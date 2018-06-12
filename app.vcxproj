@@ -1,0 +1,253 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{4FC902A4-4378-4095-B671-28E62F2FCE59}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Link>
+      <AdditionalLibraryDirectories>.\lib64;C:\tbb\lib\intel64\vc14;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <ClCompile>
+      <AdditionalIncludeDirectories>.\include64\libuv;.\include64\openssl;.\include64\zlib;.\uws;C:\tbb\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>.\include64\libuv;.\include64\openssl;.\include64\zlib;.\uws;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>.\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="include64\libuv\android-ifaddrs.h" />
+    <ClInclude Include="include64\libuv\pthread-barrier.h" />
+    <ClInclude Include="include64\libuv\stdint-msvc2008.h" />
+    <ClInclude Include="include64\libuv\tree.h" />
+    <ClInclude Include="include64\libuv\uv-aix.h" />
+    <ClInclude Include="include64\libuv\uv-bsd.h" />
+    <ClInclude Include="include64\libuv\uv-darwin.h" />
+    <ClInclude Include="include64\libuv\uv-errno.h" />
+    <ClInclude Include="include64\libuv\uv-linux.h" />
+    <ClInclude Include="include64\libuv\uv-sunos.h" />
+    <ClInclude Include="include64\libuv\uv-threadpool.h" />
+    <ClInclude Include="include64\libuv\uv-unix.h" />
+    <ClInclude Include="include64\libuv\uv-version.h" />
+    <ClInclude Include="include64\libuv\uv-win.h" />
+    <ClInclude Include="include64\libuv\uv.h" />
+    <ClInclude Include="include64\openssl\aes.h" />
+    <ClInclude Include="include64\openssl\asn1.h" />
+    <ClInclude Include="include64\openssl\asn1t.h" />
+    <ClInclude Include="include64\openssl\asn1_mac.h" />
+    <ClInclude Include="include64\openssl\async.h" />
+    <ClInclude Include="include64\openssl\bio.h" />
+    <ClInclude Include="include64\openssl\blowfish.h" />
+    <ClInclude Include="include64\openssl\bn.h" />
+    <ClInclude Include="include64\openssl\buffer.h" />
+    <ClInclude Include="include64\openssl\camellia.h" />
+    <ClInclude Include="include64\openssl\cast.h" />
+    <ClInclude Include="include64\openssl\cmac.h" />
+    <ClInclude Include="include64\openssl\cms.h" />
+    <ClInclude Include="include64\openssl\comp.h" />
+    <ClInclude Include="include64\openssl\conf.h" />
+    <ClInclude Include="include64\openssl\conf_api.h" />
+    <ClInclude Include="include64\openssl\crypto.h" />
+    <ClInclude Include="include64\openssl\ct.h" />
+    <ClInclude Include="include64\openssl\des.h" />
+    <ClInclude Include="include64\openssl\dh.h" />
+    <ClInclude Include="include64\openssl\dsa.h" />
+    <ClInclude Include="include64\openssl\dtls1.h" />
+    <ClInclude Include="include64\openssl\ebcdic.h" />
+    <ClInclude Include="include64\openssl\ec.h" />
+    <ClInclude Include="include64\openssl\ecdh.h" />
+    <ClInclude Include="include64\openssl\ecdsa.h" />
+    <ClInclude Include="include64\openssl\engine.h" />
+    <ClInclude Include="include64\openssl\err.h" />
+    <ClInclude Include="include64\openssl\evp.h" />
+    <ClInclude Include="include64\openssl\e_os2.h" />
+    <ClInclude Include="include64\openssl\hmac.h" />
+    <ClInclude Include="include64\openssl\idea.h" />
+    <ClInclude Include="include64\openssl\kdf.h" />
+    <ClInclude Include="include64\openssl\lhash.h" />
+    <ClInclude Include="include64\openssl\md2.h" />
+    <ClInclude Include="include64\openssl\md4.h" />
+    <ClInclude Include="include64\openssl\md5.h" />
+    <ClInclude Include="include64\openssl\mdc2.h" />
+    <ClInclude Include="include64\openssl\modes.h" />
+    <ClInclude Include="include64\openssl\objects.h" />
+    <ClInclude Include="include64\openssl\obj_mac.h" />
+    <ClInclude Include="include64\openssl\ocsp.h" />
+    <ClInclude Include="include64\openssl\opensslconf.h" />
+    <ClInclude Include="include64\openssl\opensslv.h" />
+    <ClInclude Include="include64\openssl\ossl_typ.h" />
+    <ClInclude Include="include64\openssl\pem.h" />
+    <ClInclude Include="include64\openssl\pem2.h" />
+    <ClInclude Include="include64\openssl\pkcs12.h" />
+    <ClInclude Include="include64\openssl\pkcs7.h" />
+    <ClInclude Include="include64\openssl\rand.h" />
+    <ClInclude Include="include64\openssl\rc2.h" />
+    <ClInclude Include="include64\openssl\rc4.h" />
+    <ClInclude Include="include64\openssl\rc5.h" />
+    <ClInclude Include="include64\openssl\ripemd.h" />
+    <ClInclude Include="include64\openssl\rsa.h" />
+    <ClInclude Include="include64\openssl\safestack.h" />
+    <ClInclude Include="include64\openssl\seed.h" />
+    <ClInclude Include="include64\openssl\sha.h" />
+    <ClInclude Include="include64\openssl\srp.h" />
+    <ClInclude Include="include64\openssl\srtp.h" />
+    <ClInclude Include="include64\openssl\ssl.h" />
+    <ClInclude Include="include64\openssl\ssl2.h" />
+    <ClInclude Include="include64\openssl\ssl3.h" />
+    <ClInclude Include="include64\openssl\stack.h" />
+    <ClInclude Include="include64\openssl\symhacks.h" />
+    <ClInclude Include="include64\openssl\tls1.h" />
+    <ClInclude Include="include64\openssl\ts.h" />
+    <ClInclude Include="include64\openssl\txt_db.h" />
+    <ClInclude Include="include64\openssl\ui.h" />
+    <ClInclude Include="include64\openssl\whrlpool.h" />
+    <ClInclude Include="include64\openssl\x509.h" />
+    <ClInclude Include="include64\openssl\x509v3.h" />
+    <ClInclude Include="include64\openssl\x509_vfy.h" />
+    <ClInclude Include="include64\openssl\__DECC_INCLUDE_EPILOGUE.H" />
+    <ClInclude Include="include64\openssl\__DECC_INCLUDE_PROLOGUE.H" />
+    <ClInclude Include="include64\zlib\crc32.h" />
+    <ClInclude Include="include64\zlib\deflate.h" />
+    <ClInclude Include="include64\zlib\gzguts.h" />
+    <ClInclude Include="include64\zlib\inffast.h" />
+    <ClInclude Include="include64\zlib\inffixed.h" />
+    <ClInclude Include="include64\zlib\inflate.h" />
+    <ClInclude Include="include64\zlib\inftrees.h" />
+    <ClInclude Include="include64\zlib\trees.h" />
+    <ClInclude Include="include64\zlib\zconf.h" />
+    <ClInclude Include="include64\zlib\zlib.h" />
+    <ClInclude Include="include64\zlib\zutil.h" />
+    <ClInclude Include="uws\Extensions.h" />
+    <ClInclude Include="uws\Group.h" />
+    <ClInclude Include="uws\HTTPSocket.h" />
+    <ClInclude Include="uws\Hub.h" />
+    <ClInclude Include="uws\Networking.h" />
+    <ClInclude Include="uws\Node.h" />
+    <ClInclude Include="uws\Socket.h" />
+    <ClInclude Include="uws\uUV.h" />
+    <ClInclude Include="uws\uWS.h" />
+    <ClInclude Include="uws\WebSocket.h" />
+    <ClInclude Include="uws\WebSocketProtocol.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="relay.cpp" />
+    <ClCompile Include="uws\Extensions.cpp" />
+    <ClCompile Include="uws\Group.cpp" />
+    <ClCompile Include="uws\HTTPSocket.cpp" />
+    <ClCompile Include="uws\Hub.cpp" />
+    <ClCompile Include="uws\Networking.cpp" />
+    <ClCompile Include="uws\Node.cpp" />
+    <ClCompile Include="uws\Socket.cpp" />
+    <ClCompile Include="uws\uUV.cpp" />
+    <ClCompile Include="uws\WebSocket.cpp" />
+    <ClCompile Include="uws\WebSocketImpl.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
