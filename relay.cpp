@@ -168,7 +168,6 @@ struct Session {
 	int authLevel;   // Level 1 = Relay Query & Listener Authentication
 
 	Session(uWS::WebSocket<uWS::SERVER>* ws) {
-		//printf("creating session for ws:%llX\n", ws);
 		// Setup Session
 		this->webSocket = ws;
 		this->timeOfConnection = std::time(nullptr);
@@ -233,14 +232,8 @@ void FreeGarbage() {
 
 	Session* client;
 	while (GarbageQueue.try_pop(client)) {
-		//printf("Free Session: 0x%016llX, WS: 0x%016llX\n", client, (client->webSocket));
 		delete client;
 	}
-	
-	//printf("SessionExists: %i\n", SessionExists.size());
-	//printf("ChannelClientTable: %i\n", ChannelClientTable.size());
-	//printf("UserIDSessionMap: %i\n", UserIDSessionMap.size());
-
 	gc_State = 0;
 }
 
@@ -341,22 +334,18 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 				msgLen = length - 9;
 				if ((msgLen > 0) && (msgLen < 24)) {
 					strncpy(msgBuffer, &message[9], msgLen);
-					RelayAuth* authNode = NULL;
 					for (auto &auth : Credentials) {
-						if (!strncmp(msgBuffer, auth.password, msgLen)) {
-							authNode = &auth;
+						if (msgLen == strlen(auth.password)) {
+							if (!strncmp(msgBuffer, auth.password, msgLen)) {
+								client->authLevel = auth.authLevel;
+							}
 						}
-					}
-					if (authNode) {
-						//printf("Client[%016llX] authenticated with \"%s\"; setting authLevel to %i\n", client, authNode->password, authNode->authLevel);
-						client->authLevel = authNode->authLevel;
 					}
 				}
 				break;
 			case 1:
 				if (length != 10) { return false; }
 				if (client->authLevel == 1) {
-					//printf("Client[%016llX] listener mode to %i\n", client, message[9]);
 					client->listenerMode = message[9];
 				}
 				break;
@@ -525,8 +514,9 @@ int main(int argc, char* argv[])
 	}
 
 	std::vector<std::thread *> threads(std::thread::hardware_concurrency());
+	
 	for (auto &thread : threads) {
-		thread = new std::thread([]() {
+		thread = new std::thread([] {
 			uWS::Hub h;
 
 			h.onMessage([](uWS::WebSocket<uWS::SERVER> *ws, char *message, size_t length, uWS::OpCode code) {
@@ -538,21 +528,21 @@ int main(int argc, char* argv[])
 				// client is not NULL, meaning this socket has a Session
 				if (client) {
 					switch (code) {
-						case uWS::OpCode::BINARY: {
-							if (!HandleBinaryMessages(client, ws, message, length)) 
-								return;
-							break;
-						}
-						case uWS::OpCode::TEXT: {
-							if (!HandleTextMessages(client, ws, message, length))
-								return;
-							break;
-						}
-						default: {
-							DisconnectClient(client, ws, CLOSE_UNSUPPORTED, MSG_TYPE_UNSUPPORTED, sizeof(MSG_TYPE_UNSUPPORTED));
+					case uWS::OpCode::BINARY: {
+						if (!HandleBinaryMessages(client, ws, message, length))
 							return;
-							break;
-						}
+						break;
+					}
+					case uWS::OpCode::TEXT: {
+						if (!HandleTextMessages(client, ws, message, length))
+							return;
+						break;
+					}
+					default: {
+						DisconnectClient(client, ws, CLOSE_UNSUPPORTED, MSG_TYPE_UNSUPPORTED, sizeof(MSG_TYPE_UNSUPPORTED));
+						return;
+						break;
+					}
 					}
 				}
 				// FIRST PACKET: client is NULL, meaning this socket needs a Session
@@ -637,7 +627,12 @@ int main(int argc, char* argv[])
 			//h.getDefaultGroup<uWS::SERVER>().startAutoPing(15000); // 15sec WebSocket Ping
 			h.run();
 		});
+
+		// Stagger thread creation to avoid OpenSSL crash:
+		// Crash occurs if creating more threads than physical cores
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
+
 
 	std::thread gc([] {
 		std::chrono::seconds THIRTY_SECONDS = std::chrono::seconds(30);
