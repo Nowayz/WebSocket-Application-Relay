@@ -102,6 +102,9 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Link>
       <AdditionalLibraryDirectories>.\lib64;C:\tbb\lib\intel64\vc14;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
     <ClCompile>
       <AdditionalIncludeDirectories>.\include64\libuv;.\include64\openssl;.\include64\zlib;.\uws;C:\tbb\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -110,6 +113,8 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <MinimalRebuild>true</MinimalRebuild>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -121,6 +126,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\uws\uWebSockets\src\Asio.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Backend.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Epoll.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Extensions.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Group.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\HTTPSocket.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Hub.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Libuv.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Networking.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Node.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Room.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\Socket.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\uWS.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\WebSocket.h" />
+    <ClInclude Include="..\uws\uWebSockets\src\WebSocketProtocol.h" />
     <ClInclude Include="include64\libuv\android-ifaddrs.h" />
     <ClInclude Include="include64\libuv\pthread-barrier.h" />
     <ClInclude Include="include64\libuv\stdint-msvc2008.h" />
@@ -222,30 +242,19 @@
     <ClInclude Include="include64\zlib\zconf.h" />
     <ClInclude Include="include64\zlib\zlib.h" />
     <ClInclude Include="include64\zlib\zutil.h" />
-    <ClInclude Include="uws\Extensions.h" />
-    <ClInclude Include="uws\Group.h" />
-    <ClInclude Include="uws\HTTPSocket.h" />
-    <ClInclude Include="uws\Hub.h" />
-    <ClInclude Include="uws\Networking.h" />
-    <ClInclude Include="uws\Node.h" />
-    <ClInclude Include="uws\Socket.h" />
-    <ClInclude Include="uws\uUV.h" />
-    <ClInclude Include="uws\uWS.h" />
-    <ClInclude Include="uws\WebSocket.h" />
-    <ClInclude Include="uws\WebSocketProtocol.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\uws\uWebSockets\src\Epoll.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Extensions.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Group.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\HTTPSocket.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Hub.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Networking.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Node.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Room.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\Socket.cpp" />
+    <ClCompile Include="..\uws\uWebSockets\src\WebSocket.cpp" />
     <ClCompile Include="relay.cpp" />
-    <ClCompile Include="uws\Extensions.cpp" />
-    <ClCompile Include="uws\Group.cpp" />
-    <ClCompile Include="uws\HTTPSocket.cpp" />
-    <ClCompile Include="uws\Hub.cpp" />
-    <ClCompile Include="uws\Networking.cpp" />
-    <ClCompile Include="uws\Node.cpp" />
-    <ClCompile Include="uws\Socket.cpp" />
-    <ClCompile Include="uws\uUV.cpp" />
-    <ClCompile Include="uws\WebSocket.cpp" />
-    <ClCompile Include="uws\WebSocketImpl.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

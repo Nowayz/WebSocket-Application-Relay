@@ -14,103 +14,120 @@ enum ListenOptions : int {
 
 class WIN32_EXPORT Node {
 protected:
-    uv_loop_t *loop;
+    template <void C(Socket *p, bool error)>
+    static void connect_cb(Poll *p, int status, int events) {
+        C((Socket *) p, status < 0);
+    }
+
+    template <void A(Socket *s)>
+    static void accept_poll_cb(Poll *p, int status, int events) {
+        ListenSocket *listenData = (ListenSocket *) p;
+        accept_cb<A, false>(listenData);
+    }
+
+    template <void A(Socket *s)>
+    static void accept_timer_cb(Timer *p) {
+        ListenSocket *listenData = (ListenSocket *) p->getData();
+        accept_cb<A, true>(listenData);
+    }
+
+    template <void A(Socket *s), bool TIMER>
+    static void accept_cb(ListenSocket *listenSocket) {
+        uv_os_sock_t serverFd = listenSocket->getFd();
+        Context *netContext = listenSocket->nodeData->netContext;
+        uv_os_sock_t clientFd = netContext->acceptSocket(serverFd);
+        if (clientFd == INVALID_SOCKET) {
+            /*
+            * If accept is failing, the pending connection won't be removed and the
+            * polling will cause the server to spin, using 100% cpu. Switch to a timer
+            * event instead to avoid this.
+            */
+            if (!TIMER && !netContext->wouldBlock()) {
+                listenSocket->stop(listenSocket->nodeData->loop);
+
+                listenSocket->timer = new Timer(listenSocket->nodeData->loop);
+                listenSocket->timer->setData(listenSocket);
+                listenSocket->timer->start(accept_timer_cb<A>, 1000, 1000);
+            }
+            return;
+        } else if (TIMER) {
+            listenSocket->timer->stop();
+            listenSocket->timer->close();
+            listenSocket->timer = nullptr;
+
+            listenSocket->setCb(accept_poll_cb<A>);
+            listenSocket->start(listenSocket->nodeData->loop, listenSocket, UV_READABLE);
+        }
+        do {
+            SSL *ssl = nullptr;
+            if (listenSocket->sslContext) {
+                ssl = SSL_new(listenSocket->sslContext.getNativeContext());
+                SSL_set_accept_state(ssl);
+            }
+
+            Socket *socket = new Socket(listenSocket->nodeData, listenSocket->nodeData->loop, clientFd, ssl);
+            socket->setPoll(UV_READABLE);
+            A(socket);
+        } while ((clientFd = netContext->acceptSocket(serverFd)) != INVALID_SOCKET);
+    }
+
+    Loop *loop;
     NodeData *nodeData;
-    std::mutex asyncMutex;
+    std::recursive_mutex asyncMutex;
 
 public:
     Node(int recvLength = 1024, int prePadding = 0, int postPadding = 0, bool useDefaultLoop = false);
     ~Node();
+
+    /* Blocking */
     void run();
 
-    uv_loop_t *getLoop() {
+    /* Non-blocking */
+    void poll();
+
+    Loop *getLoop() {
         return loop;
     }
 
-    template <void C(Socket p, bool error)>
-    static void connect_cb(uv_poll_t *p, int status, int events) {
-        C(p, status < 0);
-    }
-
-    template <void C(Socket p, bool error)>
-    uS::Socket connect(const char *hostname, int port, bool secure, uS::SocketData *socketData) {
-        uv_poll_t *p = new uv_poll_t;
-        p->data = socketData;
+    template <uS::Socket *I(Socket *s), void C(Socket *p, bool error)>
+    Socket *connect(const char *hostname, int port, bool secure, NodeData *nodeData) {
+        Context *netContext = nodeData->netContext;
 
         addrinfo hints, *result;
         memset(&hints, 0, sizeof(addrinfo));
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
         if (getaddrinfo(hostname, std::to_string(port).c_str(), &hints, &result) != 0) {
-            C(p, true);
-            delete p;
             return nullptr;
         }
 
-        uv_os_sock_t fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-        if (fd == -1) {
-            C(p, true);
-            delete p;
+        uv_os_sock_t fd = netContext->createSocket(result->ai_family, result->ai_socktype, result->ai_protocol);
+        if (fd == INVALID_SOCKET) {
+            freeaddrinfo(result);
             return nullptr;
         }
+
         ::connect(fd, result->ai_addr, result->ai_addrlen);
         freeaddrinfo(result);
 
-        NodeData *nodeData = socketData->nodeData;
-        if (secure) {
-            socketData->ssl = SSL_new(nodeData->clientContext);
-            SSL_set_fd(socketData->ssl, fd);
-            SSL_set_connect_state(socketData->ssl);
-            SSL_set_mode(socketData->ssl, SSL_MODE_RELEASE_BUFFERS);
-        } else {
-            socketData->ssl = nullptr;
-        }
-
-        socketData->poll = UV_READABLE;
-        uv_poll_init_socket(loop, p, fd);
-        uv_poll_start(p, UV_WRITABLE, connect_cb<C>);
-        return p;
-    }
-
-    template <void A(Socket s)>
-    static void accept_cb(uv_poll_t *p, int status, int events) {
-        ListenData *listenData = (ListenData *) p->data;
-        uv_os_sock_t serverFd = Socket(p).getFd();
-        uv_os_sock_t clientFd = accept(serverFd, nullptr, nullptr);
-        if (clientFd == INVALID_SOCKET) {
-            return;
-        }
-
-    #ifdef __APPLE__
-        int noSigpipe = 1;
-        setsockopt(clientFd, SOL_SOCKET, SO_NOSIGPIPE, &noSigpipe, sizeof(int));
-    #endif
-
         SSL *ssl = nullptr;
-        if (listenData->sslContext) {
-            ssl = SSL_new(listenData->sslContext.getNativeContext());
-            SSL_set_fd(ssl, clientFd);
-            SSL_set_accept_state(ssl);
-            SSL_set_mode(ssl, SSL_MODE_RELEASE_BUFFERS);
+        if (secure) {
+            ssl = SSL_new(nodeData->clientContext);
+            SSL_set_connect_state(ssl);
+            SSL_set_tlsext_host_name(ssl, hostname);
         }
 
-        SocketData *socketData = new SocketData(listenData->nodeData);
-        socketData->ssl = ssl;
+        Socket initialSocket(nodeData, getLoop(), fd, ssl);
+        uS::Socket *socket = I(&initialSocket);
 
-        uv_poll_t *clientPoll = new uv_poll_t;
-#ifdef USE_MICRO_UV
-        uv_poll_init_socket(listenData->listenPoll->get_loop(), clientPoll, clientFd);
-#else
-        uv_poll_init_socket(listenData->listenPoll->loop, clientPoll, clientFd);
-#endif
-        clientPoll->data = socketData;
-
-        socketData->poll = UV_READABLE;
-        A(clientPoll);
+        socket->setCb(connect_cb<C>);
+        socket->start(loop, socket, socket->setPoll(UV_WRITABLE));
+        return socket;
     }
 
-    template <void A(Socket s)>
-    bool listen(int port, uS::TLS::Context sslContext, int options, uS::NodeData *nodeData, void *user) {
+    // todo: hostname, backlog
+    template <void A(Socket *s)>
+    bool listen(const char *host, int port, uS::TLS::Context sslContext, int options, uS::NodeData *nodeData, void *user) {
         addrinfo hints, *result;
         memset(&hints, 0, sizeof(addrinfo));
 
@@ -118,7 +135,9 @@ public:
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
-        if (getaddrinfo(nullptr, std::to_string(port).c_str(), &hints, &result)) {
+        Context *netContext = nodeData->netContext;
+
+        if (getaddrinfo(host, std::to_string(port).c_str(), &hints, &result)) {
             return true;
         }
 
@@ -127,7 +146,7 @@ public:
         if ((options & uS::ONLY_IPV4) == 0) {
             for (addrinfo *a = result; a && listenFd == SOCKET_ERROR; a = a->ai_next) {
                 if (a->ai_family == AF_INET6) {
-                    listenFd = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+                    listenFd = netContext->createSocket(a->ai_family, a->ai_socktype, a->ai_protocol);
                     listenAddr = a;
                 }
             }
@@ -135,7 +154,7 @@ public:
 
         for (addrinfo *a = result; a && listenFd == SOCKET_ERROR; a = a->ai_next) {
             if (a->ai_family == AF_INET) {
-                listenFd = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+                listenFd = netContext->createSocket(a->ai_family, a->ai_socktype, a->ai_protocol);
                 listenAddr = a;
             }
         }
@@ -157,27 +176,22 @@ public:
         int enabled = true;
         setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled));
 
-        if (bind(listenFd, listenAddr->ai_addr, listenAddr->ai_addrlen) || ::listen(listenFd, 10)) {
-            ::close(listenFd);
+        if (::bind(listenFd, listenAddr->ai_addr, listenAddr->ai_addrlen) || ::listen(listenFd, 512)) {
+            netContext->closeSocket(listenFd);
             freeaddrinfo(result);
             return true;
         }
 
-        ListenData *listenData = new ListenData(nodeData);
-        listenData->sslContext = sslContext;
-        listenData->nodeData = nodeData;
+        ListenSocket *listenSocket = new ListenSocket(nodeData, loop, listenFd, nullptr);
+        listenSocket->sslContext = sslContext;
+        listenSocket->nodeData = nodeData;
 
-        uv_poll_t *listenPoll = new uv_poll_t;
-        listenPoll->data = listenData;
-
-        listenData->listenPoll = listenPoll;
-        listenData->ssl = nullptr;
-
-        uv_poll_init_socket(loop, listenPoll, listenFd);
-        uv_poll_start(listenPoll, UV_READABLE, accept_cb<A>);
+        listenSocket->setCb(accept_poll_cb<A>);
+        listenSocket->start(loop, listenSocket, UV_READABLE);
 
         // should be vector of listen data! one group can have many listeners!
-        nodeData->user = listenData;
+        nodeData->user = listenSocket;
+
         freeaddrinfo(result);
         return false;
     }
