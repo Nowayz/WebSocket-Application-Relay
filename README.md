@@ -7,8 +7,10 @@ It is also possible to have a 'server client' with a fixed UserId, which communi
 
 WebSocket Application Relay can easily handle millions of concurrent connections, and is remarkably stable.  Allowing connections to persist even while backend applications may need to restart themselves.
 
+This Readme is a work in progress and will continue to be refined and extended with use-case examples.
+
 ## API Outline (relay.js)
-Coming soon...
+Coming soon...  Working examples to come.
 
 
 ## Technical Outline
@@ -34,9 +36,9 @@ Server users on the relay can authenticate themselves and perform special operat
 
 
 ## Security Considerations
-The relay stores essentially no information about users except what's required to send messages to them, and what channel they are in.  Events users disconnecting are the only events dispatched by the relay itself.
+The relay stores essentially no information about user sessions except what's required to send messages to them, and what channel they are in.  User disconnections are the only events dispatched by the relay itself.
 
-While server clients or traffic inspection clients are great for storing state and dealing with anomalies related to communication, they have no way of inspecting abuses at the protocol or relay level.  Such as: a client rapidly connecting and disconnecting with thousands of sockets without sending any messages.
+While server clients are great for storing state and resolving anomalies between clients, they have no way of inspecting abuses at the protocol or relay level.  Such as: a client rapidly connecting and disconnecting with thousands of sockets without sending any messages.
 
 There will most likely be revisions and additions to what the relay audits. Though where at all possible the relay will do as little as possible - its main goal is forwarding messages.
 
