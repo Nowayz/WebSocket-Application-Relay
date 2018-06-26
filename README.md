@@ -1,9 +1,11 @@
 # WebSocket Application Relay
 
-## How To
+## About
 WebSocket Application Relay is designed to be serverless, allowing communications directly between web-clients using **relay.js** library.
 
 It is also possible to have a 'server client' with a fixed UserId, which communicates with regular clients and performs whatever authoritative communications need to occur.
+
+WebSocket Application Relay can easily handle millions of concurrent connections, and is remarkably stable.  Allowing connections to persist even while backend applications may need to restart themselves.
 
 ## API Outline (relay.js)
 Coming soon...
