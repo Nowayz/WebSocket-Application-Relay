@@ -11,8 +11,14 @@
 #include "tbb/concurrent_queue.h"
 #include "tbb/concurrent_unordered_set.h"
 
-// SETTINGS
+//
+// SERVER CONFIGURATION SETTINGS
+//
 #define SERVER_PORT 1338
+#define SERVER_TLS_CERTIFICATE "/etc/letsencrypt/live/gl.ax/cert.pem"
+#define SERVER_TLS_PRIVATEKEY  "/etc/letsencrypt/live/gl.ax/privkey.pem"
+#define SERVER_TLS_KEYPASSWORD ""
+
 
 // GARBAGE COLLECTION
 #define WAIT_FOR_GC() while (gc_State==-1) {continue;}
@@ -71,31 +77,53 @@ tbb::concurrent_queue<Session*> GarbageQueue;
 
 // 2^128-1 period
 uint64_t rand64p() {
-	static uint64_t a, b;
+	static uint64_t a=1337, b=1338;
 	static int init = 1;
-	if (init--) {
-		_rdrand64_step(&a);
-		_rdrand64_step(&b);
-	}
 	uint64_t x = a; a = b;
 	return a + (b = (x ^= x << 23) ^ b ^ (x >> 17) ^ (b >> 26));
 }
 
-static int enc64(const char* in, int len, char* out) {
-	static const char* lookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	int index = 0;
-	int val = 0, valb = -6;
-	for (int i = 0; i<len; i++) {
-		val = (val << 8) + in[i];
-		valb += 8;
-		while (valb >= 0) {
-			out[index++] = lookup[(val >> valb) & 0x3F];
-			valb -= 6;
+int enc64(const char* input, int len, char* output) {
+	static const char b64[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	int i;
+
+	if (len == 0) {
+		return 0;
+	}
+	char q, *p = (char*)output;
+	if (len == 1) {
+		i = 0;
+		*p++ = b64[(input[i] >> 2) & 0x3F];
+		q = (input[i++] & 0x03) << 4;
+		*p++ = b64[q | ((input[i] & 0xF0) >> 4)];
+		*p++ = '=';
+		*p++ = '=';
+	}
+	else {
+		for (i = 0; i < len - 2; i++) {
+			*p++ = b64[(input[i] >> 2) & 0x3F];
+			q = (input[i++] & 0x03) << 4;
+			*p++ = b64[q | ((input[i] & 0xF0) >> 4)];
+			q = (input[i++] & 0x0F) << 2;
+			*p++ = b64[q | ((input[i] & 0xC0) >> 6)];
+			*p++ = b64[input[i] & 0x3F];
+		}
+		if (i < len) {
+			*p++ = b64[(input[i] >> 2) & 0x3F];
+			if (i == (len - 1)) {
+				*p++ = b64[((input[i] & 0x3) << 4)];
+				*p++ = '=';
+			}
+			else {
+				q = (input[i++] & 0x3) << 4;
+				*p++ = b64[q | ((input[i] & 0xF0) >> 4)];
+				*p++ = b64[((input[i] & 0xF) << 2)];
+			}
+			*p++ = '=';
 		}
 	}
-	if (valb>-6) out[index++] = lookup[((val << 8) >> (valb + 8)) & 0x3F];
-	while (index % 4) out[index++] = '=';
-	return index;
+	return p - output;
 }
 
 static int dec64(const char* in, int len, unsigned char* out) {
@@ -142,7 +170,7 @@ struct RelayAuth {
 };
 
 RelayAuth Credentials[] = {
-	{ "mickymouse", 1 }
+	{ "metalgear", 1 }
 };
 
 /* 
@@ -234,6 +262,7 @@ void FreeGarbage() {
 	while (GarbageQueue.try_pop(client)) {
 		delete client;
 	}
+
 	gc_State = 0;
 }
 
@@ -242,7 +271,7 @@ void FreeGarbage() {
 /////////////////////
 // MESSAGE PROCESSING
 /////////////////
-void DisconnectClient(Session* client, uWS::WebSocket<uWS::SERVER> *ws, int code, char* msg, int msg_len) {
+void DisconnectClient(Session* client, uWS::WebSocket<uWS::SERVER> *ws, int code, const char* msg, int msg_len) {
 	if (client) {
 		client->valid = false;
 		GarbageQueue.push(client);
@@ -383,7 +412,7 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 				if (msgLen != 8) { return false; }
 				if (UserIDSessionMap.count(*(uint64_t*)(&message[9]))) {
 					Session* tmpclient = UserIDSessionMap[*(uint64_t*)(&message[9])];
-					tmpclient->userId = NULL;
+					tmpclient->userId = 0;
 					if (tmpclient->valid) {
 						DisconnectClient(tmpclient, tmpclient->webSocket, CLOSE_USERID_TAKEN, MSG_USERID_TAKEN, sizeof(MSG_USERID_TAKEN));
 					}
@@ -579,11 +608,11 @@ int main(int argc, char* argv[])
 				AcquireGarbageLock gcLock = AcquireGarbageLock();
 
 				Session* client = (Session*)ws->getUserData();
-				uint64_t dcMsgBuf[2];
-				dcMsgBuf[0] = RE_BROADCAST_TARGET; // Disconnection events come from the UserID: RE_BROADCAST_TARGET
-				dcMsgBuf[1] = (uint64_t)(client->userId);
-
 				if (client) {
+					uint64_t dcMsgBuf[2];
+					dcMsgBuf[0] = RE_BROADCAST_TARGET; // Disconnection events come from the UserID: RE_BROADCAST_TARGET
+					dcMsgBuf[1] = (uint64_t)(client->userId);
+
 					if (client->valid) {
 						// If client is still valid: invalidate session
 						client->valid = false;
@@ -620,7 +649,8 @@ int main(int argc, char* argv[])
 				}
 			});
 
-			if (!h.listen(SERVER_PORT, nullptr, uS::ListenOptions::REUSE_PORT)) {
+			auto TlsContext = uS::TLS::createContext(SERVER_TLS_CERTIFICATE, SERVER_TLS_PRIVATEKEY, SERVER_TLS_KEYPASSWORD);
+			if (!h.listen(SERVER_PORT, TlsContext, uS::ListenOptions::ONLY_IPV4)) {
 				printf("Failed to listen on port %i!\n", SERVER_PORT);
 			}
 
