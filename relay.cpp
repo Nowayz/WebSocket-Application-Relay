@@ -67,6 +67,9 @@ tbb::concurrent_unordered_set<Session*>                                         
 tbb::concurrent_unordered_map<std::string, tbb::concurrent_unordered_set<Session*>> ChannelClientTable;  //  Channel Name  :  List of Subscribed Clients
 tbb::concurrent_unordered_set<Session*>* reGlobalChannelIndex;
 
+// CHANNEL VARIABLE TABLE
+tbb::concurrent_unordered_map<std::string, tbb::concurrent_unordered_map<std::string, std::string>> ChannelVariables;
+
 // GARBAGE COLLECTION QUEUE
 tbb::concurrent_queue<Session*> GarbageQueue;
 
@@ -230,8 +233,9 @@ struct Session {
 		if ((this->channelIndex->size() == 0) && !(this->channelIndex==reGlobalChannelIndex)) {
 			
 			// this->channelName is tied to the ClientTable entry so we make a copy of the string (not sure if required)
-			std::string tmpName = *this->channelName; 
+			auto &tmpName = *this->channelName; 
 			ChannelClientTable.unsafe_erase(tmpName);
+			ChannelVariables.unsafe_erase(tmpName);
 		}
 
 		// Erase session from global session list
@@ -271,6 +275,52 @@ void FreeGarbage() {
 /////////////////////
 // MESSAGE PROCESSING
 /////////////////
+void AssignChannelVariable(uWS::WebSocket<uWS::SERVER>* ws, char* key, uint32_t key_length, char* value, uint32_t value_length) {
+	Session* client = (Session*)ws->getUserData();
+	std::string channelName = *client->channelName;
+	auto node = ChannelVariables.find(channelName);
+	if (node == ChannelVariables.end()) {
+		// Create channel if it doesnt exist
+		auto insert = ChannelVariables.insert(std::make_pair(channelName, tbb::concurrent_unordered_map<std::string, std::string>()));
+	}
+	std::string keyStr(key, key_length);
+	std::string valueStr(value, value_length);
+	ChannelVariables[channelName][keyStr] = valueStr;
+}
+
+const char* EmptyVariableReturnPacket = "\x00\x00\x00\x00\x00\x00\x00\x00\xC8";
+void TransmitChannelVariable(uWS::WebSocket<uWS::SERVER>* ws, char* key, uint32_t key_length) {
+	Session* client = (Session*)ws->getUserData();
+	std::string channelName = *client->channelName;
+	auto channelNode = ChannelVariables.find(channelName);
+	if (channelNode == ChannelVariables.end()) {
+		// Send empty packet if no channel vars exists
+		ws->send(EmptyVariableReturnPacket, 9, uWS::OpCode::BINARY);
+	}
+	else {
+		auto channelVariables = channelNode->second;
+		std::string keyStr(key, key_length);
+		auto channelVarNode = channelVariables.find(keyStr);
+		if (channelVarNode == channelVariables.end()) {
+			// Send empty packet if var not found
+			ws->send(EmptyVariableReturnPacket, 9, uWS::OpCode::BINARY);
+		}
+		else {
+			size_t returnSize = 8/*userId*/ + 1/*opcode*/ + channelVarNode->second.size();
+			char* buffer = (char*)malloc(returnSize);
+			char* cur = (char*)buffer;
+			*(uint64_t*)cur = RE_RELAY_TARGET; cur += 8;
+			*cur = 200; cur += 1;
+			const char* valueData  = channelVarNode->second.data();
+			size_t valueLength = channelVarNode->second.length();
+			memcpy(cur, valueData, valueLength); cur += valueLength;
+			ws->send(buffer, returnSize, uWS::OpCode::BINARY);
+			free(buffer);
+		}
+	}
+}
+
+
 void DisconnectClient(Session* client, uWS::WebSocket<uWS::SERVER> *ws, int code, const char* msg, int msg_len) {
 	if (client) {
 		client->valid = false;
@@ -359,7 +409,7 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 			size_t msgLen;
 			if (length < 9) { return false; }
 			switch (message[8]) {
-			case 0:
+			case 0: {
 				msgLen = length - 9;
 				if ((msgLen > 0) && (msgLen < 24)) {
 					strncpy(msgBuffer, &message[9], msgLen);
@@ -372,13 +422,15 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 					}
 				}
 				break;
-			case 1:
+			}
+			case 1: {
 				if (length != 10) { return false; }
 				if (client->authLevel == 1) {
 					client->listenerMode = message[9];
 				}
 				break;
-			case 2:
+			}
+			case 2: {
 				if (length != 9) { return false; }
 				if (client->authLevel == 1) {
 					size_t numberOfChannels = 0;
@@ -405,7 +457,8 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 					free(buffer);
 				}
 				break;
-			case 3:
+			}
+			case 3: {
 				// If a Session is authenticated, allow assignment of any untaken userId
 				msgLen = length - 9;
 				if (client->authLevel < 1) { return false; }
@@ -421,6 +474,22 @@ bool HandleBinaryMessages(Session* client, uWS::WebSocket<uWS::SERVER> *ws, char
 				UserIDSessionMap.unsafe_erase(client->userId);
 				client->userId = *(uint64_t*)(&message[9]);
 				break;
+			}
+			case 4: {
+				uint8_t key_length = *(uint8_t*)&message[9];
+				uint32_t value_length = length - 10 - key_length;
+				if (key_length && value_length >= 0) {
+					AssignChannelVariable(ws, &message[10], key_length, &message[10 + key_length], value_length);
+				}
+				break;
+			}
+			case 5: {
+				uint32_t key_length = length - 9;
+				if (key_length) {
+					TransmitChannelVariable(ws, (char*)&message[9], key_length);
+				}
+				break;
+			}
 			default:
 				DisconnectClient(client, ws, CLOSE_PROTOCOL_ERROR, MSG_PROTOCOL_VIOLATION, sizeof(MSG_PROTOCOL_VIOLATION));
 				break;
