@@ -30,7 +30,6 @@ const re = {
 	UserIdHex: x=>'0x'+Array.from(x).map(x=>x.toString(16).padStart(2,'0')).reverse().join('')  // Convert UserId to Hex String
 }
 
-
 ////////////////
 // Auxillary Routines
 //////////
@@ -45,6 +44,7 @@ function ArrayEq(a,b) {
 function UInt8UserIdToBase64(userid) {
 	return btoa(String.fromCharCode.apply(null, userid));
 }
+
 function Base64ToUInt8UserID(userid) {
 	return new Uint8Array(atob(userid).map(function(v){return v.charCodeAt();}));
 }
@@ -70,11 +70,18 @@ class Relay {
 		this.onSubscription        = null; // Callback for initial channel join: onSubscription(this)
 		this.BinaryMessageHandlers = {};
 		this.TextMessageHandlers   = {};
+		this.VariableCallbacks     = []; // List of callback for variable requests
 
 		// Setup Properties
 		this.channelName = channelName;
 		this.ready       = false; // ready set when channel is joined (after first message handler)
 		this.userId      = null;  // Assigned in FirstMessageHandler
+
+		this.SetMessageHandler(re.BINARY, 200, (userId, msg)=>{
+            let msgValue = new Uint8Array(msg);
+			let callback = this.VariableCallbacks.shift();
+			callback(msgValue);
+        });
 	}
 
 	JoinChannel(e) {
@@ -178,6 +185,7 @@ class Relay {
 		if(msgLength > 0) {
 			payLoad.set(msg, 9);
 		}
+		//console.log(payLoad);
 		this.ws.send(payLoad);
 	}
 
@@ -192,18 +200,29 @@ class Relay {
 		} else {
 			payLoad = UInt8UserIdToBase64(target);
 		}
+		//console.log(payLoad+=JSON.stringify(obj));
 		this.ws.send(payLoad+=JSON.stringify(obj));
 	}
 
+	SetChannelVar(key, value) {
+		let keyarr   = Array.from(key).map(x=>x.charCodeAt());
+		let valuearr;
+		if(value instanceof Uint8Array)
+			valuearr = Array.from(value);
+		else
+			valuearr = Array.from(value).map(x=>x.charCodeAt());
+
+		let msg = [keyarr.length].concat(keyarr).concat(valuearr);
+		msg = Uint8Array.from(msg);
+		this.bSendTo(re.RELAY_QUERY, 4, msg);
+	}
+
+	GetChannelVar(key, callback) {
+		let keyarr   = Array.from(key).map(x=>x.charCodeAt());
+		let msg = Uint8Array.from(keyarr);
+		this.VariableCallbacks.push(callback);
+		this.bSendTo(re.RELAY_QUERY, 5, msg);
+	}
 }
-
-
-
-
-
-
-
-
-
 
 
