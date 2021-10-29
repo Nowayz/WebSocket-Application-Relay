@@ -719,7 +719,7 @@ int main(int argc, char* argv[])
 			});
 
 			auto TlsContext = uS::TLS::createContext(SERVER_TLS_CERTIFICATE, SERVER_TLS_PRIVATEKEY, SERVER_TLS_KEYPASSWORD);
-			if (!h.listen(SERVER_PORT, TlsContext, uS::ListenOptions::ONLY_IPV4)) {
+			if (!h.listen(SERVER_PORT, TlsContext, uS::ListenOptions::REUSE_PORT)) {
 				printf("Failed to listen on port %i!\n", SERVER_PORT);
 			}
 
