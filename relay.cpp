@@ -62,7 +62,7 @@ struct Session;
 std::atomic<char> gc_State; // garbage collector state
 
 // LOOKUP TABLES
-tbb::concurrent_unordered_map<uint64_t, Session*>									UserIDSessionMap;    //	 Relay UserID  :  Session Pointer               (This was added to avoid using memory addresses as UserIDs) (Now UserID can be anything)
+tbb::concurrent_unordered_map<uint64_t, Session*>                                   UserIDSessionMap;    //  Relay UserID  :  Session Pointer               (This was added to avoid using memory addresses as UserIDs) (Now UserID can be anything)
 tbb::concurrent_unordered_set<Session*>                                             SessionExists;       //       Session  :  Is Session Pointer Valid?     (Used to confirm Point-To-Point message recepient validity)
 tbb::concurrent_unordered_map<std::string, tbb::concurrent_unordered_set<Session*>> ChannelClientTable;  //  Channel Name  :  List of Subscribed Clients
 tbb::concurrent_unordered_set<Session*>* reGlobalChannelIndex;
@@ -310,7 +310,7 @@ void TransmitChannelVariable(uWS::WebSocket<uWS::SERVER>* ws, char* key, uint32_
 			char* buffer = (char*)malloc(returnSize);
 			char* cur = (char*)buffer;
 			*(uint64_t*)cur = RE_RELAY_TARGET; cur += 8;
-			*cur = 200; cur += 1;
+			*cur = (char)200; cur += 1;
 			const char* valueData  = channelVarNode->second.data();
 			size_t valueLength = channelVarNode->second.length();
 			memcpy(cur, valueData, valueLength); cur += valueLength;
