@@ -164,6 +164,8 @@ public:
             return true;
         }
 
+        
+
 #ifdef __linux
 #ifdef SO_REUSEPORT
         if (options & REUSE_PORT) {
@@ -171,6 +173,11 @@ public:
             setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
         }
 #endif
+#elif defined(__APPLE__)
+        if(options & REUSE_PORT) {
+            int optval = 1;
+            setsockopt(listenFd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+        }
 #endif
 
         int enabled = true;
