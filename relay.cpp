@@ -5,7 +5,12 @@
 #include <uWS.h>
 #include <ctime>
 #include <atomic>
-#include <immintrin.h>
+
+// Don't include immintrin for ARM64 builds
+#if defined(__x86_64__) || defined(_M_X64)
+	#include <immintrin.h>
+#endif
+
 #include "tbb/tbb.h"
 #include "tbb/concurrent_unordered_map.h"
 #include "tbb/concurrent_queue.h"
