@@ -1,0 +1,182 @@
+{
+  "candidate": "c06c37b",
+  "server_sha256": "52fd8e492d4b75fec29952d63d97b33dee88b9cfb3d84ae61414a81fa46da854",
+  "event": "cycles:u",
+  "frequency_hz": 199,
+  "call_graph": "dwarf,8192",
+  "record_seconds": 12,
+  "traffic_seconds": 10,
+  "server_cpus": "0-3",
+  "client_cpus": "4-7",
+  "samples": 7464,
+  "lost_samples": 21,
+  "record_log": "[ perf record: Woken up 474 times to write data ]\nWarning:\nProcessed 8088 events and lost 4 chunks!\n\nCheck IO/CPU overload!\n\n[ perf record: Captured and wrote 59.974 MB artifacts/profiles/c06c37b/perf.data (7464 samples) ]\n",
+  "notes": "Diagnostic only, collected separately from comparison timing. Percentages are sampled user-space cycle shares, not total process CPU. Some samples were lost. Symbols below 0.5 percent omitted. Raw perf.data retained locally in artifacts/profiles/c06c37b.",
+  "symbols": [
+    {
+      "user_cycles_percent": 9.56,
+      "kind": ".",
+      "symbol": "tokio::sync::notify::NotifiedProject::drop_notified"
+    },
+    {
+      "user_cycles_percent": 9.3,
+      "kind": ".",
+      "symbol": "tokio::sync::notify::NotifiedProject::poll_notified"
+    },
+    {
+      "user_cycles_percent": 7.5,
+      "kind": ".",
+      "symbol": "war_relay::relay::Relay::receive"
+    },
+    {
+      "user_cycles_percent": 6.9,
+      "kind": ".",
+      "symbol": "tokio::runtime::scheduler::Handle::current"
+    },
+    {
+      "user_cycles_percent": 6.01,
+      "kind": ".",
+      "symbol": "war_relay::server::connection_task::{{closure}}"
+    },
+    {
+      "user_cycles_percent": 5.23,
+      "kind": ".",
+      "symbol": "<tokio_tungstenite::WebSocketStream<T> as futures_core::stream::Stream>::poll_next"
+    },
+    {
+      "user_cycles_percent": 5.21,
+      "kind": ".",
+      "symbol": "war_relay::relay::Peer::enqueue"
+    },
+    {
+      "user_cycles_percent": 4.71,
+      "kind": ".",
+      "symbol": "tokio_util::sync::cancellation_token::CancellationToken::is_cancelled"
+    },
+    {
+      "user_cycles_percent": 3.9,
+      "kind": ".",
+      "symbol": "tokio::runtime::task::waker::clone_waker"
+    },
+    {
+      "user_cycles_percent": 3.63,
+      "kind": ".",
+      "symbol": "tokio::sync::task::atomic_waker::AtomicWaker::register_by_ref"
+    },
+    {
+      "user_cycles_percent": 3.61,
+      "kind": ".",
+      "symbol": "tokio::runtime::task::waker::drop_waker"
+    },
+    {
+      "user_cycles_percent": 2.47,
+      "kind": ".",
+      "symbol": "std::sys::sync::mutex::futex::Mutex::lock_contended"
+    },
+    {
+      "user_cycles_percent": 2.17,
+      "kind": ".",
+      "symbol": "<tokio_tungstenite::WebSocketStream<T> as futures_sink::Sink<tungstenite::protocol::message::Message>>::poll_flush"
+    },
+    {
+      "user_cycles_percent": 1.8,
+      "kind": ".",
+      "symbol": "tokio::sync::watch::Receiver<T>::wait_for::{{closure}}"
+    },
+    {
+      "user_cycles_percent": 1.78,
+      "kind": ".",
+      "symbol": "core::ptr::drop_in_place<(tokio_util::sync::cancellation_token::WaitForCancellationFuture,tokio::sync::watch::Receiver<core::option::Option<war_relay::common::Disconnect>>::changed::{{closure}},tokio::time::sleep::Sleep,tokio::time::interval::Interval::tick::{{closure}},tokio::sync::mpsc::bounded::Receiver<war_relay::relay::Envelope>::recv::{{closure}},futures_util::stream::stream::next::Next<tokio_tungstenite::WebSocketStream<tokio::net::tcp::stream::TcpStream>>)>"
+    },
+    {
+      "user_cycles_percent": 1.64,
+      "kind": ".",
+      "symbol": "bytes::bytes::shared_drop"
+    },
+    {
+      "user_cycles_percent": 1.52,
+      "kind": ".",
+      "symbol": "__vdso_clock_gettime"
+    },
+    {
+      "user_cycles_percent": 1.15,
+      "kind": ".",
+      "symbol": "bytes::bytes_mut::BytesMut::split_to"
+    },
+    {
+      "user_cycles_percent": 1.13,
+      "kind": ".",
+      "symbol": "tokio::sync::watch::changed_impl::{{closure}}"
+    },
+    {
+      "user_cycles_percent": 1.05,
+      "kind": ".",
+      "symbol": "0x00000000000a799d"
+    },
+    {
+      "user_cycles_percent": 1.02,
+      "kind": ".",
+      "symbol": "core::ptr::drop_in_place<(tokio_util::sync::cancellation_token::WaitForCancellationFuture,war_relay::transport::output<futures_util::sink::send::Send<tokio_tungstenite::WebSocketStream<tokio::net::tcp::stream::TcpStream>,tungstenite::protocol::message::Message>>::{{closure}}::{{closure}},tokio::time::timeout::Timeout<futures_util::sink::send::Send<tokio_tungstenite::WebSocketStream<tokio::net::tcp::stream::TcpStream>,tungstenite::protocol::message::Message>>)>"
+    },
+    {
+      "user_cycles_percent": 0.91,
+      "kind": ".",
+      "symbol": "bytes::bytes::promotable_even_drop"
+    },
+    {
+      "user_cycles_percent": 0.91,
+      "kind": "k",
+      "symbol": "0xffffffffaf600080"
+    },
+    {
+      "user_cycles_percent": 0.88,
+      "kind": ".",
+      "symbol": "tokio::runtime::io::registration::Registration::poll_ready"
+    },
+    {
+      "user_cycles_percent": 0.82,
+      "kind": ".",
+      "symbol": "0x00000000000a62ff"
+    },
+    {
+      "user_cycles_percent": 0.82,
+      "kind": ".",
+      "symbol": "tokio::sync::batch_semaphore::Semaphore::add_permits_locked"
+    },
+    {
+      "user_cycles_percent": 0.8,
+      "kind": ".",
+      "symbol": "bytes::bytes::shared_clone"
+    },
+    {
+      "user_cycles_percent": 0.78,
+      "kind": ".",
+      "symbol": "0x00000000000a79b9"
+    },
+    {
+      "user_cycles_percent": 0.73,
+      "kind": ".",
+      "symbol": "bytes::bytes_mut::shared_v_drop"
+    },
+    {
+      "user_cycles_percent": 0.68,
+      "kind": ".",
+      "symbol": "0x000000000018f393"
+    },
+    {
+      "user_cycles_percent": 0.68,
+      "kind": ".",
+      "symbol": "bytes::bytes::shallow_clone_vec"
+    },
+    {
+      "user_cycles_percent": 0.59,
+      "kind": ".",
+      "symbol": "tungstenite::protocol::WebSocketContext::_write"
+    },
+    {
+      "user_cycles_percent": 0.53,
+      "kind": ".",
+      "symbol": "war_relay::transport::output::{{closure}}"
+    }
+  ]
+}

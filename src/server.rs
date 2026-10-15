@@ -169,11 +169,13 @@ async fn connection_task(
         }
     };
     let mut limiter = RateLimiter::new(config.messages_per_second, config.bytes_per_second);
+    let stopped = shutdown.cancelled();
+    tokio::pin!(stopped);
     let deadline = sleep(Duration::from_secs(config.join_timeout_secs));
     tokio::pin!(deadline);
     let subscription = loop {
         let incoming = tokio::select! {
-            _ = shutdown.cancelled() => { close(&mut ws, Disconnect::SHUTDOWN, &relay, &shutdown).await; return Ok(()); }
+            _ = stopped.as_mut() => { close(&mut ws, Disconnect::SHUTDOWN, &relay, &shutdown).await; return Ok(()); }
             _ = &mut deadline => { close(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, &relay, &shutdown).await; return Ok(()); }
             incoming = ws.next() => incoming,
         };
@@ -193,8 +195,13 @@ async fn connection_task(
                 }
             }
             Some(Ok(Message::Ping(_))) => {
-                if let Err(failure) =
-                    transport::output(ws.flush(), config.write_timeout(), &shutdown, None).await
+                if let Err(failure) = transport::output(
+                    ws.flush(),
+                    config.write_timeout(),
+                    stopped.as_mut(),
+                    std::future::pending(),
+                )
+                .await
                 {
                     output_failed(&relay, failure);
                     return Ok(());
@@ -217,31 +224,34 @@ async fn connection_task(
     let crate::relay::Subscription {
         registration,
         mut outgoing,
-        close: mut cancellation,
+        close: cancellation,
     } = subscription;
     let peer = &registration.peer;
+    // These one-shot futures stay registered while the read loop and its output
+    // operations take turns borrowing them. Every completion exits this session;
+    // a completed signal is never polled again.
+    let closing = transport::close_reason(cancellation);
+    tokio::pin!(closing);
     let period = Duration::from_secs(config.ping_interval_secs.max(1));
     let mut heartbeat = interval_at(Instant::now() + period, period);
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut pong_deadline = None;
     let end = loop {
         tokio::select! {
-            _ = shutdown.cancelled() => break SessionEnd::Close(Disconnect::SHUTDOWN),
-            _ = cancellation.changed() => {
-                if let Some(reason) = *cancellation.borrow() { break SessionEnd::Close(reason); }
-            }
+            _ = stopped.as_mut() => break SessionEnd::Close(Disconnect::SHUTDOWN),
+            reason = closing.as_mut() => break SessionEnd::Close(reason),
             _ = sleep_until(pong_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400))), if pong_deadline.is_some() => {
                 break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });
             }
             _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
                 if pong_deadline.is_none() {
-                    if let Err(failure) = transport::output(ws.send(Message::Ping(bytes::Bytes::from_static(b"war"))), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); }
+                    if let Err(failure) = transport::output(ws.send(Message::Ping(bytes::Bytes::from_static(b"war"))), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
                     pong_deadline = Some(Instant::now() + Duration::from_secs(config.pong_timeout_secs));
                 }
             }
             packet = outgoing.recv() => {
                 let Some(packet) = packet else { break SessionEnd::Close(Disconnect::SHUTDOWN); };
-                if let Err(failure) = transport::output(ws.send(Message::Binary(packet.bytes.clone())), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); }
+                if let Err(failure) = transport::output(ws.send(Message::Binary(packet.bytes.clone())), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
                 relay.metrics.deliveries.fetch_add(1, Relaxed);
                 relay.metrics.delivered_bytes.fetch_add(packet.bytes.len() as u64, Relaxed);
             }
@@ -251,7 +261,7 @@ async fn connection_task(
                     Some(Ok(Message::Binary(bytes))) => {
                         if let Err(reason) = relay.receive(peer, &bytes) { break SessionEnd::Close(reason); }
                     }
-                    Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); } }
+                    Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }
                     Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
                     None | Some(Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed)) => break SessionEnd::Drop(Disconnect { code: 1000, reason: "" }),

@@ -22,27 +22,27 @@ pub(crate) enum WriteFailure {
     Transport,
 }
 
+/// One terminal session signal. Keep this future pinned for the connection's
+/// lifetime so unrelated data messages do not repeatedly register/drop waiters.
+pub(crate) async fn close_reason(mut receiver: watch::Receiver<Option<Disconnect>>) -> Disconnect {
+    match receiver.wait_for(Option::is_some).await {
+        Ok(value) => value.expect("watch predicate requires a reason"),
+        Err(_) => Disconnect::SHUTDOWN,
+    }
+}
+
 /// A cancelled output future may have partially written a frame. The caller must
 /// drop that transport after any failure, rather than attempt a second flush.
 pub(crate) async fn output(
     operation: impl Future<Output = Result<(), Error>>,
     duration: Duration,
-    shutdown: &CancellationToken,
-    closing: Option<&mut watch::Receiver<Option<Disconnect>>>,
+    stopped: impl Future<Output = ()>,
+    closing: impl Future<Output = Disconnect>,
 ) -> Result<(), WriteFailure> {
-    let policy = async {
-        let Some(receiver) = closing else {
-            return std::future::pending::<Disconnect>().await;
-        };
-        match receiver.wait_for(Option::is_some).await {
-            Ok(value) => value.expect("watch predicate requires a reason"),
-            Err(_) => Disconnect::SHUTDOWN,
-        }
-    };
     tokio::select! {
         biased;
-        _ = shutdown.cancelled() => Err(WriteFailure::Closed(Disconnect::SHUTDOWN)),
-        reason = policy => Err(WriteFailure::Closed(reason)),
+        _ = stopped => Err(WriteFailure::Closed(Disconnect::SHUTDOWN)),
+        reason = closing => Err(WriteFailure::Closed(reason)),
         result = timeout(duration, operation) => match result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(_)) => Err(WriteFailure::Transport),
@@ -110,13 +110,16 @@ mod tests {
     async fn policy_interrupts_a_blocked_frame_without_waiting_for_write_timeout() {
         let (stream, _unread) = duplex(64);
         let mut ws = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
-        let (closing, mut receiver) = watch::channel(None);
+        let (closing, receiver) = watch::channel(None);
         let shutdown = CancellationToken::new();
+        let stopped = shutdown.cancelled();
+        let reason = close_reason(receiver);
+        tokio::pin!(stopped, reason);
         let write = output(
             ws.send(Message::Binary(vec![1; 4096].into())),
             Duration::from_secs(30),
-            &shutdown,
-            Some(&mut receiver),
+            stopped.as_mut(),
+            reason.as_mut(),
         );
         tokio::pin!(write);
         assert!(
@@ -140,11 +143,73 @@ mod tests {
             output(
                 ws.send(Message::Binary(vec![1; 4096].into())),
                 Duration::from_millis(20),
-                &shutdown,
-                None
+                shutdown.cancelled(),
+                std::future::pending()
             )
             .await,
             Err(WriteFailure::TimedOut)
         );
+    }
+
+    #[tokio::test]
+    async fn signals_survive_successful_outputs_and_still_cancel_a_blocked_write() {
+        let (stream, _unread) = duplex(256);
+        let mut ws = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
+        let (closing, receiver) = watch::channel(None);
+        let shutdown = CancellationToken::new();
+        let stopped = shutdown.cancelled();
+        let reason = close_reason(receiver);
+        tokio::pin!(stopped, reason);
+        for i in 0..8 {
+            assert_eq!(
+                output(
+                    ws.send(Message::Binary(vec![i].into())),
+                    Duration::from_secs(30),
+                    stopped.as_mut(),
+                    reason.as_mut()
+                )
+                .await,
+                Ok(())
+            );
+        }
+        let write = output(
+            ws.send(Message::Binary(vec![1; 4096].into())),
+            Duration::from_secs(30),
+            stopped.as_mut(),
+            reason.as_mut(),
+        );
+        tokio::pin!(write);
+        assert!(
+            timeout(Duration::from_millis(20), &mut write)
+                .await
+                .is_err()
+        );
+        closing.send_replace(Some(Disconnect::TAKEN));
+        assert_eq!(
+            timeout(Duration::from_millis(200), write).await.unwrap(),
+            Err(WriteFailure::Closed(Disconnect::TAKEN))
+        );
+    }
+
+    #[tokio::test]
+    async fn an_already_closed_signal_prevents_an_immediately_ready_output() {
+        let (_closing, receiver) = watch::channel(Some(Disconnect::OVERLOADED));
+        let shutdown = CancellationToken::new();
+        let attempted = std::cell::Cell::new(false);
+        let operation = async {
+            attempted.set(true);
+            Ok(())
+        };
+        assert_eq!(
+            output(
+                operation,
+                Duration::from_secs(30),
+                shutdown.cancelled(),
+                close_reason(receiver)
+            )
+            .await,
+            Err(WriteFailure::Closed(Disconnect::OVERLOADED))
+        );
+        assert!(!attempted.get());
     }
 }

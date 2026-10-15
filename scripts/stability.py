@@ -30,15 +30,19 @@ def sample(pid, admin, started):
             "process": runtime.snapshot(pid), "metrics": observed}
 
 
-def run_case(mode, seconds, clients):
+def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
+             server_cpus=None, client_cpus=None, payload_bytes=None):
     port, admin = runtime.free_port(), runtime.free_port()
     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
     with tempfile.TemporaryFile() as logs:
-        server = subprocess.Popen([
-            str(runtime.SERVER), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
+        server_command = [
+            str(Path(server_binary or runtime.SERVER).resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
             "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0",
             "--max-message-bytes", "1048576", "--queue-bytes", "1048586",
-        ], stdout=logs, stderr=logs, env=env)
+        ]
+        if server_cpus:
+            server_command = ["taskset", "-c", server_cpus] + server_command
+        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)
         process = None
         try:
             started = time.monotonic()
@@ -53,10 +57,12 @@ def run_case(mode, seconds, clients):
                     if time.monotonic() - started > 5:
                         raise
                     time.sleep(0.02)
-            command = [str(STRESS), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
+            command = [str(Path(stress_binary or STRESS).resolve()), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
                        "--clients", str(clients), "--duration-secs", str(seconds),
-                       "--payload-bytes", "65536" if mode == "slow" else "1024"]
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                       "--payload-bytes", str(payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024))]
+            if client_cpus:
+                command = ["taskset", "-c", client_cpus] + command
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
                 if not selector.select(timeout=10):
@@ -88,7 +94,9 @@ def run_case(mode, seconds, clients):
             counts_match = result_output is not None and result_output["verified_deliveries"] > 0 and int(metrics["war_incoming_messages_total"]) == result_output["verified_deliveries"] and int(metrics["war_joined_total"]) == result_output["joins"]
             pressure_valid = mode != "slow" or (int(metrics["war_slow_consumers_total"]) == 1 and result_output is not None and result_output["disconnect_notifications"] == 1)
             result = {"mode": mode, "duration_seconds": seconds, "clients": clients,
-                      "command": command, "baseline": baseline, "samples": observations,
+                      "command": command, "server_command": server_command,
+                      "server_cpus": server_cpus, "client_cpus": client_cpus,
+                      "baseline": baseline, "samples": observations,
                       "admin_errors": errors, "output": output, "stderr": stderr,
                       "exit_code": process.returncode, "cleanup_seconds": time.monotonic() - cleanup_start,
                       "cleaned_up": clean, "final": final,
@@ -118,9 +126,14 @@ def main():
     parser.add_argument("--clients", type=int, default=64)
     parser.add_argument("--modes", nargs="+", choices=["traffic", "churn", "slow"], default=["traffic", "churn", "slow"])
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--server", type=Path, default=runtime.SERVER)
+    parser.add_argument("--stress", type=Path, default=STRESS)
+    parser.add_argument("--server-cpus")
+    parser.add_argument("--client-cpus")
+    parser.add_argument("--payload-bytes", type=int)
     args = parser.parse_args()
-    output = {"host": platform.platform(), "server_sha256": hashlib.sha256(runtime.SERVER.read_bytes()).hexdigest(),
-              "stress_sha256": hashlib.sha256(STRESS.read_bytes()).hexdigest(),
+    output = {"host": platform.platform(), "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
+              "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
               "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(list((ROOT / "src").rglob("*.rs")) + [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/stress.rs"])},
@@ -129,7 +142,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     for mode in args.modes:
         seconds = {"traffic": args.traffic_secs, "churn": args.churn_secs, "slow": args.slow_secs}[mode]
-        output["cases"].append(run_case(mode, seconds, args.clients))
+        output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
+                                       stress_binary=args.stress, server_cpus=args.server_cpus,
+                                       client_cpus=args.client_cpus, payload_bytes=args.payload_bytes))
         args.output.write_text(json.dumps(output, indent=2) + "\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

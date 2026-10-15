@@ -3,7 +3,8 @@
 The user's ongoing goal is to port the upstream relay faithfully to Rust and keep
 improving simplicity, code, documentation, stability, performance, concurrency,
 and adjacent platform management. A later instruction makes CBOR the primary
-protocol. The goal remains active; this file is a reviewable checkpoint, not a
+protocol, and the latest instruction emphasizes preserving the upstream's
+zero-copy routing intent. The goal remains active; this file is a reviewable checkpoint, not a
 claim that an open-ended improvement effort is complete.
 
 ## Implemented and locally exercised
@@ -25,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 25 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 27 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -40,6 +41,11 @@ claim that an open-ended improvement effort is complete.
   by the first 250 ms post-overflow sample while all 530,408 healthy deliveries
   were verified. All cases returned to zero sessions/connections/queued bytes and
   the persistent global channel. See stability.md for method and caveats.
+- Repeated, affinity-separated socket measurements reproduced the cancellation
+  overhead. Reusing pinned terminal waits recovered it: median 1,623,686 verified
+  deliveries/s versus 1,384,284 for the fixed-close control, with 17.1% less server
+  CPU per delivery. Close/eviction behavior remains intact. Idle state cost rose
+  about 0.50 MiB at 2,000 sockets. See performance.md for raw evidence and limits.
 
 ## Exact verification boundaries
 
@@ -57,10 +63,12 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Repeat the sustained workload to assess the observed roughly 6% throughput
-   difference after adding output cancellation. Profile before attributing it to
-   watch/registry contention or selecting a faster representation. Keep the close
-   and immediate-eviction contracts intact.
+1. Preserve received application bytes through routing and socket output. The
+   current envelope reconstruction and WebSocket output buffer copy the payload.
+   Evaluate shared receive storage plus a separate sender prefix and vectored
+   output, including backing-storage retention, fanout, partial writes, control
+   frame ordering, and equivalent socket workloads. Keep the close and immediate
+   eviction contracts intact.
 2. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

@@ -110,3 +110,58 @@ The later [stability investigation](stability.md) adds a 30-second traffic run,
 20-second reconnect churn, and a 12-second unread-recipient case. It records two
 close-lifecycle failures and their fixes, including the measured throughput
 tradeoff and the distinction between concurrent sockets and cumulative reconnects.
+
+## Reusing cancellation waits
+
+The close/eviction fixes initially recreated cancellation and watch futures for
+every read-loop iteration and every output. A separate user-cycle profile of
+`c06c37b` found `Notified` polling/dropping, waker cloning/dropping, and repeated
+watch registration among the largest samples. That diagnostic is in
+[close-output-profile.json](benchmarks/2026-10-15-close-output-profile.json).
+It sampled user-space cycles, lost 21 samples and four chunks, and was run
+separately from the comparisons; its shares are not whole-system CPU fractions.
+
+One shutdown future and one terminal close-reason future now remain pinned for
+each session. The read loop and output operations borrow those same futures.
+Their completion still exits the session, and a cancelled partial write still
+discards its transport. No queue, validation, timeout, or Close contract changed.
+This follows Tokio's documented
+[approach to resuming a pinned future](https://tokio.rs/tokio/tutorial/select).
+
+Three rotating repetitions per binary used the same frozen verifying client,
+64 clients (32 private pairs), 1,024-byte payloads, window 16, 15 seconds, four
+workers per process, heartbeat enabled, and inbound rates disabled. Server
+CPUs 0–3 and client CPUs 4–7 were distinct physical cores on this host. No
+profiling or compilation overlapped the final comparison.
+
+| Binary | Median deliveries/s | Range | Server CPU ns/delivery | p99 upper bucket |
+| --- | ---: | ---: | ---: | ---: |
+| Initial port, `1b975de` | 1,495,207 | 1,470,864–1,536,614 | 1,932 | 1.049 ms |
+| Correct Close/cancellation, `c06c37b` | 1,384,284 | 1,344,703–1,398,560 | 2,135 | 1.049 ms |
+| Same fixes, reusable waits | 1,623,686 | 1,586,659–1,634,250 | 1,771 | 1.049 ms |
+
+That is **17.3% more verified deliveries/s and 17.1% less server CPU per delivery**
+than the fixed-close control in this workload. CPU time includes connection
+setup/teardown; throughput excludes setup. The initial release is only a
+diagnostic control because it lacks the lifecycle fixes. An earlier independent
+10-second comparison also reproduced the cancellation regression. Raw records,
+hashes, core topology, and per-case traces are in
+[reused-waits-comparison.json](benchmarks/2026-10-15-reused-waits-comparison.json)
+and [close-cost-comparison.json](benchmarks/2026-10-15-close-cost-comparison.json).
+
+Follow-up checks verified 846,758 connection lifecycles in eight seconds and
+245,807 healthy deliveries alongside an unread recipient in five seconds, with
+correct disconnect notification and complete cleanup. See
+[reused-waits-lifecycle.json](benchmarks/2026-10-15-reused-waits-lifecycle.json).
+Three 2,000-idle-socket samples per binary measured median RSS of 25.54 MiB for
+the control and 26.05 MiB for reusable waits: about 0.50 MiB extra for persistent
+session state. See [reused-waits-idle.json](benchmarks/2026-10-15-reused-waits-idle.json).
+These remain local measurements, not a hosted capacity claim.
+
+To compare frozen binaries with the same client:
+
+```sh
+python3 scripts/compare.py --candidate before=/path/to/before/war-relay \
+  --candidate after=/path/to/after/war-relay --stress /path/to/frozen/stress \
+  --repetitions 3 --seconds 15 --output artifacts/comparison.json
+```
