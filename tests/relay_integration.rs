@@ -153,7 +153,10 @@ async fn close_code(ws: &mut Socket) -> u16 {
     timeout(Duration::from_secs(3), async {
         loop {
             match ws.next().await.unwrap().unwrap() {
-                Message::Close(Some(frame)) => return u16::from(frame.code),
+                Message::Close(Some(frame)) => {
+                    ws.flush().await.unwrap();
+                    return u16::from(frame.code);
+                }
                 Message::Ping(_) => {
                     let _ = ws.flush().await;
                 }
@@ -544,5 +547,61 @@ async fn channel_list_output_uses_output_budget_instead_of_incoming_message_limi
     assert_eq!(d.array().unwrap(), Some(2));
     assert_eq!(d.u8().unwrap(), 2);
     assert_eq!(d.array().unwrap(), Some(302));
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn peer_initiated_close_is_acknowledged_before_the_transport_is_dropped() {
+    let server = Server::new(config()).await;
+    let (mut ws, _) = server.join("close-ack").await;
+    ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+        code: 1000.into(),
+        reason: "client finished".into(),
+    }))
+    .await
+    .unwrap();
+    let reply = timeout(Duration::from_secs(2), ws.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(reply, Message::Close(Some(frame)) if u16::from(frame.code)==1000 && frame.reason=="client finished")
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn close_before_join_preserves_the_peers_code_and_reason() {
+    let server = Server::new(config()).await;
+    let (mut ws, _) = connect_async(&server.url).await.unwrap();
+    ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+        code: 4002.into(),
+        reason: "no subscription".into(),
+    }))
+    .await
+    .unwrap();
+    assert!(
+        matches!(timeout(Duration::from_secs(2),ws.next()).await.unwrap().unwrap().unwrap(), Message::Close(Some(frame)) if u16::from(frame.code)==4002 && frame.reason=="no subscription")
+    );
+    assert_eq!(server.relay.metrics.joined.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn an_abrupt_transport_drop_is_counted_separately_from_protocol_violations() {
+    let server = Server::new(config()).await;
+    let (ws, _) = server.join("abrupt").await;
+    drop(ws);
+    timeout(Duration::from_secs(2), async {
+        while server.relay.counts().0 != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 1);
     server.stop().await;
 }

@@ -105,3 +105,8 @@ thousands of sockets, distributed routing, or browser rendering. It does not
 confirm the upstream README's million-connection claim. Next measurements should
 extend workload duration, active-connection count, and adverse-client behavior
 before adding structural complexity.
+
+The later [stability investigation](stability.md) adds a 30-second traffic run,
+20-second reconnect churn, and a 12-second unread-recipient case. It records two
+close-lifecycle failures and their fixes, including the measured throughput
+tradeoff and the distinction between concurrent sockets and cumulative reconnects.

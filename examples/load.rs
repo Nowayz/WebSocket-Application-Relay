@@ -56,6 +56,24 @@ async fn main() -> Result<()> {
         "invalid payload size"
     );
     ensure!((1..=32).contains(&args.window), "window must be in 1..=32");
+    let (prepared_messages, samples) = match args.mode {
+        Mode::Private => (
+            args.messages as u128 * (args.clients / 2) as u128,
+            args.messages as u128 * (args.clients / 2) as u128,
+        ),
+        Mode::Broadcast => (
+            args.messages as u128,
+            args.messages as u128 * (args.clients - 1) as u128,
+        ),
+        Mode::Idle => (0, 0),
+    };
+    let prepared_bytes = prepared_messages
+        * (2 * (args.payload_bytes as u128 + 19) + std::mem::size_of::<(Bytes, Bytes)>() as u128)
+        + samples * 8;
+    ensure!(
+        prepared_bytes <= 512 * 1024 * 1024 && samples <= 10_000_000,
+        "prepared workload exceeds 512 MiB or 10 million latency samples; reduce workload or use the bounded-duration stress example"
+    );
     let setup = Instant::now();
     match args.mode {
         Mode::Idle => {

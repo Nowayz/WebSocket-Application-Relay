@@ -21,12 +21,42 @@ pub struct Metrics {
     pub connections: AtomicUsize,
     pub variable_bytes: AtomicUsize,
     pub global_pressure: AtomicU64,
+    pub write_timeouts: AtomicU64,
+    pub write_errors: AtomicU64,
+    pub aborted_writes: AtomicU64,
+    pub close_failures: AtomicU64,
+    pub transport_disconnects: AtomicU64,
 }
 
 impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
         for (name, value, help) in [
+            (
+                "write_timeouts_total",
+                self.write_timeouts.load(Relaxed),
+                "Socket output operations exceeding their deadline.",
+            ),
+            (
+                "write_errors_total",
+                self.write_errors.load(Relaxed),
+                "Socket output operations failing with transport errors.",
+            ),
+            (
+                "aborted_writes_total",
+                self.aborted_writes.load(Relaxed),
+                "Output operations cancelled by session policy or shutdown.",
+            ),
+            (
+                "close_failures_total",
+                self.close_failures.load(Relaxed),
+                "Close handshakes failing or exceeding their single deadline.",
+            ),
+            (
+                "transport_disconnects_total",
+                self.transport_disconnects.load(Relaxed),
+                "Joined peers lost through I/O errors or absent close handshakes.",
+            ),
             (
                 "global_pressure_total",
                 self.global_pressure.load(Relaxed),

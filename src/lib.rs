@@ -7,6 +7,7 @@ pub mod metrics;
 pub mod protocol;
 pub mod relay;
 pub mod server;
+mod transport;
 
 pub use config::Config;
 pub use relay::Relay;

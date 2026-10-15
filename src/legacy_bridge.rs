@@ -2,6 +2,7 @@
 use crate::{
     legacy,
     protocol::{self, BROADCAST, Disconnect},
+    transport,
 };
 use anyhow::{Context, Result, bail};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -197,22 +198,33 @@ async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
                 .await
                 .context("legacy client left before join")??
             {
-                Message::Binary(bytes) => break Ok::<_, anyhow::Error>(bytes),
-                Message::Text(text) => break Ok(Bytes::copy_from_slice(text.as_bytes())),
+                Message::Binary(bytes) => break Ok::<_, anyhow::Error>(Some(bytes)),
+                Message::Text(text) => break Ok(Some(Bytes::copy_from_slice(text.as_bytes()))),
                 Message::Ping(_) => legacy.flush().await?,
                 Message::Pong(_) => {}
+                Message::Close(_) => {
+                    transport::acknowledge_close(&mut legacy, WAIT).await;
+                    break Ok(None);
+                }
                 _ => bail!("legacy client left before join"),
             }
         }
     })
     .await??;
+    let Some(joined) = joined else {
+        return Ok(());
+    };
     if joined.len() > 16 {
-        legacy
-            .close(Some(CloseFrame {
+        transport::initiate_close(
+            &mut legacy,
+            Some(CloseFrame {
                 code: CloseCode::Protocol,
                 reason: "Channel Length Exceeded".into(),
-            }))
-            .await?;
+            }),
+            WAIT,
+            None,
+        )
+        .await;
         return Ok(());
     }
     let (mut upstream, _) = timeout(WAIT, connect_async(upstream)).await??;
@@ -235,11 +247,15 @@ async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
             incoming = legacy.next() => match incoming {
                 Some(Ok(Message::Ping(_))) => { timeout(WAIT, legacy.flush()).await??; }
                 Some(Ok(Message::Pong(_))) => {}
-                Some(Ok(Message::Close(frame))) => { let _ = timeout(WAIT, upstream.close(frame)).await; break; }
+                Some(Ok(Message::Close(frame))) => {
+                    transport::acknowledge_close(&mut legacy, WAIT).await;
+                    transport::initiate_close(&mut upstream, frame, WAIT, None).await;
+                    break;
+                }
                 Some(Ok(message)) => match to_cbor(message) {
                     Ok(Some(packet)) => timeout(WAIT, upstream.send(Message::Binary(packet))).await??,
                     Ok(None) => {},
-                    Err(reason) => { let _ = timeout(WAIT, legacy.close(Some(CloseFrame { code: reason.code.into(), reason: reason.reason.into() }))).await; break; }
+                    Err(reason) => { transport::initiate_close(&mut legacy, Some(CloseFrame { code: reason.code.into(), reason: reason.reason.into() }), WAIT, None).await; break; }
                 }
                 _ => break,
             },
@@ -247,11 +263,15 @@ async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
                 Some(Ok(Message::Binary(bytes))) => match from_cbor(&bytes) {
                     Ok(Some(message)) => timeout(WAIT, legacy.send(message)).await??,
                     Ok(None) => {},
-                    Err(_) => { let _ = timeout(WAIT, legacy.close(Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }))).await; break; }
+                    Err(_) => { transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
                 }
                 Some(Ok(Message::Ping(_))) => { timeout(WAIT, upstream.flush()).await??; }
                 Some(Ok(Message::Pong(_))) => {},
-                Some(Ok(Message::Close(frame))) => { let _ = timeout(WAIT, legacy.close(frame)).await; break; }
+                Some(Ok(Message::Close(frame))) => {
+                    transport::acknowledge_close(&mut upstream, WAIT).await;
+                    transport::initiate_close(&mut legacy, frame, WAIT, None).await;
+                    break;
+                }
                 _ => break,
             }
         }

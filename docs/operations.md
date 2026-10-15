@@ -27,7 +27,7 @@ variables. All bounds are per process.
 
 | Budget | Default | Counts |
 | --- | ---: | --- |
-| Connections | 10,000 | TCP handshakes, unjoined sockets, and joined sessions |
+| Connections | 10,000 | TCP handshakes, unjoined sockets, joined sessions, and closing transports |
 | Channels | 10,000 | Includes persistent `re_globl` |
 | Members per channel | 10,000 | Includes closing sessions until removal |
 | Incoming message | 16 MiB | Complete reassembled WebSocket data message |
@@ -38,7 +38,7 @@ variables. All bounds are per process.
 | Variables across process | 64 MiB | Sum of channel key/value bytes |
 | Incoming rate per session | 1,000 messages/s / 16 MiB/s | One-second burst; join and ping/pong also count |
 | Handshake / channel join deadline | 5 s / 10 s | Includes clients that send no data |
-| Write deadline | 5 s | A stalled consumer cannot hold a task indefinitely |
+| Write / graceful-close deadline | 5 s | One deadline per operation; close-send and acknowledgement share a budget |
 | Heartbeat | Every 15 s, pong due within 45 s | Server ping payload `war`; zero interval disables heartbeats |
 | Shutdown deadline | 10 s | Remaining tasks are aborted and registration cleanup runs |
 
@@ -62,6 +62,15 @@ have reached some recipients when global capacity runs out; there are no deliver
 acknowledgements or transactional broadcasts. Disconnect notifications may be
 dropped under global queue pressure. During full service shutdown they are
 suppressed to avoid quadratic traffic among sessions that are all closing.
+
+A close decision removes routing membership and releases queued reservations
+before waiting for a graceful handshake. TCP connection capacity remains charged
+until the transport ends. Policy cancellation interrupts an in-flight socket
+write immediately. A partial or failed frame is never followed by a second
+blocking flush; that transport is dropped, so an unread client may observe a
+reset/abnormal close instead of the intended WebSocket close code. Responsive
+clients receive and acknowledge the normal close frame. A received Close is
+acknowledged by flushing the exact response already queued by the WebSocket library.
 
 Global variable exhaustion refuses the write and closes the writer with `1013`.
 Per-channel and process variable budgets update atomically with registry changes.
@@ -109,6 +118,13 @@ Monitor `war_connections`, `war_sessions`, `war_channels`, `war_queued_bytes`,
 `war_handshake_errors_total`, `war_protocol_errors_total`, and
 `war_rate_limited_total`. Metric labels deliberately exclude user/channel IDs.
 Debug logging reports connection failures without message bodies or credentials.
+
+Output diagnostics distinguish `war_write_timeouts_total`, `war_write_errors_total`,
+`war_aborted_writes_total` (policy or shutdown cancellation), and
+`war_close_failures_total`. Abrupt TCP loss is counted in
+`war_transport_disconnects_total`, rather than presenting an ordinary lost client
+as a malformed WAR packet. During clean reconnect churn these counters should
+stay at zero; forced unread-client eviction can increment aborted writes.
 
 ## Scaling boundary
 

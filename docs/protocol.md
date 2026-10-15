@@ -99,3 +99,10 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 Admission refusals before upgrade can end with a TCP close instead of a WebSocket
 close frame. The bridge suppresses modern command acknowledgements to preserve
 original-client expectations. See the README for its supported value conversions.
+
+Close codes describe the intended policy. If a transport is blocked partway
+through a frame, cancellation drops it instead of queueing another write behind
+the blocked data. Such a peer may observe an abnormal close/reset; `1006` is a
+client-side report and is never transmitted as a close frame. A cooperative peer's
+valid Close code and reason are echoed before dropping its transport, including
+connections that close before joining a channel.

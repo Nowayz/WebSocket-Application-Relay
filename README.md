@@ -95,6 +95,7 @@ undefined-variable and const-reassignment bugs are not copied into the new clien
   Channel populations and inbound message/byte rates have explicit limits.
 - Each recipient has a bounded message queue and byte budget, including an
   in-flight write. Routing never awaits a consumer; overflow closes it with `1013`.
+  Pending writes observe session cancellation and release their reservations promptly.
 - Process-wide queue and variable byte budgets bound aggregate retained payloads
   as the number of users and channels grows. Read buffers default to 4 KiB.
 - Channel variables have count and byte limits and disappear with an empty
@@ -104,8 +105,9 @@ undefined-variable and const-reassignment bugs are not copied into the new clien
 - Tokio drives concurrent connections. Routing uses shared registry reads;
   membership/ID changes use writes. No registry lock spans an await or socket I/O.
   Fanout shares one immutable frame across recipients.
-- SIGINT/SIGTERM stop admission, close sessions with `1001`, and enforce a shutdown
-  deadline. Registration cleanup also runs when a task is cancelled.
+- SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
+  receive `1001`; blocked transports can be dropped. Peer-initiated Close frames
+  receive their exact acknowledgement. Cleanup also runs on task cancellation.
 
 Management uses a separate HTTP listener:
 
@@ -150,6 +152,8 @@ original-client checks, and removes the services afterward.
 ./target/release/examples/load --clients 128 --messages 1000 --payload-bytes 256
 ./target/release/examples/load --mode broadcast --clients 64 --messages 500
 python3 scripts/benchmark.py --output artifacts/read-buffer.json
+cargo build --release --example stress
+python3 scripts/stability.py --output artifacts/stability.json
 ```
 
 The load tool verifies every frame and its order. Reports include setup time,
@@ -157,3 +161,10 @@ verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons
 release builds, fresh server processes, sequential candidates, and alternating
 order. [docs/performance.md](docs/performance.md) records results and limits;
 [docs/STATUS.md](docs/STATUS.md) tracks continuing work.
+
+The stability runner checks sustained traffic, reconnect churn, and an unread
+recipient while verifying healthy delivery and sampling memory/management latency.
+Its traffic templates and latency histogram remain bounded as duration increases.
+The finite load tool refuses more than 512 MiB of prepared work or 10 million
+latency samples; use the stress tool for longer runs. See the measured
+[close and backpressure investigation](docs/stability.md).

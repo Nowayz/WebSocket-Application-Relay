@@ -32,6 +32,7 @@ use tracing::{debug, info, warn};
 use crate::{
     Relay,
     protocol::{self, Disconnect},
+    transport::{self, WriteFailure},
 };
 
 /// Run pre-bound listeners; useful for embedders and tests with ephemeral ports.
@@ -172,34 +173,43 @@ async fn connection_task(
     tokio::pin!(deadline);
     let subscription = loop {
         let incoming = tokio::select! {
-            _ = shutdown.cancelled() => { close(&mut ws, Disconnect::SHUTDOWN, config.write_timeout()).await; return Ok(()); }
-            _ = &mut deadline => { close(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, config.write_timeout()).await; return Ok(()); }
+            _ = shutdown.cancelled() => { close(&mut ws, Disconnect::SHUTDOWN, &relay, &shutdown).await; return Ok(()); }
+            _ = &mut deadline => { close(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, &relay, &shutdown).await; return Ok(()); }
             incoming = ws.next() => incoming,
         };
         match incoming {
             Some(Ok(message)) if !limiter.allow(message.len()) => {
                 relay.metrics.rate_limited.fetch_add(1, Relaxed);
-                close(&mut ws, Disconnect::RATE, config.write_timeout()).await;
+                close(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
                 return Ok(());
             }
             Some(Ok(Message::Binary(bytes))) => {
                 match protocol::join(&bytes).and_then(|name| relay.subscribe(name)) {
                     Ok(subscription) => break subscription,
                     Err(reason) => {
-                        close(&mut ws, reason, config.write_timeout()).await;
+                        close(&mut ws, reason, &relay, &shutdown).await;
                         return Ok(());
                     }
                 }
             }
             Some(Ok(Message::Ping(_))) => {
-                if !flush(&mut ws, config.write_timeout(), &shutdown).await {
+                if let Err(failure) =
+                    transport::output(ws.flush(), config.write_timeout(), &shutdown, None).await
+                {
+                    output_failed(&relay, failure);
                     return Ok(());
                 }
             }
             Some(Ok(Message::Pong(_))) => {}
-            Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return Ok(()),
+            Some(Ok(Message::Close(_))) => {
+                if !transport::acknowledge_close(&mut ws, config.write_timeout()).await {
+                    relay.metrics.close_failures.fetch_add(1, Relaxed);
+                }
+                return Ok(());
+            }
+            None | Some(Err(_)) => return Ok(()),
             _ => {
-                close(&mut ws, cbor_required(), config.write_timeout()).await;
+                close(&mut ws, cbor_required(), &relay, &shutdown).await;
                 return Ok(());
             }
         }
@@ -214,43 +224,49 @@ async fn connection_task(
     let mut heartbeat = interval_at(Instant::now() + period, period);
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut pong_deadline = None;
-    let reason = loop {
+    let end = loop {
         tokio::select! {
-            _ = shutdown.cancelled() => break Disconnect::SHUTDOWN,
+            _ = shutdown.cancelled() => break SessionEnd::Close(Disconnect::SHUTDOWN),
             _ = cancellation.changed() => {
-                if let Some(reason) = *cancellation.borrow() { break reason; }
+                if let Some(reason) = *cancellation.borrow() { break SessionEnd::Close(reason); }
             }
             _ = sleep_until(pong_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400))), if pong_deadline.is_some() => {
-                break Disconnect { code: 1001, reason: "Heartbeat Timeout" };
+                break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });
             }
             _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
                 if pong_deadline.is_none() {
-                    if !write(&mut ws, Message::Ping(bytes::Bytes::from_static(b"war")), config.write_timeout(), &shutdown).await { break Disconnect::SHUTDOWN; }
+                    if let Err(failure) = transport::output(ws.send(Message::Ping(bytes::Bytes::from_static(b"war"))), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); }
                     pong_deadline = Some(Instant::now() + Duration::from_secs(config.pong_timeout_secs));
                 }
             }
             packet = outgoing.recv() => {
-                let Some(packet) = packet else { break Disconnect::SHUTDOWN; };
-                if !write(&mut ws, Message::Binary(packet.bytes.clone()), config.write_timeout(), &shutdown).await { break Disconnect::SHUTDOWN; }
+                let Some(packet) = packet else { break SessionEnd::Close(Disconnect::SHUTDOWN); };
+                if let Err(failure) = transport::output(ws.send(Message::Binary(packet.bytes.clone())), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); }
                 relay.metrics.deliveries.fetch_add(1, Relaxed);
                 relay.metrics.delivered_bytes.fetch_add(packet.bytes.len() as u64, Relaxed);
             }
             incoming = ws.next() => {
                 match incoming {
-                    Some(Ok(message)) if !limiter.allow(message.len()) => break Disconnect::RATE,
+                    Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
                     Some(Ok(Message::Binary(bytes))) => {
-                        if let Err(reason) = relay.receive(peer, &bytes) { break reason; }
+                        if let Err(reason) = relay.receive(peer, &bytes) { break SessionEnd::Close(reason); }
                     }
-                    Some(Ok(Message::Ping(_))) => { if !flush(&mut ws, config.write_timeout(), &shutdown).await { break Disconnect::SHUTDOWN; } }
+                    Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), &shutdown, Some(&mut cancellation)).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }
-                    Some(Ok(Message::Close(_))) | None => break Disconnect { code: 1000, reason: "" },
-                    Some(Err(tungstenite::Error::Capacity(_))) => break Disconnect { code: 1009, reason: "Message Too Large" },
-                    Some(Err(_)) => break Disconnect::PROTOCOL,
-                    _ => break cbor_required(),
+                    Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
+                    None | Some(Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed)) => break SessionEnd::Drop(Disconnect { code: 1000, reason: "" }),
+                    Some(Err(tungstenite::Error::Io(_) | tungstenite::Error::Protocol(tungstenite::error::ProtocolError::ResetWithoutClosingHandshake))) => {
+                        relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
+                        break SessionEnd::Drop(Disconnect { code: 1001, reason: "Transport Closed" });
+                    }
+                    Some(Err(tungstenite::Error::Capacity(_))) => break SessionEnd::Close(Disconnect { code: 1009, reason: "Message Too Large" }),
+                    Some(Err(_)) => break SessionEnd::Close(Disconnect::PROTOCOL),
+                    _ => break SessionEnd::Close(cbor_required()),
                 }
             }
         }
     };
+    let reason = end.reason();
     if reason.code == 1002 {
         relay.metrics.protocol_errors.fetch_add(1, Relaxed);
     }
@@ -258,8 +274,19 @@ async fn connection_task(
         relay.metrics.rate_limited.fetch_add(1, Relaxed);
     }
     peer.close(reason);
-    close(&mut ws, reason, config.write_timeout()).await;
-    // Registration's Drop removes membership even if this future is aborted or panics.
+    // Routing membership and queued-byte reservations end immediately, before a
+    // potentially slow close handshake. RAII still covers task aborts and panics.
+    drop(registration);
+    drop(outgoing);
+    match end {
+        SessionEnd::Close(reason) => close(&mut ws, reason, &relay, &shutdown).await,
+        SessionEnd::Acknowledge => {
+            if !transport::acknowledge_close(&mut ws, config.write_timeout()).await {
+                relay.metrics.close_failures.fetch_add(1, Relaxed);
+            }
+        }
+        SessionEnd::Drop(_) => {} // A partial/failed write cannot be safely retried.
+    }
     Ok(())
 }
 
@@ -270,34 +297,62 @@ fn cbor_required() -> Disconnect {
     }
 }
 
-async fn write(
-    ws: &mut Socket,
-    message: Message,
-    duration: Duration,
-    shutdown: &CancellationToken,
-) -> bool {
-    tokio::select! {
-        _ = shutdown.cancelled() => false,
-        result = timeout(duration, ws.send(message)) => matches!(result, Ok(Ok(()))),
+enum SessionEnd {
+    Close(Disconnect),
+    Acknowledge,
+    Drop(Disconnect),
+}
+
+impl SessionEnd {
+    fn reason(&self) -> Disconnect {
+        match self {
+            Self::Close(reason) | Self::Drop(reason) => *reason,
+            Self::Acknowledge => Disconnect {
+                code: 1000,
+                reason: "",
+            },
+        }
     }
 }
 
-async fn flush(ws: &mut Socket, duration: Duration, shutdown: &CancellationToken) -> bool {
-    tokio::select! {
-        _ = shutdown.cancelled() => false,
-        result = timeout(duration, ws.flush()) => matches!(result, Ok(Ok(()))),
-    }
+fn output_failed(relay: &Relay, failure: WriteFailure) -> SessionEnd {
+    let reason = match failure {
+        WriteFailure::Closed(reason) => {
+            relay.metrics.aborted_writes.fetch_add(1, Relaxed);
+            reason
+        }
+        WriteFailure::TimedOut => {
+            relay.metrics.write_timeouts.fetch_add(1, Relaxed);
+            Disconnect {
+                code: 1013,
+                reason: "Write Timeout",
+            }
+        }
+        WriteFailure::Transport => {
+            relay.metrics.write_errors.fetch_add(1, Relaxed);
+            Disconnect {
+                code: 1001,
+                reason: "Transport Closed",
+            }
+        }
+    };
+    SessionEnd::Drop(reason)
 }
 
-async fn close(ws: &mut Socket, reason: Disconnect, duration: Duration) {
-    let _ = timeout(
-        duration,
-        ws.close(Some(CloseFrame {
+async fn close(ws: &mut Socket, reason: Disconnect, relay: &Relay, shutdown: &CancellationToken) {
+    if !transport::initiate_close(
+        ws,
+        Some(CloseFrame {
             code: CloseCode::from(reason.code),
             reason: reason.reason.into(),
-        })),
+        }),
+        relay.config.write_timeout(),
+        Some(shutdown),
     )
-    .await;
+    .await
+    {
+        relay.metrics.close_failures.fetch_add(1, Relaxed);
+    }
 }
 
 struct RateLimiter {

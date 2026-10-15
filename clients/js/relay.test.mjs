@@ -120,3 +120,38 @@ test('legacy privileged commands preserve channel-list layout and fixed-ID takeo
   const reserved = once(next, 'close'); next.send(packet(3, new Uint8Array(8)));
   assert.equal((await reserved)[0].code, 1008);
 });
+
+test('native CBOR and legacy connections finish close handshakes before and after joining', async () => {
+  for (const [endpoint, joined] of [[url, false], [bridgeUrl, false], [url, true], [bridgeUrl, true]]) {
+    const ws = new WebSocket(endpoint); ws.binaryType = 'arraybuffer';
+    await once(ws, 'open');
+    if (joined) {
+      const welcome = once(ws, 'message');
+      ws.send(endpoint === url ? new Uint8Array([0x65,0x63,0x6c,0x6f,0x73,0x65]) : 'close');
+      await welcome;
+    }
+    const closed = once(ws, 'close');
+    ws.close(4002, 'client finished');
+    const event = (await closed)[0];
+    assert.equal(event.code, 4002);
+    assert.equal(event.reason, 'client finished');
+    assert.equal(event.wasClean, true);
+  }
+});
+
+test('an unsupported structured value closes a legacy recipient cleanly and leaves CBOR routing usable', async t => {
+  const modern = await Relay.connect(url, 'typed-limit');
+  const old = new WebSocket(bridgeUrl); old.binaryType = 'arraybuffer';
+  t.after(() => { modern.close(); old.close(); });
+  await once(old, 'open');
+  const welcome = once(old, 'message'); old.send('typed-limit');
+  const id = new DataView((await welcome)[0].data).getBigUint64(0, true);
+  const closed = once(old, 'close');
+  modern.send(id, { requiresCBOR: true });
+  const event = (await closed)[0];
+  assert.equal(event.code, 1003);
+  assert.equal(event.wasClean, true);
+  const message = once(modern, 'message');
+  modern.send(modern.userId, { stillReady: true });
+  assert.deepEqual((await message)[0].detail.value, { stillReady: true });
+});

@@ -25,12 +25,21 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 20 Rust tests and 4 JavaScript socket tests pass, along with
+- Current checks: 25 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
 - Shutdown suppresses quadratic disconnect traffic; output limits allow channel
   queries larger than incoming application-message limits.
+- Sustained checks found and fixed missing Close acknowledgements and delayed
+  eviction of unread recipients. Shared close handling covers native CBOR and
+  legacy clients, before and after join. Pending writes observe policy cancellation;
+  routing membership/queued reservations release before a graceful handshake.
+- A 30-second rerun verified 35,328,176 deliveries. A 20-second churn rerun completed
+  1,911,994 connection lifecycles with 64 workers. An unread recipient was removed
+  by the first 250 ms post-overflow sample while all 530,408 healthy deliveries
+  were verified. All cases returned to zero sessions/connections/queued bytes and
+  the persistent global channel. See stability.md for method and caveats.
 
 ## Exact verification boundaries
 
@@ -48,10 +57,14 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Extend real-socket runs to sustained traffic, reconnect churn, slow readers,
-   large fanout, and larger active populations. Record CPU/latency/retained-memory
-   profiles and compare identical workloads before selecting an optimization.
-2. Examine global counter/registry contention only if those profiles show it;
+1. Repeat the sustained workload to assess the observed roughly 6% throughput
+   difference after adding output cancellation. Profile before attributing it to
+   watch/registry contention or selecting a faster representation. Keep the close
+   and immediate-eviction contracts intact.
+2. Extend duration, fanout, active populations, adverse networks, and connection
+   mixes. Thirty-second traffic and twenty-second churn are now verified, while
+   multi-hour, TLS, and much larger concurrent populations remain unmeasured.
+   Examine global counter/registry contention only if those profiles show it;
    keep the current simple ownership model until a measured bottleneck justifies
    a different representation or sharding.
 3. Add browser bundler acceptance and deliberate malformed-CBOR/fragmentation
