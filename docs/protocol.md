@@ -24,6 +24,13 @@ trailing items, truncated arguments, more than 64 nesting levels, or more than
 65,536 items per value are protocol violations. Validation uses a fixed stack and
 does not allocate an application object graph.
 
+Expanded simple values `f8 00` through `f8 1f` are malformed under
+[RFC 8949 section 3.3](https://www.rfc-editor.org/rfc/rfc8949.html#section-3.3)
+and close the producing session with `1002`, including when nested or supplied
+as a variable. One-byte simple values and expanded values `f8 20` through
+`f8 ff` remain accepted and opaque. This rule differs from nonminimal integer
+encodings, which remain accepted and unchanged.
+
 ## Routing
 
 | Target / sender | Meaning |

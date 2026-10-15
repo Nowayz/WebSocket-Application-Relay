@@ -1,0 +1,135 @@
+{
+  "observed_at_utc": "2026-10-15T22:18:26.749955+00:00",
+  "repository": {
+    "base_revision": "4b12ba9154bd9c7324e3af7ed75a2f7d08cedde1",
+    "uncommitted_implementation": true,
+    "source_sha256": {
+      "src/protocol.rs": "af8056091a80bb82383f17b1069fdf161004044d1236d9d2596a5fca853c86ca",
+      "tests/relay_integration.rs": "16e3cb645571ad7acb1ac35b0fa3bd440326197a4fe93304d78c958a7ea3f700",
+      "examples/retention.rs": "82b007f132989f7beb688427c1aecc0195b18aebc020a23bd14962386533cbd9",
+      "scripts/retention.py": "771c9d0c8b299c68410a0714f95e2ee3c0ecf93b213d8cccb746ad247cbcdcd2"
+    }
+  },
+  "processes": [
+    {
+      "pid": 2602029,
+      "command": [
+        "./target/release/war-relay"
+      ],
+      "sha256": "9428c016eee2e8bf794d661f8ed099fc2135e011df2f004e65e93a70cae87ddb"
+    },
+    {
+      "pid": 2602028,
+      "command": [
+        "./target/release/war-legacy-bridge"
+      ],
+      "sha256": "c08a619a04874e1d57ab98ee0d2d084d95469bcea1c4b22e2d11bf92a209ed41"
+    }
+  ],
+  "endpoints": {
+    "cbor": "ws://127.0.0.1:1338",
+    "legacy": "ws://127.0.0.1:1337",
+    "management": "http://127.0.0.1:1339",
+    "browser_check": "http://127.0.0.1:4180"
+  },
+  "health": {
+    "healthz": 200,
+    "readyz": 200
+  },
+  "checks": {
+    "rust_tests_passed": 43,
+    "strict_clippy_passed": true,
+    "rustfmt_passed": true,
+    "release_malformed_network_check_passed": true,
+    "js_socket_tests_passed": 6,
+    "live_legacy_checks_passed": 3,
+    "browser_checks_passed": 7
+  },
+  "cbor_regression": {
+    "before_fix": "Both the unit vector f8 00 and the real-socket recipient-isolation regression failed; a malformed f8 00 was forwarded to a healthy peer.",
+    "rejected_socket_cases": 192,
+    "fragmented_socket_cases": 80,
+    "valid_simple_socket_deliveries": 248,
+    "healthy_self_deliveries_between_malformed_cases": 160,
+    "exhaustive_expanded_simple_unit_forms": 1280,
+    "guard_scope": "Only Type::Simple; no body movement, object decoding, canonicalization, or changes to valid nonminimal integer encodings."
+  },
+  "live_cbor": {
+    "passed": true,
+    "malformedCases": [
+      {
+        "case": "routed f8 00",
+        "code": 1002,
+        "wasClean": true
+      },
+      {
+        "case": "variable f8 1f",
+        "code": 1002,
+        "wasClean": true
+      }
+    ],
+    "malformedDelivered": 0,
+    "variableStored": false,
+    "healthyDeliveryVerified": true,
+    "healthyClose": {
+      "code": 1000,
+      "wasClean": true
+    }
+  },
+  "browser": {
+    "bundle_sha256": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "report": {
+      "passed": true,
+      "url": "ws://127.0.0.1:1338",
+      "checks": [
+        "Three browser WebSockets joined with BigInt IDs and war.cbor.v1.",
+        "Broadcast preserved Unicode, byte strings, nested values, and an exact uint64.",
+        "Private routing reached a session in a different channel.",
+        "A 128 KiB binary value arrived byte for byte.",
+        "Concurrent control requests preserved typed, missing, and empty variables.",
+        "Unsafe Number IDs were rejected before sending.",
+        "Disconnect notification and all three clean Close handshakes completed."
+      ],
+      "errors": [],
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+      "finished": true
+    },
+    "console_errors": 0,
+    "console_warnings": 0
+  },
+  "metrics_after": {
+    "war_unstarted_writes_cancelled_total": "0",
+    "war_routing_reused_bytes_total": "131243",
+    "war_routing_copied_bytes_total": "0",
+    "war_write_timeouts_total": "0",
+    "war_write_errors_total": "0",
+    "war_aborted_writes_total": "0",
+    "war_close_failures_total": "0",
+    "war_transport_disconnects_total": "0",
+    "war_global_pressure_total": "0",
+    "war_accepted_total": "13",
+    "war_rejected_total": "0",
+    "war_handshake_errors_total": "0",
+    "war_joined_total": "12",
+    "war_disconnected_total": "12",
+    "war_incoming_messages_total": "18",
+    "war_incoming_bytes_total": "131517",
+    "war_deliveries_total": "32",
+    "war_delivered_bytes_total": "131583",
+    "war_slow_consumers_total": "0",
+    "war_protocol_errors_total": "2",
+    "war_rate_limited_total": "0",
+    "war_variable_bytes": "0",
+    "war_connections": "0",
+    "war_sessions": "0",
+    "war_channels": "1",
+    "war_queued_bytes": "0",
+    "war_draining": "0"
+  },
+  "verification_limits": [
+    "Local single-host plaintext sockets.",
+    "Deterministic corpus and finite retention runs, not exhaustive fuzzing or a leak proof.",
+    "No live C++ differential because its bundled executable dependencies remain unavailable.",
+    "Browser acceptance covers Chrome 155 Linux; CI browser execution and other engines remain unverified."
+  ]
+}

@@ -81,7 +81,13 @@ pub fn validate_value(decoder: &mut Decoder<'_>) -> Result<(), Disconnect> {
                 0
             }
             Type::Simple => {
-                decoder.simple().map_err(bad)?;
+                // minicbor exposes even reserved expanded values. RFC 8949
+                // section 3.3 forbids f8 followed by a value below 32.
+                let extended = decoder.input()[decoder.position()] == 0xf8;
+                let value = decoder.simple().map_err(bad)?;
+                if extended && value < 32 {
+                    return Err(Disconnect::PROTOCOL);
+                }
                 0
             }
             _ => return Err(Disconnect::PROTOCOL),
@@ -251,6 +257,100 @@ mod tests {
             assert_eq!(value, received);
         }
         assert_eq!(envelope(1, &[0xf6]).as_ref(), &[0x82, 1, 0xf6]);
+    }
+
+    #[test]
+    fn simple_values_reject_reserved_expansions_and_preserve_valid_forms() {
+        // RFC 8949 section 3.3: expanded simple values must be >=32.
+        // Integer nonminimal encodings remain legal; simple values differ.
+        for value in 0..=255u8 {
+            for prefix in [&[][..], &[0x81], &[0xa1, 0], &[0xc0], &[0xa1]] {
+                let mut encoded = prefix.to_vec();
+                encoded.extend_from_slice(&[0xf8, value]);
+                if prefix == [0xa1] {
+                    encoded.push(0xf6); // Exercise a malformed/valid map key too.
+                }
+                let packet = envelope(1, &encoded);
+                if value < 32 {
+                    assert_eq!(parse(&packet), Err(Disconnect::PROTOCOL), "{encoded:02x?}");
+                } else {
+                    assert_eq!(parse(&packet).unwrap().1, encoded);
+                }
+            }
+        }
+        for value in 0xe0..=0xf7 {
+            assert_eq!(parse(&envelope(1, &[value])).unwrap().1, [value]);
+        }
+        assert_eq!(parse(&envelope(1, &[0x18, 0])).unwrap().1, [0x18, 0]);
+    }
+
+    #[test]
+    fn cbor_header_truncation_utf8_and_resource_boundaries() {
+        // Independent wire values, including nonminimal definite headers,
+        // extreme integers, duplicate keys, opaque tags, NaN, and signed zero.
+        let valid: &[&[u8]] = &[
+            &[0],
+            &[0x1b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+            &[0x3b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+            &[0x58, 1, 0x80],
+            &[0x78, 2, b'p', b'i'],
+            &[0x98, 1, 0xf6],
+            &[0xa2, 0, 1, 0, 2],
+            &[0xd8, 0x18, 0x43, 0, 1, 2],
+            &[0xf9, 0x7e, 1],
+            &[0xf9, 0x80, 0],
+            &[0xfa, 0x7f, 0x80, 0, 0],
+            &[0xfb, 0x7f, 0xf8, 0, 0, 0, 0, 0, 1],
+            &[0xf8, 0x20],
+            &[0xf8, 0xff],
+        ];
+        for value in valid {
+            assert_eq!(parse(&envelope(1, value)).unwrap().1, *value);
+            for end in 0..value.len() {
+                assert_eq!(
+                    parse(&envelope(1, &value[..end])),
+                    Err(Disconnect::PROTOCOL),
+                    "truncation of {value:02x?} at {end}"
+                );
+            }
+            let mut trailing = value.to_vec();
+            trailing.push(0);
+            assert_eq!(parse(&envelope(1, &trailing)), Err(Disconnect::PROTOCOL));
+        }
+        // RFC 8949 Appendix F: reserved additional information in every major
+        // type, plus indefinite/break forms excluded by the WAR wire contract.
+        for major in 0..8u8 {
+            for additional in 28..32 {
+                assert_eq!(
+                    parse(&envelope(1, &[major * 32 + additional])),
+                    Err(Disconnect::PROTOCOL)
+                );
+            }
+        }
+        for text in [
+            &[0x80][..],
+            &[0xc0, 0xaf],
+            &[0xed, 0xa0, 0x80],
+            &[0xf4, 0x90, 0x80, 0x80],
+            &[0xe2, 0x82],
+        ] {
+            let mut encoded = vec![0x60 + text.len() as u8];
+            encoded.extend_from_slice(text);
+            assert_eq!(parse(&envelope(1, &encoded)), Err(Disconnect::PROTOCOL));
+        }
+        for marker in [0x81, 0xc0] {
+            let mut nested = vec![marker; MAX_DEPTH];
+            nested.push(0);
+            assert!(parse(&envelope(1, &nested)).is_ok());
+            nested.insert(0, marker);
+            assert_eq!(parse(&envelope(1, &nested)), Err(Disconnect::PROTOCOL));
+        }
+        for count in [MAX_ITEMS - 1, MAX_ITEMS] {
+            let mut array = vec![0x9a];
+            array.extend_from_slice(&(count as u32).to_be_bytes());
+            array.resize(array.len() + count as usize, 0xf6);
+            assert_eq!(parse(&envelope(1, &array)).is_ok(), count < MAX_ITEMS);
+        }
     }
 
     #[test]

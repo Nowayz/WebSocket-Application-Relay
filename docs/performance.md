@@ -280,3 +280,51 @@ adds 128-client active workloads and a five-millisecond delayed reader beside an
 unread peer. It distinguishes cancellation before the first write poll from
 cancellation of a possibly partial frame, records the reproduced mass-departure
 reset and its fix, and includes a repeated small-message cost check.
+## Retention under repeated unknown-target primers
+
+The `retention` example exercises backing-storage lifetime through real sockets.
+Eight 1 MiB values first reach an unread recipient with a 64 KiB requested TCP
+receive buffer. The sender then alternates a prebuilt 4 MiB message to an unknown
+ID, a tiny value to that recipient, and a verified self-message barrier. The
+barrier proves that preceding input was processed while output remains blocked.
+After a two-second hold, the client reads and compares every queued frame and
+finishes both Close handshakes.
+
+Six sequential fresh four-worker release servers ran the cycle counts in order
+64, 256, 256, 64, 64, 256. Rates and heartbeats were disabled, the write deadline
+was 60 seconds, message queues allowed 1,024 entries, and the default 4 KiB read
+and 32 MiB per-peer byte budgets remained in effect. Server-only RSS and metrics
+were sampled about every 50 ms. All compilation and other socket workloads
+finished before these measurements. The production compaction policy was
+unchanged.
+
+| Metric per run | 64 primers | 256 primers |
+| --- | ---: | ---: |
+| Large unknown-target input, approximately | 256 MiB | 1 GiB |
+| Median sampled peak server RSS | 15,828 KiB | 15,920 KiB |
+| Sampled peak RSS range | 15,696–15,872 KiB | 15,900–15,932 KiB |
+| Held logical output bytes | 6,292,291 | 6,294,596 |
+| Encoded value bytes reused | 8,388,648 | 8,388,648 |
+| Encoded value bytes compacted | 211 | 981 |
+| Verified data/barrier deliveries | 137 | 521 |
+
+All six cases passed delivery/order checks, both Close handshakes, exact
+incoming/delivery/value-byte counter totals, and cleanup to zero connections,
+sessions, queued bytes, and variables with only the global channel remaining.
+Protocol, transport, write, Close, overflow, and global-pressure error counters
+were zero. The large unknown-target values produce no output reservations or
+routing-byte counts. Compaction counts include the tiny queued values and
+self-message barriers; large forwarded bodies retain shared storage.
+
+Quadrupling the primer count changed the median sampled peak by 92 KiB in this
+workload. This supports retaining the existing sharing/compaction policy. It is
+a finite retention check, not a leak proof or a production capacity estimate.
+Post-cleanup RSS ranged from 5.63 to 11.55 MiB; these observations do not identify
+which allocator/runtime allocations account for that remaining storage. Logical
+queue bytes and process RSS measure different things.
+
+Reproduce with the commands in the README. Raw phases, samples, source and
+executable hashes are in
+[retention-pressure.json](benchmarks/2026-10-15-retention-pressure.json).
+The recorded revision is the parent checkout before committing; source hashes
+identify the measured implementation.

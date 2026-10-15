@@ -177,6 +177,21 @@ original-client checks, and removes the services afterward.
 CI also builds the browser bundle; browser execution is a separate acceptance
 step using the page above.
 
+To check receive-slab retention under actual unread-recipient backpressure:
+
+```sh
+cargo build --release --bins --example retention
+python3 scripts/retention.py --cycles 64 256 --output artifacts/retention.json
+```
+
+The runner starts fresh loopback servers with rates/heartbeats disabled and a
+60-second write deadline. Eight 1 MiB deliveries block one recipient, then each
+cycle sends a 4 MiB unknown-target primer, a tiny queued value, and a verified
+self-message barrier. After a two-second hold, it verifies all buffered output,
+both Close handshakes, counter totals, and complete cleanup. It samples server
+RSS and logical queue bytes; these are finite retention checks, not a leak proof
+or a production capacity estimate.
+
 ```sh
 ./target/release/examples/load --clients 128 --messages 1000 --payload-bytes 256
 ./target/release/examples/load --mode broadcast --clients 64 --messages 500

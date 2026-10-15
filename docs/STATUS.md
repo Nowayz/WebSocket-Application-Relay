@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 40 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 43 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -110,6 +110,29 @@ claim that an open-ended improvement effort is complete.
   The recorded exit code was zero, with no error output; no code defect or
   recurrence has been established. Retain this observation for a later lifecycle
   investigation if it recurs.
+- A malformed-CBOR campaign found that expanded simple values `f8 00` through
+  `f8 1f` passed the decoder and reached a recipient. A check confined to simple
+  values now rejects these RFC-invalid forms without changing payload storage.
+  The real-socket regression rejects 192 routed/nested/map-key/variable cases,
+  including 80 fragmented values with interleaved Ping. It also verifies 248
+  valid simple-value deliveries byte for byte and healthy recovery. Independent
+  unit vectors cover truncation, reserved headers, malformed UTF-8, nonminimal
+  definite headers, duplicate keys, floating-point bits, and exact depth/item
+  boundaries. Debug and release network checks pass.
+- Repeated receive-slab retention checks now alternate large unknown-target
+  primers with tiny output held behind an unread recipient. All six fresh-server
+  cases passed full delivery/ordering, Close, counter, and cleanup checks. Raising
+  the primer count from 64 to 256 changed median sampled peak RSS from 15,828 to
+  15,920 KiB; the large forwarded values reused 8,388,648 encoded bytes in each
+  case, while only 211/981 tiny value bytes were compacted. The existing policy
+  is unchanged. Method, raw records, and finite-workload limits are in
+  `performance.md` and `benchmarks/2026-10-15-retention-pressure.json`.
+- Current local native/bridge releases include the simple-value check. Two live
+  malformed probes closed cleanly with `1002` without harming a healthy peer or
+  storing a variable. Seven Chrome acceptance checks and three live legacy/Close
+  checks passed; health/readiness returned 200 and gauges returned to zero. The
+  timestamped process/hash snapshot is
+  `benchmarks/2026-10-15-cbor-retention-live.json`.
 
 ## Exact verification boundaries
 
@@ -131,8 +154,9 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 1. Profile the remaining small-message CPU cost before changing counters, queue
    representation, or read storage. Mixed-size fanout is now exercised at 128
-   concurrent clients; extend adversarial retention checks around slab thresholds
-   and repeated large unknown-target primers followed by tiny routed values.
+   concurrent clients. Unknown-target primers followed by tiny queued output are
+   now checked at 64 and 256 cycles; extend this across simultaneous producers,
+   slab thresholds, and connection populations.
    Preserve ordinary zero-copy forwarding, compaction of enlarged slabs, exact
    peer Close acknowledgements, and immediate dropping of partial output.
 2. Extend duration, fanout, active populations, adverse networks, and connection
@@ -141,9 +165,10 @@ local single-host plaintext sockets; no production or cluster claim is made.
    Examine global counter/registry contention only if those profiles show it;
    keep the current simple ownership model until a measured bottleneck justifies
    a different representation or sharding.
-3. Extend browser acceptance across engines and production bundlers, and run
-   deliberate malformed-CBOR/fragmentation campaigns, preserving resource bounds
-   and source fidelity.
+3. Extend browser acceptance across engines and production bundlers. Broaden the
+   deterministic malformed-CBOR/fragmentation corpus with reproducible generated
+   inputs and concurrent healthy traffic, preserving resource bounds and source
+   fidelity.
 4. Revisit connection-admission policy for public multi-application operation
    (per-IP limits, origin policy, tenant boundaries) with an explicit compatibility
    and proxy model. The existing global/private scopes intentionally match WAR.

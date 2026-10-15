@@ -514,6 +514,115 @@ async fn malformed_packets_text_and_unauthorized_commands_close_cleanly() {
 }
 
 #[tokio::test]
+async fn reserved_simple_encodings_never_reach_recipients_or_channel_variables() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+
+    let server = Server::new(Config {
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut healthy, healthy_id) = server.join("healthy-cbor").await;
+    for value in 0..32u8 {
+        for prefix in [&[][..], &[0x81], &[0xa1, 0], &[0xc0], &[0xa1]] {
+            let (mut bad, _) = server.join("invalid-cbor").await;
+            let mut encoded = prefix.to_vec();
+            encoded.extend_from_slice(&[0xf8, value]);
+            if prefix == [0xa1] {
+                encoded.push(0xf6);
+            }
+            if value.is_multiple_of(2) {
+                if let MaybeTlsStream::Plain(tcp) = bad.get_ref() {
+                    tcp.set_nodelay(true).unwrap();
+                }
+                let packet = protocol::envelope(healthy_id, &encoded);
+                let split = packet.len() - 1;
+                bad.send(Message::Frame(Frame::message(
+                    packet.slice(..split),
+                    OpCode::Data(Data::Binary),
+                    false,
+                )))
+                .await
+                .unwrap();
+                bad.send(Message::Ping(Bytes::from_static(b"split-cbor")))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    timeout(Duration::from_secs(2), bad.next())
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap(),
+                    Message::Pong(Bytes::from_static(b"split-cbor"))
+                );
+                bad.send(Message::Frame(Frame::message(
+                    packet.slice(split..),
+                    OpCode::Data(Data::Continue),
+                    true,
+                )))
+                .await
+                .unwrap();
+            } else {
+                send(&mut bad, healthy_id, &encoded).await;
+            }
+            timeout(Duration::from_secs(2), async {
+                tokio::select! {
+                    incoming = bad.next() => assert!(matches!(incoming.unwrap().unwrap(), Message::Close(Some(frame)) if u16::from(frame.code) == 1002)),
+                    incoming = healthy.next() => panic!("malformed value reached a healthy recipient: {incoming:?}"),
+                }
+            })
+            .await
+            .unwrap();
+            bad.flush().await.unwrap();
+            send(&mut healthy, healthy_id, &protocol::uint(u64::from(value))).await;
+            assert_eq!(
+                data(&mut healthy).await,
+                protocol::envelope(healthy_id, &protocol::uint(u64::from(value)))
+            );
+        }
+        let (mut bad, _) = server.join("healthy-cbor").await;
+        // [0, [4, ["key", simple(value)]]]; a command must not store it either.
+        let command = [0x82, 0, 0x82, 4, 0x82, 0x63, b'k', b'e', b'y', 0xf8, value];
+        bad.send(Message::Binary(Bytes::copy_from_slice(&command)))
+            .await
+            .unwrap();
+        assert_eq!(close_code(&mut bad).await, 1002);
+        assert_eq!(server.relay.metrics.variable_bytes.load(Relaxed), 0);
+        // The bad peer shared this channel, so its departure is observable.
+        let departed = data(&mut healthy).await;
+        assert_eq!(protocol::parse(&departed).unwrap().0, BROADCAST);
+    }
+    let (mut valid, valid_id) = server.join("valid-cbor").await;
+    for value in (32..=255u8)
+        .map(|value| vec![0xf8, value])
+        .chain((0xe0..=0xf7).map(|value| vec![value]))
+    {
+        send(&mut valid, healthy_id, &value).await;
+        assert_eq!(
+            data(&mut healthy).await,
+            protocol::envelope(valid_id, &value)
+        );
+    }
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 32 * 6);
+    for ws in [&mut healthy, &mut valid] {
+        ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+            code: 1000.into(),
+            reason: "".into(),
+        }))
+        .await
+        .unwrap();
+        assert_eq!(close_code(ws).await, 1000);
+    }
+    assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn token_bucket_limits_apply_immediately_after_join() {
     let server = Server::new(Config {
         messages_per_second: 1,

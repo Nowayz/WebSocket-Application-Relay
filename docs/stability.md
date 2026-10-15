@@ -352,3 +352,45 @@ for source/binary hashes, metrics before/after browser execution, the page's
 results, and verification limits. The README includes commands to rebuild and
 serve the same acceptance page. CI builds its bundle; browser execution was
 performed locally with the Playwright CLI.
+
+## Reserved CBOR simple-value encodings
+
+The deterministic malformed-input campaign found a decoder permissiveness gap:
+`f8 00` passed validation and reached a healthy recipient. The same vector failed
+the new unit check and real-socket isolation regression before the fix.
+[RFC 8949 section 3.3](https://www.rfc-editor.org/rfc/rfc8949.html#section-3.3)
+excludes `f8` followed by a byte below 32. The relay now checks that condition
+only in its simple-value branch, retaining the fixed validation stack, borrowed
+payload storage, and existing integer/float/tag behavior.
+
+The network regression rejects 192 cases: all 32 reserved expansions in direct,
+array, map-value, tag, map-key, and set-variable positions. Eighty routed cases
+split the final CBOR byte into a continuation frame with an interleaved Ping.
+The healthy peer verifies 160 self-deliveries between rejections; malformed
+values cannot reach it or populate a variable. All 248 valid simple encodings
+(224 expanded and 24 one-byte forms) are then forwarded byte for byte. Both
+healthy sessions finish clean Close handshakes. The case passes in debug and
+release. The full suite now passes 43 Rust tests, strict Clippy, formatting, and
+six JavaScript socket checks.
+
+Independent unit vectors also test all 1,280 expanded-simple placements, every
+truncation of selected wire values, trailing items, reserved additional
+information, malformed UTF-8, duplicate map keys, nonminimal definite headers,
+opaque tags, extreme integers, floating-point payload bits, 64/65 nested
+array/tag levels, and the 65,536-item boundary. This is a deterministic corpus,
+not exhaustive generated fuzzing or a claim that every malformed input has been
+tested. Valid integer encodings remain accepted without canonicalization.
+
+The normal local native/bridge releases were refreshed afterward. Live routed
+`f8 00` and set-variable `f8 1f` cases each closed cleanly with `1002`; the
+recipient stayed usable and no variable was stored. The seven-check Chrome
+acceptance and three live legacy/Close checks passed against these processes.
+Health/readiness returned 200, session/connection/queue/variable gauges returned
+to zero, and unexpected transport/write/Close errors stayed zero. The two
+protocol-error increments are the intentional malformed probes. See
+[cbor-retention-live.json](benchmarks/2026-10-15-cbor-retention-live.json)
+for executable/source hashes, live results, counters, and verification limits.
+
+The separate retained-output campaign passed all six cases with no policy
+change. Its full method and memory measurements are recorded in
+[performance.md](performance.md#retention-under-repeated-unknown-target-primers).
