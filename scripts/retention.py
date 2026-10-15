@@ -24,7 +24,7 @@ SAMPLED_METRICS = ("war_connections", "war_sessions", "war_channels", "war_queue
                    "war_incoming_messages_total", "war_deliveries_total", "war_routing_reused_bytes_total", "war_routing_copied_bytes_total")
 
 
-def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle_secs, server_idle_secs):
+def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle_secs, server_idle_secs, server_args=()):
     port, admin = runtime.free_port(), runtime.free_port()
     env = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
     server_command = [str(server_binary), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
@@ -36,6 +36,7 @@ def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle
     if server_idle_secs:
         server_command.extend(["--idle-timeout-secs", str(server_idle_secs)])
         command.append("--expect-idle-close")
+    server_command.extend(server_args)
     client = None
     with tempfile.TemporaryFile() as logs:
         server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)
@@ -57,19 +58,34 @@ def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle
             samples, events, pending, phase = [], [], b"", "startup"
             with selectors.DefaultSelector() as selector:
                 selector.register(client.stdout, selectors.EVENT_READ)
-                while client.poll() is None:
-                    if time.monotonic() - started > 50:
-                        raise TimeoutError("retention client exceeded outer deadline")
-                    if selector.select(timeout=0.05):
-                        pending += os.read(client.stdout.fileno(), 65536)
+
+                def consume_events(wait=0):
+                    nonlocal pending, phase
+                    while selector.select(timeout=wait):
+                        chunk = os.read(client.stdout.fileno(), 65536)
+                        if not chunk:
+                            selector.unregister(client.stdout)
+                            break
+                        pending += chunk
                         while b"\n" in pending:
                             line, pending = pending.split(b"\n", 1)
                             entry = json.loads(line)
                             events.append(entry)
                             phase = entry["event"]
+                        wait = 0
+
+                while client.poll() is None:
+                    if time.monotonic() - started > 50:
+                        raise TimeoutError("retention client exceeded outer deadline")
+                    consume_events(0.05)
+                    before = phase
                     observed = runtime.metrics(admin)
-                    samples.append({"seconds":time.monotonic()-started, "phase":phase,
-                                    "process":runtime.snapshot(server.pid), "metrics":{k:observed[k] for k in SAMPLED_METRICS}})
+                    process = runtime.snapshot(server.pid)
+                    consume_events()
+                    samples.append({"seconds":time.monotonic()-started,
+                                    "phase":phase if before == phase else "transition",
+                                    "phase_before":before,"phase_after":phase,
+                                    "process":process, "metrics":{k:observed[k] for k in SAMPLED_METRICS}})
             stdout, stderr = client.communicate(timeout=2)
             events.extend(json.loads(line) for line in (pending + stdout).splitlines() if line)
             for _ in range(200):
@@ -131,9 +147,13 @@ def main():
     parser.add_argument("--idle-secs", type=int, default=0)
     parser.add_argument("--server-idle-secs", type=int, default=0, help="Require automatic application-idle closes after 1..10 seconds; zero disables.")
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
+    parser.add_argument("--server-arg", action="append", default=[], metavar="ARG",
+                        help="Append a server argument; use --server-arg=--option=value and repeat as needed.")
     parser.add_argument("--client", type=Path, default=ROOT/"target/release/examples/retention")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if any(not value or len(value) > 4096 for value in args.server_arg):
+        parser.error("extra server arguments must contain 1..=4096 characters")
     if not all(1 <= producers <= 64 for producers in args.producers) or not all(16 <= cycles <= 512 for cycles in args.cycles):
         parser.error("producers must be in 1..=64 and cycles in 16..=512")
     if not 0 <= args.idle_secs <= 10 or not 65536 <= args.primer_bytes <= 8 * 1024 * 1024:
@@ -145,11 +165,11 @@ def main():
     output = {"host":platform.platform(),"revision":subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
               "server_sha256":hashlib.sha256(args.server.read_bytes()).hexdigest(),"client_sha256":hashlib.sha256(args.client.read_bytes()).hexdigest(),
               "source_sha256":{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(list((ROOT/"src").rglob("*.rs"))+[ROOT/"examples/retention.rs",ROOT/"scripts/retention.py",ROOT/"Cargo.lock"])},
-              "notes":"Sequential fresh four-worker Linux servers; default 4 KiB reads and 32 MiB queue bytes, max(1024, producers * cycles + 32) queue messages, 60s write deadline, heartbeats and rates disabled. A 64 KiB requested client receive buffer and eight 1 MiB fillers establish unread transport backpressure. Synchronized producers alternate large unknown-target primers with tiny queued values and verified self barriers. Each producer's full sequence is verified without imposing a cross-producer order. Optional connected-idle sampling follows complete drain; two seconds of retired sampling follow client-initiated or required server-idle Close handshakes. Server-only RSS/CPU and relevant queue/routing metrics sampled about every 50ms, all final counters retained. Each case caps primer traffic at 8 GiB; preparation is bounded independently of traffic. No compaction-policy change or leak/production-capacity claim.","cases":[]}
+              "notes":"Sequential fresh four-worker Linux servers; default 4 KiB reads and 32 MiB queue bytes, max(1024, producers * cycles + 32) queue messages, 60s write deadline, heartbeats and rates disabled. A 64 KiB requested client receive buffer and eight 1 MiB fillers establish unread transport backpressure. Synchronized producers alternate large unknown-target primers with tiny queued values and verified self barriers. Each producer's full sequence is verified without imposing a cross-producer order. Optional connected-idle sampling follows complete drain; two seconds of retired sampling follow client-initiated or required server-idle Close handshakes. Server-only RSS/CPU and relevant queue/routing metrics sampled about every 50ms, all final counters retained. Each case caps primer traffic at 8 GiB; preparation is bounded independently of traffic. Extra server arguments are recorded verbatim. Samples spanning a client phase marker are labeled transition and excluded from stable phase ranges. No leak or production-capacity claim.","cases":[]}
     args.output.parent.mkdir(parents=True,exist_ok=True)
     for producers in args.producers:
         for cycles in args.cycles:
-            output["cases"].append(run_case(args.server,args.client,cycles,args.primer_bytes,producers,args.idle_secs,args.server_idle_secs))
+            output["cases"].append(run_case(args.server,args.client,cycles,args.primer_bytes,producers,args.idle_secs,args.server_idle_secs,args.server_arg))
             args.output.write_text(json.dumps(output,indent=2)+"\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

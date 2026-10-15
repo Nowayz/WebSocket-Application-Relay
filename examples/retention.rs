@@ -184,6 +184,7 @@ async fn main() -> Result<()> {
         phase("evicting", args.cycles);
         try_join_all(senders.iter_mut().map(idle_close)).await?;
     } else {
+        phase("closing", args.cycles);
         for sender in &mut senders {
             close(sender).await?;
         }

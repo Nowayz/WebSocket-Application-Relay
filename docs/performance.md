@@ -440,3 +440,22 @@ twelve-second recording windows, and ten seconds of the same verifying traffic.
 They were collected separately from timing; their percentages are sampled user
 cycles, not shares of total server CPU. Recorder logs are preserved, and raw
 `perf.data`/text reports remain local under `artifacts/profiles/`.
+## Active decoder storage baseline, 2026-10-15
+
+Fresh frozen-server measurements reproduced persistent input storage with empty
+queues and application-idle expiry disabled. After 64 four-MiB unknown-target
+primers per source, 32 still-connected producers retained roughly 134 MiB RSS;
+closing the sockets reduced it to roughly 6 MiB. One- and eight-producer cases
+also passed all delivery, sequence, Close, counter and cleanup checks. The raw
+records are `benchmarks/2026-10-15-active-input-baseline.json` and
+`benchmarks/2026-10-15-active-input-baseline-phases.json`. These are observed RSS
+values, not an accounting of exact live allocations or an input-memory cap.
+
+The retention client now emits `closing` before initiating its Close handshakes.
+The sampler drains phase events before and after reading metrics/process state,
+labels observations spanning a phase change as `transition`, and excludes those
+observations from stable holding/idle/retired ranges. This fixes a reproduced
+false failure in an experimental run, where already-closing sockets were still
+classified as connected idle. It retains the full observations and phase names
+in the record. Repeated `--server-arg=ARG` options now support explicit policy
+comparisons; the complete server command remains in each case.
