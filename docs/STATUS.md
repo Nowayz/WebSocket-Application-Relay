@@ -181,10 +181,19 @@ claim that an open-ended improvement effort is complete.
 
 ## Exact verification boundaries
 
-The original bundled C++ executable cannot run here: `libtbb.so.2`,
-`libssl.so.1.1`, and `libcrypto.so.1.1` are absent. Compatibility evidence therefore
-comes from source-derived known packets and the actual upstream JS client, not a
-live C++ differential run. Native CBOR client tests use Node 24's real WebSocket;
+The unchanged bundled C++ executable now runs with locally extracted, pinned
+Debian TBB/OpenSSL libraries inside a private network namespace. Three fresh
+process comparisons passed 46 common cases and eight explicitly asserted
+differences per implementation: routing, byte/text and frame-size boundaries,
+listeners, variables, fixed IDs, departure, and cleanup. Both implementations
+acknowledged their eight remaining client closes; Rust's sessions, connections,
+queue and variable gauges returned to zero with no write, Close, or transport
+errors. The original's pre-GC membership/variable retention and several documented
+behavior fixes were observed directly. See `compatibility.md` and
+`benchmarks/2026-10-15-cpp-reference-{1,2,3}.json` for exact scope and provenance.
+This compares the preserved executable using these host/local libraries; it
+does not reconstruct its original operating system or measure C++ performance.
+Native CBOR client tests use Node 24's real WebSocket;
 the browser acceptance page has passed through the generated ES2022 module in
 Chrome 155 on this Linux host. Other browsers and production bundler integrations
 remain unverified. CI builds the bundle but does not run the browser acceptance.
@@ -197,10 +206,11 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Strengthen source-derived compatibility with an isolated original C++ runtime
-   if its legacy dependencies can be supplied locally without changing the host
-   runtime. The current evidence remains source vectors and the unchanged
-   original client, not a live differential run.
+1. Extend the independent original-runtime comparison when routing, listener,
+   variable or ID-management behavior changes. The current 46-case corpus and
+   eight explicit difference checks now have real C++ wire evidence; longer
+   scheduling windows, adverse networks and its garbage-collection cycle remain
+   outside that finite comparison.
 2. Profile the remaining small-message CPU cost before changing counters, queue
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.

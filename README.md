@@ -120,6 +120,10 @@ The bridge preserves original command/reply layouts and suppresses CBOR command
 acknowledgements. Tests execute the **unchanged upstream `relay.js`** on real
 sockets. The old `relay.module.js` remains as source history; its existing
 undefined-variable and const-reassignment bugs are not copied into the new client.
+An isolated check also runs the **unchanged original C++ executable** and compares
+46 shared wire behaviors against the bridge, while asserting eight deliberate
+behavior differences. See [compatibility.md](docs/compatibility.md) for the
+recorded results and local dependency setup.
 
 ## Operating the relay
 
@@ -186,6 +190,18 @@ verify idle Close propagation through native and legacy WebSockets. It removes
 the temporary services afterward.
 CI also builds the browser bundle; browser execution is a separate acceptance
 step using the page above.
+
+To repeat the original C++ runtime comparison on Linux/x86-64, with Python 3.12+,
+`ar`, and working `bwrap` network namespaces:
+
+```sh
+cargo build --locked --release --bins
+python3 scripts/reference.py --output artifacts/reference/report.json
+```
+
+Its pinned libraries are cached locally and all test listeners run in a private
+network namespace. It leaves host services and system libraries in place. This
+optional comparison is separate from the standard CI checks.
 
 To check receive-slab retention under actual unread-recipient backpressure:
 
