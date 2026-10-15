@@ -11,7 +11,6 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::Semaphore,
@@ -19,7 +18,7 @@ use tokio::{
     time::{Instant, interval_at, sleep, sleep_until, timeout},
 };
 use tokio_tungstenite::{
-    WebSocketStream, accept_hdr_async_with_config,
+    accept_hdr_async_with_config,
     tungstenite::{
         self, Message,
         handshake::server::{Request, Response as HandshakeResponse},
@@ -120,7 +119,7 @@ impl Drop for ConnectionGuard {
     }
 }
 
-type Socket = WebSocketStream<TcpStream>;
+type Socket = transport::ServerSocket<TcpStream>;
 
 async fn connection_task(
     socket: TcpStream,
@@ -132,8 +131,8 @@ async fn connection_task(
     let websocket_config = WebSocketConfig::default()
         .read_buffer_size(config.read_buffer_bytes)
         .write_buffer_size(4096)
-        // Relay channel-list replies can be larger than an incoming application
-        // frame. Output is governed by its own byte budget, not the input limit.
+        // Control frames use library staging. Native data uses the relay output
+        // budget and borrowed vectored writes, independent of the incoming limit.
         .max_write_buffer_size(config.queue_bytes + 4096)
         .max_message_size(Some(config.max_message_bytes))
         .max_frame_size(Some(config.max_message_bytes));
@@ -161,13 +160,14 @@ async fn connection_task(
         },
         Some(websocket_config),
     );
-    let mut ws = tokio::select! {
+    let ws = tokio::select! {
         _ = shutdown.cancelled() => return Ok(()),
         result = timeout(Duration::from_secs(config.handshake_timeout_secs), handshake) => match result {
             Ok(Ok(ws)) => ws,
             _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return Ok(()); }
         }
     };
+    let mut ws = Socket::new(ws);
     let mut limiter = RateLimiter::new(config.messages_per_second, config.bytes_per_second);
     let stopped = shutdown.cancelled();
     tokio::pin!(stopped);
@@ -209,7 +209,7 @@ async fn connection_task(
             }
             Some(Ok(Message::Pong(_))) => {}
             Some(Ok(Message::Close(_))) => {
-                if !transport::acknowledge_close(&mut ws, config.write_timeout()).await {
+                if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
                     relay.metrics.close_failures.fetch_add(1, Relaxed);
                 }
                 return Ok(());
@@ -245,21 +245,21 @@ async fn connection_task(
             }
             _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
                 if pong_deadline.is_none() {
-                    if let Err(failure) = transport::output(ws.send(Message::Ping(bytes::Bytes::from_static(b"war"))), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
+                    if let Err(failure) = transport::output(ws.ping(bytes::Bytes::from_static(b"war")), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
                     pong_deadline = Some(Instant::now() + Duration::from_secs(config.pong_timeout_secs));
                 }
             }
             packet = outgoing.recv() => {
                 let Some(packet) = packet else { break SessionEnd::Close(Disconnect::SHUTDOWN); };
-                if let Err(failure) = transport::output(ws.send(Message::Binary(packet.bytes.clone())), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
+                if let Err(failure) = transport::output(ws.binary(&packet.frame), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
                 relay.metrics.deliveries.fetch_add(1, Relaxed);
-                relay.metrics.delivered_bytes.fetch_add(packet.bytes.len() as u64, Relaxed);
+                relay.metrics.delivered_bytes.fetch_add(packet.frame.len() as u64, Relaxed);
             }
             incoming = ws.next() => {
                 match incoming {
                     Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
                     Some(Ok(Message::Binary(bytes))) => {
-                        if let Err(reason) = relay.receive(peer, &bytes) { break SessionEnd::Close(reason); }
+                        if let Err(reason) = relay.receive(peer, bytes) { break SessionEnd::Close(reason); }
                     }
                     Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }
@@ -291,7 +291,7 @@ async fn connection_task(
     match end {
         SessionEnd::Close(reason) => close(&mut ws, reason, &relay, &shutdown).await,
         SessionEnd::Acknowledge => {
-            if !transport::acknowledge_close(&mut ws, config.write_timeout()).await {
+            if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
                 relay.metrics.close_failures.fetch_add(1, Relaxed);
             }
         }
@@ -351,7 +351,7 @@ fn output_failed(relay: &Relay, failure: WriteFailure) -> SessionEnd {
 
 async fn close(ws: &mut Socket, reason: Disconnect, relay: &Relay, shutdown: &CancellationToken) {
     if !transport::initiate_close(
-        ws,
+        ws.closing(),
         Some(CloseFrame {
             code: CloseCode::from(reason.code),
             reason: reason.reason.into(),

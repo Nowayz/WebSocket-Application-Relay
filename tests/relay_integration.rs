@@ -198,6 +198,113 @@ async fn routes_typed_cbor_private_and_channel_messages_without_changing_payload
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn fragmented_input_and_interleaved_control_leave_direct_output_ordered() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+
+    let server = Server::new(config()).await;
+    let (mut sender, sender_id) = server.join("fragmented").await;
+    let (mut recipient, recipient_id) = server.join("fragmented").await;
+    let value = protocol::byte_string(&vec![0x5a; 70_000]);
+    let encoded = protocol::envelope(recipient_id, &value);
+    // Split the CBOR routing header itself, then the application value. The
+    // decoder must retain both while this same socket receives other output.
+    sender
+        .send(Message::Frame(Frame::message(
+            encoded.slice(..1),
+            OpCode::Data(Data::Binary),
+            false,
+        )))
+        .await
+        .unwrap();
+    sender
+        .send(Message::Ping(Bytes::from_static(b"between")))
+        .await
+        .unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(3), sender.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap(),
+        Message::Pong(Bytes::from_static(b"between"))
+    );
+    let during = protocol::text("while input is fragmented");
+    send(&mut recipient, sender_id, &during).await;
+    assert_eq!(
+        data(&mut sender).await,
+        protocol::envelope(recipient_id, &during)
+    );
+    sender
+        .send(Message::Frame(Frame::message(
+            encoded.slice(1..17),
+            OpCode::Data(Data::Continue),
+            false,
+        )))
+        .await
+        .unwrap();
+    sender
+        .send(Message::Frame(Frame::message(
+            encoded.slice(17..),
+            OpCode::Data(Data::Continue),
+            true,
+        )))
+        .await
+        .unwrap();
+    assert_eq!(
+        data(&mut recipient).await,
+        protocol::envelope(sender_id, &value)
+    );
+    let after = protocol::text("after fragments");
+    send(&mut sender, recipient_id, &after).await;
+    assert_eq!(
+        data(&mut recipient).await,
+        protocol::envelope(sender_id, &after)
+    );
+    drop(sender);
+    drop(recipient);
+    server.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shared_network_payloads_are_reused_and_small_views_after_large_input_are_compacted() {
+    let server = Server::new(config()).await;
+    let (mut sender, sender_id) = server.join("storage").await;
+    let (mut recipient, recipient_id) = server.join("storage").await;
+    // Ordinary tiny messages share the normal read slab too; compaction is
+    // reserved for connections whose incoming storage has grown beyond it.
+    send(&mut sender, recipient_id, &[0xf5]).await;
+    assert_eq!(
+        data(&mut recipient).await,
+        protocol::envelope(sender_id, &[0xf5])
+    );
+    assert_eq!(server.relay.metrics.routing_reused_bytes.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+    let large = protocol::byte_string(&vec![0x5a; 65536]);
+    send(&mut sender, recipient_id, &large).await;
+    assert_eq!(
+        data(&mut recipient).await,
+        protocol::envelope(sender_id, &large)
+    );
+    assert_eq!(
+        server.relay.metrics.routing_reused_bytes.load(Relaxed),
+        large.len() as u64 + 1
+    );
+    assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+    send(&mut sender, recipient_id, &[0xf6]).await;
+    assert_eq!(
+        data(&mut recipient).await,
+        protocol::envelope(sender_id, &[0xf6])
+    );
+    assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 1);
+    drop(sender);
+    drop(recipient);
+    server.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn global_listeners_and_global_broadcast_preserve_legacy_scope() {
     let server = Server::new(config()).await;
     let (mut global, gid) = server.join("re_globl").await;

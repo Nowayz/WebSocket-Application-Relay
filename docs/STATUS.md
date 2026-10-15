@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 27 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 35 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -46,6 +46,26 @@ claim that an open-ended improvement effort is complete.
   deliveries/s versus 1,384,284 for the fixed-close control, with 17.1% less server
   CPU per delivery. Close/eviction behavior remains intact. Idle state cost rose
   about 0.50 MiB at 2,000 sockets. See performance.md for raw evidence and limits.
+- Native forwarding now shares received application storage through fanout and
+  vectored socket output. The small sender prefix is separate, so varying CBOR
+  integer widths require no body movement. Tiny views after enlarged input are
+  compacted before publication; ordinary small messages share the normal slab.
+- Final repeated 64 KiB traffic used 27.4% less server CPU per verified delivery
+  with 4.6% higher median throughput. At 1 KiB, throughput ranges overlapped and
+  CPU per delivery rose 2.1%. The copy counter stayed zero in all traffic runs;
+  pointer checks cover queue and write ownership. Median idle RSS rose 0.86 MiB
+  at 2,000 sockets. Raw evidence and limits are in performance.md.
+- Final lifecycle checks verified 917,429 cumulative reconnects and 259,154
+  healthy deliveries alongside an unread client, with complete cleanup. Finite
+  fanout checks verified 31,500 deliveries per run. Fragmented input, interleaved
+  controls, partial writes, and all WebSocket output length boundaries are covered.
+- Local runtime refreshed on 2026-10-15: native CBOR at `127.0.0.1:1338`, legacy
+  bridge at `127.0.0.1:1337`, management at `127.0.0.1:1339`. Both management
+  health/readiness checks returned 200. Three socket checks against these running
+  release processes exercised the unchanged original client, mixed CBOR/legacy
+  values, and clean Close. A separate release workload verified 16 private
+  deliveries. Gauges returned to zero afterward. Binary/process evidence is in
+  `benchmarks/2026-10-15-zero-copy-live.json`; this is a timestamped observation.
 
 ## Exact verification boundaries
 
@@ -63,12 +83,11 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Preserve received application bytes through routing and socket output. The
-   current envelope reconstruction and WebSocket output buffer copy the payload.
-   Evaluate shared receive storage plus a separate sender prefix and vectored
-   output, including backing-storage retention, fanout, partial writes, control
-   frame ordering, and equivalent socket workloads. Keep the close and immediate
-   eviction contracts intact.
+1. Profile the remaining small-message CPU cost and longer fanout/mixed-size
+   workloads before changing counters, queue representation, or read storage.
+   Preserve zero-copy ordinary forwarding, compaction for enlarged slabs, and
+   the close/immediate-eviction contracts. Extend memory-retention checks under
+   adversarial size changes and slow fanout.
 2. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

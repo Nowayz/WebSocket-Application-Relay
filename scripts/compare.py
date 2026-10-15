@@ -35,8 +35,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     labels = [label for label, _ in args.candidate]
-    if len(set(labels)) != len(labels) or args.repetitions < 1 or not 1 <= args.seconds <= 3600 or not 8 <= args.payload_bytes <= 1048557:
-        parser.error("use unique labels, positive repetitions, seconds in 1..=3600, and payload bytes in 8..=1048557")
+    if len(set(labels)) != len(labels) or args.repetitions < 1 or not 1 <= args.seconds <= 3600 or not 8 <= args.payload_bytes <= 1048544:
+        parser.error("use unique labels, positive repetitions, seconds in 1..=3600, and payload bytes in 8..=1048544")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     traces = args.output.with_suffix("").with_name(args.output.stem + "-traces")
     traces.mkdir(parents=True, exist_ok=True)

@@ -1,9 +1,10 @@
 //! Shared WebSocket output/close lifecycle for the CBOR relay and migration bridge.
-use std::{future::Future, time::Duration};
+use std::{future::Future, io::IoSlice, time::Duration};
 
+use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     sync::watch,
     time::timeout,
 };
@@ -13,7 +14,121 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::common::Disconnect;
+use crate::{common::Disconnect, frame::Frame};
+
+/// Native server transport with explicit permission to write application data.
+///
+/// The session owns all writes sequentially. Flush the decoder's automatic
+/// control replies first, then bypass its contiguous application-output buffer.
+/// Receive/fragment/control state stays in tungstenite. This endpoint negotiates
+/// no compression or other framing extensions. Any incomplete write must drop
+/// the transport; `output` and its callers enforce that rule.
+pub(crate) struct ServerSocket<S> {
+    websocket: WebSocketStream<S>,
+    active: bool,
+    pending_control: bool,
+}
+
+impl<S> ServerSocket<S>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    /// Only wrap a completed server handshake without negotiated extensions.
+    pub(crate) fn new(websocket: WebSocketStream<S>) -> Self {
+        Self {
+            websocket,
+            active: true,
+            pending_control: false,
+        }
+    }
+
+    pub(crate) async fn next(&mut self) -> Option<Result<Message, Error>> {
+        let message = self.websocket.next().await;
+        if matches!(message, Some(Ok(Message::Ping(_)))) {
+            self.pending_control = true;
+        }
+        if !matches!(&message, Some(Ok(message)) if !matches!(message, Message::Close(_))) {
+            self.active = false;
+        }
+        message
+    }
+
+    pub(crate) async fn flush(&mut self) -> Result<(), Error> {
+        self.websocket.flush().await?;
+        self.pending_control = false;
+        Ok(())
+    }
+
+    pub(crate) async fn ping(&mut self, payload: Bytes) -> Result<(), Error> {
+        if !self.active {
+            return Err(Error::AlreadyClosed);
+        }
+        self.websocket.send(Message::Ping(payload)).await?;
+        self.pending_control = false;
+        Ok(())
+    }
+
+    /// End application output before entering the shared close-handshake code.
+    pub(crate) fn closing(&mut self) -> &mut WebSocketStream<S> {
+        self.active = false;
+        &mut self.websocket
+    }
+
+    /// One final, unmasked binary frame. The body stays borrowed until completion.
+    pub(crate) async fn binary(&mut self, frame: &Frame) -> Result<(), Error> {
+        if !self.active {
+            return Err(Error::AlreadyClosed);
+        }
+        if self.pending_control {
+            self.flush().await?;
+        }
+        // The two tiny headers are contiguous stack storage; only the shared
+        // application body needs a second I/O slice.
+        let mut header = [0u8; 20];
+        header[0] = 0x82; // FIN | binary. Servers never mask application output.
+        let len = frame.len();
+        let header_len = match len {
+            0..=125 => {
+                header[1] = len as u8;
+                2
+            }
+            126..=65535 => {
+                header[1] = 126;
+                header[2..4].copy_from_slice(&(len as u16).to_be_bytes());
+                4
+            }
+            _ => {
+                header[1] = 127;
+                header[2..10].copy_from_slice(&(len as u64).to_be_bytes());
+                10
+            }
+        };
+        let combined_len = header_len + frame.prefix().len();
+        header[header_len..combined_len].copy_from_slice(frame.prefix());
+        // Exactly two slices, including short writes across their boundary.
+        // A non-vectored transport may write just the first slice each time.
+        // No application payload is copied or allocated here.
+        let mut slices = [
+            IoSlice::new(&header[..combined_len]),
+            IoSlice::new(frame.payload()),
+        ];
+        let mut remaining = slices.as_mut_slice();
+        let socket = self.websocket.get_mut();
+        while !remaining.is_empty() {
+            if remaining[0].is_empty() {
+                remaining = &mut remaining[1..];
+                continue;
+            }
+            let written = socket.write_vectored(remaining).await?;
+            if written == 0 {
+                return Err(std::io::Error::from(std::io::ErrorKind::WriteZero).into());
+            }
+            IoSlice::advance_slices(&mut remaining, written);
+        }
+        socket.flush().await?;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WriteFailure {
@@ -103,8 +218,135 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        io,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+    use tokio::io::ReadBuf;
     use tokio::io::duplex;
     use tokio_tungstenite::tungstenite::protocol::Role;
+
+    /// A short-writing transport proves slices reach I/O unchanged and that
+    /// progress survives writes stopping inside either header or the body.
+    struct Probe {
+        wire: Vec<u8>,
+        payload_pointer: usize,
+        saw_borrowed_payload: bool,
+        max_write: usize,
+    }
+
+    impl AsyncRead for Probe {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Pending
+        }
+    }
+
+    impl AsyncWrite for Probe {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            bytes: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            let n = bytes.len().min(self.max_write);
+            self.saw_borrowed_payload |= bytes.as_ptr() as usize == self.payload_pointer;
+            self.wire.extend_from_slice(&bytes[..n]);
+            Poll::Ready(Ok(n))
+        }
+
+        fn poll_write_vectored(
+            mut self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            slices: &[io::IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            let mut remaining = self.max_write;
+            for slice in slices {
+                self.saw_borrowed_payload |= slice.as_ptr() as usize == self.payload_pointer;
+                let n = slice.len().min(remaining);
+                self.wire.extend_from_slice(&slice[..n]);
+                remaining -= n;
+                if remaining == 0 {
+                    break;
+                }
+            }
+            Poll::Ready(Ok(self.max_write - remaining))
+        }
+
+        fn is_write_vectored(&self) -> bool {
+            true
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[tokio::test]
+    async fn vectored_binary_output_preserves_buffers_and_all_length_boundaries() {
+        for len in [0, 1, 115, 116, 125, 126, 65525, 65526, 65535, 65536, 65537] {
+            let input = crate::protocol::envelope(42, &vec![0x5a; len]);
+            let packet = Frame::routed(u64::MAX, input, 3, false);
+            let probe = Probe {
+                wire: Vec::new(),
+                payload_pointer: packet.payload().as_ptr() as usize,
+                saw_borrowed_payload: false,
+                max_write: 3,
+            };
+            let mut ws = ServerSocket::new(
+                WebSocketStream::from_raw_socket(probe, Role::Server, None).await,
+            );
+            ws.binary(&packet).await.unwrap();
+            let probe = ws.websocket.get_ref();
+            assert!(len == 0 || probe.saw_borrowed_payload);
+            let mut client = tokio_tungstenite::tungstenite::WebSocket::from_raw_socket(
+                io::Cursor::new(probe.wire.clone()),
+                Role::Client,
+                None,
+            );
+            let Message::Binary(output) = client.read().unwrap() else {
+                panic!("binary frame required")
+            };
+            assert_eq!(
+                output.as_ref(),
+                crate::protocol::envelope(u64::MAX, &vec![0x5a; len]).as_ref()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn pending_control_reply_precedes_direct_data_and_close_blocks_further_data() {
+        let (server, client) = duplex(1024);
+        let mut server =
+            ServerSocket::new(WebSocketStream::from_raw_socket(server, Role::Server, None).await);
+        let mut client = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
+        client
+            .send(Message::Ping(bytes::Bytes::from_static(b"ping")))
+            .await
+            .unwrap();
+        assert!(matches!(server.next().await, Some(Ok(Message::Ping(_)))));
+        let packet = Frame::encoded(bytes::Bytes::from_static(b"body"));
+        server.binary(&packet).await.unwrap();
+        assert_eq!(
+            client.next().await.unwrap().unwrap(),
+            Message::Pong(bytes::Bytes::from_static(b"ping"))
+        );
+        assert_eq!(
+            client.next().await.unwrap().unwrap(),
+            Message::Binary(bytes::Bytes::from_static(b"body"))
+        );
+        client.close(None).await.unwrap();
+        assert!(matches!(server.next().await, Some(Ok(Message::Close(_)))));
+        assert!(server.binary(&packet).await.is_err());
+        assert!(acknowledge_close(server.closing(), Duration::from_secs(1)).await);
+        assert!(matches!(client.next().await, Some(Ok(Message::Close(_)))));
+    }
 
     #[tokio::test]
     async fn policy_interrupts_a_blocked_frame_without_waiting_for_write_timeout() {

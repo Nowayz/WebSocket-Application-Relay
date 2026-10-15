@@ -70,6 +70,15 @@ and tags. The relay accepts definite-length CBOR, bounds validation to 64 nested
 levels and 65,536 items, and preserves encoded payloads verbatim. It does not
 materialize object trees or convert objects to JSON. See [docs/protocol.md](docs/protocol.md).
 
+Forwarding keeps the upstream's zero-copy intent: a validated application value
+stays in its received buffer, shared across recipient queues. The server builds
+only the small replacement sender header and writes headers plus the borrowed
+body with vectored I/O. Changing a CBOR ID's encoded width does not shift the
+body. Tiny slices of much larger receive storage are compacted deliberately to
+avoid pinning that storage in a slow queue. This concerns user-space forwarding;
+WebSocket unmasking, fragmented-message assembly, and kernel transfers still do
+their required work. See [docs/performance.md](docs/performance.md).
+
 ## Original clients
 
 The optional migration bridge translates the original binary/text wire format:
@@ -104,7 +113,7 @@ undefined-variable and const-reassignment bugs are not copied into the new clien
   old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
 - Tokio drives concurrent connections. Routing uses shared registry reads;
   membership/ID changes use writes. No registry lock spans an await or socket I/O.
-  Fanout shares one immutable frame across recipients.
+  Fanout shares one immutable application body across recipients.
 - SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
   receive `1001`; blocked transports can be dropped. Peer-initiated Close frames
   receive their exact acknowledgement. Cleanup also runs on task cancellation.

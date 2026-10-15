@@ -33,12 +33,16 @@ def sample(pid, admin, started):
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None):
     port, admin = runtime.free_port(), runtime.free_port()
+    actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
+    # A traffic window must fit completely, including encoded CBOR/routing
+    # bytes. Keep the deliberate unread-client case at its original tight cap.
+    queue_bytes = max(1048586, (actual_payload + 20) * 32) if mode == "traffic" else 1048586
     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
     with tempfile.TemporaryFile() as logs:
         server_command = [
             str(Path(server_binary or runtime.SERVER).resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
             "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0",
-            "--max-message-bytes", "1048576", "--queue-bytes", "1048586",
+            "--max-message-bytes", "1048576", "--queue-bytes", str(queue_bytes),
         ]
         if server_cpus:
             server_command = ["taskset", "-c", server_cpus] + server_command
@@ -59,7 +63,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                     time.sleep(0.02)
             command = [str(Path(stress_binary or STRESS).resolve()), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
                        "--clients", str(clients), "--duration-secs", str(seconds),
-                       "--payload-bytes", str(payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024))]
+                       "--payload-bytes", str(actual_payload)]
             if client_cpus:
                 command = ["taskset", "-c", client_cpus] + command
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
@@ -137,7 +141,7 @@ def main():
               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
               "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(list((ROOT / "src").rglob("*.rs")) + [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/stress.rs"])},
-              "notes": "Sequential fresh four-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit and output budget of 1 MiB + 10 bytes. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds. Not a long-term or production capacity guarantee.",
+              "notes": "Sequential fresh four-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic output budget is max(1 MiB + 10, 32 * (payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds. Not a long-term or production capacity guarantee.",
               "cases": []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     for mode in args.modes:

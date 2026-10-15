@@ -11,6 +11,10 @@ a CBOR uint64, excluding 0 and `18446744073709551615`.
 Subsequent messages are `[target: uint64, value: CBOR]`. Forwarded messages are
 `[sender: uint64, value: CBOR]`. CBOR integer byte order is independent of the
 machine; the original little-endian encoding exists only in the legacy bridge.
+The sender prefix is stored separately from the received application value and
+gathered into one ordinary binary WebSocket message at write time. Both compact
+and full-width target IDs remain accepted; no fixed-width CBOR requirement or
+additional WebSocket fragmentation is introduced by routing.
 
 Values support all definite-length CBOR major types, tags, half/single/double
 floats, null, undefined, and simple values. Non-minimal integer encodings are

@@ -16,6 +16,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::{
     Config,
+    frame::Frame,
     metrics::Metrics,
     protocol::{
         self, BROADCAST, CHANNEL_MESSAGE, Command, DISCONNECT_MESSAGE, Disconnect, GLOBAL_CHANNEL,
@@ -54,6 +55,7 @@ pub(crate) struct Peer {
     authenticated: AtomicBool,
     listener: AtomicU8,
     closing: AtomicBool,
+    largest_input: AtomicUsize,
     outgoing: mpsc::Sender<Envelope>,
     close: watch::Sender<Option<Disconnect>>,
     budget: Arc<Budget>,
@@ -69,17 +71,17 @@ struct Budget {
 /// Byte reservations survive dequeue and remain charged until the actual write
 /// completes (or is cancelled). Dropping any queue or failed send releases them.
 pub(crate) struct Envelope {
-    pub bytes: Bytes,
+    pub frame: Frame,
     budget: Arc<Budget>,
 }
 
 impl Drop for Envelope {
     fn drop(&mut self) {
-        self.budget.used.fetch_sub(self.bytes.len(), Relaxed);
+        self.budget.used.fetch_sub(self.frame.len(), Relaxed);
         self.budget
             .metrics
             .queued_bytes
-            .fetch_sub(self.bytes.len(), Relaxed);
+            .fetch_sub(self.frame.len(), Relaxed);
     }
 }
 
@@ -93,10 +95,14 @@ impl Peer {
     }
 
     fn enqueue(&self, bytes: &Bytes) -> Result<(), Disconnect> {
+        self.enqueue_frame(&Frame::encoded(bytes.clone()))
+    }
+
+    fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {
         if self.closing.load(Relaxed) {
             return Ok(());
         }
-        let size = bytes.len();
+        let size = frame.len();
         if self
             .budget
             .used
@@ -124,7 +130,7 @@ impl Peer {
             return Err(Disconnect::OVERLOADED);
         }
         let packet = Envelope {
-            bytes: bytes.clone(),
+            frame: frame.clone(),
             budget: self.budget.clone(),
         };
         if self.outgoing.try_send(packet).is_err() {
@@ -257,6 +263,7 @@ impl Relay {
             authenticated: AtomicBool::new(false),
             listener: AtomicU8::new(0),
             closing: AtomicBool::new(false),
+            largest_input: AtomicUsize::new(self.config.read_buffer_bytes),
             outgoing,
             close,
             budget: Arc::new(Budget {
@@ -287,7 +294,7 @@ impl Relay {
         })
     }
 
-    pub(crate) fn receive(&self, peer: &Peer, bytes: &[u8]) -> Result<(), Disconnect> {
+    pub(crate) fn receive(&self, peer: &Peer, bytes: Bytes) -> Result<(), Disconnect> {
         if peer.closing.load(Relaxed) {
             return Ok(());
         }
@@ -295,7 +302,14 @@ impl Relay {
         self.metrics
             .incoming_bytes
             .fetch_add(bytes.len() as u64, Relaxed);
-        let (target, value) = protocol::parse(bytes)?;
+        // Only this connection updates its high-water mark. A small view must
+        // not keep a previous large receive slab alive in a slow output queue.
+        let previous_largest = peer.largest_input.load(Relaxed);
+        let largest = previous_largest.max(bytes.len());
+        if largest != previous_largest {
+            peer.largest_input.store(largest, Relaxed);
+        }
+        let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
             return self.control(peer, value);
         }
@@ -303,41 +317,62 @@ impl Relay {
         if peer.closing.load(Relaxed) {
             return Ok(());
         }
-        let frame = protocol::envelope(peer.id.load(Relaxed), value);
+        let private_recipient = if target == BROADCAST {
+            if peer.channel.as_ref() == GLOBAL_CHANNEL
+                && self.config.disable_global_broadcast
+                && !peer.authenticated.load(Relaxed)
+            {
+                return Err(Disconnect {
+                    code: 1008,
+                    reason: "Global Broadcast Requires Authentication",
+                });
+            }
+            None
+        } else {
+            match state.users.get(&target) {
+                Some(recipient) => Some(recipient),
+                None => return Ok(()),
+            }
+        };
+        let value_start = bytes.len() - value.len();
+        let compact = largest > self.config.read_buffer_bytes
+            && bytes.len().saturating_mul(8) < largest
+            && !bytes.is_unique();
+        let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        let counter = if compact {
+            &self.metrics.routing_copied_bytes
+        } else {
+            &self.metrics.routing_reused_bytes
+        };
+        counter.fetch_add(frame.payload().len() as u64, Relaxed);
         if target == BROADCAST {
             if peer.channel.as_ref() == GLOBAL_CHANNEL {
-                if self.config.disable_global_broadcast && !peer.authenticated.load(Relaxed) {
-                    return Err(Disconnect {
-                        code: 1008,
-                        reason: "Global Broadcast Requires Authentication",
-                    });
-                }
                 for recipient in state.users.values() {
                     if recipient.key != peer.key {
-                        recipient.enqueue(&frame)?;
+                        recipient.enqueue_frame(&frame)?;
                     }
                 }
             } else {
                 if let Some(channel) = state.channels.get(&peer.channel) {
                     for recipient in channel.members.values() {
                         if recipient.key != peer.key {
-                            recipient.enqueue(&frame)?;
+                            recipient.enqueue_frame(&frame)?;
                         }
                     }
                 }
                 for recipient in state.channels[GLOBAL_CHANNEL].members.values() {
                     if recipient.listener.load(Relaxed) & CHANNEL_MESSAGE != 0 {
-                        recipient.enqueue(&frame)?;
+                        recipient.enqueue_frame(&frame)?;
                     }
                 }
             }
-        } else if let Some(recipient) = state.users.get(&target) {
-            recipient.enqueue(&frame)?;
+        } else if let Some(recipient) = private_recipient {
+            recipient.enqueue_frame(&frame)?;
             for listener in state.channels[GLOBAL_CHANNEL].members.values() {
                 if listener.key != recipient.key
                     && listener.listener.load(Relaxed) & PRIVATE_MESSAGE != 0
                 {
-                    listener.enqueue(&frame)?;
+                    listener.enqueue_frame(&frame)?;
                 }
             }
         }
@@ -525,6 +560,74 @@ mod tests {
     }
 
     #[test]
+    fn fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns() {
+        let relay = Relay::new(config()).unwrap();
+        let mut sender = relay.subscribe(b"a").unwrap();
+        let mut first = relay.subscribe(b"a").unwrap();
+        let mut second = relay.subscribe(b"a").unwrap();
+        for subscription in [&mut sender, &mut first, &mut second] {
+            subscription.outgoing.try_recv().unwrap();
+        }
+        let value = protocol::byte_string(&[0x5a; 2048]);
+        let input = protocol::envelope(BROADCAST, &value);
+        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        relay.receive(&sender.registration.peer, input).unwrap();
+        let first_frame = first.outgoing.try_recv().unwrap();
+        let second_frame = second.outgoing.try_recv().unwrap();
+        assert_eq!(first_frame.frame.payload().as_ptr(), pointer);
+        assert_eq!(second_frame.frame.payload().as_ptr(), pointer);
+        assert_eq!(first_frame.frame.payload(), value.as_ref());
+        assert_eq!(
+            relay.metrics.routing_reused_bytes.load(Relaxed),
+            value.len() as u64
+        );
+        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+        drop(sender);
+        drop(first);
+        drop(second);
+        // In-flight envelopes still own their byte reservations and receive storage.
+        assert_eq!(first_frame.frame.payload(), value.as_ref());
+        assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
+        drop(first_frame);
+        drop(second_frame);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn tiny_values_after_large_input_do_not_pin_a_shared_read_slab() {
+        let relay = Relay::new(config()).unwrap();
+        let mut sender = relay.subscribe(b"a").unwrap();
+        let mut recipient = relay.subscribe(b"a").unwrap();
+        sender.outgoing.try_recv().unwrap();
+        recipient.outgoing.try_recv().unwrap();
+        let unknown = (1..)
+            .find(|id| !relay.state.read().users.contains_key(id))
+            .unwrap();
+        relay
+            .receive(
+                &sender.registration.peer,
+                protocol::envelope(unknown, &protocol::byte_string(&[0; 65536])),
+            )
+            .unwrap();
+        let small = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf6]);
+        let mut read_slab = bytes::BytesMut::with_capacity(65536);
+        read_slab.extend_from_slice(&small);
+        let input = read_slab.split().freeze();
+        let backing = input.clone();
+        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        relay.receive(&sender.registration.peer, input).unwrap();
+        let packet = recipient.outgoing.try_recv().unwrap();
+        assert_ne!(packet.frame.payload().as_ptr(), pointer);
+        assert_eq!(packet.frame.payload(), [0xf6]);
+        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 1);
+        assert!(!backing.is_empty());
+        drop(packet);
+        drop(sender);
+        drop(recipient);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
     fn slow_consumer_is_closed_and_every_byte_reservation_is_released() {
         let relay = Relay::new(Config {
             queue_messages: 1,
@@ -537,7 +640,7 @@ mod tests {
         relay
             .receive(
                 &sender.registration.peer,
-                &protocol::envelope(BROADCAST, &[1]),
+                protocol::envelope(BROADCAST, &[1]),
             )
             .unwrap();
         assert_eq!(*recipient.close.borrow(), Some(Disconnect::OVERLOADED));
@@ -560,11 +663,11 @@ mod tests {
         relay
             .receive(
                 new_peer,
-                &protocol::request(0, &protocol::text("test-password")),
+                protocol::request(0, &protocol::text("test-password")),
             )
             .unwrap();
         relay
-            .receive(new_peer, &protocol::request(3, &protocol::uint(id)))
+            .receive(new_peer, protocol::request(3, &protocol::uint(id)))
             .unwrap();
         assert_eq!(*first.close.borrow(), Some(Disconnect::TAKEN));
         drop(first);
@@ -602,14 +705,14 @@ mod tests {
             relay
                 .receive(
                     &sender.registration.peer,
-                    &protocol::envelope(busy_id, &payload),
+                    protocol::envelope(busy_id, &payload),
                 )
                 .unwrap();
         }
         assert_eq!(
             relay.receive(
                 &sender.registration.peer,
-                &protocol::envelope(empty_id, &payload)
+                protocol::envelope(empty_id, &payload)
             ),
             Err(Disconnect::OVERLOADED)
         );
@@ -640,15 +743,17 @@ mod tests {
             .bytes(&[0; 8])
             .unwrap();
         let request = protocol::request(4, &e.into_writer());
-        relay.receive(&first.registration.peer, &request).unwrap();
+        relay
+            .receive(&first.registration.peer, request.clone())
+            .unwrap();
         assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 10);
         assert_eq!(
-            relay.receive(&second.registration.peer, &request),
+            relay.receive(&second.registration.peer, request.clone()),
             Err(Disconnect::OVERLOADED)
         );
         drop(first);
         assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
-        relay.receive(&second.registration.peer, &request).unwrap();
+        relay.receive(&second.registration.peer, request).unwrap();
         drop(second);
         assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
     }

@@ -49,6 +49,18 @@ large incoming-message limit multiplied by many simultaneous incomplete messages
 can dominate memory; set it to what the application needs. The sample environment
 uses 64 KiB rather than the compatibility-oriented 16 MiB default.
 
+Routed output borrows immutable receive storage. A small slice can retain its
+backing slab, so each connection tracks its largest observed message (at least
+its configured initial read buffer). Once that mark exceeds the initial read
+buffer, shared messages smaller than one eighth of the mark have their encoded
+application value compacted before fanout. Ordinary tiny messages still share
+the normal read slab. This conservative policy can continue copying small
+messages after one large message; it avoids retaining enlarged slabs through
+tiny queued views.
+Queue gauges count the emitted CBOR envelope's logical bytes, including its
+separate routing prefix, rather than the backing allocation's capacity. Measure
+RSS alongside these gauges; they are not a physical-memory accounting interface.
+
 Output has a separate limit: a rewritten sender ID may expand an application
 envelope by up to eight bytes, while channel-list replies can be larger than an
 incoming application frame. Queue budgets must fit the input limit plus ten
@@ -125,6 +137,13 @@ Output diagnostics distinguish `war_write_timeouts_total`, `war_write_errors_tot
 `war_transport_disconnects_total`, rather than presenting an ordinary lost client
 as a malformed WAR packet. During clean reconnect churn these counters should
 stay at zero; forced unread-client eviction can increment aborted writes.
+
+`war_routing_reused_bytes_total` and `war_routing_copied_bytes_total` count encoded
+application value bytes once per routed input, before recipient fanout. The
+latter measures deliberate slab compaction. They exclude relay command replies,
+unknown destinations, WebSocket unmasking/reassembly, client serialization, and
+kernel copies. Native application output writes its small headers and body as
+separate slices, without a contiguous WebSocket payload staging buffer.
 
 ## Scaling boundary
 

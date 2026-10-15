@@ -12,6 +12,8 @@ pub struct Metrics {
     pub disconnected: AtomicU64,
     pub incoming_messages: AtomicU64,
     pub incoming_bytes: AtomicU64,
+    pub routing_reused_bytes: AtomicU64,
+    pub routing_copied_bytes: AtomicU64,
     pub deliveries: AtomicU64,
     pub delivered_bytes: AtomicU64,
     pub slow_consumers: AtomicU64,
@@ -32,6 +34,16 @@ impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
         for (name, value, help) in [
+            (
+                "routing_reused_bytes_total",
+                self.routing_reused_bytes.load(Relaxed),
+                "Encoded application value bytes routed from shared receive storage, before fanout.",
+            ),
+            (
+                "routing_copied_bytes_total",
+                self.routing_copied_bytes.load(Relaxed),
+                "Encoded application value bytes compacted to avoid retaining a larger receive slab, before fanout.",
+            ),
             (
                 "write_timeouts_total",
                 self.write_timeouts.load(Relaxed),
