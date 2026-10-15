@@ -19,6 +19,7 @@ pub struct Metrics {
     pub slow_consumers: AtomicU64,
     pub protocol_errors: AtomicU64,
     pub rate_limited: AtomicU64,
+    pub idle_timeouts: AtomicU64,
     pub queued_bytes: AtomicUsize,
     pub connections: AtomicUsize,
     pub variable_bytes: AtomicUsize,
@@ -35,6 +36,11 @@ impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
         for (name, value, help) in [
+            (
+                "idle_timeouts_total",
+                self.idle_timeouts.load(Relaxed),
+                "Joined sessions closed by the configured application idle timeout.",
+            ),
             (
                 "unstarted_writes_cancelled_total",
                 self.unstarted_writes_cancelled.load(Relaxed),

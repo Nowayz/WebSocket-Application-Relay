@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 43 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 46 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -133,6 +133,20 @@ claim that an open-ended improvement effort is complete.
   checks passed; health/readiness returned 200 and gauges returned to zero. The
   timestamped process/hash snapshot is
   `benchmarks/2026-10-15-cbor-retention-live.json`.
+- The retention probe now supports synchronized producers sharing one unread
+  destination, per-producer ordering checks, connected-idle observation, and
+  automatic idle-close verification. Twelve fresh-server runs across 1, 8, and
+  32 producers passed all delivery, counter, Close, and cleanup checks. Empty
+  queues can coexist with enlarged receive capacity on still-open sessions;
+  connection and input-size budgeting remain necessary alongside queue limits.
+- Optional `--idle-timeout-secs` / `WAR_IDLE_TIMEOUT_SECS` retires joined sessions
+  without completed application input/output, defaulting to disabled. Ping/Pong
+  does not extend it; receive-only application output does. Queued/in-flight
+  output retains the existing write/queue policy. Normal Close cleanup releases
+  registrations and variables, with decoder storage released at transport end.
+  Three real-socket regressions cover controls, active input/receive-only output,
+  and unfinished fragmented input. All enabled retention cases observed exactly
+  the expected 2/9/33 idle decisions and clean Close handshakes.
 
 ## Exact verification boundaries
 

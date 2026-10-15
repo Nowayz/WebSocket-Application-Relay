@@ -32,7 +32,7 @@ def sample(pid, admin, started):
 
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None,
-             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16):
+             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=()):
     port, admin = runtime.free_port(), runtime.free_port()
     actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
     largest_payload = max(payload_sizes or [actual_payload])
@@ -46,6 +46,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
             "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0",
             "--max-message-bytes", "1048576", "--queue-bytes", str(queue_bytes),
         ]
+        server_command.extend(server_args)
         if server_cpus:
             server_command = ["taskset", "-c", server_cpus] + server_command
         server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)

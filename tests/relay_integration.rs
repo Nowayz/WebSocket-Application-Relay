@@ -623,6 +623,118 @@ async fn reserved_simple_encodings_never_reach_recipients_or_channel_variables()
 }
 
 #[tokio::test]
+async fn heartbeat_and_control_traffic_do_not_extend_application_idle_policy() {
+    let server = Server::new(Config {
+        idle_timeout_secs: 1,
+        ping_interval_secs: 1,
+        pong_timeout_secs: 3,
+        ..config()
+    })
+    .await;
+    let (mut ws, _) = server.join("idle-control").await;
+    let mut controls = tokio::time::interval(Duration::from_millis(200));
+    timeout(Duration::from_secs(3), async {
+        loop {
+            tokio::select! {
+                _ = controls.tick() => ws.send(Message::Ping(Bytes::from_static(b"keep transport"))).await.unwrap(),
+                incoming = ws.next() => match incoming.unwrap().unwrap() {
+                    Message::Close(Some(frame)) => {
+                        assert_eq!(u16::from(frame.code), 1001);
+                        assert_eq!(frame.reason, "Application Idle");
+                        ws.flush().await.unwrap();
+                        break;
+                    }
+                    Message::Ping(_) => ws.flush().await.unwrap(),
+                    Message::Pong(_) => {},
+                    other => panic!("unexpected idle-policy frame: {other:?}"),
+                }
+            }
+        }
+    }).await.unwrap();
+    assert_eq!(server.relay.metrics.idle_timeouts.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 0);
+    server.stop().await;
+}
+
+async fn expect_application_idle_close(ws: &mut Socket) {
+    let incoming = timeout(Duration::from_secs(3), ws.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(incoming, Message::Close(Some(frame)) if u16::from(frame.code) == 1001 && frame.reason == "Application Idle")
+    );
+    ws.flush().await.unwrap();
+}
+
+#[tokio::test]
+async fn application_input_and_receive_only_output_extend_idle_policy() {
+    let server = Server::new(Config {
+        idle_timeout_secs: 1,
+        ..config()
+    })
+    .await;
+    let (mut sender, sender_id) = server.join("idle-source").await;
+    let (mut receiver, receiver_id) = server.join("idle-receiver").await;
+    assert_eq!(
+        command(&mut sender, 4, &[0x82, 0x61, b'x', 1]).await,
+        protocol::reply(4, &[0xf5])
+    );
+    assert!(server.relay.metrics.variable_bytes.load(Relaxed) > 0);
+    // The sender receives no application replies during this sequence. The
+    // recipient sends no application input. Both stay active beyond one timeout.
+    for sequence in 1..=5 {
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        let value = protocol::uint(sequence);
+        send(&mut sender, receiver_id, &value).await;
+        assert_eq!(
+            data(&mut receiver).await,
+            protocol::envelope(sender_id, &value)
+        );
+    }
+    tokio::join!(
+        expect_application_idle_close(&mut sender),
+        expect_application_idle_close(&mut receiver)
+    );
+    assert_eq!(server.relay.metrics.idle_timeouts.load(Relaxed), 2);
+    assert_eq!(server.relay.metrics.variable_bytes.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn unfinished_fragmented_application_input_still_expires_cleanly() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+    let server = Server::new(Config {
+        idle_timeout_secs: 1,
+        ..config()
+    })
+    .await;
+    let (mut ws, id) = server.join("idle-fragment").await;
+    let packet = protocol::envelope(id, &protocol::byte_string(&vec![0; 1024 * 1024]));
+    // The CBOR bytes are well-formed, but the WebSocket message never finishes.
+    ws.send(Message::Frame(Frame::message(
+        packet,
+        OpCode::Data(Data::Binary),
+        false,
+    )))
+    .await
+    .unwrap();
+    expect_application_idle_close(&mut ws).await;
+    assert_eq!(server.relay.metrics.idle_timeouts.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.incoming_messages.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn token_bucket_limits_apply_immediately_after_join() {
     let server = Server::new(Config {
         messages_per_second: 1,

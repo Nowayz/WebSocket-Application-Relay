@@ -1,0 +1,721 @@
+{
+  "event": "cycles:u",
+  "frequency_hz": 199,
+  "call_graph": "dwarf,8192",
+  "record_seconds": 12,
+  "traffic_seconds": 10,
+  "notes": "Sequential diagnostics after comparison timing. User-space cycle shares, not total server CPU shares. Profiling overhead is excluded from comparison results. Raw perf.data/report text are retained locally under artifacts/profiles/application-idle. Sample-loss information is preserved verbatim in recorder logs.",
+  "cases": [
+    {
+      "candidate": "control",
+      "server_sha256": "9428c016eee2e8bf794d661f8ed099fc2135e011df2f004e65e93a70cae87ddb",
+      "stress_sha256": "d3fb0a7d5c77996dc42d08963a98cc9e8dfcc1d0fb81b95a72ed90ecee743b32",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/baselines/14b9529/war-relay",
+        "--bind",
+        "127.0.0.1:44561",
+        "--admin-bind",
+        "127.0.0.1:33849",
+        "--workers",
+        "4",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0",
+        "--max-message-bytes",
+        "1048576",
+        "--queue-bytes",
+        "1048586"
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "4-7",
+        "/home/phil/dev/war_next/artifacts/baselines/14b9529/stress",
+        "--url",
+        "ws://127.0.0.1:44561",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "10",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "perf_command": [
+        "perf",
+        "record",
+        "-F",
+        "199",
+        "-e",
+        "cycles:u",
+        "--call-graph",
+        "dwarf,8192",
+        "-o",
+        "/home/phil/dev/war_next/artifacts/profiles/application-idle/control/perf.data",
+        "-p",
+        "2616335",
+        "--",
+        "sleep",
+        "12"
+      ],
+      "output": [
+        {
+          "clients": 64,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 64,
+          "deliveries_per_second": 1620682.3554274426,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 10.00053832,
+          "event": "result",
+          "joins": 64,
+          "latency_max_ms": 5.846984,
+          "latency_p50_upper_ms": 0.524288,
+          "latency_p99_upper_ms": 1.048576,
+          "mode": "traffic",
+          "payload_bytes": 1024,
+          "setup_seconds": 0.035802224,
+          "slow_observation": null,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 16207696,
+          "window": 16
+        }
+      ],
+      "final_metrics": {
+        "war_unstarted_writes_cancelled_total": "0",
+        "war_routing_reused_bytes_total": "16645303792",
+        "war_routing_copied_bytes_total": "0",
+        "war_write_timeouts_total": "0",
+        "war_write_errors_total": "0",
+        "war_aborted_writes_total": "0",
+        "war_close_failures_total": "0",
+        "war_transport_disconnects_total": "64",
+        "war_global_pressure_total": "0",
+        "war_accepted_total": "64",
+        "war_rejected_total": "0",
+        "war_handshake_errors_total": "0",
+        "war_joined_total": "64",
+        "war_disconnected_total": "64",
+        "war_incoming_messages_total": "16207696",
+        "war_incoming_bytes_total": "16807380752",
+        "war_deliveries_total": "16207786",
+        "war_delivered_bytes_total": "16807381822",
+        "war_slow_consumers_total": "0",
+        "war_protocol_errors_total": "0",
+        "war_rate_limited_total": "0",
+        "war_variable_bytes": "0",
+        "war_connections": "0",
+        "war_sessions": "0",
+        "war_channels": "1",
+        "war_queued_bytes": "0",
+        "war_draining": "0"
+      },
+      "record_log": "[ perf record: Woken up 242 times to write data ]\n[ perf record: Captured and wrote 60.848 MB /home/phil/dev/war_next/artifacts/profiles/application-idle/control/perf.data (7575 samples) ]\n",
+      "report_stderr": "",
+      "samples": 7575,
+      "symbols": [
+        {
+          "user_cycles_percent": 14.5,
+          "kind": ".",
+          "symbol": "war_relay::server::connection_task::{{closure}}"
+        },
+        {
+          "user_cycles_percent": 10.32,
+          "kind": ".",
+          "symbol": "war_relay::relay::Relay::receive"
+        },
+        {
+          "user_cycles_percent": 9.69,
+          "kind": ".",
+          "symbol": "<futures_util::stream::stream::next::Next<St> as core::future::future::Future>::poll"
+        },
+        {
+          "user_cycles_percent": 8.91,
+          "kind": ".",
+          "symbol": "tokio::runtime::scheduler::Handle::current"
+        },
+        {
+          "user_cycles_percent": 7.12,
+          "kind": ".",
+          "symbol": "tokio::sync::notify::NotifiedProject::poll_notified"
+        },
+        {
+          "user_cycles_percent": 5.86,
+          "kind": ".",
+          "symbol": "tokio_util::sync::cancellation_token::CancellationToken::is_cancelled"
+        },
+        {
+          "user_cycles_percent": 5.73,
+          "kind": ".",
+          "symbol": "war_relay::relay::Peer::enqueue_frame"
+        },
+        {
+          "user_cycles_percent": 5.15,
+          "kind": ".",
+          "symbol": "tokio::sync::task::atomic_waker::AtomicWaker::register_by_ref"
+        },
+        {
+          "user_cycles_percent": 4.41,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_drop"
+        },
+        {
+          "user_cycles_percent": 2.39,
+          "kind": ".",
+          "symbol": "__vdso_clock_gettime"
+        },
+        {
+          "user_cycles_percent": 1.77,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::clone_waker"
+        },
+        {
+          "user_cycles_percent": 1.59,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_clone"
+        },
+        {
+          "user_cycles_percent": 1.36,
+          "kind": ".",
+          "symbol": "tokio::runtime::io::registration::Registration::poll_ready"
+        },
+        {
+          "user_cycles_percent": 1.33,
+          "kind": ".",
+          "symbol": "tokio::sync::batch_semaphore::Semaphore::add_permits_locked"
+        },
+        {
+          "user_cycles_percent": 1.25,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::drop_waker"
+        },
+        {
+          "user_cycles_percent": 1.14,
+          "kind": "k",
+          "symbol": "0xffffffffaf600080"
+        },
+        {
+          "user_cycles_percent": 1.13,
+          "kind": ".",
+          "symbol": "0x000000000018f49d"
+        },
+        {
+          "user_cycles_percent": 1.03,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::split_to"
+        },
+        {
+          "user_cycles_percent": 0.87,
+          "kind": ".",
+          "symbol": "0x00000000000a79b9"
+        },
+        {
+          "user_cycles_percent": 0.84,
+          "kind": ".",
+          "symbol": "0x000000000018fcbd"
+        },
+        {
+          "user_cycles_percent": 0.71,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::reserve_inner"
+        },
+        {
+          "user_cycles_percent": 0.6,
+          "kind": "k",
+          "symbol": "0xffffffffafe10b05"
+        },
+        {
+          "user_cycles_percent": 0.52,
+          "kind": ".",
+          "symbol": "std::sys::sync::mutex::futex::Mutex::lock_contended"
+        },
+        {
+          "user_cycles_percent": 0.52,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::raw::poll"
+        }
+      ]
+    },
+    {
+      "candidate": "disabled",
+      "server_sha256": "46098692fda5dda30db729c06212742f9ed6853ac207741df7f5180f57f6c2dd",
+      "stress_sha256": "d3fb0a7d5c77996dc42d08963a98cc9e8dfcc1d0fb81b95a72ed90ecee743b32",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/application-idle/war-relay",
+        "--bind",
+        "127.0.0.1:48723",
+        "--admin-bind",
+        "127.0.0.1:53959",
+        "--workers",
+        "4",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0",
+        "--max-message-bytes",
+        "1048576",
+        "--queue-bytes",
+        "1048586"
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "4-7",
+        "/home/phil/dev/war_next/artifacts/baselines/14b9529/stress",
+        "--url",
+        "ws://127.0.0.1:48723",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "10",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "perf_command": [
+        "perf",
+        "record",
+        "-F",
+        "199",
+        "-e",
+        "cycles:u",
+        "--call-graph",
+        "dwarf,8192",
+        "-o",
+        "/home/phil/dev/war_next/artifacts/profiles/application-idle/disabled/perf.data",
+        "-p",
+        "2616358",
+        "--",
+        "sleep",
+        "12"
+      ],
+      "output": [
+        {
+          "clients": 64,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 64,
+          "deliveries_per_second": 1715307.2411973816,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 10.000531443,
+          "event": "result",
+          "joins": 64,
+          "latency_max_ms": 5.717768,
+          "latency_p50_upper_ms": 0.524288,
+          "latency_p99_upper_ms": 1.048576,
+          "mode": "traffic",
+          "payload_bytes": 1024,
+          "setup_seconds": 0.020804995,
+          "slow_observation": null,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 17153984,
+          "window": 16
+        }
+      ],
+      "final_metrics": {
+        "war_idle_timeouts_total": "0",
+        "war_unstarted_writes_cancelled_total": "0",
+        "war_routing_reused_bytes_total": "17617141568",
+        "war_routing_copied_bytes_total": "0",
+        "war_write_timeouts_total": "0",
+        "war_write_errors_total": "0",
+        "war_aborted_writes_total": "0",
+        "war_close_failures_total": "0",
+        "war_transport_disconnects_total": "64",
+        "war_global_pressure_total": "0",
+        "war_accepted_total": "64",
+        "war_rejected_total": "0",
+        "war_handshake_errors_total": "0",
+        "war_joined_total": "64",
+        "war_disconnected_total": "64",
+        "war_incoming_messages_total": "17153984",
+        "war_incoming_bytes_total": "17788681408",
+        "war_deliveries_total": "17154072",
+        "war_delivered_bytes_total": "17788682440",
+        "war_slow_consumers_total": "0",
+        "war_protocol_errors_total": "0",
+        "war_rate_limited_total": "0",
+        "war_variable_bytes": "0",
+        "war_connections": "0",
+        "war_sessions": "0",
+        "war_channels": "1",
+        "war_queued_bytes": "0",
+        "war_draining": "0"
+      },
+      "record_log": "[ perf record: Woken up 245 times to write data ]\n[ perf record: Captured and wrote 61.574 MB /home/phil/dev/war_next/artifacts/profiles/application-idle/disabled/perf.data (7665 samples) ]\n",
+      "report_stderr": "",
+      "samples": 7665,
+      "symbols": [
+        {
+          "user_cycles_percent": 12.83,
+          "kind": ".",
+          "symbol": "war_relay::server::connection_task::{{closure}}"
+        },
+        {
+          "user_cycles_percent": 11.82,
+          "kind": ".",
+          "symbol": "war_relay::relay::Relay::receive"
+        },
+        {
+          "user_cycles_percent": 9.95,
+          "kind": ".",
+          "symbol": "<futures_util::stream::stream::next::Next<St> as core::future::future::Future>::poll"
+        },
+        {
+          "user_cycles_percent": 7.09,
+          "kind": ".",
+          "symbol": "tokio::sync::notify::NotifiedProject::poll_notified"
+        },
+        {
+          "user_cycles_percent": 6.96,
+          "kind": ".",
+          "symbol": "war_relay::relay::Peer::enqueue_frame"
+        },
+        {
+          "user_cycles_percent": 5.82,
+          "kind": ".",
+          "symbol": "tokio::sync::task::atomic_waker::AtomicWaker::register_by_ref"
+        },
+        {
+          "user_cycles_percent": 5.4,
+          "kind": ".",
+          "symbol": "tokio_util::sync::cancellation_token::CancellationToken::is_cancelled"
+        },
+        {
+          "user_cycles_percent": 4.66,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_drop"
+        },
+        {
+          "user_cycles_percent": 3.96,
+          "kind": ".",
+          "symbol": "__vdso_clock_gettime"
+        },
+        {
+          "user_cycles_percent": 3.19,
+          "kind": ".",
+          "symbol": "tokio::runtime::scheduler::Handle::current"
+        },
+        {
+          "user_cycles_percent": 2.54,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_clone"
+        },
+        {
+          "user_cycles_percent": 1.91,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::clone_waker"
+        },
+        {
+          "user_cycles_percent": 1.64,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::drop_waker"
+        },
+        {
+          "user_cycles_percent": 1.56,
+          "kind": ".",
+          "symbol": "tokio::runtime::io::registration::Registration::poll_ready"
+        },
+        {
+          "user_cycles_percent": 1.45,
+          "kind": "k",
+          "symbol": "0xffffffffaf600080"
+        },
+        {
+          "user_cycles_percent": 1.36,
+          "kind": ".",
+          "symbol": "tokio::sync::batch_semaphore::Semaphore::add_permits_locked"
+        },
+        {
+          "user_cycles_percent": 1.1,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::reserve_inner"
+        },
+        {
+          "user_cycles_percent": 1.09,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::split_to"
+        },
+        {
+          "user_cycles_percent": 0.89,
+          "kind": ".",
+          "symbol": "0x000000000018f393"
+        },
+        {
+          "user_cycles_percent": 0.84,
+          "kind": ".",
+          "symbol": "0x00000000000a79b9"
+        },
+        {
+          "user_cycles_percent": 0.66,
+          "kind": "k",
+          "symbol": "0xffffffffafe10b05"
+        },
+        {
+          "user_cycles_percent": 0.54,
+          "kind": ".",
+          "symbol": "std::sys::sync::mutex::futex::Mutex::lock_contended"
+        }
+      ]
+    },
+    {
+      "candidate": "enabled",
+      "server_sha256": "46098692fda5dda30db729c06212742f9ed6853ac207741df7f5180f57f6c2dd",
+      "stress_sha256": "d3fb0a7d5c77996dc42d08963a98cc9e8dfcc1d0fb81b95a72ed90ecee743b32",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/application-idle/war-relay",
+        "--bind",
+        "127.0.0.1:57527",
+        "--admin-bind",
+        "127.0.0.1:51953",
+        "--workers",
+        "4",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0",
+        "--max-message-bytes",
+        "1048576",
+        "--queue-bytes",
+        "1048586",
+        "--idle-timeout-secs=300"
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "4-7",
+        "/home/phil/dev/war_next/artifacts/baselines/14b9529/stress",
+        "--url",
+        "ws://127.0.0.1:57527",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "10",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "perf_command": [
+        "perf",
+        "record",
+        "-F",
+        "199",
+        "-e",
+        "cycles:u",
+        "--call-graph",
+        "dwarf,8192",
+        "-o",
+        "/home/phil/dev/war_next/artifacts/profiles/application-idle/enabled/perf.data",
+        "-p",
+        "2616392",
+        "--",
+        "sleep",
+        "12"
+      ],
+      "output": [
+        {
+          "clients": 64,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 64,
+          "deliveries_per_second": 1594735.6486030032,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 10.000483788,
+          "event": "result",
+          "joins": 64,
+          "latency_max_ms": 5.723587,
+          "latency_p50_upper_ms": 0.524288,
+          "latency_p99_upper_ms": 1.048576,
+          "mode": "traffic",
+          "payload_bytes": 1024,
+          "setup_seconds": 0.03222694,
+          "slow_observation": null,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 15948128,
+          "window": 16
+        }
+      ],
+      "final_metrics": {
+        "war_idle_timeouts_total": "0",
+        "war_unstarted_writes_cancelled_total": "0",
+        "war_routing_reused_bytes_total": "16378727456",
+        "war_routing_copied_bytes_total": "0",
+        "war_write_timeouts_total": "0",
+        "war_write_errors_total": "0",
+        "war_aborted_writes_total": "0",
+        "war_close_failures_total": "0",
+        "war_transport_disconnects_total": "64",
+        "war_global_pressure_total": "0",
+        "war_accepted_total": "64",
+        "war_rejected_total": "0",
+        "war_handshake_errors_total": "0",
+        "war_joined_total": "64",
+        "war_disconnected_total": "64",
+        "war_incoming_messages_total": "15948128",
+        "war_incoming_bytes_total": "16538208736",
+        "war_deliveries_total": "15948221",
+        "war_delivered_bytes_total": "16538209863",
+        "war_slow_consumers_total": "0",
+        "war_protocol_errors_total": "0",
+        "war_rate_limited_total": "0",
+        "war_variable_bytes": "0",
+        "war_connections": "0",
+        "war_sessions": "0",
+        "war_channels": "1",
+        "war_queued_bytes": "0",
+        "war_draining": "0"
+      },
+      "record_log": "[ perf record: Woken up 240 times to write data ]\n[ perf record: Captured and wrote 60.320 MB /home/phil/dev/war_next/artifacts/profiles/application-idle/enabled/perf.data (7512 samples) ]\n",
+      "report_stderr": "",
+      "samples": 7512,
+      "symbols": [
+        {
+          "user_cycles_percent": 13.7,
+          "kind": ".",
+          "symbol": "war_relay::server::connection_task::{{closure}}"
+        },
+        {
+          "user_cycles_percent": 10.09,
+          "kind": ".",
+          "symbol": "war_relay::relay::Relay::receive"
+        },
+        {
+          "user_cycles_percent": 8.38,
+          "kind": ".",
+          "symbol": "tokio::time::sleep::Sleep::reset"
+        },
+        {
+          "user_cycles_percent": 8.09,
+          "kind": ".",
+          "symbol": "<futures_util::stream::stream::next::Next<St> as core::future::future::Future>::poll"
+        },
+        {
+          "user_cycles_percent": 6.31,
+          "kind": ".",
+          "symbol": "tokio::sync::notify::NotifiedProject::poll_notified"
+        },
+        {
+          "user_cycles_percent": 5.97,
+          "kind": ".",
+          "symbol": "tokio::sync::task::atomic_waker::AtomicWaker::register_by_ref"
+        },
+        {
+          "user_cycles_percent": 5.76,
+          "kind": ".",
+          "symbol": "war_relay::relay::Peer::enqueue_frame"
+        },
+        {
+          "user_cycles_percent": 4.87,
+          "kind": ".",
+          "symbol": "tokio_util::sync::cancellation_token::CancellationToken::is_cancelled"
+        },
+        {
+          "user_cycles_percent": 3.82,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_drop"
+        },
+        {
+          "user_cycles_percent": 3.6,
+          "kind": ".",
+          "symbol": "__vdso_clock_gettime"
+        },
+        {
+          "user_cycles_percent": 2.76,
+          "kind": ".",
+          "symbol": "tokio::runtime::scheduler::Handle::current"
+        },
+        {
+          "user_cycles_percent": 2.29,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::drop_waker"
+        },
+        {
+          "user_cycles_percent": 2.27,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::waker::clone_waker"
+        },
+        {
+          "user_cycles_percent": 1.95,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::shared_v_clone"
+        },
+        {
+          "user_cycles_percent": 1.32,
+          "kind": ".",
+          "symbol": "tokio::sync::batch_semaphore::Semaphore::add_permits_locked"
+        },
+        {
+          "user_cycles_percent": 1.23,
+          "kind": "k",
+          "symbol": "0xffffffffaf600080"
+        },
+        {
+          "user_cycles_percent": 1.11,
+          "kind": ".",
+          "symbol": "tokio::runtime::io::registration::Registration::poll_ready"
+        },
+        {
+          "user_cycles_percent": 0.96,
+          "kind": ".",
+          "symbol": "0x000000000018f393"
+        },
+        {
+          "user_cycles_percent": 0.88,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::split_to"
+        },
+        {
+          "user_cycles_percent": 0.83,
+          "kind": ".",
+          "symbol": "bytes::bytes_mut::BytesMut::reserve_inner"
+        },
+        {
+          "user_cycles_percent": 0.68,
+          "kind": ".",
+          "symbol": "0x00000000000a62ff"
+        },
+        {
+          "user_cycles_percent": 0.64,
+          "kind": ".",
+          "symbol": "0x00000000000a79b9"
+        },
+        {
+          "user_cycles_percent": 0.59,
+          "kind": "k",
+          "symbol": "0xffffffffafe10b05"
+        },
+        {
+          "user_cycles_percent": 0.56,
+          "kind": ".",
+          "symbol": "tokio::runtime::task::raw::poll"
+        }
+      ]
+    }
+  ],
+  "driver_sha256": "5e5fdeb7f939bcf01a446bcfac527a2d0975dcb76f0682b4ee7cb5d8aeeefae3"
+}

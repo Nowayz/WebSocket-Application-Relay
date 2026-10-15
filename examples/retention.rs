@@ -1,12 +1,14 @@
 //! Retain tiny output beside repeated large unknown-target input on real sockets.
-use std::{net::SocketAddr, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
 use clap::Parser;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, future::try_join_all};
 use tokio::{
     net::{TcpSocket, TcpStream},
+    sync::Barrier,
+    task::JoinSet,
     time::{sleep, timeout},
 };
 use tokio_tungstenite::{
@@ -27,6 +29,14 @@ struct Args {
     cycles: usize,
     #[arg(long, default_value_t = 4 * 1024 * 1024)]
     primer_bytes: usize,
+    #[arg(long, default_value_t = 1)]
+    producers: usize,
+    /// Observe connected idle storage after output drains; zero skips the phase.
+    #[arg(long, default_value_t = 0)]
+    idle_secs: u64,
+    /// After the idle observation, require the server's application-idle Close.
+    #[arg(long)]
+    expect_idle_close: bool,
 }
 
 #[tokio::main(worker_threads = 2)]
@@ -40,10 +50,39 @@ async fn main() -> Result<()> {
         (64 * 1024..=8 * 1024 * 1024).contains(&args.primer_bytes),
         "primer must be in 64 KiB..=8 MiB"
     );
-    let (mut sender, sender_id) = join(args.address, "retain-source").await?;
+    ensure!(
+        (1..=64).contains(&args.producers),
+        "producers must be in 1..=64"
+    );
+    ensure!(
+        args.idle_secs <= 10,
+        "idle observation cannot exceed 10 seconds"
+    );
+    ensure!(
+        !args.expect_idle_close || args.idle_secs > 0,
+        "idle Close verification requires an idle observation"
+    );
+    ensure!(
+        args.producers as u128 * args.cycles as u128 * args.primer_bytes as u128
+            <= 8 * 1024 * 1024 * 1024u128,
+        "primer traffic cannot exceed 8 GiB; reduce producers, cycles, or primer bytes"
+    );
+    let mut sources = Vec::with_capacity(args.producers);
+    let mut next_sequence = HashMap::with_capacity(args.producers);
+    for index in 0..args.producers {
+        // Separate source channels keep departure notifications out of the
+        // data/order checks. Private routing intentionally spans channels.
+        let (sender, sender_id) = join(args.address, &format!("retain-src{index:x}")).await?;
+        ensure!(
+            next_sequence.insert(sender_id, 0usize).is_none(),
+            "duplicate producer ID"
+        );
+        sources.push((sender, sender_id));
+    }
+    let sender_id = sources[0].1;
     let (mut receiver, receiver_id) = join(args.address, "retain-dest").await?;
     let unknown = (1..)
-        .find(|id| *id != sender_id && *id != receiver_id)
+        .find(|id| !next_sequence.contains_key(id) && *id != receiver_id)
         .unwrap();
     let primer = protocol::envelope(
         unknown,
@@ -52,20 +91,19 @@ async fn main() -> Result<()> {
     let fill_value = protocol::byte_string(&vec![0xa5; FILLER_BYTES]);
     let filler = protocol::envelope(receiver_id, &fill_value);
     let expected_filler = protocol::envelope(sender_id, &fill_value);
-    let templates: Vec<_> = (1..=args.cycles)
-        .map(|sequence| {
-            let value = protocol::uint(sequence as u64);
-            (
-                protocol::envelope(receiver_id, &value),
-                protocol::envelope(sender_id, &value),
-                protocol::envelope(sender_id, &value),
-                value.len(),
-            )
-        })
+    let values: Vec<_> = (1..=args.cycles)
+        .map(|sequence| protocol::uint(sequence as u64))
         .collect();
-    let value_bytes =
-        FILLERS * fill_value.len() + 1 + templates.iter().map(|t| t.3 * 2).sum::<usize>();
+    let packets: Arc<[_]> = values
+        .iter()
+        .map(|value| protocol::envelope(receiver_id, value))
+        .collect::<Vec<_>>()
+        .into();
+    let value_bytes = FILLERS * fill_value.len()
+        + 1
+        + args.producers * values.iter().map(|v| v.len() * 2).sum::<usize>();
     phase("ready", 0);
+    let sender = &mut sources[0].0;
     for _ in 0..FILLERS {
         sender.send(Message::Binary(filler.clone())).await?;
     }
@@ -73,23 +111,45 @@ async fn main() -> Result<()> {
         .send(Message::Binary(protocol::envelope(sender_id, &[0])))
         .await?;
     ensure!(
-        data(&mut sender).await? == protocol::envelope(sender_id, &[0]),
+        data(sender).await? == protocol::envelope(sender_id, &[0]),
         "initial barrier changed"
     );
     phase("prefilled", 0);
-    for (index, (small, expected, barrier, _)) in templates.iter().enumerate() {
-        sender.send(Message::Binary(primer.clone())).await?;
-        sender.send(Message::Binary(small.clone())).await?;
-        sender.send(Message::Binary(barrier.clone())).await?;
-        // This self-message proves the same connection processed its preceding
-        // unknown primer and tiny routed value while the other peer stays unread.
-        ensure!(
-            data(&mut sender).await? == *expected,
-            "sender barrier changed at {index}"
-        );
-        if (index + 1).is_multiple_of(16) {
-            phase("priming", index + 1);
-        }
+    let start = Arc::new(Barrier::new(args.producers));
+    let mut tasks = JoinSet::new();
+    for (producer, (mut sender, id)) in sources.into_iter().enumerate() {
+        let barriers: Vec<_> = values
+            .iter()
+            .map(|value| protocol::envelope(id, value))
+            .collect();
+        let packets = packets.clone();
+        let primer = primer.clone();
+        let start = start.clone();
+        tasks.spawn(async move {
+            start.wait().await;
+            for (index, barrier) in barriers.iter().enumerate() {
+                sender.send(Message::Binary(primer.clone())).await?;
+                sender.send(Message::Binary(packets[index].clone())).await?;
+                sender.send(Message::Binary(barrier.clone())).await?;
+                // The self-message proves this connection processed preceding
+                // input while every producer feeds the same unread recipient.
+                ensure!(
+                    data(&mut sender).await? == *barrier,
+                    "producer {producer} barrier changed at {index}"
+                );
+                if (index + 1).is_multiple_of(16) {
+                    println!(
+                        "{}",
+                        serde_json::json!({"event":"priming","producer":producer,"cycles":index+1})
+                    );
+                }
+            }
+            Ok::<_, anyhow::Error>(sender)
+        });
+    }
+    let mut senders = Vec::with_capacity(args.producers);
+    while let Some(completed) = tasks.join_next().await {
+        senders.push(completed??);
     }
     phase("holding", args.cycles);
     sleep(Duration::from_secs(2)).await;
@@ -100,22 +160,49 @@ async fn main() -> Result<()> {
             "filler changed"
         );
     }
-    for (index, (_, expected, _, _)) in templates.iter().enumerate() {
+    for _ in 0..args.producers * args.cycles {
+        let packet = data(&mut receiver).await?;
+        let (id, value) = protocol::parse(&packet)
+            .map_err(|e| anyhow::anyhow!("invalid received envelope: {e:?}"))?;
+        let next = next_sequence.get_mut(&id).context("unknown producer")?;
         ensure!(
-            data(&mut receiver).await? == *expected,
-            "queued value changed at {index}"
+            *next < args.cycles && value == values[*next],
+            "producer {id} output is duplicated, missing, or out of order"
         );
+        *next += 1;
     }
-    close(&mut sender).await?;
-    close(&mut receiver).await?;
+    ensure!(
+        next_sequence.values().all(|next| *next == args.cycles),
+        "producer matrix incomplete"
+    );
+    if args.idle_secs > 0 {
+        phase("idle", args.cycles);
+        sleep(Duration::from_secs(args.idle_secs)).await;
+    }
+    senders.push(receiver);
+    if args.expect_idle_close {
+        phase("evicting", args.cycles);
+        try_join_all(senders.iter_mut().map(idle_close)).await?;
+    } else {
+        for sender in &mut senders {
+            close(sender).await?;
+        }
+    }
+    if args.idle_secs > 0 {
+        phase("retired", args.cycles);
+        sleep(Duration::from_secs(2)).await;
+    }
     println!(
         "{}",
         serde_json::json!({
             "event":"result", "cycles":args.cycles, "primer_bytes":args.primer_bytes,
-            "unknown_input_bytes":args.cycles * primer.len(), "incoming_messages":FILLERS + args.cycles * 3 + 1,
-            "verified_deliveries":FILLERS + args.cycles * 2 + 1, "routed_value_bytes":value_bytes,
+            "producers":args.producers,"joins":args.producers+1,"idle_secs":args.idle_secs,
+            "server_idle_close_verified":args.expect_idle_close,
+            "unknown_input_bytes":args.producers as u64 * args.cycles as u64 * primer.len() as u64,
+            "incoming_messages":FILLERS + args.producers * args.cycles * 3 + 1,
+            "verified_deliveries":FILLERS + args.producers * args.cycles * 2 + 1, "routed_value_bytes":value_bytes,
             "receiver_buffer_requested_bytes":65536, "filler_messages":FILLERS,
-            "filler_value_bytes":fill_value.len(), "clean_close_handshakes":2,
+            "filler_value_bytes":fill_value.len(), "clean_close_handshakes":args.producers+1,
         })
     );
     Ok(())
@@ -171,6 +258,24 @@ async fn close(ws: &mut Socket) -> Result<()> {
             }
         }
         anyhow::bail!("Close acknowledgement missing")
+    })
+    .await?
+}
+
+async fn idle_close(ws: &mut Socket) -> Result<()> {
+    timeout(Duration::from_secs(12), async {
+        loop {
+            match ws.next().await.context("Close acknowledgement missing")?? {
+                Message::Close(Some(frame))
+                    if u16::from(frame.code) == 1001 && frame.reason == "Application Idle" =>
+                {
+                    ws.flush().await?;
+                    return Ok(());
+                }
+                Message::Ping(_) => ws.flush().await?,
+                other => anyhow::bail!("unexpected idle-policy frame: {other:?}"),
+            }
+        }
     })
     .await?
 }

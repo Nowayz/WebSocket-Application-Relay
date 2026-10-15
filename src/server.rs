@@ -15,7 +15,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::Semaphore,
     task::JoinSet,
-    time::{Instant, interval_at, sleep, sleep_until, timeout},
+    time::{Instant, interval_at, sleep, timeout},
 };
 use tokio_tungstenite::{
     accept_hdr_async_with_config,
@@ -241,12 +241,41 @@ async fn connection_task(
     let mut heartbeat = interval_at(Instant::now() + period, period);
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut pong_deadline = None;
+    let idle_timeout = Duration::from_secs(config.idle_timeout_secs);
+    let mut idle_deadline = (config.idle_timeout_secs > 0).then(|| Instant::now() + idle_timeout);
+    let deadline_wait = sleep(Duration::from_secs(86_400));
+    tokio::pin!(deadline_wait);
+    let mut armed_deadline = None;
     let end = loop {
+        // Share the existing deadline wait. Disabled idle policy needs no extra
+        // timer or per-message clock read; heartbeat controls are not activity.
+        let next_deadline = match (pong_deadline, idle_deadline) {
+            (Some(pong), Some(idle)) => Some(pong.min(idle)),
+            (deadline, None) | (None, deadline) => deadline,
+        };
+        if next_deadline != armed_deadline {
+            deadline_wait.as_mut().reset(
+                next_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400)),
+            );
+            armed_deadline = next_deadline;
+        }
         tokio::select! {
             _ = stopped.as_mut() => break SessionEnd::Close(Disconnect::SHUTDOWN),
             reason = closing.as_mut() => break SessionEnd::Close(reason),
-            _ = sleep_until(pong_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400))), if pong_deadline.is_some() => {
-                break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });
+            _ = deadline_wait.as_mut(), if next_deadline.is_some() => {
+                let now = Instant::now();
+                if pong_deadline.is_some_and(|deadline| deadline <= now) {
+                    break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });
+                }
+                if idle_deadline.is_some_and(|deadline| deadline <= now) {
+                    // Queued/in-flight output is active work. Slow recipients
+                    // remain governed by queue budgets and the write deadline.
+                    if outgoing.is_empty() {
+                        relay.metrics.idle_timeouts.fetch_add(1, Relaxed);
+                        break SessionEnd::Close(Disconnect::IDLE);
+                    }
+                    idle_deadline = Some(now + idle_timeout);
+                }
             }
             _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
                 if pong_deadline.is_none() {
@@ -259,6 +288,7 @@ async fn connection_task(
                 if let Err(failure) = transport::output(ws.binary(&packet.frame), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
                 relay.metrics.deliveries.fetch_add(1, Relaxed);
                 relay.metrics.delivered_bytes.fetch_add(packet.frame.len() as u64, Relaxed);
+                if idle_deadline.is_some() { idle_deadline = Some(Instant::now() + idle_timeout); }
             }
             incoming = ws.next() => {
                 match incoming {
@@ -266,6 +296,7 @@ async fn connection_task(
                     Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
                     Some(Ok(Message::Binary(bytes))) => {
                         if let Err(reason) = relay.receive(peer, bytes) { break SessionEnd::Close(reason); }
+                        if idle_deadline.is_some() { idle_deadline = Some(Instant::now() + idle_timeout); }
                     }
                     Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }

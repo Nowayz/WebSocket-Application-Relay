@@ -40,6 +40,7 @@ variables. All bounds are per process.
 | Handshake / channel join deadline | 5 s / 10 s | Includes clients that send no data |
 | Write / graceful-close deadline | 5 s | One deadline per operation; close-send and acknowledgement share a budget |
 | Heartbeat | Every 15 s, pong due within 45 s | Server ping payload `war`; zero interval disables heartbeats |
+| Application idle timeout | Disabled (`0`) | Joined sessions; `--idle-timeout-secs` / `WAR_IDLE_TIMEOUT_SECS`, up to one day |
 | Shutdown deadline | 10 s | Remaining tasks are aborted and registration cleanup runs |
 
 Queue limits concern logical payload storage, not the complete process RSS. WebSocket
@@ -60,6 +61,29 @@ tiny queued views.
 Queue gauges count the emitted CBOR envelope's logical bytes, including its
 separate routing prefix, rather than the backing allocation's capacity. Measure
 RSS alongside these gauges; they are not a physical-memory accounting interface.
+
+Receive capacity can also remain resident on open connections after their output
+queues drain. Concurrent 4 MiB primer measurements demonstrate this separately
+from queued-view retention; the 4 KiB read setting is an initial capacity. Budget
+connections and incoming message size together, and monitor process RSS as well
+as logical queue bytes.
+
+For applications that should retire inactive sessions, set
+`WAR_IDLE_TIMEOUT_SECS=300` (or another value in `1..=86400`). The default `0`
+preserves indefinite application-idle sessions. A completed binary input or a
+successfully written relay message refreshes activity, including commands and
+replies. Receive-only clients remain active while output arrives. Ping/Pong
+traffic does not refresh application activity, and an unfinished fragmented data
+message does not qualify as completed input. Queued/in-flight output is active
+work governed by the existing queue and write limits.
+
+An application-idle decision sends `1001` / `Application Idle` and increments
+`war_idle_timeouts_total`. Routing membership and channel-variable ownership
+release before the close handshake; TCP capacity and decoder storage release
+when the transport ends. An unresponsive peer remains subject to the close
+deadline. This policy retires inactive sessions; input-size/admission limits and
+RSS monitoring still govern active populations. It shares one reusable deadline
+wait with heartbeat timeout handling and leaves application-body sharing intact.
 
 Output has a separate limit: a rewritten sender ID may expand an application
 envelope by up to eight bytes, while channel-list replies can be larger than an

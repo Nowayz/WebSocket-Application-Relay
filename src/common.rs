@@ -33,6 +33,10 @@ impl Disconnect {
         code: 1001,
         reason: "Server Shutdown",
     };
+    pub const IDLE: Self = Self {
+        code: 1001,
+        reason: "Application Idle",
+    };
     pub const RATE: Self = Self {
         code: 1008,
         reason: "Rate Limit Exceeded",

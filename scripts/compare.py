@@ -25,6 +25,8 @@ def candidate(value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", type=candidate, action="append", required=True)
+    parser.add_argument("--server-arg", action="append", default=[], metavar="LABEL=ARG",
+                        help="Append one server argument for a candidate, e.g. enabled=--idle-timeout-secs=300; repeat as needed.")
     parser.add_argument("--stress", type=Path, default=STRESS)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seconds", type=int, default=15)
@@ -43,6 +45,12 @@ def main():
     labels = [label for label, _ in args.candidate]
     if len(set(labels)) != len(labels) or args.repetitions < 1 or not 1 <= args.seconds <= 3600 or not 8 <= args.payload_bytes <= 1048544:
         parser.error("use unique labels, positive repetitions, seconds in 1..=3600, and payload bytes in 8..=1048544")
+    server_args = {label: [] for label in labels}
+    for item in args.server_arg:
+        label, separator, value = item.partition("=")
+        if not separator or label not in server_args or not value or len(value) > 4096:
+            parser.error("server arguments require an existing candidate label and a nonempty argument up to 4096 characters")
+        server_args[label].append(value)
     if args.payload_sizes and (len(args.payload_sizes) > 64 or any(not 8 <= size <= 1048544 for size in args.payload_sizes)):
         parser.error("use at most 64 payload sizes in 8..=1048544")
     if args.mode != "fanout" and (args.payload_sizes or args.unread_clients or args.reader_delay_ms):
@@ -61,7 +69,7 @@ def main():
         "mode": args.mode, "payload_sizes": args.payload_sizes, "unread_clients": args.unread_clients,
         "reader_delay_ms": args.reader_delay_ms, "window": args.window,
         "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
-        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for label, path in args.candidate},
+        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "server_args": server_args[label]} for label, path in args.candidate},
         "notes": "Sequential fresh four-worker servers. Same fixed verifying client binary, sizes and window for each candidate. CPU sets separate client/server physical cores on the recorded host. Rates disabled; heartbeat enabled. Position rotates per repetition. CPU seconds include setup and teardown. Latency quantiles are fixed-histogram upper bounds; fanout latency begins at window publication. Summary timings include only passed cases. No frequency governor changes.",
         "runs": [], "summary": {},
     }
@@ -73,7 +81,7 @@ def main():
                             stress_binary=args.stress, server_cpus=args.server_cpus,
                             client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
                             payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
-                            reader_delay_ms=args.reader_delay_ms, window=args.window)
+                            reader_delay_ms=args.reader_delay_ms, window=args.window, server_args=server_args[label])
             trace = traces / f"{repetition}-{position}.json"
             trace.write_text(json.dumps(case, indent=2) + "\n")
             result = next((entry for entry in case["output"] if entry.get("event") == "result"), {})

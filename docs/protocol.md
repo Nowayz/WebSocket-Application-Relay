@@ -98,7 +98,7 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 | Code | Cause |
 | --- | --- |
 | `1000` | Normal close |
-| `1001` | Shutdown or heartbeat timeout |
+| `1001` | Shutdown, heartbeat timeout, or configured application-idle timeout |
 | `1002` | Invalid CBOR/WAR or WebSocket framing |
 | `1003` | Text at CBOR endpoint, or structured CBOR at a legacy recipient |
 | `1008` | Authentication, rate, join-timeout, reserved-ID, or global-send policy |

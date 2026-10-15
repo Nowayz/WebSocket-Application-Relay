@@ -51,6 +51,9 @@ pub struct Config {
     pub ping_interval_secs: u64,
     #[arg(long, env = "WAR_PONG_TIMEOUT_SECS", default_value_t = 45)]
     pub pong_timeout_secs: u64,
+    /// Joined sessions with no application input/output expire; zero disables.
+    #[arg(long, env = "WAR_IDLE_TIMEOUT_SECS", default_value_t = 0)]
+    pub idle_timeout_secs: u64,
     #[arg(long, env = "WAR_SHUTDOWN_TIMEOUT_SECS", default_value_t = 10)]
     pub shutdown_timeout_secs: u64,
     /// Disable the legacy ability of re_globl members to broadcast to all users.
@@ -147,6 +150,10 @@ impl Config {
         ensure!(
             self.ping_interval_secs <= 86_400,
             "ping interval exceeds one day"
+        );
+        ensure!(
+            self.idle_timeout_secs <= 86_400,
+            "idle timeout exceeds one day"
         );
         ensure!(
             (1..=86_400).contains(&self.pong_timeout_secs),

@@ -50,6 +50,14 @@ expose privileged commands. `disconnect` events carry `{ userId }`; `close` even
 carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
 
+Operators can optionally retire inactive joined sessions with
+`--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
+and outgoing relay messages refresh activity; receive-only consumers stay active
+while messages arrive. Ping/Pong traffic does not refresh this deadline. Expiry
+closes with `1001` / `Application Idle` and uses normal queue/variable cleanup.
+The default `0` disables this policy. See [operations.md](docs/operations.md) for
+memory budgeting and deadline details.
+
 To build a standalone browser ES module and open its acceptance page:
 
 ```sh
@@ -191,6 +199,23 @@ self-message barrier. After a two-second hold, it verifies all buffered output,
 both Close handshakes, counter totals, and complete cleanup. It samples server
 RSS and logical queue bytes; these are finite retention checks, not a leak proof
 or a production capacity estimate.
+
+Add concurrent producers and observe connected-idle storage after draining:
+
+```sh
+python3 scripts/retention.py --cycles 64 --producers 1 8 32 --idle-secs 2 \
+  --output artifacts/concurrent-retention.json
+python3 scripts/retention.py --cycles 64 --producers 1 8 32 --idle-secs 2 \
+  --server-idle-secs 3 --output artifacts/concurrent-idle-expiry.json
+```
+
+Producers start together; the recipient verifies each sender's sequence without
+requiring a global order. Preparation is shared and bounded; each case permits
+at most 8 GiB of configured primer payload, plus wire headers. The runner sizes
+the message-count queue to fit the producer matrix while retaining the default
+32 MiB byte budget. Connected-idle observations include two seconds of sampling
+after all sessions retire. The second command requires every session to receive
+and acknowledge the configured server-idle Close.
 
 ```sh
 ./target/release/examples/load --clients 128 --messages 1000 --payload-bytes 256
