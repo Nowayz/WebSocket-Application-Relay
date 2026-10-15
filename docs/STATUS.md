@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 35 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 38 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -66,6 +66,31 @@ claim that an open-ended improvement effort is complete.
   values, and clean Close. A separate release workload verified 16 private
   deliveries. Gauges returned to zero afterward. Binary/process evidence is in
   `benchmarks/2026-10-15-zero-copy-live.json`; this is a timestamped observation.
+- Sustained mixed-size fanout now verifies every reader's frames, bytes, ordering,
+  disconnect events, and simultaneous graceful departure, with bounded templates,
+  histograms, and acknowledgements. Optional unread and delayed readers exercise
+  concurrent data and control pressure.
+- A 128-client departure wave reproduced resets when a capacity signal cancelled
+  output before its first poll. The connection now distinguishes untouched output
+  from a possibly partial frame and preserves an already queued peer Close on
+  the safe closing path. Three old-build runs failed; all three fixed runs passed.
+- Final-build 30-second / 128-client mixed-size acceptance verified 3,440,304
+  deliveries to 126 healthy readers beside one unread peer and a delayed reader.
+  Peak sampled RSS was 13.96 MiB. Routed bytes were 99.784% reused; the existing
+  small-view compaction policy accounted for the rest. A repeated 1 KiB cost guard
+  recorded 1,582,701 versus 1,536,783 median deliveries/s with the same p99 bucket;
+  no general performance gain is attributed to these correctness changes. See
+  stability.md for the separate implementation stages, outcomes, and limits.
+- The current local release processes were refreshed after that fix. A real Node
+  client group completed 128 simultaneous clean closes with code 1000, and three
+  additional live checks exercised the original client, native/legacy values, and
+  Close before/after joining. Readiness/liveness returned 200 and gauges returned
+  to zero. The timestamped binary/process snapshot is in
+  `benchmarks/2026-10-15-graceful-close-live.json`.
+- A further regression reproduced missing Close acknowledgement after input
+  quota exhaustion. Both receive loops now handle a valid Close before rate
+  accounting; the regression exercises this before and after joining. Other
+  inbound traffic retains its limits.
 
 ## Exact verification boundaries
 
@@ -83,11 +108,12 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Profile the remaining small-message CPU cost and longer fanout/mixed-size
-   workloads before changing counters, queue representation, or read storage.
-   Preserve zero-copy ordinary forwarding, compaction for enlarged slabs, and
-   the close/immediate-eviction contracts. Extend memory-retention checks under
-   adversarial size changes and slow fanout.
+1. Profile the remaining small-message CPU cost before changing counters, queue
+   representation, or read storage. Mixed-size fanout is now exercised at 128
+   concurrent clients; extend adversarial retention checks around slab thresholds
+   and repeated large unknown-target primers followed by tiny routed values.
+   Preserve ordinary zero-copy forwarding, compaction of enlarged slabs, exact
+   peer Close acknowledgements, and immediate dropping of partial output.
 2. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

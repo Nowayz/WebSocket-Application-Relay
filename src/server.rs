@@ -180,6 +180,12 @@ async fn connection_task(
             incoming = ws.next() => incoming,
         };
         match incoming {
+            Some(Ok(Message::Close(_))) => {
+                if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
+                    relay.metrics.close_failures.fetch_add(1, Relaxed);
+                }
+                return Ok(());
+            }
             Some(Ok(message)) if !limiter.allow(message.len()) => {
                 relay.metrics.rate_limited.fetch_add(1, Relaxed);
                 close(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
@@ -203,17 +209,13 @@ async fn connection_task(
                 )
                 .await
                 {
-                    output_failed(&relay, failure);
+                    if let SessionEnd::Close(reason) = output_failed(&relay, failure) {
+                        close(&mut ws, reason, &relay, &shutdown).await;
+                    }
                     return Ok(());
                 }
             }
             Some(Ok(Message::Pong(_))) => {}
-            Some(Ok(Message::Close(_))) => {
-                if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
-                    relay.metrics.close_failures.fetch_add(1, Relaxed);
-                }
-                return Ok(());
-            }
             None | Some(Err(_)) => return Ok(()),
             _ => {
                 close(&mut ws, cbor_required(), &relay, &shutdown).await;
@@ -257,13 +259,13 @@ async fn connection_task(
             }
             incoming = ws.next() => {
                 match incoming {
+                    Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
                     Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
                     Some(Ok(Message::Binary(bytes))) => {
                         if let Err(reason) = relay.receive(peer, bytes) { break SessionEnd::Close(reason); }
                     }
                     Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }
-                    Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
                     None | Some(Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed)) => break SessionEnd::Drop(Disconnect { code: 1000, reason: "" }),
                     Some(Err(tungstenite::Error::Io(_) | tungstenite::Error::Protocol(tungstenite::error::ProtocolError::ResetWithoutClosingHandshake))) => {
                         relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
@@ -275,6 +277,16 @@ async fn connection_task(
                 }
             }
         }
+    };
+    // Capacity signals can race a peer's already queued Close. When no partial
+    // output exists, preserve that handshake instead of sending a competing one.
+    let end = match end {
+        SessionEnd::Close(reason)
+            if reason == Disconnect::OVERLOADED && ws.take_pending_close() =>
+        {
+            SessionEnd::Acknowledge
+        }
+        end => end,
     };
     let reason = end.reason();
     if reason.code == 1002 {
@@ -327,6 +339,14 @@ impl SessionEnd {
 
 fn output_failed(relay: &Relay, failure: WriteFailure) -> SessionEnd {
     let reason = match failure {
+        WriteFailure::ClosedBeforeStart(reason) => {
+            relay.metrics.aborted_writes.fetch_add(1, Relaxed);
+            relay
+                .metrics
+                .unstarted_writes_cancelled
+                .fetch_add(1, Relaxed);
+            return SessionEnd::Close(reason);
+        }
         WriteFailure::Closed(reason) => {
             relay.metrics.aborted_writes.fetch_add(1, Relaxed);
             reason

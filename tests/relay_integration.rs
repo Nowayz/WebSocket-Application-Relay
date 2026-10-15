@@ -678,6 +678,55 @@ async fn peer_initiated_close_is_acknowledged_before_the_transport_is_dropped() 
     server.stop().await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn simultaneous_peer_closes_finish_handshakes_during_notification_pressure() {
+    let server = Server::new(Config {
+        queue_messages: 4,
+        ..config()
+    })
+    .await;
+    let mut clients = Vec::with_capacity(128);
+    for _ in 0..128 {
+        clients.push(server.join("close-burst").await.0);
+    }
+    let gate = Arc::new(tokio::sync::Barrier::new(clients.len() + 1));
+    let mut closing = tokio::task::JoinSet::new();
+    for mut ws in clients {
+        let gate = gate.clone();
+        closing.spawn(async move {
+            gate.wait().await;
+            ws.close(None).await.unwrap();
+            timeout(Duration::from_secs(3), async {
+                loop {
+                    match ws.next().await.unwrap().unwrap() {
+                        Message::Binary(bytes) => {
+                            assert_eq!(protocol::parse(&bytes).unwrap().0, BROADCAST)
+                        }
+                        Message::Close(frame) => {
+                            // The server may have sent its capacity Close before
+                            // this peer's Close arrived. Either completes cleanly.
+                            assert!(frame.is_none_or(|frame| u16::from(frame.code) == 1013));
+                            ws.flush().await.unwrap();
+                            break;
+                        }
+                        other => panic!("unexpected closing message: {other:?}"),
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        });
+    }
+    gate.wait().await;
+    while let Some(result) = closing.join_next().await {
+        result.unwrap();
+    }
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.write_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 0);
+    server.stop().await;
+}
+
 #[tokio::test]
 async fn close_before_join_preserves_the_peers_code_and_reason() {
     let server = Server::new(config()).await;
@@ -694,6 +743,48 @@ async fn close_before_join_preserves_the_peers_code_and_reason() {
     assert_eq!(server.relay.metrics.joined.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
     server.stop().await;
+}
+
+#[tokio::test]
+async fn exhausted_input_quota_still_acknowledges_close_before_and_after_join() {
+    for joined in [false, true] {
+        let server = Server::new(Config {
+            messages_per_second: 1,
+            bytes_per_second: 0,
+            ..config()
+        })
+        .await;
+        let mut ws = if joined {
+            server.join("close-quota").await.0
+        } else {
+            let (mut ws, _) = connect_async(&server.url).await.unwrap();
+            ws.send(Message::Ping(Bytes::from_static(b"quota")))
+                .await
+                .unwrap();
+            assert!(matches!(
+                timeout(Duration::from_secs(2), ws.next())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap(),
+                Message::Pong(_)
+            ));
+            ws
+        };
+        ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+            code: 4003.into(),
+            reason: "allow cleanup".into(),
+        }))
+        .await
+        .unwrap();
+        assert!(
+            matches!(timeout(Duration::from_secs(2), ws.next()).await.unwrap().unwrap().unwrap(), Message::Close(Some(frame)) if u16::from(frame.code) == 4003 && frame.reason == "allow cleanup")
+        );
+        ws.flush().await.unwrap();
+        assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 0);
+        assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+        server.stop().await;
+    }
 }
 
 #[tokio::test]

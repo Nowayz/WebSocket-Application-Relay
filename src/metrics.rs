@@ -26,6 +26,7 @@ pub struct Metrics {
     pub write_timeouts: AtomicU64,
     pub write_errors: AtomicU64,
     pub aborted_writes: AtomicU64,
+    pub unstarted_writes_cancelled: AtomicU64,
     pub close_failures: AtomicU64,
     pub transport_disconnects: AtomicU64,
 }
@@ -34,6 +35,11 @@ impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
         for (name, value, help) in [
+            (
+                "unstarted_writes_cancelled_total",
+                self.unstarted_writes_cancelled.load(Relaxed),
+                "Output operations cancelled before their write future was first polled; no partial frame exists.",
+            ),
             (
                 "routing_reused_bytes_total",
                 self.routing_reused_bytes.load(Relaxed),
@@ -122,7 +128,7 @@ impl Metrics {
             (
                 "slow_consumers_total",
                 self.slow_consumers.load(Relaxed),
-                "Sessions closed because an output queue exceeded its budget.",
+                "Recipient queue capacity-close signals, including races with peer-initiated Close.",
             ),
             (
                 "protocol_errors_total",

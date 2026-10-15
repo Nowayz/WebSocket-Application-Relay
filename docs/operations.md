@@ -67,7 +67,9 @@ incoming application frame. Queue budgets must fit the input limit plus ten
 header bytes; the WebSocket writer uses that output budget. Incoming limits still
 apply independently to each client message.
 
-Individual queue overflow closes the slow recipient with `1013`. Process-wide
+Individual queue overflow requests recipient closure with `1013`. An already
+queued peer Close wins a simultaneous capacity decision when no partial output
+exists. Process-wide
 queue pressure refuses further reservations and closes the producing session with
 `1013` instead of closing arbitrary unrelated recipients. A broadcast may already
 have reached some recipients when global capacity runs out; there are no delivery
@@ -83,6 +85,14 @@ blocking flush; that transport is dropped, so an unread client may observe a
 reset/abnormal close instead of the intended WebSocket close code. Responsive
 clients receive and acknowledge the normal close frame. A received Close is
 acknowledged by flushing the exact response already queued by the WebSocket library.
+If cancellation arrives before the output future's first poll, that operation
+has performed no I/O. Its stream can finish a normal close handshake. An inline
+boolean distinguishes this case; the application body remains shared throughout.
+An untouched stream may remain until the configured close deadline while waiting
+for acknowledgement; its routing registration and queued bytes are already released.
+Valid peer Close frames bypass input rate accounting before and after channel
+join, so an exhausted quota cannot prevent cleanup. Data, joins, Ping, and Pong
+retain their configured rate limits.
 
 Global variable exhaustion refuses the write and closes the writer with `1013`.
 Per-channel and process variable budgets update atomically with registry changes.
@@ -137,6 +147,14 @@ Output diagnostics distinguish `war_write_timeouts_total`, `war_write_errors_tot
 `war_transport_disconnects_total`, rather than presenting an ordinary lost client
 as a malformed WAR packet. During clean reconnect churn these counters should
 stay at zero; forced unread-client eviction can increment aborted writes.
+
+`war_unstarted_writes_cancelled_total` is the subset of aborted output operations
+whose write futures were never polled. Those streams can close gracefully.
+`war_slow_consumers_total` counts recipient capacity-close signals, which can
+race an already queued peer Close during mass departure. A notification burst
+can therefore increase it even when every departing client completes a clean
+handshake. Examine close failures, transport disconnects, and the before-start
+counter alongside capacity signals rather than equating each signal with a reset.
 
 `war_routing_reused_bytes_total` and `war_routing_copied_bytes_total` count encoded
 application value bytes once per routed input, before recipient fanout. The

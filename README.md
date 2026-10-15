@@ -117,6 +117,8 @@ undefined-variable and const-reassignment bugs are not copied into the new clien
 - SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
   receive `1001`; blocked transports can be dropped. Peer-initiated Close frames
   receive their exact acknowledgement. Cleanup also runs on task cancellation.
+  A cancelled write that has not started preserves the normal close handshake;
+  cancellation of a possibly partial frame still discards its transport.
 
 Management uses a separate HTTP listener:
 
@@ -173,6 +175,15 @@ order. [docs/performance.md](docs/performance.md) records results and limits;
 
 The stability runner checks sustained traffic, reconnect churn, and an unread
 recipient while verifying healthy delivery and sampling memory/management latency.
+Its `fanout` mode adds mixed sizes, concurrent healthy readers, optional unread
+recipients, a delayed reader, and simultaneous graceful departure:
+
+```sh
+python3 scripts/stability.py --modes fanout --clients 128 --fanout-secs 30 \
+  --window 8 --payload-sizes 8,1024,524288,65536,256 \
+  --unread-clients 1 --reader-delay-ms 5 --output artifacts/mixed-fanout.json
+```
+
 Its traffic templates and latency histogram remain bounded as duration increases.
 The finite load tool refuses more than 512 MiB of prepared work or 10 million
 latency samples; use the stress tool for longer runs. See the measured

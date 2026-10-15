@@ -2,7 +2,7 @@
 use std::{future::Future, io::IoSlice, time::Duration};
 
 use bytes::Bytes;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{FutureExt, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     sync::watch,
@@ -74,6 +74,17 @@ where
         &mut self.websocket
     }
 
+    /// Closing path only, after all output either completed or never started.
+    /// Poll one already available input item so a queued peer Close can win a
+    /// simultaneous capacity decision. Other in-flight input is discarded, as
+    /// it would be during `initiate_close`; incomplete reads remain in the codec.
+    pub(crate) fn take_pending_close(&mut self) -> bool {
+        matches!(
+            self.next().now_or_never(),
+            Some(Some(Ok(Message::Close(_))))
+        )
+    }
+
     /// One final, unmasked binary frame. The body stays borrowed until completion.
     pub(crate) async fn binary(&mut self, frame: &Frame) -> Result<(), Error> {
         if !self.active {
@@ -132,6 +143,7 @@ where
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WriteFailure {
+    ClosedBeforeStart(Disconnect),
     Closed(Disconnect),
     TimedOut,
     Transport,
@@ -146,23 +158,39 @@ pub(crate) async fn close_reason(mut receiver: watch::Receiver<Option<Disconnect
     }
 }
 
-/// A cancelled output future may have partially written a frame. The caller must
-/// drop that transport after any failure, rather than attempt a second flush.
+/// After polling begins, a failed output may have written part of a frame and
+/// must discard its transport. A terminal signal that wins before the first
+/// poll leaves the stream untouched and permits a normal Close handshake.
+/// Operations must perform their I/O only when polled.
 pub(crate) async fn output(
     operation: impl Future<Output = Result<(), Error>>,
     duration: Duration,
     stopped: impl Future<Output = ()>,
     closing: impl Future<Output = Disconnect>,
 ) -> Result<(), WriteFailure> {
-    tokio::select! {
+    let mut started = false;
+    tokio::pin!(operation);
+    let result = {
+        let tracked = std::future::poll_fn(|cx| {
+            started = true;
+            operation.as_mut().poll(cx)
+        });
+        tokio::select! {
         biased;
         _ = stopped => Err(WriteFailure::Closed(Disconnect::SHUTDOWN)),
         reason = closing => Err(WriteFailure::Closed(reason)),
-        result = timeout(duration, operation) => match result {
+        result = timeout(duration, tracked) => match result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(_)) => Err(WriteFailure::Transport),
             Err(_) => Err(WriteFailure::TimedOut),
         },
+        }
+    };
+    match result {
+        Err(WriteFailure::Closed(reason)) if !started => {
+            Err(WriteFailure::ClosedBeforeStart(reason))
+        }
+        result => result,
     }
 }
 
@@ -351,14 +379,16 @@ mod tests {
     #[tokio::test]
     async fn policy_interrupts_a_blocked_frame_without_waiting_for_write_timeout() {
         let (stream, _unread) = duplex(64);
-        let mut ws = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
+        let mut ws =
+            ServerSocket::new(WebSocketStream::from_raw_socket(stream, Role::Server, None).await);
+        let packet = Frame::encoded(vec![1; 4096].into());
         let (closing, receiver) = watch::channel(None);
         let shutdown = CancellationToken::new();
         let stopped = shutdown.cancelled();
         let reason = close_reason(receiver);
         tokio::pin!(stopped, reason);
         let write = output(
-            ws.send(Message::Binary(vec![1; 4096].into())),
+            ws.binary(&packet),
             Duration::from_secs(30),
             stopped.as_mut(),
             reason.as_mut(),
@@ -450,8 +480,40 @@ mod tests {
                 close_reason(receiver)
             )
             .await,
-            Err(WriteFailure::Closed(Disconnect::OVERLOADED))
+            Err(WriteFailure::ClosedBeforeStart(Disconnect::OVERLOADED))
         );
         assert!(!attempted.get());
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_first_poll_preserves_a_queued_peer_close() {
+        let (server, client) = duplex(1024);
+        let mut server =
+            ServerSocket::new(WebSocketStream::from_raw_socket(server, Role::Server, None).await);
+        let mut client = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
+        client
+            .close(Some(CloseFrame {
+                code: 4003.into(),
+                reason: "finished together".into(),
+            }))
+            .await
+            .unwrap();
+        let (_closing, receiver) = watch::channel(Some(Disconnect::OVERLOADED));
+        let packet = Frame::encoded(Bytes::from_static(b"unused"));
+        assert_eq!(
+            output(
+                server.binary(&packet),
+                Duration::from_secs(1),
+                std::future::pending(),
+                close_reason(receiver)
+            )
+            .await,
+            Err(WriteFailure::ClosedBeforeStart(Disconnect::OVERLOADED))
+        );
+        assert!(server.take_pending_close());
+        assert!(acknowledge_close(server.closing(), Duration::from_secs(1)).await);
+        assert!(
+            matches!(client.next().await.unwrap().unwrap(), Message::Close(Some(frame)) if u16::from(frame.code) == 4003 && frame.reason == "finished together")
+        );
     }
 }

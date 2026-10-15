@@ -274,3 +274,9 @@ To repeat the two sizes, use the frozen-binary comparison command above with
 `--payload-bytes 1024` and `--payload-bytes 65536`. Run other diagnostics and
 compilation separately from each comparison. Longer fanout, mixed active/idle
 populations, adverse networks, TLS, and multi-host capacity remain unmeasured.
+
+The later [mixed-size fanout investigation](stability.md#mixed-size-fanout-and-simultaneous-peer-departure)
+adds 128-client active workloads and a five-millisecond delayed reader beside an
+unread peer. It distinguishes cancellation before the first write poll from
+cancellation of a possibly partial frame, records the reproduced mass-departure
+reset and its fix, and includes a repeated small-message cost check.
