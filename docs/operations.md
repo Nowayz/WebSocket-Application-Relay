@@ -67,6 +67,12 @@ incoming application frame. Queue budgets must fit the input limit plus ten
 header bytes; the WebSocket writer uses that output budget. Incoming limits still
 apply independently to each client message.
 
+When `--max-message-bytes` is smaller than 125, valid WebSocket control frames
+still have their [RFC 6455](https://www.rfc-editor.org/rfc/rfc6455.html#section-5.5)
+limit of 125 payload bytes. Complete and fragmented
+application data retain the configured message limit. Ping/Pong still consume
+input rate quotas; a valid Close remains exempt so cleanup can complete.
+
 Individual queue overflow requests recipient closure with `1013`. An already
 queued peer Close wins a simultaneous capacity decision when no partial output
 exists. Process-wide

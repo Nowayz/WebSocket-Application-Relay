@@ -50,6 +50,21 @@ expose privileged commands. `disconnect` events carry `{ userId }`; `close` even
 carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
 
+To build a standalone browser ES module and open its acceptance page:
+
+```sh
+npm run build:browser --prefix clients/js
+python3 -m http.server 4180 --bind 127.0.0.1 --directory target/browser
+```
+
+Open [the browser check](http://127.0.0.1:4180) with the native relay running, then
+select **Run browser check**. The page imports the generated `relay.js` and checks
+typed broadcast/private delivery, a 128 KiB byte string, concurrent variable
+requests, BigInt precision, disconnect notification, and clean Close handshakes.
+It opens three temporary sessions and releases them after success or failure.
+The bundle targets ES2022; serve `target/browser/relay.js` with your own app to
+import `{ Relay }` without a browser import map or Node polyfills.
+
 ## One protocol
 
 The primary server accepts binary WebSocket messages containing CBOR. Offer the
@@ -154,10 +169,13 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ./scripts/check-js.sh
+npm run build:browser --prefix clients/js
 ```
 
 The JavaScript script builds temporary loopback services, runs the CBOR and
 original-client checks, and removes the services afterward.
+CI also builds the browser bundle; browser execution is a separate acceptance
+step using the page above.
 
 ```sh
 ./target/release/examples/load --clients 128 --messages 1000 --payload-bytes 256

@@ -1,0 +1,265 @@
+{
+  "observed_at_utc": "2026-10-15T22:06:50.006991+00:00",
+  "repository": {
+    "base_revision": "be2eff966f6bf8f9805140164aead3dad5ecad92",
+    "uncommitted_implementation": true,
+    "source_sha256": {
+      "src/server.rs": "008316cf2911d92c76e30d55c7e78f9cde0fe5fd1172ca2ad0283c9b1d4b6985",
+      "tests/relay_integration.rs": "8463c4b14fdfa993941bdc514931b49f624886f95bef42c390906baef84d4f4e",
+      "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+      "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+      "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+      "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+      "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36"
+    }
+  },
+  "processes": [
+    {
+      "pid": 2592751,
+      "command": [
+        "./target/release/war-relay"
+      ],
+      "sha256": "3ccbacba3910f2992f66687c3fc8b1424b20176700c47268018e4fad2188ae92"
+    },
+    {
+      "pid": 2593624,
+      "command": [
+        "./target/release/war-legacy-bridge"
+      ],
+      "sha256": "08d3e31e40c2164336e104e460578e9646d13276dd83b79a371dae542dc8f45c"
+    }
+  ],
+  "endpoints": {
+    "cbor": "ws://127.0.0.1:1338",
+    "legacy": "ws://127.0.0.1:1337",
+    "management": "http://127.0.0.1:1339",
+    "browser_check": "http://127.0.0.1:4180"
+  },
+  "health": {
+    "healthz": 200,
+    "readyz": 200
+  },
+  "control_frame_regression": {
+    "application_limit_bytes": 17,
+    "before_change": "Real-socket full-size control test failed with Protocol(ResetWithoutClosingHandshake) before join.",
+    "after_change": "125-byte Ping/Pong and Close with a 123-byte UTF-8 reason succeed before and after join; 17-byte data succeeds and 18-byte complete/fragmented data closes with 1009.",
+    "debug_passed": true,
+    "release_passed": true
+  },
+  "checks": {
+    "rust_tests_passed": 40,
+    "js_socket_tests_passed": 6,
+    "strict_clippy_passed": true,
+    "rustfmt_passed": true,
+    "browser_bundle_build_passed": true,
+    "github_ci_executed": false
+  },
+  "browser": {
+    "bundler": "esbuild 0.28.2",
+    "cbor_codec": "cbor-x 1.6.6",
+    "bundle_target": "es2022",
+    "bundle_sha256": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "library_request": {
+      "url": "http://127.0.0.1:4180/relay.js",
+      "status": 200
+    },
+    "failure_and_recovery": {
+      "passed": false,
+      "url": "file:///not-a-websocket",
+      "checks": [],
+      "errors": [
+        "SyntaxError: Failed to construct 'WebSocket': The URL's scheme must be either 'http', 'https', 'ws', or 'wss'. 'file' is not allowed."
+      ],
+      "finished": true
+    },
+    "success": {
+      "passed": true,
+      "url": "ws://127.0.0.1:1338",
+      "checks": [
+        "Three browser WebSockets joined with BigInt IDs and war.cbor.v1.",
+        "Broadcast preserved Unicode, byte strings, nested values, and an exact uint64.",
+        "Private routing reached a session in a different channel.",
+        "A 128 KiB binary value arrived byte for byte.",
+        "Concurrent control requests preserved typed, missing, and empty variables.",
+        "Unsafe Number IDs were rejected before sending.",
+        "Disconnect notification and all three clean Close handshakes completed."
+      ],
+      "errors": [],
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+      "finished": true
+    },
+    "console": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "inspected_widths_css_pixels": [
+      1881,
+      390
+    ],
+    "metrics_before": {
+      "war_unstarted_writes_cancelled_total": "0",
+      "war_routing_reused_bytes_total": "6685273",
+      "war_routing_copied_bytes_total": "0",
+      "war_write_timeouts_total": "0",
+      "war_write_errors_total": "52",
+      "war_aborted_writes_total": "0",
+      "war_close_failures_total": "0",
+      "war_transport_disconnects_total": "76",
+      "war_global_pressure_total": "0",
+      "war_accepted_total": "131",
+      "war_rejected_total": "0",
+      "war_handshake_errors_total": "0",
+      "war_joined_total": "131",
+      "war_disconnected_total": "131",
+      "war_incoming_messages_total": "108",
+      "war_incoming_bytes_total": "6686423",
+      "war_deliveries_total": "20711",
+      "war_delivered_bytes_total": "832779702",
+      "war_slow_consumers_total": "0",
+      "war_protocol_errors_total": "0",
+      "war_rate_limited_total": "0",
+      "war_variable_bytes": "0",
+      "war_connections": "0",
+      "war_sessions": "0",
+      "war_channels": "1",
+      "war_queued_bytes": "0",
+      "war_draining": "0"
+    },
+    "metrics_after": {
+      "war_unstarted_writes_cancelled_total": "0",
+      "war_routing_reused_bytes_total": "6816446",
+      "war_routing_copied_bytes_total": "0",
+      "war_write_timeouts_total": "0",
+      "war_write_errors_total": "52",
+      "war_aborted_writes_total": "0",
+      "war_close_failures_total": "0",
+      "war_transport_disconnects_total": "76",
+      "war_global_pressure_total": "0",
+      "war_accepted_total": "134",
+      "war_rejected_total": "0",
+      "war_handshake_errors_total": "0",
+      "war_joined_total": "134",
+      "war_disconnected_total": "134",
+      "war_incoming_messages_total": "116",
+      "war_incoming_bytes_total": "6817746",
+      "war_deliveries_total": "20723",
+      "war_delivered_bytes_total": "832911003",
+      "war_slow_consumers_total": "0",
+      "war_protocol_errors_total": "0",
+      "war_rate_limited_total": "0",
+      "war_variable_bytes": "0",
+      "war_connections": "0",
+      "war_sessions": "0",
+      "war_channels": "1",
+      "war_queued_bytes": "0",
+      "war_draining": "0"
+    },
+    "counter_deltas": {
+      "war_unstarted_writes_cancelled_total": 0,
+      "war_routing_reused_bytes_total": 131173,
+      "war_routing_copied_bytes_total": 0,
+      "war_write_timeouts_total": 0,
+      "war_write_errors_total": 0,
+      "war_aborted_writes_total": 0,
+      "war_close_failures_total": 0,
+      "war_transport_disconnects_total": 0,
+      "war_global_pressure_total": 0,
+      "war_accepted_total": 3,
+      "war_rejected_total": 0,
+      "war_handshake_errors_total": 0,
+      "war_joined_total": 3,
+      "war_disconnected_total": 3,
+      "war_incoming_messages_total": 8,
+      "war_incoming_bytes_total": 131323,
+      "war_deliveries_total": 12,
+      "war_delivered_bytes_total": 131301,
+      "war_slow_consumers_total": 0,
+      "war_protocol_errors_total": 0,
+      "war_rate_limited_total": 0
+    }
+  },
+  "finite_fanout_smoke": {
+    "command": [
+      "./target/release/examples/load",
+      "--mode",
+      "broadcast",
+      "--clients",
+      "128",
+      "--messages",
+      "100",
+      "--payload-bytes",
+      "65536",
+      "--window",
+      "8"
+    ],
+    "result": {
+      "client_tcp_nodelay": true,
+      "clients": 128,
+      "deliveries_per_second": 114626.85929165818,
+      "elapsed_seconds": 0.110794277,
+      "latency_max_ms": 11.886393,
+      "latency_p50_ms": 4.645257,
+      "latency_p99_ms": 10.713744,
+      "messages_per_sender": 100,
+      "mode": "broadcast",
+      "payload_bytes": 65536,
+      "setup_seconds": 0.030939176,
+      "verified_deliveries": 12700,
+      "window": 8
+    },
+    "limits": "Delivery/byte correctness smoke only; not a performance comparison. The finite load helper drops socket handles at completion instead of verifying Close. 76 transport disconnects were recorded during that smoke; no additional transport disconnects occurred during the subsequent browser run.",
+    "timing_context": "Release test compilation overlapped this delivery smoke; use its correctness counts only."
+  },
+  "local_bridge_lifecycle_observation": {
+    "previous_pid": 2592752,
+    "exit_code": 0,
+    "recorded_error_output": false,
+    "cause": "Unconfirmed. The current bridge serve loop returns successfully when its shutdown token is cancelled; no crash or reproduction has been established.",
+    "restored_pid": 2593624
+  },
+  "verification_limits": [
+    "Local single-host plaintext sockets.",
+    "Chrome 155 Linux only; other engines and production app bundlers remain unverified.",
+    "No C++ live differential: bundled executable dependencies remain unavailable.",
+    "CI builds the browser bundle; browser execution was performed locally with the Playwright CLI."
+  ],
+  "live_legacy_followup": {
+    "observed_at_utc": "2026-10-15T22:07:20.730772+00:00",
+    "socket_checks_passed": 3,
+    "checks": [
+      "unchanged upstream relay.js",
+      "CBOR/legacy byte strings",
+      "native/legacy Close before/after join"
+    ],
+    "metrics_after": {
+      "war_unstarted_writes_cancelled_total": "0",
+      "war_routing_reused_bytes_total": "6816492",
+      "war_routing_copied_bytes_total": "0",
+      "war_write_timeouts_total": "0",
+      "war_write_errors_total": "52",
+      "war_aborted_writes_total": "0",
+      "war_close_failures_total": "0",
+      "war_transport_disconnects_total": "76",
+      "war_global_pressure_total": "0",
+      "war_accepted_total": "141",
+      "war_rejected_total": "0",
+      "war_handshake_errors_total": "0",
+      "war_joined_total": "140",
+      "war_disconnected_total": "140",
+      "war_incoming_messages_total": "122",
+      "war_incoming_bytes_total": "6817867",
+      "war_deliveries_total": "20737",
+      "war_delivered_bytes_total": "832911197",
+      "war_slow_consumers_total": "0",
+      "war_protocol_errors_total": "0",
+      "war_rate_limited_total": "0",
+      "war_variable_bytes": "0",
+      "war_connections": "0",
+      "war_sessions": "0",
+      "war_channels": "1",
+      "war_queued_bytes": "0",
+      "war_draining": "0"
+    },
+    "process_hashes_reverified": true
+  }
+}

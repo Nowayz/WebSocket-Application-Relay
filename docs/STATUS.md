@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 38 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 40 Rust tests and 6 JavaScript socket tests pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -91,6 +91,25 @@ claim that an open-ended improvement effort is complete.
   quota exhaustion. Both receive loops now handle a valid Close before rate
   accounting; the regression exercises this before and after joining. Other
   inbound traffic retains its limits.
+- A 17-byte incoming application limit also rejected valid 125-byte WebSocket
+  control frames. The frame ceiling now permits RFC-sized controls while the
+  independent application-message limit still rejects 18-byte complete and
+  fragmented data. Both real-socket boundary checks pass in debug and release;
+  full-sized Ping/Pong/Close work before and after joining.
+- A pinned esbuild development dependency produces a standalone ES2022 browser
+  module and a small acceptance page. Actual Chrome 155 execution imported that
+  generated library, passed seven checks (typed/large delivery, exact uint64,
+  concurrent variables, disconnect, clean Close), and recovered from an invalid
+  URL. Desktop and 390-pixel-wide output were inspected. The browser check
+  routed 131,173 shared value bytes with no body compaction and returned all
+  session, connection, queue, and variable gauges to zero. Source/binary hashes
+  and timestamped observations are in
+  `benchmarks/2026-10-15-browser-control-acceptance.json`.
+- The optional local bridge was restored after one unexplained clean process
+  exit. Three live compatibility/Close checks passed through its replacement.
+  The recorded exit code was zero, with no error output; no code defect or
+  recurrence has been established. Retain this observation for a later lifecycle
+  investigation if it recurs.
 
 ## Exact verification boundaries
 
@@ -98,7 +117,9 @@ The original bundled C++ executable cannot run here: `libtbb.so.2`,
 `libssl.so.1.1`, and `libcrypto.so.1.1` are absent. Compatibility evidence therefore
 comes from source-derived known packets and the actual upstream JS client, not a
 live C++ differential run. Native CBOR client tests use Node 24's real WebSocket;
-browser bundler execution has not yet been checked.
+the browser acceptance page has passed through the generated ES2022 module in
+Chrome 155 on this Linux host. Other browsers and production bundler integrations
+remain unverified. CI builds the bundle but does not run the browser acceptance.
 
 Deployment examples are provided. The systemd unit was verified using the built
 workspace executable substituted for its intended `/usr/local/bin/war-relay`
@@ -120,8 +141,9 @@ local single-host plaintext sockets; no production or cluster claim is made.
    Examine global counter/registry contention only if those profiles show it;
    keep the current simple ownership model until a measured bottleneck justifies
    a different representation or sharding.
-3. Add browser bundler acceptance and deliberate malformed-CBOR/fragmentation
-   campaigns, preserving resource bounds and source fidelity.
+3. Extend browser acceptance across engines and production bundlers, and run
+   deliberate malformed-CBOR/fragmentation campaigns, preserving resource bounds
+   and source fidelity.
 4. Revisit connection-admission policy for public multi-application operation
    (per-IP limits, origin policy, tenant boundaries) with an explicit compatibility
    and proxy model. The existing global/private scopes intentionally match WAR.

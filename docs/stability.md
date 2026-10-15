@@ -313,3 +313,42 @@ bridge. All 128 live Node clients again completed with code 1000 and
 `wasClean: true`; the three live native/legacy checks passed, health/readiness
 returned 200, and gauges returned to zero. The live snapshot linked above now
 identifies this final executable, rather than the earlier first-poll-only stage.
+
+## Small application limits and real browser acceptance
+
+A real-socket regression with `--max-message-bytes 17` reproduced an abrupt
+pre-join reset for a valid 125-byte control payload. The WebSocket frame cap had
+been set to the application-message limit. It now permits at least 125 bytes;
+the independent data-message limit still applies to complete and reassembled
+fragmented input. The boundary tests pass in debug and release: 125-byte
+Ping/Pong and Close succeed before/after join, 17-byte application data is
+delivered, and 18-byte complete or fragmented data closes with `1009`.
+
+The standalone ES2022 client bundle was then loaded in actual Chrome 155 on
+Linux. Its seven acceptance checks cover Unicode, byte strings, nested values,
+an exact uint64, channel/private routing, a 128 KiB value, concurrent variable
+requests, precision checks, disconnect notification, and three clean Close
+handshakes. An invalid URL displayed a failure, re-enabled the button, and a
+subsequent run passed. Desktop and 390-pixel-wide layouts were inspected; the
+console reported zero errors/warnings. This verifies this browser and generated
+module. Other engines and production app bundlers remain future work.
+
+The isolated browser run reused 131,173 encoded value bytes, copied none, added
+no transport/protocol/write/Close errors, and returned session, connection,
+queue, and variable gauges to zero. A separate release smoke checked all 12,700
+64 KiB broadcast deliveries across 128 sessions. That finite helper drops
+socket handles at completion, so its 76 transport-disconnect counter increments
+are retained in the record; its timings are not a performance comparison.
+The shared application-buffer ownership and vectored writer are unchanged.
+
+One local bridge process exited with code zero and no error output during
+recording. Its cause has not been reproduced or established as a code defect.
+The replacement passed three live checks covering the unchanged original
+client, mixed CBOR/legacy bytes, and native/legacy Close before/after join.
+The record identifies the replacement process and matching executable hash.
+
+See [browser-control-acceptance.json](benchmarks/2026-10-15-browser-control-acceptance.json)
+for source/binary hashes, metrics before/after browser execution, the page's
+results, and verification limits. The README includes commands to rebuild and
+serve the same acceptance page. CI builds its bundle; browser execution was
+performed locally with the Playwright CLI.

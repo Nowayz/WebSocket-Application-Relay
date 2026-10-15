@@ -746,6 +746,98 @@ async fn close_before_join_preserves_the_peers_code_and_reason() {
 }
 
 #[tokio::test]
+async fn small_application_limits_allow_full_sized_controls_before_and_after_join() {
+    for joined in [false, true] {
+        let server = Server::new(Config {
+            max_message_bytes: 17,
+            messages_per_second: 0,
+            bytes_per_second: 0,
+            ..config()
+        })
+        .await;
+        let mut ws = if joined {
+            server.join("small-limit").await.0
+        } else {
+            connect_async(&server.url).await.unwrap().0
+        };
+        let control = Bytes::from(vec![0x5a; 125]);
+        ws.send(Message::Pong(control.clone())).await.unwrap();
+        ws.send(Message::Ping(control.clone())).await.unwrap();
+        assert_eq!(
+            timeout(Duration::from_secs(2), ws.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            Message::Pong(control)
+        );
+        // The 2-byte status plus 123 UTF-8 bytes fills the control-frame limit.
+        let reason = format!("{}x", "π".repeat(61));
+        ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+            code: 4003.into(),
+            reason: reason.clone().into(),
+        }))
+        .await
+        .unwrap();
+        assert!(
+            matches!(timeout(Duration::from_secs(2), ws.next()).await.unwrap().unwrap().unwrap(), Message::Close(Some(frame)) if u16::from(frame.code) == 4003 && frame.reason == reason)
+        );
+        ws.flush().await.unwrap();
+        assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+        assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn small_application_limits_bound_complete_and_fragmented_data() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+
+    for fragmented in [false, true] {
+        let server = Server::new(Config {
+            max_message_bytes: 17,
+            ..config()
+        })
+        .await;
+        let (mut sender, sender_id) = server.join("data-limit").await;
+        let (mut reader, _) = server.join("data-limit").await;
+        let value = protocol::byte_string(&[0x5a; 6]);
+        let allowed = protocol::envelope(BROADCAST, &value);
+        assert_eq!(allowed.len(), 17);
+        sender.send(Message::Binary(allowed)).await.unwrap();
+        assert_eq!(
+            data(&mut reader).await,
+            protocol::envelope(sender_id, &value)
+        );
+
+        let oversized = protocol::envelope(BROADCAST, &protocol::byte_string(&[0x5a; 7]));
+        assert_eq!(oversized.len(), 18);
+        if fragmented {
+            for (body, opcode, final_frame) in [
+                (oversized.slice(..9), Data::Binary, false),
+                (oversized.slice(9..), Data::Continue, true),
+            ] {
+                sender
+                    .send(Message::Frame(Frame::message(
+                        body,
+                        OpCode::Data(opcode),
+                        final_frame,
+                    )))
+                    .await
+                    .unwrap();
+            }
+        } else {
+            sender.send(Message::Binary(oversized)).await.unwrap();
+        }
+        assert_eq!(close_code(&mut sender).await, 1009);
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
 async fn exhausted_input_quota_still_acknowledges_close_before_and_after_join() {
     for joined in [false, true] {
         let server = Server::new(Config {

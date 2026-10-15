@@ -135,7 +135,10 @@ async fn connection_task(
         // budget and borrowed vectored writes, independent of the incoming limit.
         .max_write_buffer_size(config.queue_bytes + 4096)
         .max_message_size(Some(config.max_message_bytes))
-        .max_frame_size(Some(config.max_message_bytes));
+        // RFC 6455 control payloads may reach 125 bytes even when application
+        // messages have a smaller budget. The message limit still bounds data,
+        // including the sum of fragmented input.
+        .max_frame_size(Some(config.max_message_bytes.max(125)));
     let handshake = accept_hdr_async_with_config(
         socket,
         |request: &Request, mut response: HandshakeResponse| {
