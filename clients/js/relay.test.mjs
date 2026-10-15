@@ -155,3 +155,19 @@ test('an unsupported structured value closes a legacy recipient cleanly and leav
   modern.send(modern.userId, { stillReady: true });
   assert.deepEqual((await message)[0].detail.value, { stillReady: true });
 });
+
+test('application idle policy reaches native and legacy browser WebSockets cleanly', { skip: !process.env.WAR_TEST_IDLE_ENABLED }, async t => {
+  const native = await Relay.connect(url, 'idle-native');
+  const nativeClosed = once(native.ws, 'close');
+  const legacy = new WebSocket(bridgeUrl); legacy.binaryType = 'arraybuffer';
+  const legacyClosed = once(legacy, 'close');
+  t.after(() => { native.close(); legacy.close(); });
+  await once(legacy, 'open');
+  const welcome = once(legacy, 'message'); legacy.send('idle-legacy');
+  assert.equal((await welcome)[0].data.byteLength, 8);
+  for (const [event] of await Promise.all([nativeClosed, legacyClosed])) {
+    assert.equal(event.code, 1001);
+    assert.equal(event.reason, 'Application Idle');
+    assert.equal(event.wasClean, true);
+  }
+});

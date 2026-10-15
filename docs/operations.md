@@ -73,15 +73,18 @@ For applications that should retire inactive sessions, set
 preserves indefinite application-idle sessions. A completed binary input or a
 successfully written relay message refreshes activity, including commands and
 replies. Receive-only clients remain active while output arrives. Ping/Pong
-traffic does not refresh application activity, and an unfinished fragmented data
+traffic does not refresh application activity, and an unfinished WebSocket data
 message does not qualify as completed input. Queued/in-flight output is active
 work governed by the existing queue and write limits.
 
 An application-idle decision sends `1001` / `Application Idle` and increments
-`war_idle_timeouts_total`. Routing membership and channel-variable ownership
-release before the close handshake; TCP capacity and decoder storage release
-when the transport ends. An unresponsive peer remains subject to the close
-deadline. This policy retires inactive sessions; input-size/admission limits and
+`war_idle_timeouts_total`. Routing membership is removed before the handshake;
+ordinary channel variables release when the last member leaves. Global-channel
+variables retain their existing persistent lifetime. TCP capacity and the
+decoder's own storage references release when the transport ends. Published
+shared bodies remain alive until their recipients finish or discard them.
+An unresponsive peer remains subject to the close deadline.
+This policy retires inactive sessions; input-size/admission limits and
 RSS monitoring still govern active populations. It shares one reusable deadline
 wait with heartbeat timeout handling and leaves application-body sharing intact.
 

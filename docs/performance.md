@@ -328,3 +328,115 @@ executable hashes are in
 [retention-pressure.json](benchmarks/2026-10-15-retention-pressure.json).
 The recorded revision is the parent checkout before committing; source hashes
 identify the measured implementation.
+
+## Concurrent producers, connected idle storage, and retirement
+
+The extended retention client starts synchronized producers feeding one unread
+recipient. Each producer's sequence is checked independently; the relay does
+not promise a cross-producer total order. The same 4 MiB unknown-target primers,
+tiny private values, and self-message barriers exercise enlarged receive storage
+while six MiB of initial output remains blocked. After complete drain, the client
+observes open connections for two seconds, finishes client-initiated or expected
+server-idle Close handshakes, then observes retirement for another two seconds.
+
+Six initial cases used 64 cycles per producer, in order 1, 8, 32, 32, 8, 1.
+They retained the default 32 MiB per-peer byte budget and used
+`max(1024, producers * cycles + 32)` queue entries. Rates/heartbeats were disabled
+and writes had a 60-second deadline. With application-idle expiry disabled, all
+sessions remained joined during the connected-idle observation:
+
+| Producers | Primer payload per run | Connected-idle RSS range | Tiny value bytes compacted |
+| --- | ---: | ---: | ---: |
+| 1 | 256 MiB | 15,716–15,720 KiB | 211 |
+| 8 | 2 GiB | 38,592–44,644 KiB | 1,681 |
+| 32 | 8 GiB | 137,476–143,540 KiB | 6,721 |
+
+Each case reused 8,388,648 encoded large-value bytes. Empty output queues did not
+return open connections to their initial read capacity. RSS is not an exact
+allocation trace, but source inspection and the retirement observations support
+budgeting enlarged input capacity separately from output reservations. The
+configured 4 KiB read size is an initial size; incoming-size and admission limits
+remain important for active populations.
+
+The same six cases with a three-second application idle policy passed every
+delivery, ordering, counter, and cleanup check. They observed exactly 2, 9, or 33
+idle decisions and clean server-initiated handshakes. After the scheduling change
+described below, final 1- and 32-producer reruns also passed. A further final case
+used 64 producers, 32 cycles each, and 65 transports: all 4,105 data/barrier
+deliveries and all 65 idle Close handshakes verified. It reused 8,388,648 encoded
+large-value bytes and compacted 5,249 tiny bytes. Sampled RSS was 269,212 KiB
+before acknowledgement and 6,560 KiB after retirement. All fifteen cases returned
+to zero connections, sessions, queued bytes, and variables with the global
+channel remaining; unexpected transport, write, Close, overflow, and pressure
+counters were zero.
+
+These finite observations are not a leak proof or a physical-memory cap. Published
+shared bodies can outlive their source transport until recipients finish/discard
+them. Application-idle retirement releases inactive sessions; active populations
+still need input-size/admission budgeting and process RSS monitoring. See the
+README and operations guide for the optional policy, disabled by default.
+
+Raw records: [concurrent-retention.json](benchmarks/2026-10-15-concurrent-retention.json),
+[concurrent-idle-expiry.json](benchmarks/2026-10-15-concurrent-idle-expiry.json),
+[idle-final-retention.json](benchmarks/2026-10-15-idle-final-retention.json), and
+[idle-final-64-producers.json](benchmarks/2026-10-15-idle-final-64-producers.json).
+The first two identify the `c39d90e` implementation; the latter two identify the
+final executable by hash. Parent revision fields predate their commits.
+
+## Application-idle scheduling cost
+
+The first idle-policy implementation reused one heartbeat/idle deadline wait,
+but reset it whenever application activity moved the idle deadline later. Three
+rotating twenty-second cases per configuration reproduced a cost relative to
+the new disabled default. Separate user-cycle profiles attributed 8.38% of the
+enabled profile to `tokio::time::sleep::Sleep::reset`.
+
+The final implementation keeps an already earlier alarm when activity postpones
+the deadline. When that alarm completes, it checks the current absolute deadline
+and rearms before another poll; an earlier heartbeat deadline still retimes the
+wait immediately. This preserves the deadline without a coarse periodic idle
+check or per-message retiming. Application payload ownership and vectored writes
+are unchanged. The final enabled profile no longer listed `Sleep::reset` among
+symbols at or above the 0.5% reporting threshold.
+
+The final comparison used four rotating twenty-second runs per candidate: fresh
+four-worker servers, the same frozen 64-client/32-private-pair workload, 1 KiB
+values, window 16, server CPUs 0–3, and client CPUs 4–7. Every candidate occupied
+each run position once. Rates were disabled and heartbeats enabled, so each run
+crossed the default first heartbeat. No compilation or profiling overlapped the
+comparison, and relay workloads ran sequentially.
+
+| Configuration | Median verified deliveries/s | Median server CPU ns/delivery | p99 histogram upper bound |
+| --- | ---: | ---: | ---: |
+| `14b9529` control | 1,610,854 | 1,780 | 1.049 ms |
+| Initial enabled policy (`c39d90e`, 300 s) | 1,583,148 | 1,812 | 1.049 ms |
+| Final, idle policy disabled | 1,701,361 | 1,689 | 1.049 ms |
+| Final, idle policy enabled (300 s) | 1,606,449 | 1,776 | 1.049 ms |
+
+All sixteen cases passed full frame verification and cleanup; routed copy counts
+were zero. The same frozen private-traffic client drops its 64 socket handles at
+the end instead of performing Close handshakes, so every comparison case records
+64 expected transport disconnects. No protocol/write/Close-handshake error was
+recorded. These comparisons establish data throughput and cleanup; graceful
+Close acceptance comes from the separate retention, Rust-network, and JS cases.
+CPU totals include that identical setup/teardown in every candidate.
+
+Delayed rearming reduced median CPU per delivery by 2.0% and raised
+median throughput by 1.5% versus the initial enabled implementation. Those
+throughput ranges overlap; the modest local change is not a general speed claim.
+The final disabled default measured 5.6% higher throughput and 5.1% less CPU per
+delivery than the control. Enabling activity tracking still cost 5.6% throughput
+and 5.2% CPU versus that new disabled default; it stayed close to the original
+control's throughput/CPU with the same p99 bucket. Raw run ranges and positional
+variation are retained rather than attributing every difference to one function.
+
+The initial comparison/profile are
+[application-idle-cost.json](benchmarks/2026-10-15-application-idle-cost.json) and
+[application-idle-profile.json](benchmarks/2026-10-15-application-idle-profile.json).
+Final records are [idle-final-cost.json](benchmarks/2026-10-15-idle-final-cost.json)
+and [idle-final-profile.json](benchmarks/2026-10-15-idle-final-profile.json).
+Profiles used `perf record`, user-space cycles at 199 Hz, DWARF call graphs,
+twelve-second recording windows, and ten seconds of the same verifying traffic.
+They were collected separately from timing; their percentages are sampled user
+cycles, not shares of total server CPU. Recorder logs are preserved, and raw
+`perf.data`/text reports remain local under `artifacts/profiles/`.

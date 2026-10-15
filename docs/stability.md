@@ -394,3 +394,53 @@ for executable/source hashes, live results, counters, and verification limits.
 The separate retained-output campaign passed all six cases with no policy
 change. Its full method and memory measurements are recorded in
 [performance.md](performance.md#retention-under-repeated-unknown-target-primers).
+
+## Application-idle retirement and shared deadline scheduling
+
+An optional `--idle-timeout-secs` policy retires joined sessions after application
+inactivity, using `1001` / `Application Idle`. It is disabled by default. Valid
+binary input and written relay output refresh activity; Ping/Pong does not.
+Queued/in-flight output keeps the existing write/queue policy. Read-only
+consumers remain active while data arrives, and incomplete WebSocket data
+messages do not indefinitely refresh the application clock.
+
+Three network regressions exercise control traffic without application activity,
+ongoing input plus receive-only output beyond one timeout, and a deliberately
+unfinished 1 MiB fragmented message. Expiry completes normal Close cleanup,
+including ordinary channel-variable release on last-member departure. The
+control case verifies an 18-byte idle Close acknowledgement while incoming
+application messages are limited to 17 bytes. The existing no-pong test now runs
+with idle expiry both disabled and set to ten seconds, proving the two-second
+heartbeat deadline preempts the later idle alarm. The full suite passes 46 Rust
+tests; the updated JS fixture passes six default cases plus one configured-idle
+case covering both native and legacy WebSocket APIs.
+
+The first implementation reused the timeout wait but retimed it on every active
+message. Its enabled profile attributed 8.38% of sampled user cycles to
+`Sleep::reset`. The final implementation keeps an already earlier alarm when
+activity moves expiry later. A completed old alarm checks the live deadline and
+rearms before another poll. Earlier heartbeat deadlines still retime immediately;
+the change preserves absolute expiry without coarse periodic checks. No
+application-body movement, queue-budget change, or transport-cancellation change
+was introduced.
+
+All twelve initial multi-producer retention cases and three final cases passed
+full delivery/ordering, counter, idle-policy, Close, and cleanup checks. The final
+64-producer case verified 4,105 data/barrier deliveries, 65 clean server-idle
+handshakes, and zero unexpected transport/write/Close errors. Before acknowledgement,
+65 transports retained 269,212 KiB sampled RSS despite drained output. After
+retirement RSS was 6,560 KiB and connection/session/queue/variable gauges were zero.
+The large routed values reused 8,388,648 encoded bytes; 5,249 tiny encoded bytes
+were compacted. This is finite ownership/retention evidence, not a leak proof or
+a physical-memory bound for active connections. The full memory/cost methods and
+records are in [performance.md](performance.md#concurrent-producers-connected-idle-storage-and-retirement).
+
+The final local releases were refreshed with the application-idle policy
+explicitly disabled on the normal test endpoint. Chrome's seven-check acceptance
+and three live original-client/native-legacy/Close checks passed. Health and
+readiness returned 200, gauges returned to zero, and protocol/transport/write/
+Close error counters stayed zero. The enabled-policy evidence comes from the
+separate fresh-server campaigns and configured-idle JS fixture. See
+[application-idle-live.json](benchmarks/2026-10-15-application-idle-live.json)
+for process/source/binary hashes and exact verification boundaries. No public
+deployment or CI execution is claimed.

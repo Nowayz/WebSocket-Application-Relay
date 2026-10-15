@@ -253,7 +253,15 @@ async fn connection_task(
             (Some(pong), Some(idle)) => Some(pong.min(idle)),
             (deadline, None) | (None, deadline) => deadline,
         };
-        if next_deadline != armed_deadline {
+        // Activity only moves the idle deadline later. Keep an earlier alarm
+        // and check the live deadline when it fires, instead of retiming every
+        // message. An earlier heartbeat deadline still takes effect immediately.
+        let rearm = match (next_deadline, armed_deadline) {
+            (Some(next), Some(armed)) => next < armed,
+            (None, None) => false,
+            _ => true,
+        };
+        if rearm {
             deadline_wait.as_mut().reset(
                 next_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400)),
             );
@@ -263,6 +271,9 @@ async fn connection_task(
             _ = stopped.as_mut() => break SessionEnd::Close(Disconnect::SHUTDOWN),
             reason = closing.as_mut() => break SessionEnd::Close(reason),
             _ = deadline_wait.as_mut(), if next_deadline.is_some() => {
+                // Every completion rearms before this wait is polled again,
+                // including an old alarm preceding the current live deadline.
+                armed_deadline = None;
                 let now = Instant::now();
                 if pong_deadline.is_some_and(|deadline| deadline <= now) {
                     break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });

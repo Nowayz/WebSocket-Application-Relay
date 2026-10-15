@@ -628,6 +628,7 @@ async fn heartbeat_and_control_traffic_do_not_extend_application_idle_policy() {
         idle_timeout_secs: 1,
         ping_interval_secs: 1,
         pong_timeout_secs: 3,
+        max_message_bytes: 17,
         ..config()
     })
     .await;
@@ -654,6 +655,16 @@ async fn heartbeat_and_control_traffic_do_not_extend_application_idle_policy() {
     assert_eq!(server.relay.metrics.idle_timeouts.load(Relaxed), 1);
     assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 0);
+    // The 18-byte Close payload (status plus reason) must also be accepted as
+    // an acknowledgement when the application-message budget is only 17.
+    timeout(Duration::from_secs(2), async {
+        while server.relay.metrics.connections.load(Relaxed) != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
     server.stop().await;
 }
 
@@ -825,16 +836,22 @@ async fn idle_half_handshakes_are_bounded_and_release_capacity() {
 
 #[tokio::test]
 async fn heartbeat_disconnects_a_client_that_never_reads_or_pongs() {
-    let server = Server::new(Config {
-        ping_interval_secs: 1,
-        pong_timeout_secs: 1,
-        ..config()
-    })
-    .await;
-    let (mut ws, _) = server.join("heartbeat").await;
-    tokio::time::sleep(Duration::from_millis(2200)).await;
-    assert_eq!(close_code(&mut ws).await, 1001);
-    server.stop().await;
+    for idle_timeout_secs in [0, 10] {
+        let server = Server::new(Config {
+            ping_interval_secs: 1,
+            pong_timeout_secs: 1,
+            idle_timeout_secs,
+            ..config()
+        })
+        .await;
+        let (mut ws, _) = server.join("heartbeat").await;
+        // The heartbeat must also pull an already armed ten-second idle wait
+        // forward, rather than waiting for that later alarm.
+        tokio::time::sleep(Duration::from_millis(2200)).await;
+        assert_eq!(close_code(&mut ws).await, 1001);
+        assert_eq!(server.relay.metrics.idle_timeouts.load(Relaxed), 0);
+        server.stop().await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

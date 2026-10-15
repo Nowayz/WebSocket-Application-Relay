@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 46 Rust tests and 6 JavaScript socket tests pass, along with
+- Current checks: 46 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -142,11 +142,42 @@ claim that an open-ended improvement effort is complete.
 - Optional `--idle-timeout-secs` / `WAR_IDLE_TIMEOUT_SECS` retires joined sessions
   without completed application input/output, defaulting to disabled. Ping/Pong
   does not extend it; receive-only application output does. Queued/in-flight
-  output retains the existing write/queue policy. Normal Close cleanup releases
-  registrations and variables, with decoder storage released at transport end.
+  output retains the existing write/queue policy. Normal Close cleanup removes
+  registrations and releases ordinary channel variables when the last member
+  leaves. Decoder references release at transport end; published shared bodies
+  keep their recipient-owned lifetime.
   Three real-socket regressions cover controls, active input/receive-only output,
   and unfinished fragmented input. All enabled retention cases observed exactly
   the expected 2/9/33 idle decisions and clean Close handshakes.
+- The enabled-policy profile exposed per-message retiming: `Sleep::reset`
+  accounted for 8.38% of sampled user cycles. The final schedule retains an
+  already earlier alarm when activity postpones expiry, checks the live deadline
+  on completion, and immediately retimes for an earlier heartbeat deadline.
+  Exact expiry is preserved without coarse idle polling. The final enabled
+  profile no longer listed reset among symbols at or above the 0.5% cutoff.
+- Sixteen balanced twenty-second comparison cases passed. Final disabled-mode
+  medians were 1,701,361 deliveries/s and 1,689 CPU ns/delivery, versus 1,610,854
+  and 1,780 for `14b9529`. Final enabled-mode medians were 1,606,449 and 1,776,
+  with the same 1.049 ms p99 bucket. Delayed rearming reduced enabled CPU by 2.0%
+  versus the initial policy; its throughput ranges overlap, so the modest local
+  result is not a general speed claim. Enabling the policy retains a measured
+  cost against the new disabled default. Full ranges and methods are in
+  `performance.md` and `benchmarks/2026-10-15-idle-final-cost.json`.
+- Final retention checks passed at 1/32 producers and then 64 producers. The
+  65-transport case verified all 4,105 data/barrier deliveries and 65 idle Close
+  handshakes, with 8,388,648 encoded large-value bytes reused and 5,249 tiny bytes
+  compacted. Sampled RSS fell from 269,212 KiB before acknowledgement to 6,560 KiB
+  after retirement. Queue/connection/session/variable gauges returned to zero.
+- The JS fixture now verifies six default-policy cases, restarts the temporary
+  relay with idle expiry enabled, and verifies clean native/legacy idle Close.
+  The native control test also verifies the 18-byte idle Close acknowledgement
+  with a 17-byte application limit. Both heartbeat-only and combined idle/
+  heartbeat tests confirm the earlier heartbeat deadline still wins.
+- The current local native/bridge releases include the final schedule. The
+  normal endpoints explicitly keep application-idle expiry disabled. Seven Chrome
+  checks and three live legacy/Close checks passed, health/readiness returned
+  200, and all gauges returned to zero. Process/hash and verification evidence is
+  `benchmarks/2026-10-15-application-idle-live.json`.
 
 ## Exact verification boundaries
 
@@ -166,25 +197,28 @@ local single-host plaintext sockets; no production or cluster claim is made.
 
 ## Next useful iterations
 
-1. Profile the remaining small-message CPU cost before changing counters, queue
-   representation, or read storage. Mixed-size fanout is now exercised at 128
-   concurrent clients. Unknown-target primers followed by tiny queued output are
-   now checked at 64 and 256 cycles; extend this across simultaneous producers,
-   slab thresholds, and connection populations.
-   Preserve ordinary zero-copy forwarding, compaction of enlarged slabs, exact
+1. Strengthen source-derived compatibility with an isolated original C++ runtime
+   if its legacy dependencies can be supplied locally without changing the host
+   runtime. The current evidence remains source vectors and the unchanged
+   original client, not a live differential run.
+2. Profile the remaining small-message CPU cost before changing counters, queue
+   representation, or read storage. Current profiles still show signal/waker
+   polling; avoid a broad event-loop rewrite without a measured whole-socket win.
+   Concurrent retention now covers up to 64 producers. Extend active-input
+   budgeting and slab-threshold checks while preserving shared bodies, exact
    peer Close acknowledgements, and immediate dropping of partial output.
-2. Extend duration, fanout, active populations, adverse networks, and connection
+3. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.
    Examine global counter/registry contention only if those profiles show it;
    keep the current simple ownership model until a measured bottleneck justifies
    a different representation or sharding.
-3. Extend browser acceptance across engines and production bundlers. Broaden the
+4. Extend browser acceptance across engines and production bundlers. Broaden the
    deterministic malformed-CBOR/fragmentation corpus with reproducible generated
    inputs and concurrent healthy traffic, preserving resource bounds and source
    fidelity.
-4. Revisit connection-admission policy for public multi-application operation
+5. Revisit connection-admission policy for public multi-application operation
    (per-IP limits, origin policy, tenant boundaries) with an explicit compatibility
    and proxy model. The existing global/private scopes intentionally match WAR.
-5. Design node ownership and cross-node routing only after single-node capacity
+6. Design node ownership and cross-node routing only after single-node capacity
    and operational needs are established. No replicas are currently a cluster.

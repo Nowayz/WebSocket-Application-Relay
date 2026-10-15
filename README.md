@@ -24,6 +24,14 @@ management. `--help` lists all limits and environment variables. Set
 enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
 
+Operators can optionally retire inactive joined sessions with
+`--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
+and outgoing relay messages refresh activity; receive-only consumers stay active
+while messages arrive. Ping/Pong traffic does not refresh this deadline. Expiry
+closes with `1001` / `Application Idle` and uses normal queue/variable cleanup.
+The default `0` disables this policy. See [operations.md](docs/operations.md) for
+memory budgeting and deadline details.
+
 ## JavaScript client
 
 Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports
@@ -49,14 +57,6 @@ b.close();
 expose privileged commands. `disconnect` events carry `{ userId }`; `close` events
 carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
-
-Operators can optionally retire inactive joined sessions with
-`--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
-and outgoing relay messages refresh activity; receive-only consumers stay active
-while messages arrive. Ping/Pong traffic does not refresh this deadline. Expiry
-closes with `1001` / `Application Idle` and uses normal queue/variable cleanup.
-The default `0` disables this policy. See [operations.md](docs/operations.md) for
-memory budgeting and deadline details.
 
 To build a standalone browser ES module and open its acceptance page:
 
@@ -181,7 +181,9 @@ npm run build:browser --prefix clients/js
 ```
 
 The JavaScript script builds temporary loopback services, runs the CBOR and
-original-client checks, and removes the services afterward.
+original-client checks with idle expiry disabled, then restarts the relay to
+verify idle Close propagation through native and legacy WebSockets. It removes
+the temporary services afterward.
 CI also builds the browser bundle; browser execution is a separate acceptance
 step using the page above.
 
