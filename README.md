@@ -1,72 +1,159 @@
-# WebSocket Application Relay
+# WebSocket Application Relay — Rust / CBOR
 
-## About
-WebSocket Application Relay is designed to be serverless, allowing communications directly between web-clients using **relay.js** library.
+A small, bounded relay for applications and multiplayer games. Clients join a
+channel, receive a 64-bit session ID, and send CBOR values to another ID or their
+channel. Applications own message meaning and state.
 
-It is also possible to have a 'server client' with a fixed UserId, which communicates with regular clients and performs whatever authoritative communications need to occur.
+This is a behavioral port of [Nowayz/WebSocket-Application-Relay](https://github.com/Nowayz/WebSocket-Application-Relay)
+at commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`, with the requested CBOR redesign.
+The original C++ source, JavaScript clients, dependencies, history, and MIT license
+remain available. The original README is in [docs/upstream-README.md](docs/upstream-README.md).
 
-WebSocket Application Relay can easily handle millions of concurrent connections, and is remarkably stable.  Allowing connections to persist even while backend applications may need to restart themselves.
+## Run
 
-This Readme is a work in progress and will continue to be refined and extended with use-case examples.
+Requires Rust 1.91 or newer; no C++ libraries, OpenSSL, TBB, or libuv are needed.
 
-## API Outline (relay.js)
-Coming soon...  Working examples to come.
+```sh
+cargo build --release --bins --example load
+./target/release/war-relay
+```
 
+Defaults: `ws://127.0.0.1:1338` for CBOR and `http://127.0.0.1:1339` for local
+management. `--help` lists all limits and environment variables. Set
+`WAR_AUTH_PASSWORD` to enable privileged relay commands and `WAR_ADMIN_TOKEN` to
+enable management operations. Both are disabled when absent; the original
+hardcoded password is removed. Secrets are environment-only and never logged.
 
-## Technical Outline
-WebSocket Application Relay allows applications to define their own protocol and communicate using their protocol by sending messages to channels or other users.
+## JavaScript client
 
-Sending messages to the build-in **RE_BROADCAST_TARGET**  allows the transmission of the message to every user in the same channel.  
+Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports
+modern browsers through an ES module bundler and Node 22+. IDs are `BigInt`.
 
-It is typical for an application to use channel broadcasting to allow users to discover each other so they may cache each other's UserIds and send private messages directly.
+```js
+import { Relay } from './clients/js/relay.mjs';
 
-Alternatively, some applications may find it useful to broadcast messages to everybody in the channel if this type of mass communication is what an application requires.
+const a = await Relay.connect('ws://127.0.0.1:1338', 'lobby');
+const b = await Relay.connect('ws://127.0.0.1:1338', 'lobby');
+b.addEventListener('message', ({ detail: { sender, value } }) => {
+  console.log(sender, value);
+});
+a.broadcast({ kind: 'hello', text: 'Hello π', data: new Uint8Array([1, 2, 3]) });
+a.send(b.userId, { kind: 'private', position: [1.5, 2, 3] });
+await a.setVariable('settings', { round: 1, ready: true });
+console.log(await b.getVariable('settings')); // { found: true, value: ... }
+a.close();
+b.close();
+```
 
-Server users on the relay can authenticate themselves and perform special operations by sending messages to the special **RE_RELAY_TARGET** UserId.
+`authenticate(password)`, `listen(flags)`, `channels()`, and `assignId(bigint)`
+expose privileged commands. `disconnect` events carry `{ userId }`; `close` events
+carry `{ code, reason }`. The client serializes control requests, including
+concurrent variable requests, because v1 deliberately has no request-ID field.
 
+## One protocol
 
+The primary server accepts binary WebSocket messages containing CBOR. Offer the
+`war.cbor.v1` subprotocol. Connections without an offered subprotocol also use
+CBOR; unsupported offered subprotocols are rejected.
 
+1. Send a CBOR text/byte string containing a channel name (0–16 decoded bytes).
+2. Receive a CBOR unsigned integer containing the session ID.
+3. Send `[target_id, value]`. Recipients receive `[sender_id, value]`.
 
-**Built-In UserID Targets**
+Target `0xffffffffffffffff` broadcasts to the channel, excluding the sender.
+Target `0` addresses relay commands. Other IDs route privately across channels,
+including self. Unknown IDs are dropped. A departing member generates
+`[0xffffffffffffffff, departed_id]` to its peers.
 
-| Fixed UserID | Value |
-|--|--|
-|RE_BROADCAST_TARGET | 0xFFFFFFFFFFFFFFFF |
-|RE_RELAY_TARGET | 0x0000000000000000 |
+Values can combine text, bytes, arrays, maps, numbers, booleans, null, undefined,
+and tags. The relay accepts definite-length CBOR, bounds validation to 64 nested
+levels and 65,536 items, and preserves encoded payloads verbatim. It does not
+materialize object trees or convert objects to JSON. See [docs/protocol.md](docs/protocol.md).
 
+## Original clients
 
-## Security Considerations
-The relay stores essentially no information about user sessions except what's required to send messages to them, and what channel they are in.  User disconnections are the only events dispatched by the relay itself.
+The optional migration bridge translates the original binary/text wire format:
 
-While server clients are great for storing state and resolving anomalies between clients, they have no way of inspecting abuses at the protocol or relay level.  Such as: a client rapidly connecting and disconnecting with thousands of sockets without sending any messages.
+```sh
+./target/release/war-legacy-bridge \
+  --bind 127.0.0.1:1337 --upstream ws://127.0.0.1:1338
+```
 
-There will most likely be revisions and additions to what the relay audits. Though where at all possible the relay will do as little as possible - its main goal is forwarding messages.
+Existing `relay.js` clients connect to `ws://127.0.0.1:1337`. Their binary/text
+payloads become CBOR byte/text strings and interoperate with native CBOR clients.
+Other structured CBOR values require a CBOR client: an incompatible legacy
+recipient closes with `1003`, rather than receiving an invented encoding.
 
-## Basic Protocol (Internal)
-After connecting to the WebSocket Application Relay, the first packet a client sends (<16 characters long), determines which channel they join.
+The bridge preserves original command/reply layouts and suppresses CBOR command
+acknowledgements. Tests execute the **unchanged upstream `relay.js`** on real
+sockets. The old `relay.module.js` remains as source history; its existing
+undefined-variable and const-reassignment bugs are not copied into the new client.
 
-Upon joining a channel, each user is sent an 8-byte UserId to identify their session.  The Id is to identify them to other users, and also allows sending private messages to another user on the relay, regardless their channel. 
+## Operating the relay
 
-After joining a relay channel, a WebSocket connection is tied to the channel for the rest of the socket lifespan.  Talking on two channels at once or changing channels requires the creation of more connections to the relay.
+- Connection admission includes TCP handshakes, with handshake and join deadlines.
+  Channel populations and inbound message/byte rates have explicit limits.
+- Each recipient has a bounded message queue and byte budget, including an
+  in-flight write. Routing never awaits a consumer; overflow closes it with `1013`.
+- Process-wide queue and variable byte budgets bound aggregate retained payloads
+  as the number of users and channels grows. Read buffers default to 4 KiB.
+- Channel variables have count and byte limits and disappear with an empty
+  ordinary channel. `re_globl` persists, matching the original behavior.
+- OS entropy supplies IDs. Fixed-ID takeover closes the old owner with `4001`;
+  old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
+- Tokio drives concurrent connections. Routing uses shared registry reads;
+  membership/ID changes use writes. No registry lock spans an await or socket I/O.
+  Fanout shares one immutable frame across recipients.
+- SIGINT/SIGTERM stop admission, close sessions with `1001`, and enforce a shutdown
+  deadline. Registration cleanup also runs when a task is cancelled.
 
-Relay binary messages are all prefixed by 8 byte target UserId. Relay text messages are prefixed by 12 byte base64 encoded UserId which represents an 8 byte UserId.
+Management uses a separate HTTP listener:
 
-When joining any channel: UserId will be transmitted in a binary-type message.  A callback is provided (**onSubscription**) when the channel subscription occurs, so that the client may begin talking in the channel.  Conversion between text and binary UserId types occurs automatically by most relay client libraries.
+| Endpoint | Purpose | Authorization |
+| --- | --- | --- |
+| `GET /healthz` | Liveness | None |
+| `GET /readyz` | `503` while draining | None |
+| `GET /metrics` | Prometheus counters/gauges | Bearer token when configured |
+| `GET /v1/channels` | Populations and variable usage | Bearer token required |
+| `POST /v1/drain` | Reject new connections/joins | Bearer token required |
+| `POST /v1/resume` | Resume admission | Bearer token required |
+| `POST /v1/sessions/{decimal_id}/disconnect` | Close session with `4000` | Bearer token required |
 
-Message-types are not channel specific and any client can send either text or binary messages to other clients.
+Non-loopback admin binding requires a token. Liveness/readiness expose no session
+information; metrics use no per-user/channel labels. See [docs/operations.md](docs/operations.md)
+and [deployment examples](deploy/).
 
-## Relay: Special Commands
+The original `re_globl` channel can broadcast to all users, and authenticated
+listeners can observe selected channel/private/disconnect traffic. These original
+features do not provide tenant isolation. `--disable-global-broadcast` requires
+authentication for global sends. Use separate processes for untrusted applications;
+application authentication/authorization belongs in the application or admission proxy.
 
-The relay tracks very limited information.  What it does track, it allows authenticated users to query through a request interface.
+This is a single-node relay: IDs, channels, variables, and private routing are
+process-local. Replicas do not form a cluster. Cross-node routing and durable
+history are not implemented. Capacity claims require measurements on the intended
+host, network, payloads, and fanout.
 
-Authenticated users on the relay may also have the ability to perform certain privileged actions on the relay for the purpose of powering reliable server-based web-applications.
+## Verify and measure
 
-**Information available from the relay:**
+```sh
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
+./scripts/check-js.sh
+```
 
- - Current Number of Channels
- - Name of Current Channels
- - Population of Current Channels
+The JavaScript script builds temporary loopback services, runs the CBOR and
+original-client checks, and removes the services afterward.
 
-**Actions possible on the relay:**
+```sh
+./target/release/examples/load --clients 128 --messages 1000 --payload-bytes 256
+./target/release/examples/load --mode broadcast --clients 64 --messages 500
+python3 scripts/benchmark.py --output artifacts/read-buffer.json
+```
 
- - Assign custom UserId (disconnects user holding Id if necissary)
+The load tool verifies every frame and its order. Reports include setup time,
+verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons use
+release builds, fresh server processes, sequential candidates, and alternating
+order. [docs/performance.md](docs/performance.md) records results and limits;
+[docs/STATUS.md](docs/STATUS.md) tracks continuing work.

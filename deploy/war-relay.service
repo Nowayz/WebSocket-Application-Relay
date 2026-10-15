@@ -1,0 +1,32 @@
+[Unit]
+Description=WebSocket Application Relay (CBOR)
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+ExecStart=/usr/local/bin/war-relay
+EnvironmentFile=-/etc/war-relay.env
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=15s
+LimitNOFILE=65536
+MemoryMax=1G
+TasksMax=128
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
