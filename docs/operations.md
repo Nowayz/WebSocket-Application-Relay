@@ -370,6 +370,22 @@ these four metrics are zero.
 
 ## Scaling boundary
 
+Native decoders live in a worker-owned connection arena. Ready queues carry
+monotonic socket tokens, so reusing an arena slot cannot redirect an old event to
+a new connection. Each connection has at most one indexed timer; repeated input
+does not accumulate stale deadline entries. Once a worker becomes empty, an
+arena larger than 256 slots and its timer/token tables are released. Small arenas
+remain available for churn. An arena can retain its high water while the worker
+has live connections; this is separate from the sparse registry trimming below.
+
+I/O workers own dedicated OS threads and are independent of an embedder's Tokio
+blocking-pool capacity. On Linux each worker has a separate `SO_REUSEPORT` listen
+socket on the supplied address, preserving its IPv6-only setting. New flows are
+distributed by the kernel; they are not balanced by channel or current load.
+Other platforms use cloned listeners. Management and process signals use Tokio.
+Dropping the service or losing a worker suppresses shutdown notifications before
+retiring membership, including when the embedding future is cancelled.
+
 Native ownership, membership and channel-name tables release excess capacity
 after large departures. Occupied fixed-ID takeovers also release sparse ownership
 slots.

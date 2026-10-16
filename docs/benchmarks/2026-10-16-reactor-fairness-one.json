@@ -1,0 +1,2266 @@
+{
+  "host": "Linux-7.2.9-arch1-1-x86_64-with-glibc2.44",
+  "revision": "b066540b4cfde6d7f5a2efbda7f6be4a4d3810e0",
+  "script_sha256": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+  "args": {
+    "server": "artifacts/baselines/b066540/war-relay",
+    "workers": 1,
+    "sources": 4,
+    "fragments": 500000,
+    "cycles": 2,
+    "read_buffer_bytes": 4096,
+    "server_cpus": "0",
+    "client_cpus": "4-7",
+    "output": "docs/benchmarks/2026-10-16-reactor-fairness-one.json"
+  },
+  "notes": "Finite valid CBOR self routes with many empty masked continuations; exact encoded values and every normal Close verified. Independent 1 KiB self echoes every 1 ms, and admin samples approximately every 10 ms. Client preparation precedes timing. Rates, heartbeats and application idle disabled; ordinary staging/message limits retained. Affinity, read size, worker count and every observed latency are recorded. A scheduler opportunity is not a hard latency guarantee; no production capacity claim.",
+  "case": {
+    "server_command": [
+      "taskset",
+      "-c",
+      "0",
+      "/home/phil/dev/war_next/artifacts/baselines/b066540/war-relay",
+      "--bind",
+      "127.0.0.1:56835",
+      "--admin-bind",
+      "127.0.0.1:37255",
+      "--workers",
+      "1",
+      "--read-buffer-bytes",
+      "4096",
+      "--messages-per-second",
+      "0",
+      "--bytes-per-second",
+      "0",
+      "--ping-interval-secs",
+      "0",
+      "--idle-timeout-secs",
+      "0"
+    ],
+    "server_sha256": "0918b83150f0cdc006bedde985e4a24e11d0c2b0e711db9ff9a6772f2a5f55c9",
+    "samples": [
+      {
+        "seconds": 0.004533545001322636,
+        "admin_ms": 2.6575230003800243,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.0,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.0
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "194103",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "189",
+          "war_incoming_bytes_total": "195993",
+          "war_deliveries_total": "194",
+          "war_delivered_bytes_total": "196038",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.015011571002105484,
+        "admin_ms": 0.23703400074737146,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.01,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.01
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "204373",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "199",
+          "war_incoming_bytes_total": "206363",
+          "war_deliveries_total": "204",
+          "war_delivered_bytes_total": "206408",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.025371519001055276,
+        "admin_ms": 0.20009500076412223,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.02,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.02
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "213616",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "208",
+          "war_incoming_bytes_total": "215696",
+          "war_deliveries_total": "213",
+          "war_delivered_bytes_total": "215741",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.035711038999579614,
+        "admin_ms": 0.17535600272822194,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.03,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.03
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "222859",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "217",
+          "war_incoming_bytes_total": "225029",
+          "war_deliveries_total": "222",
+          "war_delivered_bytes_total": "225074",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.046054798000113806,
+        "admin_ms": 0.18982500114361756,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.04,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.03
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "233129",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "227",
+          "war_incoming_bytes_total": "235399",
+          "war_deliveries_total": "232",
+          "war_delivered_bytes_total": "235444",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.056387687000096776,
+        "admin_ms": 0.183714997547213,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.05,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.05
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41024",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "242372",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "236",
+          "war_incoming_bytes_total": "244732",
+          "war_deliveries_total": "241",
+          "war_delivered_bytes_total": "244777",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.0667803249998542,
+        "admin_ms": 0.22700499903294258,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.05,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.05
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41112",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "251651",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "249",
+          "war_incoming_bytes_total": "254141",
+          "war_deliveries_total": "254",
+          "war_delivered_bytes_total": "254186",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.07713221399899339,
+        "admin_ms": 0.1878160001069773,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.07,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.06
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41112",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "260894",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "258",
+          "war_incoming_bytes_total": "263474",
+          "war_deliveries_total": "263",
+          "war_delivered_bytes_total": "263519",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.08747979300096631,
+        "admin_ms": 0.18512599854147993,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.08,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.07
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41112",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "270137",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "267",
+          "war_incoming_bytes_total": "272807",
+          "war_deliveries_total": "272",
+          "war_delivered_bytes_total": "272852",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.09786303100190707,
+        "admin_ms": 0.21243499941192567,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.09,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.09
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41112",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "280407",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "277",
+          "war_incoming_bytes_total": "283177",
+          "war_deliveries_total": "282",
+          "war_delivered_bytes_total": "283222",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      },
+      {
+        "seconds": 0.10820542000146816,
+        "admin_ms": 0.1850159969762899,
+        "process": {
+          "VmSize": 75156,
+          "VmRSS": 5204,
+          "RssAnon": 460,
+          "Threads": 2,
+          "cpu_seconds": 0.09,
+          "thread_cpu_seconds": {
+            "219091": 0.0,
+            "219092": 0.09
+          }
+        },
+        "metrics": {
+          "war_read_buffer_reserved_bytes": "41112",
+          "war_read_buffer_peak_reserved_bytes": "49152",
+          "war_read_buffer_limit_bytes": "1073741824",
+          "war_read_buffer_reservations_rejected_total": "0",
+          "war_read_buffer_reclaims_total": "0",
+          "war_read_buffer_reclaim_header_bytes_total": "0",
+          "war_read_buffer_reclaims_deferred_total": "0",
+          "war_idle_timeouts_total": "0",
+          "war_unstarted_writes_cancelled_total": "0",
+          "war_routing_reused_bytes_total": "289650",
+          "war_routing_copied_bytes_total": "0",
+          "war_write_timeouts_total": "0",
+          "war_write_errors_total": "0",
+          "war_aborted_writes_total": "0",
+          "war_close_failures_total": "0",
+          "war_transport_disconnects_total": "0",
+          "war_global_pressure_total": "0",
+          "war_accepted_total": "5",
+          "war_rejected_total": "0",
+          "war_origin_rejected_total": "0",
+          "war_handshake_errors_total": "0",
+          "war_joined_total": "5",
+          "war_join_rejected_total": "0",
+          "war_disconnected_total": "0",
+          "war_incoming_messages_total": "286",
+          "war_incoming_bytes_total": "292510",
+          "war_deliveries_total": "291",
+          "war_delivered_bytes_total": "292555",
+          "war_slow_consumers_total": "0",
+          "war_protocol_errors_total": "0",
+          "war_rate_limited_total": "0",
+          "war_variable_bytes": "0",
+          "war_connections": "5",
+          "war_sessions": "5",
+          "war_channels": "6",
+          "war_queued_bytes": "0",
+          "war_draining": "0"
+        }
+      }
+    ],
+    "passed": true,
+    "baseline": {
+      "VmSize": 75156,
+      "VmRSS": 5188,
+      "RssAnon": 444,
+      "Threads": 2,
+      "cpu_seconds": 0.0,
+      "thread_cpu_seconds": {
+        "219091": 0.0,
+        "219092": 0.0
+      }
+    },
+    "source_durations": [
+      [
+        0.05750558900035685,
+        0.05746590999842738
+      ],
+      [
+        0.057488338999974076,
+        0.05742049200125621
+      ],
+      [
+        0.05751422899993486,
+        0.05737272199985455
+      ],
+      [
+        0.057494429001963,
+        0.0573679129993252
+      ]
+    ],
+    "elapsed_seconds": 0.11846953100030078,
+    "after_workload": {
+      "VmSize": 75156,
+      "VmRSS": 5204,
+      "RssAnon": 460,
+      "Threads": 2,
+      "cpu_seconds": 0.1,
+      "thread_cpu_seconds": {
+        "219091": 0.0,
+        "219092": 0.1
+      }
+    },
+    "final_metrics": {
+      "war_read_buffer_reserved_bytes": "0",
+      "war_read_buffer_peak_reserved_bytes": "49152",
+      "war_read_buffer_limit_bytes": "1073741824",
+      "war_read_buffer_reservations_rejected_total": "0",
+      "war_read_buffer_reclaims_total": "0",
+      "war_read_buffer_reclaim_header_bytes_total": "0",
+      "war_read_buffer_reclaims_deferred_total": "0",
+      "war_idle_timeouts_total": "0",
+      "war_unstarted_writes_cancelled_total": "0",
+      "war_routing_reused_bytes_total": "394440",
+      "war_routing_copied_bytes_total": "0",
+      "war_write_timeouts_total": "0",
+      "war_write_errors_total": "0",
+      "war_aborted_writes_total": "0",
+      "war_close_failures_total": "0",
+      "war_transport_disconnects_total": "0",
+      "war_global_pressure_total": "0",
+      "war_accepted_total": "5",
+      "war_rejected_total": "0",
+      "war_origin_rejected_total": "0",
+      "war_handshake_errors_total": "0",
+      "war_joined_total": "5",
+      "war_join_rejected_total": "0",
+      "war_disconnected_total": "5",
+      "war_incoming_messages_total": "392",
+      "war_incoming_bytes_total": "398360",
+      "war_deliveries_total": "397",
+      "war_delivered_bytes_total": "398405",
+      "war_slow_consumers_total": "0",
+      "war_protocol_errors_total": "0",
+      "war_rate_limited_total": "0",
+      "war_variable_bytes": "0",
+      "war_connections": "0",
+      "war_sessions": "0",
+      "war_channels": "1",
+      "war_queued_bytes": "0",
+      "war_draining": "0"
+    },
+    "latencies": [
+      {
+        "busy": false,
+        "ms": 0.05017800140194595
+      },
+      {
+        "busy": false,
+        "ms": 0.017599002603674307
+      },
+      {
+        "busy": false,
+        "ms": 0.012140000762883574
+      },
+      {
+        "busy": false,
+        "ms": 0.011659001756925136
+      },
+      {
+        "busy": false,
+        "ms": 0.010719002602854744
+      },
+      {
+        "busy": false,
+        "ms": 0.016338999557774514
+      },
+      {
+        "busy": false,
+        "ms": 0.018598999304231256
+      },
+      {
+        "busy": false,
+        "ms": 0.010789000953081995
+      },
+      {
+        "busy": false,
+        "ms": 0.01028999759000726
+      },
+      {
+        "busy": false,
+        "ms": 0.010299998393747956
+      },
+      {
+        "busy": false,
+        "ms": 0.010510000720387325
+      },
+      {
+        "busy": false,
+        "ms": 0.012630000128410757
+      },
+      {
+        "busy": false,
+        "ms": 0.015650002751499414
+      },
+      {
+        "busy": false,
+        "ms": 0.019160001102136448
+      },
+      {
+        "busy": false,
+        "ms": 0.015499997971346602
+      },
+      {
+        "busy": false,
+        "ms": 0.011288997484371066
+      },
+      {
+        "busy": false,
+        "ms": 0.010248997568851337
+      },
+      {
+        "busy": false,
+        "ms": 0.01035999957821332
+      },
+      {
+        "busy": false,
+        "ms": 0.010179999662796035
+      },
+      {
+        "busy": false,
+        "ms": 0.011029998859157786
+      },
+      {
+        "busy": false,
+        "ms": 0.01793000046745874
+      },
+      {
+        "busy": false,
+        "ms": 0.02071999915642664
+      },
+      {
+        "busy": false,
+        "ms": 0.011330001143505797
+      },
+      {
+        "busy": false,
+        "ms": 0.010949999705189839
+      },
+      {
+        "busy": false,
+        "ms": 0.010719999409047887
+      },
+      {
+        "busy": false,
+        "ms": 0.010529998689889908
+      },
+      {
+        "busy": false,
+        "ms": 0.011028998414985836
+      },
+      {
+        "busy": false,
+        "ms": 0.012609001714736223
+      },
+      {
+        "busy": false,
+        "ms": 0.012288997822906822
+      },
+      {
+        "busy": false,
+        "ms": 0.012349999451544136
+      },
+      {
+        "busy": false,
+        "ms": 0.02029000097536482
+      },
+      {
+        "busy": false,
+        "ms": 0.011970001651206985
+      },
+      {
+        "busy": false,
+        "ms": 0.010809999366756529
+      },
+      {
+        "busy": false,
+        "ms": 0.010699997801566496
+      },
+      {
+        "busy": false,
+        "ms": 0.020309998944867402
+      },
+      {
+        "busy": false,
+        "ms": 0.01946999691426754
+      },
+      {
+        "busy": false,
+        "ms": 0.02215899803559296
+      },
+      {
+        "busy": false,
+        "ms": 0.02795899854390882
+      },
+      {
+        "busy": false,
+        "ms": 0.029619000997627154
+      },
+      {
+        "busy": false,
+        "ms": 0.020440002117538825
+      },
+      {
+        "busy": false,
+        "ms": 0.020230003428878263
+      },
+      {
+        "busy": false,
+        "ms": 0.01545000122860074
+      },
+      {
+        "busy": false,
+        "ms": 0.015390000044135377
+      },
+      {
+        "busy": false,
+        "ms": 0.1008180006465409
+      },
+      {
+        "busy": false,
+        "ms": 0.02960900019388646
+      },
+      {
+        "busy": false,
+        "ms": 0.03005899998242967
+      },
+      {
+        "busy": false,
+        "ms": 0.02064000000245869
+      },
+      {
+        "busy": false,
+        "ms": 0.019739996787393466
+      },
+      {
+        "busy": false,
+        "ms": 0.01974899714696221
+      },
+      {
+        "busy": false,
+        "ms": 0.01981899913516827
+      },
+      {
+        "busy": false,
+        "ms": 0.019679002434713766
+      },
+      {
+        "busy": false,
+        "ms": 0.0197689987544436
+      },
+      {
+        "busy": false,
+        "ms": 0.024220000341301784
+      },
+      {
+        "busy": false,
+        "ms": 0.019490002159727737
+      },
+      {
+        "busy": false,
+        "ms": 0.019610000890679657
+      },
+      {
+        "busy": false,
+        "ms": 0.01946000338648446
+      },
+      {
+        "busy": false,
+        "ms": 0.019688999600475654
+      },
+      {
+        "busy": false,
+        "ms": 0.019998999050585553
+      },
+      {
+        "busy": false,
+        "ms": 0.010818999726325274
+      },
+      {
+        "busy": false,
+        "ms": 0.6133939969004132
+      },
+      {
+        "busy": false,
+        "ms": 0.022469001123681664
+      },
+      {
+        "busy": false,
+        "ms": 0.03387000106158666
+      },
+      {
+        "busy": false,
+        "ms": 0.03078899680986069
+      },
+      {
+        "busy": false,
+        "ms": 0.012470001820474863
+      },
+      {
+        "busy": false,
+        "ms": 0.011668998922687024
+      },
+      {
+        "busy": false,
+        "ms": 0.01101899761124514
+      },
+      {
+        "busy": false,
+        "ms": 0.24422400019830093
+      },
+      {
+        "busy": false,
+        "ms": 0.030238999897846952
+      },
+      {
+        "busy": false,
+        "ms": 0.02276000304846093
+      },
+      {
+        "busy": false,
+        "ms": 0.01931999941007234
+      },
+      {
+        "busy": false,
+        "ms": 0.019289996998850256
+      },
+      {
+        "busy": false,
+        "ms": 0.01934999818331562
+      },
+      {
+        "busy": false,
+        "ms": 0.014760000340174884
+      },
+      {
+        "busy": false,
+        "ms": 0.010519997886149213
+      },
+      {
+        "busy": false,
+        "ms": 0.02083999788737856
+      },
+      {
+        "busy": false,
+        "ms": 0.014190001820679754
+      },
+      {
+        "busy": false,
+        "ms": 0.021179999748710543
+      },
+      {
+        "busy": false,
+        "ms": 0.012979999155504629
+      },
+      {
+        "busy": false,
+        "ms": 0.011000000085914508
+      },
+      {
+        "busy": false,
+        "ms": 0.010730000212788582
+      },
+      {
+        "busy": false,
+        "ms": 0.010889998520724475
+      },
+      {
+        "busy": false,
+        "ms": 0.010939998901449144
+      },
+      {
+        "busy": false,
+        "ms": 0.02098900222335942
+      },
+      {
+        "busy": false,
+        "ms": 0.01677899854257703
+      },
+      {
+        "busy": false,
+        "ms": 0.01438899926142767
+      },
+      {
+        "busy": false,
+        "ms": 0.018889000784838572
+      },
+      {
+        "busy": false,
+        "ms": 0.019159000657964498
+      },
+      {
+        "busy": false,
+        "ms": 0.019160001102136448
+      },
+      {
+        "busy": false,
+        "ms": 0.01080000220099464
+      },
+      {
+        "busy": false,
+        "ms": 0.010149000445380807
+      },
+      {
+        "busy": false,
+        "ms": 0.025348999770358205
+      },
+      {
+        "busy": false,
+        "ms": 0.020589999621734023
+      },
+      {
+        "busy": false,
+        "ms": 0.013060001947451383
+      },
+      {
+        "busy": false,
+        "ms": 0.011159998393850401
+      },
+      {
+        "busy": false,
+        "ms": 0.011948999599553645
+      },
+      {
+        "busy": false,
+        "ms": 0.010988998838001862
+      },
+      {
+        "busy": false,
+        "ms": 0.010728999768616632
+      },
+      {
+        "busy": false,
+        "ms": 0.15781600086484104
+      },
+      {
+        "busy": false,
+        "ms": 0.017070000467356294
+      },
+      {
+        "busy": false,
+        "ms": 0.020539999241009355
+      },
+      {
+        "busy": false,
+        "ms": 0.042388997826492414
+      },
+      {
+        "busy": false,
+        "ms": 0.012619999324670061
+      },
+      {
+        "busy": false,
+        "ms": 0.019620001694420353
+      },
+      {
+        "busy": false,
+        "ms": 0.019409999367780983
+      },
+      {
+        "busy": false,
+        "ms": 0.019880000763805583
+      },
+      {
+        "busy": false,
+        "ms": 0.022009997337590903
+      },
+      {
+        "busy": false,
+        "ms": 0.019408998923609033
+      },
+      {
+        "busy": false,
+        "ms": 0.010708998161135241
+      },
+      {
+        "busy": false,
+        "ms": 0.019179002265445888
+      },
+      {
+        "busy": false,
+        "ms": 0.016250000044237822
+      },
+      {
+        "busy": false,
+        "ms": 0.015260000509442762
+      },
+      {
+        "busy": false,
+        "ms": 0.019470000552246347
+      },
+      {
+        "busy": false,
+        "ms": 0.019739996787393466
+      },
+      {
+        "busy": false,
+        "ms": 0.10566700075287372
+      },
+      {
+        "busy": false,
+        "ms": 0.019849001546390355
+      },
+      {
+        "busy": false,
+        "ms": 0.012289001460885629
+      },
+      {
+        "busy": false,
+        "ms": 0.010550000297371298
+      },
+      {
+        "busy": false,
+        "ms": 0.011060001270379871
+      },
+      {
+        "busy": false,
+        "ms": 0.010960000508930534
+      },
+      {
+        "busy": false,
+        "ms": 0.01064000025507994
+      },
+      {
+        "busy": false,
+        "ms": 0.7716010004514828
+      },
+      {
+        "busy": false,
+        "ms": 0.03332900087116286
+      },
+      {
+        "busy": false,
+        "ms": 0.01398899985360913
+      },
+      {
+        "busy": false,
+        "ms": 0.020308998500695452
+      },
+      {
+        "busy": false,
+        "ms": 0.020398998458404094
+      },
+      {
+        "busy": false,
+        "ms": 0.02084900188492611
+      },
+      {
+        "busy": false,
+        "ms": 0.015390000044135377
+      },
+      {
+        "busy": false,
+        "ms": 0.0466090023110155
+      },
+      {
+        "busy": false,
+        "ms": 0.01469899871153757
+      },
+      {
+        "busy": false,
+        "ms": 0.019568997231544927
+      },
+      {
+        "busy": false,
+        "ms": 0.019268998585175723
+      },
+      {
+        "busy": false,
+        "ms": 0.019549999706214294
+      },
+      {
+        "busy": false,
+        "ms": 0.019549999706214294
+      },
+      {
+        "busy": false,
+        "ms": 0.019520000932971016
+      },
+      {
+        "busy": false,
+        "ms": 0.019520000932971016
+      },
+      {
+        "busy": false,
+        "ms": 0.015630001144018024
+      },
+      {
+        "busy": false,
+        "ms": 0.02083000072161667
+      },
+      {
+        "busy": false,
+        "ms": 0.011060001270379871
+      },
+      {
+        "busy": false,
+        "ms": 0.011299998732283711
+      },
+      {
+        "busy": false,
+        "ms": 0.016259000403806567
+      },
+      {
+        "busy": false,
+        "ms": 0.010629002645146102
+      },
+      {
+        "busy": false,
+        "ms": 0.013319000572664663
+      },
+      {
+        "busy": false,
+        "ms": 0.010330000804970041
+      },
+      {
+        "busy": false,
+        "ms": 0.34168100319220684
+      },
+      {
+        "busy": false,
+        "ms": 0.011388998245820403
+      },
+      {
+        "busy": false,
+        "ms": 0.010669999028323218
+      },
+      {
+        "busy": false,
+        "ms": 0.01030999919748865
+      },
+      {
+        "busy": false,
+        "ms": 0.010550000297371298
+      },
+      {
+        "busy": false,
+        "ms": 0.010720003047026694
+      },
+      {
+        "busy": false,
+        "ms": 0.015009998605819419
+      },
+      {
+        "busy": false,
+        "ms": 0.012130003597121686
+      },
+      {
+        "busy": false,
+        "ms": 0.01681900175753981
+      },
+      {
+        "busy": false,
+        "ms": 0.01889999839477241
+      },
+      {
+        "busy": false,
+        "ms": 0.011479998647700995
+      },
+      {
+        "busy": false,
+        "ms": 0.010458999895490706
+      },
+      {
+        "busy": false,
+        "ms": 0.009990002581616864
+      },
+      {
+        "busy": false,
+        "ms": 0.010939998901449144
+      },
+      {
+        "busy": false,
+        "ms": 0.010679999832063913
+      },
+      {
+        "busy": false,
+        "ms": 0.011480002285679802
+      },
+      {
+        "busy": false,
+        "ms": 0.019610000890679657
+      },
+      {
+        "busy": false,
+        "ms": 0.010830000974237919
+      },
+      {
+        "busy": false,
+        "ms": 0.010959996870951727
+      },
+      {
+        "busy": false,
+        "ms": 0.01051900107995607
+      },
+      {
+        "busy": false,
+        "ms": 0.011138999980175868
+      },
+      {
+        "busy": false,
+        "ms": 0.012879001587862149
+      },
+      {
+        "busy": false,
+        "ms": 0.010830000974237919
+      },
+      {
+        "busy": false,
+        "ms": 0.016959998902166262
+      },
+      {
+        "busy": false,
+        "ms": 0.01846899976953864
+      },
+      {
+        "busy": false,
+        "ms": 0.010949999705189839
+      },
+      {
+        "busy": false,
+        "ms": 0.010870000551221892
+      },
+      {
+        "busy": false,
+        "ms": 0.011430001904955134
+      },
+      {
+        "busy": false,
+        "ms": 0.010269999620504677
+      },
+      {
+        "busy": false,
+        "ms": 0.010020001354860142
+      },
+      {
+        "busy": false,
+        "ms": 0.009928997315000743
+      },
+      {
+        "busy": false,
+        "ms": 0.29211199944256805
+      },
+      {
+        "busy": false,
+        "ms": 0.013038999895798042
+      },
+      {
+        "busy": false,
+        "ms": 0.011079999239882454
+      },
+      {
+        "busy": false,
+        "ms": 0.010489999112905934
+      },
+      {
+        "busy": false,
+        "ms": 0.01016999885905534
+      },
+      {
+        "busy": false,
+        "ms": 0.010140000085812062
+      },
+      {
+        "busy": false,
+        "ms": 0.010279996786266565
+      },
+      {
+        "busy": false,
+        "ms": 0.010149000445380807
+      },
+      {
+        "busy": false,
+        "ms": 0.015778998204041272
+      },
+      {
+        "busy": false,
+        "ms": 0.018759001250145957
+      },
+      {
+        "busy": false,
+        "ms": 0.010959000064758584
+      },
+      {
+        "busy": true,
+        "ms": 0.03802900027949363
+      },
+      {
+        "busy": true,
+        "ms": 0.011588999768719077
+      },
+      {
+        "busy": true,
+        "ms": 0.061488000937970355
+      },
+      {
+        "busy": true,
+        "ms": 0.04475799869396724
+      },
+      {
+        "busy": true,
+        "ms": 0.0914269985514693
+      },
+      {
+        "busy": true,
+        "ms": 0.05150899960426614
+      },
+      {
+        "busy": true,
+        "ms": 0.051439001254038885
+      },
+      {
+        "busy": true,
+        "ms": 0.07602800178574398
+      },
+      {
+        "busy": true,
+        "ms": 0.05722900095861405
+      },
+      {
+        "busy": true,
+        "ms": 0.04772900138050318
+      },
+      {
+        "busy": true,
+        "ms": 0.05413899998529814
+      },
+      {
+        "busy": true,
+        "ms": 0.053988998843124136
+      },
+      {
+        "busy": true,
+        "ms": 0.07290799840120599
+      },
+      {
+        "busy": true,
+        "ms": 0.04397899829200469
+      },
+      {
+        "busy": true,
+        "ms": 0.05918899842072278
+      },
+      {
+        "busy": true,
+        "ms": 0.056938999478006735
+      },
+      {
+        "busy": true,
+        "ms": 0.06060899977455847
+      },
+      {
+        "busy": true,
+        "ms": 0.06401800055755302
+      },
+      {
+        "busy": true,
+        "ms": 0.05108800178277306
+      },
+      {
+        "busy": true,
+        "ms": 0.06414800009224564
+      },
+      {
+        "busy": true,
+        "ms": 0.06380800186889246
+      },
+      {
+        "busy": true,
+        "ms": 0.051978000556118786
+      },
+      {
+        "busy": true,
+        "ms": 0.060168000345584005
+      },
+      {
+        "busy": true,
+        "ms": 0.0554489997739438
+      },
+      {
+        "busy": true,
+        "ms": 0.05739900007029064
+      },
+      {
+        "busy": true,
+        "ms": 0.04507899939198978
+      },
+      {
+        "busy": true,
+        "ms": 0.0654579998808913
+      },
+      {
+        "busy": true,
+        "ms": 0.04171899854554795
+      },
+      {
+        "busy": true,
+        "ms": 0.06275799751165323
+      },
+      {
+        "busy": true,
+        "ms": 0.046649001887999475
+      },
+      {
+        "busy": true,
+        "ms": 0.051958999392809346
+      },
+      {
+        "busy": true,
+        "ms": 0.05883899939362891
+      },
+      {
+        "busy": true,
+        "ms": 0.04887900286121294
+      },
+      {
+        "busy": true,
+        "ms": 0.04187899685348384
+      },
+      {
+        "busy": true,
+        "ms": 0.07776799975545146
+      },
+      {
+        "busy": true,
+        "ms": 0.06565899820998311
+      },
+      {
+        "busy": true,
+        "ms": 0.06221899820957333
+      },
+      {
+        "busy": true,
+        "ms": 0.06440800279960968
+      },
+      {
+        "busy": true,
+        "ms": 0.05509899710887112
+      },
+      {
+        "busy": true,
+        "ms": 0.06407899854821153
+      },
+      {
+        "busy": true,
+        "ms": 0.05046899968874641
+      },
+      {
+        "busy": true,
+        "ms": 0.05333800072548911
+      },
+      {
+        "busy": true,
+        "ms": 0.07409799945889972
+      },
+      {
+        "busy": true,
+        "ms": 0.045428998419083655
+      },
+      {
+        "busy": true,
+        "ms": 0.04062899824930355
+      },
+      {
+        "busy": true,
+        "ms": 0.04944800093653612
+      },
+      {
+        "busy": true,
+        "ms": 0.0441290030721575
+      },
+      {
+        "busy": true,
+        "ms": 0.06600799679290503
+      },
+      {
+        "busy": true,
+        "ms": 0.03991899939137511
+      },
+      {
+        "busy": true,
+        "ms": 0.05487899761646986
+      },
+      {
+        "busy": true,
+        "ms": 0.05126899850438349
+      },
+      {
+        "busy": true,
+        "ms": 0.06600799679290503
+      },
+      {
+        "busy": true,
+        "ms": 0.06651800140389241
+      },
+      {
+        "busy": true,
+        "ms": 0.08512800195603631
+      },
+      {
+        "busy": true,
+        "ms": 0.09259799844585359
+      },
+      {
+        "busy": true,
+        "ms": 0.07995800115168095
+      },
+      {
+        "busy": true,
+        "ms": 0.0676179988658987
+      },
+      {
+        "busy": true,
+        "ms": 0.10006700176745653
+      },
+      {
+        "busy": true,
+        "ms": 0.08736800009501167
+      },
+      {
+        "busy": true,
+        "ms": 0.10415699944132939
+      },
+      {
+        "busy": true,
+        "ms": 0.04452900247997604
+      },
+      {
+        "busy": true,
+        "ms": 0.06284800110734068
+      },
+      {
+        "busy": true,
+        "ms": 0.045889002649346367
+      },
+      {
+        "busy": true,
+        "ms": 0.06509800005005673
+      },
+      {
+        "busy": true,
+        "ms": 0.08874799823388457
+      },
+      {
+        "busy": true,
+        "ms": 0.0676279996696394
+      },
+      {
+        "busy": true,
+        "ms": 0.047908997657941654
+      },
+      {
+        "busy": true,
+        "ms": 0.06496900095953606
+      },
+      {
+        "busy": true,
+        "ms": 0.03847900006803684
+      },
+      {
+        "busy": true,
+        "ms": 0.04533900209935382
+      },
+      {
+        "busy": true,
+        "ms": 0.06439800199586898
+      },
+      {
+        "busy": true,
+        "ms": 0.061819002439733595
+      },
+      {
+        "busy": true,
+        "ms": 0.04213899956084788
+      },
+      {
+        "busy": true,
+        "ms": 0.11241799802519381
+      },
+      {
+        "busy": true,
+        "ms": 0.07503800225094892
+      },
+      {
+        "busy": true,
+        "ms": 0.07341799937421456
+      },
+      {
+        "busy": true,
+        "ms": 0.07691900100326166
+      },
+      {
+        "busy": true,
+        "ms": 0.0531980003870558
+      },
+      {
+        "busy": true,
+        "ms": 0.11218700092285872
+      },
+      {
+        "busy": true,
+        "ms": 0.07945800098241307
+      },
+      {
+        "busy": true,
+        "ms": 0.06362899875966832
+      },
+      {
+        "busy": true,
+        "ms": 0.04993900074623525
+      },
+      {
+        "busy": true,
+        "ms": 0.06299899905570783
+      },
+      {
+        "busy": true,
+        "ms": 0.05191899981582537
+      },
+      {
+        "busy": true,
+        "ms": 0.03953899795305915
+      },
+      {
+        "busy": true,
+        "ms": 0.044149001041660085
+      },
+      {
+        "busy": true,
+        "ms": 0.050539001676952466
+      },
+      {
+        "busy": true,
+        "ms": 0.06262800161493942
+      },
+      {
+        "busy": true,
+        "ms": 0.0516379986947868
+      },
+      {
+        "busy": true,
+        "ms": 0.038558999222004786
+      },
+      {
+        "busy": true,
+        "ms": 0.04368900044937618
+      },
+      {
+        "busy": true,
+        "ms": 0.04176800212007947
+      },
+      {
+        "busy": true,
+        "ms": 0.04850899858865887
+      },
+      {
+        "busy": true,
+        "ms": 0.054768999689258635
+      },
+      {
+        "busy": true,
+        "ms": 0.052458999562077224
+      },
+      {
+        "busy": true,
+        "ms": 0.039499002014053985
+      },
+      {
+        "busy": true,
+        "ms": 0.05500900078914128
+      },
+      {
+        "busy": true,
+        "ms": 0.04827899829251692
+      },
+      {
+        "busy": true,
+        "ms": 0.05060799958300777
+      },
+      {
+        "busy": true,
+        "ms": 0.03799900150625035
+      },
+      {
+        "busy": true,
+        "ms": 0.041958999645430595
+      },
+      {
+        "busy": true,
+        "ms": 0.053919000492896885
+      },
+      {
+        "busy": true,
+        "ms": 0.05664900163537823
+      },
+      {
+        "busy": true,
+        "ms": 0.06497900176327676
+      },
+      {
+        "busy": true,
+        "ms": 0.038209000194910914
+      },
+      {
+        "busy": true,
+        "ms": 0.014078999811317772
+      },
+      {
+        "busy": true,
+        "ms": 0.02639900048961863
+      },
+      {
+        "busy": false,
+        "ms": 0.02056900120805949
+      },
+      {
+        "busy": false,
+        "ms": 0.010709001799114048
+      },
+      {
+        "busy": false,
+        "ms": 0.02662900078576058
+      },
+      {
+        "busy": false,
+        "ms": 0.012299999070819467
+      },
+      {
+        "busy": false,
+        "ms": 0.011178999557159841
+      },
+      {
+        "busy": false,
+        "ms": 0.010489002306712791
+      },
+      {
+        "busy": false,
+        "ms": 0.010339997970731929
+      },
+      {
+        "busy": false,
+        "ms": 0.01035999957821332
+      },
+      {
+        "busy": false,
+        "ms": 0.010389998351456597
+      },
+      {
+        "busy": false,
+        "ms": 0.010200001270277426
+      },
+      {
+        "busy": false,
+        "ms": 0.010809999366756529
+      },
+      {
+        "busy": false,
+        "ms": 0.022429998352890834
+      },
+      {
+        "busy": false,
+        "ms": 0.012560001778183505
+      },
+      {
+        "busy": false,
+        "ms": 0.011049996828660369
+      },
+      {
+        "busy": false,
+        "ms": 0.009890001820167527
+      },
+      {
+        "busy": false,
+        "ms": 0.018200000340584666
+      },
+      {
+        "busy": false,
+        "ms": 0.010529998689889908
+      },
+      {
+        "busy": false,
+        "ms": 0.010629999451339245
+      },
+      {
+        "busy": false,
+        "ms": 0.024499997380189598
+      },
+      {
+        "busy": false,
+        "ms": 0.011759999324567616
+      },
+      {
+        "busy": false,
+        "ms": 0.011280000762781128
+      },
+      {
+        "busy": false,
+        "ms": 0.010869996913243085
+      },
+      {
+        "busy": false,
+        "ms": 0.010649997420841828
+      },
+      {
+        "busy": false,
+        "ms": 0.01047999830916524
+      },
+      {
+        "busy": false,
+        "ms": 0.010489002306712791
+      },
+      {
+        "busy": false,
+        "ms": 0.011289997928543016
+      },
+      {
+        "busy": false,
+        "ms": 0.02226899960078299
+      },
+      {
+        "busy": false,
+        "ms": 0.012548996892292053
+      },
+      {
+        "busy": false,
+        "ms": 0.01112900281441398
+      },
+      {
+        "busy": false,
+        "ms": 0.010719002602854744
+      },
+      {
+        "busy": false,
+        "ms": 0.010818999726325274
+      },
+      {
+        "busy": false,
+        "ms": 0.010820000170497224
+      },
+      {
+        "busy": false,
+        "ms": 0.010349998774472624
+      },
+      {
+        "busy": false,
+        "ms": 0.02214900086983107
+      },
+      {
+        "busy": false,
+        "ms": 0.0177590009116102
+      },
+      {
+        "busy": false,
+        "ms": 0.010960000508930534
+      },
+      {
+        "busy": false,
+        "ms": 0.010700001439545304
+      },
+      {
+        "busy": false,
+        "ms": 0.02028900053119287
+      },
+      {
+        "busy": false,
+        "ms": 0.01990899909287691
+      },
+      {
+        "busy": false,
+        "ms": 0.019769002392422408
+      },
+      {
+        "busy": false,
+        "ms": 0.019609000446507707
+      },
+      {
+        "busy": false,
+        "ms": 0.020370000129332766
+      },
+      {
+        "busy": false,
+        "ms": 0.02486899757059291
+      },
+      {
+        "busy": false,
+        "ms": 0.013218999811215326
+      },
+      {
+        "busy": false,
+        "ms": 0.019898998289136216
+      },
+      {
+        "busy": false,
+        "ms": 0.0197689987544436
+      },
+      {
+        "busy": false,
+        "ms": 0.01994900230783969
+      },
+      {
+        "busy": false,
+        "ms": 0.019758997950702906
+      },
+      {
+        "busy": false,
+        "ms": 0.022218999220058322
+      },
+      {
+        "busy": false,
+        "ms": 0.02913999924203381
+      },
+      {
+        "busy": false,
+        "ms": 0.021339001250453293
+      },
+      {
+        "busy": false,
+        "ms": 0.019479000911815092
+      },
+      {
+        "busy": false,
+        "ms": 0.0197689987544436
+      },
+      {
+        "busy": false,
+        "ms": 0.01943900133483112
+      },
+      {
+        "busy": false,
+        "ms": 0.01967000207514502
+      },
+      {
+        "busy": false,
+        "ms": 0.019740000425372273
+      },
+      {
+        "busy": false,
+        "ms": 0.01920999784488231
+      },
+      {
+        "busy": false,
+        "ms": 0.013169999874662608
+      },
+      {
+        "busy": false,
+        "ms": 0.014828998246230185
+      },
+      {
+        "busy": false,
+        "ms": 0.019308998162159696
+      },
+      {
+        "busy": false,
+        "ms": 0.020318999304436147
+      },
+      {
+        "busy": false,
+        "ms": 0.5657159999827854
+      },
+      {
+        "busy": false,
+        "ms": 0.019559996871976182
+      },
+      {
+        "busy": false,
+        "ms": 0.023819997295504436
+      },
+      {
+        "busy": false,
+        "ms": 0.041508999856887385
+      },
+      {
+        "busy": false,
+        "ms": 0.034549000702099875
+      },
+      {
+        "busy": false,
+        "ms": 0.0230390032811556
+      },
+      {
+        "busy": false,
+        "ms": 0.020219002180965617
+      },
+      {
+        "busy": false,
+        "ms": 0.020059000235050917
+      },
+      {
+        "busy": false,
+        "ms": 0.020159000996500254
+      },
+      {
+        "busy": false,
+        "ms": 0.010489999112905934
+      },
+      {
+        "busy": false,
+        "ms": 0.012538999726530164
+      },
+      {
+        "busy": false,
+        "ms": 0.015899000572972
+      },
+      {
+        "busy": false,
+        "ms": 0.011970001651206985
+      },
+      {
+        "busy": false,
+        "ms": 0.011020001693395898
+      },
+      {
+        "busy": false,
+        "ms": 0.01066000186256133
+      },
+      {
+        "busy": false,
+        "ms": 0.01052000152412802
+      },
+      {
+        "busy": false,
+        "ms": 0.010080002539325505
+      },
+      {
+        "busy": false,
+        "ms": 0.019949999114032835
+      },
+      {
+        "busy": false,
+        "ms": 0.01880000127130188
+      },
+      {
+        "busy": false,
+        "ms": 0.011349002306815237
+      },
+      {
+        "busy": false,
+        "ms": 0.010889001714531332
+      },
+      {
+        "busy": false,
+        "ms": 0.010789000953081995
+      },
+      {
+        "busy": false,
+        "ms": 0.30527199851348996
+      },
+      {
+        "busy": false,
+        "ms": 0.010790001397253945
+      },
+      {
+        "busy": false,
+        "ms": 0.010528998245717958
+      },
+      {
+        "busy": false,
+        "ms": 0.010170002497034147
+      },
+      {
+        "busy": false,
+        "ms": 0.016738998965593055
+      },
+      {
+        "busy": false,
+        "ms": 0.010129999282071367
+      },
+      {
+        "busy": false,
+        "ms": 0.014420002116821706
+      },
+      {
+        "busy": false,
+        "ms": 0.02063899955828674
+      },
+      {
+        "busy": false,
+        "ms": 0.011180000001331791
+      }
+    ],
+    "busy_probes": 107,
+    "busy_p99_ms": 0.11218700092285872,
+    "busy_max_ms": 0.11241799802519381,
+    "admin_max_ms": 2.6575230003800243,
+    "verified_fragmented_messages": 8,
+    "verified_empty_continuations": 4000000,
+    "clean_close_handshakes": 5,
+    "server_cpu_seconds": 0.1,
+    "server_log": ""
+  }
+}

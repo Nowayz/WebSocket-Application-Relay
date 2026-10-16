@@ -1,5 +1,10 @@
 # Measured performance and resource decisions
 
+The native runtime was replaced with readiness workers on 2026-10-16. The
+[readiness rewrite](#readiness-runtime-rewrite-2026-10-16) records its architecture,
+direct C++/old-Rust comparison, heap evidence and verification. Earlier sections
+are historical measurements of the retired async native core.
+
 ## Scope
 
 Measurements on 2026-10-15 used a Linux x86-64 host with an AMD Ryzen AI MAX+ 395,
@@ -1570,3 +1575,206 @@ inspection example. The runner builds C++ once before timing. `--audit-ids` is
 a fault-diagnosis option with extra client storage/work and must not be mixed
 into ordinary performance results. Compiler tuning parity, per-thread work
 placement, long GC cycles, TLS and sustained large populations remain open.
+
+
+## Readiness runtime rewrite (2026-10-16)
+
+The native relay was reimplemented around the original's ownership and I/O
+intent. The previous port shared application bodies but allocated a Tokio task,
+a receive slab, a message channel and a close watcher for every connection.
+At 8,196 connected sockets, the diagnostic heap capture attributed 86.9% of
+96,884,947 requested live bytes to receive buffers, task allocations and bounded
+message channels. Body sharing alone had not preserved the original design.
+
+The replacement is in `0c4c603`, with measured empty-arena retirement in
+`b066540`. The retired control is `e2d7cf9`. Both remain reproducible Git states;
+timing uses frozen executable copies and frozen clients. The
+[source and binary manifest](benchmarks/2026-10-16-reactor-build.json) binds the
+selected build and evidence.
+
+### Ownership and scheduling
+
+- A fixed number of Mio loops own native decoders on dedicated OS threads.
+  Management and signals use Tokio. An embedder's blocking-pool limit does not
+  reduce I/O concurrency. There is no task, application message channel or close
+  watcher per native connection.
+- Each worker lends one reusable base receive slab. Empty idle decoders own no
+  receive allocation. Partial headers, parsed headers awaiting payloads and
+  partial payloads remain with their decoder. Fragment assembly has a separate
+  owner and admission lease. Storage and its lease always move together.
+- Completed oversized worker slabs retire before lending to another connection.
+  Published immutable `Bytes` keep their original owner and address. Current
+  allocation capacity governs tiny-view compaction; a previous large message
+  alone no longer causes later base-slab values to be copied.
+- Routing attempts a bounded nonblocking vectored write directly. The small
+  WebSocket/sender headers stay separate from the borrowed body. Only socket
+  backpressure allocates queue storage and retains output. A per-socket mutex
+  serializes writes from different workers and the decoder's control output.
+- Short writes record their offset, preserve FIFO and retain byte reservations.
+  Control frames cannot interrupt a partially transmitted application frame.
+  Policy cancellation drops a partial transport; untouched output permits Close.
+  Terminal decoder failures flush a best-effort Close without reinterpreting a
+  denied body as its acknowledgement.
+- Connections live in worker arenas with monotonic tokens. Reusing a slot cannot
+  redirect old events to its new occupant. One indexed timer per connection
+  bounds deadline metadata. Frame and accept quanta explicitly reschedule work
+  when yielding before `WouldBlock`, including entirely buffered continuations.
+- Large arenas and timer/token tables retire once their worker becomes empty;
+  small arenas remain for churn. Dropping the service, worker failure and normal
+  shutdown suppress departure fanout before membership retirement.
+
+The existing CBOR validation, channel/ID/variable semantics, origin policy,
+admission/rate/buffering limits, management API, metrics and legacy bridge remain.
+The old asynchronous native runtime and its output-future machinery were removed.
+The transport trait has a channel-backed fixture only under `cfg(test)`.
+
+### Direct C++ and retired-Rust comparison
+
+[Full three-way results](benchmarks/2026-10-16-reactor-comparison.json) contain
+18 successful cases: three repetitions of two workloads across rebuilt C++, the
+retired Rust port and the replacement. Case and implementation order rotate.
+All run sequentially in fresh private network namespaces, with server CPUs 0–3
+and client CPUs 4–7. No profiler, compilation or other load test overlapped these
+measurements. C++ uses the unchanged upstream relay/uWS sources at
+`881c8daaf2cf05adea8f522b28cf372e8f82d4e9`, changing only the configured worker
+count in a temporary copy, with upstream `-O3 -march=native` flags and current
+system libraries. All four C++ listeners are verified, along with six threads
+(four loops, main and collector). Rust uses the normal portable release profile
+and five threads (four loops and main).
+
+The identical frozen client holds 8,192 idle rooms, two private pairs, a protocol
+probe, and a channel variable. It verifies every sender, full encoded value,
+FIFO sequence, inspection response, Close and EOF. Private traffic uses 64 cyclic
+1 KiB templates, 1,027 encoded value bytes and window 16. C++ forwards these values
+as opaque binary; Rust validates CBOR. The query workload adds two authenticated
+channel inspectors at 100 queries/s each. Rates and heartbeats are disabled for
+this controlled comparison; TLS and proxies are absent. Rust resource, byte and
+message counters are exact at the phase gates, and all reservations retire.
+
+| Private workload, median of three | Retired Rust | Replacement Rust | Rebuilt C++ |
+| --- | ---: | ---: | ---: |
+| Verified deliveries/s | 612,639 | 983,077 | 1,082,318 |
+| Observed throughput range | 604,108–612,852 | 739,316–986,679 | 1,062,273–1,090,751 |
+| Native RSS at measured gate | 101.12 MiB | 16.52 MiB | 20.51 MiB |
+| Delivery p99 upper bucket | 0.131072 ms | 0.065536 ms | 0.065536 ms |
+| Server CPU ns/verified delivery, per-run median | 1,469 | 1,258 | 1,101 |
+
+The replacement delivers **60.5% more private traffic with 83.7% less RSS** than
+the retired port. It is still **9.2% below C++ throughput** in this matrix and
+uses about **14.3% more server CPU per verified delivery**, while its measured
+RSS is **19.5% lower**. This is not a claim that Rust or CBOR beats C++ in general.
+
+Only two private pairs are active. Per-thread CPU data explains a material
+placement effect: replacement run 1 used 5.58 CPU seconds on one I/O worker;
+run 2 used about 4.97 and 4.96 seconds on two workers. Flow placement is chosen
+by the kernel and was not controlled. C++ also shows this variation in query
+runs. Medians and full ranges remain visible; these values are not a saturated
+four-core capacity ceiling or a language-only comparison.
+
+| With 200 authenticated channel queries/s, median of three | Retired Rust | Replacement Rust | Rebuilt C++ |
+| --- | ---: | ---: | ---: |
+| Healthy deliveries/s | 626,142 | 973,472 | 1,016,046 |
+| Healthy delivery p99 upper bucket | 0.131072 ms | 0.065536 ms | 0.065536 ms |
+| Inspection p99 upper bucket | 4.194304 ms | 2.097152 ms | 4.194304 ms |
+| Native RSS at measured gate | 102.29 MiB | 16.88 MiB | 20.75 MiB |
+
+All cases completed their 1,600 paced queries. Inspection CPU is included in
+this workload, so its CPU time must not be read as an isolated routing cost.
+The rebuilt C++ multiworker churn failure documented above remains a verification
+limit; it receives no successful churn rate in this comparison.
+
+### Mixed management, reconnects and larger payloads
+
+[Mixed results](benchmarks/2026-10-16-reactor-mixed.json) contain 18 successful
+old/new cases, using the same frozen clients, CPU sets and three alternating
+repetitions. The complete orchestration source and trace hashes are embedded.
+A result-extraction error in the diagnostic driver was repaired and the already
+verified traces reused; both driver revisions are preserved. Server/client
+workloads were unchanged.
+
+| Workload / median | Retired Rust | Replacement Rust |
+| --- | ---: | ---: |
+| 8,192 idle rooms + eight reconnect workers: healthy deliveries/s | 532,854 | 641,429 |
+| Same workload: verified reconnect cycles/s | 54,570 | 48,733 |
+| Same workload: server CPU seconds/wall second | 2.094 | 1.692 |
+| Same workload: measured RSS | 103.40 MiB | 18.58 MiB |
+| Above + 200 HTTP inspections/s: healthy deliveries/s | 452,844 | 548,144 |
+| Above + inspections: verified reconnect cycles/s | 37,634 | 39,751 |
+| Above + inspections: inspection p99 upper bucket | 8.388608 ms | 8.388608 ms |
+| Above + inspections: measured RSS | 112.63 MiB | 19.14 MiB |
+| 32 private clients, 64 KiB values, window 16: deliveries/s | 210,520 | 241,890 |
+| 64 KiB workload: delivery p99 upper bucket | 4.194304 ms | 2.097152 ms |
+| 64 KiB workload: sampled peak RSS | 12.53 MiB | 5.55 MiB |
+
+The first mixed workload has a real tradeoff: healthy throughput rises 20.4%
+and CPU use falls 19.2%, while reconnect rate falls 10.7%. With concurrent HTTP
+inspection, both healthy traffic (+21.0%) and reconnects (+5.6%) improve, with
+9.1% less CPU. Individual management runs still vary substantially with flow
+placement. Keep that regression and the unsaturated setup visible when choosing
+future scheduling work; the rewrite is not uniformly faster on every metric.
+
+The 64 KiB workload improves throughput by 14.9%, reduces its p99 bucket by half,
+and lowers sampled peak RSS by 55.7%. Those cases use the existing stability
+runner: CPU spans setup/workload/cleanup, RSS is sampled every 250 ms, and they
+have no 8,192-room idle population. Their CPU/RSS figures cannot be substituted
+for the gated C++ comparison.
+
+### Heap evidence and population retirement
+
+The [control capture](benchmarks/2026-10-16-reactor-heap-control.json) and
+[selected capture](benchmarks/2026-10-16-reactor-heap-selected.json) use a server-only
+`LD_PRELOAD` of gperftools, record its library hash/environment, and dump at
+ready/measured/done gates. They use 8,196 sockets and the same frozen client.
+These are **requested live allocations under a replacement allocator**, not
+ordinary RSS or timing measurements. Symbolized reports are retained for the
+[control](benchmarks/2026-10-16-reactor-heap-control.txt) and
+[replacement](benchmarks/2026-10-16-reactor-heap-selected.txt).
+
+| Heap gate | Retired Rust | Replacement Rust |
+| --- | ---: | ---: |
+| Ready, requested live bytes | 96,884,947 | 13,095,683 |
+| Done, requested live bytes | 147,144 | 189,272 |
+| Base decoder receive allocations at ready | 33,570,816 bytes | 16,384 bytes across four workers |
+
+The first readiness implementation kept 7,776,536 requested bytes after every
+socket left. Its arena high water dominated the remaining live allocations.
+Releasing large empty arenas reduced that gate to 189,272 bytes, while retaining
+small arenas for churn. Arena capacity can still remain while a worker has live
+connections; allocator-retained pages and kernel socket buffers remain separate.
+
+### Verification and limits
+
+The selected source passes 89 Rust tests (26 library, 13 budget, three reclaim,
+three decoder scheduling and 44 network/runtime tests), strict Clippy and format
+checks. The declared codec patch verifies all 62 files against two pinned
+published archives. New checks cover unchanged payload pointers through partial
+vectored writes, a queue-free ordinary output path, control exclusion during a
+partial data frame, storage lending across partial masked headers, budget
+reservation after lending, oversized-slab retirement, embedding cancellation,
+a saturated one-thread blocking pool and preservation of IPv6-only listeners.
+
+The [independent raw-input corpus](benchmarks/2026-10-16-reactor-corpus.json)
+verifies 776 cases / 2,311 exchanges, including fragmented and pipelined input,
+invalid values, terminal framing errors and healthy witnesses. The
+[reference suite](benchmarks/2026-10-16-reactor-reference.json) passes 48 common
+cases and eight documented differences against the original executable through
+the legacy bridge. JavaScript checks exercise typed/native/legacy interoperability
+and application idle behavior.
+
+[One-worker](benchmarks/2026-10-16-reactor-fairness-one.json) and
+[four-worker](benchmarks/2026-10-16-reactor-fairness-four.json) adverse scheduling
+checks each verify four million empty continuation frames plus healthy traffic,
+Close/EOF, counters and cleanup. The finite
+[fanout check](benchmarks/2026-10-16-reactor-fanout.json) verifies 934,848 deliveries
+to 27 paced readers across mixed 256 B/1 KiB/64 KiB/256 KiB values, while retiring
+four unread recipients and verifying 108 departure notifications. These are
+finite stability checks, not long-duration production or TLS acceptance.
+
+The [32-client stability run](benchmarks/2026-10-16-reactor-stability.json)
+verifies 9,264,080 private 1 KiB deliveries, 542,314 complete reconnect lifecycles,
+and 209,490 healthy 64 KiB deliveries alongside an unread recipient. Every server
+exits successfully without a forced kill. A
+[headed Chrome check](benchmarks/2026-10-16-reactor-browser.json) passes all seven
+bundle checks, including a 128 KiB value, concurrent variables, exact uint64 IDs
+and clean Close handshakes. Four live native listeners and empty final resource
+gauges were checked against the selected executable hash.

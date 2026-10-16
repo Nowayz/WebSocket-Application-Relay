@@ -266,8 +266,10 @@ count fixed, then verifies every C++ listener binds. The preserved shipped
 executable starts only one listener here. Rebuilt four-worker churn failed
 verification with a repeated welcome ID; its failed diagnostics are separate
 from successful timings. See the
-[direct comparison](docs/performance.md#direct-c-comparison-2026-10-16) for exact
-scope, performance, memory costs and limits.
+[readiness runtime comparison](docs/performance.md#readiness-runtime-rewrite-2026-10-16)
+for the current native build, the retired Rust control, C++, exact scope, memory
+costs and limits. `--control /path/to/frozen/war-relay` adds the retired async
+runtime to the same comparison using its per-connection staging contract.
 
 To measure concurrent inspection within Rust, including its HTTP management
 endpoint, use `python3 scripts/inspection.py --mode http --output
