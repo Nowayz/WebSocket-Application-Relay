@@ -40,6 +40,8 @@ pub struct Metrics {
     pub transport_disconnects: AtomicU64,
     pub join_rejected: AtomicU64,
     pub origin_rejected: AtomicU64,
+    pub output_queue_capacity_bytes: AtomicUsize,
+    pub output_queue_peak_capacity_bytes: AtomicUsize,
 }
 
 impl Metrics {
@@ -251,6 +253,16 @@ impl Metrics {
                 "draining",
                 usize::from(draining),
                 "Whether admission is disabled.",
+            ),
+            (
+                "output_queue_capacity_bytes",
+                self.output_queue_capacity_bytes.load(Relaxed),
+                "Allocated native output queue slots, including unused retained capacity; excludes bodies, allocator overhead and kernel buffers.",
+            ),
+            (
+                "output_queue_peak_capacity_bytes",
+                self.output_queue_peak_capacity_bytes.load(Relaxed),
+                "Peak aggregate allocated native output queue slot capacity.",
             ),
         ] {
             writeln!(

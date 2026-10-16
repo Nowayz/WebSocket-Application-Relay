@@ -26,6 +26,7 @@ use crate::{
 };
 
 pub(super) const WRITE_QUANTUM: usize = 256 * 1024;
+const RETAIN_QUEUE_SLOTS: usize = 32;
 
 pub(super) struct Signal {
     pub waker: Waker,
@@ -122,6 +123,11 @@ impl Socket {
     }
 
     fn writable(&self, state: &mut State, enabled: bool) -> io::Result<()> {
+        // Keep common window-sized queues warm. Once a larger queue drains,
+        // release its unused slots without touching any published body.
+        if !enabled && state.queue.is_empty() && state.queue.capacity() > RETAIN_QUEUE_SLOTS {
+            self.release_queue(state);
+        }
         if state.writable != enabled {
             let interest = if enabled {
                 Interest::READABLE | Interest::WRITABLE
@@ -133,6 +139,15 @@ impl Socket {
             state.writable = enabled;
         }
         Ok(())
+    }
+
+    fn release_queue(&self, state: &mut State) {
+        let capacity = std::mem::take(&mut state.queue).capacity();
+        if capacity != 0 {
+            self.metrics
+                .output_queue_capacity_bytes
+                .fetch_sub(capacity * std::mem::size_of::<Pending>(), Relaxed);
+        }
     }
 
     fn delivered(&self, packet: &Envelope, state: &mut State) {
@@ -210,7 +225,8 @@ impl Socket {
                     .fetch_add(1, Relaxed);
             }
         }
-        state.queue.clear();
+        // Output is terminal, so even a small warm queue has no further use.
+        self.release_queue(&mut state);
         partial
     }
 
@@ -250,11 +266,23 @@ impl PeerOutput for Socket {
             }
         }
         let first = state.queue.is_empty();
+        let old_capacity = state.queue.capacity();
         state.queue.push_back(Pending {
             packet,
             offset,
             deadline: Instant::now() + self.write_timeout,
         });
+        let added = (state.queue.capacity() - old_capacity) * std::mem::size_of::<Pending>();
+        if added != 0 {
+            let allocated = self
+                .metrics
+                .output_queue_capacity_bytes
+                .fetch_add(added, Relaxed)
+                + added;
+            self.metrics
+                .output_queue_peak_capacity_bytes
+                .fetch_max(allocated, Relaxed);
+        }
         if self.writable(&mut state, true).is_err() {
             state.fatal = true;
         }
@@ -276,7 +304,14 @@ impl PeerOutput for Socket {
 
 impl Drop for Socket {
     fn drop(&mut self) {
-        let _ = self.registry.deregister(&mut self.state.get_mut().stream);
+        let state = self.state.get_mut();
+        let capacity = state.queue.capacity() * std::mem::size_of::<Pending>();
+        if capacity != 0 {
+            self.metrics
+                .output_queue_capacity_bytes
+                .fetch_sub(capacity, Relaxed);
+        }
+        let _ = self.registry.deregister(&mut state.stream);
     }
 }
 
@@ -495,6 +530,113 @@ mod tests {
         )
         .unwrap();
         (relay, socket, reader, poll)
+    }
+
+    #[test]
+    fn recovered_queues_keep_small_capacity_but_release_large_empty_storage() {
+        for messages in [16, 48] {
+            let (relay, socket, reader, _poll) = connected();
+            let registration = relay
+                .subscribe_with_output(b"recover", socket.clone())
+                .unwrap();
+            let id = registration.peer.id.load(Relaxed);
+            let mut reader = WebSocket::from_raw_socket(reader, Role::Client, None);
+            assert_eq!(reader.read().unwrap(), Message::Binary(protocol::uint(id)));
+            // Hold application output behind a pending control write, then
+            // resume it through the same path used after a flushed Pong.
+            socket.state.lock().control_pending = true;
+            for i in 0..messages {
+                relay
+                    .receive(
+                        &registration.peer,
+                        protocol::envelope(id, &protocol::uint(i)),
+                    )
+                    .unwrap();
+            }
+            let before = socket.state.lock().queue.capacity();
+            let retained = socket.state.lock().queue[0].packet.frame.clone();
+            let pointer = retained.payload().as_ptr();
+            assert_eq!(
+                relay.metrics.output_queue_capacity_bytes.load(Relaxed),
+                before * std::mem::size_of::<Pending>()
+            );
+            socket.control_flushed().unwrap();
+            assert!(!socket.flush().unwrap());
+            let after = socket.state.lock().queue.capacity();
+            assert_eq!(
+                after,
+                if messages <= RETAIN_QUEUE_SLOTS as u64 {
+                    before
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                relay.metrics.output_queue_capacity_bytes.load(Relaxed),
+                after * std::mem::size_of::<Pending>()
+            );
+            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+            assert_eq!(retained.payload().as_ptr(), pointer);
+            assert_eq!(retained.payload(), protocol::uint(0).as_ref());
+            for i in 0..messages {
+                assert_eq!(
+                    reader.read().unwrap(),
+                    Message::Binary(protocol::envelope(id, &protocol::uint(i)))
+                );
+            }
+            drop(registration);
+            drop(socket);
+            assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+        }
+    }
+
+    #[test]
+    fn an_exact_write_quantum_retires_empty_queue_storage_before_returning() {
+        let (relay, socket, reader, _poll) = connected();
+        socket2::SockRef::from(&socket.state.lock().stream)
+            .set_send_buffer_size(1024 * 1024)
+            .unwrap();
+        let registration = relay
+            .subscribe_with_output(b"quantum", socket.clone())
+            .unwrap();
+        let id = registration.peer.id.load(Relaxed);
+        let mut reader = WebSocket::from_raw_socket(reader, Role::Client, None);
+        assert_eq!(reader.read().unwrap(), Message::Binary(protocol::uint(id)));
+        socket.state.lock().control_pending = true;
+        let overhead = 1 + protocol::uint(id).len() + 3 + 4;
+        let last = WRITE_QUANTUM - 48 * (4096 + overhead) - overhead;
+        assert!((256..65500).contains(&last));
+        let lengths = [vec![4096; 48], vec![last]].concat();
+        for &len in &lengths {
+            let value = protocol::byte_string(&vec![0xa5; len]);
+            relay
+                .receive(&registration.peer, protocol::envelope(id, &value))
+                .unwrap();
+        }
+        assert_eq!(
+            socket
+                .state
+                .lock()
+                .queue
+                .iter()
+                .map(|p| wire_len(&p.packet.frame))
+                .sum::<usize>(),
+            WRITE_QUANTUM
+        );
+        socket.control_flushed().unwrap();
+        assert!(!socket.flush().unwrap());
+        assert_eq!(socket.state.lock().queue.capacity(), 0);
+        assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        for len in lengths {
+            assert_eq!(
+                reader.read().unwrap(),
+                Message::Binary(protocol::envelope(
+                    id,
+                    &protocol::byte_string(&vec![0xa5; len])
+                ))
+            );
+        }
     }
 
     #[test]
