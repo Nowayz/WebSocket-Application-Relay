@@ -127,3 +127,105 @@ fn membership_changes_invalidate_views_without_changing_captured_owners() {
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
 }
+
+#[test]
+fn uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let mut source = relay.subscribe(b"reuse").unwrap();
+    let mut target = relay.subscribe(b"reuse").unwrap();
+    source.outgoing.try_recv().unwrap();
+    target.outgoing.try_recv().unwrap();
+    relay
+        .receive(
+            &source.registration.peer,
+            protocol::envelope(BROADCAST, &[7]),
+        )
+        .unwrap();
+    let held = target.outgoing.try_recv().unwrap();
+    let view = {
+        let state = relay.state.read();
+        Arc::as_ptr(state.channels[b"reuse".as_slice()].broadcast.get().unwrap())
+    };
+    let mut late = relay.subscribe(b"reuse").unwrap();
+    late.outgoing.try_recv().unwrap();
+    {
+        let state = relay.state.read();
+        let current = state.channels[b"reuse".as_slice()]
+            .broadcast
+            .get()
+            .expect("an uncaptured view must survive a membership update");
+        assert_eq!(Arc::as_ptr(current), view);
+        assert_eq!(current.len(), 3);
+    }
+    relay
+        .receive(
+            &source.registration.peer,
+            protocol::envelope(BROADCAST, &[9]),
+        )
+        .unwrap();
+    assert_eq!(target.outgoing.try_recv().unwrap().frame.payload(), &[9]);
+    assert_eq!(late.outgoing.try_recv().unwrap().frame.payload(), &[9]);
+    let removed = Arc::downgrade(&late.registration.peer);
+    drop(late);
+    assert!(
+        removed.upgrade().is_none(),
+        "the cache must retire a departed peer"
+    );
+    {
+        let state = relay.state.read();
+        let current = state.channels[b"reuse".as_slice()].broadcast.get().unwrap();
+        assert_eq!(Arc::as_ptr(current), view);
+        assert_eq!(current.len(), 2);
+    }
+    assert_eq!(held.frame.payload(), &[7]);
+    drop((source, target, held));
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+}
+
+#[test]
+fn a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave() {
+    struct Discard;
+    impl PeerOutput for Discard {
+        fn send(&self, _: Envelope) -> bool {
+            true
+        }
+        fn close(&self, _: Disconnect) {}
+    }
+    let relay = Relay::new(Config::default()).unwrap();
+    let output: Arc<dyn PeerOutput> = Arc::new(Discard);
+    let source = relay
+        .subscribe_with_output(b"capacity", output.clone())
+        .unwrap();
+    let mut peers: Vec<_> = (0..1024)
+        .map(|_| {
+            relay
+                .subscribe_with_output(b"capacity", output.clone())
+                .unwrap()
+        })
+        .collect();
+    relay
+        .receive(&source.peer, protocol::envelope(BROADCAST, &[7]))
+        .unwrap();
+    let late = relay.subscribe_with_output(b"capacity", output).unwrap();
+    let peak = relay.state.read().channels[b"capacity".as_slice()]
+        .broadcast
+        .get()
+        .expect("a unique view must grow in place")
+        .capacity();
+    drop(late);
+    while peers.len() > 1 {
+        peers.pop();
+    }
+    let state = relay.state.read();
+    let current = state.channels[b"capacity".as_slice()]
+        .broadcast
+        .get()
+        .unwrap();
+    assert_eq!(current.len(), 2);
+    assert!(current.capacity() <= 256 && current.capacity() < peak);
+    drop(state);
+    drop((source, peers));
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+}

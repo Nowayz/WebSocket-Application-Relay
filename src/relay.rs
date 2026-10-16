@@ -99,11 +99,46 @@ fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
 #[derive(Default)]
 struct Channel {
     members: HashMap<u64, Arc<Peer>>,
-    // Membership metadata only. Stable rooms reuse one view; joins/departures
-    // invalidate it while in-flight broadcasts keep their captured owners.
+    // Membership metadata only. Uncaptured views update in place; a membership
+    // change invalidates a captured view while its routing owners finish.
     broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
     variables: HashMap<Bytes, Bytes>,
     variable_bytes: usize,
+}
+
+impl Channel {
+    fn insert(&mut self, peer: Arc<Peer>) {
+        if let Some(view) = self.broadcast.get_mut().and_then(Arc::get_mut) {
+            // The registry write lock excludes new captures. A unique view
+            // has no routing owner, so retain its allocation across churn.
+            view.push(peer.clone());
+        } else {
+            // Active broadcasts keep their immutable membership snapshot.
+            // Rebuild lazily rather than copying a view still in use.
+            self.broadcast.take();
+        }
+        self.members.insert(peer.key, peer);
+    }
+
+    fn remove(&mut self, key: u64) -> bool {
+        if self.members.remove(&key).is_none() {
+            return false;
+        }
+        if let Some(view) = self.broadcast.get_mut().and_then(Arc::get_mut) {
+            let index = view
+                .iter()
+                .position(|peer| peer.key == key)
+                .expect("recipient view matches channel membership");
+            view.swap_remove(index);
+            // Bound spare handles in a retained room after a large wave.
+            if view.capacity() > 256 && view.len() <= view.capacity() / 8 {
+                view.shrink_to(view.len() * 2);
+            }
+        } else {
+            self.broadcast.take();
+        }
+        true
+    }
 }
 
 pub(crate) struct Peer {
@@ -497,8 +532,7 @@ impl Relay {
         peer.enqueue_frame(&Frame::integer(id))?;
         state.users.insert(id, peer.clone());
         let channel = state.channels.entry(peer.channel.clone()).or_default();
-        channel.members.insert(key, peer.clone());
-        channel.broadcast.take();
+        channel.insert(peer.clone());
         state.sessions += 1;
         self.metrics.joined.fetch_add(1, Relaxed);
         Ok(Registration {
@@ -761,10 +795,9 @@ impl Relay {
         let Some(channel) = state.channels.get_mut(&peer.channel) else {
             return;
         };
-        if channel.members.remove(&peer.key).is_none() {
+        if !channel.remove(peer.key) {
             return;
         }
-        channel.broadcast.take();
         peer.closing.store(true, Relaxed);
         let id = peer.id.load(Relaxed);
         let notify = !self.is_stopping();
