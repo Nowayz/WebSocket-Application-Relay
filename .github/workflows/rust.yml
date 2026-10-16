@@ -21,5 +21,6 @@ jobs:
       - run: cargo test --locked --all-targets
       - run: ./scripts/check-js.sh
       - run: python3 scripts/accept-pressure.py --server target/debug/war-relay --bridge target/debug/war-legacy-bridge --output artifacts/accept-pressure-ci.json
+      - run: python3 scripts/setup-pressure.py --server target/debug/war-relay --output artifacts/setup-pressure-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
       - run: npm run build:browser --prefix clients/js

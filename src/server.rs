@@ -265,7 +265,7 @@ impl Worker {
             return Ok(());
         }
         for _ in 0..ACCEPT_QUANTUM {
-            let (mut stream, address) = match self.listener.accept() {
+            let (stream, address) = match self.listener.accept() {
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) => {
@@ -274,12 +274,7 @@ impl Worker {
                     if delay.is_zero() {
                         continue;
                     }
-                    // Stop readiness notifications during resource pressure.
-                    // Existing sockets, timers and shutdown remain serviced.
-                    self.registry.deregister(&mut self.listener)?;
-                    self.accept_retry = Some(Instant::now() + delay);
-                    tracing::warn!(%error, "native accept failed; retrying in one second");
-                    return Ok(());
+                    return self.pause_accept(error, "accept", delay);
                 }
                 Ok(accepted) => accepted,
             };
@@ -297,6 +292,10 @@ impl Worker {
                 continue;
             }
             let mut guard = ConnectionGuard(metrics.clone(), None);
+            // Local bindings drop in reverse declaration order. Keep this
+            // descriptor ahead of its admission guard on every setup refusal,
+            // just as Socket keeps its stream ahead of its guard after setup.
+            let mut stream = stream;
             if let Some(limit) = &self.relay.ip_limit {
                 let Some(permit) = limit.acquire(address.ip()) else {
                     metrics.rejected.fetch_add(1, Relaxed);
@@ -305,7 +304,9 @@ impl Worker {
                 };
                 guard.1 = Some(permit);
             }
-            stream.set_nodelay(true)?;
+            if let Err(error) = stream.set_nodelay(true) {
+                return self.setup_failed(error, "TCP_NODELAY");
+            }
             let lease = match &metrics.read_budget {
                 Some(budget) => {
                     match budget.try_lease(self.relay.config.handshake_read_reservation()) {
@@ -328,14 +329,17 @@ impl Worker {
                 .checked_add(1)
                 .ok_or_else(|| io::Error::other("connection token space exhausted"))?;
             let slot = self.connections.vacant_key();
-            let socket = Socket::new(
+            let socket = match Socket::new(
                 stream,
                 token,
                 self.registry.clone(),
                 self.signal.clone(),
                 guard,
                 &self.relay,
-            )?;
+            ) {
+                Ok(socket) => socket,
+                Err(error) => return self.setup_failed(error, "register socket"),
+            };
             let connection = Connection::new(socket, token, lease, &self.relay);
             let deadline = connection.deadline(&self.relay);
             self.connections.insert(connection);
@@ -346,6 +350,26 @@ impl Worker {
         // EPOLLET requires an explicit continuation when we yield before
         // WouldBlock. The listener uses the same bounded ready queue.
         self.ready.push_back(LISTENER);
+        Ok(())
+    }
+
+    fn setup_failed(&mut self, error: io::Error, operation: &'static str) -> io::Result<()> {
+        self.relay.metrics.setup_errors.fetch_add(1, Relaxed);
+        self.relay.metrics.rejected.fetch_add(1, Relaxed);
+        self.pause_accept(error, operation, Duration::from_secs(1))
+    }
+
+    fn pause_accept(
+        &mut self,
+        error: io::Error,
+        operation: &'static str,
+        delay: Duration,
+    ) -> io::Result<()> {
+        // Stop readiness notifications during resource pressure. Existing
+        // sockets, timers and shutdown remain serviced; retry drains queued TCP.
+        self.registry.deregister(&mut self.listener)?;
+        self.accept_retry = Some(Instant::now() + delay);
+        tracing::warn!(%error, operation, "native admission failed; retrying in one second");
         Ok(())
     }
 

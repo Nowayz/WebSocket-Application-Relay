@@ -12,6 +12,7 @@ pub struct Metrics {
     pub read_budget: Option<Arc<ReadBudget>>,
     pub accepted: AtomicU64,
     pub accept_errors: AtomicU64,
+    pub setup_errors: AtomicU64,
     pub rejected: AtomicU64,
     pub handshake_errors: AtomicU64,
     pub joined: AtomicU64,
@@ -87,6 +88,11 @@ impl Metrics {
                 "accept_errors_total",
                 self.accept_errors.load(Relaxed),
                 "Native listener accept failures excluding WouldBlock and Interrupted; admission retries while established connections continue.",
+            ),
+            (
+                "setup_errors_total",
+                self.setup_errors.load(Relaxed),
+                "Accepted native sockets refused after TCP configuration or readiness registration failed; also included in rejected_total.",
             ),
             (
                 "ip_rejected_total",
