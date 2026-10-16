@@ -12,6 +12,9 @@ struct Args {
     upstream: String,
     #[arg(long, default_value_t = 1000)]
     max_connections: usize,
+    /// Maximum admitted TCP connections per direct peer IP; zero disables.
+    #[arg(long, env = "WAR_MAX_CONNECTIONS_PER_IP", default_value_t = 0)]
+    max_connections_per_ip: usize,
     #[command(flatten)]
     origin_policy: war_relay::origin::OriginPolicy,
 }
@@ -45,10 +48,11 @@ async fn main() -> Result<()> {
         }
         token.cancel();
     });
-    war_relay::legacy_bridge::serve_with_origin_policy(
+    war_relay::legacy_bridge::serve_with_limits(
         listener,
         args.upstream,
         args.max_connections,
+        args.max_connections_per_ip,
         args.origin_policy,
         shutdown,
     )

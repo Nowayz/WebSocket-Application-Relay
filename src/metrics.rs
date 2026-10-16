@@ -42,6 +42,7 @@ pub struct Metrics {
     pub origin_rejected: AtomicU64,
     pub output_queue_capacity_bytes: AtomicUsize,
     pub output_queue_peak_capacity_bytes: AtomicUsize,
+    pub ip_rejected: AtomicU64,
 }
 
 impl Metrics {
@@ -81,6 +82,11 @@ impl Metrics {
             .expect("String write");
         }
         for (name, value, help) in [
+            (
+                "ip_rejected_total",
+                self.ip_rejected.load(Relaxed),
+                "Native TCP admissions refused by the direct-peer IP limit; also included in rejected_total.",
+            ),
             (
                 "read_buffer_reclaims_total",
                 self.read_buffer_reclaims.load(Relaxed),

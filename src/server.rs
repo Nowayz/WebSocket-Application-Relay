@@ -258,7 +258,7 @@ impl Worker {
 
     fn accept(&mut self) -> io::Result<()> {
         for _ in 0..ACCEPT_QUANTUM {
-            let (mut stream, _) = match self.listener.accept() {
+            let (mut stream, address) = match self.listener.accept() {
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 accepted => accepted?,
@@ -276,7 +276,15 @@ impl Worker {
                 metrics.rejected.fetch_add(1, Relaxed);
                 continue;
             }
-            let guard = ConnectionGuard(metrics.clone());
+            let mut guard = ConnectionGuard(metrics.clone(), None);
+            if let Some(limit) = &self.relay.ip_limit {
+                let Some(permit) = limit.acquire(address.ip()) else {
+                    metrics.rejected.fetch_add(1, Relaxed);
+                    metrics.ip_rejected.fetch_add(1, Relaxed);
+                    continue;
+                };
+                guard.1 = Some(permit);
+            }
             stream.set_nodelay(true)?;
             let lease = match &metrics.read_budget {
                 Some(budget) => {
@@ -463,7 +471,10 @@ impl Worker {
     }
 }
 
-struct ConnectionGuard(Arc<crate::metrics::Metrics>);
+struct ConnectionGuard(
+    Arc<crate::metrics::Metrics>,
+    Option<crate::admission::IpPermit>,
+);
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
         self.0.connections.fetch_sub(1, Relaxed);

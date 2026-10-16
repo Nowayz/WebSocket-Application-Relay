@@ -38,6 +38,7 @@ pub struct Relay {
     pub draining: AtomicBool,
     stopping: AtomicBool,
     state: RwLock<Registry>,
+    pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
 
 struct Registry {
@@ -311,6 +312,7 @@ impl Relay {
             )
         });
         Ok(Arc::new(Self {
+            ip_limit: crate::admission::IpLimit::new(config.max_connections_per_ip),
             config,
             metrics: Arc::new(Metrics {
                 read_budget,

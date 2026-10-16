@@ -525,7 +525,7 @@ mod tests {
             Token(2),
             registry,
             signal,
-            ConnectionGuard(relay.metrics.clone()),
+            ConnectionGuard(relay.metrics.clone(), None),
             &relay,
         )
         .unwrap();

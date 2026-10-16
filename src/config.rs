@@ -19,6 +19,9 @@ pub struct Config {
     pub origin_policy: crate::origin::OriginPolicy,
     #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
     pub max_connections: usize,
+    /// Maximum admitted TCP connections per direct peer IP; zero disables.
+    #[arg(long, env = "WAR_MAX_CONNECTIONS_PER_IP", default_value_t = 0)]
+    pub max_connections_per_ip: usize,
     #[arg(long, env = "WAR_MAX_CHANNELS", default_value_t = 10_000)]
     pub max_channels: usize,
     #[arg(long, env = "WAR_MAX_CHANNEL_MEMBERS", default_value_t = 10_000)]
@@ -95,6 +98,10 @@ impl Config {
 
     pub fn validate(&self) -> Result<()> {
         self.origin_policy.validate()?;
+        ensure!(
+            self.max_connections_per_ip <= u32::MAX as usize,
+            "max-connections-per-ip must be in 0..=4294967295"
+        );
         for (name, value) in [
             ("max-connections", self.max_connections),
             ("max-channels", self.max_channels),

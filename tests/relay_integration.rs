@@ -27,6 +27,8 @@ use war_relay::{
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
+#[path = "relay_integration/admission.rs"]
+mod admission;
 #[path = "relay_integration/channel_listing.rs"]
 mod channel_listing;
 #[path = "relay_integration/listeners.rs"]

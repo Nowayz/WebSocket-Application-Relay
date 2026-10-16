@@ -172,13 +172,39 @@ pub async fn serve_with_origin_policy(
     origin_policy: crate::origin::OriginPolicy,
     shutdown: CancellationToken,
 ) -> Result<()> {
+    serve_with_limits(
+        listener,
+        upstream,
+        max_connections,
+        0,
+        origin_policy,
+        shutdown,
+    )
+    .await
+}
+
+/// Optional direct-peer admission at the public legacy ingress. Forwarding
+/// headers do not change the address observed on the accepted TCP connection.
+pub async fn serve_with_limits(
+    listener: TcpListener,
+    upstream: String,
+    max_connections: usize,
+    max_connections_per_ip: usize,
+    origin_policy: crate::origin::OriginPolicy,
+    shutdown: CancellationToken,
+) -> Result<()> {
     origin_policy.validate()?;
+    anyhow::ensure!(
+        max_connections_per_ip <= u32::MAX as usize,
+        "max-connections-per-ip must be in 0..=4294967295"
+    );
     anyhow::ensure!(
         max_connections > 0 && max_connections <= Semaphore::MAX_PERMITS,
         "invalid bridge connection limit"
     );
     let slots = Arc::new(Semaphore::new(max_connections));
     let origin_policy = Arc::new(origin_policy);
+    let ip_limit = crate::admission::IpLimit::new(max_connections_per_ip);
     let mut tasks = JoinSet::new();
     loop {
         tokio::select! {
@@ -186,8 +212,13 @@ pub async fn serve_with_origin_policy(
             _ = shutdown.cancelled() => break,
             _ = tasks.join_next(), if !tasks.is_empty() => {},
             incoming = listener.accept() => {
-                let (socket, _) = incoming?;
+                let (socket, address) = incoming?;
                 let Ok(permit) = slots.clone().try_acquire_owned() else { continue; };
+                let ip_permit = if let Some(limit) = &ip_limit {
+                    let Some(permit) = limit.acquire(address.ip()) else { continue; };
+                    Some(permit)
+                } else { None };
+                let socket = transport::HandshakeStream::new(socket, ip_permit);
                 let upstream = upstream.clone(); let token = shutdown.clone();
                 let origin_policy = origin_policy.clone();
                 tasks.spawn(async move {
@@ -206,12 +237,12 @@ pub async fn serve_with_origin_policy(
 }
 
 async fn bridge(
-    socket: TcpStream,
+    socket: transport::HandshakeStream<TcpStream>,
     upstream: String,
     origin_policy: &crate::origin::OriginPolicy,
 ) -> Result<()> {
     const WAIT: Duration = Duration::from_secs(10);
-    socket.set_nodelay(true)?;
+    socket.get_ref().set_nodelay(true)?;
     let config = WebSocketConfig::default()
         .read_buffer_size(4096)
         .write_buffer_size(4096)
@@ -220,7 +251,7 @@ async fn bridge(
     let mut legacy = timeout(
         WAIT,
         accept_hdr_async_with_config(
-            transport::HandshakeStream::new(socket),
+            socket,
             |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
                 if origin_policy.allows(request.headers()) {
                     Ok(response)

@@ -26,18 +26,25 @@ pub(crate) const READ_FRAMES_PER_POLL: std::num::NonZeroUsize =
 pub(crate) struct HandshakeStream<S> {
     stream: S,
     remaining: Option<usize>,
+    // Drop the TCP stream before releasing its direct-peer admission lease.
+    _ip_permit: Option<crate::admission::IpPermit>,
 }
 
 impl<S> HandshakeStream<S> {
-    pub(crate) fn new(stream: S) -> Self {
+    pub(crate) fn new(stream: S, ip_permit: Option<crate::admission::IpPermit>) -> Self {
         Self {
             stream,
             remaining: Some(crate::config::MAX_HTTP_UPGRADE_BYTES),
+            _ip_permit: ip_permit,
         }
     }
 
     pub(crate) fn handshake_done(&mut self) {
         self.remaining = None;
+    }
+
+    pub(crate) fn get_ref(&self) -> &S {
+        &self.stream
     }
 }
 

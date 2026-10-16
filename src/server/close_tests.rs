@@ -46,7 +46,7 @@ fn exercise_blocked_close(server_initiated: bool) {
         Token(2),
         worker.registry.clone(),
         worker.signal.clone(),
-        ConnectionGuard(relay.metrics.clone()),
+        ConnectionGuard(relay.metrics.clone(), None),
         &relay,
     )
     .unwrap();
