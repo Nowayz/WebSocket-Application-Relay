@@ -119,6 +119,45 @@ The [address-churn measurements](performance.md#address-churn-with-complete-life
 separately exercise one shared address and a rotating 4,096-address pool with
 complete Close/EOF validation. Concurrent quotas do not cap connection rate.
 
+## Accepting under OS resource pressure
+
+An exhausted process descriptor limit can make `accept()` fail before the relay
+can apply its connection quotas. Both public ingresses keep existing sessions
+running and retry such failures after one second. Native workers temporarily
+remove the listener from their readiness poll, continue servicing established
+sockets and deadlines, then register it again and explicitly accept queued
+flows. The bridge keeps its connection tasks and shutdown responsive during the
+wait. A retry does not create a per-connection timer or change payload storage.
+
+`war_accept_errors_total` counts native accept failures other than normal
+`WouldBlock` and `Interrupted` results. It is separate from `war_rejected_total`:
+no connection was accepted when the syscall failed. Resource failures log a
+warning at each retry; aborted/refused/reset incoming flows retry immediately
+within the existing bounded work schedule. The bridge uses the same retry policy
+and logs its failures, but has no management metric endpoint.
+
+Queued TCP connects can complete before their HTTP upgrades are accepted.
+When capacity returns, those queued flows can proceed without another connect
+event. Shutdown cancels retry waits; responsive native peers still receive
+`1001`. New management connections also need descriptors during exhaustion;
+a retained management HTTP connection remains usable in the fault check.
+Keep headroom below the OS limit for listeners, pollers, signals and management,
+and for the bridge's downstream and upstream sockets.
+
+The Linux regression probe limits only disposable children to 64 descriptors:
+
+```sh
+cargo build --locked --release --bins
+python3 scripts/accept-pressure.py --output artifacts/accept-pressure.json
+```
+
+It covers one/four native workers and the bridge, verifies existing private
+replies at the limit, recovers an already queued flow, waits for pressure sockets
+to retire, and shuts down during a second exhaustion wave. The same probe runs
+against debug binaries in Linux CI. The test does not change host limits or
+simulate system-wide descriptor/memory exhaustion. See the
+[recorded behavior and costs](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16).
+
 ## Important defaults and budgets
 
 `war-relay --help` is the source of truth for CLI options and matching `WAR_*`

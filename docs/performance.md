@@ -3633,3 +3633,59 @@ traffic, churn and the slow-reader workload. Mixed-size fanout reuses
 small-view policy after receive storage grows. This bounded copy prevents a
 small value from retaining a large shared slab; it is counted once before
 fanout. The same policy is present in the baseline and was not changed here.
+
+## Accept recovery under descriptor pressure, 2026-10-16
+
+This change fixes a process availability failure. At a child-only descriptor
+limit of 64, unfinished HTTP upgrades make the preceding native release exit
+with `EMFILE`, dropping an established session. The legacy listener fails the
+same way. Linux documents this as a per-process descriptor limit reached by
+[accept](https://man7.org/linux/man-pages/man2/accept.2.html). The
+[paired fault oracle](benchmarks/2026-10-16-fd-pressure-oracle-final.json) and
+[release acceptance](benchmarks/2026-10-16-fd-pressure-acceptance.json) run the
+same probe before and after the fix, including one/four native workers and the
+bridge. The [stability record](stability.md#accept-recovery-under-descriptor-pressure-2026-10-16)
+details recovery, exact replies, cleanup, bounded retries and shutdown checks.
+
+Native workers now retain one optional accept-retry deadline. The listener is
+deregistered during a one-second resource-error wait; established sockets and
+existing deadlines continue. On retry it is registered and explicitly drained,
+so recovery needs no new connection edge. The bridge likewise preserves tasks
+and cancellation during its wait. A shared small error classifier follows
+axum's existing accept policy. One singleton counter records native failures;
+there is no per-connection timer, new payload check or routing allocation.
+Connection quotas and body-sharing/compaction rules are unchanged.
+
+The [ordinary comparison](benchmarks/2026-10-16-fd-pressure-comparison.json)
+uses 12 sequential fresh processes: three alternating before/selected pairs
+for private traffic and mixed private traffic/reconnection. Baseline runtime is
+`3b2bcc9`. Each eight-second case keeps 8,192 idle rooms and one private pair,
+1 KiB values and a 16-message window. Mixed cases add eight reconnect workers.
+Four server workers use CPUs 0–3; the same frozen client uses CPUs 4–7. Every
+body, sender, FIFO order, Close/EOF, byte/counter total and final resource
+release is verified. The new accept-error counter remains zero during ordinary
+work; older frozen binaries predate that field. No build, profiler, pressure
+probe or competing load test overlaps the timing cases.
+
+| Workload | Before median | Selected median | Change |
+| --- | ---: | ---: | ---: |
+| Private deliveries/s | 575,956 | 589,706 | +2.39% |
+| Mixed healthy deliveries/s | 361,385 | 365,477 | +1.13% |
+| Mixed reconnect cycles/s | 71,986 | 73,441 | +2.02% |
+| Mixed server CPU seconds/wall second | 1.45749 | 1.47248 | +1.03% |
+
+Private CPU per delivery falls 1.96%; private CPU per wall second rises 0.38%.
+Private throughput ranges are 574,424–577,812 before and 584,366–590,276 selected.
+Mixed healthy ranges overlap at 359,141–364,692 and 363,513–370,281; mixed churn
+ranges overlap at 71,100–73,074 and 72,613–75,123. Mixed CPU covers routing and
+reconnection together and is not assigned to either operation separately.
+Private p99 stays in the 0.032768 ms histogram bucket; mixed healthy/churn p99
+remain 0.131072/0.524288 ms. Timed-gate RSS medians remain about 17.4–17.6 MiB.
+These finite Linux loopback results support retaining the correctness fix;
+they do not establish a general speed gain or production capacity.
+
+The [checkpoint manifest](benchmarks/2026-10-16-fd-pressure-build.json) binds
+source/binary/helper hashes, the counterfactual and selected fault checks,
+127 Rust tests, strict Clippy/format checks, release builds, all 12 timed traces
+and separate socket/C++/API/JavaScript/browser acceptance. Debug CI commands
+were exercised locally; no GitHub CI run or hosted deployment is claimed.

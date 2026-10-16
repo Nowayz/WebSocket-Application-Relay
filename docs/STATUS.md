@@ -9,53 +9,57 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
-Implementation `3b2bcc934e1e68031b553151ff6b22c8781bd109` fixes a reproduced
-management failure: an authorized resume could clear draining after shutdown
-started. One atomic open/draining/stopping state makes shutdown terminal.
-Normal drain/resume remains reversible; authorized resume after stopping returns
-`409`, readiness stays `503` and admission stays refused. The
-[embedding migration](operations.md#drain-and-restart) replaces the public drain
-atomic with checked methods. Payload routing and shared body ownership remain
-unchanged.
+Implementation `a0191a1dc54ad8eb7dc17ada1df4aa39b40227ca` fixes a reproduced
+availability failure: descriptor exhaustion during accept previously ended a
+native worker and shut down the relay, and also terminated the legacy bridge.
+Both public ingresses now retry resource errors after one second while existing
+sessions continue. Native workers suspend listener readiness and explicitly
+drain queued flows after rearming; the bridge preserves tasks and cancellation.
+The singleton `war_accept_errors_total` counter exposes native failures. Message
+forwarding and shared body ownership remain unchanged.
 
-Four checks cover the before-fix failure, lifecycle transitions, concurrent
-management changes and real HTTP/WebSocket behavior with four native workers.
-Current verification passes 127 Rust tests, strict Clippy and formatting, release
+The same Linux probe fails all three cases on the preceding release and passes
+on the selected debug/release binaries: one native worker, four native workers
+and the bridge, each with a child-only 64-descriptor limit. Existing clients
+keep exact private replies; an already queued flow recovers after capacity is
+freed; pressure sockets retire; shutdown interrupts a second exhaustion wave.
+Selected queued-flow recovery is 0.398–0.400 seconds after capacity release and
+shutdown is 1.2–3.3 ms. These are finite local observations, with the
+[full scope](stability.md#accept-recovery-under-descriptor-pressure-2026-10-16)
+and [operating guidance](operations.md#accepting-under-os-resource-pressure).
+Linux CI includes the same probe; its debug command was exercised locally.
+
+Twelve sequential ordinary timing cases compare the same frozen client and
+before/selected binaries. Private throughput is +2.39% with −1.96% CPU per
+delivery. Mixed healthy/churn medians are +1.13%/+2.02%; aggregate mixed CPU per
+wall second is +1.03%. Latency buckets are unchanged. The
+[performance record](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16)
+retains ranges and scope and makes no general speed or production capacity claim.
+
+Current verification passes 127 Rust tests, strict Clippy/format checks, release
 builds, seven JavaScript checks, 48 common C++ compatibility cases plus eight
 explicit differences, four release API checks and seven real Chrome checks.
-Release API probes also verify ordinary authorized drain/resume and unauthorized
-requests. The [stability record](stability.md#terminal-shutdown-admission-2026-10-16)
-describes the exact shutdown model and validation limits.
-
-Twenty sequential timed processes use the same frozen inspection client and
-before/selected binaries. Initial private throughput is −1.70%; a longer
-four-pair check is −0.58% with overlapping ranges and +0.46% CPU per delivery.
-Mixed private/churn medians are −1.53%/−0.98%, with overlapping ranges. Private
-and mixed latency buckets are unchanged. Both records remain published in the
-[performance report](performance.md#terminal-shutdown-admission-2026-10-16);
-this fix carries explicit observed costs and makes no speed claim.
-
-Separate socket checks verify 8,956,448 ordinary deliveries, 549,874 complete
-churn cycles across 4,096 source IPs, 210,814 healthy deliveries beside an unread
-recipient and 727,488 fanout deliveries. Every process exits normally and
-resources clear. The stronger churn client requires its exact Close
-acknowledgement and TCP EOF; the frozen mixed timing client has its own recorded
-contract. [Earlier stress validation is qualified](stability.md#churn-validation-correction-2026-10-16).
+Separate socket checks verify 9,177,744 ordinary deliveries, 548,131 complete
+churn cycles across 4,096 source IPs, 208,152 healthy deliveries beside an unread
+recipient and 766,368 fanout deliveries. Every workload exits normally and
+resources clear. The stronger churn client requires exact Close acknowledgement
+and TCP EOF; the frozen mixed timing client has its own recorded contract.
+[Earlier stress validation is qualified](stability.md#churn-validation-correction-2026-10-16).
 
 The active branch is `codex/lean-core`. Native sockets use fixed Mio readiness
 workers, shared read storage and direct vectored writes; Tokio handles management,
-signals and the optional legacy bridge. Previous releases add optional direct-peer
-IP admission (disabled by default), sparse connection-arena recovery and release
-of large drained output queues. Their source, measurements and tradeoffs remain
-in the historical reports.
+signals and the optional legacy bridge. Previous releases make shutdown terminal
+across management races, add optional direct-peer IP admission (disabled by
+default), compact sparse connection arenas and release large drained output
+queues. Their source, measurements and tradeoffs remain in historical reports.
 
 Local native/bridge services run the selected frozen binaries at ports
 1338/1337, management at 1339, and the browser check at 4180. Fresh Chrome
 acceptance verifies all seven checks, clean closes, zero retained resources and
 four native worker listeners. The
-[current manifest](benchmarks/2026-10-16-shutdown-state-build.json) binds source,
+[current manifest](benchmarks/2026-10-16-fd-pressure-build.json) binds source,
 binaries, clients, checks and all timed traces. This is local acceptance; no
-hosted deployment is claimed. The ongoing goal remains active.
+GitHub CI run or hosted deployment is claimed. The ongoing goal remains active.
 
 ## Earlier implementation checkpoints
 

@@ -206,6 +206,10 @@ recorded results and local dependency setup.
   receive their exact acknowledgement. Dropping the service signals its workers
   to retire. Untouched queued writes permit a normal close handshake; a partly
   transmitted frame requires dropping its transport.
+- OS resource pressure during accept, including an exhausted descriptor limit,
+  suspends new admission for one second while established sessions continue. Both ingresses
+  retry and recover queued connections. Native failures are exposed through
+  `war_accept_errors_total`; see [resource-pressure behavior](docs/operations.md#accepting-under-os-resource-pressure).
 
 Management uses a separate HTTP listener:
 

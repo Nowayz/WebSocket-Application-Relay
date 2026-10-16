@@ -765,3 +765,44 @@ frozen binaries. It also binds C++ compatibility, JavaScript, API, socket stress
 and real browser checks. The [routing comparison](performance.md#terminal-shutdown-admission-2026-10-16)
 retains the measured throughput costs and supplemental check. These finite
 local checks do not establish long-term or hosted behavior.
+
+## Accept recovery under descriptor pressure, 2026-10-16
+
+The preceding release propagated every non-interrupted/non-WouldBlock native
+accept error out of its worker, causing service shutdown. The bridge propagated
+accept errors too. The [before-fix oracle](benchmarks/2026-10-16-fd-pressure-oracle-final.json)
+runs each ingress with a child-only 64-descriptor limit. One/four native workers
+and the legacy bridge each exit with `EMFILE` and drop an established client.
+The OS limit and an independently retained management connection distinguish
+this failure from a relay quota or malformed WebSocket input.
+
+The fix retries accept failures while preserving established connections.
+Incoming connection reset/abort/refusal errors retry in the existing bounded
+schedule; other accept errors wait one second, following the management
+listener's existing portable policy. Native workers suspend listener readiness,
+continue socket work/timers and explicitly drain already queued flows on retry.
+The bridge retains its tasks and cancellation while waiting. Native
+`war_accept_errors_total` exposes the failure independently of policy refusals.
+No message-forwarding or shared-body ownership changes.
+
+The same independent masked-frame probe passes on
+[final debug binaries](benchmarks/2026-10-16-fd-pressure-debug-final.json) and
+[release binaries](benchmarks/2026-10-16-fd-pressure-acceptance.json). Each case
+reaches exactly 64 open descriptors, observes the accept failure, checks exact
+private echoes at capacity and recovers a connection queued before capacity
+returns. The two clients use distinct rooms so a valid departure notification
+cannot be mistaken for a private echo. All retired pressure sockets release;
+only the original session remains before the second wave. That second wave
+checks shutdown during backoff, including native `1001` and process exit zero.
+Linux CI runs the same final probe against its debug binaries.
+
+The release queued-flow recovery takes 0.398–0.400 seconds after capacity is
+freed about 0.6 seconds into the retry interval. The CPU counter does not advance
+at its 100 Hz resolution during those approximately 0.6-second pressure samples;
+this is an observation limit, not proof of zero CPU work. Shutdown takes
+1.2–3.3 ms in these runs. The test limits only disposable processes and does not
+simulate system-wide exhaustion or allocator failure. New management TCP
+connections also need descriptor capacity; the probe keeps one HTTP connection
+open before pressure. The [operating contract](operations.md#accepting-under-os-resource-pressure)
+and [ordinary performance comparison](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16)
+state the scope and measured costs.
