@@ -20,6 +20,8 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: ./scripts/check-js.sh
+      - run: cargo build --locked --example inspection
+      - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 1 --mode none --inspectors 0 --churn-workers 4 --fanout-readers 32 --fanout-churn-every 2 --fanout-window 1 --workers 2 --seconds 2 --server-cpus '' --client-cpus '' --output artifacts/room-churn-ci.json
       - run: python3 scripts/accept-pressure.py --server target/debug/war-relay --bridge target/debug/war-legacy-bridge --output artifacts/accept-pressure-ci.json
       - run: python3 scripts/setup-pressure.py --server target/debug/war-relay --output artifacts/setup-pressure-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
