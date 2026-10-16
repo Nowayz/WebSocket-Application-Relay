@@ -214,6 +214,9 @@ recorded results and local dependency setup.
   suspends new admission for one second while established sessions continue. Both ingresses
   retry and recover queued connections. Native failures are exposed through
   `war_accept_errors_total`; see [resource-pressure behavior](docs/operations.md#accepting-under-os-resource-pressure).
+  Native TCP configuration or readiness-registration failures retire the affected
+  socket, preserve its admission permit until TCP closes, and use the same retry
+  delay on that worker. `war_setup_errors_total` also counts these refusals.
 
 Management uses a separate HTTP listener:
 

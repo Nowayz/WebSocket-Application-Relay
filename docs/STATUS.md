@@ -9,6 +9,46 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Runtime `9a941637c63f5bd34a82c27db985cdeba2388c31` keeps accepted native
+socket setup failures from stopping the relay. A failure configuring TCP or
+registering readiness retires that socket, increments `war_setup_errors_total`
+and `war_rejected_total`, and suspends only that worker's listener for one
+second. Existing socket work, timers and shutdown continue. Early setup refusals
+now retain global/IP admission through physical TCP close, using explicit local
+drop order. Routing and shared payload ownership are unchanged.
+
+The independent Linux probe reproduces both failures in one/four-worker
+baseline processes: all four exit 1, and TCP-configuration failure releases
+its slot before TCP closes. Selected debug/release builds pass eight cases
+with 24 injected failures, two queued recoveries and a shutdown wave per case.
+Every held descriptor retains its slot; recovery restores admission/read
+allowance and exact counters. The existing three descriptor-exhaustion cases
+also pass. A shutdown-oracle correction preserves the existing behavior:
+shutdown flushes `1001` then retires TCP; ordinary recovery clients still
+require their exact Close acknowledgement and EOF.
+
+Twelve ordinary before/after processes preserve performance. Pure-private
+median is −0.41% with overlapping ranges; mixed private is +1.21% and reconnect
+throughput +2.02%. All p99 buckets are unchanged. Mixed CPU rises with completed
+work; these are stability guards, without a general speedup or CPU-saving claim.
+The [performance record](performance.md#accepted-socket-setup-recovery-2026-10-16)
+retains ranges, methods, costs and scope.
+
+Current verification passes 131 Rust tests, strict Clippy/formatting, locked
+release builds, seven JavaScript checks, four management API checks, seven real
+Chrome checks, 48 common C++ cases plus eight documented differences, and the
+1,024-reader fanout upper bound. Four separate socket cases verify 8,791,152
+ordinary deliveries, 550,559 complete reconnects across 4,096 source IPs,
+208,104 healthy deliveries beside an unread recipient, and 747,792 mixed-size
+fanout deliveries. Resources retire and every disposable server exits normally.
+Native/bridge services on 1338/1337 now run the selected frozen binaries, with
+management on 1339 and the browser check on 4180. Chrome has a clear console,
+zero retained resources and four native worker listeners. The
+[manifest](benchmarks/2026-10-16-setup-pressure-build.json) binds source,
+binaries, helpers and evidence. All acceptance is local. The goal remains active.
+
+## Previous checkpoint: large-room fanout, 2026-10-16
+
 Runtime `b410571e769d9b0b70fa6f5517fc6576d898ef24` improves large-room
 broadcast fairness while preserving shared payloads. Ordinary channel broadcasts
 without global channel observers capture a reusable peer view, release the

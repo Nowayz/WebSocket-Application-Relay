@@ -1,0 +1,190 @@
+{
+  "passed": true,
+  "source_revision": "9a941637c63f5bd34a82c27db985cdeba2388c31",
+  "browser": {
+    "passed": true,
+    "url": "ws://127.0.0.1:1338",
+    "checks": [
+      "Three browser WebSockets joined with BigInt IDs and war.cbor.v1.",
+      "Broadcast preserved Unicode, byte strings, nested values, and an exact uint64.",
+      "Private routing reached a session in a different channel.",
+      "A 128 KiB binary value arrived byte for byte.",
+      "Concurrent control requests preserved typed, missing, and empty variables.",
+      "Unsafe Number IDs were rejected before sending.",
+      "Disconnect notification and all three clean Close handshakes completed."
+    ],
+    "errors": [],
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "finished": true
+  },
+  "runtime": {
+    "native": {
+      "pid": 437196,
+      "sha256": "45ee9e45f6adf0101d7c725cc625871b41cfec10d341aa7fa5804288af676678",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/setup-pressure/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:1338",
+        "--admin-bind",
+        "127.0.0.1:1339"
+      ]
+    },
+    "bridge": {
+      "pid": 437197,
+      "sha256": "25dfd362652208f73d30d71a20651d56518610d9198ac4cf8044cd95ee905343",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/setup-pressure/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:1337",
+        "--upstream",
+        "ws://127.0.0.1:1338"
+      ]
+    }
+  },
+  "health": {
+    "healthz": 200,
+    "readyz": 200,
+    "browser": 200
+  },
+  "metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 801802,
+    "war_read_buffer_limit_bytes": 1073741824,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 131173,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 3,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 3,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 3,
+    "war_incoming_messages_total": 8,
+    "war_incoming_bytes_total": 131323,
+    "war_deliveries_total": 12,
+    "war_delivered_bytes_total": 131301,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 0
+  },
+  "worker_listener_sockets": 4,
+  "listener_rows": [
+    [
+      "7:",
+      "0100007F:053A",
+      "00000000:0000",
+      "0A",
+      "00000000:00000000",
+      "00:00000000",
+      "00000000",
+      "1000",
+      "0",
+      "644879729",
+      "1",
+      "000000004da10b5b",
+      "100",
+      "0",
+      "0",
+      "10",
+      "0"
+    ],
+    [
+      "8:",
+      "0100007F:053A",
+      "00000000:0000",
+      "0A",
+      "00000000:00000000",
+      "00:00000000",
+      "00000000",
+      "1000",
+      "0",
+      "644879728",
+      "1",
+      "0000000031751a46",
+      "100",
+      "0",
+      "0",
+      "10",
+      "0"
+    ],
+    [
+      "9:",
+      "0100007F:053A",
+      "00000000:0000",
+      "0A",
+      "00000000:00000000",
+      "00:00000000",
+      "00000000",
+      "1000",
+      "0",
+      "644879727",
+      "1",
+      "0000000004974f12",
+      "100",
+      "0",
+      "0",
+      "10",
+      "0"
+    ],
+    [
+      "10:",
+      "0100007F:053A",
+      "00000000:0000",
+      "0A",
+      "00000000:00000000",
+      "00:00000000",
+      "00000000",
+      "1000",
+      "0",
+      "644879725",
+      "1",
+      "00000000ec5506f3",
+      "100",
+      "0",
+      "0",
+      "10",
+      "0"
+    ]
+  ],
+  "screenshot": {
+    "path": "output/playwright/setup-pressure-browser-check.png",
+    "sha256": "ddbd6c9301f9c7cad0a07b549e507b61bb953e9b4c1a1bef3982c3d91cf6f351"
+  },
+  "browser_assets": {
+    "target/browser/check.js": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "target/browser/check.js.map": "82235f3e33f9469ac4577231e2bc79b8a675283f614b1165550fd3c25ed93e90",
+    "target/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "target/browser/relay.js": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "target/browser/relay.js.map": "d08ddb5e70267d2ad9618031a93e11cf7b61405b01d868d3e0a77595514c216b"
+  },
+  "eval_output": {
+    "path": "artifacts/setup-pressure-browser-eval.txt",
+    "sha256": "df4f2c2a355bd6f7263b7680bd2fa5959ffde3c9a0bc76d9bcc8ff80db7e773d"
+  },
+  "collector_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport re\nimport subprocess\nimport urllib.request\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\nstate = json.loads((root/'artifacts/reactor-manual-services.json').read_text())\nraw = (root/'artifacts/setup-pressure-browser-eval.txt').read_text()\nbrowser = json.JSONDecoder().raw_decode(raw.split('### Result\\n',1)[1])[0]\nassert browser['passed'] and browser['finished'] and len(browser['checks']) == 7 and not browser['errors']\nruntime = {}\nfor index, role in enumerate(['native','bridge']):\n    pid = state['pids'][index]\n    runtime[role] = {'pid':pid,'sha256':sha(f'/proc/{pid}/exe'),'command':state['commands'][index]}\n    assert runtime[role]['sha256'] == state[f'{role}_sha256']\ndef get(url):\n    with urllib.request.urlopen(url,timeout=3) as response:\n        return response.status, response.read()\nhealth = {label:get(url)[0] for label,url in {\n    'healthz':'http://127.0.0.1:1339/healthz','readyz':'http://127.0.0.1:1339/readyz',\n    'browser':'http://127.0.0.1:4180/'}.items()}\nassert all(status == 200 for status in health.values())\n_, body = get('http://127.0.0.1:1339/metrics')\nmetrics = {key:int(value) for key,value in (line.split() for line in body.decode().splitlines() if line.startswith('war_'))}\nfor key in ['war_connections','war_sessions','war_queued_bytes','war_variable_bytes','war_read_buffer_reserved_bytes',\n            'war_close_failures_total','war_transport_disconnects_total','war_write_errors_total','war_routing_copied_bytes_total']:\n    assert metrics[key] == 0\nassert metrics['war_joined_total'] == metrics['war_disconnected_total'] == 3\ninodes = set()\nfor fd in Path(f'/proc/{state[\"pids\"][0]}/fd').iterdir():\n    try:\n        match = re.fullmatch(r'socket:\\[(\\d+)\\]',str(fd.readlink()))\n    except FileNotFoundError:\n        continue\n    if match:\n        inodes.add(match[1])\nlisteners = [row.split() for row in Path('/proc/net/tcp').read_text().splitlines()[1:]\n             if row.split()[9] in inodes and row.split()[3] == '0A' and row.split()[1].endswith(':053A')]\nassert len(listeners) == 4\nscreenshot = root/'output/playwright/setup-pressure-browser-check.png'\nreport = {'passed':True,'source_revision':state['source_revision'],'browser':browser,'runtime':runtime,\n    'health':health,'metrics':metrics,'worker_listener_sockets':len(listeners),'listener_rows':listeners,\n    'screenshot':{'path':str(screenshot.relative_to(root)),'sha256':sha(screenshot)},\n    'browser_assets':{str(p.relative_to(root)):sha(p) for p in sorted((root/'target/browser').iterdir()) if p.is_file()},\n    'eval_output':{'path':'artifacts/setup-pressure-browser-eval.txt','sha256':sha(root/'artifacts/setup-pressure-browser-eval.txt')},\n    'collector_source':Path(__file__).read_text()}\n(root/'docs/benchmarks/2026-10-16-setup-pressure-browser.json').write_text(json.dumps(report,indent=2)+'\\n')\nprint(json.dumps({'passed':True,'checks':len(browser['checks']),'source':state['source_revision'],'listeners':len(listeners),'health':health,'resources_zero':True}))\n"
+}

@@ -136,6 +136,15 @@ warning at each retry; aborted/refused/reset incoming flows retry immediately
 within the existing bounded work schedule. The bridge uses the same retry policy
 and logs its failures, but has no management metric endpoint.
 
+An accepted native socket can also fail during `TCP_NODELAY` configuration or
+readiness registration. The worker closes that socket and suspends its listener
+for one second while existing sessions continue. Other native workers remain
+available. `war_setup_errors_total` counts these failures; each also increments
+`war_rejected_total`. They do not increment `war_accept_errors_total` or HTTP
+handshake errors. Both the global connection slot and an enabled IP permit stay
+owned until the physical descriptor closes, including setup refusal paths.
+Failure to suspend or re-register the listener itself remains a worker error.
+
 Queued TCP connects can complete before their HTTP upgrades are accepted.
 When capacity returns, those queued flows can proceed without another connect
 event. Shutdown cancels retry waits; responsive native peers still receive
@@ -157,6 +166,22 @@ to retire, and shuts down during a second exhaustion wave. The same probe runs
 against debug binaries in Linux CI. The test does not change host limits or
 simulate system-wide descriptor/memory exhaustion. See the
 [recorded behavior and costs](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16).
+
+The separate setup probe compiles a small Linux fault library with `cc` and
+loads it only into disposable child servers:
+
+```sh
+python3 scripts/setup-pressure.py --output artifacts/setup-pressure.json
+```
+
+It injects one `TCP_NODELAY`/`ENOBUFS` or socket-registration/`ENOMEM` failure at
+each armed gate, with one/four workers. A second gate holds the real descriptor
+open while management checks admission ownership. Each case verifies two
+recoveries and shutdown during a third retry. Recovered clients complete exact
+Close/EOF; shutdown checks the existing flush-Close-and-retire behavior. Linux
+CI runs this probe too. This tests recovery from the syscall results, without
+exhausting host memory or kernel watch capacity. See the
+[setup-failure evidence](stability.md#accepted-socket-setup-failures-2026-10-16).
 
 ## Important defaults and budgets
 

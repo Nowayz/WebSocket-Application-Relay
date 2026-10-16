@@ -3830,3 +3830,61 @@ zero lost samples. Raw captures remain local and normalized symbol reports are
 tracked. Profiles describe sampled active work, not off-CPU waiting, and are
 excluded from ordinary timings. All results are finite Linux loopback checks,
 without TLS or hosted acceptance.
+
+## Accepted socket setup recovery, 2026-10-16
+
+Runtime `9a941637c63f5bd34a82c27db985cdeba2388c31` keeps an accepted socket's
+configuration/registration error local to that socket. It shares the existing
+one-second listener suspension and retains admission until TCP closes, including
+early setup refusals. The [stability record](stability.md#accepted-socket-setup-failures-2026-10-16)
+retains the failing baseline, passing debug/release fault probes and exact scope.
+One/four-worker baseline processes previously exit 1 on either injected syscall
+result; selected processes preserve the established session, recover admissions
+and stop normally. Failed setup increments `war_setup_errors_total` and
+`war_rejected_total`. The listener's own suspension/registration failure remains
+a worker error. Payload routing and buffer ownership do not change.
+
+The [ordinary guard comparison](benchmarks/2026-10-16-setup-pressure-guard.json)
+uses twelve fresh four-worker processes: three alternating before/selected pairs
+for each workload, six seconds per process. Baseline is the preceding
+`b410571e769d9b0b70fa6f5517fc6576d898ef24` runtime, and the identical frozen
+client is `c8b55d394c92c0f2bdf4f7bf5a299239397dbc53` / SHA
+`5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744`.
+Server CPUs 0–3 and client CPUs 4–7 are separate. Values cycle through full
+1 KiB bodies with window 16. Pure private holds 8,192 idle rooms and one pair;
+mixed uses no idle rooms, one pair and eight complete reconnect workers.
+Both disable inspection/broadcast, retain the default disabled IP quota and
+verify every body/sender/FIFO, exact independent counters, normal Close/EOF,
+zero retained resources and process exit. Fault libraries, builds, profiling
+and competing workloads do not overlap these timings.
+
+| Workload / measure | Before median (range) | Selected median (range) | Median change |
+| --- | ---: | ---: | ---: |
+| Pure private deliveries/s | 582,517 (570,068–585,708) | 580,134 (576,421–582,032) | −0.41% |
+| Pure private p99 bucket | 0.032768 ms | 0.032768 ms | unchanged |
+| Mixed private deliveries/s | 366,161 (361,692–367,693) | 370,585 (367,724–371,465) | +1.21% |
+| Mixed private p99 bucket | 0.131072 ms | 0.131072 ms | unchanged |
+| Mixed reconnect cycles/s | 71,208 (69,430–71,735) | 72,650 (72,093–72,820) | +2.02% |
+| Mixed reconnect p99 bucket | 0.524288 ms | 0.524288 ms | unchanged |
+
+Pure-private server CPU/wall medians are 0.64833 → 0.65000 (+0.26%), with
+overlapping 0.64833–0.65333 ranges. Mixed CPU/wall is 1.43998 → 1.45831
+(+1.27%) while more independent work completes. Client CPU/wall medians are
+0.69333 → 0.69333 and 2.06831 → 2.09998 respectively. RSS medians are
+17.668 → 17.621 MiB for the idle-room workload and 5.516 → 5.551 MiB mixed.
+These short guards support retaining the stability fix; they do not establish
+a general speedup, CPU saving or production capacity. Mixed CPU is not a
+per-operation cost, and histogram upper bounds include client verification.
+All twelve cases report zero routed body copies at this size. Ordinary success
+adds error-result handling at admission, an eight-byte aggregate counter and
+no new per-message checks, body allocations or recipient copies.
+
+Single-worker injected release faults recover an already queued flow in
+0.980–1.001 seconds after failed TCP retirement; with four workers the sampled
+new flows reach another worker in under a millisecond. Per-worker suspension
+can delay that worker's new clients by about a second. This bounded admission
+pause prevents spinning under repeated failures while existing sessions and
+shutdown remain serviced. It neither reserves kernel resources nor guarantees
+successful allocation under system-wide exhaustion. The
+[build record](benchmarks/2026-10-16-setup-pressure-build.json) binds final
+functional checks, frozen binaries, helpers, comparisons and local acceptance.

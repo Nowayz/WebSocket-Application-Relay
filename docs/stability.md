@@ -843,3 +843,45 @@ retains exact scopes, ranges, rejected experiments, allocation limits and the
 normal-placement reproduction command. These checks do not establish a hard
 time bound or the same improvement for global/observer traffic or frequent
 membership changes inside the busy room.
+
+## Accepted socket setup failures, 2026-10-16
+
+Runtime `9a941637c63f5bd34a82c27db985cdeba2388c31` isolates failures after
+accepting native TCP. Previously, `TCP_NODELAY` and readiness-registration
+errors propagated out of the worker and stopped the service. The independent
+[before probe](benchmarks/2026-10-16-setup-pressure-before.json) injects
+`ENOBUFS`/`ENOMEM` into those specific syscalls in separate one/four-worker
+processes. All four baseline processes exit 1. The probe also holds the failed
+descriptor open: the TCP-configuration path had already released its connection
+slot, reporting one connection while two data descriptors remained open.
+Registration failure already preserved that ownership order.
+
+Setup errors now retire the affected socket, count `war_setup_errors_total` and
+`war_rejected_total`, and reuse the worker's one-second listener suspension.
+Established socket work, timers and shutdown continue. Queued connects are
+explicitly accepted when the retry expires. Other workers can still accept.
+A local stream binding declares descriptor ownership after the admission guard,
+so reverse local drop order closes TCP first on every early setup refusal.
+After registration, the existing `Socket` field order provides the same rule.
+Routing, payload representation and buffer ownership are unchanged.
+
+The identical final probe passes on [release](benchmarks/2026-10-16-setup-pressure-after.json)
+and [debug](benchmarks/2026-10-16-setup-pressure-debug.json) binaries. Across eight
+cases it injects 24 setup failures: two recovery waves and a third shutdown wave
+per case. Every close gate observes two charged slots, each recovered client
+verifies its welcome/self-echo and exact Close/EOF, and an established client
+continues exact private echoes. Admission/join/retirement/error counters match;
+queues and variables are empty, and decoder allowance returns to the established
+client's initial level after recovery. Shutdown delivers `1001`, reaches EOF
+and exits zero during retry. It flushes Close and retires TCP without waiting
+for an acknowledgement; an initial probe that sent a late acknowledgement
+sometimes induced a reset and was corrected to exercise that existing contract.
+
+Single-worker release recovery takes 0.980–1.001 seconds after the failed
+socket retires. Four-worker queued clients in this sample reach another worker
+in under a millisecond; that is observed placement, not a recovery deadline.
+Release shutdown takes 1.1–1.2 ms in these finite cases. The existing
+[descriptor-exhaustion probe](benchmarks/2026-10-16-setup-pressure-accept.json)
+also passes one/four native workers and the legacy bridge after sharing the
+listener suspension helper. These checks use child-only fault injection or FD
+limits, and do not establish behavior under system-wide memory exhaustion.
