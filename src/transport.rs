@@ -1,10 +1,16 @@
 //! Shared WebSocket output/close lifecycle for the CBOR relay and migration bridge.
-use std::{future::Future, io::IoSlice, time::Duration};
+use std::{
+    future::Future,
+    io::{self, IoSlice},
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use bytes::Bytes;
 use futures_util::{FutureExt, SinkExt, StreamExt};
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
     sync::watch,
     time::timeout,
 };
@@ -15,6 +21,80 @@ use tokio_tungstenite::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{common::Disconnect, frame::Frame};
+
+/// Bound the raw HTTP upgrade without parsing or copying it a second time.
+/// After upgrade, reads and all vectored writes delegate directly to the socket.
+pub(crate) struct HandshakeStream<S> {
+    stream: S,
+    remaining: Option<usize>,
+}
+
+impl<S> HandshakeStream<S> {
+    pub(crate) fn new(stream: S) -> Self {
+        Self {
+            stream,
+            remaining: Some(crate::config::MAX_HTTP_UPGRADE_BYTES),
+        }
+    }
+
+    pub(crate) fn handshake_done(&mut self) {
+        self.remaining = None;
+    }
+}
+
+impl<S: AsyncRead + Unpin> AsyncRead for HandshakeStream<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let Some(remaining) = self.remaining else {
+            return Pin::new(&mut self.stream).poll_read(cx, buf);
+        };
+        if buf.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+        if remaining == 0 {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTP upgrade exceeds 16384 bytes",
+            )));
+        }
+        let length = remaining.min(buf.remaining());
+        let mut limited = ReadBuf::new(buf.initialize_unfilled_to(length));
+        let result = Pin::new(&mut self.stream).poll_read(cx, &mut limited);
+        let read = limited.filled().len();
+        buf.advance(read);
+        self.remaining = Some(remaining - read);
+        result
+    }
+}
+
+impl<S: AsyncWrite + Unpin> AsyncWrite for HandshakeStream<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.stream).poll_write(cx, buf)
+    }
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.stream).poll_write_vectored(cx, bufs)
+    }
+    fn is_write_vectored(&self) -> bool {
+        self.stream.is_write_vectored()
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.stream).poll_shutdown(cx)
+    }
+}
 
 /// Native server transport with explicit permission to write application data.
 ///

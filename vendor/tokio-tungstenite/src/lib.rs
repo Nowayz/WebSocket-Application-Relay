@@ -291,6 +291,12 @@ impl<S> WebSocketStream<S> {
         self.inner.reclaim_read_buffer()
     }
 
+    /// Attach a staging reservation before the first read. See tungstenite's
+    /// `WebSocket::set_read_budget` for ownership and admission semantics.
+    pub fn set_read_budget(&mut self, lease: tungstenite::protocol::ReadLease) -> Result<(), WsError> {
+        self.inner.set_read_budget(lease)
+    }
+
     /// Close the underlying web socket
     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
     where

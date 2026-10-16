@@ -15,6 +15,7 @@ pub use self::{
 use crate::{
     error::{CapacityError, Error, ProtocolError, Result},
     protocol::frame::mask::apply_mask,
+    protocol::ReadLease,
     Message,
 };
 use bytes::BytesMut;
@@ -104,6 +105,8 @@ where
 pub(super) struct FrameCodec {
     /// Buffer to read data from the stream.
     in_buffer: BytesMut,
+    // Drop staging storage before releasing its allowance.
+    read_lease: Option<ReadLease>,
     in_buf_max_read: usize,
     /// Buffer to send packets to the network.
     out_buffer: Vec<u8>,
@@ -124,6 +127,7 @@ impl FrameCodec {
     pub(super) fn new(in_buf_len: usize) -> Self {
         Self {
             in_buffer: BytesMut::with_capacity(in_buf_len),
+            read_lease: None,
             in_buf_max_read: in_buf_len.max(FrameHeader::MAX_SIZE),
             out_buffer: <_>::default(),
             max_out_buffer_len: usize::MAX,
@@ -138,6 +142,7 @@ impl FrameCodec {
         in_buffer.reserve(min_in_buf_len.saturating_sub(in_buffer.len()));
         Self {
             in_buffer,
+            read_lease: None,
             in_buf_max_read: min_in_buf_len.max(FrameHeader::MAX_SIZE),
             out_buffer: <_>::default(),
             max_out_buffer_len: usize::MAX,
@@ -165,7 +170,49 @@ impl FrameCodec {
         let mut fresh = BytesMut::with_capacity(self.in_buf_max_read);
         fresh.extend_from_slice(&self.in_buffer);
         self.in_buffer = fresh;
+        if let Some(lease) = &mut self.read_lease {
+            lease.shrink_to(2 * self.in_buf_max_read);
+        }
         Some(copied)
+    }
+
+    pub(super) fn set_read_budget(&mut self, mut lease: ReadLease) -> Result<()> {
+        let capacity = self.in_buffer.capacity().max(self.in_buf_max_read);
+        lease.for_capacity(capacity)?;
+        let bytes = 2 * capacity;
+        lease.shrink_to(bytes);
+        self.read_lease = Some(lease);
+        Ok(())
+    }
+
+    // Reserve an absolute capacity with a budget, retaining the original library
+    // allocation policy when admission is disabled. Only unfinished input moves;
+    // Bytes already published to consumers retain their original owner/pointer.
+    fn reserve_input(&mut self, wanted: usize, unbudgeted_additional: usize) -> Result<()> {
+        let Some(lease) = &mut self.read_lease else {
+            self.in_buffer.reserve(unbudgeted_additional);
+            return Ok(());
+        };
+        if self.in_buffer.capacity() >= wanted
+            || self.in_buffer.try_reclaim(wanted.saturating_sub(self.in_buffer.len()))
+        {
+            return Ok(());
+        }
+        // Leave one read chunk after a large frame. An exact boundary forces a
+        // fresh small allocation for the next header while the published body
+        // is still shared. This bounded read-ahead is part of the reservation.
+        let capacity = if wanted > self.in_buf_max_read {
+            // Overflow saturates to a capacity whose doubled allowance is
+            // rejected by the lease before allocation, with a refusal count.
+            wanted.saturating_add(self.in_buf_max_read)
+        } else {
+            self.in_buf_max_read
+        };
+        lease.for_capacity(capacity)?;
+        let mut fresh = BytesMut::with_capacity(capacity);
+        fresh.extend_from_slice(&self.in_buffer);
+        self.in_buffer = fresh;
+        Ok(())
     }
 
     /// Sets a maximum size for the out buffer.
@@ -210,9 +257,9 @@ impl FrameCodec {
 
                     // Reserve full message length only once, even for multiple
                     // loops or if WouldBlock errors cause multiple fn calls.
-                    self.in_buffer.reserve(len);
+                    self.reserve_input(len, len)?;
                 } else {
-                    self.in_buffer.reserve(FrameHeader::MAX_SIZE);
+                    self.reserve_input(FrameHeader::MAX_SIZE, FrameHeader::MAX_SIZE)?;
                 }
             }
 

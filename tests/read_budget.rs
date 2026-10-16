@@ -1,0 +1,194 @@
+//! Public decoder admission: account before growth and retain published owners.
+use std::{
+    io::{self, Cursor, Read, Write},
+    sync::{Arc, Barrier},
+};
+use tokio_tungstenite::tungstenite::{
+    Error, Message, WebSocket,
+    error::CapacityError,
+    protocol::{ReadBudget, Role, WebSocketConfig},
+};
+
+struct Paused(Cursor<Vec<u8>>);
+impl Read for Paused {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.0.read(buf)? {
+            0 => Err(io::ErrorKind::WouldBlock.into()),
+            n => Ok(n),
+        }
+    }
+}
+impl Write for Paused {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn socket(wire: Vec<u8>, pool: &Arc<ReadBudget>) -> WebSocket<Paused> {
+    let lease = pool.try_lease(8192).unwrap();
+    let mut ws = WebSocket::from_raw_socket(
+        Paused(Cursor::new(wire)),
+        Role::Server,
+        Some(WebSocketConfig::default().read_buffer_size(4096)),
+    );
+    ws.set_read_budget(lease).unwrap();
+    ws
+}
+
+fn frame(opcode: u8, body: &[u8]) -> Vec<u8> {
+    let mut wire = vec![opcode];
+    match body.len() {
+        0..=125 => wire.push(0x80 | body.len() as u8),
+        126..=65535 => {
+            wire.push(0xfe);
+            wire.extend_from_slice(&(body.len() as u16).to_be_bytes());
+        }
+        _ => {
+            wire.push(0xff);
+            wire.extend_from_slice(&(body.len() as u64).to_be_bytes());
+        }
+    }
+    wire.extend_from_slice(&[0; 4]);
+    wire.extend_from_slice(body);
+    wire
+}
+
+fn pending(ws: &mut WebSocket<Paused>) {
+    assert!(matches!(ws.read(), Err(Error::Io(e)) if e.kind() == io::ErrorKind::WouldBlock));
+}
+fn denied(ws: &mut WebSocket<Paused>) {
+    assert!(matches!(
+        ws.read(),
+        Err(Error::Capacity(CapacityError::ReadBufferBudgetExceeded))
+    ));
+}
+
+#[test]
+fn concurrent_leases_never_exceed_the_limit_and_release_on_drop() {
+    let pool = ReadBudget::new(4096);
+    let held = Arc::new(Barrier::new(33));
+    let release = Arc::new(Barrier::new(33));
+    std::thread::scope(|scope| {
+        for _ in 0..32 {
+            let (pool, held, release) = (pool.clone(), held.clone(), release.clone());
+            scope.spawn(move || {
+                let lease = pool.try_lease(512);
+                held.wait();
+                release.wait();
+                drop(lease);
+            });
+        }
+        held.wait();
+        assert_eq!(pool.reserved(), 4096);
+        assert_eq!(pool.peak(), 4096);
+        assert_eq!(pool.rejected(), 24);
+        release.wait();
+    });
+    assert_eq!(pool.reserved(), 0);
+    assert!(pool.try_lease(usize::MAX).is_err());
+    assert_eq!(pool.reserved(), 0);
+}
+
+#[test]
+fn a_header_is_denied_before_body_allocation_and_cannot_resume_unreserved() {
+    let pool = ReadBudget::new(32768);
+    let wire = frame(0x82, &vec![0xa5; 65536]);
+    let mut ws = socket(wire[..14].to_vec(), &pool);
+    denied(&mut ws);
+    assert_eq!(pool.reserved(), 8192);
+    assert_eq!(pool.peak(), 8192);
+    assert_eq!(pool.rejected(), 1);
+    assert!(!ws.can_read());
+    denied(&mut ws);
+    assert_eq!(pool.rejected(), 1);
+    ws.close(None).unwrap();
+    drop(ws);
+    assert_eq!(pool.reserved(), 0);
+}
+
+#[test]
+fn growth_reclaim_and_drop_preserve_the_published_payload_pointer() {
+    let body = vec![0xa5; 131073];
+    let wire = frame(0x82, &body);
+    let pool = ReadBudget::new(1024 * 1024);
+    let mut ws = socket(wire[..4111].to_vec(), &pool);
+    pending(&mut ws);
+    assert_eq!(pool.reserved(), 2 * (body.len() + 4096));
+    assert_eq!(ws.reclaim_read_buffer(), None);
+    ws.get_mut().0.get_mut().extend_from_slice(&wire[4111..]);
+    let Message::Binary(published) = ws.read().unwrap() else {
+        panic!("binary")
+    };
+    let pointer = published.as_ptr();
+    assert_eq!(published.as_ref(), body);
+    pending(&mut ws);
+    assert_eq!(ws.reclaim_read_buffer(), Some(0));
+    assert_eq!(pool.reserved(), 8192);
+    assert!(published.is_unique());
+    assert_eq!(published.as_ptr(), pointer);
+    drop(ws);
+    assert_eq!(pool.reserved(), 0);
+    assert_eq!(published.as_ptr(), pointer);
+    assert_eq!(published.as_ref(), body);
+}
+
+#[test]
+fn fragment_assembly_is_admitted_separately_and_held_until_safe_reclaim() {
+    let pool = ReadBudget::new(115000);
+    let fragment = vec![0x5a; 16384];
+    let mut wire = frame(0x02, &fragment);
+    wire.extend(frame(0x00, &fragment));
+    let mut ws = socket(wire, &pool);
+    pending(&mut ws);
+    assert_eq!(pool.reserved(), 40960 + 65536);
+    assert_eq!(ws.reclaim_read_buffer(), Some(0));
+    assert_eq!(pool.reserved(), 8192 + 65536);
+    ws.get_mut().0.get_mut().extend(frame(0x80, &[]));
+    let Message::Binary(published) = ws.read().unwrap() else {
+        panic!("binary")
+    };
+    assert_eq!(published.len(), 32768);
+    assert!(published.iter().all(|&b| b == 0x5a));
+    assert_eq!(pool.reserved(), 8192 + 65536);
+    let pointer = published.as_ptr();
+    assert_eq!(ws.reclaim_read_buffer(), Some(0));
+    assert_eq!(pool.reserved(), 8192);
+    assert_eq!(published.as_ptr(), pointer);
+    drop(ws);
+    assert_eq!(pool.reserved(), 0);
+
+    let mut wire = frame(0x02, &fragment);
+    wire.extend(frame(0x00, &fragment));
+    wire.extend(frame(0x80, &fragment));
+    let mut ws = socket(wire, &pool);
+    denied(&mut ws);
+    assert_eq!(pool.reserved(), 40960 + 65536);
+    assert_eq!(pool.rejected(), 1);
+    drop(ws);
+    assert_eq!(pool.reserved(), 0);
+}
+
+#[test]
+fn fragmented_utf8_carries_partial_codepoints_and_control_frames() {
+    let pool = ReadBudget::new(65536);
+    let mut wire = frame(0x01, &[0xf0]);
+    wire.extend(frame(0x00, &[0x9f]));
+    wire.extend(frame(0x89, b"probe"));
+    wire.extend(frame(0x00, &[0x98]));
+    wire.extend(frame(0x80, &[0x80]));
+    let mut ws = socket(wire, &pool);
+    assert_eq!(
+        ws.read().unwrap(),
+        Message::Ping(b"probe".as_slice().into())
+    );
+    assert_eq!(ws.read().unwrap(), Message::text("😀"));
+    pending(&mut ws);
+    assert_eq!(pool.reserved(), 8192 + 16);
+    assert_eq!(ws.reclaim_read_buffer(), Some(0));
+    assert_eq!(pool.reserved(), 8192);
+    drop(ws);
+    assert_eq!(pool.reserved(), 0);
+}

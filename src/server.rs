@@ -12,6 +12,7 @@ use axum::{
     routing::{get, post},
 };
 use tokio::{
+    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
     sync::Semaphore,
     task::JoinSet,
@@ -119,15 +120,27 @@ impl Drop for ConnectionGuard {
     }
 }
 
-type Socket = transport::ServerSocket<TcpStream>;
+type Socket = transport::ServerSocket<transport::HandshakeStream<TcpStream>>;
 
 async fn connection_task(
-    socket: TcpStream,
+    mut socket: TcpStream,
     relay: Arc<Relay>,
     shutdown: CancellationToken,
 ) -> Result<()> {
     socket.set_nodelay(true)?;
     let config = &relay.config;
+    let read_lease = match &relay.metrics.read_budget {
+        Some(budget) => match budget.try_lease(config.handshake_read_reservation()) {
+            Ok(lease) => Some(lease),
+            Err(_) => {
+                relay.metrics.rejected.fetch_add(1, Relaxed);
+                let _ = timeout(config.write_timeout(), socket.write_all(
+                    b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")).await;
+                return Ok(());
+            }
+        },
+        None => None,
+    };
     let websocket_config = WebSocketConfig::default()
         .read_buffer_size(config.read_buffer_bytes)
         .write_buffer_size(4096)
@@ -140,7 +153,7 @@ async fn connection_task(
         // including the sum of fragmented input.
         .max_frame_size(Some(config.max_message_bytes.max(125)));
     let handshake = accept_hdr_async_with_config(
-        socket,
+        transport::HandshakeStream::new(socket),
         |request: &Request, mut response: HandshakeResponse| {
             if let Some(protocols) = request.headers().get("sec-websocket-protocol") {
                 if protocols
@@ -163,13 +176,17 @@ async fn connection_task(
         },
         Some(websocket_config),
     );
-    let ws = tokio::select! {
+    let mut ws = tokio::select! {
         _ = shutdown.cancelled() => return Ok(()),
         result = timeout(Duration::from_secs(config.handshake_timeout_secs), handshake) => match result {
             Ok(Ok(ws)) => ws,
             _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return Ok(()); }
         }
     };
+    ws.get_mut().handshake_done();
+    if let Some(lease) = read_lease {
+        ws.set_read_budget(lease)?;
+    }
     let mut ws = Socket::new(ws);
     let mut limiter = RateLimiter::new(config.messages_per_second, config.bytes_per_second);
     let stopped = shutdown.cancelled();
@@ -190,12 +207,15 @@ async fn connection_task(
                 return Ok(());
             }
             Some(Ok(message)) if !limiter.allow(message.len()) => {
+                drop(message);
                 relay.metrics.rate_limited.fetch_add(1, Relaxed);
                 close(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
                 return Ok(());
             }
             Some(Ok(Message::Binary(bytes))) => {
-                match protocol::join(&bytes).and_then(|name| relay.subscribe(name)) {
+                let result = protocol::join(&bytes).and_then(|name| relay.subscribe(name));
+                drop(bytes);
+                match result {
                     Ok(subscription) => break subscription,
                     Err(reason) => {
                         close(&mut ws, reason, &relay, &shutdown).await;
@@ -219,6 +239,12 @@ async fn connection_task(
                 }
             }
             Some(Ok(Message::Pong(_))) => {}
+            Some(Err(tungstenite::Error::Capacity(
+                tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
+            ))) => {
+                close(&mut ws, input_memory_limit(), &relay, &shutdown).await;
+                return Ok(());
+            }
             None | Some(Err(_)) => return Ok(()),
             _ => {
                 close(&mut ws, cbor_required(), &relay, &shutdown).await;
@@ -337,6 +363,7 @@ async fn connection_task(
                         relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
                         break SessionEnd::Drop(Disconnect { code: 1001, reason: "Transport Closed" });
                     }
+                    Some(Err(tungstenite::Error::Capacity(tungstenite::error::CapacityError::ReadBufferBudgetExceeded))) => break SessionEnd::Close(input_memory_limit()),
                     Some(Err(tungstenite::Error::Capacity(_))) => break SessionEnd::Close(Disconnect { code: 1009, reason: "Message Too Large" }),
                     Some(Err(_)) => break SessionEnd::Close(Disconnect::PROTOCOL),
                     _ => break SessionEnd::Close(cbor_required()),
@@ -376,6 +403,13 @@ async fn connection_task(
         SessionEnd::Drop(_) => {} // A partial/failed write cannot be safely retried.
     }
     Ok(())
+}
+
+fn input_memory_limit() -> Disconnect {
+    Disconnect {
+        code: 1013,
+        reason: "Input Memory Limit",
+    }
 }
 
 fn cbor_required() -> Disconnect {

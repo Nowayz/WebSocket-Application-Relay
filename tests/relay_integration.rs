@@ -100,6 +100,13 @@ impl Server {
         assert_eq!(self.relay.counts(), (0, 1));
         assert_eq!(self.relay.metrics.connections.load(Relaxed), 0);
         assert_eq!(self.relay.metrics.queued_bytes.load(Relaxed), 0);
+        if let Some(budget) = &self.relay.metrics.read_budget {
+            assert_eq!(
+                budget.reserved(),
+                0,
+                "decoder reservations must retire with transports"
+            );
+        }
     }
 }
 
@@ -160,6 +167,135 @@ async fn prime_read_storage(source: &mut Socket, source_id: u64, receiver_id: u6
     .await;
     send(source, source_id, &[0]).await;
     assert_eq!(data(source).await, protocol::envelope(source_id, &[0]));
+}
+
+#[tokio::test]
+async fn input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing() {
+    let server = Server::new(Config {
+        total_read_buffer_bytes: 100000,
+        ..config()
+    })
+    .await;
+    let (mut healthy, id) = server.join("budget-good").await;
+    for joined in [false, true] {
+        let mut offender = if joined {
+            server.join("budget-bad").await.0
+        } else {
+            connect_async(&server.url).await.unwrap().0
+        };
+        let mut header = vec![0x82, 0xff];
+        header.extend_from_slice(&65536u64.to_be_bytes());
+        header.extend_from_slice(&[0; 4]);
+        offender.get_mut().write_all(&header).await.unwrap();
+        assert_eq!(close_code(&mut offender).await, 1013);
+        send(&mut healthy, id, &[0x18, 42]).await;
+        assert_eq!(
+            data(&mut healthy).await,
+            protocol::envelope(id, &[0x18, 42])
+        );
+    }
+    let budget = server.relay.metrics.read_budget.as_ref().unwrap();
+    assert_eq!(budget.rejected(), 2);
+    assert!(budget.peak() <= 100000);
+    let text = server.http("GET", "/metrics", Some("admin-test")).await;
+    assert!(text.contains("war_read_buffer_reservations_rejected_total 2\n"));
+    assert!(text.contains("war_read_buffer_limit_bytes 100000\n"));
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn handshake_reservations_reject_with_http_503_and_release_after_abandonment() {
+    let server = Server::new(Config {
+        total_read_buffer_bytes: 65536,
+        ..config()
+    })
+    .await;
+    let address = server
+        .url
+        .strip_prefix("ws://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let half_open = TcpStream::connect(address).await.unwrap();
+    let budget = server.relay.metrics.read_budget.as_ref().unwrap();
+    timeout(Duration::from_secs(3), async {
+        while budget.reserved() != 40960 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let Err(tokio_tungstenite::tungstenite::Error::Http(response)) =
+        connect_async(&server.url).await
+    else {
+        panic!("exhausted handshake admission must return HTTP 503");
+    };
+    assert_eq!(response.status(), 503);
+    assert_eq!(budget.reserved(), 40960);
+    drop(half_open);
+    timeout(Duration::from_secs(3), async {
+        while budget.reserved() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let (mut healthy, id) = server.join("budget-after").await;
+    send(&mut healthy, id, &[0]).await;
+    assert_eq!(data(&mut healthy).await, protocol::envelope(id, &[0]));
+    assert_eq!(budget.rejected(), 1);
+    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 1);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff() {
+    let server = Server::new(config()).await;
+    let address = server
+        .url
+        .strip_prefix("ws://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let mut oversized = TcpStream::connect(address).await.unwrap();
+    let mut request = b"GET / HTTP/1.1\r\nHost: localhost\r\nX-Large: ".to_vec();
+    request.resize(16385, b'x');
+    let _ = oversized.write_all(&request).await;
+    wait_counter(&server.relay.metrics.handshake_errors, 1).await;
+    let budget = server.relay.metrics.read_budget.as_ref().unwrap();
+    assert_eq!(budget.reserved(), 0);
+
+    let mut raw = TcpStream::connect(address).await.unwrap();
+    let mut request = b"GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nX-Padding: ".to_vec();
+    request.resize(16000, b'x');
+    request.extend_from_slice(b"\r\n\r\n");
+    raw.write_all(&request).await.unwrap();
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(3), async {
+        while !response.ends_with(b"\r\n\r\n") {
+            response.push(raw.read_u8().await.unwrap());
+        }
+    })
+    .await
+    .unwrap();
+    assert!(response.starts_with(b"HTTP/1.1 101 "));
+    let mut ws = WebSocketStream::from_raw_socket(
+        MaybeTlsStream::Plain(raw),
+        tokio_tungstenite::tungstenite::protocol::Role::Client,
+        None,
+    )
+    .await;
+    ws.send(Message::Binary(protocol::text("handoff")))
+        .await
+        .unwrap();
+    let id = Decoder::new(&data(&mut ws).await).u64().unwrap();
+    let value = protocol::byte_string(&vec![0x39; 65536]);
+    send(&mut ws, id, &value).await;
+    assert_eq!(data(&mut ws).await, protocol::envelope(id, &value));
+    server.stop().await;
 }
 
 #[tokio::test]

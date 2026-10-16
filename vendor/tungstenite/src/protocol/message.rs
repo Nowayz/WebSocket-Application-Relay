@@ -2,6 +2,7 @@ use super::frame::{CloseFrame, Frame};
 use crate::{
     error::{CapacityError, Error, Result},
     protocol::frame::Utf8Bytes,
+    protocol::ReadLease,
 };
 use std::{fmt, result::Result as StdResult, str};
 
@@ -9,6 +10,7 @@ mod string_collect {
     use crate::utf8::DecodeError;
 
     use crate::error::{Error, Result};
+    use crate::protocol::ReadLease;
 
     #[derive(Debug)]
     pub struct StringCollector {
@@ -25,6 +27,17 @@ mod string_collect {
             self.data
                 .len()
                 .saturating_add(self.incomplete.map(|i| i.buffer_len as usize).unwrap_or(0))
+        }
+
+        pub fn reserve_budgeted(&mut self, required: usize, lease: &mut ReadLease) -> Result<()> {
+            if self.data.capacity() < required {
+                let capacity = required.max(self.data.capacity().saturating_mul(2)).max(8);
+                lease.for_capacity(capacity)?;
+                let mut fresh = String::with_capacity(capacity);
+                fresh.push_str(&self.data);
+                self.data = fresh;
+            }
+            Ok(())
         }
 
         pub fn extend<T: AsRef<[u8]>>(&mut self, tail: T) -> Result<()> {
@@ -112,6 +125,15 @@ impl IncompleteMessage {
 
     /// Add more data to an existing message.
     pub fn extend<T: AsRef<[u8]>>(&mut self, tail: T, size_limit: Option<usize>) -> Result<()> {
+        self.extend_budgeted(tail, size_limit, None)
+    }
+
+    pub(super) fn extend_budgeted<T: AsRef<[u8]>>(
+        &mut self,
+        tail: T,
+        size_limit: Option<usize>,
+        lease: Option<&mut ReadLease>,
+    ) -> Result<()> {
         // Always have a max size. This ensures an error in case of concatenating two buffers
         // of more than `usize::max_value()` bytes in total.
         let max_size = size_limit.unwrap_or_else(usize::max_value);
@@ -127,10 +149,23 @@ impl IncompleteMessage {
 
         match self.collector {
             IncompleteMessageCollector::Binary(ref mut v) => {
+                let required = my_size + portion_size;
+                if let Some(lease) = lease.filter(|_| v.capacity() < required) {
+                    let capacity = required.max(v.capacity().saturating_mul(2)).max(8);
+                    lease.for_capacity(capacity)?;
+                    let mut fresh = Vec::with_capacity(capacity);
+                    fresh.extend_from_slice(v);
+                    *v = fresh;
+                }
                 v.extend(tail.as_ref());
                 Ok(())
             }
-            IncompleteMessageCollector::Text(ref mut t) => t.extend(tail),
+            IncompleteMessageCollector::Text(ref mut t) => {
+                if let Some(lease) = lease {
+                    t.reserve_budgeted(my_size + portion_size, lease)?;
+                }
+                t.extend(tail)
+            }
         }
     }
 

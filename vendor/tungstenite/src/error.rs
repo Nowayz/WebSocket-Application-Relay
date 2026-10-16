@@ -135,6 +135,9 @@ impl From<httparse::Error> for Error {
 /// Indicates the specific type/cause of a capacity error.
 #[derive(Error, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CapacityError {
+    /// Shared decoder staging admission failed before allocating.
+    #[error("Decoder staging allowance exhausted")]
+    ReadBufferBudgetExceeded,
     /// Too many headers provided (see [`httparse::Error::TooManyHeaders`]).
     #[error("Too many headers")]
     TooManyHeaders,

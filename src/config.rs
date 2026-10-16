@@ -3,6 +3,8 @@ use std::{net::SocketAddr, time::Duration};
 use anyhow::{Result, ensure};
 use clap::Parser;
 
+pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
+
 /// Resource limits apply to each process. Secrets are loaded separately and never formatted.
 #[derive(Clone, Parser)]
 #[command(version, about = "WebSocket Application Relay (Rust)")]
@@ -29,6 +31,9 @@ pub struct Config {
     pub total_queue_bytes: usize,
     #[arg(long, env = "WAR_READ_BUFFER_BYTES", default_value_t = 4 * 1024)]
     pub read_buffer_bytes: usize,
+    /// Shared decoder staging allowance, including growth headroom; zero disables admission.
+    #[arg(long, env = "WAR_TOTAL_READ_BUFFER_BYTES", default_value_t = 1024 * 1024 * 1024)]
+    pub total_read_buffer_bytes: usize,
     /// Reclaim enlarged decoder storage after this many seconds without large input; zero disables.
     #[arg(long, env = "WAR_READ_BUFFER_IDLE_SECS", default_value_t = 5)]
     pub read_buffer_idle_secs: u64,
@@ -128,6 +133,12 @@ impl Config {
             "read-buffer-bytes cannot exceed 1048576"
         );
         ensure!(
+            self.total_read_buffer_bytes == 0
+                || (self.total_read_buffer_bytes >= self.handshake_read_reservation()
+                    && self.total_read_buffer_bytes <= isize::MAX as usize),
+            "total-read-buffer-bytes must be zero or fit one handshake staging reservation and the addressable range"
+        );
+        ensure!(
             self.max_connections <= tokio::sync::Semaphore::MAX_PERMITS,
             "max-connections exceeds semaphore capacity"
         );
@@ -185,5 +196,11 @@ impl Config {
 
     pub fn write_timeout(&self) -> Duration {
         Duration::from_secs(self.write_timeout_secs)
+    }
+
+    pub(crate) fn handshake_read_reservation(&self) -> usize {
+        // The HTTP reader retains a bounded Vec plus a 4 KiB chunk. Two times
+        // their sum covers growth and transfer into the decoder's BytesMut.
+        2 * self.read_buffer_bytes.max(MAX_HTTP_UPGRADE_BYTES + 4096)
     }
 }

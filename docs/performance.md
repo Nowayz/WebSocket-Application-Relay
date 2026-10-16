@@ -591,5 +591,136 @@ and error counters were clean. Exact process hashes and evidence are in
 
 This releases unused decoder ownership. It does not impose a process-wide input
 allocation budget, free incomplete messages, or guarantee the allocator returns
-pages. Global reservations before decoder growth and larger active populations
-remain useful next work; connection/input limits and actual RSS still matter.
+pages. The following iteration adds reservations before decoder growth;
+connection/input limits and actual RSS still matter.
+
+## Admission before decoder growth
+
+The next measured problem was simultaneous incomplete input. The decoder reserves
+the advertised frame length before the body finishes arriving, and fragmented
+messages have a separate assembly buffer. Delayed cache reclamation cannot
+prevent those allocations. A 64-source baseline advertised 8 MiB frames and
+supplied only 2 MiB to each; all were admitted. Three fresh processes held
+148–149 MiB RSS while an independent healthy session continued to echo data.
+
+The selected implementation adds a shared **1 GiB staging allowance**, adjustable
+with `--total-read-buffer-bytes` (`0` disables). A connection reserves before its
+bounded HTTP upgrade; frame and fragment growth then acquire separate high-water
+leases before allocating. Twice the requested capacity covers old/new staging
+overlap. Large frame capacity includes one configured read chunk of read-ahead.
+Ordinary reads within the high water perform no shared-budget atomics or new
+guard allocations. Reclamation shrinks unused allowances; transport drop or
+cancellation releases them. Published `Bytes` keep their original owners and
+pointers and require separate consumer budgets. This is not an RSS cap.
+
+An exploratory exact-capacity implementation passed correctness but increased
+64 KiB server CPU per delivery by 9.1% in the first three-way comparison. A
+userspace cycle profile identified the reader as a hot path; source inspection
+suggested exact frame boundaries lost reusable storage for the next header.
+Keeping one bounded read chunk recovered the cost in a second whole-socket
+comparison. This is a source-supported explanation, not a syscall/allocation
+count measurement. Both experimental binaries and all raw records are retained.
+
+The second comparison rotated three candidates across all positions, three
+fresh-process repetitions each, 15 seconds per run, 64 clients forming 32 private
+pairs, a window of 16, and 64 KiB payloads. Four server workers used CPUs 0–3;
+the fixed verifying client used CPUs 4–7. Rates were disabled and heartbeats
+enabled. CPU includes setup/teardown; latency is a fixed-histogram upper bound.
+
+| 64 KiB candidate | Median verified deliveries/s | Median server ns/delivery | Median p99 upper bound |
+| --- | ---: | ---: | ---: |
+| Prior server (`bf8d2e9`) | 201,967 | 12,131 | 4.194304 ms |
+| Exploratory exact capacity | 206,765 | 13,593 | 4.194304 ms |
+| Selected charged read-ahead | 205,480 | 11,867 | 4.194304 ms |
+
+The selected version used 12.7% less CPU per delivery than exact capacity and
+2.2% less than the prior server, with 1.7% higher throughput than the prior
+server. These are small local differences against the prior server, not a
+general speed guarantee. The reason for admission is bounded staging growth.
+Every frame was verified, routed-value compaction stayed zero, and the selected
+and exploratory final staging reservations were zero in every run. The frozen
+traffic client intentionally drops its 64 socket handles after timing: these
+transport departures do not establish graceful-Close acceptance.
+
+Sources, release hashes, original package checksums and the complete codec patch
+are bound in [input-budget-build.json](benchmarks/2026-10-15-input-budget-build.json).
+The [initial 64 KiB comparison](benchmarks/2026-10-15-input-budget-traffic-64k.json),
+[reader profile](benchmarks/2026-10-15-input-budget-profile.json) and
+[selected comparison](benchmarks/2026-10-15-input-budget-read-ahead-64k.json)
+include raw evidence or links to their complete traces. Original package
+verification covers all 62 vendored files plus the declared patch.
+
+The final small-message comparison used the same fixed client, affinity, window,
+duration and alternating candidate order, three repetitions per server. At 1 KiB,
+median throughput was 1,685,370/s before and 1,698,247/s after admission; server
+CPU was 1,716 versus 1,690 ns per verified delivery, with the same 1.048576 ms
+p99 bound. These sub-2% differences support retaining the bounded policy without
+a broad throughput claim. Every delivered value was checked, compaction stayed
+zero and all final staging/queue/session gauges were zero. Full traces are in
+[the selected 1 KiB comparison](benchmarks/2026-10-15-input-budget-read-ahead-1k.json).
+
+Admission has a standing-memory cost. Three alternating fresh-process pairs with
+2,000 idle joined sockets measured median RSS deltas of 22,704 KiB before and
+23,644 KiB after: **940 KiB more**, approximately 0.46 KiB per session on this
+host. Staging reservations were exactly 16,384,000 bytes with no refusals. These
+idle samples verify the active population; the idle runner does not separately
+sample final cleanup.
+
+Three alternating ten-second churn pairs used 64 workers and the same fixed
+verifying client. Each lifecycle joins, verifies one self-routed counter and its
+Close handshake. Every run passed with zero final staging/queue/session/connection
+gauges and no protocol, handshake, write, Close or admission errors. Churn rate
+ranges overlap substantially, so they establish correct sustained admission and
+cleanup rather than a stable speed improvement. The full populations, CPU and
+memory records are in [input-budget-resources.json](benchmarks/2026-10-15-input-budget-resources.json).
+
+Nine final incomplete-input cases used the selected release and the same frozen
+client. Three alternating control/limited pairs joined 64 source channels plus
+one independent healthy client, advertised masked 8 MiB frames, supplied only
+2 MiB per admitted source, and held for two seconds. The healthy client verified
+1 KiB self echoes throughout. Admitted incomplete sockets intentionally dropped
+TCP; two ordinary sessions verified normal Close and a new join/route after
+the reservations released. All connection/session/queue/variable/staging gauges
+returned to zero, with the persistent global channel remaining.
+
+| Incomplete-input configuration | Admitted / refused sources | Held RSS |
+| --- | ---: | ---: |
+| Prior server, three runs | 64 / 0 | Median 148.22 MiB; range 143.87–156.38 MiB |
+| Selected, 24 MiB staging allowance, three runs | 1 / 63 (`1013`) | Median 8.14 MiB; range 8.12–8.17 MiB |
+| Selected default 1 GiB allowance, one run | 63 / 1 (`1013`) | 151.94 MiB |
+| Selected admission disabled, one run | 64 / 0 | 149.81 MiB |
+
+The tight allowance reduced median held RSS by **94.5% in this configured
+workload**. The default admits most of this cohort and does not establish a
+general RSS reduction; staging headroom and RSS measure different quantities.
+An additional single-source case filled its exact 16,793,600-byte allowance,
+kept the independent healthy client routing, verified HTTP `503` for another
+handshake, and admitted a new client after release. All nine cases verified
+post-release routing, two normal Close handshakes, exact expected incomplete
+TCP-drop counts and zero protocol/write/Close errors. Refused incomplete frames
+verify the received Close code, not a full acknowledgement exchange.
+
+The selected release also passed an eight-producer retention/reclamation check
+with 64 cycles of 4 MiB primers per producer. Every ordered data item/barrier and
+all nine Close handshakes were verified. Last connected-idle RSS was about
+11.66 MiB after the default five-second reset; final staging allowance was zero.
+This retains shared application ownership while separating admission from cache
+retirement. The [summary](benchmarks/2026-10-15-input-budget-summary.json) binds
+every pressure source record and its hash; the
+[retention record](benchmarks/2026-10-15-input-budget-retention.json) includes all
+phases and final metrics. These are finite plaintext loopback checks, not a
+production capacity or multi-hour stability claim.
+
+The selected native and bridge releases also passed the 46-common-case/eight-
+explicit-difference [original C++ comparison](benchmarks/2026-10-15-input-budget-reference.json),
+all 60 Rust checks and seven JavaScript socket cases. After a subsequent host
+reboot, runtime source/release hashes still matched their saved manifest. The
+local services and headed Chrome were restarted, and Rust/Clippy/format/vendor
+checks, seven Chrome checks, three live legacy/Close checks and a shared-routing
+reclamation check passed again. The latter shrank staging from 8,405,022 to
+16,384 bytes after 5.022 seconds while both sessions remained connected;
+subsequent typed routing added no body copies. Both completed normal Close and
+final staging/connection/session/queue/variable gauges were zero. Health and
+readiness returned 200. [Live evidence](benchmarks/2026-10-15-input-budget-live.json)
+records exact process hashes, the browser report, and the post-reboot boundary;
+performance results were collected before the reboot.

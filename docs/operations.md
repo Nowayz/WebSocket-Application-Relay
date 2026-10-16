@@ -32,6 +32,8 @@ variables. All bounds are per process.
 | Members per channel | 10,000 | Includes closing sessions until removal |
 | Incoming message | 16 MiB | Complete reassembled WebSocket data message |
 | Read buffer per socket | 4 KiB | Initial read capacity; tune for the actual workload |
+| Decoder staging across process | 1 GiB | `--total-read-buffer-bytes` / `WAR_TOTAL_READ_BUFFER_BYTES`; twice frame/fragment capacity as growth headroom; zero disables |
+| HTTP upgrade input | 16 KiB | Raw bytes read before upgrade completes; handshake timeout still applies |
 | Enlarged read storage retirement | 5 s after large input | `--read-buffer-idle-secs` / `WAR_READ_BUFFER_IDLE_SECS`; zero disables |
 | Output queue per session | 64 messages / 32 MiB | Includes an in-flight socket write |
 | Output reservations across process | 256 MiB | Logical payload bytes per recipient, conservatively counting shared frames repeatedly |
@@ -48,8 +50,38 @@ Queue limits concern logical payload storage, not the complete process RSS. WebS
 read/write buffers, partially assembled incoming frames, metadata, allocator
 overhead, stacks, and kernel socket buffers also cost memory. In particular, a
 large incoming-message limit multiplied by many simultaneous incomplete messages
-can dominate memory; set it to what the application needs. The sample environment
+can dominate memory. Decoder admission below bounds staging requests, while the
+message limit should still match the application. The sample environment
 uses 64 KiB rather than the compatibility-oriented 16 MiB default.
+
+Before accepting a native WebSocket handshake, the relay reserves twice the greater
+of the configured initial read capacity and 20 KiB (the 16 KiB raw HTTP bound plus
+the HTTP reader's 4 KiB chunk). An exhausted shared staging allowance returns
+HTTP `503`. Once upgraded, separate frame and fragment-assembly leases reserve
+twice their requested capacities **before allocation**, covering overlap of old
+and new staging allocations during growth. Large frame allocations include one
+configured read chunk of bounded read-ahead so the next header can reuse storage;
+that capacity is also charged. Denied frame/fragment growth stops
+input and sends a best-effort `1013` / `Input Memory Limit`; this does not wait for
+the advertised body. A refused incomplete frame cannot be resumed unreserved.
+
+Each lease retains its high-water allowance, so normal reads within it perform
+no shared-budget atomics or per-packet guard allocation. The allowance releases
+on transport drop/cancellation, or shrinks on a safe decoder reset. Fragment
+assembly retains its reservation while a fragmented message is incomplete.
+After a message completes, its high water can remain until the configured large
+input reclamation policy runs or the session ends. This conservative headroom
+can refuse growth while RSS remains lower than the limit; disabling reclamation
+also retains those allowances longer. `0` disables this admission policy and
+uses the decoder's original allocation-growth behavior.
+
+The staging allowance is not an RSS cap: published `Bytes` bodies retain their
+shared owners outside it, consumers have separate output/variable limits, and
+allocator overhead, protocol metadata, stacks, TLS/proxy/kernel buffers and
+allocator-retained pages are excluded. It controls the native relay decoder;
+the optional migration bridge has its own bounded connections/messages and
+separate process memory. Use connection and message limits alongside these
+reservations and measure actual RSS on the intended deployment.
 
 Routed output borrows immutable receive storage. A small slice can retain its
 backing slab, so each connection tracks its largest observed message (at least
@@ -86,11 +118,11 @@ can share the normal slab again instead of using the old large-input watermark.
 This needs a narrow local codec hook; its source provenance and complete patch
 are in [vendor/README.md](../vendor/README.md).
 
-This policy releases unused input storage; it is not a process-wide admission
-budget or an RSS cap. Incomplete frames and fragment assembly still need their
-storage, recipients can still own published bodies, and an allocator can retain
-freed pages. Budget connections and incoming message size together, and monitor
-process RSS as well as logical queue bytes.
+This reclamation policy releases unused input storage and its staging headroom.
+Admission controls growth separately. Incomplete frames and fragment assembly
+still need their storage, recipients can still own published bodies, and an
+allocator can retain freed pages. Monitor process RSS alongside staging and
+logical output reservations.
 
 For applications that should retire inactive sessions, set
 `WAR_IDLE_TIMEOUT_SECS=300` (or another value in `1..=86400`). The default `0`
@@ -226,6 +258,15 @@ counts only the incomplete wire-header bytes copied during those resets;
 application-value compaction remains in `war_routing_copied_bytes_total`.
 `war_read_buffer_reclaims_deferred_total` counts scheduled attempts postponed
 because a frame or buffered input still needs processing.
+
+`war_read_buffer_reserved_bytes`, `war_read_buffer_peak_reserved_bytes` and
+`war_read_buffer_limit_bytes` expose the current, peak and configured staging
+allowance. Reserved/peak include two-times capacity headroom and are not physical
+allocation measurements. `war_read_buffer_reservations_rejected_total` counts
+refused handshake admissions and frame/fragment growth attempts. A high ratio of
+reserved to limit plus rising refusals identifies input staging pressure; it is
+separate from slow-consumer and output-budget pressure. With admission disabled,
+these four metrics are zero.
 
 ## Scaling boundary
 

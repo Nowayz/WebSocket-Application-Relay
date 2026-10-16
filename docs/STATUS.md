@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 46 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 60 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -230,6 +230,47 @@ installation path. No system service or public endpoint has been installed.
 Caddy is not installed here, so its example was not executed. Measurements are
 local single-host plaintext sockets; no production or cluster claim is made.
 
+## Decoder staging admission (current checkpoint)
+
+The native relay now reserves decoder staging before allocating, in addition to
+reclaiming unused storage. `--total-read-buffer-bytes` /
+`WAR_TOTAL_READ_BUFFER_BYTES` defaults to 1 GiB; `0` disables admission. A bounded
+16 KiB HTTP upgrade has temporary headroom, then separate frame/fragment leases
+retain twice their requested capacity. Large frames include one charged read
+chunk of read-ahead. Ordinary reads within the high water perform no shared
+budget atomics or guard allocations. Refusals return HTTP `503` or a best-effort
+WebSocket `1013`, before receiving the refused body. Reclaim/drop/cancellation
+release the allowances; completed payloads retain their existing shared owners.
+This controls staging requests, not total process RSS or published body storage.
+
+Three paired 64-source partial-frame runs with a 24 MiB allowance reduced median
+held RSS from 148.22 to 8.14 MiB, while independent healthy routing and later
+admission remained verified. The default admits most of that cohort; the memory
+reduction belongs to the deliberately tighter configuration. Nine final pressure
+cases, an eight-producer retention/reclamation case and over three million
+selected-server churn lifecycles passed. Exact-size allocation was rejected
+after repeated large-message CPU regressions; charged read-ahead recovered the
+cost. Selected 1 KiB and 64 KiB CPU/throughput medians stayed within a few percent
+of the prior release, with identical p99 bounds. Standing idle RSS increased
+940 KiB at 2,000 sessions. See `performance.md` for all costs and limitations.
+
+All 60 Rust tests, strict Clippy, formatting, seven JS socket cases and the
+46-case/eight-difference original C++ comparison passed. Vendor verification now
+covers 62 files against the original pinned packages plus the complete declared
+patch. The host subsequently rebooted: saved runtime sources/releases matched
+their recorded hashes; native/bridge/HTTP/Chrome were restarted, and all Rust,
+Clippy/format/vendor checks, seven Chrome checks, three live legacy checks and
+the five-second live reclamation/shared-routing check passed again. Final live
+connection/session/queue/variable/staging gauges and error counters were zero.
+
+Current local endpoints are native `ws://127.0.0.1:1338`, optional bridge
+`ws://127.0.0.1:1337`, management `http://127.0.0.1:1339`, and the browser check
+`http://127.0.0.1:4180/`. The selected native release hash begins `a420b7a37a1d`;
+the bridge begins `d82df74b7cf8`. Exact hashes, sources, measurements and post-reboot
+live evidence are in `benchmarks/2026-10-15-input-budget-{build,summary,live}.json`.
+No hosted deployment or multi-node capacity is claimed; the ongoing goal remains
+active.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -241,8 +282,9 @@ local single-host plaintext sockets; no production or cluster claim is made.
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
    Concurrent retention and delayed storage reclamation now cover up to 64
-   producers. Add process-wide reservations before decoder allocations;
-   reclamation alone does not bound simultaneous incomplete input. Preserve
+   producers. Process-wide reservations now precede decoder allocations and
+   cover incomplete frames plus fragment assembly; extend pressure checks to
+   larger active populations and mixed reclamation/admission waves. Preserve
    shared bodies, exact peer Close acknowledgements, and immediate dropping of
    partial output. Extend mixed healthy traffic during large reclamation waves.
 3. Extend duration, fanout, active populations, adverse networks, and connection

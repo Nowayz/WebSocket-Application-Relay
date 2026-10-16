@@ -185,9 +185,17 @@ impl Relay {
         let _ = random_id()?;
         let mut channels = HashMap::new();
         channels.insert(Bytes::from_static(GLOBAL_CHANNEL), Channel::default());
+        let read_budget = (config.total_read_buffer_bytes > 0).then(|| {
+            tokio_tungstenite::tungstenite::protocol::ReadBudget::new(
+                config.total_read_buffer_bytes,
+            )
+        });
         Ok(Arc::new(Self {
             config,
-            metrics: Arc::new(Metrics::default()),
+            metrics: Arc::new(Metrics {
+                read_budget,
+                ..Metrics::default()
+            }),
             draining: AtomicBool::new(false),
             stopping: AtomicBool::new(false),
             state: RwLock::new(Registry {

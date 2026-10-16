@@ -107,6 +107,15 @@ avoid pinning that storage in a slow queue. This concerns user-space forwarding;
 WebSocket unmasking, fragmented-message assembly, and kernel transfers still do
 their required work. See [docs/performance.md](docs/performance.md).
 
+Native decoder staging has a shared 1 GiB allowance, configurable with
+`--total-read-buffer-bytes` / `WAR_TOTAL_READ_BUFFER_BYTES` (`0` disables).
+Frame and fragment storage reserve twice the requested capacity before growth,
+retaining headroom for reuse. Exhaustion returns HTTP `503` before upgrade or a
+best-effort WebSocket `1013` before reading a refused body. This preserves shared
+payload ownership and avoids per-packet budget atomics within the high water.
+It is a staging allowance, not an RSS limit; see [operations](docs/operations.md)
+for the accounting boundary, reclamation and metrics.
+
 ## Original clients
 
 The optional migration bridge translates the original binary/text wire format:
@@ -251,6 +260,21 @@ python3 scripts/benchmark.py --output artifacts/read-buffer.json
 cargo build --release --example stress
 python3 scripts/stability.py --output artifacts/stability.json
 ```
+
+To check admission against concurrent incomplete frames while a healthy session
+continues routing, use a deliberately smaller staging allowance:
+
+```sh
+cargo build --release --bins --example input_budget
+python3 scripts/input-budget.py --server-arg=--total-read-buffer-bytes=25165824 \
+  --expect-admitted 1 --output artifacts/input-budget.json
+```
+
+All 64 sources join, advertise 8 MiB frames, and only admitted sources supply
+2 MiB of body. Refusals must use `1013`; the independent session verifies 1 KiB
+self echoes. The probe drops admitted incomplete transports intentionally, then
+verifies new admission/routing, two normal Close handshakes and final resource
+release. Its memory samples are server-only and explicitly phase-bracketed.
 
 The load tool verifies every frame and its order. Reports include setup time,
 verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons use

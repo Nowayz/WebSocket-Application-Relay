@@ -1,10 +1,15 @@
 use std::{
     fmt::Write,
-    sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed},
+    },
 };
+use tokio_tungstenite::tungstenite::protocol::ReadBudget;
 
 #[derive(Default)]
 pub struct Metrics {
+    pub read_budget: Option<Arc<ReadBudget>>,
     pub accepted: AtomicU64,
     pub rejected: AtomicU64,
     pub handshake_errors: AtomicU64,
@@ -38,6 +43,39 @@ pub struct Metrics {
 impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
+        let budget = self.read_budget.as_deref();
+        for (name, kind, value, help) in [
+            (
+                "read_buffer_reserved_bytes",
+                "gauge",
+                budget.map_or(0, ReadBudget::reserved) as u64,
+                "Decoder staging allowance reserved, including two-times capacity growth headroom; excludes published payloads and allocator overhead.",
+            ),
+            (
+                "read_buffer_peak_reserved_bytes",
+                "gauge",
+                budget.map_or(0, ReadBudget::peak) as u64,
+                "Peak successfully reserved decoder staging allowance.",
+            ),
+            (
+                "read_buffer_limit_bytes",
+                "gauge",
+                budget.map_or(0, ReadBudget::limit) as u64,
+                "Shared decoder staging allowance; zero disables admission.",
+            ),
+            (
+                "read_buffer_reservations_rejected_total",
+                "counter",
+                budget.map_or(0, ReadBudget::rejected),
+                "Decoder staging growth or connection admissions refused before allocation.",
+            ),
+        ] {
+            writeln!(
+                text,
+                "# HELP war_{name} {help}\n# TYPE war_{name} {kind}\nwar_{name} {value}"
+            )
+            .expect("String write");
+        }
         for (name, value, help) in [
             (
                 "read_buffer_reclaims_total",

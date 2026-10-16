@@ -3,8 +3,9 @@
 pub mod frame;
 
 mod message;
+mod read_budget;
 
-pub use self::{frame::CloseFrame, message::Message};
+pub use self::{frame::CloseFrame, message::Message, read_budget::{ReadBudget, ReadLease}};
 
 use self::{
     frame::{
@@ -230,7 +231,18 @@ impl<Stream> WebSocket<Stream> {
     /// partial next headers. Returns copied header bytes, or None if a frame is
     /// partially received. This allocates only the configured initial read size.
     pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
-        self.context.frame.reclaim_read_buffer()
+        self.context.reclaim_read_buffer()
+    }
+
+    /// Attach a pre-reserved decoder staging lease before the first read.
+    /// Initial receive storage must already be covered by this lease. Future
+    /// frame and fragment growth is admitted before allocating; consumers must
+    /// separately bound published message ownership.
+    ///
+    /// # Panics
+    /// Panics if called after reading has started or a budget is already attached.
+    pub fn set_read_budget(&mut self, lease: ReadLease) -> Result<()> {
+        self.context.set_read_budget(lease)
     }
 
     /// Check if it is possible to read messages.
@@ -375,6 +387,11 @@ pub struct WebSocketContext {
     state: WebSocketState,
     /// Receive: an incomplete message being processed.
     incomplete: Option<IncompleteMessage>,
+    // Persistent fragment high water avoids atomics on every fragmented message.
+    // Its staging collector above is dropped before its allowance.
+    fragment_lease: Option<ReadLease>,
+    read_started: bool,
+    read_memory_failed: bool,
     /// Send in addition to regular messages E.g. "pong" or "close".
     additional_send: Option<Frame>,
     /// True indicates there is an additional message (like a pong)
@@ -412,6 +429,9 @@ impl WebSocketContext {
             frame,
             state: WebSocketState::Active,
             incomplete: None,
+            fragment_lease: None,
+            read_started: false,
+            read_memory_failed: false,
             additional_send: None,
             unflushed_additional: false,
             config,
@@ -434,12 +454,31 @@ impl WebSocketContext {
         &self.config
     }
 
+    fn set_read_budget(&mut self, lease: ReadLease) -> Result<()> {
+        assert!(!self.read_started && self.fragment_lease.is_none(),
+            "attach a read budget only once, before the first read");
+        let fragment = lease.sibling();
+        self.frame.set_read_budget(lease)?;
+        self.fragment_lease = Some(fragment);
+        Ok(())
+    }
+
+    fn reclaim_read_buffer(&mut self) -> Option<usize> {
+        let copied = self.frame.reclaim_read_buffer()?;
+        if self.incomplete.is_none() {
+            if let Some(lease) = &mut self.fragment_lease {
+                lease.shrink_to(0);
+            }
+        }
+        Some(copied)
+    }
+
     /// Check if it is possible to read messages.
     ///
     /// Reading is impossible after receiving `Message::Close`. It is still possible after
     /// sending close frame since the peer still may send some data before confirming close.
     pub fn can_read(&self) -> bool {
-        self.state.can_read()
+        self.state.can_read() && !self.read_memory_failed
     }
 
     /// Check if it is possible to write messages.
@@ -457,6 +496,10 @@ impl WebSocketContext {
     where
         Stream: Read + Write,
     {
+        self.read_started = true;
+        if self.read_memory_failed {
+            return Err(CapacityError::ReadBufferBudgetExceeded.into());
+        }
         // Do not read from already closed connections.
         self.state.check_not_terminated()?;
 
@@ -478,7 +521,13 @@ impl WebSocketContext {
 
             // If we get here, either write blocks or we have nothing to write.
             // Thus if read blocks, just let it return WouldBlock.
-            if let Some(message) = self.read_message_frame(stream)? {
+            let result = self.read_message_frame(stream);
+            if matches!(&result, Err(Error::Capacity(CapacityError::ReadBufferBudgetExceeded))) {
+                // A denied header has already been consumed. Never resume that
+                // read without its allocation; writing a best-effort Close is safe.
+                self.read_memory_failed = true;
+            }
+            if let Some(message) = result? {
                 trace!("Received message {message}");
                 return Ok(message);
             }
@@ -690,7 +739,12 @@ impl WebSocketContext {
                 let payload = match (data, self.incomplete.as_mut()) {
                     (OpData::Continue, None) => Err(ProtocolError::UnexpectedContinueFrame),
                     (OpData::Continue, Some(incomplete)) => {
-                        incomplete.extend(frame.into_payload(), self.config.max_message_size)?;
+                        let payload = frame.into_payload();
+                        if let Some(lease) = self.fragment_lease.as_mut() {
+                            incomplete.extend_budgeted(payload, self.config.max_message_size, Some(lease))?;
+                        } else {
+                            incomplete.extend(payload, self.config.max_message_size)?;
+                        }
                         Ok(None)
                     }
                     (_, Some(_)) => Err(ProtocolError::ExpectedFragment(data)),
@@ -711,7 +765,11 @@ impl WebSocketContext {
                     }
                     (Some((payload, t)), false) => {
                         let mut incomplete = IncompleteMessage::new(t);
-                        incomplete.extend(payload, self.config.max_message_size)?;
+                        if let Some(lease) = self.fragment_lease.as_mut() {
+                            incomplete.extend_budgeted(payload, self.config.max_message_size, Some(lease))?;
+                        } else {
+                            incomplete.extend(payload, self.config.max_message_size)?;
+                        }
                         self.incomplete = Some(incomplete);
                         Ok(None)
                     }
