@@ -191,6 +191,7 @@ async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
         .max_write_buffer_size(17 * 1024 * 1024)
         .max_message_size(Some(16 * 1024 * 1024));
     let mut legacy = timeout(WAIT, accept_async_with_config(socket, Some(config))).await??;
+    legacy.set_read_frame_limit(Some(transport::READ_FRAMES_PER_POLL));
     let joined = timeout(WAIT, async {
         loop {
             match legacy

@@ -92,6 +92,17 @@ the optional migration bridge has its own bounded connections/messages and
 separate process memory. Use connection and message limits alongside these
 reservations and measure actual RSS on the intended deployment.
 
+Native and legacy server readers process at most 256 WebSocket frames in one
+stream poll. Long sequences of empty or small continuations yield and explicitly
+reschedule the reader, preserving incomplete messages and their existing storage.
+This lets other sessions, management requests and cancellation/deadline branches
+make progress even when fragment input is already buffered. Complete messages
+usually return before reaching the quota. It does not reject otherwise valid
+fragmentation or change the message/rate limits. The quota bounds frame count,
+not elapsed time or total connection CPU; one large frame still performs its
+normal validation, unmasking and assembly work. See the measured scheduling
+results in `performance.md`.
+
 Routed output borrows immutable receive storage. A small slice can retain its
 backing slab, so each connection tracks its largest observed message (at least
 its configured initial read buffer). Once that mark exceeds the initial read

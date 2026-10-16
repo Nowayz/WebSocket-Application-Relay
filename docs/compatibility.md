@@ -67,7 +67,7 @@ checks received bytes before producing a report. It uses neither the new client
 encoder nor the bridge's encoder to construct legacy packets. The unchanged
 upstream `relay.js` also has separate real-socket coverage in `check-js.sh`.
 
-Forty-six common cases cover:
+Forty-eight common cases cover:
 
 - Text and binary joins; empty, 16-byte, binary/non-UTF-8, and 16-byte UTF-8 channel
   names; unique nonreserved IDs; rejection of overlong text and binary names.
@@ -77,6 +77,8 @@ Forty-six common cases cover:
 - Payloads that put complete legacy binary messages at WebSocket lengths 125,
   126, 65,535, and 65,536; exact arbitrary bytes and UTF-8 text; two-message
   ordering at each recipient.
+- Binary and text messages containing 1,024 empty continuation frames, including
+  a UTF-8 codepoint split before those continuations and completed afterward.
 - Ignored text relay commands and malformed listener lengths; authenticated
   channel-list names, populations, and layout; shared, isolated, empty, and
   missing variables, including binary keys and values.
@@ -133,6 +135,15 @@ queued bytes, and variable bytes, with only the persistent global channel left.
 Native write errors, write timeouts, Close failures, and transport disconnects
 were zero. One native handshake error per run is expected from the TCP readiness
 probe, which connects and closes before performing an upgrade.
+
+The [2026-10-16 bounded-parsing check](benchmarks/2026-10-16-fairness-reference.json)
+passes all 48 common cases and the same eight explicit differences. The two
+added cases exercise 1,024 empty continuation frames in binary and text input,
+including split UTF-8, through the original executable and the Rust bridge.
+These exceed the bridge's 256-frame parsing quota and verify exact payload
+preservation across the new cooperative steps. Both Rust services shut down
+successfully; final staging, queue, connection, session and variable gauges were
+zero with no native write, timeout, Close or transport failures.
 
 This is application and legacy wire compatibility evidence. CBOR framing,
 resource bounds, shared-body ownership, receive-buffer retention, and performance

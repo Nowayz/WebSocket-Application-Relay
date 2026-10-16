@@ -279,6 +279,16 @@ impl<Stream: Read + Write> WebSocket<Stream> {
         self.context.read(&mut self.socket)
     }
 
+    /// Read at most `max_frames` frames, preserving incomplete message state.
+    ///
+    /// `Ok(None)` means the frame limit was reached without a message. Retry
+    /// after yielding execution; it does not indicate EOF or an I/O readiness
+    /// change. Actual I/O blocking still returns `Error::Io(WouldBlock)`.
+    /// No received or assembled data is discarded when this method yields.
+    pub fn read_with_frame_limit(&mut self, max_frames: std::num::NonZeroUsize) -> Result<Option<Message>> {
+        self.context.read_bounded(&mut self.socket, Some(max_frames.get()))
+    }
+
     /// Writes and immediately flushes a message.
     /// Equivalent to calling [`write`](Self::write) then [`flush`](Self::flush).
     pub fn send(&mut self, message: Message) -> Result<()> {
@@ -496,6 +506,13 @@ impl WebSocketContext {
     where
         Stream: Read + Write,
     {
+        Ok(self.read_bounded(stream, None)?.expect("unlimited read does not yield"))
+    }
+
+    fn read_bounded<Stream>(&mut self, stream: &mut Stream, mut remaining: Option<usize>) -> Result<Option<Message>>
+    where
+        Stream: Read + Write,
+    {
         self.read_started = true;
         if self.read_memory_failed {
             return Err(CapacityError::ReadBufferBudgetExceeded.into());
@@ -529,7 +546,13 @@ impl WebSocketContext {
             }
             if let Some(message) = result? {
                 trace!("Received message {message}");
-                return Ok(message);
+                return Ok(Some(message));
+            }
+            if let Some(remaining) = &mut remaining {
+                *remaining -= 1;
+                if *remaining == 0 {
+                    return Ok(None);
+                }
             }
         }
     }

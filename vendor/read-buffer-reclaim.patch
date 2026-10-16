@@ -1,3 +1,4 @@
+diff --git a/tungstenite/src/error.rs b/tungstenite/src/error.rs
 --- a/tungstenite/src/error.rs
 +++ b/tungstenite/src/error.rs
 @@ -135,6 +135,9 @@
@@ -10,6 +11,7 @@
      /// Too many headers provided (see [`httparse::Error::TooManyHeaders`]).
      #[error("Too many headers")]
      TooManyHeaders,
+diff --git a/tungstenite/src/protocol/frame/mod.rs b/tungstenite/src/protocol/frame/mod.rs
 --- a/tungstenite/src/protocol/frame/mod.rs
 +++ b/tungstenite/src/protocol/frame/mod.rs
 @@ -15,6 +15,7 @@
@@ -127,6 +129,7 @@
                  }
              }
  
+diff --git a/tungstenite/src/protocol/message.rs b/tungstenite/src/protocol/message.rs
 --- a/tungstenite/src/protocol/message.rs
 +++ b/tungstenite/src/protocol/message.rs
 @@ -2,6 +2,7 @@
@@ -212,6 +215,7 @@
          }
      }
  
+diff --git a/tungstenite/src/protocol/mod.rs b/tungstenite/src/protocol/mod.rs
 --- a/tungstenite/src/protocol/mod.rs
 +++ b/tungstenite/src/protocol/mod.rs
 @@ -3,8 +3,9 @@
@@ -251,7 +255,24 @@
      /// Check if it is possible to read messages.
      ///
      /// Reading is impossible after receiving `Message::Close`. It is still possible after
-@@ -368,6 +387,11 @@
+@@ -258,6 +277,16 @@
+     /// is returned. Once that happens it is safe to drop the underlying connection.
+     pub fn read(&mut self) -> Result<Message> {
+         self.context.read(&mut self.socket)
++    }
++
++    /// Read at most `max_frames` frames, preserving incomplete message state.
++    ///
++    /// `Ok(None)` means the frame limit was reached without a message. Retry
++    /// after yielding execution; it does not indicate EOF or an I/O readiness
++    /// change. Actual I/O blocking still returns `Error::Io(WouldBlock)`.
++    /// No received or assembled data is discarded when this method yields.
++    pub fn read_with_frame_limit(&mut self, max_frames: std::num::NonZeroUsize) -> Result<Option<Message>> {
++        self.context.read_bounded(&mut self.socket, Some(max_frames.get()))
+     }
+ 
+     /// Writes and immediately flushes a message.
+@@ -368,6 +397,11 @@
      state: WebSocketState,
      /// Receive: an incomplete message being processed.
      incomplete: Option<IncompleteMessage>,
@@ -263,7 +284,7 @@
      /// Send in addition to regular messages E.g. "pong" or "close".
      additional_send: Option<Frame>,
      /// True indicates there is an additional message (like a pong)
-@@ -405,6 +429,9 @@
+@@ -405,6 +439,9 @@
              frame,
              state: WebSocketState::Active,
              incomplete: None,
@@ -273,7 +294,7 @@
              additional_send: None,
              unflushed_additional: false,
              config,
-@@ -427,12 +454,31 @@
+@@ -427,12 +464,31 @@
          &self.config
      }
  
@@ -306,10 +327,17 @@
      }
  
      /// Check if it is possible to write messages.
-@@ -450,6 +496,10 @@
+@@ -450,6 +506,17 @@
      where
          Stream: Read + Write,
      {
++        Ok(self.read_bounded(stream, None)?.expect("unlimited read does not yield"))
++    }
++
++    fn read_bounded<Stream>(&mut self, stream: &mut Stream, mut remaining: Option<usize>) -> Result<Option<Message>>
++    where
++        Stream: Read + Write,
++    {
 +        self.read_started = true;
 +        if self.read_memory_failed {
 +            return Err(CapacityError::ReadBufferBudgetExceeded.into());
@@ -317,7 +345,7 @@
          // Do not read from already closed connections.
          self.state.check_not_terminated()?;
  
-@@ -471,7 +521,13 @@
+@@ -471,9 +538,21 @@
  
              // If we get here, either write blocks or we have nothing to write.
              // Thus if read blocks, just let it return WouldBlock.
@@ -330,9 +358,18 @@
 +            }
 +            if let Some(message) = result? {
                  trace!("Received message {message}");
-                 return Ok(message);
+-                return Ok(message);
++                return Ok(Some(message));
++            }
++            if let Some(remaining) = &mut remaining {
++                *remaining -= 1;
++                if *remaining == 0 {
++                    return Ok(None);
++                }
              }
-@@ -683,7 +739,12 @@
+         }
+     }
+@@ -683,7 +762,12 @@
                  let payload = match (data, self.incomplete.as_mut()) {
                      (OpData::Continue, None) => Err(ProtocolError::UnexpectedContinueFrame),
                      (OpData::Continue, Some(incomplete)) => {
@@ -346,7 +383,7 @@
                          Ok(None)
                      }
                      (_, Some(_)) => Err(ProtocolError::ExpectedFragment(data)),
-@@ -704,7 +765,11 @@
+@@ -704,7 +788,11 @@
                      }
                      (Some((payload, t)), false) => {
                          let mut incomplete = IncompleteMessage::new(t);
@@ -359,6 +396,8 @@
                          self.incomplete = Some(incomplete);
                          Ok(None)
                      }
+diff --git a/tungstenite/src/protocol/read_budget.rs b/tungstenite/src/protocol/read_budget.rs
+new file mode 100644
 --- /dev/null
 +++ b/tungstenite/src/protocol/read_budget.rs
 @@ -0,0 +1,116 @@
@@ -478,12 +517,32 @@
 +        self.budget.reserved.fetch_sub(self.reserved, Relaxed);
 +    }
 +}
+diff --git a/tokio-tungstenite/src/lib.rs b/tokio-tungstenite/src/lib.rs
 --- a/tokio-tungstenite/src/lib.rs
 +++ b/tokio-tungstenite/src/lib.rs
-@@ -285,6 +285,18 @@
-         self.inner.get_config()
+@@ -210,6 +210,7 @@
+     /// `false` once start_send hits `WouldBlock` errors.
+     /// `true` initially and after `flush`ing.
+     ready: bool,
++    read_frame_limit: Option<std::num::NonZeroUsize>,
+ }
+ 
+ impl<S> WebSocketStream<S> {
+@@ -243,7 +244,7 @@
      }
  
+     pub(crate) fn new(ws: WebSocket<AllowStd<S>>) -> Self {
+-        Self { inner: ws, closing: false, ended: false, ready: true }
++        Self { inner: ws, closing: false, ended: false, ready: true, read_frame_limit: None }
+     }
+ 
+     fn with_context<F, R>(&mut self, ctx: Option<(ContextWaker, &mut Context<'_>)>, f: F) -> R
+@@ -283,6 +284,26 @@
+     /// Returns a reference to the configuration of the tungstenite stream.
+     pub fn get_config(&self) -> &WebSocketConfig {
+         self.inner.get_config()
++    }
++
 +    /// Release unused decoder storage between frames. Published payloads remain
 +    /// shared; a partial next header is preserved. None means a frame is busy.
 +    pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
@@ -496,6 +555,36 @@
 +        self.inner.set_read_budget(lease)
 +    }
 +
++    /// Bound frames parsed by one stream poll, including empty continuations.
++    /// The stream wakes itself and yields when the limit is reached without
++    /// a message. Incomplete input and protocol state remain in the decoder.
++    /// `None` retains upstream's unlimited parsing behavior.
++    pub fn set_read_frame_limit(&mut self, limit: Option<std::num::NonZeroUsize>) {
++        self.read_frame_limit = limit;
+     }
+ 
      /// Close the underlying web socket
-     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
-     where
+@@ -310,11 +331,21 @@
+             return Poll::Ready(None);
+         }
+ 
++        let limit = self.read_frame_limit;
+         match futures_util::ready!(self.with_context(Some((ContextWaker::Read, cx)), |s| {
+             trace!("{}:{} Stream.with_context poll_next -> read()", file!(), line!());
+-            cvt(s.read())
++            cvt(match limit {
++                Some(limit) => s.read_with_frame_limit(limit),
++                None => s.read().map(Some),
++            })
+         })) {
+-            Ok(v) => Poll::Ready(Some(Ok(v))),
++            Ok(Some(v)) => Poll::Ready(Some(Ok(v))),
++            Ok(None) => {
++                // This is a cooperative yield, not an underlying WouldBlock:
++                // already buffered frames may need no further I/O wakeup.
++                cx.waker().wake_by_ref();
++                Poll::Pending
++            }
+             Err(e) => {
+                 self.ended = true;
+                 if matches!(e, WsError::AlreadyClosed | WsError::ConnectionClosed) {

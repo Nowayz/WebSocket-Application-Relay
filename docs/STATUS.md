@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 65 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 68 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -269,7 +269,7 @@ At that checkpoint the native release hash began `a420b7a37a1d` and the bridge
 began `d82df74b7cf8`. Exact hashes, sources, measurements and post-reboot live
 evidence are in `benchmarks/2026-10-15-input-budget-{build,summary,live}.json`.
 
-## Fragment capacity under pressure (current checkpoint)
+## Fragment capacity under pressure
 
 A new real-socket check found that a valid 4 MiB message split into 3 MiB/1 MiB
 fragments was refused under a 16 MiB staging allowance: geometric assembly
@@ -309,18 +309,67 @@ and final connection/session/queue/variable/staging gauges and error counters
 were zero. `benchmarks/2026-10-16-fragment-final-live.json` records the process
 identities, exact release hashes, browser report and live probe source.
 
+At that checkpoint the native SHA-256 began `6f801ea16bdb` and bridge began
+`933efb31e760`, using the same local endpoints listed below.
+
+## Fragment scheduling (current checkpoint)
+
+Valid messages with many empty continuations exposed a scheduling problem:
+decoder reads could parse many frames before returning to the executor.
+The native relay and legacy server now yield after at most 256 parsed frames
+without a message. They resume the same incomplete data, UTF-8/control state
+and admission leases; published CBOR values retain their shared ownership.
+The asynchronous wrapper explicitly wakes itself so buffered input resumes
+without requiring another network event. Library defaults remain unchanged;
+the quota controls frame count per poll, without a time or total CPU guarantee.
+
+Three alternating single-worker pairs at each read size verified 64 million
+empty continuations, 32 complete messages and all five normal Close handshakes
+per run. The median of maximum healthy RTTs fell from 10.662 to 0.871 ms with
+4 KiB reads and from 322.164 to 0.864 ms with 128 KiB reads. Management RTTs also
+fell. Fragment-heavy CPU increased about 1.7–1.8% in these medians. A separate
+four-worker/16-source pair at each read size verified all 128 messages and
+17 Close handshakes; maximum healthy RTT stayed below 0.8 ms on the candidate.
+These are finite local results, without a production latency claim.
+
+Twelve ordinary traffic cases verified 178,598,784 deliveries. The selected
+1 KiB/64 KiB CPU medians changed by less than 0.6%, throughput by approximately
+1% or less, with unchanged p99 bounds. The frozen traffic client intentionally
+drops its TCP handles; every expected departure and final resource release was
+accounted for, with normal Close verified independently. The new workload's
+19 recorded cases also cover the README command, tight 16 MiB fragment staging
+with the default five-second reset, and three reclamation waves with 64 sources
+plus healthy traffic. All final staging/session/connection/queue/variable gauges
+were zero; routed-body compaction stayed zero.
+
+All 68 Rust tests, strict Clippy, formatting, the 62-file vendor audit and seven
+JavaScript socket cases pass. The original C++ comparison now includes binary
+and split-UTF-8 text messages with 1,024 empty continuations: all 48 common cases
+and eight explicit differences pass. Three new decoder checks cover bounded
+progress, explicit wakeup with entirely buffered input, cancellation/resumption,
+UTF-8/control preservation, published payload pointers and terminal errors.
+
+The verified release replaced the quiescent local native/bridge processes.
+A fresh Chrome run passed all seven checks with no console messages, three
+live legacy/Close cases passed, and live decoder retirement returned two
+connected sessions to 16 KiB after 5.040 seconds. Subsequent typed routing added
+no body copies. Health/readiness returned 200; final resource gauges and error
+counters were zero. Exact sources, hashes, counters, workload traces and live
+process identities are bound in `benchmarks/2026-10-16-fairness-{build,summary,live}.json`.
+See `performance.md` for cost and measurement limits.
+
 Current local endpoints are native `ws://127.0.0.1:1338`, optional bridge
 `ws://127.0.0.1:1337`, management `http://127.0.0.1:1339`, and browser check
-`http://127.0.0.1:4180/`. Native SHA-256 begins `6f801ea16bdb`; bridge begins
-`933efb31e760`. Application-idle Close is disabled for manual testing; normal
-five-second decoder retirement and 1 GiB staging admission remain enabled.
-No hosted deployment or multi-node capacity is claimed; the ongoing goal remains
-active.
+`http://127.0.0.1:4180/`. Native SHA-256 begins `8bfeb5be88d2`; bridge begins
+`17e21d754a6b`. Application-idle Close is disabled for manual testing; normal
+five-second retirement and 1 GiB staging admission remain enabled.
+The ongoing goal remains active; no hosted deployment or cluster capacity is
+claimed.
 
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
-   variable or ID-management behavior changes. The current 46-case corpus and
+   variable or ID-management behavior changes. The current 48-case corpus and
    eight explicit difference checks now have real C++ wire evidence; longer
    scheduling windows, adverse networks and its garbage-collection cycle remain
    outside that finite comparison.
@@ -331,10 +380,11 @@ active.
    cover up to 64 producers plus independent healthy traffic across repeated
    waves. Process-wide reservations precede decoder allocations and cover
    incomplete frames plus fragment assembly; final-fragment growth uses its
-   known complete length. Extend duration, larger populations and adversarial
-   fragment schedules when the measurements justify the next change. Preserve
-   shared bodies, exact peer Close acknowledgements, and immediate dropping of
-   partial output.
+   known complete length. Empty-continuation parsing now yields cooperatively;
+   extend mixed nonempty fragment sizes, malformed CBOR and cancellation/deadline
+   precedence with concurrent healthy traffic. Increase duration and populations
+   when the measurements justify the next change. Preserve shared bodies,
+   exact peer Close acknowledgements, and immediate dropping of partial output.
 3. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

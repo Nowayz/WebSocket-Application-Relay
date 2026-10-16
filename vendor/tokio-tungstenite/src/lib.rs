@@ -210,6 +210,7 @@ pub struct WebSocketStream<S> {
     /// `false` once start_send hits `WouldBlock` errors.
     /// `true` initially and after `flush`ing.
     ready: bool,
+    read_frame_limit: Option<std::num::NonZeroUsize>,
 }
 
 impl<S> WebSocketStream<S> {
@@ -243,7 +244,7 @@ impl<S> WebSocketStream<S> {
     }
 
     pub(crate) fn new(ws: WebSocket<AllowStd<S>>) -> Self {
-        Self { inner: ws, closing: false, ended: false, ready: true }
+        Self { inner: ws, closing: false, ended: false, ready: true, read_frame_limit: None }
     }
 
     fn with_context<F, R>(&mut self, ctx: Option<(ContextWaker, &mut Context<'_>)>, f: F) -> R
@@ -297,6 +298,14 @@ impl<S> WebSocketStream<S> {
         self.inner.set_read_budget(lease)
     }
 
+    /// Bound frames parsed by one stream poll, including empty continuations.
+    /// The stream wakes itself and yields when the limit is reached without
+    /// a message. Incomplete input and protocol state remain in the decoder.
+    /// `None` retains upstream's unlimited parsing behavior.
+    pub fn set_read_frame_limit(&mut self, limit: Option<std::num::NonZeroUsize>) {
+        self.read_frame_limit = limit;
+    }
+
     /// Close the underlying web socket
     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
     where
@@ -322,11 +331,21 @@ where
             return Poll::Ready(None);
         }
 
+        let limit = self.read_frame_limit;
         match futures_util::ready!(self.with_context(Some((ContextWaker::Read, cx)), |s| {
             trace!("{}:{} Stream.with_context poll_next -> read()", file!(), line!());
-            cvt(s.read())
+            cvt(match limit {
+                Some(limit) => s.read_with_frame_limit(limit),
+                None => s.read().map(Some),
+            })
         })) {
-            Ok(v) => Poll::Ready(Some(Ok(v))),
+            Ok(Some(v)) => Poll::Ready(Some(Ok(v))),
+            Ok(None) => {
+                // This is a cooperative yield, not an underlying WouldBlock:
+                // already buffered frames may need no further I/O wakeup.
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
             Err(e) => {
                 self.ended = true;
                 if matches!(e, WsError::AlreadyClosed | WsError::ConnectionClosed) {

@@ -109,12 +109,18 @@ pub(crate) struct ServerSocket<S> {
     pending_control: bool,
 }
 
+// Bound non-message parsing so empty continuations cannot monopolize a poll.
+// Normal complete messages return before this budget is exhausted.
+pub(crate) const READ_FRAMES_PER_POLL: std::num::NonZeroUsize =
+    std::num::NonZeroUsize::new(256).unwrap();
+
 impl<S> ServerSocket<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     /// Only wrap a completed server handshake without negotiated extensions.
-    pub(crate) fn new(websocket: WebSocketStream<S>) -> Self {
+    pub(crate) fn new(mut websocket: WebSocketStream<S>) -> Self {
+        websocket.set_read_frame_limit(Some(READ_FRAMES_PER_POLL));
         Self {
             websocket,
             active: true,

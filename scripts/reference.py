@@ -116,10 +116,10 @@ class Client:
             data.extend(part)
         return bytes(data)
 
-    def send(self, opcode, payload):
+    def send(self, opcode, payload, final=True):
         mask = os.urandom(4)
         size = len(payload)
-        header = bytes([0x80 | opcode])
+        header = bytes([(0x80 if final else 0) | opcode])
         if size < 126:
             header += bytes([0x80 | size])
         elif size < 65536:
@@ -217,13 +217,19 @@ class Suite:
                     "value": value}
         return {label: [frame(*item) for item in frames[label]] for label in sorted(frames)}
 
-    def exchange(self, name, label, wire, deliveries=None, difference=False, barrier=True):
+    def exchange(self, name, label, wire, deliveries=None, difference=False, barrier=True, fragmented=False):
         sender = self.clients[label]
         barrier = barrier and wire[0] != 8
         expected = defaultdict(list)
         for destination, frame in deliveries or []:
             expected[destination].append(frame)
-        sender.send(*wire)
+        if fragmented:
+            sender.send(wire[0], wire[1][:-1], final=False)
+            for _ in range(1024):
+                sender.send(0, b"", final=False)
+            sender.send(0, wire[1][-1:])
+        else:
+            sender.send(*wire)
         if barrier:
             sender.send(2, command(5, b"__barrier"))
             expected[label].append((2, ZERO_REPLY))
@@ -238,9 +244,9 @@ class Suite:
         record = {"case": name, "frames": self.normalized(actual)}
         (self.differences if difference else self.common).append(record)
 
-    def route(self, name, source, target, destinations, body=b"payload", text=False):
+    def route(self, name, source, target, destinations, body=b"payload", text=False, fragmented=False):
         wire, output = self.wire(self.clients[source], target, body, text)
-        self.exchange(name, source, wire, [(label, output) for label in destinations])
+        self.exchange(name, source, wire, [(label, output) for label in destinations], fragmented=fragmented)
 
     def query(self, label):
         client = self.clients[label]
@@ -295,6 +301,10 @@ class Suite:
             self.join("bytes", b"\xff\x00\xfe")
             self.join("utf8", "π".encode() * 8, text=True)
             self.common.append({"case": "join-boundaries", "unique_nonreserved_ids": 9})
+            self.route("fragmented-binary-with-1024-empty-continuations", "a", b.id, ["b"],
+                       b"\x00binary\xff", fragmented=True)
+            self.route("fragmented-text-with-split-utf8-and-1024-empty-continuations", "a", b.id, ["b"],
+                       "€π".encode(), text=True, fragmented=True)
             for text, channel in ((False, b"x" * 17), (True, "π".encode() * 9)):
                 rejected = Client(self.port, channel, text, reject=True)
                 rejected.socket.close()

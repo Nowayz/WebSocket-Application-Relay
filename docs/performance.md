@@ -817,3 +817,118 @@ and `python3 scripts/fragment-waves.py --max-message-bytes 16777216 --output
 artifacts/fragment-waves.json`. The benchmark overrides the reset interval to
 one second; the ordinary server default remains five seconds. See the README
 for the larger cohort and disabled-reset variants.
+
+## Scheduling during empty-fragment input, 2026-10-16
+
+Message size and staging admission do not bound the work done before a
+fragmented message completes. A valid message can contain many empty masked
+continuations. The decoder previously parsed until a complete message or actual
+I/O blocking, while Tokio's I/O budget counted reads rather than frames. A
+single ready socket could therefore delay unrelated routing and management
+requests, especially with larger configured read chunks. This was reproduced
+against `9ddd0ee` before changing the parser.
+
+The decoder now exposes a bounded step using its existing parsing loop.
+`read_with_frame_limit(NonZeroUsize)` returns `Ok(None)` when its frame quota is
+exhausted without a message. The asynchronous wrapper explicitly wakes itself
+and returns `Pending`; buffered input can then resume without waiting for a new
+network event. Native and legacy server sockets enable **256 frames per poll**.
+The library default and ordinary synchronous `read()` remain unlimited. No wire
+validation, message/rate limit, payload owner or ordering changes. The hook
+allocates no new payload buffer and carries incomplete UTF-8/control state and
+admission leases across yields and cancelled read futures.
+
+This provides scheduling opportunities rather than a time deadline. A single
+frame can still require its normal body validation, unmasking and assembly;
+the quota also does not cap a connection's total CPU use. Tokio's
+[runtime fairness contract](https://docs.rs/tokio/latest/tokio/runtime/index.html#detailed-runtime-behavior)
+requires bounded task polls and does not promise a particular scheduling order.
+The measured latency below is specific to the workload and host.
+
+Three alternating fresh-process pairs used one worker on CPU 0 and the identical
+independent Python client on CPUs 4–7. Four source sockets each completed eight
+small CBOR messages containing two million empty continuations apiece:
+**64 million valid empty continuations and 32 verified messages per run**.
+Each message's encoded value included a checked wave counter. A separate socket
+verified 1 KiB self echoes about every millisecond, and management latency was
+sampled approximately every 10 ms. All five sockets completed normal Close.
+Rates, heartbeats and application idle were disabled; message/staging defaults
+remained enabled. Preparation preceded timing; no compilation or competing
+benchmark ran alongside a measured case.
+
+| Read chunk / observation | Prior release | Bounded parsing |
+| --- | ---: | ---: |
+| 4 KiB: median of each run's maximum healthy RTT | 10.662 ms | 0.871 ms |
+| 4 KiB: range of maximum healthy RTTs | 9.471–11.140 ms | 0.831–0.910 ms |
+| 4 KiB: median of maximum management RTTs | 18.059 ms | 1.583 ms |
+| 128 KiB: median of maximum healthy RTTs | 322.164 ms | 0.864 ms |
+| 128 KiB: range of maximum healthy RTTs | 215.464–324.853 ms | 0.859–1.067 ms |
+| 128 KiB: median of maximum management RTTs | 364.034 ms | 1.468 ms |
+
+With 4 KiB reads the prior server completed 272–301 healthy probes during each
+burst; bounded parsing completed 1,395–1,401. With 128 KiB reads those populations
+were 20–24 versus 1,390–1,417. The prior larger-buffer runs have too few healthy
+observations for a robust percentile claim, so the table reports per-run maxima.
+Median server CPU increased from 1.73 to 1.76 seconds with 4 KiB reads and from
+1.70 to 1.73 seconds with 128 KiB reads, about **1.7–1.8% more**. CPU is sampled
+from `/proc` at 10 ms resolution. This is a measured scheduling/CPU tradeoff for
+fragment-heavy input, not a throughput improvement.
+
+Every fragment workload verified exact incoming message/byte totals, join and
+delivery counts, delivered byte totals, normal Close and final resource release.
+Staging reservations, sessions, connections, queued and variable bytes returned
+to zero with the persistent global channel remaining. Protocol, write, timeout,
+Close, transport and admission errors were zero, and routed-body compaction was
+zero. The three new Rust checks additionally prove self-wakeup with entirely
+buffered input, state preservation when pending read futures are dropped,
+split UTF-8 with interleaved Ping/Pong, and terminal protocol-error behavior.
+
+A separate four-worker pair on CPUs 0–3 used 16 sources, eight messages each and
+two million empty continuations per message (256 million continuations per run).
+Maximum healthy RTT was 9.230 versus 0.499 ms with 4 KiB reads, and 294.970 versus
+0.797 ms with 128 KiB reads. All 128 messages and 17 normal Close handshakes were
+verified in each case. These are single pairs supporting the repeated
+single-worker finding, not a larger-population or production latency bound.
+
+Ordinary complete-message cost was checked with three alternating 15-second
+pairs per payload, four server workers on CPUs 0–3, and the same frozen Rust
+traffic client on CPUs 4–7. Sixty-four peers formed 32 private pairs with a
+window of 16; every encoded value and its order were verified.
+
+| Complete-message workload | Prior deliveries/s | Bounded deliveries/s | Prior server ns/delivery | Bounded server ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| 1 KiB, medians | 1,777,326 | 1,779,085 | 1,605 | 1,614 |
+| 64 KiB, medians | 211,040 | 208,921 | 11,407 | 11,426 |
+
+The 1 KiB CPU median increased 0.53% and the 64 KiB median increased 0.17%;
+throughput changed +0.10% and −1.00%, within overlapping ranges. The p99 upper
+bounds remained 1.048576 and 4.194304 ms respectively. These results support
+retaining the scheduling change without claiming a general traffic speed gain.
+All final resource gauges were zero, compaction stayed zero, and the frozen
+client's 64 intentional TCP departures were accounted for in every run.
+
+The final release also passed two 4 MiB fragmented waves under a tight 16 MiB
+staging allowance and the ordinary five-second reset, plus 64-producer/one-healthy
+session reclamation across three 1 MiB waves. All 192 larger-cohort messages,
+68 normal Close handshakes and three returns to the expected 532,480-byte
+connected allowance were verified. The original C++ comparison now additionally
+checks binary and split-UTF-8 text with 1,024 empty continuations: all 48 common
+cases and eight explicit differences passed. Those added cases exercise the
+legacy server's quota as well as preserving the original wire behavior.
+
+The [build manifest](benchmarks/2026-10-16-fairness-build.json) binds original
+package provenance, the full codec patch, source/release/client hashes, exact
+verifier source and test evidence. The
+[summary](benchmarks/2026-10-16-fairness-summary.json) binds all comparison traces
+and ordinary traffic checks. The traffic verifier intentionally drops its socket
+handles at timing end; those records account for every expected TCP departure
+and establish delivery/ordering and cleanup. Normal Close is verified separately
+by the fragment workload and compatibility checks. An initial driver preflight
+incorrectly expected graceful teardown from that frozen traffic client; its
+record and correction are retained.
+
+Reproduce the finite probe with `python3 scripts/fragment-fairness.py --workers 1
+--output artifacts/fragment-fairness.json`. Its default is 500,000 empty
+continuations per message; the comparison used `--fragments 2000000 --cycles 8`.
+Affinity is optional and requires an appropriate Linux CPU set. These checks
+do not establish production latency, multi-hour stability or cluster capacity.

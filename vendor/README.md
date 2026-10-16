@@ -1,7 +1,7 @@
-# WebSocket decoder storage patch
+# WebSocket decoder storage and scheduling patch
 
 The relay uses the published `tungstenite` and `tokio-tungstenite` **0.30.0**
-sources with explicit storage reclamation and admission APIs. The native
+sources with explicit storage reclamation, admission and bounded parsing APIs. The native
 connection can release unused decoder storage after a quiet input interval
 without discarding a partially received frame, copying a published payload, or
 resetting WebSocket protocol/fragment/control state.
@@ -10,7 +10,8 @@ Upstream's public APIs could not safely release this storage. Reconstructing a
 WebSocket from its TCP stream loses buffered input and protocol state; a limit
 checked after decoding does not control the decoder's allocation. This local
 patch keeps the existing decoder and gives the connection owner explicit storage
-control. No WebSocket framing, validation, masking, or output logic is replaced.
+control. Bounded parsing also lets asynchronous callers yield between fragments.
+No WebSocket framing, validation, masking, or output logic is replaced.
 
 `set_read_budget(ReadLease)` attaches shared admission before the first read.
 Frame and fragment-assembly storage reserve twice their requested capacity before
@@ -31,9 +32,10 @@ The modified or added upstream source files are:
 - `tungstenite/src/protocol/message.rs`: admission before binary/text fragment
   assembly grows, preserving incomplete UTF-8 codepoints.
 - `tungstenite/src/error.rs`: distinct staging-admission error.
-- `tungstenite/src/protocol/mod.rs`: synchronous API, persistent fragment allowance,
-  and terminal handling of denied reads.
-- `tokio-tungstenite/src/lib.rs`: asynchronous-wrapper forwarding methods.
+- `tungstenite/src/protocol/mod.rs`: synchronous APIs, persistent fragment allowance,
+  terminal handling of denied reads, and bounded fragment parsing.
+- `tokio-tungstenite/src/lib.rs`: asynchronous-wrapper forwarding methods and
+  explicit wakeup after a bounded parsing step.
 
 `read-buffer-reclaim.patch` is the complete diff against the published sources.
 `provenance.json` records original package hashes and upstream commits. The crate
@@ -67,12 +69,27 @@ applies below the usual eight-byte minimum growth, while preserving incomplete
 UTF-8 state and published payload ownership. The no-budget path keeps upstream's
 original allocation behavior.
 
+`WebSocket::read_with_frame_limit(NonZeroUsize)` uses the same parser but returns
+`Ok(None)` after consuming the configured number of frames without producing a
+message. This means cooperative yield, not EOF or socket blocking. Ordinary
+`read()` retains its unlimited behavior. `WebSocketStream::set_read_frame_limit`
+opts into bounded polls; a yield explicitly wakes the caller and returns
+`Pending`, so already buffered continuations resume even without a new I/O event.
+The asynchronous default is unchanged (`None`). Native and legacy server sockets
+enable 256 frames per poll. Incomplete data, UTF-8/control state, admission leases
+and published payload owners remain in place. No extra payload buffer or
+per-yield allocation is introduced by these hooks. This bounds frame count per
+poll, not elapsed time, total CPU use or the work within a single frame.
+
 `tests/read_buffer_reclaim.rs` exercises shared-owner release, every masked
 header split, deferred partial payloads, and a coalesced small message through
 the public API. `tests/read_budget.rs` covers concurrent admission, refusal before
 body allocation, terminal denial, fragment/UTF-8 assembly, shared payload pointers,
 and reclaim/drop release. Native socket tests separately cover scheduling,
 HTTP/Close admission responses, routing and cancellation/shutdown cleanup.
+`tests/read_fairness.rs` additionally checks bounded parsing, UTF-8/control
+resumption, self-wakeup with entirely buffered input, dropped read futures,
+shared payload pointers and terminal protocol errors.
 Rebase the patch deliberately when upgrading either package and rerun the
 full relay/client/compatibility checks. Remove these copies when an upstream API
 can provide the same ownership and partial-input guarantees.

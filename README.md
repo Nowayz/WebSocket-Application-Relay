@@ -138,7 +138,7 @@ acknowledgements. Tests execute the **unchanged upstream `relay.js`** on real
 sockets. The old `relay.module.js` remains as source history; its existing
 undefined-variable and const-reassignment bugs are not copied into the new client.
 An isolated check also runs the **unchanged original C++ executable** and compares
-46 shared wire behaviors against the bridge, while asserting eight deliberate
+48 shared wire behaviors against the bridge, while asserting eight deliberate
 behavior differences. See [compatibility.md](docs/compatibility.md) for the
 recorded results and local dependency setup.
 
@@ -298,6 +298,23 @@ probe uses a one-second reclamation interval and 256 MiB staging allowance to
 keep runs short; production defaults remain five seconds and 1 GiB. Use
 `--clients 64 --message-bytes 1048576` for the larger active cohort, or
 `--reclaim-secs 0 --cooldown-secs 0` to observe retained decoder capacity.
+
+To check unrelated routing while valid messages contain many empty continuation
+frames:
+
+```sh
+python3 scripts/fragment-fairness.py --workers 1 \
+  --output artifacts/fragment-fairness.json
+```
+
+Four sources complete eight messages each; every message contains 500,000 empty
+continuations. A separate session verifies 1 KiB self echoes every millisecond,
+and management latency is sampled alongside server CPU and RSS. Every encoded
+value and normal Close handshake is checked. The relay yields after 256 parsed
+frames without a completed message, retaining the same incomplete data and
+ownership. This provides scheduling opportunities, without a fixed latency
+guarantee. Optional `--server-cpus 0 --client-cpus 4-7` separates the client on a
+Linux host with those CPUs; `--read-buffer-bytes 131072` checks larger read chunks.
 
 The load tool verifies every frame and its order. Reports include setup time,
 verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons use
