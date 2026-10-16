@@ -1139,3 +1139,88 @@ Channel/membership-table capacity, mass departure within one room, much larger
 active fanout, multi-hour behavior and deployed TLS/network paths remain outside
 this optimization. Event-boundary RSS does not measure continuous peak RSS,
 and freeing ID buckets does not imply that the allocator returns pages to the OS.
+
+## Membership index capacity after room departures, 2026-10-16
+
+The ID-index change did not cover ordinary room membership or the global
+membership index scanned during private delivery. An initial 4,096-peer room
+case showed little CPU change; its record is retained. At 8,192 transient peers,
+an unprofiled ordinary-room run rose from 1,457 to 1,688 native ns/delivery after
+departure. Private global-index delivery rose from 1,476 to 1,714 ns/delivery.
+A separate profile put `Relay::receive` at 26.24% of user cycles, dominated by
+its empty-bucket group scan. These observations preceded runtime changes.
+
+One typed helper now trims sparse `u64 -> Arc<Peer>` ownership and membership
+indexes. The prior thresholds remain: capacity above 256, occupancy at most one
+eighth, and room for twice the remaining entries. Empty ordinary rooms retire
+directly; the persistent global room keeps its variables. Only keys and `Arc`
+handles move. Peer, queue, variable and published-payload storage stays intact,
+with no additional per-message check, allocation or body movement. Rehashing
+allocates metadata under the existing write lock; regrowth can allocate again.
+The [stability regression](stability.md#membership-lifetime-during-room-departures-2026-10-16)
+first fails on retained capacity, then checks pointers, held reservations,
+administrative events, later delivery and both variable lifetimes.
+
+The final comparison uses three fresh processes per build/scope, reversing order
+on the second repetition. Four-worker relays use CPUs 0–3 and the same frozen
+client uses 4–7. The two original peers stay connected through 8,192 transient
+members in the same room. `room` measures ordinary broadcast; `private` measures
+private delivery with both survivors in the global room and zero listener flags,
+isolating its index scan from extra listener fanout. Three-second traffic phases
+use 64 prebuilt 1 KiB values and 16-message windows. Every full encoded value,
+sender, frame and FIFO position is checked. Stdin gates exclude filling/draining
+from routing CPU. Rates/heartbeats are disabled, with storage/queue defaults
+retained. CPU includes boundary management sampling at 10 ms tick resolution;
+percentiles are fixed-histogram upper bounds. Hash seeds/key positions vary.
+
+Every remaining peer verifies each disconnect ID and its exact FIFO prefix.
+Sixteen-close windows wait for all readers, preserving default 64-message queues
+and all notifications. Each process checks 33,566,720 departure deliveries and
+normal Close/EOF. This is paced departure, not unpaced simultaneous closure.
+
+| Post-departure median | Prior `3963138` | Selected |
+| --- | ---: | ---: |
+| Ordinary room deliveries/s | 403,031 | 440,729 |
+| Ordinary room server ns/delivery | 1,696 | 1,488 |
+| Ordinary room p99 upper bucket | 0.065536 ms | 0.032768 ms |
+| Global-index private deliveries/s | 409,571 | 434,403 |
+| Global-index private server ns/delivery | 1,636 | 1,494 |
+| Global-index private p99 upper bucket | 0.065536 ms | 0.032768 ms |
+
+Post-wave room CPU improves **12.28%** with **9.35% higher throughput**; private
+CPU improves **8.68%** with **6.06% higher throughput**. Fresh CPU differs by
+−0.64%/+1.44% respectively; fresh private p99 also differs by one bucket.
+Filling CPU medians remain 0.16–0.17 seconds. Draining uses about 89 native
+CPU-seconds per wave, dominated by preserved quadratic notifications and kept
+separate from steady routing. These data support the post-wave improvement,
+without a free-rehash or general ordinary-traffic speed claim.
+
+All twelve processes verify 30,873,216 application deliveries, 402,800,640 exact
+disconnect deliveries and 98,328 normal Close handshakes, with exact counts/bytes,
+zero routed-body compaction and complete resource release. The selected profile
+puts `Relay::receive` at 9.78% of user cycles. Control/selected profiles have
+2,209/2,220 samples and zero lost samples; profiled timings are excluded.
+The prior global-ID probe also passes three further waves in separate rooms.
+
+Eighteen four-second ordinary cost cases use 64 clients and a frozen stress
+client. Throughput/CPU medians differ by −0.98%/+0.23% at 1 KiB, −0.02%/−0.71%
+at 64 KiB and −0.79%/+1.07% for churn. Ranges overlap, with matching p99 buckets
+at 1.048576, 4.194304 and 2.097152 ms. Counts, departures, zero compaction and
+cleanup pass. Traffic deliberately drops 64 TCP handles per case; churn and the
+population probe separately verify normal Close. Live ordinary/global-room
+waves verify 1,051,648 disconnects, 130 typed messages during/after departure,
+2,052 clean closes and zero additional body copies. Variables survive retirement,
+and ordinary variables release normally. Fresh Chrome/legacy/reclamation pass.
+
+The [comparison](benchmarks/2026-10-16-member-comparison.json),
+[ordinary guard](benchmarks/2026-10-16-member-cost.json),
+[live record](benchmarks/2026-10-16-member-live.json),
+[summary](benchmarks/2026-10-16-member-summary.json), and
+[manifest](benchmarks/2026-10-16-member-build.json) bind commands and sources.
+Build `cargo build --release --bins --example registry_peak`, then run
+`python3 scripts/registry-peak.py --scope room --peak-clients 8192 --seconds 3
+--output artifacts/member-room.json`. Use `--scope private` for the global
+membership path; `--scope global` retains the separate-room probe. Channel-name
+table costs, larger active application fanout, unpaced departure, long duration,
+TLS/proxies and clusters remain unmeasured. Event-boundary RSS is not continuous
+peak RSS; metadata trimming does not guarantee OS page return or cap process RSS.

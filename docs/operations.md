@@ -354,20 +354,22 @@ these four metrics are zero.
 
 ## Scaling boundary
 
-The native ID ownership table releases excess capacity after large departures
-and occupied fixed-ID takeovers. This prevents a later small global audience
-from scanning the table's previous population on every broadcast. The check
-runs during ID retirement under the existing registry write lock; normal
-messages add no allocation, trimming check or body movement. Small tables retain
-their storage, and larger tables keep regrowth headroom. A subsequent population
-wave can allocate metadata again. [Measured cost and limits](performance.md#id-registry-capacity-after-population-waves-2026-10-16)
-cover three repeated 8,192-peer waves per process, alongside ordinary traffic
-and churn guards.
+Native ownership and membership tables release excess capacity after large
+departures. Occupied fixed-ID takeovers also release sparse ownership slots.
+This keeps a later small audience from scanning the previous population's empty
+buckets during global broadcast, room broadcast, or global-listener inspection
+on private delivery. The check runs under the existing registry write lock when
+an entry retires; normal messages add no allocation, trimming check or body
+movement. Small tables retain their storage, and larger tables keep regrowth
+headroom. A subsequent population wave can allocate metadata again. The
+[ID-index measurements](performance.md#id-registry-capacity-after-population-waves-2026-10-16)
+and [membership measurements](performance.md#membership-index-capacity-after-room-departures-2026-10-16)
+record methods, costs and limits.
 
 Rehashing moves ID keys and `Arc` handles. Peers, their queues and published
 application bodies keep their existing owners and addresses. This policy trims
-the ID index; channel/membership tables, socket state and allocator-retained
-pages have separate lifetimes, so it is not a process RSS cap. Displaced sessions
+peer indexes; the channel-name table, socket state and allocator-retained pages
+have separate lifetimes, so it is not a process RSS cap. Displaced sessions
 continue counting toward connection/session limits until their normal cleanup.
 
 Workers share one process-local registry; private routing and variables do not

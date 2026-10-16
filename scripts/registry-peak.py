@@ -33,6 +33,7 @@ def run(args):
     command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}",
                "--peak-clients", str(args.peak_clients), "--waves", str(args.waves),
                "--seconds", str(args.seconds), "--payload-bytes", str(args.payload_bytes)]
+    command += ["--scope", args.scope]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -44,7 +45,7 @@ def run(args):
               "client_source_sha256": digest(ROOT / "examples/registry_peak.rs"),
               "runner_sha256": digest(__file__), "profile_diagnostic": args.profile,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-              "scope": "Two global-channel survivors, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Peak peers use distinct ordinary rooms, with no global disconnect listener, so their departure does not create survivor traffic. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.",
+              "scope": "Two retained clients, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Global: broadcast with transient peers in separate rooms. Room: ordinary room broadcast, transient peers in the same room. Private: private delivery with all peers in the global room, exercising its listener index with default zero listener flags. Both shared-room modes verify every departing ID and exact FIFO prefix at each remaining peer, pacing 16 departures per window by reader progress so default queue limits remain intact. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.",
               "events": [], "traffic": [], "passed": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
@@ -82,7 +83,7 @@ def run(args):
                 metrics, wave = event["metrics"], event["wave"]
                 if event["event"] == "traffic_ready":
                     assert metrics["war_connections"] == metrics["war_sessions"] == 2
-                    assert metrics["war_channels"] == 1
+                    assert metrics["war_channels"] == (2 if args.scope == "room" else 1)
                     ready[wave] = event
                     if args.profile and wave == 1:
                         profile = args.output.with_suffix(".perf.data")
@@ -118,7 +119,7 @@ def run(args):
                     print(json.dumps(row), flush=True)
                 elif event["event"] == "population_ready":
                     assert metrics["war_connections"] == metrics["war_sessions"] == args.peak_clients + 2
-                    assert metrics["war_channels"] == args.peak_clients + 1
+                    assert metrics["war_channels"] == {"room": 2, "private": 1, "global": args.peak_clients + 1}[args.scope]
                 elif event["event"] == "done":
                     for key in ["war_connections", "war_sessions", "war_queued_bytes", "war_variable_bytes", "war_read_buffer_reserved_bytes"]:
                         assert metrics[key] == 0, key
@@ -127,8 +128,8 @@ def run(args):
                     joins = args.peak_clients * args.waves + 2
                     assert details["normal_closes"] == details["joins"] == joins
                     assert metrics["war_joined_total"] == metrics["war_disconnected_total"] == metrics["war_accepted_total"] == joins
-                    assert metrics["war_deliveries_total"] == joins + sum(t["verified"] for t in result["traffic"]) + 1
-                    assert metrics["war_delivered_bytes_total"] == details["welcome_bytes"] + details["disconnect_bytes"] + sum(t["delivered_encoded_bytes"] for t in result["traffic"])
+                    assert metrics["war_deliveries_total"] == joins + sum(t["verified"] for t in result["traffic"]) + details.get("departure_deliveries", 0) + 1
+                    assert metrics["war_delivered_bytes_total"] == details["welcome_bytes"] + details["disconnect_bytes"] + details.get("departure_bytes", 0) + sum(t["delivered_encoded_bytes"] for t in result["traffic"])
                     for key in ["war_handshake_errors_total", "war_origin_rejected_total", "war_join_rejected_total", "war_rejected_total", "war_protocol_errors_total", "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total", "war_close_failures_total", "war_aborted_writes_total", "war_transport_disconnects_total", "war_slow_consumers_total", "war_global_pressure_total", "war_read_buffer_reservations_rejected_total"]:
                         assert metrics.get(key, 0) == 0, key
                 client.stdin.write("continue\n")
@@ -181,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-7")
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--scope", choices=["global", "room", "private"], default="global")
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     outcome = run(arguments)

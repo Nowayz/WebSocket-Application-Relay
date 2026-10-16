@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 83 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 84 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -528,6 +528,59 @@ This is finite local evidence; larger active fanout, other table scan costs,
 multi-hour/TLS/proxy paths and cluster operation remain unmeasured. The ongoing
 goal stays active, with no hosted publication or deployment claimed.
 
+## Latest checkpoint: room membership lifetime, 2026-10-16
+
+Measured retained ordinary/global membership tables after departure. A 4,096-peer
+case showed little CPU change; an 8,192-peer room case rose from 1,457 to 1,688
+native ns/delivery, and private global-index delivery from 1,476 to 1,714.
+A separate profile identifies empty-bucket scanning. One shared typed helper
+now trims sparse peer indexes, retaining small tables and regrowth headroom.
+It adds no per-message check, allocation or body movement. Ordinary empty rooms
+retire directly; global variables retain their persistent lifetime.
+
+Twelve final processes verify 30,873,216 application deliveries, 402,800,640
+disconnect deliveries and 98,328 normal Close handshakes. Each keeps two original
+clients through 8,192 transient members. Every remaining reader checks each
+departure's exact FIFO prefix; 16-close windows preserve default 64-message
+queues and all notifications. Post-wave room medians improve from 403,031 to
+440,729 deliveries/s (+9.35%) and 1,696 to 1,488 server ns/delivery (−12.28%).
+Private global-index medians improve from 409,571 to 434,403 deliveries/s (+6.06%)
+and 1,636 to 1,494 ns/delivery (−8.68%). Both median p99 buckets move from
+0.065536 to 0.032768 ms. Fresh CPU differs by −0.64%/+1.44%; filling/draining
+and profile timings stay separate. Rehash allocation and brief write locking
+are tradeoffs. The prior global-ID probe also passes three further waves.
+
+All 84 Rust tests pass; all three sparse-index regressions pass in release,
+alongside strict Clippy/formatting, vendor verification (62 files), seven JS
+socket cases, the 776-case/2,311-exchange release corpus and the C++ comparison's
+48 common cases/eight explicit differences. A new regression holds a payload
+and variables through 1,024 administrative departures in ordinary/global rooms,
+checks peer/variable/payload pointers and later routing, then verifies held
+reservations and the two variable lifetimes. All eighteen ordinary cost guards
+pass; CPU medians differ by +0.23% at 1 KiB, −0.71% at 64 KiB and +1.07% for
+churn, with matching p99 buckets and overlapping ranges. Gains remain scoped
+to routing after population waves.
+
+Old quiescent services were verified by PID, cwd and executable SHA before
+SIGTERM; both exited zero. Updated live room/global waves verify 1,051,648
+disconnect deliveries, 130 typed messages during/after departure and 2,052 clean
+closes, with zero additional body copies. Ordinary variables survive retirement;
+the global live probe writes no persistent variables. Default decoder retirement
+takes 5.016 seconds with two sessions connected, and later routing adds no copies.
+Seven fresh Chrome checks and three named legacy/Close cases pass. Health and
+readiness return 200; resource gauges and unexpected-error counters are zero.
+
+Native SHA-256 begins `c276a8c1172d`; bridge begins `45d309801638`. Endpoints
+remain native `ws://127.0.0.1:1338`, legacy `ws://127.0.0.1:1337`, management
+`http://127.0.0.1:1339`, and browser `http://127.0.0.1:4180/`. Origin remains
+unrestricted and application-idle Close disabled for manual use; decoder
+retirement and 1 GiB input staging remain enabled. The
+[summary](benchmarks/2026-10-16-member-summary.json),
+[manifest](benchmarks/2026-10-16-member-build.json), and
+[live record](benchmarks/2026-10-16-member-live.json) bind sources and observations.
+Unpaced departure, larger active fanout, other table costs, long/TLS/proxy paths
+and clustered operation remain unmeasured. The continuing goal stays active.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -539,8 +592,9 @@ goal stays active, with no hosted publication or deployment claimed.
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
    The ID ownership map now shrinks after substantial retirement, with measured
-   global-routing recovery after large population waves. Channel/membership-table
-   scan costs after large populations remain unmeasured.
+   global-routing recovery after large population waves. Membership indexes now
+   have ordinary-room and global-index private-delivery measurements; channel-name
+   table/inspection costs after large populations remain unmeasured.
    Concurrent retention, staging pressure and delayed storage reclamation now
    cover up to 64 producers plus independent healthy traffic across repeated
    waves. Process-wide reservations precede decoder allocations and cover

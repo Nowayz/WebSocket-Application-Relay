@@ -605,3 +605,35 @@ initial timing runner; the corrected runner returns failure and CLI status 1.
 A normal-service smoke case passes. All recorded population-comparison services independently
 have exit status zero; their exact earlier runner snapshot is retained for
 provenance. Calibration records are excluded from performance results.
+
+## Membership lifetime during room departures, 2026-10-16
+
+The same bounded metadata helper now handles native ID ownership and room
+membership, including the persistent global room. An empty ordinary room still
+retires the complete channel and its variables. A room with retained peers
+can release spare member slots; an empty global room preserves its variables.
+Only keys and `Arc` handles move. No application-message path changes.
+
+A unit regression first fails on retained membership capacity in the prior
+release. It then verifies ordinary and global rooms with 1,024 administrative
+close signals: exact disconnect events to the healthy peers, peer pointer
+identity, variable value/pointer identity, later private delivery, and a held
+application frame across rehashing and final peer destruction. Its byte
+reservation lasts until the frame drops. Ordinary variables release at the
+last departure; global variables keep their documented lifetime.
+
+The population probe now supports `--scope room` and `--scope private`, keeping
+transient peers in the same ordinary or global room as the two original clients.
+All departing IDs are preencoded once; every remaining client checks the exact
+FIFO prefix. Sixteen-close windows wait for every remaining reader before more
+closes begin, keeping the default 64-message queues and shared byte limits.
+No departure notifications are suppressed. At 8,192 transient peers this verifies
+33,566,720 departure deliveries per process, alongside exact normal Close/EOF,
+timed application traffic, metric totals and final resource release.
+
+Broadcast scope exercises the ordinary membership index; private scope uses
+global-room members with zero listener flags to isolate that index's scan from
+extra listener fanout. Profiles, ordinary traffic guards and the
+[membership performance record](performance.md#membership-index-capacity-after-room-departures-2026-10-16)
+retain their separate scopes. The original `global` probe remains the default,
+with transient peers in separate rooms.

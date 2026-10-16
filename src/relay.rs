@@ -41,17 +41,15 @@ struct Registry {
     sessions: usize,
 }
 
-impl Registry {
-    fn shrink_users_if_sparse(&mut self) {
-        // HashMap iteration scans spare buckets too. After a large ID retirement
-        // wave, release excess slots so global routing follows the live owners.
-        // Keep small maps and 2x headroom to avoid churn. Only metadata/Arc
-        // handles move, never peers, queues or shared application bodies.
-        let remaining = self.users.len();
-        let capacity = self.users.capacity();
-        if capacity > 256 && remaining <= capacity / 8 {
-            self.users.shrink_to(remaining * 2);
-        }
+fn shrink_sparse_peers(peers: &mut HashMap<u64, Arc<Peer>>) {
+    // HashMap iteration scans spare buckets too. After substantial retirement,
+    // release excess slots in ownership and membership indexes. Keep small
+    // maps and 2x headroom to avoid churn. Only keys/Arc handles move; peers,
+    // queues, variables and shared application bodies keep their storage.
+    let remaining = peers.len();
+    let capacity = peers.capacity();
+    if capacity > 256 && remaining <= capacity / 8 {
+        peers.shrink_to(remaining * 2);
     }
 }
 
@@ -469,7 +467,7 @@ impl Relay {
                     let owner = state.users.remove(&old).ok_or(Disconnect::PROTOCOL)?;
                     if let Some(previous) = state.users.insert(id, owner) {
                         previous.close(Disconnect::TAKEN);
-                        state.shrink_users_if_sparse();
+                        shrink_sparse_peers(&mut state.users);
                     }
                     peer.id.store(id, Relaxed);
                 }
@@ -550,6 +548,10 @@ impl Relay {
                 .variable_bytes
                 .fetch_sub(channel.variable_bytes, Relaxed);
             state.channels.remove(&peer.channel);
+        } else {
+            // Empty ordinary rooms drop the complete map; retained rooms and
+            // the persistent global room can release spare membership slots.
+            shrink_sparse_peers(&mut channel.members);
         }
         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
             for recipient in state.channels[GLOBAL_CHANNEL].members.values() {
@@ -565,7 +567,7 @@ impl Relay {
             .is_some_and(|owner| owner.key == peer.key)
         {
             state.users.remove(&id);
-            state.shrink_users_if_sparse();
+            shrink_sparse_peers(&mut state.users);
         }
         state.sessions -= 1;
         self.metrics.disconnected.fetch_add(1, Relaxed);
@@ -841,6 +843,111 @@ mod tests {
         drop(subscriptions);
         assert_eq!(relay.counts(), (0, 1));
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn sparse_membership_keeps_peers_variables_and_published_payloads_alive() {
+        for room in [b"kept-room".as_slice(), GLOBAL_CHANNEL] {
+            let relay = Relay::new(config()).unwrap();
+            let mut source = relay.subscribe(room).unwrap();
+            let mut target = relay.subscribe(room).unwrap();
+            source.outgoing.try_recv().unwrap();
+            target.outgoing.try_recv().unwrap();
+            let source_id = source.registration.peer.id.load(Relaxed);
+            let target_id = target.registration.peer.id.load(Relaxed);
+            let mut argument = Encoder::new(Vec::new());
+            argument
+                .array(2)
+                .unwrap()
+                .bytes(b"kept")
+                .unwrap()
+                .bool(true)
+                .unwrap();
+            relay
+                .receive(
+                    &source.registration.peer,
+                    protocol::request(4, &argument.into_writer()),
+                )
+                .unwrap();
+            source.outgoing.try_recv().unwrap();
+            let variable_pointer =
+                relay.state.read().channels[room].variables[b"kept".as_slice()].as_ptr();
+            let fillers: Vec<_> = (0..1024)
+                .map(|_| {
+                    let mut sub = relay.subscribe(room).unwrap();
+                    sub.outgoing.try_recv().unwrap();
+                    sub
+                })
+                .collect();
+            let peak_capacity = relay.state.read().channels[room].members.capacity();
+            assert!(peak_capacity >= 1026);
+            // Exercise real administrative close signals. Registrations remain
+            // until cleanup, while healthy peers keep their output queues.
+            for sub in &fillers {
+                assert!(relay.disconnect(sub.registration.peer.id.load(Relaxed)));
+            }
+            let value = protocol::byte_string(&[0x5a; 8192]);
+            let input = protocol::envelope(target_id, &value);
+            let pointer = protocol::parse(&input).unwrap().1.as_ptr();
+            relay.receive(&source.registration.peer, input).unwrap();
+            let held = target.outgoing.try_recv().unwrap();
+            assert_eq!(held.frame.payload().as_ptr(), pointer);
+            for sub in fillers {
+                let id = sub.registration.peer.id.load(Relaxed);
+                drop(sub);
+                let expected = protocol::envelope(BROADCAST, &protocol::uint(id));
+                for survivor in [&mut source, &mut target] {
+                    let departure = survivor.outgoing.try_recv().unwrap();
+                    assert_eq!(departure.frame.payload(), expected.as_ref());
+                }
+            }
+            {
+                let state = relay.state.read();
+                let channel = &state.channels[room];
+                assert_eq!(channel.members.len(), 2);
+                assert!(channel.members.capacity() <= 256);
+                assert!(channel.members.capacity() < peak_capacity / 4);
+                assert!(Arc::ptr_eq(
+                    &channel.members[&source.registration.peer.key],
+                    &source.registration.peer
+                ));
+                assert!(Arc::ptr_eq(
+                    &channel.members[&target.registration.peer.key],
+                    &target.registration.peer
+                ));
+                assert_eq!(
+                    channel.variables[b"kept".as_slice()].as_ptr(),
+                    variable_pointer
+                );
+                assert_eq!(channel.variables[b"kept".as_slice()].as_ref(), &[0xf5]);
+            }
+            assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 5);
+            relay
+                .receive(
+                    &source.registration.peer,
+                    protocol::envelope(target_id, &[0x18, 42]),
+                )
+                .unwrap();
+            let after = target.outgoing.try_recv().unwrap();
+            assert_eq!(
+                [after.frame.prefix(), after.frame.payload()].concat(),
+                protocol::envelope(source_id, &[0x18, 42])
+            );
+            drop(after);
+            drop(source);
+            drop(target);
+            assert_eq!(relay.counts(), (0, 1));
+            assert_eq!(
+                relay.metrics.variable_bytes.load(Relaxed),
+                if room == GLOBAL_CHANNEL { 5 } else { 0 }
+            );
+            assert_eq!(held.frame.payload().as_ptr(), pointer);
+            assert_eq!(held.frame.payload(), value.as_ref());
+            assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
+            drop(held);
+            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        }
     }
 
     #[test]
