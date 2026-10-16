@@ -2693,3 +2693,163 @@ their original capture paths and updated replay commands recorded. The
 runtime source files, common client, helper sources, controls, reports and live
 runtime evidence. These finite Linux loopback checks do not establish TLS or
 production capacity.
+
+## Rejected borrowed output submission (2026-10-16)
+
+The borrowed-submission prototype is rejected. It improves the ready-socket
+private throughput median by 1.94%, but the extended fanout comparison is
+3.04% slower with 3.98% more server lifecycle CPU. Eight of nine fanout pairs
+favor the existing implementation. The original owned output interface remains
+in use. A useful queued-write lifetime test is retained independently.
+
+The previous output interface consumes an owned `Envelope` for every delivery.
+Its body and budget clones are needed when a queue must outlive the call, but
+the normal socket path writes borrowed slices immediately and drops those
+temporary owners. The existing user-cycle profile identifies the output and
+ownership paths as a material part of the remaining user-space work.
+
+The prototype accepts a scoped `Submission`: a frame reference and its
+already-acquired byte charge. Immediate completion, closed sockets and refused
+submissions release that charge on return. Only queuing calls `into_owned`,
+which clones the body and budget owners and transfers the existing charge to
+the queue's `Envelope`. Partial writes retain the original body and exact wire
+offset. Completion, cancellation and queue destruction release the charge once.
+The type cannot outlive the borrowed frame or peer, and consuming promotion
+prevents submitting the same reservation twice. The per-peer and global byte
+admission checks still happen before the transport can write anything.
+
+The queue still owns ordering, message limits, write deadlines and control-frame
+serialization. This does not remove synchronization or byte-accounting atomics.
+Promotion now occurs while the socket output lock protects queue ordering;
+any first-share allocation on that path also occurs there. Writable sends avoid
+the temporary owners. Backpressure retains the required owners and its costs.
+
+Two separate fresh-process diagnostics compare the previous and selected
+release using the same frozen client, one private pair, 8,192 idle rooms,
+1 KiB values, window 16 and eight seconds. Four server workers use CPUs 0–3;
+the client uses CPUs 4–7. `cycles:u` is sampled at 499 Hz with 8 KiB DWARF
+stacks. Both diagnostics pass complete payload, FIFO, counter and cleanup checks.
+Report generation finishes before ordinary timing begins.
+
+| Self sample share / private diagnostic | Previous | Borrowed submission |
+| --- | ---: | ---: |
+| `bytes::bytes_mut::shared_v_clone` | 1.91% | Absent at 0.1% report threshold |
+| `bytes::bytes_mut::shared_v_drop` | 4.53% | 1.46% |
+| Socket `send` | 15.31% | 14.15% |
+| Samples | 3,496 | 3,469 |
+| Lost samples | 0 | 0 |
+
+These are relative sample fractions, not wall-time gains. A missing symbol does
+not prove zero operations. The
+[profile summary](benchmarks/2026-10-16-borrowed-send-profiles.json) binds the
+capture hashes and full symbol reports; raw captures remain local artifacts.
+
+### Ordinary traffic and inspection
+
+The [comparison](benchmarks/2026-10-16-borrowed-send-comparison.json) uses 24 fresh
+processes, three repetitions rotating workload order and alternating which
+build runs first. It uses the same CPU affinity, frozen client, room population,
+private pair, values, window and eight-second traffic interval as the profiles.
+Churn adds eight reconnect workers. Full/page-100 also add 200 inspections/s,
+returning equivalent results within each workload. The complete page traversal
+is verified at quiescent gates. No profiler, build or other load test overlaps
+these ordinary timing windows.
+
+| Median of three | Previous | Borrowed submission |
+| --- | ---: | ---: |
+| Private deliveries/s | 573,495 | 584,619 |
+| Private server CPU seconds/wall second | 0.65000 | 0.65000 |
+| Churn: healthy deliveries/s | 356,195 | 363,166 |
+| Churn: complete reconnect cycles/s | 71,398 | 73,741 |
+| Churn: server CPU seconds/wall second | 1.46249 | 1.48248 |
+| Full listing: healthy deliveries/s | 323,703 | 325,095 |
+| Full listing: complete reconnect cycles/s | 61,025 | 60,144 |
+| Full listing: server CPU seconds/wall second | 1.67601 | 1.64601 |
+| Page-100: healthy deliveries/s | 334,831 | 341,473 |
+| Page-100: complete reconnect cycles/s | 68,278 | 68,933 |
+| Page-100: server CPU seconds/wall second | 1.46104 | 1.47354 |
+
+The ratio of private throughput medians improves 1.94%; the median of the three
+paired percentage changes is 1.08% (range +0.43% to +2.70%). Absolute private
+run ranges overlap: 569,978–578,371 before and 575,941–585,373 selected.
+Page-100 healthy throughput medians improve 1.98%, with nonoverlapping ranges
+of 331,644–336,079 and 341,115–342,233; paired changes are +1.60% to +3.19%.
+All 12 workload/repetition pairs have higher selected healthy throughput, but
+that does not make each individual difference larger than normal variation.
+
+Churn healthy throughput medians improve 1.96% and reconnect throughput 3.28%,
+with 1.37% more server CPU as more work completes. Full-list healthy throughput
+improves only 0.43%, reconnect throughput falls 1.44% and CPU falls 1.79%.
+Page-100 reconnect throughput improves 0.96% with 0.86% more CPU. Full-list and
+churn run ranges overlap. The healthy p99 buckets stay 0.032768 ms for private
+and 0.131072 ms for mixed cases; reconnect p99 stays 0.524288 ms. HTTP throughput
+stays about 199.97/s, with p99 buckets of 8.388608 ms for full arrays and
+2.097152 ms for page-100. These are histogram upper bounds. Event-gate RSS is
+essentially unchanged. The measurements support a modest ready-socket benefit,
+with mixed costs under full-list inspection. They do not justify retaining the
+prototype once its fanout cost is included.
+
+### Fanout confirmation and rejection
+
+The [initial fanout study](benchmarks/2026-10-16-borrowed-send-fanout.json)
+compares three alternating pairs of fresh processes. Each holds 32 clients:
+one publisher, 27 healthy readers and four unread readers. The four-second
+traffic interval uses window 16, a one-millisecond reader delay and cyclic
+256 B / 1 KiB / 64 KiB / 256 KiB values. Server CPUs are 0–3 and the same frozen
+stress client uses CPUs 4–7. Every full encoded frame and its order is checked.
+The configured per-peer output limit disconnects the four unread clients.
+
+The initial median is 189,061 deliveries/s before and 184,684 for the prototype.
+Ranges overlap, with one notably slower prototype run. A fixed six additional
+pairs use the identical workload; the
+[confirmation](benchmarks/2026-10-16-borrowed-send-fanout-confirmation.json)
+retains all six original cases and adds the twelve new ones. Other validation,
+builds and profiling finish before this extension begins. No cases are excluded.
+
+| Median of nine fresh processes per build | Existing output | Rejected prototype |
+| --- | ---: | ---: |
+| Healthy deliveries/s | 190,482 | 184,684 |
+| Fanout p99 upper bucket, ms | 4.194304 | 4.194304 |
+| Server lifecycle CPU seconds | 3.27 | 3.40 |
+| Sampled maximum RSS, MiB | 6.71 | 6.56 |
+
+Healthy throughput medians fall 3.04%. The median paired percentage change is
+−1.10%, with eight of nine pairs lower and a range of −4.09% to +0.34%.
+Absolute run ranges still overlap: 183,996–194,878 before and 182,693–193,477
+for the prototype. Lifecycle CPU rises 3.98%; this includes setup and teardown,
+and process accounting has 10 ms ticks. The small RSS difference is not a memory
+gain claim. Both builds disconnect exactly four unread clients in every run,
+with no extra teardown overflows, and retire all resource gauges cleanly.
+
+This establishes an adverse whole-workload result for a relay use case that
+needs to scale. It does not establish a particular instruction or lock as the
+cause. Promotion under the output lock is a possible mechanism, not a measured
+causal explanation. Removing sampled clone work alone does not justify this
+interface change.
+
+### Retained verification and reproducibility
+
+The [checks](benchmarks/2026-10-16-borrowed-send-checks.json) distinguish the
+prototype's 106 passing Rust tests from the retained code's 105 passing tests.
+The retained addition drives a real nonblocking socket through a partial write,
+retires its registration, verifies that the original body pointer and full byte
+charge survive, then drains and decodes the complete message and observes the
+charge return to zero. Existing cancellation/control-frame checks still pass.
+Strict Clippy, formatting and the locked release build pass after restoration.
+
+The rebuilt relay and bridge retain identical ELF section headers and code/data
+contents to the frozen existing release; only `.note.gnu.build-id` and `.strtab`
+contents differ. No runtime output behavior is changed. The existing frozen
+local services remain active. The rejected prototype also passed 48 shared C++
+reference cases and eight documented differences, seven JavaScript checks,
+four release API checks including 13 normal closes, and an unread-peer stress
+check with 210,364 verified healthy deliveries. Those correctness results did
+not override its measured fanout cost.
+
+The [experiment record](benchmarks/2026-10-16-borrowed-send-experiment.json)
+binds both releases, the two prototype source copies and replayable patch,
+all 24 inspection cases, 18 distinct fanout cases, profiles, helper sources and
+checks. The prototype source is archived under its candidate directory rather
+than retained in the server; its complete patch is also embedded in the record
+for replay from the stated base commit. These finite Linux loopback checks do
+not establish TLS or production capacity.

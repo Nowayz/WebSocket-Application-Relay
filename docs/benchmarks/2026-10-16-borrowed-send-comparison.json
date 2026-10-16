@@ -1,0 +1,612 @@
+{
+  "scope": "24 sequential fresh processes; three repetitions rotate workload order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Full adds200 complete HTTP listings/s; page100 requests200 first100-row pages/s and verifies full traversals at quiescent gates. Equivalent outputs within each workload; full body/sender/FIFO/field/order/cursor/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.",
+  "before_runtime_revision": "1d766c279e19d567d9dba49d276c1541cbe173d6",
+  "selected_source_hashes": {
+    "src/relay.rs": "4195ec6a6ed365f86551e0e67b4bc588b1eb4a9c254a115591f407e9cd84ed43",
+    "src/server/socket.rs": "76da3d89b3e51b542849c11b836bf587f3bb224cf80670955a1c0a202d0e6ec0"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/routing-owner-candidate/war-relay",
+      "sha256": "d58f9c43d408b95da68aab723190b53d94fd5dc503026601e5bf931cdffc40e8"
+    },
+    "selected": {
+      "path": "artifacts/baselines/borrowed-send-candidate/war-relay",
+      "sha256": "f529ce1d10e1a30966c29b35513697114330b66d0787561104989d474288ffe3"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/paging-candidate/inspection",
+    "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941",
+    "source_path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "source_sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426"
+  },
+  "helpers": {
+    "inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\ncandidate = json.loads((root/'artifacts/borrowed-send-candidate.json').read_text())\nservers = {'before':root/'artifacts/baselines/routing-owner-candidate/war-relay',\n           'selected':root/candidate['directory']/'war-relay'}\nclient = root/'artifacts/baselines/paging-candidate/inspection'\noutput = root/'docs/benchmarks/2026-10-16-borrowed-send-comparison.json'\nrecord = {'scope':'24 sequential fresh processes; three repetitions rotate workload order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Full adds200 complete HTTP listings/s; page100 requests200 first100-row pages/s and verifies full traversals at quiescent gates. Equivalent outputs within each workload; full body/sender/FIFO/field/order/cursor/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.',\n          'before_runtime_revision':'1d766c279e19d567d9dba49d276c1541cbe173d6',\n          'selected_source_hashes':candidate['sources'],\n          'variants':{k:{'path':str(p.relative_to(root)),'sha256':sha(p)} for k,p in servers.items()},\n          'client':{'path':str(client.relative_to(root)),'sha256':sha(client),\n                    'source_path':str((client.parent/'inspection.rs').relative_to(root)),\n                    'source_sha256':sha(client.parent/'inspection.rs'),\n                    'runtime_revision':'2e7806b8e255527cc0dc3cc6ffc6813859f71426'},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nworkloads = ['private','churn','full','page100']\nfor repetition in range(1,4):\n    offset = repetition-1\n    for workload in workloads[offset:]+workloads[:offset]:\n        roles = ['before','selected'] if repetition%2 else ['selected','before']\n        for role in roles:\n            trace = output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n            command = [sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),\n                       '--client',str(client),'--pairs','1','--seconds','8',\n                       '--mode','http' if workload in ['full','page100'] else 'none',\n                       '--churn-workers','0' if workload=='private' else '8','--output',str(trace)]\n            if workload=='page100': command += ['--page-size','100']\n            done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=120)\n            data = json.loads(trace.read_text())\n            assert done.returncode == 0 and data['passed'],done.stdout+done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n            assert data['client_sha256']==record['client']['sha256']\n            assert data['client_source_sha256']==record['client']['source_sha256']\n            mixed = data['mixed']\n            row = {'kind':role,'workload':workload,'repetition':repetition,\n                   'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n                   'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                   'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                   'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                   'cpu_wall':mixed['server_cpu_seconds_per_wall_second'],'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor workload in workloads:\n    for role in servers:\n        rows = [r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n        fields = ['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_wall','rss_mib']\n        summary = {key:statistics.median(r[key] for r in rows) for key in fields}\n        summary['ranges'] = {key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in ['healthy','churn','cpu_wall']}\n        record['medians'][workload+'/'+role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "1122030ac53afb7b0d3d3870ef1de7d0f2f84935bb10f43a08ee78ab7e5902a6",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-before-1.json",
+      "trace_sha256": "1e4bac13fb97cd3f7f29f00bad1b6e78e67e179d483b40aec7db5daf2091af18",
+      "passed": true,
+      "healthy": 578370.9293564396,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512465424507002,
+      "rss_mib": 17.37109375
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-selected-1.json",
+      "trace_sha256": "9a014a5997e767ae90a9bbfa694ee440567af517b4d35c2d276c5172a4dcc8df",
+      "passed": true,
+      "healthy": 584618.7943889956,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512464290530179,
+      "rss_mib": 17.26953125
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-before-1.json",
+      "trace_sha256": "3634f3bf6a9b5208dce1f11073a7ad5983418eab76c861db37c283e14ec3fd35",
+      "passed": true,
+      "healthy": 363012.2070215784,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72444.74305204662,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4624847190456023,
+      "rss_mib": 17.6015625
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-selected-1.json",
+      "trace_sha256": "3e02edf5836e03f9a7cc839e06d7a2e9dea62e33c40b71f2bc5f65b9719dad8e",
+      "passed": true,
+      "healthy": 364801.62183333555,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73741.36499300803,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4824822079897808,
+      "rss_mib": 17.546875
+    },
+    {
+      "kind": "before",
+      "workload": "full",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-before-1.json",
+      "trace_sha256": "0204f054e6ae19985e030820e0431fdc9ef3a371ae6e4940ec7c35dd4727ca14",
+      "passed": true,
+      "healthy": 326777.6352369188,
+      "healthy_p99_ms": 0.131072,
+      "churn": 61337.54713745878,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97162707568526,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.676012199428087,
+      "rss_mib": 17.63671875
+    },
+    {
+      "kind": "selected",
+      "workload": "full",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-selected-1.json",
+      "trace_sha256": "9cbbf99aab6b78d3d84efa54dcb4d69395727f6f9be78cb06bdd4c450939b754",
+      "passed": true,
+      "healthy": 327465.6234588085,
+      "healthy_p99_ms": 0.131072,
+      "churn": 62259.05770881725,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97167948582558,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.6597649397323522,
+      "rss_mib": 17.5078125
+    },
+    {
+      "kind": "before",
+      "workload": "page100",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-before-1.json",
+      "trace_sha256": "0ca30b7c0873f5e8f750224ea0e67fb61fbeec174a1598d8f0ca9592405bf57b",
+      "passed": true,
+      "healthy": 331643.6345432791,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68295.66505900133,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97083712798567,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4610369287663454,
+      "rss_mib": 16.5234375
+    },
+    {
+      "kind": "selected",
+      "workload": "page100",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-selected-1.json",
+      "trace_sha256": "48f7190e9c81b8dfd17f868f0eba7a9b2ec2c8a5f2ff572c11a5eafe5208d2ba",
+      "passed": true,
+      "healthy": 342232.9174255531,
+      "healthy_p99_ms": 0.131072,
+      "churn": 70021.7075829783,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9713203881905,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4872866953871668,
+      "rss_mib": 16.48046875
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-selected-2.json",
+      "trace_sha256": "765d4b37c645e1c146d8c048ed581992d593179c8204198a7eb141a06c34fbce",
+      "passed": true,
+      "healthy": 363166.3052368021,
+      "healthy_p99_ms": 0.131072,
+      "churn": 74387.49320024105,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.512484612359675,
+      "rss_mib": 17.55859375
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-before-2.json",
+      "trace_sha256": "432e69addbbae3e5fab08c9ace30de91ffe5ce1af8e7e33b61e802748a2f072b",
+      "passed": true,
+      "healthy": 354849.0501398462,
+      "healthy_p99_ms": 0.131072,
+      "churn": 69876.91911317142,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4399880293795118,
+      "rss_mib": 17.515625
+    },
+    {
+      "kind": "selected",
+      "workload": "full",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-selected-2.json",
+      "trace_sha256": "7d1f6d6e8a69d65059bae1bc3c025d2b6a234aa5d1e0c77640c0810ec408589d",
+      "passed": true,
+      "healthy": 325095.4615327256,
+      "healthy_p99_ms": 0.131072,
+      "churn": 60143.65537578496,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.99843833719407,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.6387372041253838,
+      "rss_mib": 17.65234375
+    },
+    {
+      "kind": "before",
+      "workload": "full",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-before-2.json",
+      "trace_sha256": "08772b2d0abea34fdb6ceace4187f9e2c3e1f237eab33dcb86b97ee80e4d6ed5",
+      "passed": true,
+      "healthy": 323702.7762134664,
+      "healthy_p99_ms": 0.131072,
+      "churn": 60274.079244005494,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97206235310577,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.659768117530778,
+      "rss_mib": 17.546875
+    },
+    {
+      "kind": "selected",
+      "workload": "page100",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-selected-2.json",
+      "trace_sha256": "75e738e042a44ecaa5ce1e0c01944bed977c4490a8b659df585dca72b55f1583",
+      "passed": true,
+      "healthy": 341472.5750887454,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68932.52267220218,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97105608935613,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.473536719558443,
+      "rss_mib": 16.41796875
+    },
+    {
+      "kind": "before",
+      "workload": "page100",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-before-2.json",
+      "trace_sha256": "7d523ebf74929dbe6ac320f3902b7276c485b257c33e563ee7ccd2eedeb7e13b",
+      "passed": true,
+      "healthy": 336079.0032480744,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68277.95297011636,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.98631561137654,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4748990776339022,
+      "rss_mib": 16.55078125
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-selected-2.json",
+      "trace_sha256": "da9bd8c6ebebf4dbaf62cb62234fecaba829c6f9a7a15eb549aeaacb95c3cf9e",
+      "passed": true,
+      "healthy": 575940.9151884656,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6462465386227584,
+      "rss_mib": 17.359375
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-before-2.json",
+      "trace_sha256": "b25ad46f047d7a8d85a940eb6a83722a352d4849fedaab0357fcf4223e380166",
+      "passed": true,
+      "healthy": 573495.1631344886,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499967847096548,
+      "rss_mib": 17.4296875
+    },
+    {
+      "kind": "before",
+      "workload": "full",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-before-3.json",
+      "trace_sha256": "c46d94baca20b6f302ae60957bbf0f0d8cd7893b1a4cc220671d9b667ccbcd6d",
+      "passed": true,
+      "healthy": 323695.3297612595,
+      "healthy_p99_ms": 0.131072,
+      "churn": 61024.578554762935,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97240363332273,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.6797681905199109,
+      "rss_mib": 17.54296875
+    },
+    {
+      "kind": "selected",
+      "workload": "full",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-full-selected-3.json",
+      "trace_sha256": "ff3ee95ef81345535de854ca6e469e461449c8035cae5d093c1deb9e96e72b6b",
+      "passed": true,
+      "healthy": 323934.3481236208,
+      "healthy_p99_ms": 0.131072,
+      "churn": 60019.295951497996,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9705836272514,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.646007866481813,
+      "rss_mib": 17.640625
+    },
+    {
+      "kind": "before",
+      "workload": "page100",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-before-3.json",
+      "trace_sha256": "837d6f0e9879cf5a9ff3334c110ecb9c8c5cd9e47a3afd524658ffab244ad680",
+      "passed": true,
+      "healthy": 334830.57565872703,
+      "healthy_p99_ms": 0.131072,
+      "churn": 66187.85501072188,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97048235709929,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.427289317823796,
+      "rss_mib": 16.5
+    },
+    {
+      "kind": "selected",
+      "workload": "page100",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-page100-selected-3.json",
+      "trace_sha256": "5da7b2a3e7a53db864afb5b463efa2a36135aa91749a267d924aa12e29f51015",
+      "passed": true,
+      "healthy": 341115.0676831316,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67627.29899076096,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97131448988264,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4435429264738404,
+      "rss_mib": 16.53515625
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-before-3.json",
+      "trace_sha256": "64795acaa726037dd649a42414f54ea08764ad7fe80f5bd353a5e73b73e374ac",
+      "passed": true,
+      "healthy": 569978.4193243225,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6462459402022229,
+      "rss_mib": 17.37109375
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-private-selected-3.json",
+      "trace_sha256": "5c4e423e2820143a8ff9d67654f700d8fa2fe5737a64b39982777ef45d38452e",
+      "passed": true,
+      "healthy": 585372.7534495378,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499963950387436,
+      "rss_mib": 17.359375
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-before-3.json",
+      "trace_sha256": "2b4692df8ab736df3dabc738e693a2e886bdaa5373a0d0db9fa1c079c84189d7",
+      "passed": true,
+      "healthy": 356195.4099768982,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71398.07994649229,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4662311057794133,
+      "rss_mib": 17.58203125
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-borrowed-send-comparison-churn-selected-3.json",
+      "trace_sha256": "f7105ff926d524764f52c7e06fedee69e8f143bf86a841d655988c280454a905",
+      "passed": true,
+      "healthy": 357512.7464552509,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71212.35193199124,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4587367247664362,
+      "rss_mib": 17.6015625
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/before": {
+      "healthy": 573495.1631344886,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499967847096548,
+      "rss_mib": 17.37109375,
+      "ranges": {
+        "healthy": [
+          569978.4193243225,
+          578370.9293564396
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6462459402022229,
+          0.6512465424507002
+        ]
+      }
+    },
+    "private/selected": {
+      "healthy": 584618.7943889956,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499963950387436,
+      "rss_mib": 17.359375,
+      "ranges": {
+        "healthy": [
+          575940.9151884656,
+          585372.7534495378
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6462465386227584,
+          0.6512464290530179
+        ]
+      }
+    },
+    "churn/before": {
+      "healthy": 356195.4099768982,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71398.07994649229,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4624847190456023,
+      "rss_mib": 17.58203125,
+      "ranges": {
+        "healthy": [
+          354849.0501398462,
+          363012.2070215784
+        ],
+        "churn": [
+          69876.91911317142,
+          72444.74305204662
+        ],
+        "cpu_wall": [
+          1.4399880293795118,
+          1.4662311057794133
+        ]
+      }
+    },
+    "churn/selected": {
+      "healthy": 363166.3052368021,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73741.36499300803,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4824822079897808,
+      "rss_mib": 17.55859375,
+      "ranges": {
+        "healthy": [
+          357512.7464552509,
+          364801.62183333555
+        ],
+        "churn": [
+          71212.35193199124,
+          74387.49320024105
+        ],
+        "cpu_wall": [
+          1.4587367247664362,
+          1.512484612359675
+        ]
+      }
+    },
+    "full/before": {
+      "healthy": 323702.7762134664,
+      "healthy_p99_ms": 0.131072,
+      "churn": 61024.578554762935,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97206235310577,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.676012199428087,
+      "rss_mib": 17.546875,
+      "ranges": {
+        "healthy": [
+          323695.3297612595,
+          326777.6352369188
+        ],
+        "churn": [
+          60274.079244005494,
+          61337.54713745878
+        ],
+        "cpu_wall": [
+          1.659768117530778,
+          1.6797681905199109
+        ]
+      }
+    },
+    "full/selected": {
+      "healthy": 325095.4615327256,
+      "healthy_p99_ms": 0.131072,
+      "churn": 60143.65537578496,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97167948582558,
+      "inspection_p99_ms": 8.388608,
+      "cpu_wall": 1.646007866481813,
+      "rss_mib": 17.640625,
+      "ranges": {
+        "healthy": [
+          323934.3481236208,
+          327465.6234588085
+        ],
+        "churn": [
+          60019.295951497996,
+          62259.05770881725
+        ],
+        "cpu_wall": [
+          1.6387372041253838,
+          1.6597649397323522
+        ]
+      }
+    },
+    "page100/before": {
+      "healthy": 334830.57565872703,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68277.95297011636,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97083712798567,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4610369287663454,
+      "rss_mib": 16.5234375,
+      "ranges": {
+        "healthy": [
+          331643.6345432791,
+          336079.0032480744
+        ],
+        "churn": [
+          66187.85501072188,
+          68295.66505900133
+        ],
+        "cpu_wall": [
+          1.427289317823796,
+          1.4748990776339022
+        ]
+      }
+    },
+    "page100/selected": {
+      "healthy": 341472.5750887454,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68932.52267220218,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97131448988264,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.473536719558443,
+      "rss_mib": 16.48046875,
+      "ranges": {
+        "healthy": [
+          341115.0676831316,
+          342232.9174255531
+        ],
+        "churn": [
+          67627.29899076096,
+          70021.7075829783
+        ],
+        "cpu_wall": [
+          1.4435429264738404,
+          1.4872866953871668
+        ]
+      }
+    }
+  }
+}
