@@ -392,16 +392,18 @@ Other platforms use cloned listeners. Management and process signals use Tokio.
 Dropping the service or losing a worker suppresses shutdown notifications before
 retiring membership, including when the embedding future is cancelled.
 
-HTTP channel listings copy bounded names and numeric metadata into an owned
+Full HTTP channel listings copy bounded names and numeric metadata into an owned
 snapshot under the registry read lock, then release the lock before base64
 encoding, sorting and JSON serialization. Each encoded name occupies at most
 24 inline bytes; the response avoids allocating separate strings for every row.
 The JSON buffer starts with an estimate based on row count and can grow for
 escaped names or large counters. Its storage transfers to the HTTP body without
 a second body copy. The public Rust `Relay::channels()` API still returns owned
-strings. Listings
-remain complete arrays sorted by `name_base64`; their output size and sorting
-work grow with the number of channels. See the
+strings. Full listings remain complete arrays sorted by `name_base64`; their
+output size and sorting work grow with the number of channels. Bounded pages
+select only the requested number of small rows while scanning under the read
+lock, then order and serialize them after unlocking. See
+[bounded browsing](#bounded-channel-browsing) and the
 [listing measurements](performance.md#http-channel-listing-allocation-2026-10-16)
 before choosing an inspection frequency for a large population.
 
@@ -436,12 +438,62 @@ connection churn, active-frame sizes, fanout, queue pressure, p99 latency, CPU,
 and memory on the intended TLS/network path before increasing capacity. The
 initial measurements cover local single-host sockets, not a deployed cluster.
 
-Channel inspection captures a coherent view of bounded channel names and numeric
+Full channel inspection captures a coherent view of bounded channel names and numeric
 metadata under the registry read lock. UTF-8/base64 formatting, sorting, CBOR
 encoding and reply enqueueing run after that lock releases. CBOR queries capture
 only names and member counts; HTTP inspection also captures variable usage.
 Concurrent joins/departures can make a returned snapshot older than the current
-registry by the time the caller receives it. There is no cache or pagination.
+registry by the time the caller receives it. There is no inspection cache.
 The snapshot owns small metadata, so it keeps no peer, variable value or routed
 application body alive. Each large inspection still allocates snapshot/output
 storage and uses CPU proportional to the list, with sorting costs in addition.
+
+### Bounded channel browsing
+
+`GET /v1/channels?limit=100` returns at most 100 rows, with the same JSON array,
+fields and ascending `name_base64` order as the full listing. The limit must be
+in 1–1,000. Without these query parameters, `/v1/channels` returns the full array.
+
+To continue, set `after` to the last returned row's `name_base64`. The cursor is
+exclusive: the next page contains names strictly greater in that base64 text
+order. Use standard base64 with its original padding, and URL-encode it because
+`+`, `/` and `=` can occur. With the management token configured, for example:
+
+```sh
+curl --fail --get \
+  -H "Authorization: Bearer ${WAR_ADMIN_TOKEN}" \
+  --data-urlencode 'limit=100' \
+  http://127.0.0.1:1339/v1/channels
+
+# Use the actual last row's name_base64 here; /wA= illustrates a binary name.
+curl --fail --get \
+  -H "Authorization: Bearer ${WAR_ADMIN_TOKEN}" \
+  --data-urlencode 'limit=100' \
+  --data-urlencode 'after=/wA=' \
+  http://127.0.0.1:1339/v1/channels
+```
+
+Stop when a page has fewer rows than the requested limit. If the final page has
+exactly that many rows, the following request returns an empty array. The empty
+channel has `name_base64: ""`; its cursor is valid and must be sent explicitly as
+`after=`. An absent `after` starts from the beginning. Do not treat an empty
+cursor string as an absent cursor.
+
+Each page captures one coherent view. A sequence of pages does not retain a
+historical registry snapshot: member/variable counts can change, names can
+retire, and new names at or before the last cursor require a fresh traversal to
+observe them. A retired cursor remains usable. The server stores no cursor
+state and keeps no session or variable body alive for subsequent pages.
+
+Invalid limits, malformed/noncanonical base64, cursors longer than a 16-byte
+channel name, duplicate recognized parameters, or `after` without `limit` return
+HTTP 400. Missing or incorrect authorization returns HTTP 401 before query
+validation.
+
+Page metadata storage and output depend on the requested limit. Selecting a page
+still scans the channel registry under a read lock; a full traversal therefore
+repeats that scan. Use the full endpoint when collecting every channel at once,
+and bounded pages when browsing a limited part of a large population. The
+[paging measurements](performance.md#bounded-http-channel-pages-2026-10-16)
+record both costs. CBOR channel-query command 2 keeps its existing full-list
+behavior and raw-byte ordering.

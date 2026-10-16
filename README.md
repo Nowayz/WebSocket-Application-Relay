@@ -197,6 +197,11 @@ Management uses a separate HTTP listener:
 | `POST /v1/resume` | Resume admission | Bearer token required |
 | `POST /v1/sessions/{decimal_id}/disconnect` | Close session with `4000` | Bearer token required |
 
+For bounded channel browsing, use `GET /v1/channels?limit=100`. Pass the last row's
+URL-encoded `name_base64` as `after` to continue. Limits are 1–1,000; the JSON row
+format and base64 ordering match the full listing. Each page is a fresh coherent
+view. See [paging and concurrent changes](docs/operations.md#bounded-channel-browsing).
+
 Non-loopback admin binding requires a token. Liveness/readiness expose no session
 information; metrics use no per-user/channel labels. See [docs/operations.md](docs/operations.md)
 and [deployment examples](deploy/).

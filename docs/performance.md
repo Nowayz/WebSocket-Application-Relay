@@ -2422,3 +2422,152 @@ verified. The [build manifest](benchmarks/2026-10-16-response-buffer-build.json)
 binds committed sources, vendor files, test/helper sources, frozen binaries,
 raw heaps and every report. These are finite Linux loopback checks with rates
 and heartbeat disabled, without TLS or a production capacity claim.
+
+## Bounded HTTP channel pages (2026-10-16)
+
+`2e7806b` adds optional `limit` and exclusive `after` parameters to the authenticated
+HTTP listing. Plain `GET /v1/channels` keeps its full-array schema and base64 text
+order. Limits are 1–1,000; cursors are canonical standard base64 for at most
+16 raw name bytes, including the valid empty cursor. Authorization happens before
+query validation. The [operator contract](operations.md#bounded-channel-browsing)
+describes URL encoding, termination, retired cursors and concurrent changes.
+
+The bounded path scans the registry under one read guard and maintains a capped
+max-heap of keys and indices into small owned rows. Only the requested number of
+metadata rows are retained. Sorting the retained keys and JSON formatting happen
+after unlocking. Temporary storage depends on page size; no persistent index or
+cursor snapshot is added. Each page is coherent, while subsequent pages observe
+fresh state. Selection still scans the hash table, so a complete traversal
+repeats work. This is intended for browsing part of a large population.
+
+Axum's pinned
+[`Query::try_from_uri`](https://docs.rs/axum/0.8.9/axum/extract/struct.Query.html#method.try_from_uri)
+provides standard form-query decoding after authorization. Its feature adds the
+locked `form_urlencoded`, `serde_urlencoded` and `ryu` packages. Cursor validation
+uses a fixed stack decode buffer and rejects noncanonical, oversized and malformed
+names. Existing full Rust/HTTP snapshots and the CBOR query contract remain
+available.
+
+### Allocations and output size
+
+Five fresh server-only allocator diagnostics hold 8,194 stable channels. The
+newly frozen client independently verifies the complete population, payloads,
+sender IDs, FIFO, Close/EOF, counters and final resources. At a paused gate the
+controller checks each first page against the full response prefix, warms it,
+and makes 20 requests between raw heap captures. Every repeated response must be
+byte-identical. Diagnostic timing/RSS are excluded from ordinary comparisons.
+
+| Request / 8,194 stable channels | Returned rows | Response bytes | Allocations/request | Requested bytes/request |
+| --- | ---: | ---: | ---: | ---: |
+| Before full array | 8,194 | 770,198 | 50 | 1,716,512 |
+| Selected full array | 8,194 | 770,198 | 50 | 1,716,608 |
+| Selected first page, limit 1 | 1 | 81 | 53 | 45,294 |
+| Selected first page, limit 100 | 100 | 9,376 | 53 | 70,640 |
+| Selected first page, limit 1,000 | 1,000 | 93,976 | 53 | 301,041 |
+
+The full before/selected response SHA-256 is
+`4e05aa791fcb95e7823ebad8fcfd61fa6ee245c6791fa99bd78ced83aeb179c6`.
+Full allocation count is unchanged, with 96 additional requested bytes per
+request in this capture. Every batch ends with zero change in live allocation
+count and requested live bytes. Page requests have a little more fixed query
+machinery but much smaller metadata/output storage. The 100-row first page uses
+95.9% fewer cumulative requested allocation bytes than the selected full array.
+These requests return different quantities of data. This is not an
+equivalent-output speedup, a peak-memory reduction measurement or a count of
+bytes copied. The [allocation summary](benchmarks/2026-10-16-paging-allocations.json)
+binds all captures, symbols, collectors, libraries and binary hashes.
+
+### Mixed workloads and full-list compatibility
+
+The [27-case matrix](benchmarks/2026-10-16-paging-comparison.json) contains three
+rotating repetitions with alternating before/selected order. Both servers use
+four workers on CPUs 0–3 and the same freshly frozen client on CPUs 4–7. Each
+eight-second phase uses one private pair, 1 KiB values and window 16. Large mixed
+cases hold 8,192 idle rooms, add eight reconnect workers and request 200 HTTP
+inspections/s. Small mixed cases use 64 rooms. Private controls omit concurrent
+churn and inspection. No builds, profilers or other load tests overlap timing.
+
+The 18 before/selected full/private/small cases exercise the same existing API
+and frozen client. Nine additional selected cases poll the first page at limits
+1, 100 or 1,000. Their stable checkpoints traverse every page and independently
+verify all expected rows, fields and cursor progress. During traffic the client
+checks every returned row, prefix completeness for stable names, allowed churn
+rows, bounds and strict order. Every case checks complete data-plane payloads,
+Close/EOF, exact counters and empty final resource gauges.
+
+| Median of three / selected large mixed workload | Full array | First 1 | First 100 | First 1,000 |
+| --- | ---: | ---: | ---: | ---: |
+| Healthy private deliveries/s | 323,763 | 332,756 | 333,195 | 323,128 |
+| Complete reconnect cycles/s | 59,477 | 67,072 | 67,322 | 64,638 |
+| Completed inspections/s | 199.97 | 199.97 | 199.97 | 199.97 |
+| Inspection p99 upper bucket, ms | 8.388608 | 2.097152 | 2.097152 | 4.194304 |
+| Reconnect p99 upper bucket, ms | 0.524288 | 0.524288 | 0.524288 | 1.048576 |
+| Server CPU seconds/wall second | 1.6498 | 1.4535 | 1.4510 | 1.4610 |
+| Event-gate RSS, MiB | 17.57 | 16.49 | 16.52 | 16.73 |
+
+Polling 100 rows uses 12.0% less server CPU than polling the full array, with
+2.9% more healthy deliveries and 13.2% more reconnects in this mixed workload.
+It returns only a subset per request, and client verification work also shrinks.
+The larger 1,000-row heap has a worse reconnect p99 bucket under this polling
+load. Selection holds the registry read guard while scanning; bounded output
+does not remove writer contention. Buckets bound observed latency rather than
+report exact p99 values. RSS samples are event-boundary observations, not peaks.
+
+The default API has measured whole-build costs too. Large full-list healthy
+traffic is 323,231 before versus 323,763 selected (+0.2%), reconnect throughput
+60,702 versus 59,477 (−2.0%), and server CPU 1.6635 versus 1.6498 (−0.8%). Private
+control is 581,369 versus 567,632 deliveries/s (−2.4%), with nonoverlapping run
+ranges and the same 0.032768 ms p99 bucket. Small mixed healthy throughput is
+359,233 versus 351,753 (−2.1%) and reconnect throughput 72,242 versus 70,974
+(−1.8%), with unchanged median p99 buckets. These costs are retained alongside
+the bounded browsing feature; no general routing-speed gain is claimed. The
+matrix uses a new common client, so earlier matrices' medians are not substituted
+for its before control.
+
+### Complete traversal cost
+
+The [traversal diagnostic](benchmarks/2026-10-16-paging-traversal.json) uses three
+fresh static populations and rotates request order. At a paused ready gate, a
+Python controller follows every cursor and checks all 8,194 rows against the
+full reference. Server CPUs are 0–3 and client/controller CPUs 4–7. Its wall time
+includes HTTP connections, Python JSON parsing and complete equality checks.
+
+| Complete static traversal, median of three | Requests | Controller-verified elapsed |
+| --- | ---: | ---: |
+| Full array | 1 | 6.32 ms |
+| Limit 1 | 8,195 | 2,315.95 ms |
+| Limit 100 | 82 | 31.45 ms |
+| Limit 1,000 | 9 | 9.53 ms |
+
+The final empty request at limit 1 is part of the documented termination rule.
+This demonstrates the rescan/round-trip cost of exporting everything through
+small pages. Process CPU accounting has 10 ms ticks and is too coarse for the
+single full request. The first traversal hook incorrectly returned a pre-probe
+CPU baseline for subsequent traffic; it now captures the baseline after all
+paused queries. All three processes were rerun. The
+[accounting correction](benchmarks/2026-10-16-paging-traversal-accounting.json)
+retains the rejected records' hashes and positive post-probe baseline checks.
+The separate 27-case ordinary matrix never used this hook.
+
+### Verification and runtime
+
+The [source checks](benchmarks/2026-10-16-paging-checks.json) pass 103 Linux Rust
+tests, strict Clippy, formatting and the locked release build. New tests cover
+all 256 single-byte names, every length through 16, Unicode and base64 prefix
+keys, page sizes, detached metadata, variables, empty cursors, URL-encoded
+plus/slash/padding, invalid and duplicate parameters, authentication precedence
+and live membership changes. The
+[release API acceptance](benchmarks/2026-10-16-paging-acceptance.json) observes a
+cursor channel retire before reusing its key, then verifies joins behind/ahead,
+changed member counts and all 13 normal peer closes with empty final resources.
+
+The selected releases pass the unchanged
+[C++ reference suite](benchmarks/2026-10-16-paging-reference.json): 48 common cases
+and eight documented differences through the legacy bridge. Seven JavaScript
+checks and seven [headed Chrome checks](benchmarks/2026-10-16-paging-browser.json)
+pass. The refreshed native and bridge executable hashes match the measured
+build; four native listeners, readiness and empty resource gauges are verified.
+The [build manifest](benchmarks/2026-10-16-paging-build.json) binds committed
+runtime sources, vendor files, helper/client sources, frozen binaries, raw
+captures, traversal correction and all reports. These remain finite Linux
+loopback checks without TLS or production capacity claims.
