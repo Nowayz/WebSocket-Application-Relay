@@ -26,6 +26,10 @@ use crate::{
     },
 };
 
+mod listing;
+
+pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
+
 /// The registry lock protects membership and ID ownership. Output submission is
 /// nonblocking; the transport writes immediately or retains a shared frame.
 pub struct Relay {
@@ -241,6 +245,7 @@ pub struct ChannelInfo {
 
 /// Registry names are bounded to 16 bytes. Inline inspection names hold small
 /// metadata without per-name allocation or reference-count traffic.
+#[derive(Clone, Copy)]
 struct SnapshotName {
     bytes: [u8; 16],
     len: u8,
@@ -271,6 +276,7 @@ impl SnapshotName {
 
 /// One coherent view owns only small names and numeric metadata. It keeps no
 /// registry guard, peer or variable value alive while inspection formats output.
+#[derive(Clone, Copy)]
 pub(crate) struct ChannelSnapshot {
     name: SnapshotName,
     members: usize,

@@ -1,6 +1,58 @@
 use super::*;
 
 #[test]
+fn bounded_channel_pages_match_the_independent_full_listing_and_own_metadata() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let mut names = vec![
+        Vec::new(),
+        b"abc".to_vec(),
+        b"abc\0".to_vec(),
+        "π世界".as_bytes().to_vec(),
+    ];
+    names.extend((0..=255).map(|byte| vec![byte]));
+    names.extend((2..=16).map(|len| vec![0x5a; len]));
+    let mut subscriptions: Vec<_> = names
+        .iter()
+        .map(|name| {
+            let mut sub = relay.subscribe(name).unwrap();
+            sub.outgoing.try_recv().unwrap();
+            sub
+        })
+        .collect();
+    relay
+        .receive(
+            &subscriptions[0].registration.peer,
+            protocol::request(4, b"\x82\x43key\xf5"),
+        )
+        .unwrap();
+    subscriptions[0].outgoing.try_recv().unwrap();
+    let expected = serde_json::to_value(relay.channels()).unwrap();
+    for limit in [1, 2, 7, MAX_CHANNEL_PAGE_SIZE] {
+        let mut after = None;
+        let mut collected = Vec::new();
+        loop {
+            let page = relay.channel_page(std::num::NonZeroUsize::new(limit).unwrap(), after);
+            assert!(page.len() <= limit);
+            let rows = serde_json::to_value(&page).unwrap();
+            collected.extend(rows.as_array().unwrap().iter().cloned());
+            if page.len() < limit {
+                break;
+            }
+            after = Some(page.last().unwrap().name.base64());
+        }
+        assert_eq!(collected, *expected.as_array().unwrap());
+    }
+    let page = relay.channel_page(std::num::NonZeroUsize::new(7).unwrap(), None);
+    let detached = serde_json::to_vec(&page).unwrap();
+    drop(subscriptions);
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    drop(relay);
+    assert_eq!(serde_json::to_vec(&page).unwrap(), detached);
+}
+
+#[test]
 fn detached_http_listing_preserves_json_and_base64_order_for_bounded_names() {
     let relay = Relay::new(Config::default()).unwrap();
     let mut names = vec![

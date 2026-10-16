@@ -89,6 +89,9 @@ struct Args {
     audit_ids: bool,
     #[arg(long, value_enum, default_value = "http")]
     mode: Mode,
+    /// Inspect the first bounded HTTP page during traffic; traverse all pages at gates.
+    #[arg(long)]
+    page_size: Option<usize>,
     #[arg(long, default_value_t = 8192)]
     rooms: usize,
     #[arg(long, default_value_t = 8)]
@@ -193,9 +196,11 @@ struct Expected {
     json: HashMap<String, Info>,
     transient_raw: HashMap<Bytes, ()>,
     transient_json: HashMap<String, Info>,
+    sorted_json: Vec<String>,
+    page_size: Option<usize>,
 }
 impl Expected {
-    fn new(stable: &[(Bytes, u64)], workers: usize) -> Self {
+    fn new(stable: &[(Bytes, u64)], workers: usize, page_size: Option<usize>) -> Self {
         let info = |name: &Bytes, members| Info {
             name: std::str::from_utf8(name).ok().map(str::to_owned),
             name_base64: STANDARD.encode(name),
@@ -210,12 +215,16 @@ impl Expected {
                 (entry.name_base64.clone(), entry)
             })
             .collect();
+        let mut sorted_json: Vec<_> = json.keys().cloned().collect();
+        sorted_json.sort_unstable();
         let transient: Vec<_> = (0..workers)
             .map(|i| Bytes::from(format!("churn{i}")))
             .collect();
         Self {
             raw: stable.iter().cloned().collect(),
             json,
+            sorted_json,
+            page_size,
             transient_raw: transient.iter().map(|n| (n.clone(), ())).collect(),
             transient_json: transient
                 .iter()
@@ -340,6 +349,56 @@ impl Expected {
         ensure!(fixed == self.json.len(), "missing HTTP channel");
         Ok(())
     }
+
+    fn http_page(
+        &self,
+        bytes: &[u8],
+        after: Option<&str>,
+        limit: usize,
+        quiescent: bool,
+    ) -> Result<Option<String>> {
+        let rows: Vec<Info> = serde_json::from_slice(bytes)?;
+        ensure!(rows.len() <= limit, "HTTP page exceeded limit");
+        let mut next = self
+            .sorted_json
+            .partition_point(|key| after.is_some_and(|after| key.as_str() <= after));
+        let mut previous = after;
+        for row in &rows {
+            ensure!(
+                previous.is_none_or(|key| key < row.name_base64.as_str()),
+                "page cursor/order changed"
+            );
+            previous = Some(&row.name_base64);
+            if let Some(expected) = self.json.get(&row.name_base64) {
+                ensure!(expected == row, "page metadata changed: {row:?}");
+                ensure!(
+                    self.sorted_json.get(next) == Some(&row.name_base64),
+                    "page skipped a stable channel"
+                );
+                next += 1;
+            } else {
+                ensure!(
+                    !quiescent && self.transient_json.get(&row.name_base64) == Some(row),
+                    "unexpected page transient"
+                );
+            }
+        }
+        if let Some(last) = previous {
+            ensure!(
+                self.sorted_json
+                    .get(next)
+                    .is_none_or(|key| key.as_str() > last),
+                "page omitted a stable channel before its last key"
+            );
+        }
+        if rows.len() < limit {
+            ensure!(
+                next == self.sorted_json.len(),
+                "short page omitted remaining stable channels"
+            );
+        }
+        Ok((quiescent && rows.len() == limit).then(|| rows.last().unwrap().name_base64.clone()))
+    }
 }
 
 fn gate(event: &str, details: serde_json::Value) -> Result<()> {
@@ -450,12 +509,38 @@ async fn http(
     expected: &Expected,
     quiescent: bool,
 ) -> Result<()> {
-    timeout(Duration::from_secs(5),async {
+    let deadline = if quiescent && expected.page_size.is_some() {
+        30
+    } else {
+        5
+    };
+    timeout(Duration::from_secs(deadline),async {
+        let mut after: Option<String> = None;
+        loop {
         let mut socket=TcpStream::connect(admin).await?;socket.set_nodelay(true)?;
-        socket.write_all(b"GET /v1/channels HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer inspection-benchmark\r\nConnection: close\r\n\r\n").await?;
+        if let Some(limit) = expected.page_size {
+            let mut path = format!("/v1/channels?limit={limit}");
+            if let Some(after) = &after {
+                path.push_str("&after=");
+                for byte in after.bytes() {
+                    match byte {b'+' => path.push_str("%2B"), b'/' => path.push_str("%2F"), b'=' => path.push_str("%3D"), _ => path.push(char::from(byte))}
+                }
+            }
+            socket.write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer inspection-benchmark\r\nConnection: close\r\n\r\n").as_bytes()).await?;
+        } else {
+            socket.write_all(b"GET /v1/channels HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer inspection-benchmark\r\nConnection: close\r\n\r\n").await?;
+        }
         bytes.clear();(&mut socket).take(2*1024*1024).read_to_end(bytes).await?;
         ensure!(bytes.starts_with(b"HTTP/1.1 200 OK\r\n"),"management status");let end=bytes.windows(4).position(|v| v==b"\r\n\r\n").context("missing HTTP body")?+4;
-        expected.http(&bytes[end..],quiescent)
+        if let Some(limit) = expected.page_size {
+            after = expected.http_page(&bytes[end..],after.as_deref(),limit,quiescent)?;
+            if after.is_none() {break;}
+        } else {
+            expected.http(&bytes[end..],quiescent)?;
+            break;
+        }
+        }
+        Ok(())
     }).await?
 }
 
@@ -582,6 +667,13 @@ async fn main() -> Result<()> {
         "invalid workload bounds"
     );
     ensure!(
+        args.page_size
+            .is_none_or(|limit| (1..=1000).contains(&limit)
+                && args.mode == Mode::Http
+                && args.wire == Wire::Cbor),
+        "bounded pages require HTTP/CBOR and a limit in 1..=1000"
+    );
+    ensure!(
         match args.wire {
             Wire::Cpp =>
                 args.protocol_only
@@ -684,7 +776,7 @@ async fn main() -> Result<()> {
     } else {
         None
     };
-    let expected = Arc::new(Expected::new(&stable, args.churn_workers));
+    let expected = Arc::new(Expected::new(&stable, args.churn_workers, args.page_size));
     let mut buffer = Vec::with_capacity(1024 * 1024);
     let mut inspections_verified = 0u64;
     if let Some(socket) = &mut probe {
@@ -777,7 +869,7 @@ async fn main() -> Result<()> {
                     .filter(|(_, count)| **count > 0)
                     .map(|(i, count)| (Bytes::from(format!("churn{i}")), *count)),
             );
-            Expected::new(&retained, 0).cpp(&bytes)?;
+            Expected::new(&retained, 0, None).cpp(&bytes)?;
         } else {
             args.wire.check_query(&expected, &bytes, true)?;
         }

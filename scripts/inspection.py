@@ -114,6 +114,8 @@ def run(args):
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
+    if getattr(args, "page_size", None) is not None:
+        command += ["--page-size", str(args.page_size)]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -248,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
     parser.add_argument("--mode", choices=["none", "cbor", "http"], default="http")
+    parser.add_argument("--page-size", type=int, help="HTTP first-page size during traffic; complete traversal verified at quiescent gates")
     parser.add_argument("--rooms", type=int, default=8192)
     parser.add_argument("--seconds", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)

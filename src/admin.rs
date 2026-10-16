@@ -1,17 +1,45 @@
 //! HTTP management for the native relay.
-use std::sync::{Arc, atomic::Ordering::Relaxed};
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, atomic::Ordering::Relaxed},
+};
 
 use axum::{
     Router,
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::{BufMut, BytesMut};
+use serde::Deserialize;
 use tracing::info;
 
-use crate::{Relay, protocol};
+use crate::{Relay, protocol, relay::MAX_CHANNEL_PAGE_SIZE};
+
+#[derive(Deserialize)]
+struct ChannelQuery {
+    limit: Option<NonZeroUsize>,
+    after: Option<String>,
+}
+
+fn cursor_key(cursor: &str) -> Result<[u8; 24], StatusCode> {
+    let invalid = StatusCode::BAD_REQUEST;
+    if cursor.len() > 24 {
+        return Err(invalid);
+    }
+    let mut raw = [0; 18];
+    let len = STANDARD
+        .decode_slice(cursor, &mut raw)
+        .map_err(|_| invalid)?;
+    if len > 16 {
+        return Err(invalid);
+    }
+    let mut key = [0; 24];
+    key[..cursor.len()].copy_from_slice(cursor.as_bytes());
+    Ok(key)
+}
 
 pub fn admin_router(relay: Arc<Relay>) -> Router {
     Router::new()
@@ -61,11 +89,36 @@ async fn metrics(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Respons
         .into_response()
 }
 
-async fn channels(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Response {
+async fn channels(State(relay): State<Arc<Relay>>, headers: HeaderMap, uri: Uri) -> Response {
     if !authorized(&relay, &headers, false) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let channels = relay.channel_listing();
+    let channels = if uri.query().is_some_and(|query| !query.is_empty()) {
+        // Authorize before parsing, so malformed queries expose no inspection
+        // behavior to callers without the management token.
+        let Query(query) = match Query::<ChannelQuery>::try_from_uri(&uri) {
+            Ok(query) => query,
+            Err(error) => return error.into_response(),
+        };
+        match query.limit {
+            Some(limit) if limit.get() <= MAX_CHANNEL_PAGE_SIZE => {
+                let after = match query.after.as_deref().map(cursor_key).transpose() {
+                    Ok(after) => after,
+                    Err(status) => return status.into_response(),
+                };
+                relay.channel_page(limit, after)
+            }
+            Some(_) => {
+                return (StatusCode::BAD_REQUEST, "limit must be in 1..=1000").into_response();
+            }
+            None if query.after.is_some() => {
+                return (StatusCode::BAD_REQUEST, "after requires limit").into_response();
+            }
+            None => relay.channel_listing(),
+        }
+    } else {
+        relay.channel_listing()
+    };
     // A normal bounded-name row fits in about 128 bytes. This is a capacity
     // hint, not a limit: escaped names and large counters may grow the buffer.
     // Snapshot and sort-key storage do not borrow the registry during encoding.
