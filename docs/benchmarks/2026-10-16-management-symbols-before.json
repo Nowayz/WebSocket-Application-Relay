@@ -1,0 +1,586 @@
+{
+  "scope": "Cumulative requested allocations across 20 paused-gate HTTP listings, server-only replacement allocator. Symbolized via recorded binary PIE base and GNU addr2line inline frames. Not RSS or ordinary timing.",
+  "binary": "/home/phil/dev/war_next/artifacts/baselines/b0da28a/war-relay",
+  "binary_sha256": "a7f6cece25447385fcf066d5546feeb4a10b77726e40f3a8c8c1fb959328a83d",
+  "input_sha256": "b60ab229390338bc0525c44d3d574321ebde732b623a6978232f8061f20ed95a",
+  "analyzer_source": "import argparse\nimport hashlib\nimport json\nfrom pathlib import Path\nimport re\nimport subprocess\n\nparser = argparse.ArgumentParser()\nparser.add_argument('--report', type=Path, required=True)\nparser.add_argument('--output', type=Path, required=True)\nargs = parser.parse_args()\nreport = json.loads(args.report.read_text())\nbinary = Path(report['server_command'][3])\naddresses, gates = set(), []\nfor gate in ['before', 'after']:\n    descriptor = report['allocation_probe'][gate]\n    heap = Path(descriptor['path'])\n    data = heap.read_text()\n    assert hashlib.sha256(heap.read_bytes()).hexdigest() == descriptor['sha256']\n    base = int(next(line.split('-')[0] for line in data.splitlines()\n                    if str(binary) in line and ' 00000000 ' in line), 16)\n    rows = {}\n    for line in data.splitlines():\n        match = re.match(r'\\s*(\\d+):\\s*(\\d+)\\s*\\[\\s*(\\d+):\\s*(\\d+)\\]\\s*@\\s*(.*)', line)\n        if match:\n            stack = tuple(int(address,16)-base-1 for address in match[5].split()\n                          if base <= int(address,16) < base+0x1000000)\n            addresses.update(stack)\n            counts = rows.setdefault(stack, [0]*4)\n            for i in range(4):\n                counts[i] += int(match[i+1])\n    gates.append(rows)\nordered = sorted(addresses)\nsymbolized = subprocess.run(['addr2line','-a','-f','-C','-i','-e',str(binary)],\n    input=''.join(hex(a)+'\\n' for a in ordered), capture_output=True, text=True, check=True)\nsymbols, current = {}, None\nfor line in symbolized.stdout.splitlines():\n    if re.fullmatch(r'0x[0-9a-fA-F]+',line):\n        current = int(line,16)\n        symbols[current] = []\n    elif current is not None:\n        symbols[current].append(line)\nstacks = []\nfor stack in gates[0].keys() | gates[1].keys():\n    delta = [b-a for a,b in zip(gates[0].get(stack,[0]*4), gates[1].get(stack,[0]*4))]\n    if delta[2] or delta[3]:\n        stacks.append({'live_objects_delta':delta[0], 'live_bytes_delta':delta[1],\n            'allocated_objects':delta[2], 'allocated_bytes':delta[3],\n            'symbols':[s for a in stack for s in symbols.get(a,[])],\n            'binary_return_offsets':[hex(a) for a in stack]})\nstacks.sort(key=lambda r:r['allocated_objects'], reverse=True)\nresult = {'scope':'Cumulative requested allocations across 20 paused-gate HTTP listings, server-only replacement allocator. Symbolized via recorded binary PIE base and GNU addr2line inline frames. Not RSS or ordinary timing.',\n    'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),\n    'input_sha256':hashlib.sha256(args.report.read_bytes()).hexdigest(),\n    'analyzer_source':Path(__file__).read_text(),'probe':report['allocation_probe'],\n    'totals':{k:sum(row[k] for row in stacks) for k in ['live_objects_delta','live_bytes_delta','allocated_objects','allocated_bytes']},\n    'stacks':stacks}\nargs.output.write_text(json.dumps(result,indent=2)+'\\n')\nprint(json.dumps({'totals':result['totals'],'top':stacks[:5]},indent=2))\n",
+  "probe": {
+    "requests": 20,
+    "rows": 8194,
+    "response_bytes": 770198,
+    "response_sha256": "4e05aa791fcb95e7823ebad8fcfd61fa6ee245c6791fa99bd78ced83aeb179c6",
+    "before": {
+      "path": "/home/phil/dev/war_next/artifacts/profiles/management-before_279573.0001.heap",
+      "sha256": "663f8c84ea5b0622faf28691caf26f4b85eeba33d09c0f8a56b88c7c57de2fd9",
+      "header": "heap profile:  49443: 13062170 [293087: 116145005] @ heapprofile"
+    },
+    "after": {
+      "path": "/home/phil/dev/war_next/artifacts/profiles/management-before_279573.0002.heap",
+      "sha256": "f8d62832eeb822a5042e0f33dfaea6e295e29849eada7e6070fe1599cbb21772",
+      "header": "heap profile:  49443: 13062170 [622067: 181926125] @ heapprofile"
+    }
+  },
+  "totals": {
+    "live_objects_delta": 0,
+    "live_bytes_delta": 0,
+    "allocated_objects": 328980,
+    "allocated_bytes": 65781120
+  },
+  "stacks": [
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 163880,
+      "allocated_bytes": 1966080,
+      "symbols": [
+        "war_relay::relay::Relay::channels",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0x27a0a7"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 163860,
+      "allocated_bytes": 1310600,
+      "symbols": [
+        "war_relay::relay::Relay::channels",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0x27a047"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 280,
+      "allocated_bytes": 42265600,
+      "symbols": [
+        "alloc::raw_vec::finish_grow",
+        "bytes.761df4b03ca1f5ca-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xb0263"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 140,
+      "allocated_bytes": 880,
+      "symbols": [
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x2c348b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 40,
+      "allocated_bytes": 320,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262dab"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 40,
+      "allocated_bytes": 70000,
+      "symbols": [
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x2c2e3e"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 40,
+      "allocated_bytes": 70000,
+      "symbols": [
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0xad155"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x26f925"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262f6b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "http::header::map::HeaderMap<T>::try_reserve",
+        "hyper.5089378ce801b27f-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x1253cf"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262feb"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x26305b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "http::extensions::Extensions::insert",
+        "axum.9a3e81600cdeefef-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xa9c29"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 320,
+      "symbols": [
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x28ef5a"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 163840,
+      "symbols": [
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x28eb28"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 11799360,
+      "symbols": [
+        "war_relay::relay::Relay::channels",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0x279f97"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 3520,
+      "symbols": [
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}",
+        "war_relay.fcc175694bd8646b-cgu.0:?",
+        "<axum::serve::WithGracefulShutdown<L,M,S,F> as core::future::into_future::IntoFuture>::into_future::{{closure}}",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x29ab5b",
+        "0x289c0a"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 480,
+      "symbols": [
+        "<axum::json::Json<T> as axum_core::response::into_response::IntoResponse>::into_response::make_response",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0xaccfb"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 10560,
+      "symbols": [
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x26f2e6"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 480,
+      "symbols": [
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x2b235b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "alloc::raw_vec::finish_grow",
+        "tokio.b9da8c3f773d25ec-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x1eccd2"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 12480,
+      "symbols": [
+        "http::header::map::HeaderMap<T>::try_insert2",
+        "axum_core.a0012b0ab3e2f651-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xae0e3"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 6400,
+      "symbols": [
+        "alloc::raw_vec::finish_grow",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x24f5e6"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 12480,
+      "symbols": [
+        "http::header::map::HeaderMap<T>::try_reserve",
+        "hyper.5089378ce801b27f-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x1254a8"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262e1b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 2960,
+      "symbols": [
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0x11d8ea"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262e8b"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 480,
+      "symbols": [
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x28e9ed"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 160,
+      "symbols": [
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x262efb"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 480,
+      "symbols": [
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x26f329"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 2560,
+      "symbols": [
+        "<F as axum::handler::Handler<(M,T1,T2),S>>::call::{{closure}}",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x265ae4"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 800,
+      "symbols": [
+        "bytes::bytes_mut::BytesMut::split_to",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0xb2019"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 120,
+      "symbols": [
+        "axum::routing::route::set_content_length",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0xa7d1f"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 6400,
+      "symbols": [
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x28ef0c"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 480,
+      "symbols": [
+        "http::extensions::Extensions::insert",
+        "axum.9a3e81600cdeefef-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xa9c58"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 23040,
+      "symbols": [
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}",
+        "war_relay.fcc175694bd8646b-cgu.0:?",
+        "<axum::serve::WithGracefulShutdown<L,M,S,F> as core::future::into_future::IntoFuture>::into_future::{{closure}}",
+        "war_relay.fcc175694bd8646b-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x29b368",
+        "0x289c0a"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 10400,
+      "symbols": [
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+        "war_relay.1185c151ae7c092c-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x26f9b6"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 5120,
+      "symbols": [
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate",
+        "??:?",
+        "tokio::io::poll_evented::PollEvented<E>::new_with_interest",
+        "tokio.b9da8c3f773d25ec-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0x1f14e7",
+        "0x1ed004"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 7866240,
+      "symbols": [
+        "war_relay::relay::Relay::channels",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0x279d4d"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "http::header::map::HeaderMap<T>::try_insert2",
+        "axum_core.a0012b0ab3e2f651-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xae09a"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 640,
+      "symbols": [
+        "<bytes::bytes::Bytes as axum_core::response::into_response::IntoResponse>::into_response",
+        "??:?"
+      ],
+      "binary_return_offsets": [
+        "0xaf415"
+      ]
+    },
+    {
+      "live_objects_delta": 0,
+      "live_bytes_delta": 0,
+      "allocated_objects": 20,
+      "allocated_bytes": 163840,
+      "symbols": [
+        "alloc::raw_vec::finish_grow",
+        "bytes.761df4b03ca1f5ca-cgu.0:?"
+      ],
+      "binary_return_offsets": [
+        "0xb026e"
+      ]
+    }
+  ]
+}

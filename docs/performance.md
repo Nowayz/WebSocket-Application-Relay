@@ -2173,3 +2173,137 @@ allocation tables retain the collector/analyzer sources and exact hashes. The
 [build manifest](benchmarks/2026-10-16-channel-names-build.json) binds the source,
 vendor files, test/helper sources, control/release/client binaries, raw heaps
 and every report. These remain finite local and loopback checks.
+
+## HTTP channel-listing allocation (2026-10-16)
+
+Selected runtime `8f7bdd2` is compared with `b0da28a` using identical frozen
+clients. This checkpoint changes the management response representation.
+
+The HTTP `GET /v1/channels` handler previously called the public Rust
+`Relay::channels()` API. After taking the small owned registry snapshot, that API
+allocated a UTF-8 string for each valid name and a base64 string for every
+nonempty name. A large polling client repeatedly created and freed those small
+allocations before serializing the complete array.
+
+The HTTP path now prepares a temporary 24-byte base64 key per row for sorting,
+then serializes the original bounded name and numeric metadata directly.
+The registry read lock is held only while copying the small names and numbers;
+encoding, sorting and serialization still happen after it is released. The
+response encodes each name again into a stack buffer. Base64 contains no zero
+bytes, so zero padding the fixed-size key preserves the previous lexical order,
+including empty names and prefix keys. The public Rust `Relay::channels()` return type and
+owned strings remain available to callers. Using
+[`sort_by_cached_key`](https://doc.rust-lang.org/std/primitive.slice.html#method.sort_by_cached_key)
+avoids repeated encoding inside the comparator and a second vector of full
+metadata rows. The temporary sort-key storage retires before JSON formatting.
+
+### Isolated request allocation diagnostic
+
+The unchanged frozen inspection client first populates 8,192 ordinary rooms and
+one private pair, then independently verifies the entire HTTP listing. While
+that client waits at its ready gate, the controller warms one listing, captures
+the server heap, makes 20 sequential authenticated listings, and captures it
+again. Every response must exactly match the warmed bytes. Only the server
+loads the recorded gperftools replacement allocator. The original client's
+payload, sender, FIFO, listing, Close/EOF, counter and final-resource checks still
+run, but all diagnostic timing and RSS are excluded from ordinary comparisons.
+
+Both versions return exactly 770,198 bytes for 8,194 rows, with response SHA-256
+`4e05aa791fcb95e7823ebad8fcfd61fa6ee245c6791fa99bd78ced83aeb179c6`.
+The cumulative allocation changes between the paused captures are:
+
+| Per HTTP request | Before | Selected |
+| --- | ---: | ---: |
+| Allocations | 16,449 | 62 |
+| Requested allocation bytes | 3,289,056 | 2,764,686 |
+| Live allocation change after the request batch | 0 | 0 |
+| Live requested-byte change after the request batch | 0 | 0 |
+
+The two old name-allocation stacks account for 327,740 allocations and 3,276,680
+requested bytes across 20 requests: 16,387 allocations and 163,834 bytes per
+request. Both disappear from the selected HTTP path. Total allocation count
+falls 99.6%, while requested allocation bytes fall 15.9%. The additional byte
+reduction comes from sorting compact keys rather than building another vector
+of full metadata rows. The complete operation still allocates snapshot/output
+storage and HTTP machinery; this is not an allocation-free response. Cumulative
+requested bytes include response-buffer
+growth and are neither simultaneously live bytes nor RSS.
+
+The [allocation summary](benchmarks/2026-10-16-management-cached-allocations.json) binds
+the before/selected raw captures and responses. Both symbol reports retain the
+full allocation stacks and analyzer source; totals are checked against each raw
+heap header. The collector source, unchanged client/runner hashes, library and
+server binary hashes are recorded separately.
+
+### Ordinary timing, selection and tradeoffs
+
+The selected [comparison matrix](benchmarks/2026-10-16-management-cached-comparison.json)
+contains 18 successful fresh-process cases: three repetitions of three workloads
+and two implementations. Workload order rotates and implementation order
+alternates. Both versions use four server workers on CPUs 0–3 and the unchanged
+client on CPUs 4–7. No builds, profiles or other load tests overlap timing.
+
+Each case runs one private pair with 1 KiB values and window 16 for eight seconds.
+The private control holds 8,192 additional ordinary rooms without concurrent
+churn or inspection. Large management adds eight reconnect workers and two HTTP
+inspectors, each paced at a ten-millisecond interval. Small management holds
+64 ordinary rooms with the same churn and inspection settings. All inspectors
+verify every row, field, name and ordering, including transient churn rooms.
+Complete payload/FIFO checks, normal Close/EOF, exact counters and empty final
+connection/staging/queue/variable gauges must pass in every case.
+
+| Median of three / large management | Before | Selected |
+| --- | ---: | ---: |
+| Healthy private deliveries/s | 318,248 | 312,884 |
+| Complete reconnect cycles/s | 59,379 | 59,745 |
+| Completed HTTP listings/s | 199.97 | 199.97 |
+| HTTP p99 upper bucket | 16.777216 ms | 8.388608 ms |
+| Reconnect p99 upper bucket | 0.524288 ms | 0.524288 ms |
+| Private delivery p99 upper bucket | 0.131072 ms | 0.131072 ms |
+| Server CPU seconds/wall second | 1.7485 | 1.6535 |
+| Event-gate server RSS | 19.20 MiB | 17.53 MiB |
+
+Large-management CPU falls 5.4%, and the HTTP p99 bucket improves in all three
+selected runs. Both versions complete the requested 200 listings/s. The bucket
+change bounds observations; it does not establish that exact p99 latency halved.
+Healthy private throughput falls 1.7%, while complete reconnect throughput rises
+0.6%. Total server CPU covers all mixed work and is not an isolated cost per
+request or delivery.
+
+The private control is 577,663 versus 565,091 deliveries/s (−2.2%), with the same
+0.032768 ms p99 bucket. Small management is 353,708 versus 344,616 healthy
+deliveries/s (−2.6%) and 70,499 versus 69,902 reconnects/s (−0.8%), with unchanged
+median delivery, reconnect and HTTP p99 buckets. Per-run ranges are retained in
+the matrix; the small-management healthy ranges do not overlap. These are
+measured costs, and this checkpoint makes no broad routing-throughput gain claim.
+It is retained for lower allocation traffic, management CPU and listing latency,
+with those delivery-rate tradeoffs exposed. Event-gate RSS is not a continuous
+peak, a memory cap or requested live heap bytes.
+
+An [earlier representation](benchmarks/2026-10-16-management-experiments.json)
+kept the prepared base64 key beside every full metadata row in another vector.
+It also removed per-name allocations, but reduced requested bytes by only 5.0%.
+Its own alternating 18-case matrix showed large-management healthy throughput
+−2.0% and a worse reconnect p99 bucket. That representation is not retained. Its
+source patch, hashes, matrix and allocation captures remain recorded. Selection
+does not treat the two matrices' differing control results as interchangeable.
+
+### Verification and reproducibility
+
+The [source checks](benchmarks/2026-10-16-management-checks.json) pass 99 Linux
+Rust checks, strict Clippy, formatting and the release build. The new detached
+snapshot check covers all 256 single-byte names, every name length through 16,
+empty names, base64 prefix keys and Unicode, and serializes successfully after
+all original channels and the registry are destroyed. A real HTTP/WebSocket
+fixture checks exact JSON bytes, field order, binary/NUL/escaped/Unicode names,
+variable usage, authentication and clean service cleanup.
+
+The refreshed local service passes all seven
+[headed Chrome checks](benchmarks/2026-10-16-management-browser.json), including
+the 128 KiB value, typed variables and clean Close handshakes. Executable hashes,
+four native listener sockets, health/readiness and empty final resource gauges
+are verified. The [build manifest](benchmarks/2026-10-16-management-build.json)
+binds committed source, vendor files, test/helper sources, control and selected
+binaries, raw heaps, browser output and ordinary/experimental reports. The C++
+performance matrix was not repeated for this HTTP-only change. These remain
+finite local and loopback checks, with no TLS or production capacity claim.

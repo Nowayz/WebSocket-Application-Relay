@@ -392,6 +392,16 @@ Other platforms use cloned listeners. Management and process signals use Tokio.
 Dropping the service or losing a worker suppresses shutdown notifications before
 retiring membership, including when the embedding future is cancelled.
 
+HTTP channel listings copy bounded names and numeric metadata into an owned
+snapshot under the registry read lock, then release the lock before base64
+encoding, sorting and JSON serialization. Each encoded name occupies at most
+24 inline bytes; the response avoids allocating separate strings for every row.
+The public Rust `Relay::channels()` API still returns owned strings. Listings
+remain complete arrays sorted by `name_base64`; their output size and sorting
+work grow with the number of channels. See the
+[listing measurements](performance.md#http-channel-listing-allocation-2026-10-16)
+before choosing an inspection frequency for a large population.
+
 Native ownership, membership and channel-name tables release excess capacity
 after large departures. Occupied fixed-ID takeovers also release sparse ownership
 slots.
