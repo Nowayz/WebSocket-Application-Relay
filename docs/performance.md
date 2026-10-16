@@ -3043,3 +3043,149 @@ runtime source files, frozen binaries and the common client, helper sources,
 all initial/final reports and raw allocation captures. The first-stage source
 copies and complete patch are retained so its results remain reproducible.
 These are finite Linux loopback checks without TLS or production-capacity claims.
+
+## Release large empty output queues (2026-10-16)
+
+A recovered socket retained its `VecDeque<Pending>` high-water allocation after
+all messages were written. `war_queued_bytes` correctly returned to zero because
+the payload reservations were released, while unused queue slots stayed live.
+The change releases empty queues larger than 32 slots and retains smaller ones
+for reuse. It runs when application writable interest is disabled, including
+the exact-quantum return path. Terminal output releases every queue allocation.
+No live body is compacted or moved by retirement; queued ownership and byte
+charges still survive partial writes and release on completion/cancellation.
+
+Two gauges separate this storage from logical payload reservations:
+`war_output_queue_capacity_bytes` and `war_output_queue_peak_capacity_bytes`.
+Capacity is slot count times the compiled `Pending` size, including unused
+slots, without allocator overhead, message bodies or kernel buffers. Accounting
+changes only on capacity growth/release and socket destruction; the immediate
+write path adds no per-message capacity atomics. The peak is process-wide.
+
+### Recovered connected sockets
+
+The new `queue_waves` client holds one publisher and 32 receivers connected.
+Each of three waves sends a changing 8 MiB encoded value followed by 48 changing
+scalar values. A private marker proves publication completes before readers
+resume. Parallel readers compare every complete frame and its order; all
+departures, normal Close/EOF and exact message/delivery/byte/resource totals
+are checked. Per-peer limits retain the defaults of 64 messages and 32 MiB.
+The probe raises the global byte allowance to 1 GiB to hold this workload,
+disables rates/heartbeat and uses a 60-second write deadline. Four server
+workers use CPUs 0–3; the frozen client uses CPUs 4–7.
+
+The [allocation diagnostic](benchmarks/2026-10-16-queue-retirement-memory.json)
+contains three fresh-process roles: the original release, capacity gauges with
+the old retention behavior, and the selected release. Only the server uses
+gperftools. Every row sums to the captured heap header. Release unwind stacks
+combine some vector allocations, so the instrumentation-only control measures
+queue capacity directly rather than attributing a merged stack to one owner.
+
+| Across 32 recovered receivers | Gauge-only baseline | Selected |
+| --- | ---: | ---: |
+| Queue-slot capacity while each burst is queued | 163,840 B | 163,840 B |
+| Queue-slot capacity after each drain and at idle | 163,840 B | 0 B |
+| Process peak queue-slot capacity | 163,840 B | 163,840 B |
+| Whole live requested heap: idle minus connected baseline | 165,944 B | 2,328 B |
+| Cumulative requested objects: connected baseline to idle | 832 | 1,158 |
+| Cumulative requested bytes: connected baseline to idle | 25,951,328 B | 26,587,680 B |
+
+On this x86-64 build each 64-slot queue occupies 5,120 bytes. The entire
+163,840-byte high water now retires while those same sockets remain open.
+Small warm queues remain available for ordinary windows. The cost is repeated
+growth on later large bursts: requested bytes rise 2.45% in the whole diagnostic
+and allocation events increase. These totals include transport/runtime work,
+boundary metrics and heap-dump overhead. They do not establish a general
+allocator or RSS reduction. Freed blocks may remain mapped in allocator arenas.
+
+### Ordinary recovery and traffic costs
+
+The [recovery comparison](benchmarks/2026-10-16-queue-recovery-comparison.json)
+runs five fresh processes per role, rotating all three implementations. Each
+process executes the same three waves with the same frozen client. No heap
+profiler, build or competing load test overlaps ordinary timing. Publish/drain
+intervals exclude gate pauses; server CPU covers ready-to-idle, including any
+progress during those pauses and management sampling.
+
+| Median of five process medians | Original | Gauges only | Selected |
+| --- | ---: | ---: | ---: |
+| Publish and marker interval, ms | 5.016 | 5.041 | 4.646 |
+| Concurrent verified drain, ms | 17.686 | 17.881 | 18.029 |
+| Server ready-to-idle CPU, seconds | 0.07 | 0.07 | 0.07 |
+| Idle event-gate RSS, MiB | 13.32 | 13.42 | 13.41 |
+
+Drain medians rise 1.94% versus original and 0.83% versus gauges-only, with
+overlapping ranges: 17.290–18.842 ms original and 17.010–19.296 ms selected.
+Publish ranges overlap too. CPU accounting has 10 ms ticks, coarse compared
+with this 70 ms total. These observations do not support a speed or RSS gain.
+All five instrumented baselines retain 163,840 bytes at idle, and all five
+selected processes report zero, with the same peak in every case.
+
+The [private/churn matrix](benchmarks/2026-10-16-queue-retirement-comparison.json)
+adds 12 fresh eight-second cases, alternating builds and workload order across
+three repetitions. Each holds 8,192 idle rooms and one private pair with 1 KiB
+values/window 16; churn adds eight reconnect workers. The common frozen client
+checks every payload, sender, order, Close/EOF and exact final counters.
+Only private/churn workloads run in this matrix; inherited driver prose also
+describes inspection modes used by earlier studies.
+
+| Median of three | Original | Selected |
+| --- | ---: | ---: |
+| Private deliveries/s | 588,567 | 582,953 |
+| Private server CPU seconds/wall second | 0.65250 | 0.65125 |
+| Churn: healthy deliveries/s | 363,961 | 366,297 |
+| Churn: complete reconnect cycles/s | 71,649 | 73,080 |
+| Churn: server CPU seconds/wall second | 1.45499 | 1.46749 |
+
+Private throughput changes −0.95%, healthy churn throughput +0.64%, reconnect
+throughput +2.00% and churn CPU +0.86%. Healthy-throughput ranges overlap in
+both workloads. Private p99 remains 0.032768 ms, mixed healthy p99 0.131072 ms
+and reconnect p99 0.524288 ms, all histogram upper buckets. No general routing
+speed improvement is claimed; the private-path cost is retained in the record.
+
+The [nine-pair fanout comparison](benchmarks/2026-10-16-queue-retirement-fanout.json)
+uses 27 healthy readers and four unread peers, window 16, a one-ms reader delay
+and cyclic 256 B / 1 KiB / 64 KiB / 256 KiB values. Median healthy throughput is
+187,820 before versus 187,724 selected (−0.05%), with unchanged 4.194304 ms p99
+bucket. Lifecycle CPU medians are 3.32 versus 3.35 seconds. Throughput and CPU
+ranges overlap. Healthy readers complete all full-frame/order checks while the
+unread peers reach the existing output limit. This is treated as flat fanout
+performance, alongside the memory/observation feature.
+
+### Verification and provenance
+
+The implementation is commit `a3dfe507f413570072de36bcae92389415e9aed5`.
+The [source checks](benchmarks/2026-10-16-queue-retirement-checks.json) record
+111 passing Rust tests, strict Clippy, formatting, a locked release build and
+seven JavaScript checks. The two new socket tests cover small-queue reuse,
+large-queue retirement while payload aliases remain live, exact frame order,
+and retirement on the exact 256 KiB write-quantum boundary.
+
+The [C++ reference check](benchmarks/2026-10-16-queue-retirement-reference.json)
+passes 48 common cases and preserves eight documented differences against
+reference commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`. This is a behavior
+check; the performance comparisons above use the preceding Rust release.
+The [release API acceptance](benchmarks/2026-10-16-queue-retirement-acceptance.json)
+passes four checks with 13 normal disconnects. The separate
+[stability cases](benchmarks/2026-10-16-queue-retirement-stability.json) verify
+6,987,120 traffic deliveries, 553,695 complete reconnect cycles and 211,139
+healthy deliveries beside an unread peer. Every case checks final counters and
+releases its live read/queue reservations. These fixed loopback workloads do
+not establish production capacity.
+
+The [Chrome browser check](benchmarks/2026-10-16-queue-retirement-browser.json)
+passes all seven checks, including arbitrary CBOR values, private routing,
+128 KiB payload fidelity and three clean Close handshakes, with no console
+errors or warnings. The local native relay and legacy bridge run the same
+frozen release binaries used by acceptance; the native process has four
+listener sockets and reports healthy/ready with no live sessions or retained
+queue capacity after the check.
+
+The [build manifest](benchmarks/2026-10-16-queue-retirement-build.json) binds
+both release binaries, all 88 runtime source files, 37 tracked client/check
+files, the frozen benchmark clients, 58 evidence reports, 27 diagnostic heap
+captures and the browser artifacts by SHA-256. The instrumentation-only
+baseline retains its own source copies and binary hashes so the capacity
+observation can be distinguished from the retirement change. Diagnostic heap
+captures and binary snapshots are local artifacts; the JSON reports and
+workload sources are committed.

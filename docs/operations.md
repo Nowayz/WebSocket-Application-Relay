@@ -323,6 +323,16 @@ Monitor `war_connections`, `war_sessions`, `war_channels`, `war_queued_bytes`,
 `war_rate_limited_total`. Metric labels deliberately exclude user/channel IDs.
 Debug logging reports connection failures without message bodies or credentials.
 
+`war_output_queue_capacity_bytes` reports allocated native output queue slots,
+including unused retained capacity. `war_output_queue_peak_capacity_bytes` is
+the process-wide high-water mark of that aggregate. These count requested slot
+storage, not message bodies, allocator bookkeeping or kernel buffers. They are
+separate from `war_queued_bytes`, which charges encoded application bytes until
+completion or cancellation. A drained queue may retain up to 32 slots for reuse;
+larger empty queues release their storage. Terminal output releases even small
+queues. Freed storage can remain in allocator arenas, so a lower capacity gauge
+does not imply an immediate RSS decrease. Metrics have no user/channel labels.
+
 `war_join_rejected_total` counts native rejection decisions after HTTP upgrade
 and before channel registration: invalid joins, unsupported transport, decoder
 protocol/size/staging errors, channel admission, rate policy and join timeout.

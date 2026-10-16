@@ -127,6 +127,10 @@ concerns user-space forwarding;
 WebSocket unmasking, fragmented-message assembly, and kernel transfers still do
 their required work. See [docs/performance.md](docs/performance.md).
 
+After backpressure clears, output queues retain up to 32 slots for reuse and
+release larger empty allocations. The current and peak queue-capacity metrics
+make that storage visible separately from reserved message bytes.
+
 Native decoder staging has a shared 1 GiB allowance, configurable with
 `--total-read-buffer-bytes` / `WAR_TOTAL_READ_BUFFER_BYTES` (`0` disables).
 Frame and fragment storage reserve twice the requested capacity before growth,

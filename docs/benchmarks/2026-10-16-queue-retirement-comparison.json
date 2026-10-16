@@ -1,0 +1,324 @@
+{
+  "scope": "12 sequential fresh processes; three repetitions alternate private/churn order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Full adds200 complete HTTP listings/s; cbor adds200 complete authenticated CBOR channel queries/s; page100 requests200 first100-row pages/s and verifies full traversals at quiescent gates. Equivalent outputs within each workload; full body/sender/FIFO/field/order/cursor/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.",
+  "before_runtime_revision": "8f2bc2045e62767abf65691b31496657866b054c",
+  "selected_source_hashes": {
+    "src/metrics.rs": "9da65201d01073366945cc8525380fdf67f8ae3faad356ed973b777b1a7fb16b",
+    "src/server/socket.rs": "fcb05aa9bb3b729bff8aba0d5d76f83ee84d03e6acb670b30b2b6eb8f8a08256"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/control-frame-final-candidate/war-relay",
+      "sha256": "a2add57eb6bb5a1d1e49b3b31e87f7f2e0430abefd8c798f026bcf6c9accee19"
+    },
+    "selected": {
+      "path": "artifacts/baselines/queue-retirement-candidate/war-relay",
+      "sha256": "cd8309478b436155fa20c775008417d471f060ed1ed6a1b0e0c3318ce99788ea"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/paging-candidate/inspection",
+    "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941",
+    "source_path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "source_sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426"
+  },
+  "helpers": {
+    "inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\ncandidate = json.loads((root/'artifacts/queue-retirement-candidate.json').read_text())\nservers = {'before':root/'artifacts/baselines/control-frame-final-candidate/war-relay',\n           'selected':root/candidate['directory']/'war-relay'}\nclient = root/'artifacts/baselines/paging-candidate/inspection'\noutput = root/'docs/benchmarks/2026-10-16-queue-retirement-comparison.json'\nrecord = {'scope':'12 sequential fresh processes; three repetitions alternate private/churn order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Full adds200 complete HTTP listings/s; cbor adds200 complete authenticated CBOR channel queries/s; page100 requests200 first100-row pages/s and verifies full traversals at quiescent gates. Equivalent outputs within each workload; full body/sender/FIFO/field/order/cursor/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.',\n          'before_runtime_revision':'8f2bc2045e62767abf65691b31496657866b054c',\n          'selected_source_hashes':candidate['sources'],\n          'variants':{k:{'path':str(p.relative_to(root)),'sha256':sha(p)} for k,p in servers.items()},\n          'client':{'path':str(client.relative_to(root)),'sha256':sha(client),\n                    'source_path':str((client.parent/'inspection.rs').relative_to(root)),\n                    'source_sha256':sha(client.parent/'inspection.rs'),\n                    'runtime_revision':'2e7806b8e255527cc0dc3cc6ffc6813859f71426'},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nworkloads = ['private','churn']\nfor repetition in range(1,4):\n    offset = (repetition-1)%len(workloads)\n    for workload in workloads[offset:]+workloads[:offset]:\n        roles = ['before','selected'] if repetition%2 else ['selected','before']\n        for role in roles:\n            trace = output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n            command = [sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),\n                       '--client',str(client),'--pairs','1','--seconds','8',\n                       '--mode',('cbor' if workload=='cbor' else 'http' if workload in ['full','page100'] else 'none'),\n                       '--churn-workers','0' if workload=='private' else '8','--output',str(trace)]\n            if workload=='page100': command += ['--page-size','100']\n            done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=120)\n            data = json.loads(trace.read_text())\n            assert done.returncode == 0 and data['passed'],done.stdout+done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n            assert data['client_sha256']==record['client']['sha256']\n            assert data['client_source_sha256']==record['client']['source_sha256']\n            mixed = data['mixed']\n            row = {'kind':role,'workload':workload,'repetition':repetition,\n                   'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n                   'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                   'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                   'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                   'cpu_wall':mixed['server_cpu_seconds_per_wall_second'],'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor workload in workloads:\n    for role in servers:\n        rows = [r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n        fields = ['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_wall','rss_mib']\n        summary = {key:statistics.median(r[key] for r in rows) for key in fields}\n        summary['ranges'] = {key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in ['healthy','churn','cpu_wall']}\n        record['medians'][workload+'/'+role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "8d98d1e3f092298ea36d22b2094f990ed8dcb82cbffc5903dbe18ebd48f4570e",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-1.json",
+      "trace_sha256": "ce5fc669fe35b31275504372b9a9bfd4dc729a661182b7b491c5d7c1101aec41",
+      "passed": true,
+      "healthy": 591350.6585731038,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.652496313069583,
+      "rss_mib": 17.234375
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-1.json",
+      "trace_sha256": "9ac2040c68bb5507641838981739c6175d55e504a255262331d4163b690a636f",
+      "passed": true,
+      "healthy": 584022.2380207537,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512458050001471,
+      "rss_mib": 17.41015625
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-1.json",
+      "trace_sha256": "df54e9211505985a39b938a09898a0c8c28478383208bdc1bb3c508c54d62b21",
+      "passed": true,
+      "healthy": 363961.4545445773,
+      "healthy_p99_ms": 0.131072,
+      "churn": 70908.37908452378,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.421240060202329,
+      "rss_mib": 17.51171875
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-1.json",
+      "trace_sha256": "306ee6a806f192ed30293c7b038885a13d919bb27d94cd898610c6336d012c87",
+      "passed": true,
+      "healthy": 362568.122877778,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72272.85215025554,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4587344010236827,
+      "rss_mib": 17.64453125
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-2.json",
+      "trace_sha256": "f01eec7fad49a90830e2fe1855136e2e079e44c812c1ea13bf295a0228ab6e40",
+      "passed": true,
+      "healthy": 369634.4573305923,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73525.44314156304,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.473743849330045,
+      "rss_mib": 17.46875
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-2.json",
+      "trace_sha256": "b43a2bf95d81c0261fa5538c13e79a881bdfb8594f1d5f1c06e2ff61ed8864d6",
+      "passed": true,
+      "healthy": 364869.72024837916,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72586.42147096535,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.461240869984389,
+      "rss_mib": 17.62109375
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-2.json",
+      "trace_sha256": "5384586a7d832790592b512b99b1578a6340ecddc59bb9884588dda3cefa83f8",
+      "passed": true,
+      "healthy": 574592.7929960142,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6487486372223941,
+      "rss_mib": 17.36328125
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-2.json",
+      "trace_sha256": "e246df6a5c0b8c158b5d9c18baba49647dfbf9fde3c47546941a4e47b2b10b3d",
+      "passed": true,
+      "healthy": 575733.8227905823,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499975419530454,
+      "rss_mib": 17.38671875
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-3.json",
+      "trace_sha256": "499c369029504462aebe52a2dde7aeba99df698e718160cce0f759c907bfc494",
+      "passed": true,
+      "healthy": 588566.7620735293,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524964103725603,
+      "rss_mib": 17.32421875
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-3.json",
+      "trace_sha256": "0fac02d515f22ea9809b590b0b8b3557635bc7e0fc6704c654a9f686224a9a25",
+      "passed": true,
+      "healthy": 582953.3977689014,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512470929143831,
+      "rss_mib": 17.3046875
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-3.json",
+      "trace_sha256": "07ea437604d24a171b71205d2e8ca9b6173ae5223912dca263af3527df798a92",
+      "passed": true,
+      "healthy": 360546.38561262086,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71648.78173887527,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4549854141349698,
+      "rss_mib": 17.5859375
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-3.json",
+      "trace_sha256": "0544cf470e8491ef13efd678ea3f5c02d45bd27e1871c789f1d02285a20b693e",
+      "passed": true,
+      "healthy": 366296.92141173687,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73079.8857909649,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4674876663164726,
+      "rss_mib": 17.59375
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/before": {
+      "healthy": 588566.7620735293,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.652496313069583,
+      "rss_mib": 17.32421875,
+      "ranges": {
+        "healthy": [
+          575733.8227905823,
+          591350.6585731038
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6499975419530454,
+          0.6524964103725603
+        ]
+      }
+    },
+    "private/selected": {
+      "healthy": 582953.3977689014,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512458050001471,
+      "rss_mib": 17.36328125,
+      "ranges": {
+        "healthy": [
+          574592.7929960142,
+          584022.2380207537
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6487486372223941,
+          0.6512470929143831
+        ]
+      }
+    },
+    "churn/before": {
+      "healthy": 363961.4545445773,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71648.78173887527,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4549854141349698,
+      "rss_mib": 17.5859375,
+      "ranges": {
+        "healthy": [
+          360546.38561262086,
+          364869.72024837916
+        ],
+        "churn": [
+          70908.37908452378,
+          72586.42147096535
+        ],
+        "cpu_wall": [
+          1.421240060202329,
+          1.461240869984389
+        ]
+      }
+    },
+    "churn/selected": {
+      "healthy": 366296.92141173687,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73079.8857909649,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4674876663164726,
+      "rss_mib": 17.59375,
+      "ranges": {
+        "healthy": [
+          362568.122877778,
+          369634.4573305923
+        ],
+        "churn": [
+          72272.85215025554,
+          73525.44314156304
+        ],
+        "cpu_wall": [
+          1.4587344010236827,
+          1.473743849330045
+        ]
+      }
+    }
+  }
+}

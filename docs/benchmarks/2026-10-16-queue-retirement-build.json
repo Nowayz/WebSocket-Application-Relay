@@ -1,0 +1,420 @@
+{
+  "recorded_utc": "2026-10-16T20:51:04.578810+00:00",
+  "runtime_source_revision": "a3dfe507f413570072de36bcae92389415e9aed5",
+  "scope": "Release native output slot capacity only when large queues are empty or output is terminal; retain up to32 slots. Current/peak requested capacity gauges account for growth, release and destruction. Payload ownership and admission unchanged. Real-socket recovery diagnostics plus15 ordinary three-role cases,12 private/churn cases and18 fanout cases. Heap profiling and builds excluded from ordinary timing. Source bytes match the commit.",
+  "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.91.1\nLLVM version: 21.1.2\n",
+  "build_command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--release",
+    "--bins"
+  ],
+  "binaries": {
+    "war-relay": {
+      "path": "artifacts/baselines/queue-retirement-candidate/war-relay",
+      "sha256": "cd8309478b436155fa20c775008417d471f060ed1ed6a1b0e0c3318ce99788ea"
+    },
+    "war-legacy-bridge": {
+      "path": "artifacts/baselines/queue-retirement-candidate/war-legacy-bridge",
+      "sha256": "4f2fa5f8575e20ba556c6da8470de152a257174d6a40564b25771c436e5f8263"
+    }
+  },
+  "clients": {
+    "recovery": {
+      "path": "artifacts/baselines/queue-wave-clients/queue_waves",
+      "sha256": "1b138b26a156526b5274f2d01a7fe34a1928f77c4a5e0d7ed68bd02e0ad2f238"
+    },
+    "recovery_source": {
+      "path": "artifacts/baselines/queue-wave-clients/queue_waves.rs",
+      "sha256": "413bc55d2ea14673ee7cbda6b30a7af611e400b57e8b8b00779e1a1cf5dcf63e"
+    },
+    "inspection": {
+      "path": "artifacts/baselines/paging-candidate/inspection",
+      "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941"
+    },
+    "inspection_source": {
+      "path": "artifacts/baselines/paging-candidate/inspection.rs",
+      "sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04"
+    },
+    "stress": {
+      "path": "artifacts/baselines/e2d7cf9/stress",
+      "sha256": "58019dadf5c21ff0e8378a7ffcb05c176a57c8af2429c316a5b0edf9341353a8"
+    }
+  },
+  "before_manifest": {
+    "path": "docs/benchmarks/2026-10-16-control-frame-build.json",
+    "sha256": "53b738a4ee7b8d72fa2c40df87ff56a0e2698f9243fea379284ec2522be882a2"
+  },
+  "runtime_sources": {
+    "Cargo.lock": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620",
+    "Cargo.toml": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4",
+    "src/admin.rs": "12a208e2f36e4e3620098bc37cc42c38f9e028959c007ef5c893e546e5fe9e39",
+    "src/bin/war-legacy-bridge.rs": "fec0f0e226d054bc283d9a2a287381490590ba68ce60087e0f6b7a29754b2151",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "0930bbc73059186ce59437a9ecea1eaba5e9383f0f2681f9967eb5d2c171953b",
+    "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "f00f5850d538de146174769ec8116325b39c62f11e53ff4408fd525f31e258d0",
+    "src/lib.rs": "a39f7cf2307201d7a89af67baf5de5a892f185b7c88d67d55abb5491021b344b",
+    "src/main.rs": "0b70966df79a602285a0bfc4dfbab64468322ae03a9ac12794d30f94180346f3",
+    "src/metrics.rs": "9da65201d01073366945cc8525380fdf67f8ae3faad356ed973b777b1a7fb16b",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54",
+    "src/relay.rs": "6cf1616329d810ea504df3f9301c02190c053f448023903d27d48724e2d9ac89",
+    "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4",
+    "src/relay/listener_tests.rs": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765",
+    "src/server.rs": "1b04f6f8775fff4e658d20a15a78215b3db11e6bf492088f0d9cffabb243e12e",
+    "src/server/close_tests.rs": "b92fb5b0568db5d1702541c7d95b187ef3d0fbecef8a2106702812ff29f8b8eb",
+    "src/server/ownership_tests.rs": "85dd09241fd14032b314475791ee17c8befd770c7c8c1694353221bc3fca0b0f",
+    "src/server/socket.rs": "fcb05aa9bb3b729bff8aba0d5d76f83ee84d03e6acb670b30b2b6eb8f8a08256",
+    "src/server/timers.rs": "b47267728003a246d44ca0e639b2b9d82474ab9a0e4a0cef6b3b51d075da0824",
+    "src/transport.rs": "2d873f5c47918e6b63573c51e1284bb3aa59934ca6d9496edf515be3fe44754c",
+    "vendor/provenance.json": "48cd086e057e3f0ae9bfbb557a8ccd0ae5a417fc8ded78afe6113ba21c38cc07",
+    "vendor/read-buffer-reclaim.patch": "84e86124bfef4207204412f93c25e8527ea640c034baba8bc2b6890393a2afab",
+    "vendor/tokio-tungstenite/.cargo_vcs_info.json": "7904b96b5c1d841e95481db9b63de2859427e72998c46e04b7a10b32ec2de516",
+    "vendor/tokio-tungstenite/CHANGELOG.md": "e374356eacf72059d3a65ee08a6a41a171c0424d2a67735bae7ee59da50fcb43",
+    "vendor/tokio-tungstenite/Cargo.lock": "d2c691100eab31ebcd1e24bab5e6ad1368340ee8a4f9f16ede4702f492c7be20",
+    "vendor/tokio-tungstenite/Cargo.toml": "d35883d4f3476aa6792059750d5fb0d66051b84e5ccbed911914ea0b2b2992f1",
+    "vendor/tokio-tungstenite/Cargo.toml.orig": "38f845507abfdb2e904396563ee08779d1b3dc4ff609e4f2344f0ee1d2597cbd",
+    "vendor/tokio-tungstenite/LICENSE": "fdd55e2b2da854b0fbdc1e607df7c2ba1e1ebf91ecb77c515511ebeef972bc8f",
+    "vendor/tokio-tungstenite/README.md": "ff6376adb37c3f09445aaa97cfc356e35ba0e4fcfee3452fdd1fa791cdbd97da",
+    "vendor/tokio-tungstenite/examples/README.md": "067ceaf7b70949f087fd582d71bb114e88ef0313560dbd33b345158ffa33eff3",
+    "vendor/tokio-tungstenite/examples/autobahn-client.rs": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732",
+    "vendor/tokio-tungstenite/examples/autobahn-server.rs": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f",
+    "vendor/tokio-tungstenite/examples/client.rs": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7",
+    "vendor/tokio-tungstenite/examples/echo-server.rs": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52",
+    "vendor/tokio-tungstenite/examples/interval-server.rs": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e",
+    "vendor/tokio-tungstenite/examples/server-custom-accept.rs": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535",
+    "vendor/tokio-tungstenite/examples/server-headers.rs": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483",
+    "vendor/tokio-tungstenite/examples/server.rs": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e",
+    "vendor/tokio-tungstenite/src/compat.rs": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9",
+    "vendor/tokio-tungstenite/src/connect.rs": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30",
+    "vendor/tokio-tungstenite/src/handshake.rs": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d",
+    "vendor/tokio-tungstenite/src/lib.rs": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5",
+    "vendor/tokio-tungstenite/src/stream.rs": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172",
+    "vendor/tokio-tungstenite/src/tls.rs": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211",
+    "vendor/tungstenite/.cargo_vcs_info.json": "05db1b097178b9822b792a31c0909ad819609ac829e66892ab29d0ec046ae35c",
+    "vendor/tungstenite/CHANGELOG.md": "7e416d40b723071c0b44f9647de19e18a1180fdddabbb6bea8aca11e3c60427e",
+    "vendor/tungstenite/Cargo.lock": "62974d50013c278220b6cc72e1064015b3c2d0339eaca013ea882c212c9b4356",
+    "vendor/tungstenite/Cargo.toml": "84e09d25e81a69d487b38e57839339f69794c0b642c76c9545f5de53d94eb887",
+    "vendor/tungstenite/Cargo.toml.orig": "bc5bdace1ae1157ffa559d8699d78d39023e5f861b1404552e42792e05f24d8b",
+    "vendor/tungstenite/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "vendor/tungstenite/LICENSE-MIT": "7fea0ee51a4ca5d5cea7464135fd55e8b09caf3a61da3d451ac8a22af95c033f",
+    "vendor/tungstenite/README.md": "39e59dbbfd67127ad101be692fb5f04babdd80eeffeb2ea97b6327fec5ace9b4",
+    "vendor/tungstenite/benches/buffer.rs": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e",
+    "vendor/tungstenite/benches/e2e.rs": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce",
+    "vendor/tungstenite/benches/read.rs": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42",
+    "vendor/tungstenite/benches/write.rs": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8",
+    "vendor/tungstenite/examples/autobahn-client.rs": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4",
+    "vendor/tungstenite/examples/autobahn-server.rs": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776",
+    "vendor/tungstenite/examples/callback-error.rs": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0",
+    "vendor/tungstenite/examples/client.rs": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040",
+    "vendor/tungstenite/examples/server.rs": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157",
+    "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c",
+    "vendor/tungstenite/src/buffer.rs": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30",
+    "vendor/tungstenite/src/client.rs": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637",
+    "vendor/tungstenite/src/error.rs": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b",
+    "vendor/tungstenite/src/handshake/client.rs": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5",
+    "vendor/tungstenite/src/handshake/headers.rs": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75",
+    "vendor/tungstenite/src/handshake/machine.rs": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420",
+    "vendor/tungstenite/src/handshake/mod.rs": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0",
+    "vendor/tungstenite/src/handshake/server.rs": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f",
+    "vendor/tungstenite/src/lib.rs": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7",
+    "vendor/tungstenite/src/protocol/frame/coding.rs": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6",
+    "vendor/tungstenite/src/protocol/frame/frame.rs": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a",
+    "vendor/tungstenite/src/protocol/frame/mask.rs": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6",
+    "vendor/tungstenite/src/protocol/frame/mod.rs": "a678afc526347b3d5b685b273619dcbbb050f15b1c5f267f97cd6df241ed6a6b",
+    "vendor/tungstenite/src/protocol/frame/utf8.rs": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886",
+    "vendor/tungstenite/src/protocol/message.rs": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84",
+    "vendor/tungstenite/src/protocol/mod.rs": "a1214f11d0927de8a622f0c074a27f6739697a8e157883f1f6ec5f2843741453",
+    "vendor/tungstenite/src/protocol/read_budget.rs": "4f112c7459d575424671d2f95a36a681ef903ed33bf643aba6abc53a27530883",
+    "vendor/tungstenite/src/server.rs": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49",
+    "vendor/tungstenite/src/stream.rs": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d",
+    "vendor/tungstenite/src/tls.rs": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9",
+    "vendor/tungstenite/src/utf8.rs": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35",
+    "vendor/tungstenite/src/util.rs": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a",
+    "src/relay/listing.rs": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4"
+  },
+  "source_changes_from_before": [
+    "src/metrics.rs",
+    "src/server/socket.rs"
+  ],
+  "helper_sources": {
+    "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+    "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36",
+    "clients/js/package.json": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07",
+    "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+    "clients/js/relay.test.mjs": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1",
+    "examples/fragment_waves.rs": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054",
+    "examples/input_budget.rs": "8feaa3b292668f84ba155447e0db9e9bd997c2aa9f2482ee98717354b48c70b1",
+    "examples/inspection.rs": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "examples/load.rs": "b2d2cb93456b4a91e5ff889e739f9b8a647a0c3564b4ef10ecbcd78b8c204c6c",
+    "examples/queue_waves.rs": "413bc55d2ea14673ee7cbda6b30a7af611e400b57e8b8b00779e1a1cf5dcf63e",
+    "examples/registry_peak.rs": "1c568805f9b3459b0109caf082bb6a93234bda7dbc4fdb98678da5c28ea11c39",
+    "examples/retention.rs": "143546d2e7e9a419f5c7c53d347864de3bd066b55f93cfa58987e61c26c21c14",
+    "examples/stress.rs": "64438033d1c6f86bdd1a3ea9962b7ad1afc1c8ca060384332916eb8ae4a87306",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4",
+    "scripts/check-js.sh": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b",
+    "scripts/check-vendor.py": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f",
+    "scripts/compare-cpp.py": "33028dea75e856343da3b1266e729e12155e6684de24aed550ce809d6aaa5221",
+    "scripts/compare.py": "4c858bc0be5dbea2b26b1e3418de7000d405deb9580c99e6c70da62633c03943",
+    "scripts/fragment-fairness.py": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+    "scripts/fragment-waves.py": "ae7a92c15649a7f9347503bbd987c4711dcf3ac228da37cafd16441123b3e7ff",
+    "scripts/input-budget.py": "9c259d5c6362a54d522294f5b875c3b8c4f04410e7eca5124b56aead6c53e579",
+    "scripts/input-corpus.py": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292",
+    "scripts/inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "scripts/queue-waves.py": "aab226bcf1412f1e7e467132e8658303b1de4e165e02535a9336a605dfcac5be",
+    "scripts/reference.py": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+    "scripts/registry-peak.py": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc",
+    "scripts/retention.py": "55e78d9dd8c092bb06170baee3b7920e932b4acbc18ee1d0da237e4acedc6701",
+    "scripts/stability.py": "608baae680fb42a86663f499c320f7c049ce2deb8b7e622dca52ea5589624bf9",
+    "tests/read_budget.rs": "af91ad4ee136b6412c7fb63067bdf56beab1dbd8d4769c99eba1ac4ea2552823",
+    "tests/read_buffer_reclaim.rs": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156",
+    "tests/read_fairness.rs": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4",
+    "tests/relay_integration.rs": "fbe383c95869c5e5cec7ccb1ab769308a4acacc3f4a866f2d50b16334360fdc5",
+    "tests/relay_integration/channel_listing.rs": "3bce596425ea23391d3a7616324e9aabe7b0b5041693fa933b12b02dab485717",
+    "tests/relay_integration/listeners.rs": "0b6ecfd78ccd71766dca8d95eeeb840ed503934903b556cce7dedca645c0cecb",
+    "tests/relay_integration/origin_policy.rs": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+  },
+  "local_helpers": {
+    "artifacts/queue-memory-summary.py": "3d7514bafbe81452fa44f2667a95f2c0aec45104f21bbbeba95451203c2a7c50",
+    "artifacts/queue-recovery-study.py": "f8ba8c4a5ecfbdceb21af0c17980841849f25215491f63ab57165e1895b8a3ba",
+    "artifacts/queue-retirement-study.py": "8d98d1e3f092298ea36d22b2094f990ed8dcb82cbffc5903dbe18ebd48f4570e",
+    "artifacts/queue-retirement-fanout.py": "4603d1385580296df31dc6554475e53a0a502418663741d304626810f8a76191",
+    "artifacts/queue-retirement-accept.py": "f14087ddb5e68b96935057e8ad719f4ec130f51d0a42e9414e71245290b103a8",
+    "artifacts/paging-accept.mjs": "fa831d7c10a072ba811e727d9cb076f77a87cd4a09027ff9b52131d8ccba51b5",
+    "artifacts/refresh-queue-retirement-runtime.py": "ceb9797349c77fa0effe09b934b2d497db490044f54caec08e1da5e10963fb48",
+    "artifacts/record-queue-retirement-browser.py": "c2d4b229339e0c2f24b1a9df3012fad3c74f5507d105cf0ae973678a03dd76d0",
+    "artifacts/record-queue-retirement-checkpoint.py": "f72682a6f13dfae2c48eab48a0bc48185dc8652718ebe90cf7fa113aafd8016a"
+  },
+  "documentation": {
+    "README.md": "43fd8378cb92427307034fa1a23c154e284aa41c9c0bb5d07f91452bcc398d5b",
+    "docs/operations.md": "d8225e7a57284e269878032fbd86479ee2692517a1ca15fec2934e3f2766ec95",
+    "docs/performance.md": "e2e0166b0bbe942a9df999962fc434796ca8356103700bf6c7287c10de480a3c"
+  },
+  "evidence_files": {
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-before-1.json": "7164d47eed69bf2223e1c9f20407c4241eda2fcf33b67946261054c01a1cb0b5",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-before-2.json": "5914de98c3e9fc50d21d9633244d3314172cf21097681b23a0cdb8414c2a95d3",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-before-3.json": "284b5236bca386e902262cb72fa6051b5763056e8532905ab9242c6c1c73014a",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-before-4.json": "9b95ad38c3419ecb9bad6fb1b510724dac0219d4ec2ad93c7eeaab7fb505ea66",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-before-5.json": "f6ff0b189aef9f4bd1f435a0a6b6e1255a0935f179fd32cb5c1aeefc77a76b70",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-observed-1.json": "3caf272c146b09b790923ccd5d828b0c8eea84817e00132aca717f1983115e1a",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-observed-2.json": "ee45c43daaaf78f3f82bd4209c789c5cc7fa161e450120fcb2e307f5cd5581db",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-observed-3.json": "34913aba19c20c98e288e892c4d6ffcc6afaca291034c078cef1a3949edb548c",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-observed-4.json": "9684da226cabfec948afc4dfdd220d0da2b9dcfb5891f67749be7d242ae1d533",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-observed-5.json": "90058191a47d8b6cfa9d2878849220f2696814cd5e961cee05b8bce151cfd5f0",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-selected-1.json": "1b85a6865df76e69283927a723bdc381e77c0d6cb6c2ff8d35ce24c847bf53eb",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-selected-2.json": "0634788f6904522a58dd58dd76e8e49a2b3182278d811fb3f8442d66f9a30815",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-selected-3.json": "1f8b623b3aec4c1845c3a3732521a44e2175fea52ef48e48e13b1b852b793ff1",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-selected-4.json": "59066d7941a52c470ab3c4737bd9c0def4f4c00140ec7e1675e6a6a0ac158207",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison-selected-5.json": "7b6f1fbfc93c047e0d0cc6863a57ec3c78d5dae73ff6577dcb21358f68bc8371",
+    "docs/benchmarks/2026-10-16-queue-recovery-comparison.json": "0250cbbebdc0da835846a4eedb188d03026b0eefa980837c0fe8003fdc54e74b",
+    "docs/benchmarks/2026-10-16-queue-retirement-acceptance.json": "c7c12396761e2aaac925b976556f7a59362329ca0180270f9d6cf85b0b631fcc",
+    "docs/benchmarks/2026-10-16-queue-retirement-browser.json": "f0525bc22da31082a6f2c217e44a69f39f1054a3e762f422c6e6b2fc60022fdd",
+    "docs/benchmarks/2026-10-16-queue-retirement-checks.json": "4089c6e9e61ab5983a6d4f00eeb4c87d1b8fcf7959c253f8f80329f121e3bbcf",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-1.json": "df54e9211505985a39b938a09898a0c8c28478383208bdc1bb3c508c54d62b21",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-2.json": "b43a2bf95d81c0261fa5538c13e79a881bdfb8594f1d5f1c06e2ff61ed8864d6",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-before-3.json": "07ea437604d24a171b71205d2e8ca9b6173ae5223912dca263af3527df798a92",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-1.json": "306ee6a806f192ed30293c7b038885a13d919bb27d94cd898610c6336d012c87",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-2.json": "f01eec7fad49a90830e2fe1855136e2e079e44c812c1ea13bf295a0228ab6e40",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-churn-selected-3.json": "0544cf470e8491ef13efd678ea3f5c02d45bd27e1871c789f1d02285a20b693e",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-1.json": "ce5fc669fe35b31275504372b9a9bfd4dc729a661182b7b491c5d7c1101aec41",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-2.json": "e246df6a5c0b8c158b5d9c18baba49647dfbf9fde3c47546941a4e47b2b10b3d",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-before-3.json": "499c369029504462aebe52a2dde7aeba99df698e718160cce0f759c907bfc494",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-1.json": "9ac2040c68bb5507641838981739c6175d55e504a255262331d4163b690a636f",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-2.json": "5384586a7d832790592b512b99b1578a6340ecddc59bb9884588dda3cefa83f8",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison-private-selected-3.json": "0fac02d515f22ea9809b590b0b8b3557635bc7e0fc6704c654a9f686224a9a25",
+    "docs/benchmarks/2026-10-16-queue-retirement-comparison.json": "bf6cbca75f36bd445638607b9dd16868bd7cb04f8a3e3186581d1dc545f0f719",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-1.json": "867332063ba5d36adb5e981830cfec1dff2f95b69b0352d26dd576647aaf6e37",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-2.json": "2c1069371b2b957d0e0324e5ae057682c226f2e071dd3c0a9a7aaf6efa7c4baf",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-3.json": "fe2febd032c0c55ca4f3271c1d62a16d15bc9815de6bc943f5d66271f9a659da",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-4.json": "c7c3717a6a637ef96d6a5d23aed76e82368cccbd950c0ceb936eb8d23f7e5173",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-5.json": "23b3c8568dec15629ea1756ae231f917ba0d1327f479cabfdc50e0f6294e4a6a",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-6.json": "878158caa85a496103e935b56b23b87b901d55dafef8cda04fb505216f82a130",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-7.json": "28a316c9e135f113e971eed6fdaaa826e7c0d123d45f3d31b04e4a1f39db5063",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-8.json": "5f508025682d9d1cc58db72a2214c4000425baabba0e8fdfb92b0e5e4d032984",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-before-9.json": "c233eb7ddf60aa2f1f4edcf49bd93bed725cb67d06911f96a0996f8e69014da1",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-1.json": "45eacbdc94db197d29cc3ce983a362d91d409ada1e9db636f14643e983dca093",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-2.json": "264b63104702e63885854fcd81921af87950a567d611e7401e25caa846330a54",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-3.json": "7a9090fdcc30afa927438e0b87362cb6d304044f6c592977dbdcb5428a64633d",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-4.json": "6bd8e614e42600641766fc6c4aab7c9cfdc3c767de142af5bc7b183e2ba2c7d2",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-5.json": "2dfb825c27c67a5d7e3ac1eb3e54180b92da132b21bdb99d984aa7694aec0644",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-6.json": "2f2e060ec7a27c24b1145d47985ce01050a9565c099ccf24dd8b24e167371daf",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-7.json": "9737a266c18f39d617e16bf6b834cec00470a31d140ef118eee375c42dbeca45",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-8.json": "fd3c2887f4eb62d2d31f40b703fbacbecc71c24d06634ae5b0cc21ae3b56c3af",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout-selected-9.json": "bbd1082e064cc8a50b4184688bfe6e9641b62d0972de51e1bda1729d9afaaae0",
+    "docs/benchmarks/2026-10-16-queue-retirement-fanout.json": "b318a33e5898ab5592bcf58693bf08e1871171a7bd64793175de1e0ee45b5103",
+    "docs/benchmarks/2026-10-16-queue-retirement-memory.json": "41215f7ebf5c72dd2e7d8a251629bddcaefdedff9aa0bb4d57c73e770cebc951",
+    "docs/benchmarks/2026-10-16-queue-retirement-reference.json": "5a153b8dd4e6f10db0caa5d6d9e31611303f6a87d508611aef1097ad834082b3",
+    "docs/benchmarks/2026-10-16-queue-retirement-stability.json": "cd66e5c5a8ddf8051cb8abc7f22640a7c8c7d328182403a728ec13d19fb8fdac",
+    "docs/benchmarks/2026-10-16-queue-waves-heap-before.json": "413a1ac1166a716613783f3124fd286edc8401aa38e930f1250bbbcebe99fccb",
+    "docs/benchmarks/2026-10-16-queue-waves-heap-observed.json": "1514f98f9fdc2d8ff694d0e8877dcfdf2e5eb6dfbac2ea8c377713614c943c87",
+    "docs/benchmarks/2026-10-16-queue-waves-heap-selected.json": "52ceb7f917add3c626542f050e9f57cd0eef6c31c17db8db413b2bc036e2baae",
+    "docs/benchmarks/2026-10-16-queue-waves-symbols-before.json": "960818dd85c2ada9575e3ffc70a4fa47512baef41c0f438ec930d795c21db1b9"
+  },
+  "capacity_instrumentation_baseline": {
+    "directory": "artifacts/baselines/queue-observation",
+    "binaries": {
+      "war-relay": "22faabd90bcac1c96ed2647e4092c89337490a5edce2ff2de994a44a65b20938",
+      "war-legacy-bridge": "71dcacb409de148e23cd1c418b1aa38993c2e62bfa905ece0e86b407054c221d"
+    },
+    "sources": {
+      "src/metrics.rs": "9da65201d01073366945cc8525380fdf67f8ae3faad356ed973b777b1a7fb16b",
+      "src/server/socket.rs": "2b4661c2c3f7655f82b40b4834638ba44452de29843c3414ec74841ea07f879d"
+    }
+  },
+  "heap_captures": [
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0001.heap",
+      "sha256": "704b2b89eb9e90114f21cce05e74090bfcc6682f43473220969bde0c47e86e4a",
+      "header": "heap profile:    374:   205359 [  1737:   776015] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0002.heap",
+      "sha256": "64c7da74b10e7c82fb11ea180c191cb3e33a220058a5ae876c52560b07314b62",
+      "header": "heap profile:    512:  8765478 [  2072:  9558367] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0003.heap",
+      "sha256": "a723b7336dd35812bef960970ff6eb25b7e9bdc0dedb4bb0be065348b7652b84",
+      "header": "heap profile:    414:   371495 [  2122:  9620719] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0004.heap",
+      "sha256": "f6ad80eff3cea9fe874f8a2625ff5c77f3dc7ad36d20510833d93e6ad179affc",
+      "header": "heap profile:    512:  8765502 [  2273: 18081207] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0005.heap",
+      "sha256": "da2d8018198ce9dad070a20bedd437b808b32a0cf16af1239ba3459995df600f",
+      "header": "heap profile:    414:   371495 [  2323: 18143559] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0006.heap",
+      "sha256": "2856aea1d541b43cdf88db0ad42017771d17ec4518aaa56ae50b989cb1649cb6",
+      "header": "heap profile:    512:  8765502 [  2474: 26604047] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0007.heap",
+      "sha256": "a881ebcd03dbb14e62172c0de42d1ead7857b6c6b47ea8bc7464aa41d4b59816",
+      "header": "heap profile:    414:   371495 [  2524: 26666399] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0008.heap",
+      "sha256": "cee3832272ab0dccef75a9b5076ea720e1a3d903e5a9d6f0016fd1fd9c061cbb",
+      "header": "heap profile:    414:   371495 [  2574: 26728751] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/before_362359.0009.heap",
+      "sha256": "98e54567fad8c1e6a562725b0bf197fb8035f2681aebf03cb1de29e269b7a258",
+      "header": "heap profile:    273:   178924 [  2756: 26793132] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0001.heap",
+      "sha256": "53da59a70a2cce7b0b4f78ff1560775277196c912672e103f26bd575622408f2",
+      "header": "heap profile:    374:   201487 [  1734:   768259] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0002.heap",
+      "sha256": "f10d99bd1920467d705f2f6a282f23a075718bb5bd11660af83bbbaad5d29b1a",
+      "header": "heap profile:    511:  8761414 [  2064:  9549203] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0003.heap",
+      "sha256": "6f599281758d8a7a6d4b6ec9a662b22fef284d5bb91e8ee6a63dd00cbfde9b85",
+      "header": "heap profile:    413:   367431 [  2114:  9611555] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0004.heap",
+      "sha256": "ac6b9a4c768775778ef269079eee7565d573ea785d086d12695665ee15f64c1c",
+      "header": "heap profile:    511:  8761438 [  2265: 18072043] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0005.heap",
+      "sha256": "bed115dc991d622de1d94481f364682ea6313d1f9a0de1ef8001840eb5e4c486",
+      "header": "heap profile:    413:   367431 [  2315: 18134395] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0006.heap",
+      "sha256": "fd0cd51d6e0f32308cb6ac00d09d4b5853d8c4efda637471948208c919733bee",
+      "header": "heap profile:    511:  8761438 [  2466: 26594883] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0007.heap",
+      "sha256": "683d912a46caf77a0bf4465cf3b07dccd0e45270c8a0fbf843930d5b73acb5aa",
+      "header": "heap profile:    413:   367431 [  2516: 26657235] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0008.heap",
+      "sha256": "e7239d6429f6d0b38220b4b8ae57a325fff7ff799db020dc8fd128ed7611040b",
+      "header": "heap profile:    413:   367431 [  2566: 26719587] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/observed_363335.0009.heap",
+      "sha256": "94ee5e4db5c4f94c2a3163b7ccd99b6f989d86421f0254daec365b9c7557a7b3",
+      "header": "heap profile:    272:   174860 [  2748: 26783968] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0001.heap",
+      "sha256": "fef6075d2c8eb2b575789b4bed46ca1baf40e979ea7cb6b4499929347333c1fd",
+      "header": "heap profile:    374:   203295 [  1735:   771868] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0002.heap",
+      "sha256": "fd1499549ac1ba5ff6ed5aae2d6872f324751dbabdb05455469b346eab786ad0",
+      "header": "heap profile:    511:  8763318 [  2068:  9554060] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0003.heap",
+      "sha256": "a29c9151ede77f338d9c071c95944504ebaebd780e50dfb9235948bae998980e",
+      "header": "heap profile:    381:   205495 [  2118:  9616412] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0004.heap",
+      "sha256": "adc85dedb8250e94977cffd9595b98aa02b1d1638fe37e3d641d8dfe260be307",
+      "header": "heap profile:    512:  8763470 [  2432: 18394564] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0005.heap",
+      "sha256": "b5ea93d5f5a0e0bdf36e7700513fe3747a053b3e86dc114d3a57304aae02aea7",
+      "header": "heap profile:    382:   205623 [  2482: 18456916] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0006.heap",
+      "sha256": "387fddfcf8a8a25d267f812c84e77565940bd332d0287463dfde29215dacbd15",
+      "header": "heap profile:    512:  8763470 [  2793: 27234844] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0007.heap",
+      "sha256": "332a5c2321c076fff8bbad82974b027a5ca7e4c71bd1ef0a3ccd484463bbff61",
+      "header": "heap profile:    382:   205623 [  2843: 27297196] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0008.heap",
+      "sha256": "ce894d9d63c684f559c80ac73dabfb9db87b15fe33fa35509e13002ba976f809",
+      "header": "heap profile:    382:   205623 [  2893: 27359548] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/queue-waves-heaps/selected_367466.0009.heap",
+      "sha256": "82f826a69d487e757ccfb0f6d601c56ac5c51086d056080198a1d0d2ddb36633",
+      "header": "heap profile:    273:   176892 [  3075: 27423929] @ heapprofile"
+    }
+  ],
+  "allocator": {
+    "path": "/usr/lib/libtcmalloc.so.4.6.5",
+    "sha256": "ccbb0396626ef87993ee197e42baae2a408fa04cab6ad4f04abf98f6381be56a"
+  },
+  "browser_artifacts": {
+    "target/browser/check.js": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "target/browser/check.js.map": "82235f3e33f9469ac4577231e2bc79b8a675283f614b1165550fd3c25ed93e90",
+    "target/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "target/browser/relay.js": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "target/browser/relay.js.map": "d08ddb5e70267d2ad9618031a93e11cf7b61405b01d868d3e0a77595514c216b",
+    "output/playwright/queue-retirement-browser-check.png": "ddbd6c9301f9c7cad0a07b549e507b61bb953e9b4c1a1bef3982c3d91cf6f351",
+    "artifacts/queue-retirement-browser-eval.txt": "df4f2c2a355bd6f7263b7680bd2fa5959ffde3c9a0bc76d9bcc8ff80db7e773d",
+    "artifacts/queue-retirement-browser-console.txt": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+  }
+}
