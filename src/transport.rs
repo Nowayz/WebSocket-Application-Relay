@@ -59,6 +59,10 @@ where
         Ok(())
     }
 
+    pub(crate) fn reclaim_read_buffer(&mut self) -> Option<usize> {
+        self.websocket.reclaim_read_buffer()
+    }
+
     pub(crate) async fn ping(&mut self, payload: Bytes) -> Result<(), Error> {
         if !self.active {
             return Err(Error::AlreadyClosed);

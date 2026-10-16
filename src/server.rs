@@ -243,16 +243,21 @@ async fn connection_task(
     let mut pong_deadline = None;
     let idle_timeout = Duration::from_secs(config.idle_timeout_secs);
     let mut idle_deadline = (config.idle_timeout_secs > 0).then(|| Instant::now() + idle_timeout);
+    let read_buffer_timeout = Duration::from_secs(config.read_buffer_idle_secs);
+    let mut read_buffer_deadline = None;
     let deadline_wait = sleep(Duration::from_secs(86_400));
     tokio::pin!(deadline_wait);
     let mut armed_deadline = None;
     let end = loop {
         // Share the existing deadline wait. Disabled idle policy needs no extra
         // timer or per-message clock read; heartbeat controls are not activity.
-        let next_deadline = match (pong_deadline, idle_deadline) {
+        let mut next_deadline = match (pong_deadline, idle_deadline) {
             (Some(pong), Some(idle)) => Some(pong.min(idle)),
             (deadline, None) | (None, deadline) => deadline,
         };
+        if let Some(read) = read_buffer_deadline {
+            next_deadline = Some(next_deadline.map_or(read, |deadline| deadline.min(read)));
+        }
         // Activity only moves the idle deadline later. Keep an earlier alarm
         // and check the live deadline when it fires, instead of retiming every
         // message. An earlier heartbeat deadline still takes effect immediately.
@@ -287,6 +292,17 @@ async fn connection_task(
                     }
                     idle_deadline = Some(now + idle_timeout);
                 }
+                if read_buffer_deadline.is_some_and(|deadline| deadline <= now) {
+                    if let Some(copied) = ws.reclaim_read_buffer() {
+                        relay.metrics.read_buffer_reclaims.fetch_add(1, Relaxed);
+                        relay.metrics.read_buffer_reclaim_header_bytes.fetch_add(copied as u64, Relaxed);
+                        peer.reclaimed_input(config.read_buffer_bytes);
+                        read_buffer_deadline = None;
+                    } else {
+                        relay.metrics.read_buffer_reclaims_deferred.fetch_add(1, Relaxed);
+                        read_buffer_deadline = Some(now + read_buffer_timeout);
+                    }
+                }
             }
             _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
                 if pong_deadline.is_none() {
@@ -306,8 +322,13 @@ async fn connection_task(
                     Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
                     Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
                     Some(Ok(Message::Binary(bytes))) => {
+                        let large_input = config.read_buffer_idle_secs > 0 && bytes.len() > config.read_buffer_bytes.max(64 * 1024);
                         if let Err(reason) = relay.receive(peer, bytes) { break SessionEnd::Close(reason); }
-                        if idle_deadline.is_some() { idle_deadline = Some(Instant::now() + idle_timeout); }
+                        if idle_deadline.is_some() || large_input {
+                            let now = Instant::now();
+                            if idle_deadline.is_some() { idle_deadline = Some(now + idle_timeout); }
+                            if large_input { read_buffer_deadline = Some(now + read_buffer_timeout); }
+                        }
                     }
                     Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
                     Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }

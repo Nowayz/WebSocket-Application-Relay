@@ -1,0 +1,62 @@
+--- a/tungstenite/src/protocol/frame/mod.rs
++++ b/tungstenite/src/protocol/frame/mod.rs
+@@ -144,6 +144,28 @@
+             out_buffer_write_len: 0,
+             header: None,
+         }
++    }
++
++    /// Release decoder ownership between frames without touching published data.
++    /// An incomplete next header is copied; a partially received frame is busy.
++    pub(super) fn reclaim_read_buffer(&mut self) -> Option<usize> {
++        if self.header.is_some() {
++            return None;
++        }
++        // Header parsing returns None only while at most 13 bytes are buffered.
++        if self.in_buffer.len() >= FrameHeader::MAX_SIZE {
++            return None;
++        }
++        // A short buffer can also hold a complete small frame. Reclaim only
++        // when the ordinary parser proves these are incomplete header bytes.
++        if !matches!(FrameHeader::parse(&mut Cursor::new(self.in_buffer.as_ref())), Ok(None)) {
++            return None;
++        }
++        let copied = self.in_buffer.len();
++        let mut fresh = BytesMut::with_capacity(self.in_buf_max_read);
++        fresh.extend_from_slice(&self.in_buffer);
++        self.in_buffer = fresh;
++        Some(copied)
+     }
+ 
+     /// Sets a maximum size for the out buffer.
+--- a/tungstenite/src/protocol/mod.rs
++++ b/tungstenite/src/protocol/mod.rs
+@@ -226,6 +226,13 @@
+         self.context.get_config()
+     }
+ 
++    /// Release unused receive storage while preserving published payloads and
++    /// partial next headers. Returns copied header bytes, or None if a frame is
++    /// partially received. This allocates only the configured initial read size.
++    pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
++        self.context.frame.reclaim_read_buffer()
++    }
++
+     /// Check if it is possible to read messages.
+     ///
+     /// Reading is impossible after receiving `Message::Close`. It is still possible after
+--- a/tokio-tungstenite/src/lib.rs
++++ b/tokio-tungstenite/src/lib.rs
+@@ -285,6 +285,12 @@
+         self.inner.get_config()
+     }
+ 
++    /// Release unused decoder storage between frames. Published payloads remain
++    /// shared; a partial next header is preserved. None means a frame is busy.
++    pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
++        self.inner.reclaim_read_buffer()
++    }
++
+     /// Close the underlying web socket
+     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
+     where

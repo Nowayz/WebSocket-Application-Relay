@@ -181,6 +181,32 @@ claim that an open-ended improvement effort is complete.
 
 ## Exact verification boundaries
 
+Unused enlarged native decoder storage now retires after five seconds without
+large complete input, with `--read-buffer-idle-secs 0` preserving indefinite
+reuse. It shares the existing pinned deadline wait, keeps clients connected and
+published values in their original storage, defers busy frames, and preserves
+fragment/control state. Three small backend hooks are vendored with original
+package/commit checksums and the complete patch; CI audits all 61 package files
+against the pinned archives plus that patch. The first-download and cached audit
+paths both passed locally.
+
+Eighteen matched connected-idle cases, a disabled-policy case and a 64-producer
+control/default pair passed. At 32 producers the median last connected-idle RSS
+fell from 140.24 to 12.02 MiB; the 65-connection pair fell from 262.93 to 12.43 MiB
+without disconnecting clients. Sampled peak concurrent-input memory remained unchanged.
+Small-population allocator variation and a roughly 2.6% observed large-payload
+CPU cost are retained in `performance.md`, alongside the overlapping throughput
+ranges and every raw record. Small-message traffic cost remained close to the
+control, and 2,000 ordinary idle sockets added a median 20 KiB RSS versus control.
+
+All 52 Rust checks, strict Clippy, seven JS socket cases and the original C++
+46-case/eight-difference comparison passed with this version. The current local
+native/bridge releases include the policy. A live five-second reset retained
+both sessions and subsequent typed routing added no body copies; both closed
+cleanly. Seven fresh Chrome checks and three live legacy/Close checks passed;
+health/readiness returned 200 and final resource gauges were zero. See
+`benchmarks/2026-10-15-read-buffer-idle-{build,summary,live}.json`.
+
 The unchanged bundled C++ executable now runs with locally extracted, pinned
 Debian TBB/OpenSSL libraries inside a private network namespace. Three fresh
 process comparisons passed 46 common cases and eight explicitly asserted
@@ -214,9 +240,11 @@ local single-host plaintext sockets; no production or cluster claim is made.
 2. Profile the remaining small-message CPU cost before changing counters, queue
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
-   Concurrent retention now covers up to 64 producers. Extend active-input
-   budgeting and slab-threshold checks while preserving shared bodies, exact
-   peer Close acknowledgements, and immediate dropping of partial output.
+   Concurrent retention and delayed storage reclamation now cover up to 64
+   producers. Add process-wide reservations before decoder allocations;
+   reclamation alone does not bound simultaneous incomplete input. Preserve
+   shared bodies, exact peer Close acknowledgements, and immediate dropping of
+   partial output. Extend mixed healthy traffic during large reclamation waves.
 3. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

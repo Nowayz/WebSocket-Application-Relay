@@ -20,6 +20,9 @@ pub struct Metrics {
     pub protocol_errors: AtomicU64,
     pub rate_limited: AtomicU64,
     pub idle_timeouts: AtomicU64,
+    pub read_buffer_reclaims: AtomicU64,
+    pub read_buffer_reclaim_header_bytes: AtomicU64,
+    pub read_buffer_reclaims_deferred: AtomicU64,
     pub queued_bytes: AtomicUsize,
     pub connections: AtomicUsize,
     pub variable_bytes: AtomicUsize,
@@ -36,6 +39,21 @@ impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
         let mut text = String::with_capacity(2500);
         for (name, value, help) in [
+            (
+                "read_buffer_reclaims_total",
+                self.read_buffer_reclaims.load(Relaxed),
+                "Decoder receive storage resets completed between frames; this is not a freed-byte count.",
+            ),
+            (
+                "read_buffer_reclaim_header_bytes_total",
+                self.read_buffer_reclaim_header_bytes.load(Relaxed),
+                "Incomplete WebSocket header bytes copied while reclaiming decoder receive storage.",
+            ),
+            (
+                "read_buffer_reclaims_deferred_total",
+                self.read_buffer_reclaims_deferred.load(Relaxed),
+                "Scheduled decoder resets deferred because a frame or buffered input remains in progress.",
+            ),
             (
                 "idle_timeouts_total",
                 self.idle_timeouts.load(Relaxed),

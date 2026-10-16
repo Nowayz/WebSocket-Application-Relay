@@ -16,6 +16,7 @@ jobs:
           cache: npm
           cache-dependency-path: clients/js/package-lock.json
       - run: cargo fmt --check
+      - run: python3 scripts/check-vendor.py
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: ./scripts/check-js.sh

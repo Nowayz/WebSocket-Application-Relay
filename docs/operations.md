@@ -32,6 +32,7 @@ variables. All bounds are per process.
 | Members per channel | 10,000 | Includes closing sessions until removal |
 | Incoming message | 16 MiB | Complete reassembled WebSocket data message |
 | Read buffer per socket | 4 KiB | Initial read capacity; tune for the actual workload |
+| Enlarged read storage retirement | 5 s after large input | `--read-buffer-idle-secs` / `WAR_READ_BUFFER_IDLE_SECS`; zero disables |
 | Output queue per session | 64 messages / 32 MiB | Includes an in-flight socket write |
 | Output reservations across process | 256 MiB | Logical payload bytes per recipient, conservatively counting shared frames repeatedly |
 | Variables per channel | 256 / 1 MiB | Key bytes plus encoded CBOR value bytes |
@@ -56,17 +57,40 @@ its configured initial read buffer). Once that mark exceeds the initial read
 buffer, shared messages smaller than one eighth of the mark have their encoded
 application value compacted before fanout. Ordinary tiny messages still share
 the normal read slab. This conservative policy can continue copying small
-messages after one large message; it avoids retaining enlarged slabs through
-tiny queued views.
+messages after one large message until decoder reclamation resets the watermark;
+it avoids retaining enlarged slabs through tiny queued views.
 Queue gauges count the emitted CBOR envelope's logical bytes, including its
 separate routing prefix, rather than the backing allocation's capacity. Measure
 RSS alongside these gauges; they are not a physical-memory accounting interface.
 
 Receive capacity can also remain resident on open connections after their output
 queues drain. Concurrent 4 MiB primer measurements demonstrate this separately
-from queued-view retention; the 4 KiB read setting is an initial capacity. Budget
-connections and incoming message size together, and monitor process RSS as well
-as logical queue bytes.
+from queued-view retention; the 4 KiB read setting is an initial capacity.
+
+By default, `WAR_READ_BUFFER_IDLE_SECS=5` releases unused decoder storage after
+five seconds without a completed binary input larger than the greater of 64 KiB
+and the configured initial read buffer. A new large input postpones the deadline;
+small input, Ping/Pong and outgoing application traffic leave it alone. Sessions
+stay connected and routing continues. Set the interval to `0` to keep the
+decoder's normal indefinite reuse policy, or to `1..=86400` for another interval.
+Large recurring bursts reuse their storage during the interval. A shorter
+interval can increase allocation churn for sparsely recurring large messages.
+
+Reclamation replaces only the decoder's receive buffer with its initial read
+capacity. Published payloads keep their existing shared owners; incomplete
+message assembly and protocol/control state remain intact. An incomplete next
+WebSocket header may be copied, at most 13 bytes. A complete buffered header or
+partially received frame defers the operation for another interval so application
+bytes are not moved or lost. After a successful reset, later tiny routed values
+can share the normal slab again instead of using the old large-input watermark.
+This needs a narrow local codec hook; its source provenance and complete patch
+are in [vendor/README.md](../vendor/README.md).
+
+This policy releases unused input storage; it is not a process-wide admission
+budget or an RSS cap. Incomplete frames and fragment assembly still need their
+storage, recipients can still own published bodies, and an allocator can retain
+freed pages. Budget connections and incoming message size together, and monitor
+process RSS as well as logical queue bytes.
 
 For applications that should retire inactive sessions, set
 `WAR_IDLE_TIMEOUT_SECS=300` (or another value in `1..=86400`). The default `0`
@@ -195,6 +219,13 @@ latter measures deliberate slab compaction. They exclude relay command replies,
 unknown destinations, WebSocket unmasking/reassembly, client serialization, and
 kernel copies. Native application output writes its small headers and body as
 separate slices, without a contiguous WebSocket payload staging buffer.
+
+`war_read_buffer_reclaims_total` counts completed decoder resets, not bytes
+returned to the operating system. `war_read_buffer_reclaim_header_bytes_total`
+counts only the incomplete wire-header bytes copied during those resets;
+application-value compaction remains in `war_routing_copied_bytes_total`.
+`war_read_buffer_reclaims_deferred_total` counts scheduled attempts postponed
+because a frame or buffered input still needs processing.
 
 ## Scaling boundary
 

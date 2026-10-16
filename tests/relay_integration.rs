@@ -1,5 +1,8 @@
 use std::{
-    sync::{Arc, atomic::Ordering::Relaxed},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering::Relaxed},
+    },
     time::Duration,
 };
 
@@ -133,6 +136,169 @@ async fn send(ws: &mut Socket, target: u64, value: &[u8]) {
     ws.send(Message::Binary(protocol::envelope(target, value)))
         .await
         .unwrap();
+}
+
+async fn wait_counter(counter: &AtomicU64, minimum: u64) {
+    timeout(Duration::from_secs(3), async {
+        while counter.load(Relaxed) < minimum {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+async fn prime_read_storage(source: &mut Socket, source_id: u64, receiver_id: u64) {
+    let unknown = (1..)
+        .find(|id| *id != source_id && *id != receiver_id)
+        .unwrap();
+    send(
+        source,
+        unknown,
+        &protocol::byte_string(&vec![0x5a; 4 * 1024 * 1024]),
+    )
+    .await;
+    send(source, source_id, &[0]).await;
+    assert_eq!(data(source).await, protocol::envelope(source_id, &[0]));
+}
+
+#[tokio::test]
+async fn enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values() {
+    let server = Server::new(Config {
+        read_buffer_idle_secs: 1,
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut source, source_id) = server.join("read-retire").await;
+    let (mut receiver, receiver_id) = server.join("read-retire").await;
+    prime_read_storage(&mut source, source_id, receiver_id).await;
+    wait_counter(&server.relay.metrics.read_buffer_reclaims, 1).await;
+    assert_eq!(server.relay.counts(), (2, 2));
+    assert_eq!(server.relay.metrics.connections.load(Relaxed), 2);
+    let copied = server.relay.metrics.routing_copied_bytes.load(Relaxed);
+    send(&mut source, receiver_id, &[0x18, 42]).await;
+    assert_eq!(
+        data(&mut receiver).await,
+        protocol::envelope(source_id, &[0x18, 42])
+    );
+    assert_eq!(
+        server.relay.metrics.routing_copied_bytes.load(Relaxed),
+        copied
+    );
+    assert_eq!(
+        server
+            .relay
+            .metrics
+            .read_buffer_reclaim_header_bytes
+            .load(Relaxed),
+        0
+    );
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes() {
+    let server = Server::new(Config {
+        read_buffer_idle_secs: 1,
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut source, source_id) = server.join("read-busy").await;
+    let (mut receiver, receiver_id) = server.join("read-busy").await;
+    prime_read_storage(&mut source, source_id, receiver_id).await;
+    let value = protocol::byte_string(&vec![0x39; 128 * 1024]);
+    let packet = protocol::envelope(receiver_id, &value);
+    let mask = [0x17, 0x39, 0x5b, 0x7d];
+    let mut wire = vec![0x82, 0xff];
+    wire.extend_from_slice(&(packet.len() as u64).to_be_bytes());
+    wire.extend_from_slice(&mask);
+    wire.extend(
+        packet
+            .iter()
+            .enumerate()
+            .map(|(i, byte)| byte ^ mask[i & 3]),
+    );
+    // A complete header and only part of its body make the decoder busy when
+    // the same pinned deadline cancels its pending read future.
+    source
+        .get_mut()
+        .write_all(&wire[..14 + 4096])
+        .await
+        .unwrap();
+    wait_counter(&server.relay.metrics.read_buffer_reclaims_deferred, 1).await;
+    assert_eq!(server.relay.metrics.read_buffer_reclaims.load(Relaxed), 0);
+    source
+        .get_mut()
+        .write_all(&wire[14 + 4096..])
+        .await
+        .unwrap();
+    assert_eq!(
+        data(&mut receiver).await,
+        protocol::envelope(source_id, &value)
+    );
+    wait_counter(&server.relay.metrics.read_buffer_reclaims, 1).await;
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn reclaiming_between_fragments_preserves_message_assembly_and_ping_replies() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+    let server = Server::new(Config {
+        read_buffer_idle_secs: 1,
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut source, source_id) = server.join("read-fragment").await;
+    let (mut receiver, receiver_id) = server.join("read-fragment").await;
+    prime_read_storage(&mut source, source_id, receiver_id).await;
+    let value = protocol::byte_string(&vec![0x39; 128 * 1024]);
+    let packet = protocol::envelope(receiver_id, &value);
+    let split = packet.len() / 2;
+    source
+        .send(Message::Frame(Frame::message(
+            packet.slice(..split),
+            OpCode::Data(Data::Binary),
+            false,
+        )))
+        .await
+        .unwrap();
+    wait_counter(&server.relay.metrics.read_buffer_reclaims, 1).await;
+    let ping = Bytes::from_static(b"between fragments");
+    source.send(Message::Ping(ping.clone())).await.unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(3), source.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap(),
+        Message::Pong(ping)
+    );
+    source
+        .send(Message::Frame(Frame::message(
+            packet.slice(split..),
+            OpCode::Data(Data::Continue),
+            true,
+        )))
+        .await
+        .unwrap();
+    assert_eq!(
+        data(&mut receiver).await,
+        protocol::envelope(source_id, &value)
+    );
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    server.stop().await;
 }
 
 async fn command(ws: &mut Socket, op: u8, value: &[u8]) -> Bytes {

@@ -29,6 +29,9 @@ pub struct Config {
     pub total_queue_bytes: usize,
     #[arg(long, env = "WAR_READ_BUFFER_BYTES", default_value_t = 4 * 1024)]
     pub read_buffer_bytes: usize,
+    /// Reclaim enlarged decoder storage after this many seconds without large input; zero disables.
+    #[arg(long, env = "WAR_READ_BUFFER_IDLE_SECS", default_value_t = 5)]
+    pub read_buffer_idle_secs: u64,
     #[arg(long, env = "WAR_MAX_VARIABLES", default_value_t = 256)]
     pub max_variables: usize,
     #[arg(long, env = "WAR_MAX_VARIABLE_BYTES", default_value_t = 1024 * 1024)]
@@ -154,6 +157,10 @@ impl Config {
         ensure!(
             self.idle_timeout_secs <= 86_400,
             "idle timeout exceeds one day"
+        );
+        ensure!(
+            self.read_buffer_idle_secs <= 86_400,
+            "read buffer idle interval exceeds one day"
         );
         ensure!(
             (1..=86_400).contains(&self.pong_timeout_secs),

@@ -86,6 +86,12 @@ impl Drop for Envelope {
 }
 
 impl Peer {
+    // The connection may lower this watermark only after the decoder installed
+    // fresh base-size input storage. Published bodies keep their own ownership.
+    pub(crate) fn reclaimed_input(&self, buffer: usize) {
+        self.largest_input.store(buffer, Relaxed);
+    }
+
     pub(crate) fn close(&self, reason: Disconnect) -> bool {
         if self.closing.swap(true, Relaxed) {
             return false;

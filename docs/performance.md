@@ -459,3 +459,137 @@ false failure in an experimental run, where already-closing sockets were still
 classified as connected idle. It retains the full observations and phase names
 in the record. Repeated `--server-arg=ARG` options now support explicit policy
 comparisons; the complete server command remains in each case.
+
+## Retiring unused decoder storage, 2026-10-15
+
+The native relay now schedules receive-storage reclamation after five seconds
+without a completed binary message larger than `max(64 KiB, initial read size)`.
+It shares the existing pinned heartbeat/idle deadline wait. Large recurring input
+postpones the operation, preserving buffer reuse during a burst. Small-message
+traffic does not read an extra clock for this policy. Zero disables it.
+
+The decoder exposes one narrow safe operation through `tungstenite` and its
+Tokio wrapper. It replaces unused input storage only between frames and only
+after the normal parser proves any remaining bytes are an incomplete header.
+It can copy at most thirteen header bytes; it never copies a published body.
+Busy input defers the attempt. Fragment assembly and control state stay in the
+existing decoder. Successful reclamation also lowers the connection's routing
+watermark so later tiny values can share its normal slab again. The complete
+three-file patch, original package checksums/commits, license attribution, and a
+file-by-file source audit are in [vendor](../vendor/README.md).
+
+An exploratory eager reset at each empty read increased allocation churn and
+allocator-retained RSS for small populations. It was discarded. The delayed
+policy keeps reuse during the measured primer bursts and retires the unused
+storage afterward. It is a memory-lifetime improvement with measured tradeoffs,
+rather than a claim that dropping an allocation always returns its pages.
+
+### Matched connected-idle observations
+
+The control and candidate use the same frozen verifying retention client,
+64 cycles of four-MiB unknown-target primers per producer, eight one-MiB output
+fillers, and a six-second idle observation after all deliveries drain. Each case
+uses a fresh four-worker process, disabled heartbeat/rates/application-idle Close,
+the same 4 KiB initial read setting, and the existing output budgets. Producer
+order varies across repetitions. Source/binary hashes are in
+[read-buffer-idle-build.json](benchmarks/2026-10-15-read-buffer-idle-build.json).
+
+This table uses each run's **last connected-idle sample**, with all connections
+still present and queues empty. Values are medians of three runs per binary;
+complete ranges and every observation remain in the
+[summary](benchmarks/2026-10-15-read-buffer-idle-summary.json) and its referenced
+control/default retention records.
+
+| Producers, plus one receiver | Control RSS | New default RSS | Change |
+| --- | ---: | ---: | ---: |
+| 1 | 9.55 MiB | 11.41 MiB | No stable RSS gain; ranges overlap and allocator variation dominates |
+| 8 | 37.76 MiB | 11.57 MiB | 69.4% lower |
+| 32 | 140.24 MiB | 12.02 MiB | 91.4% lower |
+
+All eighteen cases passed exact data/order, backpressure, counter, Close and
+cleanup checks. Each enabled run completed exactly one reset per producer,
+copied zero wire-header bytes, and reported zero deferred resets. At one
+producer, the control range was 9.54–15.36 MiB and the candidate range was
+5.52–11.42 MiB; the higher candidate median is retained explicitly. Freed
+storage and process RSS are different quantities.
+
+A separate disabled-policy 32-producer run retained 143,592 KiB with zero
+resets, consistent with the control. A 64-producer/65-connection pair, using
+32 cycles each to cap primer payload at eight GiB, passed all 4,105 data/barrier
+deliveries and all 65 clean Close handshakes. The enabled process's last
+connected-idle sample was 12,732 KiB versus 269,236 KiB for the control; all
+65 sockets remained connected. Sampled peak RSS was effectively unchanged at about
+275,284/275,292 KiB. Reclamation acts after input is no longer needed; it does
+not reduce the demonstrated peak needed to process concurrent large frames.
+Those individual records are [default at 64 producers](benchmarks/2026-10-15-read-buffer-idle-default-64-producers.json),
+[control at 64 producers](benchmarks/2026-10-15-read-buffer-idle-control-64-producers.json),
+and [disabled at 32 producers](benchmarks/2026-10-15-read-buffer-idle-disabled-32-producers.json).
+
+### Traffic cost and ordinary idle connections
+
+The same frozen traffic generator ran 64 clients as 32 private pairs, window 16,
+four server workers on CPUs 0–3 and the client on CPUs 4–7. Candidate order
+rotated; timed runs did not overlap compilation, profiles, or other workloads.
+Each received frame was verified. The following are process-run medians:
+
+| Payload | Binary/configuration | Deliveries/s | Server CPU ns/delivery | p99 bucket upper bound |
+| --- | --- | ---: | ---: | ---: |
+| 1 KiB | Control | 1,727,933 | 1,687 | 1.049 ms |
+| 1 KiB | New default | 1,732,999 | 1,683 | 1.049 ms |
+| 1 KiB | New binary, policy disabled | 1,727,633 | 1,687 | 1.049 ms |
+| 64 KiB | Control | 205,060 | 11,917 | 4.194 ms |
+| 64 KiB | New default | 198,605 | 12,226 | 4.194 ms |
+| 64 KiB | New binary, policy disabled | 199,938 | 12,226 | 4.194 ms |
+
+All twelve twenty-second 1 KiB runs and nine fifteen-second 64 KiB runs passed.
+Throughput ranges overlap. No general CPU/throughput gain is claimed. The 64 KiB
+candidate measured 2.6% more CPU per delivery and 3.1% less median throughput
+than the control. The disabled new binary showed a similar CPU cost, so these
+measurements do not isolate that difference to active reclamation. Some early
+large-message cases occupied the 8.389 ms p99 bucket; the table retains the
+median bucket and the raw per-run variation remains available.
+
+Body-compaction counters stayed zero in every traffic case. These continuous
+workloads keep postponing the storage deadline; actual resets and correctness
+across them are established separately by the retention and socket regressions.
+The frozen traffic generator deliberately drops its 64 socket handles after
+timing. Every run recorded 64 combined abrupt read/write departures; one large
+control run recorded 63 read-side disconnects plus one write error, first visible
+after timed samples ended. Protocol errors, write timeouts and Close failures
+were zero, and all resource gauges cleaned up. This traffic teardown is not a
+graceful-Close acceptance check.
+
+Raw records and full traces are
+[small traffic](benchmarks/2026-10-15-read-buffer-idle-cost.json) and
+[large traffic](benchmarks/2026-10-15-read-buffer-idle-large-cost.json).
+Three alternating 2,000-socket idle trials per binary, with one fixed load
+client, measured median server RSS increases of 22,692 KiB for the control and
+22,712 KiB for the candidate: 20 KiB more. No storage reset occurred because
+these clients sent no large input. This is a two-second idle-state measurement,
+not a high-active-population or production-capacity claim. The raw record is
+[small connections](benchmarks/2026-10-15-read-buffer-idle-small-connections.json).
+
+### Scope and final acceptance
+
+The public-API regressions verify release of the decoder's shared owner without
+moving the published payload, all fourteen masked header splits, deferred partial
+payloads and a buffered small frame. Native socket regressions verify continued
+routing without later tiny-body compaction, a pending frame across the deadline,
+and fragmented-message assembly with Ping/Pong across reclamation. All 52 Rust
+checks, strict Clippy, seven real-socket JS cases, the new 61-file codec source
+audit, and the original C++ comparison passed locally. The C++ comparison still
+passes 46 common cases plus its eight explicit differences.
+
+The refreshed local release actually reclaimed its decoder storage after an
+observed 5.008 seconds while both clients stayed connected. A subsequent typed
+private value preserved bytes and an exact uint64 with zero additional routed
+body copies. Both clients completed code-1000 closes. A fresh Chrome run passed
+seven bundled-client checks, and three live legacy/Close checks passed. Health
+and readiness returned 200, and final connection/session/queue/variable gauges
+and error counters were clean. Exact process hashes and evidence are in
+[read-buffer-idle-live.json](benchmarks/2026-10-15-read-buffer-idle-live.json).
+
+This releases unused decoder ownership. It does not impose a process-wide input
+allocation budget, free incomplete messages, or guarantee the allocator returns
+pages. Global reservations before decoder growth and larger active populations
+remain useful next work; connection/input limits and actual RSS still matter.

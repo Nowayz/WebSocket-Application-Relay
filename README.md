@@ -24,6 +24,11 @@ management. `--help` lists all limits and environment variables. Set
 enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
 
+Unused enlarged receive storage is released after five seconds without large
+input, while clients stay connected. `--read-buffer-idle-secs 0` disables that
+policy. It preserves published payload ownership and partial input; the narrow
+codec hook and source provenance are documented in [vendor/README.md](vendor/README.md).
+
 Operators can optionally retire inactive joined sessions with
 `--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
 and outgoing relay messages refresh activity; receive-only consumers stay active
@@ -178,11 +183,15 @@ host, network, payloads, and fanout.
 
 ```sh
 cargo fmt --check
+python3 scripts/check-vendor.py
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ./scripts/check-js.sh
 npm run build:browser --prefix clients/js
 ```
+
+The codec source audit uses Python 3.12+ and Git, caching two checksum-pinned
+published archives on its first run. Rust builds use the included codec sources.
 
 The JavaScript script builds temporary loopback services, runs the CBOR and
 original-client checks with idle expiry disabled, then restarts the relay to

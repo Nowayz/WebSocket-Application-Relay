@@ -22,6 +22,8 @@ runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
 SAMPLED_METRICS = ("war_connections", "war_sessions", "war_channels", "war_queued_bytes", "war_variable_bytes",
                    "war_incoming_messages_total", "war_deliveries_total", "war_routing_reused_bytes_total", "war_routing_copied_bytes_total")
+OPTIONAL_METRICS = ("war_read_buffer_reclaims_total", "war_read_buffer_reclaim_header_bytes_total",
+                    "war_read_buffer_reclaims_deferred_total")
 
 
 def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle_secs, server_idle_secs, server_args=()):
@@ -85,7 +87,8 @@ def run_case(server_binary, client_binary, cycles, primer_bytes, producers, idle
                     samples.append({"seconds":time.monotonic()-started,
                                     "phase":phase if before == phase else "transition",
                                     "phase_before":before,"phase_after":phase,
-                                    "process":process, "metrics":{k:observed[k] for k in SAMPLED_METRICS}})
+                                    "process":process, "metrics":{k:observed[k] for k in SAMPLED_METRICS}
+                                    | {k:observed[k] for k in OPTIONAL_METRICS if k in observed}})
             stdout, stderr = client.communicate(timeout=2)
             events.extend(json.loads(line) for line in (pending + stdout).splitlines() if line)
             for _ in range(200):

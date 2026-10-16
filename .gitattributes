@@ -2,3 +2,11 @@
 docs/upstream-README.md whitespace=-blank-at-eol
 # Keep machine-produced measurement traces separate from hand-written review content.
 docs/benchmarks/**/*.json linguist-generated=true
+# The source audit compares published package bytes, including original LF endings.
+vendor/tungstenite/** -text
+vendor/tokio-tungstenite/** -text
+vendor/read-buffer-reclaim.patch -text whitespace=-blank-at-eol linguist-vendored=false
+# Preserve publisher whitespace and the patch format's blank context prefixes.
+vendor/tungstenite/CHANGELOG.md whitespace=-blank-at-eol
+vendor/README.md linguist-vendored=false
+vendor/provenance.json linguist-vendored=false
