@@ -1220,7 +1220,103 @@ The [comparison](benchmarks/2026-10-16-member-comparison.json),
 Build `cargo build --release --bins --example registry_peak`, then run
 `python3 scripts/registry-peak.py --scope room --peak-clients 8192 --seconds 3
 --output artifacts/member-room.json`. Use `--scope private` for the global
-membership path; `--scope global` retains the separate-room probe. Channel-name
-table costs, larger active application fanout, unpaced departure, long duration,
-TLS/proxies and clusters remain unmeasured. Event-boundary RSS is not continuous
+membership path; `--scope global` retains the separate-room probe. The following
+section measures channel-name table costs. Larger active application fanout,
+unpaced departure, long duration, TLS/proxies and clusters remain unmeasured.
+Event-boundary RSS is not continuous
 peak RSS; metadata trimming does not guarantee OS page return or cap process RSS.
+
+## Channel-name capacity after room waves, 2026-10-16
+
+After ownership and membership reclamation, the native channel-name map still
+retained spare buckets from retired ordinary rooms. Both authenticated CBOR
+channel queries and management inspection iterate this map. The first release
+socket probe at 8,192 temporary rooms records fresh/post-wave query CPU of
+1,945/2,054 ns and throughput of 474,278/444,151 queries/s. Every reply and all
+management snapshots pass; this exploratory run is excluded from final medians.
+
+A separate user-cycle profile includes the channel-name empty-bucket loop in
+`Relay::receive` (inlined control handling). This is consistent with the
+[standard-library iteration contract](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter),
+which visits empty buckets as well as occupied entries. The profile identifies
+the scan rather than establishing its full CPU cost or a general bottleneck.
+The control has 2,138 samples and the selected recording 2,135, both with zero
+lost samples; their `Relay::receive` shares are 8.36%/6.92%. Profiled timings are
+diagnostic and excluded from performance comparisons.
+
+The existing sparse-map policy is now generic over the registry's key/value
+types and also runs after removal of an empty ordinary room. Capacity must be
+over 256 and at least eight times the remaining length before shrinking, with
+twice the remaining length retained as growth headroom. Rehashing moves channel
+descriptors and handles; name/variable bytes, peer objects, queues and published
+bodies keep their existing storage. Normal application messages and inspections
+add no trimming check. Rehashing allocates metadata under the existing write
+lock; another room wave can grow it again. This is not an RSS cap or an OS
+page-return guarantee.
+
+The frozen `registry_peak` client adds `--scope channels`: two original clients
+stay in `re_globl` while 8,192 temporary peers join distinct ordinary rooms.
+After authentication it sends channel queries in 16-message windows, comparing
+every complete response with independent literal CBOR. An authenticated HTTP
+snapshot at each gate independently verifies every field and base64 sort order,
+including the 8,193-entry peak and the final empty global room. These snapshots
+sit outside traffic CPU intervals. Queues keep their default 64-message limit.
+Every connection checks its exact normal Close acknowledgement and EOF.
+
+Three fresh processes per build keep those clients through two population waves.
+Order reverses for repetition two; four-worker servers use CPUs 0–3 and the same
+frozen client uses 4–7. Each phase lasts four seconds. Take the median of each
+process's two post-wave phases, then the median across the three processes:
+
+| Measurement | `c2278cf` control | Selected |
+| --- | ---: | ---: |
+| Fresh query CPU, ns/reply | 1,958 | 1,975 |
+| Fresh replies/s | 471,130 | 468,278 |
+| Post-wave query CPU, ns/reply | 2,047 | 1,951 |
+| Post-wave replies/s | 442,038 | 470,346 |
+| Post-wave p99 upper bucket, ms | 0.065536 | 0.032768 |
+| Filling CPU, seconds for two waves | 0.34 | 0.34 |
+| Draining CPU, seconds for two waves | 0.19 | 0.19 |
+
+Post-wave CPU improves **4.71%**, throughput **6.40%**. Per-process post-wave
+CPU ranges are 1,983–2,123 ns for control and 1,950–1,955 ns selected; throughput
+ranges are 426,209–460,162 and 467,858–471,317 replies/s. Fresh CPU is +0.88%,
+with the same 0.032768 ms p99 bucket. Preparation CPU includes gated management
+inspection and is separate from routing/query timing. The result supports
+query recovery after room waves, without a general traffic or capacity claim.
+
+All six processes verify **33,165,328 queries and 98,316 normal Close/EOF
+handshakes**, exact incoming/delivered counts and bytes, zero routing reuse/copy
+counters for control queries, and final zero resource/error gauges. Three more
+separate-room waves pass the prior global-routing probe. Eighteen ordinary cost
+cases use the same frozen stress client across 1 KiB, 64 KiB and connection churn.
+CPU medians differ by +0.56%, +0.19% and +0.13%; throughput by +0.77%, +0.18% and
+−2.90%, with overlapping ranges and the same p99 buckets (1.048576, 4.194304 and
+2.097152 ms). Native CPU covers socket setup through final transport cleanup,
+excluding process shutdown. Every native process separately exits zero without
+a forced kill. Traffic deliberately drops 64 TCP handles per case; churn checks
+normal Close. No general ordinary-traffic speedup is attributed to this change.
+
+The stability runner formerly ignored service exit status. A calibration wrapper
+completes actual churn, forwards termination, waits for a native exit zero and
+then deliberately exits 7. The old runner falsely passes; the corrected runner
+rejects it after waiting, with exit status and shutdown logs retained. A separate
+diagnostic verifier initially rejected `perf`'s expected SIGINT return after an
+intentional stop. That rejected recording is preserved and excluded from
+timings; a fresh completed recording passes after accepting only exit zero or
+the deliberately sent SIGINT. The timed runner snapshot remains frozen.
+
+The [comparison](benchmarks/2026-10-16-channel-comparison.json),
+[ordinary guard](benchmarks/2026-10-16-channel-cost.json),
+[live record](benchmarks/2026-10-16-channel-live.json),
+[summary](benchmarks/2026-10-16-channel-summary.json), and
+[manifest](benchmarks/2026-10-16-channel-build.json) bind commands and sources.
+Build `cargo build --locked --release --bins --example registry_peak`, then run
+`python3 scripts/registry-peak.py --scope channels --peak-clients 8192 --waves 2
+--seconds 4 --output artifacts/channel-peak.json`. The runner provisions disposable
+loopback-only benchmark credentials. Final timing cases use the frozen timed
+runner; the current runner differs only in diagnostic `perf` stop handling.
+Management inspection is functionally verified, not separately benchmarked.
+Large active inspection/lock contention, unpaced departure, multi-hour operation,
+TLS/proxies and clustered routing remain unmeasured. RSS samples are event-boundary
+observations, not continuous peaks or an allocation census.

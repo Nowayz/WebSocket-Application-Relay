@@ -1,0 +1,263 @@
+{
+  "timestamp_utc": "2026-10-16T12:54:10.044794+00:00",
+  "base_revision": "c2278cfbf219514abdf8985e286f3485fe627a2b",
+  "passed": true,
+  "change": "Extend bounded sparse-map retirement to channel-name metadata after ordinary room removal. Preserve channel-name/variable bytes, peers, queues and published payload storage. Verify both inspection interfaces; report stability service exit before success.",
+  "release": {
+    "native_sha256": "8903af76ff2d3a2430b7a59e8a6c4ed909cac14301571b1eb9de3d126f442cb5",
+    "bridge_sha256": "5cb66b8504dca0d037347b4a44a11acd57671ba6c38cdaff7ed96fa0ab4f8aad"
+  },
+  "validation": {
+    "rust_debug": {
+      "passed": true,
+      "tests": 85,
+      "groups": {
+        "unit": 28,
+        "read_budget": 9,
+        "read_buffer_reclaim": 3,
+        "read_fairness": 3,
+        "network": 42
+      },
+      "command": "cargo test --locked"
+    },
+    "sparse_regressions_release": {
+      "passed": true,
+      "tests": 4,
+      "command": "cargo test --locked --release sparse_ -- --nocapture"
+    },
+    "clippy": {
+      "passed": true,
+      "command": "cargo clippy --locked --all-targets -- -D warnings"
+    },
+    "format": {
+      "passed": true,
+      "command": "cargo fmt --check"
+    },
+    "vendor": {
+      "passed": true,
+      "verified_files": 62,
+      "command": "python3 scripts/check-vendor.py"
+    },
+    "javascript": {
+      "passed": true,
+      "regular_cases": 6,
+      "enabled_idle_case": 1
+    },
+    "release_input_corpus": {
+      "passed": true,
+      "cases": 776,
+      "exchanges": 2311
+    },
+    "cpp_reference": {
+      "passed": true,
+      "common_cases": 48,
+      "explicit_differences": 8,
+      "upstream_commit": "881c8daaf2cf05adea8f522b28cf372e8f82d4e9"
+    },
+    "query_population": {
+      "passed": true,
+      "processes": 6,
+      "waves_per_process": 2,
+      "rooms_per_wave": 8192,
+      "verified_queries": 33165328,
+      "normal_closes": 98316,
+      "exact_http_snapshots": 54
+    },
+    "ordinary_cost": {
+      "passed": true,
+      "cases": 18,
+      "exact_departures_and_counts": true,
+      "zero_body_compaction": true,
+      "native_exit_zero_and_no_forced_kill": true
+    },
+    "exit_status_oracle": {
+      "verified": true,
+      "before_false_success_reproduced": true,
+      "after_exit7_rejected": true
+    },
+    "prior_global_id_regression": {
+      "passed": true,
+      "waves": 3,
+      "transient_rooms_per_wave": 8192
+    },
+    "live": {
+      "passed": true,
+      "transient_rooms": 1024,
+      "typed_deliveries": 65,
+      "normal_closes": 1029,
+      "extra_routed_body_copies": 0,
+      "exact_input_and_delivered_bytes": true,
+      "fresh_chrome_checks": 7,
+      "named_legacy_cases": 3,
+      "healthz": 200,
+      "readyz": 200,
+      "final_resources_and_errors_zero": true
+    },
+    "diff_check": {
+      "passed": true,
+      "command": "git diff --check"
+    }
+  },
+  "query_population": {
+    "medians": {
+      "control": {
+        "after_cpu_ns_per_query": 2047.3114494234526,
+        "after_queries_per_second": 442038.254051047,
+        "after_p99_upper_ms": 0.065536,
+        "fill_cpu_seconds": 0.3400000000000003,
+        "drain_cpu_seconds": 0.1899999999999995,
+        "fresh_server_ns_per_delivery": 1958.0499732559028,
+        "fresh_deliveries_per_second": 471130.1033479864,
+        "fresh_p99_upper_ms": 0.032768,
+        "after_cpu_range": [
+          1983.0608505963319,
+          2123.3586110919355
+        ],
+        "after_throughput_range": [
+          426209.4532298484,
+          460161.96406991413
+        ]
+      },
+      "selected": {
+        "after_cpu_ns_per_query": 1950.8285364269404,
+        "after_queries_per_second": 470346.4506969659,
+        "after_p99_upper_ms": 0.032768,
+        "fill_cpu_seconds": 0.33999999999999986,
+        "drain_cpu_seconds": 0.1899999999999995,
+        "fresh_server_ns_per_delivery": 1975.313914751858,
+        "fresh_deliveries_per_second": 468278.4783290847,
+        "fresh_p99_upper_ms": 0.032768,
+        "after_cpu_range": [
+          1950.4632492581004,
+          1954.817516897561
+        ],
+        "after_throughput_range": [
+          467857.72048289946,
+          471317.07161843916
+        ]
+      }
+    },
+    "changes": {
+      "post_wave_cpu_percent": -4.712664163710068,
+      "post_wave_queries_per_second_percent": 6.404015124593676,
+      "fresh_cpu_percent": 0.8816905457856183
+    },
+    "verified_queries": 33165328,
+    "normal_closes": 98316
+  },
+  "ordinary_cost_medians": {
+    "traffic/1024/control": {
+      "verified_per_second": 1788437.7358392465,
+      "cpu_ns_per_verified": 1601.6139657444005,
+      "p99_upper_ms": 1.048576,
+      "throughput_range": [
+        1767314.5681658038,
+        1821409.944068681
+      ]
+    },
+    "traffic/1024/selected": {
+      "verified_per_second": 1802229.289898772,
+      "cpu_ns_per_verified": 1610.545423417056,
+      "p99_upper_ms": 1.048576,
+      "throughput_range": [
+        1785047.6774870132,
+        1822132.3409271708
+      ]
+    },
+    "traffic/65536/control": {
+      "verified_per_second": 201216.1032225015,
+      "cpu_ns_per_verified": 11495.382196895263,
+      "p99_upper_ms": 4.194304,
+      "throughput_range": [
+        197240.88229350245,
+        203458.5550049635
+      ]
+    },
+    "traffic/65536/selected": {
+      "verified_per_second": 201578.26192978097,
+      "cpu_ns_per_verified": 11516.909649905781,
+      "p99_upper_ms": 4.194304,
+      "throughput_range": [
+        199270.6898866047,
+        202331.34120727173
+      ]
+    },
+    "churn/8/control": {
+      "verified_per_second": 109137.46295043563,
+      "cpu_ns_per_verified": 17603.26219727983,
+      "p99_upper_ms": 2.097152,
+      "throughput_range": [
+        103495.40843602535,
+        109490.34142082628
+      ]
+    },
+    "churn/8/selected": {
+      "verified_per_second": 105971.22232161612,
+      "cpu_ns_per_verified": 17626.38896173044,
+      "p99_upper_ms": 2.097152,
+      "throughput_range": [
+        105737.19958174677,
+        109621.8453206119
+      ]
+    }
+  },
+  "live": {
+    "runtime": {
+      "native": {
+        "pid": 139639,
+        "cwd": "/home/phil/dev/war_next",
+        "executable": "/home/phil/dev/war_next/target/release/war-relay",
+        "sha256": "8903af76ff2d3a2430b7a59e8a6c4ed909cac14301571b1eb9de3d126f442cb5",
+        "command": [
+          "./target/release/war-relay",
+          "--idle-timeout-secs",
+          "0"
+        ]
+      },
+      "bridge": {
+        "pid": 139656,
+        "cwd": "/home/phil/dev/war_next",
+        "executable": "/home/phil/dev/war_next/target/release/war-legacy-bridge",
+        "sha256": "5cb66b8504dca0d037347b4a44a11acd57671ba6c38cdaff7ed96fa0ab4f8aad",
+        "command": [
+          "./target/release/war-legacy-bridge"
+        ]
+      }
+    },
+    "health": {
+      "healthz": 200,
+      "readyz": 200,
+      "browser": 200
+    },
+    "typed_deliveries": 65,
+    "normal_closes": 1029,
+    "extra_body_copies": 0,
+    "browser_checks": 7,
+    "legacy_named_cases": 3,
+    "reclamation_seconds": 5.026779439,
+    "resources_and_errors_zero": true
+  },
+  "evidence_sha256": {
+    "docs/benchmarks/2026-10-16-channel-comparison.json": "c43797eb1b405b8c8aa55b52935d704c875105bb12ef869f121e8e09f54dc4a2",
+    "docs/benchmarks/2026-10-16-channel-control-1.json": "a12e1fbd7d4f109ed2b3ee6de666eef59fb0cac41e2c7bd4a3fa3e2db74218ae",
+    "docs/benchmarks/2026-10-16-channel-control-2.json": "0343bd7ab1c0c1cc321e181332717b17d7f61517ea948171111d60ad926933a8",
+    "docs/benchmarks/2026-10-16-channel-control-3.json": "64ade2ca6dd459affe3d734db4bb2f0072c1b252aca698018e8f71bf4eccfc8e",
+    "docs/benchmarks/2026-10-16-channel-control.json": "950a6b35eccc255ad1e6644c21301c11351e6e5882e77ac884e595095c1469b5",
+    "docs/benchmarks/2026-10-16-channel-corpus.json": "c377a4498b77154fd9a1d7153121c8f725b71297a7f4cdb73ee5ef47efe83950",
+    "docs/benchmarks/2026-10-16-channel-cost.json": "ec34d6d0ae5157a50ba5655ff7fcb22d55208a7658d718ff5ae23286c2f581a9",
+    "docs/benchmarks/2026-10-16-channel-exit-after.json": "cfe41db59a690f1819ac6ecdd1d7a0854c773da335255519923400c1cf47fded",
+    "docs/benchmarks/2026-10-16-channel-exit-before.json": "fdbfc34fb5a7eb0dae59a0f397c7135892401b49ab79d5d0f0660c96f2acfc9c",
+    "docs/benchmarks/2026-10-16-channel-global-regression.json": "126b197ce2e1e3a755e8190d43facbc779ffd04061cc172cedd554a72c2b92b6",
+    "docs/benchmarks/2026-10-16-channel-live.json": "c7b6cde07fec47268f42ea8e7da9205b64b4910fcb7e688548f5cb63ff6159af",
+    "docs/benchmarks/2026-10-16-channel-profile-after.json": "d37ab5712d7cc63eb7f09f18912c10e18e17e7022e90f202c2c481f0e10d7fc8",
+    "docs/benchmarks/2026-10-16-channel-profile-control.json": "e25b5af2f01004f871179cb5a69890115d1adc5b08d899d7fec392354890a8a2",
+    "docs/benchmarks/2026-10-16-channel-profile-stop-rejected.json": "a164614979141fbdf34fbf524440d69a5beb16c08be4ccbe0e225efa81fd3e68",
+    "docs/benchmarks/2026-10-16-channel-reclaim-live.json": "c2e12dd72ebad9fb6d0bf18dcf1c99aeef763e4db82cd70e38256ccac4fb2933",
+    "docs/benchmarks/2026-10-16-channel-reference.json": "0bf741ccba9dd7a7d91504e67bf6e6ac0e2fb4ad65c986a9f7c021fe93abe7b9",
+    "docs/benchmarks/2026-10-16-channel-selected-1.json": "08cc63a89e27c9a8e0e5b295c31cc6a910c7d715b7000c47dec0b060553c1606",
+    "docs/benchmarks/2026-10-16-channel-selected-2.json": "9a76b0ac0ad42be336540c0b307a767528a0e1d743941ce8d53198cf49975cd4",
+    "docs/benchmarks/2026-10-16-channel-selected-3.json": "e576cfd844c3d861903d84d611ec20445a174a6ba0f8f2eab31a415d8dc8ecf6",
+    "docs/benchmarks/2026-10-16-channel-build.json": "54e62b2386783ee7ca2d4eb9e38d60e32605309f68e18138a3cd10a8854e032b"
+  },
+  "limits": "Finite single-host plaintext loopback. Repeated queries use two retained clients after temporary-room waves, not a large active list. HTTP management snapshots are exact functional checks, not a throughput benchmark. Rates/heartbeats are disabled for the query probe, default queues retained. Rehash allocates metadata under the write lock; gated filling/draining CPU includes HTTP inspection. RSS is event-boundary, not an allocation census or page-return guarantee. Ordinary throughput ranges overlap and p99 buckets match; no general traffic speedup. Profiles/exploration/oracles/rejected diagnostics are excluded from timing medians. Large active inspection/lock contention, unpaced departure, multi-hour/TLS/proxy operation, clusters and hosted CI/deployment remain unverified."
+}

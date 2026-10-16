@@ -31,6 +31,7 @@ enum Scope {
     Global,
     Room,
     Private,
+    Channels,
 }
 
 #[derive(Parser)]
@@ -46,7 +47,8 @@ struct Args {
     #[arg(long, default_value_t = 1024)]
     payload_bytes: usize,
     /// Global broadcast with separate rooms, ordinary room broadcast, or private
-    /// delivery through a populated global-room listener index.
+    /// delivery through a populated global-room listener index. Channels queries
+    /// inspect a retained channel-name table after separate rooms depart.
     #[arg(long, value_enum, default_value = "global")]
     scope: Scope,
 }
@@ -67,7 +69,8 @@ async fn main() -> Result<()> {
         (8..=65536).contains(&args.payload_bytes),
         "payload-bytes must be in 8..=65536"
     );
-    let same_room = !matches!(args.scope, Scope::Global);
+    let same_room = matches!(args.scope, Scope::Room | Scope::Private);
+    let queries = matches!(args.scope, Scope::Channels);
     let room = if matches!(args.scope, Scope::Room) {
         "peak-room"
     } else {
@@ -82,7 +85,7 @@ async fn main() -> Result<()> {
     };
     let mut welcome_bytes = first_welcome + second_welcome;
     let mut payload = vec![0x5a; args.payload_bytes];
-    let packets: Vec<_> = (0u64..64)
+    let mut packets: Vec<_> = (0u64..64)
         .map(|i| {
             payload[..8].copy_from_slice(&i.to_le_bytes());
             let value = protocol::byte_string(&payload);
@@ -92,11 +95,29 @@ async fn main() -> Result<()> {
             )
         })
         .collect();
+    let mut setup_reply_bytes = 0;
+    let mut setup_request_bytes = 0;
+    if queries {
+        let request = protocol::request(0, &protocol::text("registry-peak-benchmark"));
+        setup_request_bytes = request.len();
+        sender.send(Message::Binary(request)).await?;
+        let reply = data(&mut sender).await?;
+        ensure!(
+            reply.as_ref() == b"\x82\x00\x82\x00\xf5",
+            "authentication failed"
+        );
+        setup_reply_bytes = reply.len();
+        // Independent known bytes: [0, [2, [[h'72655f676c6f626c', 2]]]].
+        packets = vec![(
+            Bytes::from_static(b"\x82\x00\x82\x02\xf6"),
+            Bytes::from_static(b"\x82\x00\x82\x02\x81\x82\x48re_globl\x02"),
+        )];
+    }
     gate("traffic_ready", 0, serde_json::json!({"sessions":2}))?;
     gate(
         "traffic_done",
         0,
-        traffic(&mut sender, &mut receiver, &packets, args.seconds).await?,
+        traffic(&mut sender, &mut receiver, &packets, args.seconds, queries).await?,
     )?;
     let mut fillers = Vec::with_capacity(args.peak_clients);
     let mut departure_deliveries = 0u64;
@@ -115,7 +136,7 @@ async fn main() -> Result<()> {
         gate(
             "population_ready",
             wave,
-            serde_json::json!({"sessions":args.peak_clients+2,"channels":match args.scope {Scope::Global =>args.peak_clients+1, Scope::Room=>2, Scope::Private=>1}}),
+            serde_json::json!({"sessions":args.peak_clients+2,"channels":match args.scope {Scope::Global | Scope::Channels =>args.peak_clients+1, Scope::Room=>2, Scope::Private=>1}}),
         )?;
         if same_room {
             let (next_sender, next_receiver, deliveries, bytes) =
@@ -133,7 +154,7 @@ async fn main() -> Result<()> {
         gate(
             "traffic_done",
             wave,
-            traffic(&mut sender, &mut receiver, &packets, args.seconds).await?,
+            traffic(&mut sender, &mut receiver, &packets, args.seconds, queries).await?,
         )?;
     }
     close(&mut sender).await?;
@@ -146,7 +167,7 @@ async fn main() -> Result<()> {
     gate(
         "done",
         args.waves,
-        serde_json::json!({"joins":args.peak_clients*args.waves+2,"normal_closes":args.peak_clients*args.waves+2,"welcome_bytes":welcome_bytes,"disconnect_bytes":disconnect.len(),"disconnects":1,"departure_deliveries":departure_deliveries,"departure_bytes":departure_bytes}),
+        serde_json::json!({"joins":args.peak_clients*args.waves+2,"normal_closes":args.peak_clients*args.waves+2,"welcome_bytes":welcome_bytes,"setup_deliveries":usize::from(queries),"setup_request_bytes":setup_request_bytes,"setup_reply_bytes":setup_reply_bytes,"disconnect_bytes":disconnect.len(),"disconnects":1,"departure_deliveries":departure_deliveries,"departure_bytes":departure_bytes}),
     )?;
     Ok(())
 }
@@ -257,6 +278,7 @@ async fn traffic(
     receiver: &mut Socket,
     packets: &[(Bytes, Bytes)],
     seconds: u64,
+    queries: bool,
 ) -> Result<serde_json::Value> {
     let start = Instant::now();
     let until = start + Duration::from_secs(seconds);
@@ -276,10 +298,12 @@ async fn traffic(
         }
         for (i, stamp) in stamps.iter().enumerate() {
             let expected = &packets[(count as usize - stamps.len() + i) % packets.len()].1;
-            ensure!(
-                data(receiver).await? == *expected,
-                "payload, sender or FIFO changed"
-            );
+            let received = if queries {
+                data(sender).await?
+            } else {
+                data(receiver).await?
+            };
+            ensure!(received == *expected, "payload, sender or FIFO changed");
             let ns = stamp.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
             latency[ns.checked_ilog2().unwrap_or(0) as usize] += 1;
             maximum = maximum.max(ns);
@@ -296,7 +320,7 @@ async fn traffic(
         })
         .unwrap();
     Ok(
-        serde_json::json!({"sent":count,"verified":count,"elapsed_seconds":elapsed,"deliveries_per_second":count as f64/elapsed,"p99_upper_ms":(1u128<<(p99+1)) as f64/1e6,"max_latency_ms":maximum as f64/1e6,"sent_encoded_bytes":count*packets[0].0.len() as u64,"delivered_encoded_bytes":count*packets[0].1.len() as u64,"value_bytes":count*protocol::parse(&packets[0].0).unwrap().1.len() as u64}),
+        serde_json::json!({"sent":count,"verified":count,"elapsed_seconds":elapsed,"deliveries_per_second":count as f64/elapsed,"p99_upper_ms":(1u128<<(p99+1)) as f64/1e6,"max_latency_ms":maximum as f64/1e6,"sent_encoded_bytes":count*packets[0].0.len() as u64,"delivered_encoded_bytes":count*packets[0].1.len() as u64,"value_bytes":if queries {0} else {count*protocol::parse(&packets[0].0).unwrap().1.len() as u64}}),
     )
 }
 

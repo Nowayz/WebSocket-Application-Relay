@@ -637,3 +637,45 @@ extra listener fanout. Profiles, ordinary traffic guards and the
 [membership performance record](performance.md#membership-index-capacity-after-room-departures-2026-10-16)
 retain their separate scopes. The original `global` probe remains the default,
 with transient peers in separate rooms.
+
+## Channel-name lifetime through room waves, 2026-10-16
+
+The same bounded metadata policy now covers the native channel-name registry.
+The check runs only when an ordinary room's final member leaves and its channel
+entry is removed. The persistent global room and its variable lifetime remain
+intact. Sorting, authentication, resource admission and routing behavior retain
+their existing contracts.
+
+A unit regression first fails on retained capacity before this change. It keeps
+binary, ASCII and global rooms through 1,024 other rooms, then checks channel-name
+and variable byte pointers, peer identity and a held 8 KiB application frame.
+Independent literal CBOR verifies raw-byte channel ordering; independent JSON
+verifies the management endpoint's distinct base64 ordering, including a
+non-UTF-8 name. Retained variables survive, ordinary variables are absent on
+rejoin and global variables persist. The held frame retains its byte reservation
+and payload address through final peer destruction until the envelope drops.
+
+The population probe's `--scope channels` checks every CBOR reply and every field
+of authenticated HTTP inspection at each fresh/peak/retired/empty gate. Six final
+processes verify 33,165,328 queries and 98,316 exact normal Close/EOF handshakes
+through two waves of 8,192 separate rooms each, with exact metric counts/bytes
+and complete resource release. Existing concurrent private routing also passes
+through 2,048 arrivals and departures. Large active inspection lock contention
+has not been benchmarked.
+
+The ordinary stability runner now publishes its verdict after waiting for the
+server process and records exit status, forced-kill status and final logs.
+A real-socket calibration wrapper reproduces the old false success by exiting
+7 after a native child has exited zero; the final runner rejects it. Every
+ordinary cost case exits zero. A rejected diagnostic recording exposed an
+overly strict `perf` stop-status check; the corrected runner accepts exit zero
+or the SIGINT it deliberately sent, and a fresh complete recording passes.
+Failed/oracle observations are retained separately from successful timings.
+
+Updated manual services keep binary/ASCII/global rooms through 1,024 distinct
+ordinary rooms, verify 65 typed private deliveries during/after close windows,
+1,029 clean closes, exact incoming/output byte counts and zero extra body copies.
+Ordinary variables survive retirement then disappear on rejoin. Default decoder
+reclamation, fresh browser acceptance and three named legacy/Close cases pass.
+The [channel-name performance record](performance.md#channel-name-capacity-after-room-waves-2026-10-16)
+states measured costs and limits; these remain finite local checks.

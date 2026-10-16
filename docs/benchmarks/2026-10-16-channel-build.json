@@ -1,0 +1,309 @@
+{
+  "timestamp_utc": "2026-10-16T12:54:10.044794+00:00",
+  "base_revision": "c2278cfbf219514abdf8985e286f3485fe627a2b",
+  "change": "Extend bounded sparse-map retirement to channel-name metadata after ordinary room removal. Preserve channel-name/variable bytes, peers, queues and published payload storage. Verify both inspection interfaces; report stability service exit before success.",
+  "runtime_source_sha256": {
+    "Cargo.lock": "75c42aa094a3cd5008045e4b402d0923c717b5702160e776134a7bca9308462f",
+    "Cargo.toml": "b253df492373b74abe06c48a6dc00c76a854271c3b031960a415a01692a26e9a",
+    "src/bin/war-legacy-bridge.rs": "fec0f0e226d054bc283d9a2a287381490590ba68ce60087e0f6b7a29754b2151",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "0930bbc73059186ce59437a9ecea1eaba5e9383f0f2681f9967eb5d2c171953b",
+    "src/frame.rs": "7d2202188943f4e0af4c40148065b36e9c4e7dfc78b6d206edfb57002f97b936",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "f00f5850d538de146174769ec8116325b39c62f11e53ff4408fd525f31e258d0",
+    "src/lib.rs": "5a4006a63db3615f2d276c6ef7c4273dce5acd76c56adb5191b8544db515e75d",
+    "src/main.rs": "1ae3c820c5acebe1d9cb4f49d45666cce793361fc996e823f95f6a0f081567b8",
+    "src/metrics.rs": "1aa6b501d0801ddc1caaa940395618d009ee7b087e61444c79a5fdc187234966",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "af8056091a80bb82383f17b1069fdf161004044d1236d9d2596a5fca853c86ca",
+    "src/relay.rs": "b3e1490f14f8c27693e96352450ed379e788c022784360cefc741d1176e272b1",
+    "src/server.rs": "57fde00edce9f55ee73bf36da915765f1782bcffde38521610b4776d16969cb1",
+    "src/transport.rs": "a079aecd0a6920760e4646f9a68fb7207d82a760b253ff4bf5e4fabaf599947a",
+    "vendor/tokio-tungstenite/examples/autobahn-client.rs": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732",
+    "vendor/tokio-tungstenite/examples/autobahn-server.rs": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f",
+    "vendor/tokio-tungstenite/examples/client.rs": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7",
+    "vendor/tokio-tungstenite/examples/echo-server.rs": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52",
+    "vendor/tokio-tungstenite/examples/interval-server.rs": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e",
+    "vendor/tokio-tungstenite/examples/server-custom-accept.rs": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535",
+    "vendor/tokio-tungstenite/examples/server-headers.rs": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483",
+    "vendor/tokio-tungstenite/examples/server.rs": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e",
+    "vendor/tokio-tungstenite/src/compat.rs": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9",
+    "vendor/tokio-tungstenite/src/connect.rs": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30",
+    "vendor/tokio-tungstenite/src/handshake.rs": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d",
+    "vendor/tokio-tungstenite/src/lib.rs": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5",
+    "vendor/tokio-tungstenite/src/stream.rs": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172",
+    "vendor/tokio-tungstenite/src/tls.rs": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211",
+    "vendor/tungstenite/benches/buffer.rs": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e",
+    "vendor/tungstenite/benches/e2e.rs": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce",
+    "vendor/tungstenite/benches/read.rs": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42",
+    "vendor/tungstenite/benches/write.rs": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8",
+    "vendor/tungstenite/examples/autobahn-client.rs": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4",
+    "vendor/tungstenite/examples/autobahn-server.rs": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776",
+    "vendor/tungstenite/examples/callback-error.rs": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0",
+    "vendor/tungstenite/examples/client.rs": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040",
+    "vendor/tungstenite/examples/server.rs": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157",
+    "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c",
+    "vendor/tungstenite/src/buffer.rs": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30",
+    "vendor/tungstenite/src/client.rs": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637",
+    "vendor/tungstenite/src/error.rs": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b",
+    "vendor/tungstenite/src/handshake/client.rs": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5",
+    "vendor/tungstenite/src/handshake/headers.rs": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75",
+    "vendor/tungstenite/src/handshake/machine.rs": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420",
+    "vendor/tungstenite/src/handshake/mod.rs": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0",
+    "vendor/tungstenite/src/handshake/server.rs": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f",
+    "vendor/tungstenite/src/lib.rs": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7",
+    "vendor/tungstenite/src/protocol/frame/coding.rs": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6",
+    "vendor/tungstenite/src/protocol/frame/frame.rs": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a",
+    "vendor/tungstenite/src/protocol/frame/mask.rs": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6",
+    "vendor/tungstenite/src/protocol/frame/mod.rs": "ad52a31ecd83380c6c5ec946ffa63ea3381680ce4f6b3ecb7d925aae8a8a13bb",
+    "vendor/tungstenite/src/protocol/frame/utf8.rs": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886",
+    "vendor/tungstenite/src/protocol/message.rs": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84",
+    "vendor/tungstenite/src/protocol/mod.rs": "816ea883fe576585a4273c65720f49c54d98f2e57e400b31f9ae1f3e33569755",
+    "vendor/tungstenite/src/protocol/read_budget.rs": "1dcc46e726f463c16b548b570c6795c4a651c568f5d35280190df625d7876abc",
+    "vendor/tungstenite/src/server.rs": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49",
+    "vendor/tungstenite/src/stream.rs": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d",
+    "vendor/tungstenite/src/tls.rs": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9",
+    "vendor/tungstenite/src/utf8.rs": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35",
+    "vendor/tungstenite/src/util.rs": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a"
+  },
+  "validation_source_sha256": {
+    ".github/workflows/rust.yml": "263dd38a77070bb63a24de8aa0eb88fd597b831c66e3b33377494befc8243f4a",
+    "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+    "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36",
+    "clients/js/package.json": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07",
+    "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+    "clients/js/relay.test.mjs": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1",
+    "examples/registry_peak.rs": "b4a24fb2f79820c72770b06368002c919fdc404161cfed448f5b2a715448374f",
+    "examples/stress.rs": "64438033d1c6f86bdd1a3ea9962b7ad1afc1c8ca060384332916eb8ae4a87306",
+    "scripts/benchmark.py": "e4e3aeaaac3d90b11df284fcf455a7dbc439f12d6be9d7d30d2dc9a47ff28af2",
+    "scripts/check-js.sh": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b",
+    "scripts/check-vendor.py": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f",
+    "scripts/fragment-fairness.py": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+    "scripts/input-corpus.py": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292",
+    "scripts/reference.py": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+    "scripts/registry-peak.py": "bbf5ffe25a69d9b4bb7fafe4608ca8338a60d8c02907eef99bbe52c154e487eb",
+    "scripts/stability.py": "608baae680fb42a86663f499c320f7c049ce2deb8b7e622dca52ea5589624bf9",
+    "tests/read_budget.rs": "539f4e96843a4da04a703e5f4eef935a569ccb3791ca10c16950fcbe9b621508",
+    "tests/read_buffer_reclaim.rs": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156",
+    "tests/read_fairness.rs": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4",
+    "tests/relay_integration.rs": "e7d23db37cc571ea17592a7ceff11b8992b7ea2f7ecd00b570fc08982e27ee1c",
+    "tests/relay_integration/origin_policy.rs": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+  },
+  "documentation_sha256": {
+    "README.md": "d28b811918e660b316c40fb4a4e1c3cc2468ed45ddef5448e024e71f66f1ab66",
+    "deploy/war-relay.env.example": "120ba43752d7b19ef9632b5886be0f99069a6f17951aa26b8a694407c69ec888",
+    "docs/STATUS.md": "9916cac44a635cec1b3c613ee2c221a0a664ffde5687faaf40826067c39d24fd",
+    "docs/operations.md": "f34bfbe5bb4ce83e88699168f0e8088dfc9e5db00061e66eaf5fbec5cd7cba6c",
+    "docs/performance.md": "90f7183c10abe45f635bfbbc802cc99dfed637dd9f26133a02c5f261430381d8",
+    "docs/protocol.md": "2d5d48def23217dd1377aab4a55217bd6d4ab61896194275088a79cff927a91d",
+    "docs/stability.md": "c176ac3d3ea6b586d5ad04c4d800073a8432406e2e3219a5b6c4c6b4ee3cca67"
+  },
+  "local_helper_sha256": {
+    "artifacts/compare-channels.py": "070142b423668f937023f661b873268d61714daf7a1dae01f0d646d9dfe35fcb",
+    "artifacts/channel-cost.py": "98305d36049d24cc3c3b4a94cfe1af8631e804d831b434fae8a2af32318bc43c",
+    "artifacts/check-channel-live.mjs": "ec904d3e54598c110d511d691c3279186ae40e465e3981ee27d718d637c10579",
+    "artifacts/check-channel-reclaim-live.mjs": "85f07ea3907b7443a7b38eb8b33545d10343f9dcd6d7f0c8f199db875e76b7af",
+    "artifacts/check-channel-exit.py": "322e14b50c904764cbe2c7c385cd187d4c8e36abf294335ae576a582eb9785a7",
+    "artifacts/channel-exit-wrapper.py": "e05d5711648b21cc4e9e8fe294bac2dda5838683bf96d40052e6cadfcbd63513",
+    "artifacts/record-channel-checkpoint.py": "3b713a1b7286661096258923bf8622e5824a6140cf0a7288651777b852eda4d1",
+    "artifacts/baselines/c2278cf/stability.py": "be39874c0db79075b602e2c64bd6f356af60a67eca79a2ad5aefc3599bb28ba9",
+    "artifacts/clients/channel-peak/registry_peak-initial.rs": "8e5c37c2f720394610ad4e0dc365b362979a9a14e488358a1f700d71919020b9",
+    "artifacts/clients/channel-peak/registry-peak-initial.py": "f63448a34370867f1b4127d8d869645e0af0161341265e416ac0110b991fe026",
+    "artifacts/clients/channel-peak/registry_peak.rs": "b4a24fb2f79820c72770b06368002c919fdc404161cfed448f5b2a715448374f",
+    "artifacts/clients/channel-peak/registry-peak-timed.py": "8cd5a18b9b2149f5040279c4511d275d2ce8a42d617bb7f5ab7bb823a4c7afb7",
+    "artifacts/clients/channel-peak/registry-peak.py": "bbf5ffe25a69d9b4bb7fafe4608ca8338a60d8c02907eef99bbe52c154e487eb"
+  },
+  "validation_logs_sha256": {
+    "artifacts/channel-tests.log": "e042852275d25a46f7c360d98efbe850594fb2c36601a4c28f48d0579e040daa",
+    "artifacts/channel-clippy.log": "36c843a5e290c9b7cc336278dc926393ce7da519997445c023deab5480d0dbee",
+    "artifacts/channel-build.log": "5ffd7964b73bc41624bb0db8dd2a14e4a93f283e8330968cd29815c3c517b058",
+    "artifacts/channel-client-build.log": "53dc16c6fa5e6bd6ea3f7811edbcbc8c1656d23f841bc3014890bd8a3c17eb36",
+    "artifacts/channel-release-tests.log": "d85748758c2285ca06133c9fc755a8606d6cbe5cc4cda7eee732064bfb267743",
+    "artifacts/channel-js.log": "2c900ed1df2aab97c89636282b8edcd4bce25f03623518850dc06c2008055391",
+    "artifacts/channel-vendor.log": "a8f4f27e7d2c2186e0f90064be31e1557f6456e4f6cb341f8d638cfe865121bf",
+    "artifacts/channel-regression-before.log": "040c499be766b98f14aeaebf216d2b852f3c07976ae918e01af5ea5792c9a601",
+    "artifacts/channel-exit-before.log": "b0ec3a414290b0f07963018034b4a3a5552abc0856a3f9a6ce34ff124b84c3e7",
+    "artifacts/channel-exit-after.log": "f727e1ef0c1b79ded5eb9dbd948d09b56f8da06e70cb98012d326eec5b25fb55",
+    "artifacts/channel-live-legacy.log": "99c7085509d8c895ca95b33507b8b98c50470d68d583f40828a47af41e85aae6",
+    "artifacts/channel-live-browser.txt": "7369c1fdc1cbc65e49990ff3fb10541c8dae89c2add49c6da35429515754f4c8",
+    "artifacts/channel-live-browser-console.txt": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+  },
+  "vendor_provenance": {
+    "tungstenite": {
+      "version": "0.30.0",
+      "package_sha256": "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22",
+      "upstream_git": "7f4aeaf0944992c5664c8fb8e0d54577c7e18020",
+      "modified_files": [
+        "src/error.rs",
+        "src/protocol/frame/mod.rs",
+        "src/protocol/message.rs",
+        "src/protocol/mod.rs",
+        "src/protocol/read_budget.rs"
+      ]
+    },
+    "tokio-tungstenite": {
+      "version": "0.30.0",
+      "package_sha256": "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71",
+      "upstream_git": "4994a078037a18a9347b8cf49291a5031d63d9e0",
+      "modified_files": [
+        "src/lib.rs"
+      ]
+    }
+  },
+  "vendor_patch_sha256": "b2f3fe7568f3fbf859c606d082bf8fbac12f6aea180148229b22f5d5f908a7d0",
+  "release_command": "cargo build --locked --release --bins",
+  "candidate": {
+    "native_sha256": "8903af76ff2d3a2430b7a59e8a6c4ed909cac14301571b1eb9de3d126f442cb5",
+    "bridge_sha256": "5cb66b8504dca0d037347b4a44a11acd57671ba6c38cdaff7ed96fa0ab4f8aad"
+  },
+  "control": {
+    "revision": "c2278cf",
+    "native_sha256": "c276a8c1172d27946b03142770b39c59b7ac07e1cdce0061caa86c84a6c57277",
+    "bridge_sha256": "45d3098016380b30d06762dd99e128748adaca9b9559420ffc419e35c9a54623"
+  },
+  "frozen_client": {
+    "sha256": "b40bd36f3b1bbc46121d622546d2039b6055c9372dff2c58d9305511ede0da50",
+    "source_sha256": "b4a24fb2f79820c72770b06368002c919fdc404161cfed448f5b2a715448374f",
+    "path": "artifacts/clients/channel-peak/registry_peak"
+  },
+  "probe_provenance": {
+    "exploratory": {
+      "client_sha256": "6257eb97da3eb60a738dcef3637dade135a05c869fa481fa501e679be7f2612d",
+      "client_source_sha256": "8e5c37c2f720394610ad4e0dc365b362979a9a14e488358a1f700d71919020b9",
+      "runner_sha256": "f63448a34370867f1b4127d8d869645e0af0161341265e416ac0110b991fe026",
+      "scope": "Initial control and control profile, before exact aggregate input-byte checks. Excluded from timing medians."
+    },
+    "timed": {
+      "runner_sha256": "8cd5a18b9b2149f5040279c4511d275d2ce8a42d617bb7f5ab7bb823a4c7afb7",
+      "path": "artifacts/clients/channel-peak/registry-peak-timed.py",
+      "scope": "Six comparison services plus prior global-routing regression. Incorrect strict perf exit check is never entered by these unprofiled cases."
+    },
+    "current": {
+      "runner_sha256": "bbf5ffe25a69d9b4bb7fafe4608ca8338a60d8c02907eef99bbe52c154e487eb",
+      "scope": "Only change from timed runner is accepting perf exit0 or the SIGINT deliberately sent to stop recording. Fresh selected profile passes all data, exit and cleanup checks."
+    }
+  },
+  "validation": {
+    "rust_debug": {
+      "passed": true,
+      "tests": 85,
+      "groups": {
+        "unit": 28,
+        "read_budget": 9,
+        "read_buffer_reclaim": 3,
+        "read_fairness": 3,
+        "network": 42
+      },
+      "command": "cargo test --locked"
+    },
+    "sparse_regressions_release": {
+      "passed": true,
+      "tests": 4,
+      "command": "cargo test --locked --release sparse_ -- --nocapture"
+    },
+    "clippy": {
+      "passed": true,
+      "command": "cargo clippy --locked --all-targets -- -D warnings"
+    },
+    "format": {
+      "passed": true,
+      "command": "cargo fmt --check"
+    },
+    "vendor": {
+      "passed": true,
+      "verified_files": 62,
+      "command": "python3 scripts/check-vendor.py"
+    },
+    "javascript": {
+      "passed": true,
+      "regular_cases": 6,
+      "enabled_idle_case": 1
+    },
+    "release_input_corpus": {
+      "passed": true,
+      "cases": 776,
+      "exchanges": 2311
+    },
+    "cpp_reference": {
+      "passed": true,
+      "common_cases": 48,
+      "explicit_differences": 8,
+      "upstream_commit": "881c8daaf2cf05adea8f522b28cf372e8f82d4e9"
+    },
+    "query_population": {
+      "passed": true,
+      "processes": 6,
+      "waves_per_process": 2,
+      "rooms_per_wave": 8192,
+      "verified_queries": 33165328,
+      "normal_closes": 98316,
+      "exact_http_snapshots": 54
+    },
+    "ordinary_cost": {
+      "passed": true,
+      "cases": 18,
+      "exact_departures_and_counts": true,
+      "zero_body_compaction": true,
+      "native_exit_zero_and_no_forced_kill": true
+    },
+    "exit_status_oracle": {
+      "verified": true,
+      "before_false_success_reproduced": true,
+      "after_exit7_rejected": true
+    },
+    "prior_global_id_regression": {
+      "passed": true,
+      "waves": 3,
+      "transient_rooms_per_wave": 8192
+    },
+    "live": {
+      "passed": true,
+      "transient_rooms": 1024,
+      "typed_deliveries": 65,
+      "normal_closes": 1029,
+      "extra_routed_body_copies": 0,
+      "exact_input_and_delivered_bytes": true,
+      "fresh_chrome_checks": 7,
+      "named_legacy_cases": 3,
+      "healthz": 200,
+      "readyz": 200,
+      "final_resources_and_errors_zero": true
+    },
+    "diff_check": {
+      "passed": true,
+      "command": "git diff --check"
+    }
+  },
+  "evidence_sha256": {
+    "docs/benchmarks/2026-10-16-channel-comparison.json": "c43797eb1b405b8c8aa55b52935d704c875105bb12ef869f121e8e09f54dc4a2",
+    "docs/benchmarks/2026-10-16-channel-control-1.json": "a12e1fbd7d4f109ed2b3ee6de666eef59fb0cac41e2c7bd4a3fa3e2db74218ae",
+    "docs/benchmarks/2026-10-16-channel-control-2.json": "0343bd7ab1c0c1cc321e181332717b17d7f61517ea948171111d60ad926933a8",
+    "docs/benchmarks/2026-10-16-channel-control-3.json": "64ade2ca6dd459affe3d734db4bb2f0072c1b252aca698018e8f71bf4eccfc8e",
+    "docs/benchmarks/2026-10-16-channel-control.json": "950a6b35eccc255ad1e6644c21301c11351e6e5882e77ac884e595095c1469b5",
+    "docs/benchmarks/2026-10-16-channel-corpus.json": "c377a4498b77154fd9a1d7153121c8f725b71297a7f4cdb73ee5ef47efe83950",
+    "docs/benchmarks/2026-10-16-channel-cost.json": "ec34d6d0ae5157a50ba5655ff7fcb22d55208a7658d718ff5ae23286c2f581a9",
+    "docs/benchmarks/2026-10-16-channel-exit-after.json": "cfe41db59a690f1819ac6ecdd1d7a0854c773da335255519923400c1cf47fded",
+    "docs/benchmarks/2026-10-16-channel-exit-before.json": "fdbfc34fb5a7eb0dae59a0f397c7135892401b49ab79d5d0f0660c96f2acfc9c",
+    "docs/benchmarks/2026-10-16-channel-global-regression.json": "126b197ce2e1e3a755e8190d43facbc779ffd04061cc172cedd554a72c2b92b6",
+    "docs/benchmarks/2026-10-16-channel-live.json": "c7b6cde07fec47268f42ea8e7da9205b64b4910fcb7e688548f5cb63ff6159af",
+    "docs/benchmarks/2026-10-16-channel-profile-after.json": "d37ab5712d7cc63eb7f09f18912c10e18e17e7022e90f202c2c481f0e10d7fc8",
+    "docs/benchmarks/2026-10-16-channel-profile-control.json": "e25b5af2f01004f871179cb5a69890115d1adc5b08d899d7fec392354890a8a2",
+    "docs/benchmarks/2026-10-16-channel-profile-stop-rejected.json": "a164614979141fbdf34fbf524440d69a5beb16c08be4ccbe0e225efa81fd3e68",
+    "docs/benchmarks/2026-10-16-channel-reclaim-live.json": "c2e12dd72ebad9fb6d0bf18dcf1c99aeef763e4db82cd70e38256ccac4fb2933",
+    "docs/benchmarks/2026-10-16-channel-reference.json": "0bf741ccba9dd7a7d91504e67bf6e6ac0e2fb4ad65c986a9f7c021fe93abe7b9",
+    "docs/benchmarks/2026-10-16-channel-selected-1.json": "08cc63a89e27c9a8e0e5b295c31cc6a910c7d715b7000c47dec0b060553c1606",
+    "docs/benchmarks/2026-10-16-channel-selected-2.json": "9a76b0ac0ad42be336540c0b307a767528a0e1d743941ce8d53198cf49975cd4",
+    "docs/benchmarks/2026-10-16-channel-selected-3.json": "e576cfd844c3d861903d84d611ec20445a174a6ba0f8f2eab31a415d8dc8ecf6"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+    "node": "v24.21.0"
+  },
+  "official_reference": {
+    "url": "https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter",
+    "use": "Iteration contract; actual Rust 1.91.1 scan confirmed by native disassembly/profile and release socket workloads."
+  },
+  "limits": "Finite single-host plaintext loopback. Repeated queries use two retained clients after temporary-room waves, not a large active list. HTTP management snapshots are exact functional checks, not a throughput benchmark. Rates/heartbeats are disabled for the query probe, default queues retained. Rehash allocates metadata under the write lock; gated filling/draining CPU includes HTTP inspection. RSS is event-boundary, not an allocation census or page-return guarantee. Ordinary throughput ranges overlap and p99 buckets match; no general traffic speedup. Profiles/exploration/oracles/rejected diagnostics are excluded from timing medians. Large active inspection/lock contention, unpaced departure, multi-hour/TLS/proxy operation, clusters and hosted CI/deployment remain unverified."
+}

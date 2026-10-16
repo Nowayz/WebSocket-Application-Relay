@@ -127,20 +127,30 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                       "counts_match": counts_match, "pressure_valid": pressure_valid,
                       "teardown_overflow_signals": max(0, int(metrics["war_slow_consumers_total"]) - unread_clients) if mode == "fanout" else None,
                       "passed": process.returncode == 0 and clean and not errors and counts_match and pressure_valid}
-            print(json.dumps({"event": "case_finished", "mode": mode, "passed": result["passed"], "result": output[-1] if output else None,
-                              "peak_server_rss_kib": max([baseline["process"]["VmRSS"]] + [s["process"]["VmRSS"] for s in observations]),
-                              "cleanup_seconds": result["cleanup_seconds"]}), flush=True)
-            return result
         finally:
             if process is not None and process.poll() is None:
                 process.kill()
                 process.communicate()
             server.terminate()
+            forced_kill = False
             try:
                 server.wait(timeout=12)
             except subprocess.TimeoutExpired:
+                forced_kill = True
                 server.kill()
                 server.wait()
+        # A successful client and empty resource gauges do not establish a
+        # successful service shutdown. Publish the verdict only after waiting.
+        result["server_exit_code"] = server.returncode
+        result["server_forced_kill"] = forced_kill
+        result["passed"] = result["passed"] and server.returncode == 0 and not forced_kill
+        logs.seek(0)
+        result["server_log"] = logs.read().decode(errors="replace")
+        print(json.dumps({"event": "case_finished", "mode": mode, "passed": result["passed"], "result": output[-1] if output else None,
+                          "server_exit_code": server.returncode,
+                          "peak_server_rss_kib": max([baseline["process"]["VmRSS"]] + [s["process"]["VmRSS"] for s in observations]),
+                          "cleanup_seconds": result["cleanup_seconds"]}), flush=True)
+        return result
 
 
 def main():

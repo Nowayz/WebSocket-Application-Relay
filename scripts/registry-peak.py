@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Measure verified global routing before/after a transient population in separate rooms.
+"""Measure verified routing or channel queries before/after a transient population.
 
 Build the registry_peak example first. Server/client phases are explicitly gated;
 native CPU snapshots exclude filling/draining the population from routing cost.
 The optional perf profile is diagnostic and must not be used as a timing sample.
 """
 import argparse
+import base64
 import datetime
 import hashlib
 import json
@@ -17,15 +18,50 @@ import signal
 import subprocess
 import tempfile
 import time
+import urllib.request
 
 import benchmark as runtime
 
 ROOT = runtime.ROOT
+PROBE_TOKEN = "registry-peak-benchmark"  # Disposable loopback benchmark only.
+
+
+def inspection(port, event, peak):
+    """Compare every management field and its ordering with independent values."""
+    expected = [{"name": "re_globl", "name_base64": "cmVfZ2xvYmw=",
+                 "members": 0 if event == "done" else 2,
+                 "variables": 0, "variable_bytes": 0}]
+    if event == "population_ready":
+        for i in range(peak):
+            name = f"peak{i:x}"
+            expected.append({"name": name, "name_base64": base64.b64encode(name.encode()).decode(),
+                             "members": 1, "variables": 0, "variable_bytes": 0})
+    expected.sort(key=lambda row: row["name_base64"])
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/v1/channels",
+                                     headers={"Authorization": f"Bearer {PROBE_TOKEN}"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = response.read()
+        assert response.status == 200
+        assert json.loads(body) == expected, "management inspection changed"
+    return {"entries": len(expected), "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+            "passed": True}
 
 
 def run(args):
     port, admin = runtime.free_port(), runtime.free_port()
     env = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
+    queries = args.scope == "channels"
+    if queries:
+        env.update(WAR_AUTH_PASSWORD=PROBE_TOKEN, WAR_ADMIN_TOKEN=PROBE_TOKEN)
+
+    def metrics():
+        if not queries:
+            return runtime.metrics(admin)
+        request = urllib.request.Request(f"http://127.0.0.1:{admin}/metrics",
+                                         headers={"Authorization": f"Bearer {PROBE_TOKEN}"})
+        with urllib.request.urlopen(request, timeout=1) as response:
+            return dict(line.split() for line in response.read().decode().splitlines()
+                        if line.startswith("war_"))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", "4",
                       "--messages-per-second", "0", "--bytes-per-second", "0",
@@ -45,7 +81,7 @@ def run(args):
               "client_source_sha256": digest(ROOT / "examples/registry_peak.rs"),
               "runner_sha256": digest(__file__), "profile_diagnostic": args.profile,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-              "scope": "Two retained clients, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Global: broadcast with transient peers in separate rooms. Room: ordinary room broadcast, transient peers in the same room. Private: private delivery with all peers in the global room, exercising its listener index with default zero listener flags. Both shared-room modes verify every departing ID and exact FIFO prefix at each remaining peer, pacing 16 departures per window by reader progress so default queue limits remain intact. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.",
+              "scope": "Two retained clients, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Global: broadcast with transient peers in separate rooms. Room: ordinary room broadcast, transient peers in the same room. Private: private delivery with all peers in the global room, exercising its listener index with default zero listener flags. Channels: repeated authenticated queries on the sender, exact independent CBOR reply, separate temporary rooms; authenticated HTTP inspection checks every field and base64 ordering at each gate, outside timed snapshots. Both shared-room modes verify every departing ID and exact FIFO prefix at each remaining peer, pacing 16 departures per window by reader progress so default queue limits remain intact. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.",
               "events": [], "traffic": [], "passed": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
@@ -58,7 +94,7 @@ def run(args):
                 if server.poll() is not None:
                     raise RuntimeError("server stopped during readiness")
                 try:
-                    runtime.metrics(admin)
+                    metrics()
                     break
                 except OSError:
                     if time.monotonic() - started > 5:
@@ -77,13 +113,19 @@ def run(args):
                 if not line:
                     raise RuntimeError("client stopped before its final gated event")
                 event = json.loads(line)
-                event.update(metrics={k: int(float(v)) for k, v in runtime.metrics(admin).items()},
+                # Inspect outside the traffic CPU interval: before its opening
+                # snapshot, after its closing snapshot. Other gates are untimed.
+                if queries and event["event"] == "traffic_ready":
+                    event["management_inspection"] = inspection(admin, event["event"], args.peak_clients)
+                event.update(metrics={k: int(float(v)) for k, v in metrics().items()},
                              process=runtime.snapshot(server.pid), seconds=time.monotonic() - started)
+                if queries and event["event"] != "traffic_ready":
+                    event["management_inspection"] = inspection(admin, event["event"], args.peak_clients)
                 result["events"].append(event)
-                metrics, wave = event["metrics"], event["wave"]
+                observed, wave = event["metrics"], event["wave"]
                 if event["event"] == "traffic_ready":
-                    assert metrics["war_connections"] == metrics["war_sessions"] == 2
-                    assert metrics["war_channels"] == (2 if args.scope == "room" else 1)
+                    assert observed["war_connections"] == observed["war_sessions"] == 2
+                    assert observed["war_channels"] == (2 if args.scope == "room" else 1)
                     ready[wave] = event
                     if args.profile and wave == 1:
                         profile = args.output.with_suffix(".perf.data")
@@ -99,6 +141,9 @@ def run(args):
                     if perf is not None:
                         perf.send_signal(signal.SIGINT)
                         result["perf_exit_code"] = perf.wait(timeout=10)
+                        # perf may propagate our deliberate recording-stop
+                        # signal after successfully flushing its samples.
+                        assert result["perf_exit_code"] in (0, -signal.SIGINT), "perf failed"
                         perf_log.seek(0)
                         result["perf_log"] = perf_log.read().decode(errors="replace")
                         perf_log.close()
@@ -112,26 +157,28 @@ def run(args):
                                 "war_routing_reused_bytes_total": output["value_bytes"],
                                 "war_routing_copied_bytes_total": 0}
                     for key, value in expected.items():
-                        assert metrics[key] - before["metrics"][key] == value, key
+                        assert observed[key] - before["metrics"][key] == value, key
                     row = {"wave": wave, **output, "server_cpu_seconds": cpu,
                            "server_ns_per_delivery": cpu * 1e9 / output["verified"]}
                     result["traffic"].append(row)
                     print(json.dumps(row), flush=True)
                 elif event["event"] == "population_ready":
-                    assert metrics["war_connections"] == metrics["war_sessions"] == args.peak_clients + 2
-                    assert metrics["war_channels"] == {"room": 2, "private": 1, "global": args.peak_clients + 1}[args.scope]
+                    assert observed["war_connections"] == observed["war_sessions"] == args.peak_clients + 2
+                    assert observed["war_channels"] == {"room": 2, "private": 1, "global": args.peak_clients + 1, "channels": args.peak_clients + 1}[args.scope]
                 elif event["event"] == "done":
                     for key in ["war_connections", "war_sessions", "war_queued_bytes", "war_variable_bytes", "war_read_buffer_reserved_bytes"]:
-                        assert metrics[key] == 0, key
-                    assert metrics["war_channels"] == 1
+                        assert observed[key] == 0, key
+                    assert observed["war_channels"] == 1
                     details = event["details"]
                     joins = args.peak_clients * args.waves + 2
                     assert details["normal_closes"] == details["joins"] == joins
-                    assert metrics["war_joined_total"] == metrics["war_disconnected_total"] == metrics["war_accepted_total"] == joins
-                    assert metrics["war_deliveries_total"] == joins + sum(t["verified"] for t in result["traffic"]) + details.get("departure_deliveries", 0) + 1
-                    assert metrics["war_delivered_bytes_total"] == details["welcome_bytes"] + details["disconnect_bytes"] + details.get("departure_bytes", 0) + sum(t["delivered_encoded_bytes"] for t in result["traffic"])
+                    assert observed["war_joined_total"] == observed["war_disconnected_total"] == observed["war_accepted_total"] == joins
+                    assert observed["war_incoming_messages_total"] == sum(t["sent"] for t in result["traffic"]) + details.get("setup_deliveries", 0)
+                    assert observed["war_incoming_bytes_total"] == sum(t["sent_encoded_bytes"] for t in result["traffic"]) + details.get("setup_request_bytes", 0)
+                    assert observed["war_deliveries_total"] == joins + sum(t["verified"] for t in result["traffic"]) + details.get("departure_deliveries", 0) + details.get("setup_deliveries", 0) + 1
+                    assert observed["war_delivered_bytes_total"] == details["welcome_bytes"] + details["disconnect_bytes"] + details.get("departure_bytes", 0) + details.get("setup_reply_bytes", 0) + sum(t["delivered_encoded_bytes"] for t in result["traffic"])
                     for key in ["war_handshake_errors_total", "war_origin_rejected_total", "war_join_rejected_total", "war_rejected_total", "war_protocol_errors_total", "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total", "war_close_failures_total", "war_aborted_writes_total", "war_transport_disconnects_total", "war_slow_consumers_total", "war_global_pressure_total", "war_read_buffer_reservations_rejected_total"]:
-                        assert metrics.get(key, 0) == 0, key
+                        assert observed.get(key, 0) == 0, key
                 client.stdin.write("continue\n")
                 client.stdin.flush()
                 if event["event"] == "done":
@@ -182,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-7")
     parser.add_argument("--profile", action="store_true")
-    parser.add_argument("--scope", choices=["global", "room", "private"], default="global")
+    parser.add_argument("--scope", choices=["global", "room", "private", "channels"], default="global")
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     outcome = run(arguments)

@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 84 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 85 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -581,6 +581,67 @@ retirement and 1 GiB input staging remain enabled. The
 Unpaced departure, larger active fanout, other table costs, long/TLS/proxy paths
 and clustered operation remain unmeasured. The continuing goal stays active.
 
+## Latest checkpoint: channel-name lifetime, 2026-10-16
+
+Measured the remaining channel-name index after temporary rooms retire. The
+first 8,192-room socket run rises from 1,945 to 2,054 native ns per authenticated
+channel reply. A separate profile shows the empty-bucket scan; a regression
+fails on retained capacity before the change. The existing bounded metadata
+helper now also trims channel names on removal of an empty ordinary room.
+Small tables and regrowth headroom remain. Names, variables, peers, queues and
+published application storage retain their addresses; normal messages add no
+work or allocation.
+
+Six final processes keep two original global-room clients through two waves of
+8,192 temporary ordinary rooms each. Every CBOR query reply is checked against
+independent literal bytes. Gated HTTP snapshots check every channel field and
+base64 ordering at fresh, peak, retired and empty states. All 33,165,328 queries
+and 98,316 normal Close/EOF handshakes pass with exact counts/bytes, zero routing
+body compaction and full cleanup. Median post-wave CPU improves from 2,047 to
+1,951 ns/query (−4.71%), throughput from 442,038 to 470,346 queries/s (+6.40%),
+and p99 from 0.065536 to 0.032768 ms. Fresh CPU is +0.88%; filling/draining
+CPU medians remain 0.34/0.19 seconds across two waves. Profiles are diagnostic;
+the finite improvement applies to queries after room waves.
+
+All 85 Rust tests pass, including concurrent private routing through 2,048
+arrivals/departures. All four sparse-index regressions pass in release, plus
+strict Clippy/formatting, 62-file vendor verification, seven JS socket cases,
+the 776-case/2,311-exchange release corpus and C++ 48-common/eight-difference
+comparison. The new unit regression verifies binary channel names, both distinct
+inspection sort orders, retained key/value/peer pointers, an in-flight payload,
+ordinary-variable removal on rejoin and global-variable persistence.
+Eighteen ordinary cost cases pass with matching p99 buckets and overlapping
+throughput ranges; CPU changes are +0.56% at 1 KiB, +0.19% at 64 KiB and +0.13%
+for churn. The old global-routing probe also passes three further waves.
+
+The stability runner now waits for native service exit before reporting success,
+records its status/forced-kill flag and retains shutdown logs. A real-socket
+wrapper exits 7 after its native child exits zero; this reproduces false success
+before the verifier fix and is rejected afterward. All eighteen cost services
+exit zero without forced killing. A diagnostic verifier initially rejected
+`perf`'s expected SIGINT stop status; that failure is retained separately and
+excluded from timings. A fresh completed recording passes with the corrected
+stop-status check. The timed runner snapshot is preserved.
+
+Quiescent prior services were checked by PID/cwd/executable SHA and both exited
+zero. Updated manual services pass a 1,024-distinct-room wave with 65 typed
+deliveries during/after departure, 1,029 clean closes and zero additional body
+copies. Binary/ascii room variables survive the wave and are absent after
+rejoin. Default decoder retirement takes 5.027 seconds; typed delivery afterward
+adds no copies. Fresh Chrome and three named legacy/Close cases pass. Health,
+readiness and browser return 200, with final resource gauges and unexpected
+error counters zero.
+
+Native SHA-256 begins `8903af76ff2d`; bridge begins `5cb66b8504dc`. Endpoints stay
+native `ws://127.0.0.1:1338`, legacy `ws://127.0.0.1:1337`, management
+`http://127.0.0.1:1339`, browser `http://127.0.0.1:4180/`. Origin stays unrestricted
+and application-idle Close disabled for manual use. The
+[summary](benchmarks/2026-10-16-channel-summary.json),
+[manifest](benchmarks/2026-10-16-channel-build.json), and
+[live record](benchmarks/2026-10-16-channel-live.json) bind sources and observations.
+Large active inspection/lock contention, unpaced departure, long duration,
+TLS/proxies and clusters remain unmeasured. The ongoing goal stays active.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -593,8 +654,10 @@ and clustered operation remain unmeasured. The continuing goal stays active.
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
    The ID ownership map now shrinks after substantial retirement, with measured
    global-routing recovery after large population waves. Membership indexes now
-   have ordinary-room and global-index private-delivery measurements; channel-name
-   table/inspection costs after large populations remain unmeasured.
+   have ordinary-room and global-index private-delivery measurements. Channel-name
+   queries after temporary-room waves are now measured too; large active
+   inspection snapshots, sorting/encoding under the registry lock and their
+   effects on concurrent traffic remain unmeasured.
    Concurrent retention, staging pressure and delayed storage reclamation now
    cover up to 64 producers plus independent healthy traffic across repeated
    waves. Process-wide reservations precede decoder allocations and cover
