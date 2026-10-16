@@ -1,0 +1,436 @@
+{
+  "scope": "Sequential fresh native servers with four I/O workers and default limits, identical frozen client, server CPUs 0-3 and client CPUs 4-7. Three repetitions; case order rotates and baseline/candidate order alternates. 8192 idle rooms, one private pair (one active source worker), 1KiB values, window 16. Private has no reconnects; churn adds eight reconnect workers; management also adds two HTTP inspectors at 100 requests/s each. Phase gates verify full bodies, IDs, FIFO, Close/EOF and exact counters/resources. No compilation, profiling or other load tests overlap timing. Candidate changes peer-Close flushing and blocked-Close handling only.",
+  "source_revision": "08c0f4311fc26f329c50370d7882f1e01394d3bc",
+  "source_diff": "diff --git a/src/server.rs b/src/server.rs\nindex c1c8026..8d655a4 100644\n--- a/src/server.rs\n+++ b/src/server.rs\n@@ -4,6 +4,9 @@\n mod socket;\n mod timers;\n \n+#[cfg(all(test, target_os = \"linux\"))]\n+mod close_tests;\n+\n pub use crate::admin::admin_router;\n \n use std::{\n@@ -667,23 +670,42 @@ impl Connection {\n             deadline: now + relay.config.write_timeout(),\n             flush_only: acknowledge,\n         });\n-        if !acknowledge {\n-            match ws.close(Some(CloseFrame {\n-                code: CloseCode::from(reason.code),\n-                reason: reason.reason.into(),\n-            })) {\n-                Ok(()) => {}\n-                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}\n-                Err(error) => {\n-                    tracing::debug!(token = self.token.0, %error, \"Close send failed\");\n-                    relay.metrics.close_failures.fetch_add(1, Relaxed);\n-                    return Drive::Drop;\n-                }\n+        if acknowledge {\n+            return self.finish_peer_close(relay);\n+        }\n+        match ws.close(Some(CloseFrame {\n+            code: CloseCode::from(reason.code),\n+            reason: reason.reason.into(),\n+        })) {\n+            Ok(()) => {}\n+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}\n+            Err(error) => {\n+                tracing::debug!(token = self.token.0, %error, \"Close send failed\");\n+                relay.metrics.close_failures.fetch_add(1, Relaxed);\n+                return Drive::Drop;\n             }\n         }\n         Drive::Again\n     }\n \n+    /// A received Close completes the exchange once queued control bytes reach\n+    /// TCP. Flush in this turn; only actual backpressure needs another event.\n+    fn finish_peer_close(&mut self, relay: &Relay) -> Drive {\n+        self.closing.as_mut().expect(\"closing exchange\").flush_only = true;\n+        let Stage::WebSocket(ws) = &mut self.stage else {\n+            unreachable!()\n+        };\n+        match ws.flush() {\n+            Ok(()) | Err(Error::ConnectionClosed | Error::AlreadyClosed) => Drive::Drop,\n+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => Drive::Wait,\n+            Err(error) => {\n+                tracing::debug!(token = self.token.0, %error, \"Close acknowledgement flush failed\");\n+                relay.metrics.close_failures.fetch_add(1, Relaxed);\n+                Drive::Drop\n+            }\n+        }\n+    }\n+\n     fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {\n         let (fatal, requested) = {\n             let state = self.socket.state.lock();\n@@ -793,8 +815,15 @@ impl Connection {\n                 relay.metrics.close_failures.fetch_add(1, Relaxed);\n                 return Drive::Drop;\n             }\n-            if !self.socket.state.lock().control_pending && (closing.flush_only || stopping) {\n-                return Drive::Drop;\n+            if closing.flush_only || stopping {\n+                // The peer's Close is already consumed. Reading this closed\n+                // decoder can terminate it while its reply is still buffered.\n+                // Only writable readiness or the Close deadline may finish it.\n+                return if self.socket.state.lock().control_pending {\n+                    Drive::Wait\n+                } else {\n+                    Drive::Drop\n+                };\n             }\n         }\n         if self.closing.is_none()\n@@ -845,7 +874,7 @@ impl Connection {\n                 Ok(None) => continue,\n                 Ok(Some(Message::Close(_))) => {\n                     if self.closing.is_some() {\n-                        return Drive::Again;\n+                        return self.finish_peer_close(relay);\n                     }\n                     return self.start_close(\n                         Disconnect {\n",
+  "new_test_source": "//! Close output must survive real TCP backpressure after the parser receives\n//! the peer's Close. No application or decoder state may discard the reply.\nuse super::*;\nuse crate::Config;\nuse tungstenite::protocol::Role;\n\n#[test]\nfn a_blocked_close_acknowledgement_waits_for_output_without_reading_a_closed_decoder() {\n    exercise_blocked_close(false);\n}\n\n#[test]\nfn a_blocked_server_close_survives_the_peers_acknowledgement_before_output_finishes() {\n    exercise_blocked_close(true);\n}\n\nfn exercise_blocked_close(server_initiated: bool) {\n    let relay = Relay::new(Config {\n        ping_interval_secs: 0,\n        total_read_buffer_bytes: 0,\n        ..Config::default()\n    })\n    .unwrap();\n    let listener = std::net::TcpListener::bind(\"127.0.0.1:0\").unwrap();\n    let raw_client = socket2::Socket::new(\n        socket2::Domain::IPV4,\n        socket2::Type::STREAM,\n        Some(socket2::Protocol::TCP),\n    )\n    .unwrap();\n    raw_client.set_recv_buffer_size(1024).unwrap();\n    raw_client\n        .connect(&listener.local_addr().unwrap().into())\n        .unwrap();\n    let (server, _) = listener.accept().unwrap();\n    server.set_nodelay(true).unwrap();\n    server.set_nonblocking(true).unwrap();\n    socket2::SockRef::from(&server)\n        .set_send_buffer_size(4096)\n        .unwrap();\n    listener.set_nonblocking(true).unwrap();\n    let worker = Worker::new(listener, relay.clone()).unwrap();\n    let socket = Socket::new(\n        mio::net::TcpStream::from_std(server),\n        Token(2),\n        worker.registry.clone(),\n        worker.signal.clone(),\n        &relay,\n    )\n    .unwrap();\n    relay.metrics.connections.fetch_add(1, Relaxed);\n    let mut connection = Connection::new(\n        socket.clone(),\n        Token(2),\n        None,\n        ConnectionGuard(relay.metrics.clone()),\n        &relay,\n    );\n    connection.stage = Stage::WebSocket(WebSocket::from_raw_socket(\n        Stream {\n            socket: socket.clone(),\n            remaining_upgrade: None,\n        },\n        Role::Server,\n        Some(\n            WebSocketConfig::default()\n                .read_buffer_size(4096)\n                .shared_read_buffer(true),\n        ),\n    ));\n    connection.registration = Some(\n        relay\n            .subscribe_with_output(b\"blocked-close\", socket.clone())\n            .unwrap(),\n    );\n\n    // The real socket has a small receive window and send buffer. Fill it with\n    // valid WebSocket frames; the codec keeps any short-write remainder intact.\n    let value = protocol::byte_string(&vec![0x5a; 8192]);\n    for _ in 0..3 {\n        let Stage::WebSocket(ws) = &mut connection.stage else {\n            unreachable!()\n        };\n        let mut blocked = false;\n        for _ in 0..100 {\n            match ws.send(Message::Binary(value.clone())) {\n                Ok(()) => {}\n                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {\n                    blocked = true;\n                    break;\n                }\n                result => panic!(\"unexpected fill result: {result:?}\"),\n            }\n        }\n        assert!(blocked, \"test socket did not reach backpressure\");\n        std::thread::sleep(Duration::from_millis(20));\n    }\n    let Stage::WebSocket(ws) = &mut connection.stage else {\n        unreachable!()\n    };\n    assert!(\n        matches!(ws.flush(), Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock)\n    );\n\n    let raw_client: std::net::TcpStream = raw_client.into();\n    raw_client\n        .set_read_timeout(Some(Duration::from_secs(4)))\n        .unwrap();\n    let mut client = WebSocket::from_raw_socket(raw_client, Role::Client, None);\n    if server_initiated {\n        assert!(\n            connection.start_close(Disconnect::IDLE, &relay, false, Instant::now()) != Drive::Drop\n        );\n    }\n    client.close(None).unwrap();\n    let mut scratch = ReadStorage::default();\n    assert!(connection.drive(&relay, &mut scratch, false) != Drive::Drop);\n    assert_eq!(\n        relay.counts(),\n        (0, 1),\n        \"membership retires before Close output\"\n    );\n    assert!(connection.closing.as_ref().unwrap().flush_only);\n    assert!(\n        matches!(connection.drive(&relay, &mut scratch, false), Drive::Wait),\n        \"a blocked acknowledgement must not read/terminate the closed decoder\"\n    );\n\n    // Release the deliberately tiny window before draining. Keeping a window\n    // smaller than loopback's MSS would measure TCP persist delays instead of\n    // whether the pending Close resumes when backpressure clears.\n    socket2::SockRef::from(client.get_ref())\n        .set_recv_buffer_size(1024 * 1024)\n        .unwrap();\n    let reader = std::thread::spawn(move || {\n        loop {\n            match client.read().unwrap() {\n                Message::Binary(_) => {}\n                Message::Close(frame) => {\n                    if server_initiated {\n                        let frame = frame.expect(\"server's original Close\");\n                        assert_eq!(u16::from(frame.code), Disconnect::IDLE.code);\n                        assert_eq!(frame.reason, Disconnect::IDLE.reason);\n                    } else {\n                        assert!(frame.is_none());\n                    }\n                    return;\n                }\n                other => panic!(\"unexpected output: {other:?}\"),\n            }\n        }\n    });\n    let deadline = Instant::now() + Duration::from_secs(4);\n    while connection.drive(&relay, &mut scratch, false) != Drive::Drop {\n        assert!(Instant::now() < deadline, \"Close output failed to resume\");\n        std::thread::yield_now();\n    }\n    drop(connection);\n    drop(socket);\n    reader.join().unwrap();\n    assert_eq!(relay.metrics.close_failures.load(Relaxed), 0);\n    assert_eq!(relay.metrics.connections.load(Relaxed), 0);\n}\n",
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nservers = {'baseline': root/'artifacts/baselines/b066540/war-relay',\n           'candidate': root/'artifacts/baselines/close-inline/war-relay'}\nclient = root/'artifacts/baselines/e2d7cf9/inspection'\noutput = root/'docs/benchmarks/2026-10-16-close-single-pair.json'\ndef sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()\nrecord = {'scope': 'Sequential fresh native servers with four I/O workers and default limits, identical frozen client, server CPUs 0-3 and client CPUs 4-7. Three repetitions; case order rotates and baseline/candidate order alternates. 8192 idle rooms, one private pair (one active source worker), 1KiB values, window 16. Private has no reconnects; churn adds eight reconnect workers; management also adds two HTTP inspectors at 100 requests/s each. Phase gates verify full bodies, IDs, FIFO, Close/EOF and exact counters/resources. No compilation, profiling or other load tests overlap timing. Candidate changes peer-Close flushing and blocked-Close handling only.',\n          'source_revision': subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),\n          'source_diff': subprocess.check_output(['git','diff','--','src/server.rs'],cwd=root,text=True),\n          'new_test_source': (root/'src/server/close_tests.rs').read_text(),\n          'driver_source': Path(__file__).read_text(), 'driver_sha256': sha(__file__),\n          'binaries': {k:{'path':str(v),'sha256':sha(v)} for k,v in servers.items()},\n          'client_sha256':sha(client),\n          'helper_sha256':{k:sha(root/'scripts'/k) for k in ['inspection.py','benchmark.py']},\n          'cases':[], 'passed':False}\nfor repetition in range(1,4):\n    names=['private','churn','management']; start=(repetition-1)%len(names)\n    for name in names[start:]+names[:start]:\n        for kind in (['baseline','candidate'] if repetition%2 else ['candidate','baseline']):\n            trace=output.with_name(f'{output.stem}-{name}-{kind}-{repetition}.json')\n            cmd=[sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[kind]),\n                 '--client',str(client),'--seconds','8','--mode','http' if name=='management' else 'none',\n                 '--pairs','1','--churn-workers','0' if name=='private' else '8','--output',str(trace)]\n            run=subprocess.run(cmd,cwd=root,capture_output=True,text=True,timeout=100)\n            data=json.loads(trace.read_text())\n            assert run.returncode==0 and data['passed'],run.stdout+run.stderr\n            assert data['server_sha256']==record['binaries'][kind]['sha256']\n            assert data['client_sha256']==record['client_sha256']\n            assert data['runner_sha256']==record['helper_sha256']['inspection.py']\n            assert not data['profile_diagnostic']\n            mixed=data['mixed']\n            row={'kind':kind,'workload':name,'repetition':repetition,'trace':str(trace.relative_to(root)),\n                 'trace_sha256':sha(trace),'passed':True,\n                 'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                 'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                 'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                 'cpu_seconds_per_wall_second':mixed['server_cpu_seconds_per_wall_second'],\n                 'rss_measured_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row)\n            output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians']={}\nfor name in ['private','churn','management']:\n    for kind in servers:\n        rows=[r for r in record['cases'] if r['kind']==kind and r['workload']==name]\n        keys=['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_seconds_per_wall_second','rss_measured_mib']\n        summary={k:statistics.median(r[k] for r in rows) for k in keys}\n        summary['ranges']={k:[min(r[k] for r in rows),max(r[k] for r in rows)] for k in ['healthy','churn']}\n        record['medians'][name+'/'+kind]=summary\nrecord['passed']=True\noutput.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps({'passed':True,'medians':record['medians']}),flush=True)\n",
+  "driver_sha256": "febf0ee0fbef9128f66d1f64e7719c42dc809509f61385d640cbfb96299cdeed",
+  "binaries": {
+    "baseline": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/b066540/war-relay",
+      "sha256": "0918b83150f0cdc006bedde985e4a24e11d0c2b0e711db9ff9a6772f2a5f55c9"
+    },
+    "candidate": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/close-inline/war-relay",
+      "sha256": "7b2b0628c5c698a45ffd59b90e54126e60308e5df05d027fa4ea9c964c031238"
+    }
+  },
+  "client_sha256": "0bb29e7a64448404d9aa6847d7fa9a0d55644bc1d35648f2f0ca6a3d663e667d",
+  "helper_sha256": {
+    "inspection.py": "431639169a4e10fc0fe4348eb6a9e8792d086b3aed1565ac37616731b764d596",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "cases": [
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-baseline-1.json",
+      "trace_sha256": "ccb63c5b4f313fe933f85f6abf73225bdea52b284376aaafd8cde855c6b829d8",
+      "passed": true,
+      "healthy": 577538.0256862593,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6612477395246025,
+      "rss_measured_mib": 18.296875
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-candidate-1.json",
+      "trace_sha256": "6b2b5888ae26530b69b766b908abd5270c858bb98d82d80c243f6ed186708009",
+      "passed": true,
+      "healthy": 576356.9428893221,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6599987894797202,
+      "rss_measured_mib": 18.34765625
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-baseline-1.json",
+      "trace_sha256": "9545159e8ee60ba136f4531654b6322ef64ded81abeffebd69591beb8ed2ef64",
+      "passed": true,
+      "healthy": 324788.7741978947,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67774.45186414408,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4862352387116091,
+      "rss_measured_mib": 18.41796875
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-candidate-1.json",
+      "trace_sha256": "d2f80cc40f01ef68a6bf752e138ccf1e2fe2c87fb358ad3791463949d4cbc12a",
+      "passed": true,
+      "healthy": 323900.09813959873,
+      "healthy_p99_ms": 0.131072,
+      "churn": 66783.8578618826,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4737413465592484,
+      "rss_measured_mib": 18.55078125
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-baseline-1.json",
+      "trace_sha256": "e12b377e973895a6d2ea636338eacdb12e6052daed762f9414beb25f473e92f4",
+      "passed": true,
+      "healthy": 285159.9264042525,
+      "healthy_p99_ms": 0.262144,
+      "churn": 56400.69899566997,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97189789919526,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7597527015129184,
+      "rss_measured_mib": 19.1640625
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-candidate-1.json",
+      "trace_sha256": "7015f26e80c493e30bdc100243e9fee81852232095085036f3c5ad7774644a69",
+      "passed": true,
+      "healthy": 288019.6286846743,
+      "healthy_p99_ms": 0.262144,
+      "churn": 57422.326191493434,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97197020389797,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7610031626080767,
+      "rss_measured_mib": 19.20703125
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-candidate-2.json",
+      "trace_sha256": "edd12111853a6fb869e428f2e644808c18e63cc95cc8cdebdb13baf9aa37b0ef",
+      "passed": true,
+      "healthy": 324434.7039278931,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68273.63550117408,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5062254123763685,
+      "rss_measured_mib": 18.62109375
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-baseline-2.json",
+      "trace_sha256": "c8f9204178d33f4470839770587d38f188d32917737ddfb15718cb9800c87f82",
+      "passed": true,
+      "healthy": 321782.5074128873,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68551.25595323679,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.524983448020278,
+      "rss_measured_mib": 18.5859375
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-candidate-2.json",
+      "trace_sha256": "690cc589646041d5ba6f0a7a1c6cbb13b7930e683cc260b0f38830d2505d9848",
+      "passed": true,
+      "healthy": 292626.1470456037,
+      "healthy_p99_ms": 0.131072,
+      "churn": 57662.108756381764,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9700324909309,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7547370351079188,
+      "rss_measured_mib": 19.03515625
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-baseline-2.json",
+      "trace_sha256": "01b9df5e6b3c44749fcd64ebcce031e145426860329acf01cee4027058fe028a",
+      "passed": true,
+      "healthy": 283803.799865783,
+      "healthy_p99_ms": 0.262144,
+      "churn": 56659.47432002882,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97167448724161,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7672496732809977,
+      "rss_measured_mib": 19.12109375
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-candidate-2.json",
+      "trace_sha256": "4c8fa8d3af9beb2ad200712d50e8a48d653c7d47452771f5c98cfaf2ed0c2766",
+      "passed": true,
+      "healthy": 567706.9749024209,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6574964964477317,
+      "rss_measured_mib": 18.28515625
+    },
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-baseline-2.json",
+      "trace_sha256": "def3ea737e2ff89b75ed8ffb92afd939b879d70eef4a3cf9362fc52bea897008",
+      "passed": true,
+      "healthy": 571642.1658146557,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6599978823142949,
+      "rss_measured_mib": 18.29296875
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-baseline-3.json",
+      "trace_sha256": "f5038e261873976c6c87e37a77f835c75d4d18de77cbc044bbbe5fcafc28344b",
+      "passed": true,
+      "healthy": 277658.80460721377,
+      "healthy_p99_ms": 0.262144,
+      "churn": 54364.70066819047,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97177120988542,
+      "inspection_p99_ms": 16.777216,
+      "cpu_seconds_per_wall_second": 1.7235067031152,
+      "rss_measured_mib": 18.55078125
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-management-candidate-3.json",
+      "trace_sha256": "80f5a4b44c2b881a3d9ab1331d76b0e8c3b3d585c4e556f099f4c7e83467ccd5",
+      "passed": true,
+      "healthy": 287736.31095188763,
+      "healthy_p99_ms": 0.262144,
+      "churn": 55970.54644589604,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.99882598189163,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7437397640296175,
+      "rss_measured_mib": 19.125
+    },
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-baseline-3.json",
+      "trace_sha256": "5cace5121e7da1958303989a7dc9bdb28e277b7acfad2baa4b939baa8b0a511c",
+      "passed": true,
+      "healthy": 563926.0958330466,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.659997771435025,
+      "rss_measured_mib": 18.26171875
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-private-candidate-3.json",
+      "trace_sha256": "4d08d0ad1f54f35b793730804881b970a8738a3585d017a279aff9be2ae473a7",
+      "passed": true,
+      "healthy": 568326.4298444085,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6562458775454281,
+      "rss_measured_mib": 18.25390625
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-baseline-3.json",
+      "trace_sha256": "2dd85798606583dceb7a2014ce11b034471ce484cfd680bccca9acdb549bc8e8",
+      "passed": true,
+      "healthy": 321177.2946433529,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68311.17459789857,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5212371862388712,
+      "rss_measured_mib": 18.57421875
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-single-pair-churn-candidate-3.json",
+      "trace_sha256": "beea46a163386ce5af52143933000123c9186d00e164847f672f2c3fae79f5b4",
+      "passed": true,
+      "healthy": 320173.5258590789,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67405.85412126227,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5024883895209697,
+      "rss_measured_mib": 18.58984375
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/baseline": {
+      "healthy": 571642.1658146557,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6599978823142949,
+      "rss_measured_mib": 18.29296875,
+      "ranges": {
+        "healthy": [
+          563926.0958330466,
+          577538.0256862593
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "private/candidate": {
+      "healthy": 568326.4298444085,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6574964964477317,
+      "rss_measured_mib": 18.28515625,
+      "ranges": {
+        "healthy": [
+          567706.9749024209,
+          576356.9428893221
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "churn/baseline": {
+      "healthy": 321782.5074128873,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68311.17459789857,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5212371862388712,
+      "rss_measured_mib": 18.57421875,
+      "ranges": {
+        "healthy": [
+          321177.2946433529,
+          324788.7741978947
+        ],
+        "churn": [
+          67774.45186414408,
+          68551.25595323679
+        ]
+      }
+    },
+    "churn/candidate": {
+      "healthy": 323900.09813959873,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67405.85412126227,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5024883895209697,
+      "rss_measured_mib": 18.58984375,
+      "ranges": {
+        "healthy": [
+          320173.5258590789,
+          324434.7039278931
+        ],
+        "churn": [
+          66783.8578618826,
+          68273.63550117408
+        ]
+      }
+    },
+    "management/baseline": {
+      "healthy": 283803.799865783,
+      "healthy_p99_ms": 0.262144,
+      "churn": 56400.69899566997,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97177120988542,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7597527015129184,
+      "rss_measured_mib": 19.12109375,
+      "ranges": {
+        "healthy": [
+          277658.80460721377,
+          285159.9264042525
+        ],
+        "churn": [
+          54364.70066819047,
+          56659.47432002882
+        ]
+      }
+    },
+    "management/candidate": {
+      "healthy": 288019.6286846743,
+      "healthy_p99_ms": 0.262144,
+      "churn": 57422.326191493434,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97197020389797,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7547370351079188,
+      "rss_measured_mib": 19.125,
+      "ranges": {
+        "healthy": [
+          287736.31095188763,
+          292626.1470456037
+        ],
+        "churn": [
+          55970.54644589604,
+          57662.108756381764
+        ]
+      }
+    }
+  }
+}

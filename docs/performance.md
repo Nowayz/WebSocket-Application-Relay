@@ -1778,3 +1778,105 @@ exits successfully without a forced kill. A
 bundle checks, including a 128 KiB value, concurrent variables, exact uint64 IDs
 and clean Close handshakes. Four live native listeners and empty final resource
 gauges were checked against the selected executable hash.
+
+## Close output under backpressure (2026-10-16)
+
+Investigating reconnect cost exposed a correctness defect in `b066540`.
+After consuming a peer's Close, a blocked reply left the decoder in a closed
+state with output still buffered. The next worker turn could call its read
+method, which terminated the decoder and discarded that output. An acknowledgement
+of a server-initiated Close also failed to switch the connection to flushing only.
+
+`12bfc4d` attempts the peer-Close flush in the receiving turn. If TCP returns
+`WouldBlock`, later turns flush without reading the closed decoder, waiting for
+writable readiness within the existing Close deadline. This follows the bounded
+Close exchange described in [RFC 6455 section 5.5.1](https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1).
+No per-connection task or application-output staging was added.
+
+The [negative and positive control](benchmarks/2026-10-16-close-regression.json)
+uses the same final Linux fixture against the original and replacement server
+source. Real TCP sockets have a deliberately small receive window/send buffer;
+valid Pong replies fill the unread peer's output path. One test initiates Close
+from the peer; the other acknowledges a blocked server-initiated Close. Both
+fail against the committed original and pass with the fix. After pressure clears,
+the client receives the expected Close, membership and transport capacity retire,
+and no Close failure is recorded. The fixture enlarges the receive window only
+after proving that output remains blocked, so its drain deadline does not depend
+on a tiny-window TCP persist interval. The report includes the exact fixture,
+source hashes, commands and both process outputs.
+
+### Throughput and latency limits
+
+The [first matrix](benchmarks/2026-10-16-close-comparison.json) repeats three
+workloads with two private pairs, 8,192 idle rooms and four workers, using the
+same frozen client and alternating old/new server order. All 18 cases pass.
+Private throughput medians are 979,076/s before and 976,103/s after. Mixed churn
+and management runs retain the earlier one-versus-two active-source-worker
+placement effect, so their small median differences cannot establish a general
+reconnect improvement.
+
+The [controlled follow-up](benchmarks/2026-10-16-close-single-pair.json) uses
+one private pair, ensuring one active private source worker in each case.
+It again runs three repetitions of each workload, sequentially, with server
+CPUs 0–3 and client CPUs 4–7. Each measured phase lasts eight seconds. Values
+are 1 KiB with window 16; the churn cases add eight reconnect workers, and the
+management cases add 200 paced HTTP inspections/s. No build, profiler or other
+load test overlaps either timing matrix. The release binary hashes match across
+the matrices and the final selected build.
+
+| One-pair workload / median of three | Before | After |
+| --- | ---: | ---: |
+| Private deliveries/s | 571,642 | 568,326 |
+| Private delivery p99 upper bucket | 0.032768 ms | 0.032768 ms |
+| With reconnects: healthy deliveries/s | 321,783 | 323,900 |
+| With reconnects: complete cycles/s | 68,311 | 67,406 |
+| With reconnects: cycle p99 upper bucket | 0.524288 ms | 0.524288 ms |
+| With reconnects and HTTP: healthy deliveries/s | 283,804 | 288,020 |
+| With reconnects and HTTP: complete cycles/s | 56,401 | 57,422 |
+| With reconnects and HTTP: cycle p99 upper bucket | 1.048576 ms | 0.524288 ms |
+| With reconnects and HTTP: inspection p99 upper bucket | 8.388608 ms | 8.388608 ms |
+| With reconnects and HTTP: measured RSS | 19.12 MiB | 19.12 MiB |
+
+This is a correctness fix with no broad throughput win. Private traffic changes
+by −0.6%, churn-only cycles by −1.3%, and management/churn cycles by +1.8%.
+The management/churn latency bucket improves consistently across the three runs,
+but these are finite loopback checks with histogram bucket bounds. They do not
+resolve the earlier 10.7% reconnect regression against the retired asynchronous
+port, and they are not a new C++ capacity comparison.
+
+The separate [diagnostic capture](benchmarks/2026-10-16-close-churn-profile.json)
+and [flat profile](benchmarks/2026-10-16-close-churn-profile.txt) use the original
+readiness build with `cycles:u`, 499 Hz and 8 KiB DWARF stacks. About 4.1% of
+user-cycle samples are in the registry's shared-lock slow path. Source inspection
+also shows that private routing holds that read guard during direct socket
+writes. This identifies a separate lock-scope hypothesis to measure; it does not
+establish that lock contention accounts for the entire reconnect gap. Profile
+timing is excluded from both ordinary matrices.
+
+### Selected-build verification
+
+The [build manifest](benchmarks/2026-10-16-close-build.json) binds `12bfc4d`,
+both frozen release executables, runtime/vendor sources, frozen clients, helpers
+and all raw reports. The [source checks](benchmarks/2026-10-16-close-checks.json)
+pass 91 Linux Rust tests, strict Clippy and formatting. JavaScript checks pass
+six native/legacy interoperability cases and a separate application-idle case.
+
+The selected release passes the independent
+[raw-input corpus](benchmarks/2026-10-16-close-corpus.json): 776 cases / 2,311
+exchanges, exact counters, Close/EOF and empty final resources. The
+[C++ reference comparison](benchmarks/2026-10-16-close-reference.json) passes
+48 shared wire cases and eight documented differences through the legacy bridge.
+
+The finite [32-client stability run](benchmarks/2026-10-16-close-stability.json)
+verifies 6,950,304 private 1 KiB deliveries, 548,010 complete reconnect lifecycles,
+and 211,450 healthy 64 KiB deliveries alongside an unread recipient. The
+[mixed-size fanout run](benchmarks/2026-10-16-close-fanout.json) verifies 746,064
+deliveries to 27 paced readers, four retired unread recipients and 108 departure
+notifications. Every service exits successfully without a forced kill.
+
+The refreshed local release also passes all seven
+[headed Chrome checks](benchmarks/2026-10-16-close-browser.json), including a
+128 KiB value and three clean Close handshakes. Its executable hash matches the
+frozen selected build; four native listeners, HTTP readiness and empty final
+connection/staging/output/variable gauges are verified. These checks remain
+finite local acceptance, without TLS or a production deployment.

@@ -1,0 +1,436 @@
+{
+  "scope": "Sequential fresh native servers with four I/O workers and default limits, identical frozen client, server CPUs 0-3 and client CPUs 4-7. Three repetitions; case order rotates and baseline/candidate order alternates. 8192 idle rooms, two private pairs, 1KiB values, window 16. Private has no reconnects; churn adds eight reconnect workers; management also adds two HTTP inspectors at 100 requests/s each. Phase gates verify full bodies, IDs, FIFO, Close/EOF and exact counters/resources. No compilation, profiling or other load tests overlap timing. Candidate changes peer-Close flushing and blocked-Close handling only.",
+  "source_revision": "08c0f4311fc26f329c50370d7882f1e01394d3bc",
+  "source_diff": "diff --git a/src/server.rs b/src/server.rs\nindex c1c8026..8d655a4 100644\n--- a/src/server.rs\n+++ b/src/server.rs\n@@ -4,6 +4,9 @@\n mod socket;\n mod timers;\n \n+#[cfg(all(test, target_os = \"linux\"))]\n+mod close_tests;\n+\n pub use crate::admin::admin_router;\n \n use std::{\n@@ -667,23 +670,42 @@ impl Connection {\n             deadline: now + relay.config.write_timeout(),\n             flush_only: acknowledge,\n         });\n-        if !acknowledge {\n-            match ws.close(Some(CloseFrame {\n-                code: CloseCode::from(reason.code),\n-                reason: reason.reason.into(),\n-            })) {\n-                Ok(()) => {}\n-                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}\n-                Err(error) => {\n-                    tracing::debug!(token = self.token.0, %error, \"Close send failed\");\n-                    relay.metrics.close_failures.fetch_add(1, Relaxed);\n-                    return Drive::Drop;\n-                }\n+        if acknowledge {\n+            return self.finish_peer_close(relay);\n+        }\n+        match ws.close(Some(CloseFrame {\n+            code: CloseCode::from(reason.code),\n+            reason: reason.reason.into(),\n+        })) {\n+            Ok(()) => {}\n+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}\n+            Err(error) => {\n+                tracing::debug!(token = self.token.0, %error, \"Close send failed\");\n+                relay.metrics.close_failures.fetch_add(1, Relaxed);\n+                return Drive::Drop;\n             }\n         }\n         Drive::Again\n     }\n \n+    /// A received Close completes the exchange once queued control bytes reach\n+    /// TCP. Flush in this turn; only actual backpressure needs another event.\n+    fn finish_peer_close(&mut self, relay: &Relay) -> Drive {\n+        self.closing.as_mut().expect(\"closing exchange\").flush_only = true;\n+        let Stage::WebSocket(ws) = &mut self.stage else {\n+            unreachable!()\n+        };\n+        match ws.flush() {\n+            Ok(()) | Err(Error::ConnectionClosed | Error::AlreadyClosed) => Drive::Drop,\n+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => Drive::Wait,\n+            Err(error) => {\n+                tracing::debug!(token = self.token.0, %error, \"Close acknowledgement flush failed\");\n+                relay.metrics.close_failures.fetch_add(1, Relaxed);\n+                Drive::Drop\n+            }\n+        }\n+    }\n+\n     fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {\n         let (fatal, requested) = {\n             let state = self.socket.state.lock();\n@@ -793,8 +815,15 @@ impl Connection {\n                 relay.metrics.close_failures.fetch_add(1, Relaxed);\n                 return Drive::Drop;\n             }\n-            if !self.socket.state.lock().control_pending && (closing.flush_only || stopping) {\n-                return Drive::Drop;\n+            if closing.flush_only || stopping {\n+                // The peer's Close is already consumed. Reading this closed\n+                // decoder can terminate it while its reply is still buffered.\n+                // Only writable readiness or the Close deadline may finish it.\n+                return if self.socket.state.lock().control_pending {\n+                    Drive::Wait\n+                } else {\n+                    Drive::Drop\n+                };\n             }\n         }\n         if self.closing.is_none()\n@@ -845,7 +874,7 @@ impl Connection {\n                 Ok(None) => continue,\n                 Ok(Some(Message::Close(_))) => {\n                     if self.closing.is_some() {\n-                        return Drive::Again;\n+                        return self.finish_peer_close(relay);\n                     }\n                     return self.start_close(\n                         Disconnect {\n",
+  "new_test_source": "//! Close output must survive real TCP backpressure after the parser receives\n//! the peer's Close. No application or decoder state may discard the reply.\nuse super::*;\nuse crate::Config;\nuse tungstenite::protocol::Role;\n\n#[test]\nfn a_blocked_close_acknowledgement_waits_for_output_without_reading_a_closed_decoder() {\n    let relay = Relay::new(Config {\n        ping_interval_secs: 0,\n        total_read_buffer_bytes: 0,\n        ..Config::default()\n    })\n    .unwrap();\n    let listener = std::net::TcpListener::bind(\"127.0.0.1:0\").unwrap();\n    let raw_client = socket2::Socket::new(\n        socket2::Domain::IPV4,\n        socket2::Type::STREAM,\n        Some(socket2::Protocol::TCP),\n    )\n    .unwrap();\n    raw_client.set_recv_buffer_size(1024).unwrap();\n    raw_client\n        .connect(&listener.local_addr().unwrap().into())\n        .unwrap();\n    let (server, _) = listener.accept().unwrap();\n    server.set_nodelay(true).unwrap();\n    server.set_nonblocking(true).unwrap();\n    socket2::SockRef::from(&server)\n        .set_send_buffer_size(4096)\n        .unwrap();\n    listener.set_nonblocking(true).unwrap();\n    let worker = Worker::new(listener, relay.clone()).unwrap();\n    let socket = Socket::new(\n        mio::net::TcpStream::from_std(server),\n        Token(2),\n        worker.registry.clone(),\n        worker.signal.clone(),\n        &relay,\n    )\n    .unwrap();\n    relay.metrics.connections.fetch_add(1, Relaxed);\n    let mut connection = Connection::new(\n        socket.clone(),\n        Token(2),\n        None,\n        ConnectionGuard(relay.metrics.clone()),\n        &relay,\n    );\n    connection.stage = Stage::WebSocket(WebSocket::from_raw_socket(\n        Stream {\n            socket: socket.clone(),\n            remaining_upgrade: None,\n        },\n        Role::Server,\n        Some(\n            WebSocketConfig::default()\n                .read_buffer_size(4096)\n                .shared_read_buffer(true),\n        ),\n    ));\n    connection.registration = Some(\n        relay\n            .subscribe_with_output(b\"blocked-close\", socket.clone())\n            .unwrap(),\n    );\n\n    // The real socket has a small receive window and send buffer. Fill it with\n    // valid WebSocket frames; the codec keeps any short-write remainder intact.\n    let value = protocol::byte_string(&vec![0x5a; 8192]);\n    for _ in 0..3 {\n        let Stage::WebSocket(ws) = &mut connection.stage else {\n            unreachable!()\n        };\n        let mut blocked = false;\n        for _ in 0..100 {\n            match ws.send(Message::Binary(value.clone())) {\n                Ok(()) => {}\n                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {\n                    blocked = true;\n                    break;\n                }\n                result => panic!(\"unexpected fill result: {result:?}\"),\n            }\n        }\n        assert!(blocked, \"test socket did not reach backpressure\");\n        std::thread::sleep(Duration::from_millis(20));\n    }\n    let Stage::WebSocket(ws) = &mut connection.stage else {\n        unreachable!()\n    };\n    assert!(\n        matches!(ws.flush(), Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock)\n    );\n\n    let raw_client: std::net::TcpStream = raw_client.into();\n    raw_client\n        .set_read_timeout(Some(Duration::from_secs(4)))\n        .unwrap();\n    let mut client = WebSocket::from_raw_socket(raw_client, Role::Client, None);\n    client.close(None).unwrap();\n    let mut scratch = ReadStorage::default();\n    assert!(connection.drive(&relay, &mut scratch, false) != Drive::Drop);\n    assert_eq!(\n        relay.counts(),\n        (0, 1),\n        \"membership retires before Close output\"\n    );\n    assert!(connection.closing.as_ref().unwrap().flush_only);\n    assert!(\n        matches!(connection.drive(&relay, &mut scratch, false), Drive::Wait),\n        \"a blocked acknowledgement must not read/terminate the closed decoder\"\n    );\n\n    // Release the deliberately tiny window before draining. Keeping a window\n    // smaller than loopback's MSS would measure TCP persist delays instead of\n    // whether the pending Close resumes when backpressure clears.\n    socket2::SockRef::from(client.get_ref())\n        .set_recv_buffer_size(1024 * 1024)\n        .unwrap();\n    let reader = std::thread::spawn(move || {\n        loop {\n            match client.read().unwrap() {\n                Message::Binary(_) => {}\n                Message::Close(frame) => {\n                    assert!(frame.is_none());\n                    return;\n                }\n                other => panic!(\"unexpected output: {other:?}\"),\n            }\n        }\n    });\n    let deadline = Instant::now() + Duration::from_secs(4);\n    while connection.drive(&relay, &mut scratch, false) != Drive::Drop {\n        assert!(Instant::now() < deadline, \"Close output failed to resume\");\n        std::thread::yield_now();\n    }\n    drop(connection);\n    drop(socket);\n    reader.join().unwrap();\n    assert_eq!(relay.metrics.close_failures.load(Relaxed), 0);\n    assert_eq!(relay.metrics.connections.load(Relaxed), 0);\n}\n",
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nservers = {'baseline': root/'artifacts/baselines/b066540/war-relay',\n           'candidate': root/'artifacts/baselines/close-inline/war-relay'}\nclient = root/'artifacts/baselines/e2d7cf9/inspection'\noutput = root/'docs/benchmarks/2026-10-16-close-comparison.json'\ndef sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()\nrecord = {'scope': 'Sequential fresh native servers with four I/O workers and default limits, identical frozen client, server CPUs 0-3 and client CPUs 4-7. Three repetitions; case order rotates and baseline/candidate order alternates. 8192 idle rooms, two private pairs, 1KiB values, window 16. Private has no reconnects; churn adds eight reconnect workers; management also adds two HTTP inspectors at 100 requests/s each. Phase gates verify full bodies, IDs, FIFO, Close/EOF and exact counters/resources. No compilation, profiling or other load tests overlap timing. Candidate changes peer-Close flushing and blocked-Close handling only.',\n          'source_revision': subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),\n          'source_diff': subprocess.check_output(['git','diff','--','src/server.rs'],cwd=root,text=True),\n          'new_test_source': (root/'src/server/close_tests.rs').read_text(),\n          'driver_source': Path(__file__).read_text(), 'driver_sha256': sha(__file__),\n          'binaries': {k:{'path':str(v),'sha256':sha(v)} for k,v in servers.items()},\n          'client_sha256':sha(client),\n          'helper_sha256':{k:sha(root/'scripts'/k) for k in ['inspection.py','benchmark.py']},\n          'cases':[], 'passed':False}\nfor repetition in range(1,4):\n    names=['private','churn','management']; start=(repetition-1)%len(names)\n    for name in names[start:]+names[:start]:\n        for kind in (['baseline','candidate'] if repetition%2 else ['candidate','baseline']):\n            trace=output.with_name(f'{output.stem}-{name}-{kind}-{repetition}.json')\n            cmd=[sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[kind]),\n                 '--client',str(client),'--seconds','8','--mode','http' if name=='management' else 'none',\n                 '--churn-workers','0' if name=='private' else '8','--output',str(trace)]\n            run=subprocess.run(cmd,cwd=root,capture_output=True,text=True,timeout=100)\n            data=json.loads(trace.read_text())\n            assert run.returncode==0 and data['passed'],run.stdout+run.stderr\n            assert data['server_sha256']==record['binaries'][kind]['sha256']\n            assert data['client_sha256']==record['client_sha256']\n            assert data['runner_sha256']==record['helper_sha256']['inspection.py']\n            assert not data['profile_diagnostic']\n            mixed=data['mixed']\n            row={'kind':kind,'workload':name,'repetition':repetition,'trace':str(trace.relative_to(root)),\n                 'trace_sha256':sha(trace),'passed':True,\n                 'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                 'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                 'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                 'cpu_seconds_per_wall_second':mixed['server_cpu_seconds_per_wall_second'],\n                 'rss_measured_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row)\n            output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians']={}\nfor name in ['private','churn','management']:\n    for kind in servers:\n        rows=[r for r in record['cases'] if r['kind']==kind and r['workload']==name]\n        keys=['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_seconds_per_wall_second','rss_measured_mib']\n        summary={k:statistics.median(r[k] for r in rows) for k in keys}\n        summary['ranges']={k:[min(r[k] for r in rows),max(r[k] for r in rows)] for k in ['healthy','churn']}\n        record['medians'][name+'/'+kind]=summary\nrecord['passed']=True\noutput.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps({'passed':True,'medians':record['medians']}),flush=True)\n",
+  "driver_sha256": "772fa99557088929036869976f8cf1cb3a7a814a8a412201b7e69c232fa94d04",
+  "binaries": {
+    "baseline": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/b066540/war-relay",
+      "sha256": "0918b83150f0cdc006bedde985e4a24e11d0c2b0e711db9ff9a6772f2a5f55c9"
+    },
+    "candidate": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/close-inline/war-relay",
+      "sha256": "7b2b0628c5c698a45ffd59b90e54126e60308e5df05d027fa4ea9c964c031238"
+    }
+  },
+  "client_sha256": "0bb29e7a64448404d9aa6847d7fa9a0d55644bc1d35648f2f0ca6a3d663e667d",
+  "helper_sha256": {
+    "inspection.py": "431639169a4e10fc0fe4348eb6a9e8792d086b3aed1565ac37616731b764d596",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "cases": [
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-baseline-1.json",
+      "trace_sha256": "19fdd3d02cc72a3075cb078bf83296bbfbc695ae938eda913b04feea5dfaff97",
+      "passed": true,
+      "healthy": 734386.4147255233,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 0.6987465887191538,
+      "rss_measured_mib": 18.16015625
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-candidate-1.json",
+      "trace_sha256": "8496aa417dc6f10f838c2d7ce05016c046a324667bf3cb60f774032c45bb24b5",
+      "passed": true,
+      "healthy": 985305.3784251226,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.244994160354891,
+      "rss_measured_mib": 18.3203125
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-baseline-1.json",
+      "trace_sha256": "192f821cdb4fcd9a3ba92366f00af8e93ac2227fa2631dc97167730fed6ee576",
+      "passed": true,
+      "healthy": 379388.0301396518,
+      "healthy_p99_ms": 0.131072,
+      "churn": 57139.97587390964,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.3812282656826256,
+      "rss_measured_mib": 18.6484375
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-candidate-1.json",
+      "trace_sha256": "ef416026c3391ee418fa58e74ad4f3815ea18dd13202ae637993a40505eca99b",
+      "passed": true,
+      "healthy": 646459.6983916675,
+      "healthy_p99_ms": 0.131072,
+      "churn": 48603.02622377575,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.6862335628060088,
+      "rss_measured_mib": 18.5625
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-baseline-1.json",
+      "trace_sha256": "3153de9b5c7789688b5dd9754ec4f3952b0b0c436f1e5dc0a27fca846a954ed2",
+      "passed": true,
+      "healthy": 552333.105634908,
+      "healthy_p99_ms": 0.262144,
+      "churn": 39289.78017993903,
+      "churn_p99_ms": 2.097152,
+      "inspection": 199.97216040075594,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.8859874377796295,
+      "rss_measured_mib": 19.15234375
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-candidate-1.json",
+      "trace_sha256": "5e37c802422b0518bff60bcfac7079c373940248d1e0712f8f6151b4fd26b551",
+      "passed": true,
+      "healthy": 562822.7148827432,
+      "healthy_p99_ms": 0.262144,
+      "churn": 40337.31766189232,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97182986834056,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.904731679495944,
+      "rss_measured_mib": 18.51171875
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-candidate-2.json",
+      "trace_sha256": "302de252a390479b4b691cdd958628efc0b6593b5fafb6a0527c06c1e9ea53f3",
+      "passed": true,
+      "healthy": 372719.8926733727,
+      "healthy_p99_ms": 0.131072,
+      "churn": 59401.97039771146,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4112344483727832,
+      "rss_measured_mib": 18.56640625
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-baseline-2.json",
+      "trace_sha256": "ba8304f71b86ba42dbbbf3837aa4d58dc7e83e8af3704168d98b5484605a727d",
+      "passed": true,
+      "healthy": 649309.1764444555,
+      "healthy_p99_ms": 0.131072,
+      "churn": 49451.257638969815,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.704987334075342,
+      "rss_measured_mib": 18.4609375
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-candidate-2.json",
+      "trace_sha256": "72ea4b29461fcfbd72a2d1467eb98677b4b7e20d257f47701ef3db6031fcbefc",
+      "passed": true,
+      "healthy": 559485.3710449241,
+      "healthy_p99_ms": 0.262144,
+      "churn": 40826.38734117585,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97189634963084,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.9009828396736783,
+      "rss_measured_mib": 19.06640625
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-baseline-2.json",
+      "trace_sha256": "e422dcb8305812d91065d332052c2aca7534fce799c6936c24834045a80795ae",
+      "passed": true,
+      "healthy": 549091.3763074294,
+      "healthy_p99_ms": 0.262144,
+      "churn": 39452.91778177421,
+      "churn_p99_ms": 2.097152,
+      "inspection": 199.99831588918127,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.8962340325243,
+      "rss_measured_mib": 19.12109375
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-candidate-2.json",
+      "trace_sha256": "d72ec1f93153d3714464f6ccf2bdfea64cfc60cb29dbc254c8e68ea70d1e9247",
+      "passed": true,
+      "healthy": 972177.6761182632,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.234994507207555,
+      "rss_measured_mib": 18.30078125
+    },
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-baseline-2.json",
+      "trace_sha256": "7d8914cd2b40fb403c4adcfdba757fe98468e5c7a224ff50859d2a2edf07e486",
+      "passed": true,
+      "healthy": 979075.9518880924,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.241244867917938,
+      "rss_measured_mib": 18.359375
+    },
+    {
+      "kind": "baseline",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-baseline-3.json",
+      "trace_sha256": "b29c21319e54a53fb8a8595bc42df853be1aacf10cb8f67e2beee814fc9218f5",
+      "passed": true,
+      "healthy": 337086.0233733601,
+      "healthy_p99_ms": 0.262144,
+      "churn": 47017.90409027614,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.9703522455983,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.6747517000568857,
+      "rss_measured_mib": 18.61328125
+    },
+    {
+      "kind": "candidate",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-management-candidate-3.json",
+      "trace_sha256": "29883d333bab16181ee83d323528f2a9da6f30b247b2dbb786dcc7f3cb3fde4a",
+      "passed": true,
+      "healthy": 551893.6166816907,
+      "healthy_p99_ms": 0.262144,
+      "churn": 40386.03548182074,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97232338050642,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.9122353423260927,
+      "rss_measured_mib": 19.09765625
+    },
+    {
+      "kind": "baseline",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-baseline-3.json",
+      "trace_sha256": "43ef9a87ff73cb4e23ba6eccc2ed59020a1788dcabfe21885d9a158767acba15",
+      "passed": true,
+      "healthy": 984804.0136503045,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.2399974989250448,
+      "rss_measured_mib": 18.3203125
+    },
+    {
+      "kind": "candidate",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-private-candidate-3.json",
+      "trace_sha256": "03b376581bf177df1080752a608d4242aa5828088223bde6e06d18df526577b8",
+      "passed": true,
+      "healthy": 976103.4706718817,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.241246783619272,
+      "rss_measured_mib": 18.38671875
+    },
+    {
+      "kind": "baseline",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-baseline-3.json",
+      "trace_sha256": "8ca56cfab62fb194b881c06a3fd0691945827bdcfa6089950aa51684b1b8616d",
+      "passed": true,
+      "healthy": 635831.24374386,
+      "healthy_p99_ms": 0.131072,
+      "churn": 48518.137066140436,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.7024872647568268,
+      "rss_measured_mib": 18.6015625
+    },
+    {
+      "kind": "candidate",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-close-comparison-churn-candidate-3.json",
+      "trace_sha256": "b98b7c81896d204362651e67b1c2089355321d77d4c5fcff44e0ddc3c7821a53",
+      "passed": true,
+      "healthy": 639241.5365489188,
+      "healthy_p99_ms": 0.131072,
+      "churn": 47761.76707480289,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.6724830893144238,
+      "rss_measured_mib": 18.546875
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/baseline": {
+      "healthy": 979075.9518880924,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.2399974989250448,
+      "rss_measured_mib": 18.3203125,
+      "ranges": {
+        "healthy": [
+          734386.4147255233,
+          984804.0136503045
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "private/candidate": {
+      "healthy": 976103.4706718817,
+      "healthy_p99_ms": 0.065536,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.241246783619272,
+      "rss_measured_mib": 18.3203125,
+      "ranges": {
+        "healthy": [
+          972177.6761182632,
+          985305.3784251226
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "churn/baseline": {
+      "healthy": 635831.24374386,
+      "healthy_p99_ms": 0.131072,
+      "churn": 49451.257638969815,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.7024872647568268,
+      "rss_measured_mib": 18.6015625,
+      "ranges": {
+        "healthy": [
+          379388.0301396518,
+          649309.1764444555
+        ],
+        "churn": [
+          48518.137066140436,
+          57139.97587390964
+        ]
+      }
+    },
+    "churn/candidate": {
+      "healthy": 639241.5365489188,
+      "healthy_p99_ms": 0.131072,
+      "churn": 48603.02622377575,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.6724830893144238,
+      "rss_measured_mib": 18.5625,
+      "ranges": {
+        "healthy": [
+          372719.8926733727,
+          646459.6983916675
+        ],
+        "churn": [
+          47761.76707480289,
+          59401.97039771146
+        ]
+      }
+    },
+    "management/baseline": {
+      "healthy": 549091.3763074294,
+      "healthy_p99_ms": 0.262144,
+      "churn": 39452.91778177421,
+      "churn_p99_ms": 2.097152,
+      "inspection": 199.97216040075594,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.8859874377796295,
+      "rss_measured_mib": 19.12109375,
+      "ranges": {
+        "healthy": [
+          337086.0233733601,
+          552333.105634908
+        ],
+        "churn": [
+          39289.78017993903,
+          47017.90409027614
+        ]
+      }
+    },
+    "management/candidate": {
+      "healthy": 559485.3710449241,
+      "healthy_p99_ms": 0.262144,
+      "churn": 40386.03548182074,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97189634963084,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.904731679495944,
+      "rss_measured_mib": 19.06640625,
+      "ranges": {
+        "healthy": [
+          551893.6166816907,
+          562822.7148827432
+        ],
+        "churn": [
+          40337.31766189232,
+          40826.38734117585
+        ]
+      }
+    }
+  }
+}
