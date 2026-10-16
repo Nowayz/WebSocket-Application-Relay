@@ -167,6 +167,8 @@ recorded results and local dependency setup.
   incomplete input retains separately admitted staging.
 - Channel variables have count and byte limits and disappear with an empty
   ordinary channel. `re_globl` persists, matching the original behavior.
+  Peers share the registry's canonical channel-name storage; a new channel owns
+  one bounded name copy independent of receive buffers.
 - OS entropy supplies IDs. Fixed-ID takeover closes the old owner with `4001`;
   old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
 - Mio workers drive native sockets; Tokio handles management and process signals.

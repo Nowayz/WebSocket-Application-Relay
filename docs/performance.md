@@ -2053,3 +2053,123 @@ the selected commit with its recorded nine-line source deletion. Earlier
 exploratory variants remain in the local prototype archive and contribute no
 selected timing result. These are finite local acceptance and loopback
 measurements, without a new production or TLS capacity claim.
+
+## Canonical channel-name ownership (2026-10-16)
+
+`b0da28a` makes peers share the registry's existing channel-name storage. The
+before control is `04cc911`. Previously, every join copied its name into a new
+`Bytes`, including joins to an existing channel. Cloning that new name for the
+channel entry also promoted its ownership, leaving two small live allocations
+per nonempty name in the shared-global-room probe.
+
+Admission now uses one
+[`get_key_value`](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.get_key_value)
+lookup for both bounds and the stored name. Joining an existing channel clones
+that canonical owner. A new channel still copies at most 16 name bytes, so it
+never borrows an ephemeral caller buffer or pins a decoder slab. Empty ordinary
+channels and their variables retire as before; surviving name views keep their
+own immutable storage. Global names use the existing static key. No intern pool
+or retained empty-channel cache was introduced.
+
+### Allocation evidence
+
+The server-only heap diagnostic runs the existing verified population client
+and registry helper, with a dump at each quiescent gate. It holds 1,024 additional
+global-room peers plus the two private endpoints, all using `re_globl`. All
+payload, sender, FIFO, ordered departure, Close/EOF, counter and resource checks
+still run. Only the server loads gperftools; the client and controller retain
+their ordinary allocators. The diagnostic driver, base-helper hash, library
+hash/environment and each captured dump hash are recorded. Heap timing and RSS are
+excluded from ordinary performance comparisons.
+
+GNU `addr2line` symbolizes return addresses using each dump's recorded PIE base,
+including inline frames. At the live-population gate, the attributed classes are:
+
+| Requested live allocation class / 1,026 members | Before objects | Selected objects | Before bytes | Selected bytes |
+| --- | ---: | ---: | ---: | ---: |
+| `Bytes::copy_from_slice` | 1,026 | 0 | 8,208 | 0 |
+| `bytes::shallow_clone_vec` | 1,026 | 0 | 24,624 | 0 |
+| Identified name storage total | 2,052 | 0 | 32,832 | 0 |
+
+The whole capture has 5,403 live allocations before and 3,354 after. The
+identified name allocations account for 38.0% of the before allocation count.
+Three other live allocations differ between these captures. The full requested
+live byte totals also vary with worker-arena capacity and connection placement;
+attribute the deterministic 32,832-byte saving to these name classes rather than
+treating the entire heap delta as a name-storage win. Requested heap bytes,
+allocation count, allocator-retained pages, RSS and kernel socket memory are
+different measurements.
+
+Both captures show no live name-copy or name-promotion objects after all members
+leave. The selected capture still records transient welcome-frame promotions
+in cumulative allocation counts. Sharing names removes persistent metadata
+duplication; it does not establish that all connection setup is allocation-free.
+
+### Ordinary timing and tradeoffs
+
+The [comparison matrix](benchmarks/2026-10-16-channel-names-comparison.json)
+contains 24 successful fresh-process cases: three alternating before/selected
+repetitions of four workloads, with workload order rotated. Server CPUs are 0–3
+and client CPUs 4–7. Frozen clients and unchanged helpers verify every full body,
+sender, FIFO sequence, query, Close/EOF and exact counter/resource total. No
+build, profiler or other load test overlaps ordinary timing.
+
+The first three workloads hold 8,192 separate idle rooms and one private pair,
+using 1 KiB values and window 16 for eight seconds. Churn adds eight reconnect
+workers; management also adds 200 paced HTTP inspections/s. The shared workload
+uses 1,024 additional global-room members and three three-second private phases
+before, during and after population. Its retirement checks are outside timing.
+
+| Median of three | Before | Selected |
+| --- | ---: | ---: |
+| Private deliveries/s, 8,192 idle rooms | 575,995 | 585,236 |
+| With reconnects: healthy deliveries/s | 350,961 | 354,733 |
+| With reconnects: complete cycles/s | 71,988 | 71,714 |
+| With reconnects and HTTP: healthy deliveries/s | 317,694 | 323,720 |
+| With reconnects and HTTP: complete cycles/s | 59,654 | 59,985 |
+| Shared room, 1,024 idle members: private deliveries/s | 515,156 | 510,780 |
+| Shared room: CPU ns/delivery | 1,132 | 1,129 |
+| Shared room: event-gate RSS | 6.22 MiB | 6.27 MiB |
+
+Throughput changes range from −0.8% for the shared-room case to +1.9% for healthy
+traffic with HTTP/reconnects. Churn-only cycles change −0.4%. Delivery, reconnect
+and inspection p99 buckets are unchanged. These small deltas and the
+per-run ranges do not establish a broad throughput improvement. The observed RSS
+does not establish a reduction either. The retained improvement is ownership
+simplicity and elimination of measured duplicate name allocations, with one
+channel lookup replacing the prior two admission lookups. This is not another
+large routing-speed gain or a new C++ performance comparison.
+
+### Verification and reproducibility
+
+The [source checks](benchmarks/2026-10-16-channel-names-checks.json) pass 97 Linux
+Rust tests, strict Clippy and formatting. The
+[storage regression](benchmarks/2026-10-16-channel-names-regression.json) fails
+the intended canonical-sharing assertion against the old implementation and
+passes with the change. New checks cover static global names, empty/binary/NUL,
+16-byte and Unicode names, caller-buffer mutation, surviving name views and
+fresh variables after ordinary-channel recreation. Existing rehash checks still
+prove stable stored-name, variable and published-payload addresses.
+
+The selected release passes the unchanged
+[C++ reference suite](benchmarks/2026-10-16-channel-names-reference.json), covering
+48 common cases and eight documented differences through the legacy bridge.
+The [stability run](benchmarks/2026-10-16-channel-names-stability.json) verifies
+9,225,104 private deliveries, 531,768 complete reconnect lifecycles and 210,542
+healthy 64 KiB deliveries alongside an unread recipient. The
+[fanout run](benchmarks/2026-10-16-channel-names-fanout.json) verifies 773,280
+mixed-size deliveries, four unread retirements and 108 departure notifications.
+Every service exits successfully without a forced kill.
+
+Seven JavaScript checks and all seven
+[headed Chrome checks](benchmarks/2026-10-16-channel-names-browser.json) pass,
+including the 128 KiB value and clean Close handshakes. The running native hash
+matches the selected frozen build; four listeners, readiness and empty final
+connection/staging/queue/variable gauges are verified.
+
+The [heap summary](benchmarks/2026-10-16-channel-names-heap.json) links eight
+captured gates per implementation. Full diagnostic reports and symbolized
+allocation tables retain the collector/analyzer sources and exact hashes. The
+[build manifest](benchmarks/2026-10-16-channel-names-build.json) binds the source,
+vendor files, test/helper sources, control/release/client binaries, raw heaps
+and every report. These remain finite local and loopback checks.
