@@ -1,0 +1,530 @@
+{
+  "scope": "Final socket-owned admission build and committed before runtime, with the same frozen populated-registry client and helper. Four workers, server CPUs 0-3 and client CPUs 4-7; 1KiB private values, window 16. Three fresh alternating before/selected repetitions at 1024 idle non-listening global members. Every case measures three 3-second phases: two peers, live population, and two peers after exact FIFO departure/Close/EOF checks. The 8192-member before trace was captured before implementing indexes and is imported unchanged; selected is a fresh matching run. Those large cases have one repetition each and are not medians. No compilation, profiling or other load test overlaps timing.",
+  "variants": {
+    "before": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/12bfc4d/war-relay",
+      "sha256": "7b2b0628c5c698a45ffd59b90e54126e60308e5df05d027fa4ea9c964c031238"
+    },
+    "selected": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/04cc911/war-relay",
+      "sha256": "3eb883f2a2627e9af14f1784d6d16b8c00c475956c709698b2527a4ef7051c1c"
+    }
+  },
+  "client_sha256": "3da6b04dde7f971ac1d2a5e950efa237f70f8e7b5040e4bca3cb6ae82a73df5a",
+  "client_source": "//! Verify routing before/after a transient population in separate or shared rooms.\n//! Every reported event waits for the harness to sample and send `continue`.\n//! This blocking control gate is outside timed traffic, on the CLI main thread.\nuse std::{\n    io::{self, Write},\n    sync::{\n        Arc,\n        atomic::{AtomicUsize, Ordering},\n    },\n    time::{Duration, Instant},\n};\n\nuse anyhow::{Context, Result, ensure};\nuse bytes::Bytes;\nuse clap::{Parser, ValueEnum};\nuse futures_util::{SinkExt, StreamExt};\nuse tokio::{net::TcpStream, time::timeout};\nuse tokio_tungstenite::{\n    MaybeTlsStream, WebSocketStream, connect_async_with_config,\n    tungstenite::{\n        Message,\n        protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},\n    },\n};\nuse war_relay::protocol;\n\ntype Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;\n\n#[derive(Clone, Copy, ValueEnum)]\nenum Scope {\n    Global,\n    Room,\n    Private,\n    Channels,\n}\n\n#[derive(Parser)]\nstruct Args {\n    #[arg(long, default_value = \"ws://127.0.0.1:1338\")]\n    url: String,\n    #[arg(long, default_value_t = 8192)]\n    peak_clients: usize,\n    #[arg(long, default_value_t = 3)]\n    seconds: u64,\n    #[arg(long, default_value_t = 1)]\n    waves: usize,\n    #[arg(long, default_value_t = 1024)]\n    payload_bytes: usize,\n    /// Global broadcast with separate rooms, ordinary room broadcast, or private\n    /// delivery through a populated global-room listener index. Channels queries\n    /// inspect a retained channel-name table after separate rooms depart.\n    #[arg(long, value_enum, default_value = \"global\")]\n    scope: Scope,\n    /// Also measure private delivery while the global-room population is live.\n    #[arg(long)]\n    measure_populated: bool,\n}\n\n#[tokio::main(worker_threads = 4)]\nasync fn main() -> Result<()> {\n    let args = Args::parse();\n    ensure!(\n        args.peak_clients <= 9000,\n        \"peak-clients must be in 0..=9000\"\n    );\n    ensure!(\n        (1..=60).contains(&args.seconds),\n        \"seconds must be in 1..=60\"\n    );\n    ensure!((1..=8).contains(&args.waves), \"waves must be in 1..=8\");\n    ensure!(\n        !args.measure_populated || matches!(args.scope, Scope::Private),\n        \"measure-populated requires private scope\"\n    );\n    ensure!(\n        (8..=65536).contains(&args.payload_bytes),\n        \"payload-bytes must be in 8..=65536\"\n    );\n    let same_room = matches!(args.scope, Scope::Room | Scope::Private);\n    let queries = matches!(args.scope, Scope::Channels);\n    let room = if matches!(args.scope, Scope::Room) {\n        \"peak-room\"\n    } else {\n        \"re_globl\"\n    };\n    let (mut sender, id, first_welcome) = join(&args.url, room).await?;\n    let (mut receiver, receiver_id, second_welcome) = join(&args.url, room).await?;\n    let target = if matches!(args.scope, Scope::Private) {\n        receiver_id\n    } else {\n        protocol::BROADCAST\n    };\n    let mut welcome_bytes = first_welcome + second_welcome;\n    let mut payload = vec![0x5a; args.payload_bytes];\n    let mut packets: Vec<_> = (0u64..64)\n        .map(|i| {\n            payload[..8].copy_from_slice(&i.to_le_bytes());\n            let value = protocol::byte_string(&payload);\n            (\n                protocol::envelope(target, &value),\n                protocol::envelope(id, &value),\n            )\n        })\n        .collect();\n    let mut setup_reply_bytes = 0;\n    let mut setup_request_bytes = 0;\n    if queries {\n        let request = protocol::request(0, &protocol::text(\"registry-peak-benchmark\"));\n        setup_request_bytes = request.len();\n        sender.send(Message::Binary(request)).await?;\n        let reply = data(&mut sender).await?;\n        ensure!(\n            reply.as_ref() == b\"\\x82\\x00\\x82\\x00\\xf5\",\n            \"authentication failed\"\n        );\n        setup_reply_bytes = reply.len();\n        // Independent known bytes: [0, [2, [[h'72655f676c6f626c', 2]]]].\n        packets = vec![(\n            Bytes::from_static(b\"\\x82\\x00\\x82\\x02\\xf6\"),\n            Bytes::from_static(b\"\\x82\\x00\\x82\\x02\\x81\\x82\\x48re_globl\\x02\"),\n        )];\n    }\n    gate(\"traffic_ready\", 0, serde_json::json!({\"sessions\":2}))?;\n    gate(\n        \"traffic_done\",\n        0,\n        traffic(&mut sender, &mut receiver, &packets, args.seconds, queries).await?,\n    )?;\n    let mut fillers = Vec::with_capacity(args.peak_clients);\n    let mut departure_deliveries = 0u64;\n    let mut departure_bytes = 0u64;\n    for wave in 1..=args.waves {\n        for i in 0..args.peak_clients {\n            let channel = if same_room {\n                room.into()\n            } else {\n                format!(\"peak{i:x}\")\n            };\n            let (socket, id, bytes) = join(&args.url, &channel).await?;\n            welcome_bytes += bytes;\n            fillers.push((socket, id));\n        }\n        gate(\n            \"population_ready\",\n            wave,\n            serde_json::json!({\"sessions\":args.peak_clients+2,\"channels\":match args.scope {Scope::Global | Scope::Channels =>args.peak_clients+1, Scope::Room=>2, Scope::Private=>1}}),\n        )?;\n        if args.measure_populated {\n            gate(\n                \"population_traffic_ready\",\n                wave,\n                serde_json::json!({\"sessions\":args.peak_clients+2}),\n            )?;\n            gate(\n                \"population_traffic_done\",\n                wave,\n                traffic(&mut sender, &mut receiver, &packets, args.seconds, false).await?,\n            )?;\n        }\n        if same_room {\n            let (next_sender, next_receiver, deliveries, bytes) =\n                depart_room(sender, receiver, &mut fillers).await?;\n            sender = next_sender;\n            receiver = next_receiver;\n            departure_deliveries += deliveries;\n            departure_bytes += bytes;\n        } else {\n            for (mut socket, _) in fillers.drain(..) {\n                close(&mut socket).await?;\n            }\n        }\n        gate(\"traffic_ready\", wave, serde_json::json!({\"sessions\":2}))?;\n        gate(\n            \"traffic_done\",\n            wave,\n            traffic(&mut sender, &mut receiver, &packets, args.seconds, queries).await?,\n        )?;\n    }\n    close(&mut sender).await?;\n    let disconnect = protocol::envelope(protocol::BROADCAST, &protocol::uint(id));\n    ensure!(\n        data(&mut receiver).await? == disconnect,\n        \"final disconnect event changed\"\n    );\n    close(&mut receiver).await?;\n    gate(\n        \"done\",\n        args.waves,\n        serde_json::json!({\"joins\":args.peak_clients*args.waves+2,\"normal_closes\":args.peak_clients*args.waves+2,\"welcome_bytes\":welcome_bytes,\"setup_deliveries\":usize::from(queries),\"setup_request_bytes\":setup_request_bytes,\"setup_reply_bytes\":setup_reply_bytes,\"disconnect_bytes\":disconnect.len(),\"disconnects\":1,\"departure_deliveries\":departure_deliveries,\"departure_bytes\":departure_bytes}),\n    )?;\n    Ok(())\n}\n\nasync fn depart_room(\n    sender: Socket,\n    receiver: Socket,\n    fillers: &mut Vec<(Socket, u64)>,\n) -> Result<(Socket, Socket, u64, u64)> {\n    let count = fillers.len();\n    let departures: Arc<[Bytes]> = fillers\n        .iter()\n        .map(|(_, id)| protocol::envelope(protocol::BROADCAST, &protocol::uint(*id)))\n        .collect();\n    let progress: Arc<[AtomicUsize]> = (0..count + 2).map(|_| AtomicUsize::new(0)).collect();\n    let (allowed, _) = tokio::sync::watch::channel(0usize);\n    let mut tasks = Vec::with_capacity(count);\n    let source = tokio::spawn(read_departures(\n        sender,\n        departures.clone(),\n        progress.clone(),\n        count,\n        count,\n    ));\n    let target = tokio::spawn(read_departures(\n        receiver,\n        departures.clone(),\n        progress.clone(),\n        count + 1,\n        count,\n    ));\n    for (index, (socket, _)) in fillers.drain(..).enumerate() {\n        let departures = departures.clone();\n        let progress = progress.clone();\n        let mut allowed = allowed.subscribe();\n        tasks.push(tokio::spawn(async move {\n            let mut socket = read_departures(socket, departures, progress, index, index).await?;\n            loop {\n                let ready = *allowed.borrow_and_update() > index;\n                if ready {\n                    break;\n                }\n                allowed.changed().await?;\n            }\n            close(&mut socket).await\n        }));\n    }\n    // Pace 16 departures at a time. Every remaining peer must read the complete\n    // prefix before more closes start, keeping default 64-message queues safe.\n    // These shared counters/encoded events are allocated once, outside traffic.\n    for start in (0..count).step_by(16) {\n        let end = (start + 16).min(count);\n        allowed.send_replace(end);\n        timeout(Duration::from_secs(10), async {\n            while progress[end..]\n                .iter()\n                .any(|n| n.load(Ordering::Acquire) < end)\n            {\n                tokio::time::sleep(Duration::from_millis(1)).await;\n            }\n        })\n        .await\n        .context(\"room departure window stalled\")?;\n    }\n    for task in tasks {\n        task.await??;\n    }\n    let deliveries = count as u64 * (count as u64 + 3) / 2;\n    let bytes = departures\n        .iter()\n        .enumerate()\n        .map(|(i, bytes)| (count - i + 1) as u64 * bytes.len() as u64)\n        .sum();\n    Ok((source.await??, target.await??, deliveries, bytes))\n}\n\nasync fn read_departures(\n    mut socket: Socket,\n    expected: Arc<[Bytes]>,\n    progress: Arc<[AtomicUsize]>,\n    slot: usize,\n    count: usize,\n) -> Result<Socket> {\n    for (index, bytes) in expected.iter().take(count).enumerate() {\n        ensure!(\n            data(&mut socket).await? == *bytes,\n            \"departure ID, order or bytes changed\"\n        );\n        progress[slot].store(index + 1, Ordering::Release);\n    }\n    Ok(socket)\n}\n\nfn gate(event: &str, wave: usize, details: serde_json::Value) -> Result<()> {\n    println!(\n        \"{}\",\n        serde_json::json!({\"event\":event,\"wave\":wave,\"details\":details})\n    );\n    io::stdout().flush()?;\n    let mut line = String::new();\n    io::stdin().read_line(&mut line)?;\n    ensure!(line == \"continue\\n\", \"expected harness continuation\");\n    Ok(())\n}\n\nasync fn traffic(\n    sender: &mut Socket,\n    receiver: &mut Socket,\n    packets: &[(Bytes, Bytes)],\n    seconds: u64,\n    queries: bool,\n) -> Result<serde_json::Value> {\n    let start = Instant::now();\n    let until = start + Duration::from_secs(seconds);\n    let mut count = 0u64;\n    let mut latency = [0u64; 64];\n    let mut maximum = 0u64;\n    let mut stamps = [Instant::now(); 16];\n    while Instant::now() < until {\n        for stamp in &mut stamps {\n            *stamp = Instant::now();\n            sender\n                .send(Message::Binary(\n                    packets[count as usize % packets.len()].0.clone(),\n                ))\n                .await?;\n            count += 1;\n        }\n        for (i, stamp) in stamps.iter().enumerate() {\n            let expected = &packets[(count as usize - stamps.len() + i) % packets.len()].1;\n            let received = if queries {\n                data(sender).await?\n            } else {\n                data(receiver).await?\n            };\n            ensure!(received == *expected, \"payload, sender or FIFO changed\");\n            let ns = stamp.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;\n            latency[ns.checked_ilog2().unwrap_or(0) as usize] += 1;\n            maximum = maximum.max(ns);\n        }\n    }\n    let elapsed = start.elapsed().as_secs_f64();\n    let rank = (count * 99).div_ceil(100);\n    let mut cumulative = 0;\n    let p99 = latency\n        .iter()\n        .position(|n| {\n            cumulative += n;\n            cumulative >= rank\n        })\n        .unwrap();\n    Ok(\n        serde_json::json!({\"sent\":count,\"verified\":count,\"elapsed_seconds\":elapsed,\"deliveries_per_second\":count as f64/elapsed,\"p99_upper_ms\":(1u128<<(p99+1)) as f64/1e6,\"max_latency_ms\":maximum as f64/1e6,\"sent_encoded_bytes\":count*packets[0].0.len() as u64,\"delivered_encoded_bytes\":count*packets[0].1.len() as u64,\"value_bytes\":if queries {0} else {count*protocol::parse(&packets[0].0).unwrap().1.len() as u64}}),\n    )\n}\n\nasync fn join(url: &str, channel: &str) -> Result<(Socket, u64, usize)> {\n    let config = WebSocketConfig::default().read_buffer_size(4096);\n    let (mut socket, _) = timeout(\n        Duration::from_secs(5),\n        connect_async_with_config(url, Some(config), true),\n    )\n    .await??;\n    socket\n        .send(Message::Binary(protocol::text(channel)))\n        .await?;\n    let welcome = data(&mut socket).await?;\n    let id = minicbor::Decoder::new(&welcome).u64()?;\n    ensure!(id != 0 && id != protocol::BROADCAST, \"invalid ID\");\n    Ok((socket, id, welcome.len()))\n}\n\nasync fn data(socket: &mut Socket) -> Result<Bytes> {\n    match timeout(Duration::from_secs(5), socket.next())\n        .await?\n        .context(\"socket closed\")??\n    {\n        Message::Binary(bytes) => Ok(bytes),\n        message => anyhow::bail!(\"unexpected data message: {message:?}\"),\n    }\n}\n\nasync fn close(socket: &mut Socket) -> Result<()> {\n    let expected = CloseFrame {\n        code: CloseCode::Normal,\n        reason: \"registry-peak\".into(),\n    };\n    socket.send(Message::Close(Some(expected.clone()))).await?;\n    let reply = timeout(Duration::from_secs(5), socket.next())\n        .await?\n        .context(\"missing Close acknowledgement\")??;\n    ensure!(\n        reply == Message::Close(Some(expected)),\n        \"Close changed: {reply:?}\"\n    );\n    socket.flush().await?;\n    ensure!(\n        timeout(Duration::from_secs(5), socket.next())\n            .await?\n            .is_none(),\n        \"expected EOF after Close\"\n    );\n    Ok(())\n}\n",
+  "helper_sha256": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc",
+  "helper_source": "#!/usr/bin/env python3\n\"\"\"Measure verified routing or channel queries before/after a transient population.\n\nBuild the registry_peak example first. Server/client phases are explicitly gated;\nnative CPU snapshots exclude filling/draining the population from routing cost.\nThe optional perf profile is diagnostic and must not be used as a timing sample.\n\"\"\"\nimport argparse\nimport base64\nimport datetime\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport platform\nimport select\nimport signal\nimport subprocess\nimport tempfile\nimport time\nimport urllib.request\n\nimport benchmark as runtime\n\nROOT = runtime.ROOT\nPROBE_TOKEN = \"registry-peak-benchmark\"  # Disposable loopback benchmark only.\n\n\ndef inspection(port, event, peak):\n    \"\"\"Compare every management field and its ordering with independent values.\"\"\"\n    expected = [{\"name\": \"re_globl\", \"name_base64\": \"cmVfZ2xvYmw=\",\n                 \"members\": 0 if event == \"done\" else 2,\n                 \"variables\": 0, \"variable_bytes\": 0}]\n    if event == \"population_ready\":\n        for i in range(peak):\n            name = f\"peak{i:x}\"\n            expected.append({\"name\": name, \"name_base64\": base64.b64encode(name.encode()).decode(),\n                             \"members\": 1, \"variables\": 0, \"variable_bytes\": 0})\n    expected.sort(key=lambda row: row[\"name_base64\"])\n    request = urllib.request.Request(f\"http://127.0.0.1:{port}/v1/channels\",\n                                     headers={\"Authorization\": f\"Bearer {PROBE_TOKEN}\"})\n    with urllib.request.urlopen(request, timeout=5) as response:\n        body = response.read()\n        assert response.status == 200\n        assert json.loads(body) == expected, \"management inspection changed\"\n    return {\"entries\": len(expected), \"bytes\": len(body), \"sha256\": hashlib.sha256(body).hexdigest(),\n            \"passed\": True}\n\n\ndef run(args):\n    port, admin = runtime.free_port(), runtime.free_port()\n    env = {k: v for k, v in os.environ.items() if not k.startswith(\"WAR_\")}\n    queries = args.scope == \"channels\"\n    if queries:\n        env.update(WAR_AUTH_PASSWORD=PROBE_TOKEN, WAR_ADMIN_TOKEN=PROBE_TOKEN)\n\n    def metrics():\n        if not queries:\n            return runtime.metrics(admin)\n        request = urllib.request.Request(f\"http://127.0.0.1:{admin}/metrics\",\n                                         headers={\"Authorization\": f\"Bearer {PROBE_TOKEN}\"})\n        with urllib.request.urlopen(request, timeout=1) as response:\n            return dict(line.split() for line in response.read().decode().splitlines()\n                        if line.startswith(\"war_\"))\n    server_command = [str(args.server.resolve()), \"--bind\", f\"127.0.0.1:{port}\",\n                      \"--admin-bind\", f\"127.0.0.1:{admin}\", \"--workers\", \"4\",\n                      \"--messages-per-second\", \"0\", \"--bytes-per-second\", \"0\",\n                      \"--ping-interval-secs\", \"0\"]\n    command = [str(args.client.resolve()), \"--url\", f\"ws://127.0.0.1:{port}\",\n               \"--peak-clients\", str(args.peak_clients), \"--waves\", str(args.waves),\n               \"--seconds\", str(args.seconds), \"--payload-bytes\", str(args.payload_bytes)]\n    command += [\"--scope\", args.scope]\n    if args.measure_populated:\n        command.append(\"--measure-populated\")\n    if args.server_cpus:\n        server_command = [\"taskset\", \"-c\", args.server_cpus] + server_command\n    if args.client_cpus:\n        command = [\"taskset\", \"-c\", args.client_cpus] + command\n    digest = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\n    result = {\"timestamp_utc\": datetime.datetime.now(datetime.timezone.utc).isoformat(),\n              \"host\": platform.platform(), \"server_command\": server_command, \"command\": command,\n              \"server_sha256\": digest(args.server), \"client_sha256\": digest(args.client),\n              \"client_source_sha256\": digest(ROOT / \"examples/registry_peak.rs\"),\n              \"runner_sha256\": digest(__file__), \"profile_diagnostic\": args.profile,\n              \"args\": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},\n              \"scope\": \"Two retained clients, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Global: broadcast with transient peers in separate rooms. Room: ordinary room broadcast, transient peers in the same room. Private: private delivery with all peers in the global room, exercising its listener index with default zero listener flags. Channels: repeated authenticated queries on the sender, exact independent CBOR reply, separate temporary rooms; authenticated HTTP inspection checks every field and base64 ordering at each gate, outside timed snapshots. Both shared-room modes verify every departing ID and exact FIFO prefix at each remaining peer, pacing 16 departures per window by reader progress so default queue limits remain intact. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.\",\n              \"population_traffic_scope\": \"When requested, a separate private traffic phase holds every global-room member connected with zero listener flags. Only the addressed recipient receives data; all members subsequently verify exact FIFO departure notifications, Close and EOF. Population setup and retirement are outside routing timing.\",\n              \"events\": [], \"traffic\": [], \"passed\": False}\n    args.output.parent.mkdir(parents=True, exist_ok=True)\n    with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:\n        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)\n        client = perf = None\n        perf_log = None\n        try:\n            started = time.monotonic()\n            while True:\n                if server.poll() is not None:\n                    raise RuntimeError(\"server stopped during readiness\")\n                try:\n                    metrics()\n                    break\n                except OSError:\n                    if time.monotonic() - started > 5:\n                        raise\n                    time.sleep(.02)\n            client = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,\n                                      stderr=client_errors, text=True, env=env)\n            ready = {}\n            limit = (args.waves + 1 + args.waves * args.measure_populated) * args.seconds + args.peak_clients * args.waves * .02 + 40\n            while True:\n                if time.monotonic() - started > limit:\n                    raise TimeoutError(\"registry workload exceeded its outer deadline\")\n                if not select.select([client.stdout], [], [], .25)[0]:\n                    continue\n                line = client.stdout.readline()\n                if not line:\n                    raise RuntimeError(\"client stopped before its final gated event\")\n                event = json.loads(line)\n                # Inspect outside the traffic CPU interval: before its opening\n                # snapshot, after its closing snapshot. Other gates are untimed.\n                if queries and event[\"event\"] == \"traffic_ready\":\n                    event[\"management_inspection\"] = inspection(admin, event[\"event\"], args.peak_clients)\n                event.update(metrics={k: int(float(v)) for k, v in metrics().items()},\n                             process=runtime.snapshot(server.pid), seconds=time.monotonic() - started)\n                if queries and event[\"event\"] != \"traffic_ready\":\n                    event[\"management_inspection\"] = inspection(admin, event[\"event\"], args.peak_clients)\n                result[\"events\"].append(event)\n                observed, wave = event[\"metrics\"], event[\"wave\"]\n                if event[\"event\"] in (\"traffic_ready\", \"population_traffic_ready\"):\n                    populated = event[\"event\"] == \"population_traffic_ready\"\n                    assert observed[\"war_connections\"] == observed[\"war_sessions\"] == (args.peak_clients + 2 if populated else 2)\n                    assert observed[\"war_channels\"] == (2 if args.scope == \"room\" else 1)\n                    ready[wave] = event\n                    if args.profile and wave == 1 and populated == args.measure_populated:\n                        profile = args.output.with_suffix(\".perf.data\")\n                        perf_log = tempfile.TemporaryFile()\n                        perf = subprocess.Popen([\"perf\", \"record\", \"-e\", \"cycles:u\", \"-F\", \"499\",\n                                                 \"--call-graph\", \"dwarf,8192\", \"-p\", str(server.pid),\n                                                 \"-o\", str(profile)], stdout=perf_log, stderr=perf_log)\n                        time.sleep(.2)\n                        if perf.poll() is not None:\n                            raise RuntimeError(\"perf could not attach\")\n                        result[\"profile_path\"] = str(profile)\n                elif event[\"event\"] in (\"traffic_done\", \"population_traffic_done\"):\n                    if perf is not None:\n                        perf.send_signal(signal.SIGINT)\n                        result[\"perf_exit_code\"] = perf.wait(timeout=10)\n                        # perf may propagate our deliberate recording-stop\n                        # signal after successfully flushing its samples.\n                        assert result[\"perf_exit_code\"] in (0, -signal.SIGINT), \"perf failed\"\n                        perf_log.seek(0)\n                        result[\"perf_log\"] = perf_log.read().decode(errors=\"replace\")\n                        perf_log.close()\n                        perf = perf_log = None\n                    before, output = ready[wave], event[\"details\"]\n                    cpu = event[\"process\"][\"cpu_seconds\"] - before[\"process\"][\"cpu_seconds\"]\n                    expected = {\"war_incoming_messages_total\": output[\"sent\"],\n                                \"war_incoming_bytes_total\": output[\"sent_encoded_bytes\"],\n                                \"war_deliveries_total\": output[\"verified\"],\n                                \"war_delivered_bytes_total\": output[\"delivered_encoded_bytes\"],\n                                \"war_routing_reused_bytes_total\": output[\"value_bytes\"],\n                                \"war_routing_copied_bytes_total\": 0}\n                    for key, value in expected.items():\n                        assert observed[key] - before[\"metrics\"][key] == value, key\n                    row = {\"wave\": wave, \"populated\": event[\"event\"] == \"population_traffic_done\", **output, \"server_cpu_seconds\": cpu,\n                           \"server_ns_per_delivery\": cpu * 1e9 / output[\"verified\"]}\n                    result[\"traffic\"].append(row)\n                    print(json.dumps(row), flush=True)\n                elif event[\"event\"] == \"population_ready\":\n                    assert observed[\"war_connections\"] == observed[\"war_sessions\"] == args.peak_clients + 2\n                    assert observed[\"war_channels\"] == {\"room\": 2, \"private\": 1, \"global\": args.peak_clients + 1, \"channels\": args.peak_clients + 1}[args.scope]\n                elif event[\"event\"] == \"done\":\n                    for key in [\"war_connections\", \"war_sessions\", \"war_queued_bytes\", \"war_variable_bytes\", \"war_read_buffer_reserved_bytes\"]:\n                        assert observed[key] == 0, key\n                    assert observed[\"war_channels\"] == 1\n                    details = event[\"details\"]\n                    joins = args.peak_clients * args.waves + 2\n                    assert details[\"normal_closes\"] == details[\"joins\"] == joins\n                    assert observed[\"war_joined_total\"] == observed[\"war_disconnected_total\"] == observed[\"war_accepted_total\"] == joins\n                    assert observed[\"war_incoming_messages_total\"] == sum(t[\"sent\"] for t in result[\"traffic\"]) + details.get(\"setup_deliveries\", 0)\n                    assert observed[\"war_incoming_bytes_total\"] == sum(t[\"sent_encoded_bytes\"] for t in result[\"traffic\"]) + details.get(\"setup_request_bytes\", 0)\n                    assert observed[\"war_deliveries_total\"] == joins + sum(t[\"verified\"] for t in result[\"traffic\"]) + details.get(\"departure_deliveries\", 0) + details.get(\"setup_deliveries\", 0) + 1\n                    assert observed[\"war_delivered_bytes_total\"] == details[\"welcome_bytes\"] + details[\"disconnect_bytes\"] + details.get(\"departure_bytes\", 0) + details.get(\"setup_reply_bytes\", 0) + sum(t[\"delivered_encoded_bytes\"] for t in result[\"traffic\"])\n                    for key in [\"war_handshake_errors_total\", \"war_origin_rejected_total\", \"war_join_rejected_total\", \"war_rejected_total\", \"war_protocol_errors_total\", \"war_rate_limited_total\", \"war_write_timeouts_total\", \"war_write_errors_total\", \"war_close_failures_total\", \"war_aborted_writes_total\", \"war_transport_disconnects_total\", \"war_slow_consumers_total\", \"war_global_pressure_total\", \"war_read_buffer_reservations_rejected_total\"]:\n                        assert observed.get(key, 0) == 0, key\n                client.stdin.write(\"continue\\n\")\n                client.stdin.flush()\n                if event[\"event\"] == \"done\":\n                    assert client.wait(timeout=5) == 0\n                    result[\"passed\"] = True\n                    break\n        except Exception as error:\n            result[\"error\"] = repr(error)\n        finally:\n            if perf is not None:\n                perf.send_signal(signal.SIGINT)\n                perf.wait(timeout=10)\n            if perf_log is not None:\n                perf_log.seek(0)\n                result[\"perf_log\"] = perf_log.read().decode(errors=\"replace\")\n                perf_log.close()\n            if client is not None:\n                if client.poll() is None:\n                    client.kill()\n                    client.wait()\n                result[\"client_exit_code\"] = client.returncode\n                client.stdin.close()\n                client.stdout.close()\n            server.terminate()\n            try:\n                result[\"server_exit_code\"] = server.wait(timeout=12)\n            except subprocess.TimeoutExpired:\n                server.kill()\n                result[\"server_exit_code\"] = server.wait()\n            logs.seek(0)\n            client_errors.seek(0)\n            result.update(server_log=logs.read().decode(errors=\"replace\"), client_log=client_errors.read().decode(errors=\"replace\"))\n            if result[\"server_exit_code\"] != 0:\n                result[\"passed\"] = False\n                result.setdefault(\"error\", f\"server exited with status {result['server_exit_code']}\")\n            args.output.write_text(json.dumps(result, indent=2) + \"\\n\")\n    return result\n\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"--server\", type=Path, default=runtime.SERVER)\n    parser.add_argument(\"--client\", type=Path, default=ROOT / \"target/release/examples/registry_peak\")\n    parser.add_argument(\"--peak-clients\", type=int, default=8192)\n    parser.add_argument(\"--waves\", type=int, default=1)\n    parser.add_argument(\"--seconds\", type=int, default=3)\n    parser.add_argument(\"--payload-bytes\", type=int, default=1024)\n    parser.add_argument(\"--server-cpus\", default=\"0-3\")\n    parser.add_argument(\"--client-cpus\", default=\"4-7\")\n    parser.add_argument(\"--profile\", action=\"store_true\")\n    parser.add_argument(\"--scope\", choices=[\"global\", \"room\", \"private\", \"channels\"], default=\"global\")\n    parser.add_argument(\"--measure-populated\", action=\"store_true\", help=\"also measure private routing while all global-room members remain connected\")\n    parser.add_argument(\"--output\", type=Path, required=True)\n    arguments = parser.parse_args()\n    if arguments.measure_populated and arguments.scope != \"private\":\n        parser.error(\"--measure-populated requires --scope private\")\n    outcome = run(arguments)\n    print(json.dumps({\"passed\": outcome[\"passed\"], \"error\": outcome.get(\"error\")}), flush=True)\n    raise SystemExit(0 if outcome[\"passed\"] else 1)\n",
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport shutil\nimport statistics\nimport subprocess\nimport sys\n\nroot=Path(__file__).resolve().parents[1]\nservers={'before':root/'artifacts/baselines/12bfc4d/war-relay',\n         'selected':root/json.loads((root/'artifacts/listeners-selected-build.json').read_text())['directory']/'war-relay'}\nclient=root/'artifacts/baselines/listener-study-clients/registry_peak'\noutput=root/'docs/benchmarks/2026-10-16-listeners-population.json'\nsha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nrecord={'scope':'Final socket-owned admission build and committed before runtime, with the same frozen populated-registry client and helper. Four workers, server CPUs 0-3 and client CPUs 4-7; 1KiB private values, window 16. Three fresh alternating before/selected repetitions at 1024 idle non-listening global members. Every case measures three 3-second phases: two peers, live population, and two peers after exact FIFO departure/Close/EOF checks. The 8192-member before trace was captured before implementing indexes and is imported unchanged; selected is a fresh matching run. Those large cases have one repetition each and are not medians. No compilation, profiling or other load test overlaps timing.',\n        'variants':{k:{'path':str(v),'sha256':sha(v)} for k,v in servers.items()},\n        'client_sha256':sha(client),'client_source':(root/'examples/registry_peak.rs').read_text(),\n        'helper_sha256':sha(root/'scripts/registry-peak.py'),'helper_source':(root/'scripts/registry-peak.py').read_text(),\n        'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),\n        'cases':[],'passed':False}\ndef add_case(kind,population,repetition,trace,imported=False):\n    data=json.loads(trace.read_text());assert data['passed'] and not data['profile_diagnostic'],data.get('error')\n    assert data['server_sha256']==record['variants'][kind]['sha256']\n    assert data['client_sha256']==record['client_sha256'] and data['runner_sha256']==record['helper_sha256']\n    assert data['args']['measure_populated'] and data['args']['peak_clients']==population\n    assert [r['populated'] for r in data['traffic']]==[False,True,False]\n    row={'kind':kind,'population':population,'repetition':repetition,'trace':str(trace.relative_to(root)),\n         'trace_sha256':sha(trace),'imported_unchanged':imported,'passed':True,'phases':data['traffic']}\n    record['cases'].append(row);output.write_text(json.dumps(record,indent=2)+'\\n')\n    print(json.dumps({'kind':kind,'population':population,'repetition':repetition,'phases':[(r['populated'],r['deliveries_per_second'],r['server_ns_per_delivery']) for r in data['traffic']]}),flush=True)\ndef run(kind,population,repetition):\n    trace=output.with_name(f'{output.stem}-{population}-{kind}-{repetition}.json')\n    command=[sys.executable,str(root/'scripts/registry-peak.py'),'--server',str(servers[kind]),'--client',str(client),\n             '--scope','private','--measure-populated','--peak-clients',str(population),'--seconds','3','--output',str(trace)]\n    completed=subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=240)\n    assert completed.returncode==0,completed.stdout+completed.stderr\n    add_case(kind,population,repetition,trace)\nfor repetition in range(1,4):\n    for kind in (['before','selected'] if repetition%2 else ['selected','before']):run(kind,1024,repetition)\ntrace=output.with_name(f'{output.stem}-8192-before-1.json')\nshutil.copy2(root/'artifacts/private-population-before-8192.json',trace)\nadd_case('before',8192,1,trace,True)\nrun('selected',8192,1)\nrecord['medians_1024']={}\nfor kind in servers:\n    rows=[c for c in record['cases'] if c['kind']==kind and c['population']==1024]\n    result=[]\n    for phase in range(3):\n        samples=[c['phases'][phase] for c in rows]\n        keys=['deliveries_per_second','p99_upper_ms','server_ns_per_delivery']\n        summary={key:statistics.median(s[key] for s in samples) for key in keys}\n        summary['rate_range']=[min(s['deliveries_per_second'] for s in samples),max(s['deliveries_per_second'] for s in samples)]\n        result.append(summary)\n    record['medians_1024'][kind]=result\nrecord['passed']=True;output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(record['medians_1024']),flush=True)\n",
+  "driver_sha256": "9ac6511a6d9454e48d741dcd8ea91ec4fb38948549831f234c8dea05dd50823e",
+  "cases": [
+    {
+      "kind": "before",
+      "population": 1024,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-before-1.json",
+      "trace_sha256": "4dbe5f223f32a5134c470323849b8340745bc82e81e5aee71123137384823c36",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1592035584,
+          "deliveries_per_second": 511741.41758222645,
+          "elapsed_seconds": 3.000015139,
+          "max_latency_ms": 1.306105,
+          "p99_upper_ms": 0.032768,
+          "sent": 1535232,
+          "sent_encoded_bytes": 1592035584,
+          "value_bytes": 1576683264,
+          "verified": 1535232,
+          "server_cpu_seconds": 1.74,
+          "server_ns_per_delivery": 1133.3791895947975
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1162900096,
+          "deliveries_per_second": 373795.4638772747,
+          "elapsed_seconds": 3.000057808,
+          "max_latency_ms": 0.886516,
+          "p99_upper_ms": 0.065536,
+          "sent": 1121408,
+          "sent_encoded_bytes": 1162900096,
+          "value_bytes": 1151686016,
+          "verified": 1121408,
+          "server_cpu_seconds": 2.1399999999999997,
+          "server_ns_per_delivery": 1908.3152608149753
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1581814912,
+          "deliveries_per_second": 508455.9110051143,
+          "elapsed_seconds": 3.000016259,
+          "max_latency_ms": 1.920659,
+          "p99_upper_ms": 0.032768,
+          "sent": 1525376,
+          "sent_encoded_bytes": 1581814912,
+          "value_bytes": 1566561152,
+          "verified": 1525376,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1147.2581186540237
+        }
+      ]
+    },
+    {
+      "kind": "selected",
+      "population": 1024,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-selected-1.json",
+      "trace_sha256": "a50ef8bffa719311fe20361f0a2ae36bf83a3ed4f0c6ccedbe2d1638d12b32ec",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1567578976,
+          "deliveries_per_second": 503878.3386876562,
+          "elapsed_seconds": 3.000025768,
+          "max_latency_ms": 2.767677,
+          "p99_upper_ms": 0.032768,
+          "sent": 1511648,
+          "sent_encoded_bytes": 1567578976,
+          "value_bytes": 1552462496,
+          "verified": 1511648,
+          "server_cpu_seconds": 1.73,
+          "server_ns_per_delivery": 1144.4463261288342
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1589828848,
+          "deliveries_per_second": 511030.85642060114,
+          "elapsed_seconds": 3.000022368,
+          "max_latency_ms": 0.37907,
+          "p99_upper_ms": 0.032768,
+          "sent": 1533104,
+          "sent_encoded_bytes": 1589828848,
+          "value_bytes": 1574497808,
+          "verified": 1533104,
+          "server_cpu_seconds": 1.7500000000000002,
+          "server_ns_per_delivery": 1141.4750727934963
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1577368256,
+          "deliveries_per_second": 507025.10863111983,
+          "elapsed_seconds": 3.000024997,
+          "max_latency_ms": 2.348048,
+          "p99_upper_ms": 0.032768,
+          "sent": 1521088,
+          "sent_encoded_bytes": 1577368256,
+          "value_bytes": 1562157376,
+          "verified": 1521088,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1150.4922792106702
+        }
+      ]
+    },
+    {
+      "kind": "selected",
+      "population": 1024,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-selected-2.json",
+      "trace_sha256": "34c500bb9fbf0fb02e448ddab873b76d2969a09d00a3b6d438a3c631467df98d",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1600298400,
+          "deliveries_per_second": 514396.3601313557,
+          "elapsed_seconds": 3.000021228,
+          "max_latency_ms": 0.674523,
+          "p99_upper_ms": 0.032768,
+          "sent": 1543200,
+          "sent_encoded_bytes": 1600298400,
+          "value_bytes": 1584866400,
+          "verified": 1543200,
+          "server_cpu_seconds": 1.74,
+          "server_ns_per_delivery": 1127.5272161741834
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1596614976,
+          "deliveries_per_second": 513213.36088582716,
+          "elapsed_seconds": 3.000015427,
+          "max_latency_ms": 1.940708,
+          "p99_upper_ms": 0.032768,
+          "sent": 1539648,
+          "sent_encoded_bytes": 1596614976,
+          "value_bytes": 1581218496,
+          "verified": 1539648,
+          "server_cpu_seconds": 1.7300000000000002,
+          "server_ns_per_delivery": 1123.6334538803676
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1593097472,
+          "deliveries_per_second": 512085.2484978772,
+          "elapsed_seconds": 3.000000497,
+          "max_latency_ms": 0.658522,
+          "p99_upper_ms": 0.032768,
+          "sent": 1536256,
+          "sent_encoded_bytes": 1593097472,
+          "value_bytes": 1577734912,
+          "verified": 1536256,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1139.133061156474
+        }
+      ]
+    },
+    {
+      "kind": "before",
+      "population": 1024,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-before-2.json",
+      "trace_sha256": "010bc416e156a57ac026937d9ef684d6ffb9864f134a7ecda5c8f86e4d283eeb",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1594756672,
+          "deliveries_per_second": 512616.4494296508,
+          "elapsed_seconds": 3.000012976,
+          "max_latency_ms": 0.648123,
+          "p99_upper_ms": 0.032768,
+          "sent": 1537856,
+          "sent_encoded_bytes": 1594756672,
+          "value_bytes": 1579378112,
+          "verified": 1537856,
+          "server_cpu_seconds": 1.76,
+          "server_ns_per_delivery": 1144.4504556993634
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1196332976,
+          "deliveries_per_second": 384548.91840505035,
+          "elapsed_seconds": 3.000003237,
+          "max_latency_ms": 1.513829,
+          "p99_upper_ms": 0.065536,
+          "sent": 1153648,
+          "sent_encoded_bytes": 1196332976,
+          "value_bytes": 1184796496,
+          "verified": 1153648,
+          "server_cpu_seconds": 2.1799999999999997,
+          "server_ns_per_delivery": 1889.6578505748716
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1587937360,
+          "deliveries_per_second": 510422.8000438154,
+          "elapsed_seconds": 3.000022726,
+          "max_latency_ms": 0.835018,
+          "p99_upper_ms": 0.032768,
+          "sent": 1531280,
+          "sent_encoded_bytes": 1587937360,
+          "value_bytes": 1572624560,
+          "verified": 1531280,
+          "server_cpu_seconds": 1.7699999999999996,
+          "server_ns_per_delivery": 1155.895721226686
+        }
+      ]
+    },
+    {
+      "kind": "before",
+      "population": 1024,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-before-3.json",
+      "trace_sha256": "3ed0deef2e2beae0c4029bcbfc9c8b9b89cc0a6cbf29ade718ce521189cbe902",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1592251280,
+          "deliveries_per_second": 511812.84779354505,
+          "elapsed_seconds": 3.000002846,
+          "max_latency_ms": 0.655262,
+          "p99_upper_ms": 0.032768,
+          "sent": 1535440,
+          "sent_encoded_bytes": 1592251280,
+          "value_bytes": 1576896880,
+          "verified": 1535440,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1139.73844630855
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1201775152,
+          "deliveries_per_second": 386294.3561367113,
+          "elapsed_seconds": 3.000033476,
+          "max_latency_ms": 0.671653,
+          "p99_upper_ms": 0.065536,
+          "sent": 1158896,
+          "sent_encoded_bytes": 1201775152,
+          "value_bytes": 1190186192,
+          "verified": 1158896,
+          "server_cpu_seconds": 2.1799999999999997,
+          "server_ns_per_delivery": 1881.1006337065617
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1584486224,
+          "deliveries_per_second": 509313.68070538656,
+          "elapsed_seconds": 3.000021515,
+          "max_latency_ms": 0.631354,
+          "p99_upper_ms": 0.032768,
+          "sent": 1527952,
+          "sent_encoded_bytes": 1584486224,
+          "value_bytes": 1569206704,
+          "verified": 1527952,
+          "server_cpu_seconds": 1.7599999999999998,
+          "server_ns_per_delivery": 1151.8686450883272
+        }
+      ]
+    },
+    {
+      "kind": "selected",
+      "population": 1024,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-1024-selected-3.json",
+      "trace_sha256": "8c7416680468f3987568390fff5c4f5a6f30846b645dd70d0dea8dc14daef1de",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1579691136,
+          "deliveries_per_second": 507772.3753515273,
+          "elapsed_seconds": 3.000021415,
+          "max_latency_ms": 0.994684,
+          "p99_upper_ms": 0.032768,
+          "sent": 1523328,
+          "sent_encoded_bytes": 1579691136,
+          "value_bytes": 1564457856,
+          "verified": 1523328,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1148.8005209646249
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1610668400,
+          "deliveries_per_second": 517730.9025867457,
+          "elapsed_seconds": 3.000014085,
+          "max_latency_ms": 1.559079,
+          "p99_upper_ms": 0.032768,
+          "sent": 1553200,
+          "sent_encoded_bytes": 1610668400,
+          "value_bytes": 1595136400,
+          "verified": 1553200,
+          "server_cpu_seconds": 1.76,
+          "server_ns_per_delivery": 1133.14447592068
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1575410400,
+          "deliveries_per_second": 506396.3920945051,
+          "elapsed_seconds": 3.000021374,
+          "max_latency_ms": 0.616524,
+          "p99_upper_ms": 0.032768,
+          "sent": 1519200,
+          "sent_encoded_bytes": 1575410400,
+          "value_bytes": 1560218400,
+          "verified": 1519200,
+          "server_cpu_seconds": 1.7600000000000002,
+          "server_ns_per_delivery": 1158.5044760400212
+        }
+      ]
+    },
+    {
+      "kind": "before",
+      "population": 8192,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-8192-before-1.json",
+      "trace_sha256": "f0cf0de53de2576e166c40b916c9c43496d4bd6cc26df13e9077fa7113f9e2ab",
+      "imported_unchanged": true,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1626629904,
+          "deliveries_per_second": 522860.5283803784,
+          "elapsed_seconds": 3.000019919,
+          "max_latency_ms": 0.636943,
+          "p99_upper_ms": 0.032768,
+          "sent": 1568592,
+          "sent_encoded_bytes": 1626629904,
+          "value_bytes": 1610943984,
+          "verified": 1568592,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1115.6502136948295
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 287788240,
+          "deliveries_per_second": 92505.11051486255,
+          "elapsed_seconds": 3.000050467,
+          "max_latency_ms": 0.809459,
+          "p99_upper_ms": 0.262144,
+          "sent": 277520,
+          "sent_encoded_bytes": 287788240,
+          "value_bytes": 285013040,
+          "verified": 277520,
+          "server_cpu_seconds": 2.76,
+          "server_ns_per_delivery": 9945.22917267224
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1595254432,
+          "deliveries_per_second": 512777.4026703691,
+          "elapsed_seconds": 3.000007395,
+          "max_latency_ms": 0.627873,
+          "p99_upper_ms": 0.032768,
+          "sent": 1538336,
+          "sent_encoded_bytes": 1595254432,
+          "value_bytes": 1579871072,
+          "verified": 1538336,
+          "server_cpu_seconds": 1.7800000000000011,
+          "server_ns_per_delivery": 1157.0944189045833
+        }
+      ]
+    },
+    {
+      "kind": "selected",
+      "population": 8192,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-population-8192-selected-1.json",
+      "trace_sha256": "cddc9d616e6f6b7a6ff9fc2a1a730084c6a8fe3180d280213d971f0d56cb6166",
+      "imported_unchanged": false,
+      "passed": true,
+      "phases": [
+        {
+          "wave": 0,
+          "populated": false,
+          "delivered_encoded_bytes": 1604280480,
+          "deliveries_per_second": 515676.09736329515,
+          "elapsed_seconds": 3.000022704,
+          "max_latency_ms": 0.665253,
+          "p99_upper_ms": 0.032768,
+          "sent": 1547040,
+          "sent_encoded_bytes": 1604280480,
+          "value_bytes": 1588810080,
+          "verified": 1547040,
+          "server_cpu_seconds": 1.74,
+          "server_ns_per_delivery": 1124.7285138070122
+        },
+        {
+          "wave": 1,
+          "populated": true,
+          "delivered_encoded_bytes": 1589646336,
+          "deliveries_per_second": 510975.7778958619,
+          "elapsed_seconds": 3.000001304,
+          "max_latency_ms": 0.724811,
+          "p99_upper_ms": 0.032768,
+          "sent": 1532928,
+          "sent_encoded_bytes": 1589646336,
+          "value_bytes": 1574317056,
+          "verified": 1532928,
+          "server_cpu_seconds": 1.7599999999999998,
+          "server_ns_per_delivery": 1148.12959251837
+        },
+        {
+          "wave": 1,
+          "populated": false,
+          "delivered_encoded_bytes": 1593197024,
+          "deliveries_per_second": 512116.28059296584,
+          "elapsed_seconds": 3.000006167,
+          "max_latency_ms": 0.40132,
+          "p99_upper_ms": 0.032768,
+          "sent": 1536352,
+          "sent_encoded_bytes": 1593197024,
+          "value_bytes": 1577833504,
+          "verified": 1536352,
+          "server_cpu_seconds": 1.75,
+          "server_ns_per_delivery": 1139.0618816521214
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "medians_1024": {
+    "before": [
+      {
+        "deliveries_per_second": 511812.84779354505,
+        "p99_upper_ms": 0.032768,
+        "server_ns_per_delivery": 1139.73844630855,
+        "rate_range": [
+          511741.41758222645,
+          512616.4494296508
+        ]
+      },
+      {
+        "deliveries_per_second": 384548.91840505035,
+        "p99_upper_ms": 0.065536,
+        "server_ns_per_delivery": 1889.6578505748716,
+        "rate_range": [
+          373795.4638772747,
+          386294.3561367113
+        ]
+      },
+      {
+        "deliveries_per_second": 509313.68070538656,
+        "p99_upper_ms": 0.032768,
+        "server_ns_per_delivery": 1151.8686450883272,
+        "rate_range": [
+          508455.9110051143,
+          510422.8000438154
+        ]
+      }
+    ],
+    "selected": [
+      {
+        "deliveries_per_second": 507772.3753515273,
+        "p99_upper_ms": 0.032768,
+        "server_ns_per_delivery": 1144.4463261288342,
+        "rate_range": [
+          503878.3386876562,
+          514396.3601313557
+        ]
+      },
+      {
+        "deliveries_per_second": 513213.36088582716,
+        "p99_upper_ms": 0.032768,
+        "server_ns_per_delivery": 1133.14447592068,
+        "rate_range": [
+          511030.85642060114,
+          517730.9025867457
+        ]
+      },
+      {
+        "deliveries_per_second": 507025.10863111983,
+        "p99_upper_ms": 0.032768,
+        "server_ns_per_delivery": 1150.4922792106702,
+        "rate_range": [
+          506396.3920945051,
+          512085.2484978772
+        ]
+      }
+    ]
+  }
+}

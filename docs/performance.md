@@ -1880,3 +1880,176 @@ The refreshed local release also passes all seven
 frozen selected build; four native listeners, HTTP readiness and empty final
 connection/staging/output/variable gauges are verified. These checks remain
 finite local acceptance, without TLS or a production deployment.
+
+## Listener eligibility and private routing concurrency (2026-10-16)
+
+`04cc911` removes two measured sources of work from ordinary private routing.
+The before control is `12bfc4d`, including its verified Close flush fix.
+
+Previously, each private message scanned every global-channel member for the
+private-listener bit. Ordinary channel broadcasts and departure notifications
+also scanned global membership for their respective bits. In a populated private
+probe, 8,192 idle global members with zero listener flags reduced delivery rate
+from 522,861/s to 92,505/s, raising server CPU per delivery from 1,116 ns to
+9,945 ns. Its post-retirement phase recovered to 512,777/s. Idle decoders alone
+did not explain that cost; routing was traversing ineligible peers on each value.
+
+The registry now keeps three compact recipient indexes for the three authorized
+listener classes. Only authenticated global members opting into a class enter
+its index. Flag changes and retirement update the indexes under the registry
+write guard. Entries use immutable session keys, so changing or taking over an
+ID cannot remove a different listener. Repeated masks do not add duplicate
+entries. Large sparse vectors release spare capacity. New empty indexes allocate
+no recipient storage; small capacity remains available for later opt-ins.
+Updates may allocate when listener membership grows, while
+delivery borrows the existing index and shares the original body.
+
+Private routing also held the registry read guard through byte reservations and
+the direct socket write. The separate before profile found both shared and
+exclusive lock slow paths under concurrent reconnects. When the private-listener
+index is empty, routing now captures the sender ID and target under one guard,
+retains the target, and releases the guard before output. An
+[`Arc` clone](https://doc.rust-lang.org/std/sync/struct.Arc.html#cloning-references)
+retains the existing allocation; it does not copy the peer or message body.
+Routes with eligible private observers and other fanout retain the existing
+guarded path. Permission and ID changes apply coherently to subsequent lookups;
+accepted output can finish after a later registry change.
+
+### Transport ownership
+
+Review of the first unshipped snapshot prototype found an admission-lifetime
+defect: the captured target could retain TCP after the decoder's connection
+guard had released capacity. The existing reservation now belongs to the socket.
+It is declared after the socket state so TCP and queued reservations retire
+before the admission guard, following Rust's
+[field destruction order](https://doc.rust-lang.org/reference/destructors.html#r-destructors.operation).
+This moves the existing guard without adding another allocation.
+
+The [ownership regression fixture](benchmarks/2026-10-16-listeners-ownership.json)
+retains a real routing target, retires its
+decoder/membership, and checks that capacity remains charged while TCP is open.
+Dropping the captured target then releases capacity and produces EOF. It fails
+against the unshipped prototype and passes with the socket-owned reservation.
+Both final benchmark candidates include this ownership fix. Earlier exploratory
+builds and traces are kept separately and excluded from the selected results.
+
+### Mixed-workload ablation
+
+The [three-way matrix](benchmarks/2026-10-16-listeners-mixed.json) has 18 successful
+fresh-process cases. It compares the committed before runtime, listener indexes
+with the registry guard retained, and the complete selected build. Both new
+variants own admission at the socket; their only runtime difference is the
+private early-unlock branch. The exact source patch for the indexed control is
+embedded with the driver and binary hashes.
+
+Each implementation runs three repetitions of two workloads, rotating order.
+All hold 8,192 idle rooms, one private pair, eight reconnect workers, 1 KiB values
+and window 16 for eight seconds. The management case adds 200 paced HTTP
+inspections/s. The original inspection client remains frozen. Server CPUs are
+0–3 and client CPUs 4–7. Every sender, full body, FIFO sequence, query, Close,
+EOF, byte/message counter and final reservation is checked. No build, profiler
+or other load test overlaps ordinary timing.
+
+| Median of three | Before | Indexes, guard retained | Selected |
+| --- | ---: | ---: | ---: |
+| With reconnects: healthy deliveries/s | 325,391 | 327,245 | 350,128 |
+| With reconnects: complete cycles/s | 68,605 | 67,366 | 71,825 |
+| With reconnects: server CPU seconds/wall second | 1.499 | 1.487 | 1.499 |
+| With reconnects and HTTP: healthy deliveries/s | 290,511 | 292,064 | 318,067 |
+| With reconnects and HTTP: complete cycles/s | 56,336 | 57,195 | 59,699 |
+| With reconnects and HTTP: server CPU seconds/wall second | 1.750 | 1.761 | 1.745 |
+| With reconnects: delivery p99 upper bucket | 0.131072 ms | 0.131072 ms | 0.131072 ms |
+| With reconnects and HTTP: inspection p99 upper bucket | 8.388608 ms | 8.388608 ms | 8.388608 ms |
+
+The selected build improves healthy traffic by 7.6% and reconnects by 4.7%
+without the HTTP inspectors, with effectively unchanged CPU use. With inspection,
+healthy traffic improves 9.5% and reconnects 6.0%, with 0.3% less CPU. The indexed
+control alone has no broad gain here: these idle rooms contain no global members
+to scan. Shortening the read-guard lifetime explains the material improvement in
+this workload. Full per-run ranges and histogram latency buckets remain in the
+reports; these measurements do not settle the earlier comparison with the
+retired asynchronous port or establish a new C++ capacity comparison.
+
+### Private traffic through a live global population
+
+The [populated-routing matrix](benchmarks/2026-10-16-listeners-population.json)
+extends the existing registry probe with `--scope private --measure-populated`.
+It measures traffic while the idle global members are still connected, in
+addition to the original phases before population and after retirement. All
+members have zero listener flags. The addressed peer is the sole data recipient.
+The same frozen client, helper, CPU sets, 1 KiB values and window 16 are used for
+both builds; each measured phase lasts three seconds.
+
+There are three alternating before/selected repetitions at 1,024 additional idle
+members, and one matched case per build at 8,192 additional members. The large
+before trace was collected before implementing the indexes and is imported
+unchanged with its hash verified. Large-case numbers below are single observed
+runs, not medians or a saturated capacity ceiling.
+
+| Live private workload | Before | Selected |
+| --- | ---: | ---: |
+| Two peers, before population: deliveries/s, median of three | 511,813 | 507,772 |
+| Plus 1,024 idle global members: deliveries/s, median of three | 384,549 | 513,213 |
+| Same populated phase: server CPU ns/delivery | 1,890 | 1,133 |
+| Same populated phase: p99 upper bucket | 0.065536 ms | 0.032768 ms |
+| Two peers after retirement: deliveries/s, median of three | 509,314 | 507,025 |
+| Plus 8,192 idle global members: deliveries/s, single case | 92,505 | 510,976 |
+| Same large phase: server CPU ns/delivery | 9,945 | 1,148 |
+| Same large phase: p99 upper bucket | 0.262144 ms | 0.032768 ms |
+
+The repeated 1,024-member phase improves throughput by 33.5% and reduces server
+CPU per delivery by 40.0%. The 8,192-member case improves throughput 5.52x and
+reduces CPU per delivery by 88.5%. In the repeated two-peer phases, throughput
+changes by −0.8% before population and −0.4% after retirement, within overlapping
+run ranges. Keep that small observed cost visible alongside the populated and
+mixed-workload wins.
+
+Both large cases verify 33,566,720 ordered departure deliveries, all 8,194 welcome
+messages and normal Close/EOF exchanges, exact final counters and empty resources.
+Their full lifetime takes about 107 seconds because departure fanout is quadratic
+for a shared room; this validation is outside the three routing intervals. The
+listener index does not remove notifications required by the protocol. Sampled
+RSS is process memory at gates, not kernel socket memory or continuous peak RSS.
+
+### Verification and reproducibility
+
+The [selected source checks](benchmarks/2026-10-16-listeners-checks.json) pass
+95 Linux Rust tests, strict Clippy and formatting. New behavioral checks cover
+all listener masks, repeated opt-ins, ordinary-channel scope exclusion, shared
+payload addresses, target/listener duplicate suppression, ID changes, takeover
+and delayed cleanup. A real four-worker wire test uses exact FIFO barriers after
+acknowledged permission changes and verifies that a replacement ID owner inherits
+no listener permission. Weak references prove retired listeners are released.
+The transport-lifetime regression separately verifies capacity and actual TCP EOF.
+
+The frozen selected release passes the unchanged
+[C++ reference suite](benchmarks/2026-10-16-listeners-reference.json): 48 shared
+cases and eight documented differences through the legacy bridge. The
+[32-client stability run](benchmarks/2026-10-16-listeners-stability.json) verifies
+9,181,296 private 1 KiB deliveries, 546,329 complete reconnect lifecycles and
+209,835 healthy 64 KiB deliveries alongside an unread recipient. The
+[fanout run](benchmarks/2026-10-16-listeners-fanout.json) verifies 765,072 mixed-size
+deliveries to 27 paced readers, four retired unread recipients and 108 departure
+notifications. Each server exits successfully without a forced kill.
+
+JavaScript checks pass six native/legacy interoperability cases and the separate
+application-idle case. All seven [headed Chrome checks](benchmarks/2026-10-16-listeners-browser.json)
+pass against the refreshed release, including a 128 KiB value and clean Close
+handshakes. Its running executable hash matches the frozen build; four listeners,
+HTTP readiness and empty final connection, staging, queue and variable gauges
+are verified.
+
+Fresh [diagnostic profiles](benchmarks/2026-10-16-listeners-profiles.json) use the
+same one-pair/churn workload before and after the change, with user cycles at
+499 Hz and 8 KiB DWARF stacks. They are separate from every ordinary timing run.
+Flat self-cycle percentages exclude kernel execution and sleeping waits; they
+support the lock-scope diagnosis without serving as latency or capacity results.
+Full profile hashes and the rounded per-thread aggregates are retained.
+
+The [build manifest](benchmarks/2026-10-16-listeners-build.json) binds the selected
+commit, runtime/vendor sources, test/helper sources, all release/control/client
+executables and every raw report. An index-only ablation is reproducible from
+the selected commit with its recorded nine-line source deletion. Earlier
+exploratory variants remain in the local prototype archive and contribute no
+selected timing result. These are finite local acceptance and loopback
+measurements, without a new production or TLS capacity claim.

@@ -1,0 +1,460 @@
+{
+  "scope": "Sequential three-way ablation: committed native runtime, listener eligibility indexes with the existing registry guard, and the selected private fast path retaining the target and releasing that guard before output when no private listeners exist. Both new variants use socket-owned admission reservations. Four workers, 8192 idle rooms, one active private pair, eight reconnect workers; management adds two HTTP inspectors at 100 requests/s each. Frozen original inspection client, 1KiB values, window 16, 8-second phases. Server CPUs 0-3, client CPUs 4-7. Three repetitions, rotating implementation order and reversing workload order. All full payload/FIFO/Close/EOF/counter/resource checks must pass. No build, profiler or other load test overlaps timing.",
+  "parent_revision": "04cc911c17ebb33ee98cba434bf5ba6788b35cdf",
+  "variants": {
+    "before": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/12bfc4d/war-relay",
+      "sha256": "7b2b0628c5c698a45ffd59b90e54126e60308e5df05d027fa4ea9c964c031238"
+    },
+    "indexed": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/listener-index-owned/war-relay",
+      "sha256": "6bffc5177be6f392b86a033c0a6f8dc1e5c97f25a0371c15be5bd4f3ec9952f8"
+    },
+    "snapshot": {
+      "path": "/home/phil/dev/war_next/artifacts/baselines/04cc911/war-relay",
+      "sha256": "3eb883f2a2627e9af14f1784d6d16b8c00c475956c709698b2527a4ef7051c1c"
+    }
+  },
+  "indexed_source": {
+    "selected_revision": "04cc911c17ebb33ee98cba434bf5ba6788b35cdf",
+    "scope": "Listener indexes and socket-owned admission, with the private early-unlock branch removed. All other selected runtime and test sources are unchanged. All 95 Rust tests pass.",
+    "source_patch": "diff --git a/src/relay.rs b/src/relay.rs\nindex 1bccc0f..e26337f 100644\n--- a/src/relay.rs\n+++ b/src/relay.rs\n@@ -489,15 +489,6 @@ impl Relay {\n             &self.metrics.routing_reused_bytes\n         };\n         counter.fetch_add(frame.payload().len() as u64, Relaxed);\n-        if let Some(recipient) = private_recipient\n-            && state.listeners(PRIVATE_MESSAGE).is_empty()\n-        {\n-            // Lookup and sender identity form one registry snapshot. The\n-            // retained target owns its lifetime through the socket write.\n-            let recipient = recipient.clone();\n-            drop(state);\n-            return recipient.enqueue_frame(&frame);\n-        }\n         if target == BROADCAST {\n             if peer.channel.as_ref() == GLOBAL_CHANNEL {\n                 for recipient in state.users.values() {\n",
+    "relay_source_sha256": "2c30e67a82e731a5aa2b92892255880ecd9ce0fc89afd76752c7627c06e997ca",
+    "native_sha256": "6bffc5177be6f392b86a033c0a6f8dc1e5c97f25a0371c15be5bd4f3ec9952f8",
+    "build_command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--bins"
+    ]
+  },
+  "snapshot_source": {
+    "revision": "04cc911c17ebb33ee98cba434bf5ba6788b35cdf",
+    "directory": "artifacts/baselines/04cc911",
+    "binaries": {
+      "war-relay": "3eb883f2a2627e9af14f1784d6d16b8c00c475956c709698b2527a4ef7051c1c",
+      "war-legacy-bridge": "44ec0aee4eb96ccc10acfdba7df3903120a420a851e0411449e61e88e4904a84"
+    }
+  },
+  "client_sha256": "0bb29e7a64448404d9aa6847d7fa9a0d55644bc1d35648f2f0ca6a3d663e667d",
+  "helper_sha256": {
+    "inspection.py": "431639169a4e10fc0fe4348eb6a9e8792d086b3aed1565ac37616731b764d596",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nservers = {\n    'before': root/'artifacts/baselines/12bfc4d/war-relay',\n    'indexed': root/'artifacts/baselines/listener-index-owned/war-relay',\n    'snapshot': root/json.loads((root/'artifacts/listeners-selected-build.json').read_text())['directory']/'war-relay',\n}\nclient = root/'artifacts/baselines/e2d7cf9/inspection'\noutput = root/'docs/benchmarks/2026-10-16-listeners-mixed.json'\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\nrecord = {\n    'scope': 'Sequential three-way ablation: committed native runtime, listener eligibility indexes with the existing registry guard, and the selected private fast path retaining the target and releasing that guard before output when no private listeners exist. Both new variants use socket-owned admission reservations. Four workers, 8192 idle rooms, one active private pair, eight reconnect workers; management adds two HTTP inspectors at 100 requests/s each. Frozen original inspection client, 1KiB values, window 16, 8-second phases. Server CPUs 0-3, client CPUs 4-7. Three repetitions, rotating implementation order and reversing workload order. All full payload/FIFO/Close/EOF/counter/resource checks must pass. No build, profiler or other load test overlaps timing.',\n    'parent_revision': subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),\n    'variants': {name: {'path':str(path),'sha256':sha(path)} for name,path in servers.items()},\n    'indexed_source': json.loads((root/'artifacts/listener-index-owned-source.json').read_text()),\n    'snapshot_source': json.loads((root/'artifacts/listeners-selected-build.json').read_text()),\n    'client_sha256':sha(client),\n    'helper_sha256':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n    'driver_source':Path(__file__).read_text(), 'driver_sha256':sha(__file__),\n    'cases':[], 'passed':False,\n}\nfor repetition in range(1,4):\n    workloads = ['churn','management'] if repetition%2 else ['management','churn']\n    order = list(servers); start=(repetition-1)%len(order); order=order[start:]+order[:start]\n    for workload in workloads:\n        for kind in order:\n            trace=output.with_name(f'{output.stem}-{workload}-{kind}-{repetition}.json')\n            command=[sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[kind]),\n                     '--client',str(client),'--pairs','1','--churn-workers','8','--seconds','8',\n                     '--mode','http' if workload=='management' else 'none','--output',str(trace)]\n            completed=subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=100)\n            data=json.loads(trace.read_text()); assert completed.returncode==0 and data['passed'],completed.stdout+completed.stderr\n            assert data['server_sha256']==record['variants'][kind]['sha256']\n            assert data['client_sha256']==record['client_sha256'] and not data['profile_diagnostic']\n            assert data['runner_sha256']==record['helper_sha256']['inspection.py']\n            mixed=data['mixed']\n            row={'kind':kind,'workload':workload,'repetition':repetition,'trace':str(trace.relative_to(root)),\n                 'trace_sha256':sha(trace),'passed':True,\n                 'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                 'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                 'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                 'cpu_seconds_per_wall_second':mixed['server_cpu_seconds_per_wall_second'],\n                 'rss_measured_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row);output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(row),flush=True)\nrecord['medians']={}\nfor workload in ['churn','management']:\n    for kind in servers:\n        rows=[c for c in record['cases'] if c['kind']==kind and c['workload']==workload]\n        keys=['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_seconds_per_wall_second','rss_measured_mib']\n        result={key:statistics.median(c[key] for c in rows) for key in keys}\n        result['ranges']={key:[min(c[key] for c in rows),max(c[key] for c in rows)] for key in ['healthy','churn']}\n        record['medians'][workload+'/'+kind]=result\nrecord['passed']=True;output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "84953df82ca5d49762374bdc6a042dfa0f15dc843b3f56578b12d9e6a98f7cdd",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-before-1.json",
+      "trace_sha256": "8a9233ab539346eac8d1882547c500a30c46f1ed649d266726a4c64031f83bba",
+      "passed": true,
+      "healthy": 331638.3992360803,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68604.63012522842,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4874838496441025,
+      "rss_measured_mib": 18.5859375
+    },
+    {
+      "kind": "indexed",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-indexed-1.json",
+      "trace_sha256": "6117fb3a1c35990f0017d64e4bfd37f5bd037be8f651168a1cfcaab3efdedbac",
+      "passed": true,
+      "healthy": 331457.338066118,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67453.33328228042,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4749881543701324,
+      "rss_measured_mib": 18.640625
+    },
+    {
+      "kind": "snapshot",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-snapshot-1.json",
+      "trace_sha256": "a87c500af842410bfb68c4e82c85f237e57e4dcd5ef4aabfff7be0a174accb8e",
+      "passed": true,
+      "healthy": 357165.0053946579,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73697.25709456005,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5062373711410413,
+      "rss_measured_mib": 18.51953125
+    },
+    {
+      "kind": "before",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-before-1.json",
+      "trace_sha256": "9421142f78c9cc71329673918f5aa269dbf13d02fae7d5af6e88f4ebc826ea1f",
+      "passed": true,
+      "healthy": 293683.1914723913,
+      "healthy_p99_ms": 0.131072,
+      "churn": 58185.789837212506,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97221301112017,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.768504258817094,
+      "rss_measured_mib": 19.08203125
+    },
+    {
+      "kind": "indexed",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-indexed-1.json",
+      "trace_sha256": "22d6c64e2e72648a6c36cff52fa8001206b9d06b988e50b9b62212e007fb8060",
+      "passed": true,
+      "healthy": 293459.2207782231,
+      "healthy_p99_ms": 0.131072,
+      "churn": 57195.310321277524,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.9844765799764,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.761113296882417,
+      "rss_measured_mib": 19.14453125
+    },
+    {
+      "kind": "snapshot",
+      "workload": "management",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-snapshot-1.json",
+      "trace_sha256": "089dd36e4f7ffc6c4ca658005c2f9779d4f6d134d5a39a8458002f9811cf5eb4",
+      "passed": true,
+      "healthy": 318500.68300619535,
+      "healthy_p99_ms": 0.131072,
+      "churn": 59698.505962250056,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97154759827177,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7385026419324752,
+      "rss_measured_mib": 19.1640625
+    },
+    {
+      "kind": "indexed",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-indexed-2.json",
+      "trace_sha256": "ec77bbb72635a08a61c53737a75df2fc00e0ad68df99e7417ef213137351d9e9",
+      "passed": true,
+      "healthy": 292063.5413138124,
+      "healthy_p99_ms": 0.131072,
+      "churn": 57318.1848838026,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97229843741434,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7685050143058831,
+      "rss_measured_mib": 19.17578125
+    },
+    {
+      "kind": "snapshot",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-snapshot-2.json",
+      "trace_sha256": "57d53f576e7170602bb0ba120b41be647805bd23c37fd8e504082f99fc8df6b2",
+      "passed": true,
+      "healthy": 318067.363459931,
+      "healthy_p99_ms": 0.131072,
+      "churn": 59722.11879194563,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.971936588328,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7560035681662554,
+      "rss_measured_mib": 19.19140625
+    },
+    {
+      "kind": "before",
+      "workload": "management",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-before-2.json",
+      "trace_sha256": "3b941179cc5a9123b2fcf7b0214d70cf90e5dfbb341e73a4d07ba88b99c918c1",
+      "passed": true,
+      "healthy": 290511.2274391931,
+      "healthy_p99_ms": 0.131072,
+      "churn": 56335.71841571769,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97193441393836,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7497544261219606,
+      "rss_measured_mib": 19.09765625
+    },
+    {
+      "kind": "indexed",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-indexed-2.json",
+      "trace_sha256": "049223a18720d027855ed144e8b39a1450a7896d8c6ccc1a65da3666d238b2e2",
+      "passed": true,
+      "healthy": 326347.5247764049,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67045.99148129686,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4874887179558824,
+      "rss_measured_mib": 18.60546875
+    },
+    {
+      "kind": "snapshot",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-snapshot-2.json",
+      "trace_sha256": "de5ddf7f5cbde71732cd9f3b0568894fbee4fe24b99504c2397391de37e129da",
+      "passed": true,
+      "healthy": 350127.55505928304,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71825.12344516299,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.498739534301832,
+      "rss_measured_mib": 18.6328125
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-before-2.json",
+      "trace_sha256": "dab516fb863c00487fe906a3277aa12204a3f6f73d82865ec28900d8c65515b7",
+      "passed": true,
+      "healthy": 324689.15361253486,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68688.52284206451,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.5212366640787844,
+      "rss_measured_mib": 18.5625
+    },
+    {
+      "kind": "snapshot",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-snapshot-3.json",
+      "trace_sha256": "eb1a8ae998739b2cae9f89af4c6f21915f33c73b175f6a64f5fd0ec1317ea925",
+      "passed": true,
+      "healthy": 349348.535379569,
+      "healthy_p99_ms": 0.131072,
+      "churn": 70144.80434767099,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.464985471189713,
+      "rss_measured_mib": 18.625
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-before-3.json",
+      "trace_sha256": "2a943f00215e1abcc085a0f414d5e7550b957c9bf66290b5cde9c6a04a6d4722",
+      "passed": true,
+      "healthy": 325391.364818032,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67812.45082086703,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.498737862471421,
+      "rss_measured_mib": 18.5546875
+    },
+    {
+      "kind": "indexed",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-churn-indexed-3.json",
+      "trace_sha256": "fa2a36ada6df1774f724f9c1f6052a8f231114d86be21e7fb49c303b5f975b9a",
+      "passed": true,
+      "healthy": 327244.5195500068,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67366.28351747086,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4899841530872917,
+      "rss_measured_mib": 18.62890625
+    },
+    {
+      "kind": "snapshot",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-snapshot-3.json",
+      "trace_sha256": "132a77b7983aca36871ee23589987f4a85b0be64dc10730f63374cf4c2fe3545",
+      "passed": true,
+      "healthy": 316669.39948058414,
+      "healthy_p99_ms": 0.131072,
+      "churn": 58657.49759921346,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.96930991013085,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7447322289658918,
+      "rss_measured_mib": 19.140625
+    },
+    {
+      "kind": "before",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-before-3.json",
+      "trace_sha256": "0cb7a2bb972a814639dd64e9b81d1dc6560362b69d56439e871f26cf4478b91e",
+      "passed": true,
+      "healthy": 284290.35453736206,
+      "healthy_p99_ms": 0.131072,
+      "churn": 54692.24794041919,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97211306394829,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7297587780031527,
+      "rss_measured_mib": 19.1015625
+    },
+    {
+      "kind": "indexed",
+      "workload": "management",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-listeners-mixed-management-indexed-3.json",
+      "trace_sha256": "933789bb3c76b79abd768534259786a37e9feb1c979b5729ce16a5f5f6d1da7f",
+      "passed": true,
+      "healthy": 289607.40596202255,
+      "healthy_p99_ms": 0.131072,
+      "churn": 55992.75317987261,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.96920854129962,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7522301898431378,
+      "rss_measured_mib": 19.09765625
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "churn/before": {
+      "healthy": 325391.364818032,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68604.63012522842,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.498737862471421,
+      "rss_measured_mib": 18.5625,
+      "ranges": {
+        "healthy": [
+          324689.15361253486,
+          331638.3992360803
+        ],
+        "churn": [
+          67812.45082086703,
+          68688.52284206451
+        ]
+      }
+    },
+    "churn/indexed": {
+      "healthy": 327244.5195500068,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67366.28351747086,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.4874887179558824,
+      "rss_measured_mib": 18.62890625,
+      "ranges": {
+        "healthy": [
+          326347.5247764049,
+          331457.338066118
+        ],
+        "churn": [
+          67045.99148129686,
+          67453.33328228042
+        ]
+      }
+    },
+    "churn/snapshot": {
+      "healthy": 350127.55505928304,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71825.12344516299,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_seconds_per_wall_second": 1.498739534301832,
+      "rss_measured_mib": 18.625,
+      "ranges": {
+        "healthy": [
+          349348.535379569,
+          357165.0053946579
+        ],
+        "churn": [
+          70144.80434767099,
+          73697.25709456005
+        ]
+      }
+    },
+    "management/before": {
+      "healthy": 290511.2274391931,
+      "healthy_p99_ms": 0.131072,
+      "churn": 56335.71841571769,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97211306394829,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7497544261219606,
+      "rss_measured_mib": 19.09765625,
+      "ranges": {
+        "healthy": [
+          284290.35453736206,
+          293683.1914723913
+        ],
+        "churn": [
+          54692.24794041919,
+          58185.789837212506
+        ]
+      }
+    },
+    "management/indexed": {
+      "healthy": 292063.5413138124,
+      "healthy_p99_ms": 0.131072,
+      "churn": 57195.310321277524,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97229843741434,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.761113296882417,
+      "rss_measured_mib": 19.14453125,
+      "ranges": {
+        "healthy": [
+          289607.40596202255,
+          293459.2207782231
+        ],
+        "churn": [
+          55992.75317987261,
+          57318.1848838026
+        ]
+      }
+    },
+    "management/snapshot": {
+      "healthy": 318067.363459931,
+      "healthy_p99_ms": 0.131072,
+      "churn": 59698.505962250056,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97154759827177,
+      "inspection_p99_ms": 8.388608,
+      "cpu_seconds_per_wall_second": 1.7447322289658918,
+      "rss_measured_mib": 19.1640625,
+      "ranges": {
+        "healthy": [
+          316669.39948058414,
+          318500.68300619535
+        ],
+        "churn": [
+          58657.49759921346,
+          59722.11879194563
+        ]
+      }
+    }
+  }
+}

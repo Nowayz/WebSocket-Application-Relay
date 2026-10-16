@@ -1,0 +1,39 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 7K of event 'cycles:u'
+# Event count (approx.): 17697673885
+#
+# Overhead  Command    Symbol                                                                                                                                                                  IPC   [IPC Coverage]
+# ........  .........  ......................................................................................................................................................................  ....................
+#
+     4.53%  war-io-3   [.] war_relay::relay::Relay::receive_with_storage                                                                                                                       -      -
+     3.15%  war-io-3   [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send                                                                                           -      -
+     2.70%  war-io-3   [.] war_relay::server::Connection::drive                                                                                                                                -      -
+     2.41%  war-io-3   [.] tungstenite::protocol::WebSocketContext::read_bounded                                                                                                               -      -
+     2.40%  war-io-3   [.] bytes::bytes_mut::shared_v_clone                                                                                                                                    -      -
+     2.19%  war-io-2   [.] war_relay::server::Connection::drive                                                                                                                                -      -
+     2.02%  war-io-0   [.] war_relay::server::Connection::drive                                                                                                                                -      -
+     1.82%  war-io-3   [.] bytes::bytes_mut::shared_v_drop                                                                                                                                     -      -
+     1.68%  war-io-1   [.] war_relay::server::Connection::drive                                                                                                                                -      -
+     1.45%  war-io-3   [.] parking_lot::raw_rwlock::RawRwLock::lock_shared_slow                                                                                                                -      -
+     1.43%  war-io-3   [.] war_relay::relay::Peer::enqueue_frame                                                                                                                               -      -
+     1.16%  war-io-1   [.] __vdso_clock_gettime                                                                                                                                                -      -
+            |
+            ---__vdso_clock_gettime
+               clock_gettime
+
+     1.11%  war-io-3   [.] bytes::bytes_mut::BytesMut::split_to                                                                                                                                -      -
+     1.11%  war-io-0   [.] war_relay::server::Worker::accept                                                                                                                                   -      -
+     1.03%  war-io-0   [.] __vdso_clock_gettime                                                                                                                                                -      -
+            |
+            ---__vdso_clock_gettime
+               clock_gettime
+
+
+
+#
+# (Tip: To compare hot regions in two workloads use perf record -b -o file ... ; perf diff --stream file1 file2)
+#

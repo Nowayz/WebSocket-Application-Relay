@@ -320,6 +320,19 @@ cargo build --release --example stress
 python3 scripts/stability.py --output artifacts/stability.json
 ```
 
+To check private routing before, during and after an idle global-room population:
+
+```sh
+cargo build --release --bins --example registry_peak
+python3 scripts/registry-peak.py --scope private --measure-populated \
+  --peak-clients 1024 --seconds 3 --output artifacts/private-population.json
+```
+
+The probe checks every payload and sender with a 16-message window, then verifies
+every ordered departure notification, Close and EOF. Larger shared populations
+take longer to retire because the protocol sends each departure to every
+remaining member; routing timing excludes setup and retirement.
+
 To check admission against concurrent incomplete frames while a healthy session
 continues routing, use a deliberately smaller staging allowance:
 
