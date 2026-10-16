@@ -51,6 +51,21 @@ impl Timers {
         }
     }
 
+    pub fn rekey(&mut self, from: usize, to: usize) {
+        let deadline = self
+            .positions
+            .get(from)
+            .and_then(|&index| (index != usize::MAX).then(|| self.heap[index].0));
+        self.remove(from);
+        self.set(to, deadline);
+    }
+
+    pub fn shrink_to_fit(&mut self, slots: usize) {
+        self.positions.truncate(slots);
+        self.positions.shrink_to_fit();
+        self.heap.shrink_to_fit();
+    }
+
     fn swap(&mut self, a: usize, b: usize) {
         self.heap.swap(a, b);
         self.positions[self.heap[a].1] = a;
@@ -118,6 +133,31 @@ mod tests {
             assert_eq!(timers.next(), Some(when));
             assert_eq!(timers.pop_due(when), Some(slot));
         }
+        assert_eq!(timers.next(), None);
+    }
+
+    #[test]
+    fn rekeying_sparse_slots_keeps_exact_deadlines_and_equal_deadline_order() {
+        let now = Instant::now();
+        let mut timers = Timers::default();
+        for slot in 0..1024 {
+            timers.set(slot, Some(now + Duration::from_millis((slot % 3) as u64)));
+        }
+        for slot in 1..1021 {
+            timers.remove(slot);
+        }
+        timers.set(1022, None);
+        timers.rekey(1023, 1);
+        timers.rekey(1022, 2);
+        timers.rekey(1021, 3);
+        timers.shrink_to_fit(4);
+        assert_eq!(timers.positions.len(), 4);
+        assert!(timers.positions.capacity() < 1024);
+        assert_eq!(timers.pop_due(now), Some(0));
+        assert_eq!(timers.pop_due(now), Some(1));
+        assert_eq!(timers.pop_due(now), None);
+        assert_eq!(timers.pop_due(now + Duration::from_millis(1)), Some(3));
+        assert_eq!(timers.pop_due(now + Duration::from_secs(1)), None);
         assert_eq!(timers.next(), None);
     }
 }

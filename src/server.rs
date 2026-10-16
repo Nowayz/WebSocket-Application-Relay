@@ -4,6 +4,8 @@
 mod socket;
 mod timers;
 
+#[cfg(test)]
+mod arena_tests;
 #[cfg(all(test, target_os = "linux"))]
 mod close_tests;
 #[cfg(test)]
@@ -203,6 +205,7 @@ struct Worker {
     ready: VecDeque<Token>,
     timers: Timers,
     scratch: ReadStorage,
+    compacted: bool,
 }
 
 impl Drop for Worker {
@@ -236,6 +239,7 @@ impl Worker {
             ready: VecDeque::new(),
             timers: Timers::default(),
             scratch: ReadStorage::default(),
+            compacted: false,
         })
     }
 
@@ -317,6 +321,32 @@ impl Worker {
         Ok(())
     }
 
+    fn reclaim_connections(&mut self) {
+        if self.connections.is_empty() {
+            self.scratch = ReadStorage::default();
+            // Keep small arenas warm for ordinary reconnect traffic.
+            if self.connections.capacity() > 256 || self.compacted {
+                self.connections = Slab::new();
+                self.tokens = HashMap::new();
+                self.timers = Timers::default();
+                self.compacted = false;
+            }
+        } else if self.connections.capacity() > 256
+            && self.connections.len() <= self.connections.capacity() / 8
+        {
+            // Slots are private to this worker. Ready/pending events and the
+            // poller carry stable tokens, while timers are rekeyed with each
+            // move. Socket owners and shared payload allocations stay in place.
+            self.connections.compact(|connection, from, to| {
+                *self.tokens.get_mut(&connection.token).expect("live token") = to;
+                self.timers.rekey(from, to);
+                true
+            });
+            self.timers.shrink_to_fit(self.connections.len());
+            self.compacted = true;
+        }
+    }
+
     fn run(mut self) -> Result<()> {
         let mut events = Events::with_capacity(1024);
         let mut shutdown_deadline = None;
@@ -376,17 +406,7 @@ impl Worker {
                         {
                             self.tokens.shrink_to(self.tokens.len() * 2);
                         }
-                        if self.connections.is_empty() {
-                            self.scratch = ReadStorage::default();
-                            // Retain small arenas for churn. A large population
-                            // wave must not leave megabytes of empty connection
-                            // records and timer indices on an idle worker.
-                            if self.connections.capacity() > 256 {
-                                self.connections = Slab::new();
-                                self.tokens = HashMap::new();
-                                self.timers = Timers::default();
-                            }
-                        }
+                        self.reclaim_connections();
                     }
                     Drive::Wait | Drive::Again => {
                         let deadline = self.connections[slot].deadline(&self.relay);
