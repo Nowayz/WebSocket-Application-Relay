@@ -382,18 +382,19 @@ impl Relay {
             return Err(Disconnect::CHANNEL_LENGTH);
         }
         let mut state = self.state.write();
+        let existing = state.channels.get_key_value(channel);
         if self.draining.load(Relaxed)
             || state.sessions >= self.config.max_connections
-            || (!state.channels.contains_key(channel)
-                && state.channels.len() >= self.config.max_channels)
-            || state
-                .channels
-                .get(channel)
-                .is_some_and(|c| c.members.len() >= self.config.max_channel_members)
+            || (existing.is_none() && state.channels.len() >= self.config.max_channels)
+            || existing.is_some_and(|(_, c)| c.members.len() >= self.config.max_channel_members)
         {
             self.metrics.rejected.fetch_add(1, Relaxed);
             return Err(Disconnect::OVERLOADED);
         }
+        // Copy a bounded name once per channel. Peers in an existing channel
+        // share its canonical storage instead of allocating another name.
+        let channel =
+            existing.map_or_else(|| Bytes::copy_from_slice(channel), |(name, _)| name.clone());
         let id = loop {
             let id = random_id().map_err(|_| Disconnect::OVERLOADED)?;
             if id != 0 && id != BROADCAST && !state.users.contains_key(&id) {
@@ -405,7 +406,7 @@ impl Relay {
         let peer = Arc::new(Peer {
             key,
             id: AtomicU64::new(id),
-            channel: Bytes::copy_from_slice(channel),
+            channel,
             authenticated: AtomicBool::new(false),
             listener: AtomicU8::new(0),
             closing: AtomicBool::new(false),
@@ -712,6 +713,8 @@ fn random_id() -> Result<u64> {
     Ok(u64::from_ne_bytes(bytes))
 }
 
+#[cfg(test)]
+mod channel_tests;
 #[cfg(test)]
 mod listener_tests;
 
