@@ -256,6 +256,10 @@ blocking flush; that transport is dropped, so an unread client may observe a
 reset/abnormal close instead of the intended WebSocket close code. Responsive
 clients receive and acknowledge the normal close frame. A received Close is
 acknowledged by flushing the exact response already queued by the WebSocket library.
+The worker attempts that flush immediately. If TCP blocks it, the connection
+waits for writable readiness within the original close deadline; it does not
+read the closed decoder again and discard the buffered response. This also
+applies when the peer acknowledges a server-initiated Close before output finishes.
 Each retained frame records its write offset. A zero offset proves that frame
 has performed no I/O, allowing a normal close handshake after cancelling the
 queue. A nonzero offset requires transport retirement. The body remains shared.

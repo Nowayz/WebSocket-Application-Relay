@@ -4,6 +4,9 @@
 mod socket;
 mod timers;
 
+#[cfg(all(test, target_os = "linux"))]
+mod close_tests;
+
 pub use crate::admin::admin_router;
 
 use std::{
@@ -667,21 +670,40 @@ impl Connection {
             deadline: now + relay.config.write_timeout(),
             flush_only: acknowledge,
         });
-        if !acknowledge {
-            match ws.close(Some(CloseFrame {
-                code: CloseCode::from(reason.code),
-                reason: reason.reason.into(),
-            })) {
-                Ok(()) => {}
-                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                Err(error) => {
-                    tracing::debug!(token = self.token.0, %error, "Close send failed");
-                    relay.metrics.close_failures.fetch_add(1, Relaxed);
-                    return Drive::Drop;
-                }
+        if acknowledge {
+            return self.finish_peer_close(relay);
+        }
+        match ws.close(Some(CloseFrame {
+            code: CloseCode::from(reason.code),
+            reason: reason.reason.into(),
+        })) {
+            Ok(()) => {}
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+            Err(error) => {
+                tracing::debug!(token = self.token.0, %error, "Close send failed");
+                relay.metrics.close_failures.fetch_add(1, Relaxed);
+                return Drive::Drop;
             }
         }
         Drive::Again
+    }
+
+    /// A received Close completes the exchange once queued control bytes reach
+    /// TCP. Flush in this turn; only actual backpressure needs another event.
+    fn finish_peer_close(&mut self, relay: &Relay) -> Drive {
+        self.closing.as_mut().expect("closing exchange").flush_only = true;
+        let Stage::WebSocket(ws) = &mut self.stage else {
+            unreachable!()
+        };
+        match ws.flush() {
+            Ok(()) | Err(Error::ConnectionClosed | Error::AlreadyClosed) => Drive::Drop,
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => Drive::Wait,
+            Err(error) => {
+                tracing::debug!(token = self.token.0, %error, "Close acknowledgement flush failed");
+                relay.metrics.close_failures.fetch_add(1, Relaxed);
+                Drive::Drop
+            }
+        }
     }
 
     fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {
@@ -793,8 +815,15 @@ impl Connection {
                 relay.metrics.close_failures.fetch_add(1, Relaxed);
                 return Drive::Drop;
             }
-            if !self.socket.state.lock().control_pending && (closing.flush_only || stopping) {
-                return Drive::Drop;
+            if closing.flush_only || stopping {
+                // The peer's Close is already consumed. Reading this closed
+                // decoder can terminate it while its reply is still buffered.
+                // Only writable readiness or the Close deadline may finish it.
+                return if self.socket.state.lock().control_pending {
+                    Drive::Wait
+                } else {
+                    Drive::Drop
+                };
             }
         }
         if self.closing.is_none()
@@ -845,7 +874,7 @@ impl Connection {
                 Ok(None) => continue,
                 Ok(Some(Message::Close(_))) => {
                     if self.closing.is_some() {
-                        return Drive::Again;
+                        return self.finish_peer_close(relay);
                     }
                     return self.start_close(
                         Disconnect {
