@@ -12,12 +12,19 @@ struct Args {
     upstream: String,
     #[arg(long, default_value_t = 1000)]
     max_connections: usize,
+    #[command(flatten)]
+    origin_policy: war_relay::origin::OriginPolicy,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    tracing_subscriber::fmt().with_env_filter("info").init();
+    args.origin_policy.validate()?;
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
     let listener = TcpListener::bind(args.bind)
         .await
         .context("cannot bind legacy bridge")?;
@@ -38,5 +45,12 @@ async fn main() -> Result<()> {
         }
         token.cancel();
     });
-    war_relay::legacy_bridge::serve(listener, args.upstream, args.max_connections, shutdown).await
+    war_relay::legacy_bridge::serve_with_origin_policy(
+        listener,
+        args.upstream,
+        args.max_connections,
+        args.origin_policy,
+        shutdown,
+    )
+    .await
 }

@@ -2,6 +2,13 @@
 
 ## Framing
 
+HTTP upgrades optionally enforce an exact browser Origin allowlist through
+`--allowed-origin` / `WAR_ALLOWED_ORIGINS`, shared by native and legacy listeners.
+The default remains unrestricted. With a list, denied or duplicate Origin
+headers receive HTTP `403` before upgrade; missing Origin remains allowed for
+native clients. This is separate from authentication and leaves CBOR routing
+unchanged. See [operations](operations.md#browser-origin-admission).
+
 One CBOR item per binary WebSocket message. WebSocket fragmentation is reassembled
 by tungstenite; the relay processes complete messages. Text WebSocket messages
 close with `1003`. The first CBOR item is a definite-length text or byte string

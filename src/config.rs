@@ -15,6 +15,8 @@ pub struct Config {
     pub admin_bind: SocketAddr,
     #[arg(long, env = "WAR_NO_ADMIN")]
     pub no_admin: bool,
+    #[command(flatten)]
+    pub origin_policy: crate::origin::OriginPolicy,
     #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
     pub max_connections: usize,
     #[arg(long, env = "WAR_MAX_CHANNELS", default_value_t = 10_000)]
@@ -92,6 +94,7 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<()> {
+        self.origin_policy.validate()?;
         for (name, value) in [
             ("max-connections", self.max_connections),
             ("max-channels", self.max_channels),

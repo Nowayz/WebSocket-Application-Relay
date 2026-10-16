@@ -16,7 +16,7 @@ use tokio::{
 };
 use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream, connect_async_with_config,
-    tungstenite::{Message, protocol::WebSocketConfig},
+    tungstenite::{Message, client::IntoClientRequest, protocol::WebSocketConfig},
 };
 use tokio_util::task::AbortOnDropHandle;
 use war_relay::protocol;
@@ -37,6 +37,9 @@ enum Mode {
 struct Args {
     #[arg(long, default_value = "ws://127.0.0.1:1338")]
     url: String,
+    /// Send this exact Origin header on every connection, including churn.
+    #[arg(long)]
+    origin: Option<String>,
     #[arg(long, value_enum, default_value = "traffic")]
     mode: Mode,
     /// Traffic uses pairs; churn uses this many independent workers; slow uses three sockets.
@@ -185,8 +188,8 @@ async fn traffic(args: Args) -> Result<()> {
     let mut work = Vec::with_capacity(args.clients / 2);
     for pair in 0..args.clients / 2 {
         let channel = format!("sustain{pair:x}");
-        let (sender, sid) = join(&args.url, &channel).await?;
-        let (receiver, rid) = join(&args.url, &channel).await?;
+        let (sender, sid) = join(&args.url, &channel, args.origin.as_deref()).await?;
+        let (receiver, rid) = join(&args.url, &channel, args.origin.as_deref()).await?;
         work.push((sender, receiver, packets(rid, sid, args.payload_bytes)));
     }
     let setup_secs = setup.elapsed().as_secs_f64();
@@ -250,13 +253,14 @@ async fn churn(args: Args) -> Result<()> {
     );
     for worker in 0..args.clients {
         let url = args.url.clone();
+        let origin = args.origin.clone();
         jobs.spawn(async move {
             let mut stats = Stats::new();
             let channel = format!("churn{worker:x}");
             let mut sequence = 0u64;
             while Instant::now() < deadline {
                 let connected = Instant::now();
-                let (mut ws, id) = join(&url, &channel).await?;
+                let (mut ws, id) = join(&url, &channel, origin.as_deref()).await?;
                 stats.joins += 1;
                 let value = protocol::byte_string(&sequence.to_le_bytes());
                 ws.send(Message::Binary(protocol::envelope(id, &value)))
@@ -291,9 +295,9 @@ async fn churn(args: Args) -> Result<()> {
 
 async fn slow(args: Args) -> Result<()> {
     let setup = Instant::now();
-    let (sender, sid) = join(&args.url, "slow-reader").await?;
-    let (mut reader, _) = join(&args.url, "slow-reader").await?;
-    let (mut slow, slow_id) = join(&args.url, "slow-reader").await?;
+    let (sender, sid) = join(&args.url, "slow-reader", args.origin.as_deref()).await?;
+    let (mut reader, _) = join(&args.url, "slow-reader", args.origin.as_deref()).await?;
+    let (mut slow, slow_id) = join(&args.url, "slow-reader", args.origin.as_deref()).await?;
     // Read the welcome, then deliberately stop polling this socket until after traffic.
     let packets = packets(protocol::BROADCAST, sid, args.payload_bytes);
     let (mut sender, _pump) = sender_with_heartbeat(sender);
@@ -361,16 +365,16 @@ struct Window {
 /// shared template set and fixed histograms keep memory independent of duration.
 async fn fanout(args: Args) -> Result<()> {
     let setup = Instant::now();
-    let (sender, sid) = join(&args.url, "fanout").await?;
+    let (sender, sid) = join(&args.url, "fanout", args.origin.as_deref()).await?;
     let healthy = args.clients - args.unread_clients - 1;
     let mut readers = Vec::with_capacity(healthy);
     for _ in 0..healthy {
-        readers.push(join(&args.url, "fanout").await?.0);
+        readers.push(join(&args.url, "fanout", args.origin.as_deref()).await?.0);
     }
     let mut unread = Vec::with_capacity(args.unread_clients);
     let mut unread_ids = Vec::with_capacity(args.unread_clients);
     for _ in 0..args.unread_clients {
-        let (socket, id) = join(&args.url, "fanout").await?;
+        let (socket, id) = join(&args.url, "fanout", args.origin.as_deref()).await?;
         unread.push(socket);
         unread_ids.push(id);
     }
@@ -599,11 +603,15 @@ fn sender_with_heartbeat(ws: Socket) -> (SplitSink<Socket, Message>, AbortOnDrop
     (sink, AbortOnDropHandle::new(task))
 }
 
-async fn join(url: &str, channel: &str) -> Result<(Socket, u64)> {
+async fn join(url: &str, channel: &str, origin: Option<&str>) -> Result<(Socket, u64)> {
     let config = WebSocketConfig::default().read_buffer_size(4096);
+    let mut request = url.into_client_request()?;
+    if let Some(origin) = origin {
+        request.headers_mut().insert("origin", origin.parse()?);
+    }
     let (mut ws, _) = timeout(
         Duration::from_secs(10),
-        connect_async_with_config(url, Some(config), true),
+        connect_async_with_config(request, Some(config), true),
     )
     .await??;
     ws.send(Message::Binary(protocol::text(channel))).await?;

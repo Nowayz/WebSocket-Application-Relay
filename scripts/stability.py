@@ -32,7 +32,7 @@ def sample(pid, admin, started):
 
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None,
-             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=()):
+             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None):
     port, admin = runtime.free_port(), runtime.free_port()
     actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
     largest_payload = max(payload_sizes or [actual_payload])
@@ -67,6 +67,8 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
             command = [str(Path(stress_binary or STRESS).resolve()), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
                        "--clients", str(clients), "--duration-secs", str(seconds),
                        "--payload-bytes", str(actual_payload), "--window", str(window)]
+            if origin is not None:
+                command += ["--origin", origin]
             if mode == "fanout":
                 command += ["--unread-clients", str(unread_clients), "--reader-delay-ms", str(reader_delay_ms)]
                 if payload_sizes:
@@ -152,6 +154,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
     parser.add_argument("--stress", type=Path, default=STRESS)
+    parser.add_argument("--origin", help="Exact Origin header sent by the workload")
+    parser.add_argument("--allowed-origin", action="append", default=[], help="Server allowlist entry; repeat as needed")
     parser.add_argument("--server-cpus")
     parser.add_argument("--client-cpus")
     parser.add_argument("--payload-bytes", type=int)
@@ -174,7 +178,9 @@ def main():
                                        stress_binary=args.stress, server_cpus=args.server_cpus,
                                        client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
                                        payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
-                                       reader_delay_ms=args.reader_delay_ms, window=args.window))
+                                       reader_delay_ms=args.reader_delay_ms, window=args.window,
+                                       origin=args.origin,
+                                       server_args=[part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]))
         args.output.write_text(json.dumps(output, indent=2) + "\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

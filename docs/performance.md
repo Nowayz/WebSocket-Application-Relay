@@ -973,3 +973,71 @@ transport intentionally drops TCP. The
 traffic, pressure and acceptance records; the
 [manifest](benchmarks/2026-10-16-input-rejection-build.json) binds source, package,
 patch and fixed-client hashes. This is finite plaintext loopback evidence.
+
+## Cost check for optional browser-origin admission, 2026-10-16
+
+The shared policy borrows configured strings and parsed HTTP header bytes once
+per upgrade. There is no URL parsing or allocation in its acceptance check and
+no new per-message work. An empty list preserves unrestricted admission; an
+enabled list compares at most 64 exact origins. Denial builds a small fixed HTTP
+response and updates native rejection counters. Native application-body storage,
+queue ownership and vectored writes are unchanged. The optional bridge also
+reuses the existing bounded HTTP reader; its post-upgrade translation path and
+16 MiB data-message ceiling remain intact.
+
+All comparisons use the same newly frozen verifying client, sending the same
+`Origin: https://app.example` to both the prior `1c3a603` release and the new
+release. Fresh four-worker relays run sequentially on CPUs 0–3, with the client
+on CPUs 4–7. Each churn iteration joins, verifies its monotonic self-message and
+finishes Close before reconnecting. Its latency measures connection through
+verified self-delivery; Close follows that timing interval. CPU includes setup
+and teardown, sampled at the host's 10 ms tick resolution. Percentiles are fixed
+histogram upper bounds. Incoming rate limits are disabled for the workload;
+the incoming-message ceiling is 1 MiB. Heartbeats, the 4 KiB initial read buffer,
+five-second decoder retirement and 1 GiB staging admission retain their defaults.
+
+Three five-second repetitions per arm measured 64 independent churn workers.
+The 64-entry list places the match last, exercising the bounded linear scan:
+
+| Five-second churn / median | Lifecycles/s | Server ns/lifecycle | p99 upper ms |
+| --- | ---: | ---: | ---: |
+| Prior release | 110,642 | 17,301 | 2.097152 |
+| New, unrestricted | 105,268 | 17,250 | 2.097152 |
+| New, one allowed origin | 110,106 | 17,354 | 2.097152 |
+| New, 64 allowed origins | 110,157 | 17,519 | 2.097152 |
+
+The enabled one/64-entry arms used +0.31%/+1.26% median server CPU per lifecycle
+against that control. The unrestricted arm's throughput median was 4.86% lower
+despite similar CPU cost and overlapping ranges, so it received a longer check:
+four ten-second repetitions per build, alternating order. Those medians were
+108,275 versus 108,148 lifecycles/s (−0.12%) and 17,462 versus 17,479 server
+ns/lifecycle (+0.09%), with the same 2.097152 ms p99 bound and overlapping ranges.
+The initial spread remains in the record; it is not attributed to the policy.
+
+Three four-second traffic pairs checked 64 peers/32 private-routing pairs,
+1 KiB values and a 16-message window. Every complete encoded value and its
+order were verified. Throughput medians were 1,719,050 versus 1,707,154
+deliveries/s (−0.69%); server CPU was 1,627 versus 1,622 ns/delivery (−0.28%).
+The p99 bound stayed 1.048576 ms. This is a cost guard, with no speed improvement
+or production capacity claim.
+
+All 26 cases passed exact join/departure counts and resource/error checks:
+15,148,001 complete churn lifecycles and 41,517,392 ordinary traffic deliveries.
+No application values were compacted in these workloads. Churn verifies Close;
+the traffic generator intentionally drops 64 TCP handles at its deadline, and
+each traffic case accounts for exactly those transport/write departures.
+Sessions, connections, queued/variable bytes and decoder reservations end at
+zero, leaving the persistent global channel. Unexpected rejection, protocol,
+Close, timeout and pressure counters are zero.
+
+The [short comparison](benchmarks/2026-10-16-origin-cost.json) and
+[longer confirmation](benchmarks/2026-10-16-origin-churn-confirm.json) retain raw
+samples, commands, client/release digests and per-case checks. The
+[summary](benchmarks/2026-10-16-origin-summary.json) and
+[manifest](benchmarks/2026-10-16-origin-build.json) bind them to source and live
+acceptance. For a fresh enabled-policy workload, build the stress example and
+run `python3 scripts/stability.py --modes churn --churn-secs 10 --origin
+https://app.example --allowed-origin https://app.example --output
+artifacts/origin-churn.json`. Other browser engines, TLS/proxies, adversarial
+Origin admission rates, legacy CPU cost and larger/longer deployments remain
+unmeasured.

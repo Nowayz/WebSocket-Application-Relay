@@ -20,6 +20,57 @@ Keep it on a trusted network or behind TLS termination as well. Its upstream URL
 currently supports plain `ws://`; connect locally to the relay. Native CBOR clients
 avoid the translation, second socket, and extra memory/CPU entirely.
 
+## Browser-origin admission
+
+Both binaries accept `--allowed-origin` and `WAR_ALLOWED_ORIGINS`. The default
+empty list accepts all origins, preserving existing clients. For example:
+
+```sh
+WAR_ALLOWED_ORIGINS=https://app.example,https://admin.example ./target/release/war-relay
+./target/release/war-legacy-bridge --allowed-origin https://app.example --allowed-origin https://admin.example
+```
+
+Use each application's serialized `location.origin`: `http://` or `https://`,
+host, and a nondefault port if present. This is the page origin, rather than the
+relay's `ws://` or `wss://` URL. Comparisons are exact and case-sensitive; there
+is no path, trailing slash, wildcard, suffix/subdomain matching or normalization.
+Use the lowercase, ASCII/IDNA host and default-port omission supplied by the
+browser. Configuration accepts at most 64 entries of up to 1,024 bytes each.
+
+When a list is set, an unlisted Origin, an empty header, a combined origin list
+or duplicate Origin headers receives HTTP `403` / `Origin Not Allowed` before
+WebSocket upgrade and channel registration. The literal opaque origin `null`
+is denied unless explicitly listed. Sandboxed/file/privacy contexts can share
+that value; allowing it does not identify a particular page. A missing Origin
+remains allowed for native clients and local bridge upstream connections.
+
+Origin protects the browser scripting boundary described by
+[RFC 6455 section 10.2](https://www.rfc-editor.org/rfc/rfc6455.html#section-10.2);
+non-browser clients can omit or forge it. It does not authorize channels,
+replace authentication, or change the relay's global/private routing scopes.
+Use TLS and an admission/authentication proxy where client identity is needed.
+Preserve the browser's Origin through that proxy. Removing or rewriting it to an
+allowed value bypasses this check.
+
+Configure every exposed ingress. In particular, setting only the native relay's
+policy does not restrict the legacy bridge's browser clients: the bridge's
+upstream is an Origin-less native connection. Set the policy on the bridge too.
+The existing public `legacy_bridge::serve` library entry point remains
+unrestricted; `serve_with_origin_policy` opts into the same policy as the CLI.
+Both listeners cap raw HTTP upgrade input at 16 KiB. The bridge uses its existing
+10-second handshake deadline and connection cap; it has no shared decoder budget
+or management listener. That HTTP cap is removed after upgrade, so subsequent
+WebSocket data still has the independent 16 MiB legacy message limit.
+
+`war_origin_rejected_total` counts native policy denials once and also contributes
+to `war_rejected_total`. A successfully written HTTP `403` does not increment
+`war_handshake_errors_total` or `war_join_rejected_total`; a failed/timed-out
+denial write still counts as a handshake failure. The bridge has no such metric:
+its denials are visible as HTTP `403`, with connection errors at `RUST_LOG=debug`.
+No Origin values are used as metric labels. Checks borrow bounded configuration
+and header bytes once at upgrade; application messages retain their shared-body
+forwarding path.
+
 ## Important defaults and budgets
 
 `war-relay --help` is the source of truth for CLI options and matching `WAR_*`
@@ -246,7 +297,7 @@ loses in-memory variables; clients must reconnect and rebuild application state.
 
 Monitor `war_connections`, `war_sessions`, `war_channels`, `war_queued_bytes`,
 `war_variable_bytes`, `war_slow_consumers_total`, `war_global_pressure_total`,
-`war_handshake_errors_total`, `war_join_rejected_total`, `war_protocol_errors_total`, and
+`war_handshake_errors_total`, `war_origin_rejected_total`, `war_join_rejected_total`, `war_protocol_errors_total`, and
 `war_rate_limited_total`. Metric labels deliberately exclude user/channel IDs.
 Debug logging reports connection failures without message bodies or credentials.
 

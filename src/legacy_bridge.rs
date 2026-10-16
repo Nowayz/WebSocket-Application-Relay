@@ -17,7 +17,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_tungstenite::{
-    accept_async_with_config, connect_async,
+    accept_hdr_async_with_config, connect_async,
     tungstenite::{
         Message,
         protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
@@ -152,11 +152,33 @@ pub async fn serve(
     max_connections: usize,
     shutdown: CancellationToken,
 ) -> Result<()> {
+    serve_with_origin_policy(
+        listener,
+        upstream,
+        max_connections,
+        crate::origin::OriginPolicy::default(),
+        shutdown,
+    )
+    .await
+}
+
+/// Serve the original wire protocol with an optional browser-origin boundary.
+/// Apply the policy at this public ingress; the upstream bridge connection has
+/// no browser Origin and must not be relied on to enforce downstream origins.
+pub async fn serve_with_origin_policy(
+    listener: TcpListener,
+    upstream: String,
+    max_connections: usize,
+    origin_policy: crate::origin::OriginPolicy,
+    shutdown: CancellationToken,
+) -> Result<()> {
+    origin_policy.validate()?;
     anyhow::ensure!(
         max_connections > 0 && max_connections <= Semaphore::MAX_PERMITS,
         "invalid bridge connection limit"
     );
     let slots = Arc::new(Semaphore::new(max_connections));
+    let origin_policy = Arc::new(origin_policy);
     let mut tasks = JoinSet::new();
     loop {
         tokio::select! {
@@ -167,11 +189,12 @@ pub async fn serve(
                 let (socket, _) = incoming?;
                 let Ok(permit) = slots.clone().try_acquire_owned() else { continue; };
                 let upstream = upstream.clone(); let token = shutdown.clone();
+                let origin_policy = origin_policy.clone();
                 tasks.spawn(async move {
                     let _permit = permit;
                     tokio::select! {
                         _ = token.cancelled() => {},
-                        result = bridge(socket, upstream) => { if let Err(error) = result { tracing::debug!(%error, "legacy bridge connection ended"); } }
+                        result = bridge(socket, upstream, &origin_policy) => { if let Err(error) = result { tracing::debug!(%error, "legacy bridge connection ended"); } }
                     }
                 });
             }
@@ -182,7 +205,11 @@ pub async fn serve(
     Ok(())
 }
 
-async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
+async fn bridge(
+    socket: TcpStream,
+    upstream: String,
+    origin_policy: &crate::origin::OriginPolicy,
+) -> Result<()> {
     const WAIT: Duration = Duration::from_secs(10);
     socket.set_nodelay(true)?;
     let config = WebSocketConfig::default()
@@ -190,7 +217,22 @@ async fn bridge(socket: TcpStream, upstream: String) -> Result<()> {
         .write_buffer_size(4096)
         .max_write_buffer_size(17 * 1024 * 1024)
         .max_message_size(Some(16 * 1024 * 1024));
-    let mut legacy = timeout(WAIT, accept_async_with_config(socket, Some(config))).await??;
+    let mut legacy = timeout(
+        WAIT,
+        accept_hdr_async_with_config(
+            transport::HandshakeStream::new(socket),
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                if origin_policy.allows(request.headers()) {
+                    Ok(response)
+                } else {
+                    Err(crate::origin::forbidden())
+                }
+            },
+            Some(config),
+        ),
+    )
+    .await??;
+    legacy.get_mut().handshake_done();
     legacy.set_read_frame_limit(Some(transport::READ_FRAMES_PER_POLL));
     let joined = timeout(WAIT, async {
         loop {

@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 73 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 80 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -415,6 +415,58 @@ Current local endpoints are native `ws://127.0.0.1:1338`, optional bridge
 five-second retirement and 1 GiB staging admission remain enabled. The ongoing
 goal stays active; no hosted deployment or cluster capacity is claimed.
 
+## Latest checkpoint: browser-origin admission, 2026-10-16
+
+Native and legacy public listeners now share `--allowed-origin` /
+`WAR_ALLOWED_ORIGINS`: exact browser page origins, at most 64 entries, with
+unrestricted defaults. Unlisted, empty, combined and duplicate Origin headers
+receive HTTP `403` before upgrade. Missing Origin remains allowed for native
+and bridge clients; `null` requires an explicit entry. This is a browser boundary,
+separate from authentication and the preserved global/private routing scopes.
+The policy borrows headers/configuration once per upgrade and adds no per-message
+checks or application-body movement. The bridge checks its own ingress and now
+shares the native 16 KiB HTTP reader bound; its later 64 KiB test frames still
+route correctly. Existing `legacy_bridge::serve` callers retain unrestricted
+behavior, with a separate opt-in library entry point.
+
+All 80 Rust tests pass, including new HTTP/capacity/counter and legacy boundary
+regressions. The policy checks also pass in release. Strict Clippy, formatting,
+the 62-file vendor audit, seven JS socket cases, the complete independent
+776-case/2,311-exchange corpus in release and the local debug CI command, and the
+48-common-case/eight-explicit-difference C++ comparison pass. Actual Chrome 155
+passes seven CBOR checks from an allowed page and preserves legacy binary/text
+delivery with clean Close. The same page from another port receives `403` on
+both guarded listeners. Native denial increments only its intended counters;
+bridge denial creates no upstream connection. All final resource gauges are zero.
+
+Twenty-six sequential cost runs pass: 15,148,001 complete connection lifecycles
+and 41,517,392 verified traffic deliveries. The longer unrestricted comparison
+differs by −0.12% median churn throughput and +0.09% server CPU/lifecycle; p99
+stays in the same histogram bucket. The short enabled 64-entry list costs +1.26%
+median CPU/lifecycle against its control. Ordinary 1 KiB traffic medians differ
+by −0.69% throughput and −0.28% CPU/delivery, with the same p99 bucket. No routed
+body compaction occurs in those cases. The earlier short unrestricted spread
+and the longer confirmation are both retained; no general speed claim is made.
+
+The quiescent old native/bridge processes were verified by PID, cwd and executable
+digest before SIGTERM, and both exited zero. Their replacements run at the same
+local endpoints, with Origin unrestricted for manual testing. Fresh Chrome checks
+(seven), live legacy/Close checks (three), liveness and readiness pass. The normal
+decoder retirement returns two connected sessions to 16 KiB after 5.020 seconds;
+later typed routing adds zero body copies. Final resource and unexpected-error
+counters are zero. The separate guarded-browser fixture was stopped cleanly.
+
+Current native SHA-256 begins `2849ab156586`; bridge begins `546d7e85772b`.
+Native WebSocket is `ws://127.0.0.1:1338`, legacy is `ws://127.0.0.1:1337`,
+management is `http://127.0.0.1:1339`, and the browser check remains at
+`http://127.0.0.1:4180/`. Application-idle Close is disabled for manual testing;
+five-second decoder retirement and 1 GiB staging admission stay enabled.
+The [summary](benchmarks/2026-10-16-origin-summary.json),
+[manifest](benchmarks/2026-10-16-origin-build.json), and
+[live record](benchmarks/2026-10-16-origin-live.json) bind sources and observations.
+The ongoing goal remains active, with no hosted deployment, cluster capacity or
+TLS-proxy acceptance claimed.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -445,8 +497,9 @@ goal stays active; no hosted deployment or cluster capacity is claimed.
    sequences and paced transport failures, preserving resource bounds, exact
    counter expectations and source fidelity. The current finite corpus is not
    exhaustive fuzz coverage.
-5. Revisit connection-admission policy for public multi-application operation
-   (per-IP limits, origin policy, tenant boundaries) with an explicit compatibility
-   and proxy model. The existing global/private scopes intentionally match WAR.
+5. Extend connection-admission policy for public multi-application operation
+   (per-IP limits and tenant boundaries) with an explicit compatibility and
+   trusted-proxy model. Optional browser-origin admission now covers both public
+   ingresses; the existing global/private scopes intentionally match WAR.
 6. Design node ownership and cross-node routing only after single-node capacity
    and operational needs are established. No replicas are currently a cluster.

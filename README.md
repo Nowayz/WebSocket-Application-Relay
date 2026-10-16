@@ -37,6 +37,16 @@ closes with `1001` / `Application Idle` and uses normal queue/variable cleanup.
 The default `0` disables this policy. See [operations.md](docs/operations.md) for
 memory budgeting and deadline details.
 
+For a browser application, optionally restrict HTTP upgrades with
+`--allowed-origin https://app.example` or `WAR_ALLOWED_ORIGINS=https://app.example`.
+Repeat the option or comma-separate values for multiple sites. Origins match
+exactly; use the page's `location.origin`, without a trailing slash. Unlisted
+browser origins receive HTTP `403`. Missing Origin remains allowed for native
+clients, so this is a browser boundary, not client authentication. With no list,
+the original unrestricted behavior remains. Apply the same setting to an exposed
+legacy bridge. See [origin admission](docs/operations.md#browser-origin-admission)
+for proxy behavior, `null` origins, and telemetry.
+
 ## JavaScript client
 
 Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports

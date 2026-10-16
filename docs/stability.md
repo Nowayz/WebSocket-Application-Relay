@@ -510,3 +510,50 @@ source, package, patch, verifier and release hashes; the
 record and its exact counters. Ordinary traffic cost is recorded separately in
 `performance.md`. This finite corpus does not establish exhaustive fuzz coverage,
 production capacity or arbitrary network/teardown behavior.
+
+## Optional browser-origin admission, 2026-10-16
+
+Native and legacy listeners now share one optional, exact Origin allowlist.
+The default remains unrestricted. With a configured list, an unlisted, empty,
+combined or duplicate Origin receives HTTP `403` before upgrade. Origin-less
+clients remain supported, and `null` requires an explicit entry. The policy
+runs once during the handshake, borrowing headers and bounded configuration;
+application validation, shared bodies and routing scopes remain unchanged.
+The bridge checks its own public ingress, since its upstream has no browser
+Origin. Its HTTP reader now shares the native 16 KiB raw upgrade guard.
+
+Four real-socket regressions cover exact/IPv6/missing/explicit-null origins,
+unrestricted defaults, unsupported subprotocols, malformed and duplicate Origin
+values, exact `403` body/length, and native counter scopes. A healthy session
+continues routing through repeated denials with only two connection slots.
+Each denial releases its slot and decoder allowance; it never registers a
+channel member or changes queued bytes. The bridge test uses one slot, verifies
+that denial and oversized HTTP input create no upstream connection, and then
+routes a 64 KiB frame after a valid upgrade. Accepted peers finish normal Close
+and EOF. Three unit checks cover bounded configuration, exact borrowed header
+comparisons and repeated/comma-separated CLI arguments.
+
+Headed Chrome 155 exercised the actual generated browser module with the
+allowlist set through `WAR_ALLOWED_ORIGINS` on both binaries. The allowed page
+at `http://127.0.0.1:4180` passed seven native checks, including typed/128 KiB
+delivery, control serialization, precise IDs, disconnect and clean Close.
+A browser legacy connection preserved 64 KiB binary and Unicode text messages
+and closed cleanly. Serving the same page at port `4181` caused actual HTTP
+`403` upgrade failures on both listeners. The native denial incremented the
+Origin and general rejection counters once, without a handshake/join error;
+the bridge denial created no native connection. All resource gauges returned
+to zero. The browser's two expected error/`1006` observations are recorded as
+denied upgrades, rather than clean WebSocket Close handshakes.
+
+All 80 Rust tests pass in debug, with the new policy checks also passing in
+release. Strict Clippy, formatting, 62-file vendor verification, seven JS socket
+cases, the independent 776-case/2,311-exchange input corpus and the original C++
+48-common-case/eight-explicit-difference comparison pass. This preserves the
+finite prior protocol contract with the policy disabled. Evidence is bound in
+[the manifest](benchmarks/2026-10-16-origin-build.json), with
+[browser observations](benchmarks/2026-10-16-origin-browser.json),
+[input corpus](benchmarks/2026-10-16-origin-corpus.json), and
+[original-runtime comparison](benchmarks/2026-10-16-origin-reference.json).
+The [operations guide](operations.md#browser-origin-admission) documents the
+proxy and authentication boundary. Other browser engines and a deployed TLS
+proxy are outside these checks.

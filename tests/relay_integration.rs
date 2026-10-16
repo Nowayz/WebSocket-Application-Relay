@@ -27,6 +27,9 @@ use war_relay::{
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
+#[path = "relay_integration/origin_policy.rs"]
+mod origin_policy;
+
 struct Server {
     relay: Arc<Relay>,
     url: String,

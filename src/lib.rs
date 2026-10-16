@@ -5,6 +5,7 @@ mod frame;
 pub mod legacy;
 pub mod legacy_bridge;
 pub mod metrics;
+pub mod origin;
 pub mod protocol;
 pub mod relay;
 pub mod server;

@@ -39,6 +39,7 @@ pub struct Metrics {
     pub close_failures: AtomicU64,
     pub transport_disconnects: AtomicU64,
     pub join_rejected: AtomicU64,
+    pub origin_rejected: AtomicU64,
 }
 
 impl Metrics {
@@ -151,7 +152,12 @@ impl Metrics {
             (
                 "rejected_total",
                 self.rejected.load(Relaxed),
-                "Connections or joins refused by admission limits or drain.",
+                "Connections or joins refused by admission limits, browser-origin policy or drain.",
+            ),
+            (
+                "origin_rejected_total",
+                self.origin_rejected.load(Relaxed),
+                "Native HTTP upgrades refused by the configured browser-origin policy; also included in rejected_total.",
             ),
             (
                 "handshake_errors_total",

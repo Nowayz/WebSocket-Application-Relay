@@ -155,6 +155,11 @@ async fn connection_task(
     let handshake = accept_hdr_async_with_config(
         transport::HandshakeStream::new(socket),
         |request: &Request, mut response: HandshakeResponse| {
+            if !config.origin_policy.allows(request.headers()) {
+                relay.metrics.rejected.fetch_add(1, Relaxed);
+                relay.metrics.origin_rejected.fetch_add(1, Relaxed);
+                return Err(crate::origin::forbidden());
+            }
             if let Some(protocols) = request.headers().get("sec-websocket-protocol") {
                 if protocols
                     .to_str()
@@ -180,6 +185,7 @@ async fn connection_task(
         _ = shutdown.cancelled() => return Ok(()),
         result = timeout(Duration::from_secs(config.handshake_timeout_secs), handshake) => match result {
             Ok(Ok(ws)) => ws,
+            Ok(Err(tungstenite::Error::Http(response))) if response.status() == StatusCode::FORBIDDEN => return Ok(()),
             _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return Ok(()); }
         }
     };
