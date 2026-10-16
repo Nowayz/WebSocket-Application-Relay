@@ -82,20 +82,20 @@ variables. All bounds are per process.
 | Channels | 10,000 | Includes persistent `re_globl` |
 | Members per channel | 10,000 | Includes closing sessions until removal |
 | Incoming message | 16 MiB | Complete reassembled WebSocket data message |
-| Read buffer per socket | 4 KiB | Initial read capacity; tune for the actual workload |
+| Worker receive chunk | 4 KiB | One reusable base slab per worker; idle sockets allocate none; incomplete frames retain separate storage |
 | Decoder staging across process | 1 GiB | `--total-read-buffer-bytes` / `WAR_TOTAL_READ_BUFFER_BYTES`; twice frame/fragment capacity as growth headroom; zero disables |
 | HTTP upgrade input | 16 KiB | Raw bytes read before upgrade completes; handshake timeout still applies |
-| Enlarged read storage retirement | 5 s after large input | `--read-buffer-idle-secs` / `WAR_READ_BUFFER_IDLE_SECS`; zero disables |
+| Private decoder/fragment high-water retirement | 5 s after large input | `--read-buffer-idle-secs` / `WAR_READ_BUFFER_IDLE_SECS`; zero disables this timer; oversized worker slabs always retire before reuse |
 | Output queue per session | 64 messages / 32 MiB | Includes an in-flight socket write |
 | Output reservations across process | 256 MiB | Logical payload bytes per recipient, conservatively counting shared frames repeatedly |
 | Variables per channel | 256 / 1 MiB | Key bytes plus encoded CBOR value bytes |
 | Variables across process | 64 MiB | Sum of channel key/value bytes |
 | Incoming rate per session | 1,000 messages/s / 16 MiB/s | One-second burst; join and ping/pong also count |
 | Handshake / channel join deadline | 5 s / 10 s | Includes clients that send no data |
-| Write / graceful-close deadline | 5 s | One deadline per operation; close-send and acknowledgement share a budget |
+| Write / graceful-close deadline | 5 s | Queued application output has a deadline from retention; close-send and acknowledgement share one budget |
 | Heartbeat | Every 15 s, pong due within 45 s | Server ping payload `war`; zero interval disables heartbeats |
 | Application idle timeout | Disabled (`0`) | Joined sessions; `--idle-timeout-secs` / `WAR_IDLE_TIMEOUT_SECS`, up to one day |
-| Shutdown deadline | 10 s | Remaining tasks are aborted and registration cleanup runs |
+| Shutdown deadline | 10 s | Workers drop remaining transports and run registration cleanup |
 
 Queue limits concern logical payload storage, not the complete process RSS. WebSocket
 read/write buffers, partially assembled incoming frames, metadata, allocator
@@ -108,7 +108,8 @@ uses 64 KiB rather than the compatibility-oriented 16 MiB default.
 Before accepting a native WebSocket handshake, the relay reserves twice the greater
 of the configured initial read capacity and 20 KiB (the 16 KiB raw HTTP bound plus
 the HTTP reader's 4 KiB chunk). An exhausted shared staging allowance returns
-HTTP `503`. Once upgraded, separate frame and fragment-assembly leases reserve
+HTTP `503`. After upgrade an empty decoder releases its HTTP reservation. Worker
+receive storage and private partial-frame/fragment leases reserve
 twice their requested capacities **before allocation**, covering overlap of old
 and new staging allocations during growth. Large frame allocations include one
 configured read chunk of bounded read-ahead so the next header can reuse storage;
@@ -117,7 +118,14 @@ advertised body; fragment assembly is admitted before appending a decoded frame.
 Denial stops input and sends a best-effort `1013` / `Input Memory Limit`.
 A refused incomplete frame cannot be resumed unreserved.
 
-Each lease retains its high-water allowance, so normal reads within it perform
+The receive allocation and its lease move together between worker and decoder.
+Storage moves only between frames with no unread bytes; a parsed header awaiting
+its body also stays with its connection. Idle decoders keep a zero-byte lease.
+A worker discards an oversized empty slab before lending storage again, and
+releases scratch storage when its last socket retires. A small message from
+another connection therefore cannot pin a previous large receive allocation.
+
+Each retained lease keeps its high-water allowance, so normal reads within it perform
 no shared-budget atomics or per-packet guard allocation. The allowance releases
 on transport drop/cancellation, or shrinks on a safe decoder reset. Fragment
 assembly retains its reservation while a fragmented message is incomplete.
@@ -143,9 +151,10 @@ the optional migration bridge has its own bounded connections/messages and
 separate process memory. Use connection and message limits alongside these
 reservations and measure actual RSS on the intended deployment.
 
-Native and legacy server readers process at most 256 WebSocket frames in one
-stream poll. Long sequences of empty or small continuations yield and explicitly
-reschedule the reader, preserving incomplete messages and their existing storage.
+Native workers process at most 256 WebSocket frames per ready connection turn;
+the legacy bridge uses the same frame bound per stream poll. Long sequences of
+empty or small continuations yield and explicitly reschedule the reader,
+preserving incomplete messages and their existing storage.
 This lets other sessions, management requests and cancellation/deadline branches
 make progress even when fragment input is already buffered. Complete messages
 usually return before reaching the quota. It does not reject otherwise valid
@@ -155,37 +164,39 @@ normal validation, unmasking and assembly work. See the measured scheduling
 results in `performance.md`.
 
 Routed output borrows immutable receive storage. A small slice can retain its
-backing slab, so each connection tracks its largest observed message (at least
-its configured initial read buffer). Once that mark exceeds the initial read
-buffer, shared messages smaller than one eighth of the mark have their encoded
-application value compacted before fanout. Ordinary tiny messages still share
-the normal read slab. This conservative policy can continue copying small
-messages after one large message until decoder reclamation resets the watermark;
-it avoids retaining enlarged slabs through tiny queued views.
+backing slab, so routing receives the current allocation's capacity from the
+decoder. Shared messages smaller than one eighth of a slab larger than the
+configured base chunk have their encoded value compacted before fanout. This
+applies to small coalesced views of a large current allocation. Later small
+messages on a fresh base slab remain shared; a previous large message alone does
+not cause copying. Changing CBOR sender-ID width never shifts the body.
 Queue gauges count the emitted CBOR envelope's logical bytes, including its
 separate routing prefix, rather than the backing allocation's capacity. Measure
 RSS alongside these gauges; they are not a physical-memory accounting interface.
 
-Receive capacity can also remain resident on open connections after their output
-queues drain. Concurrent 4 MiB primer measurements demonstrate this separately
-from queued-view retention; the 4 KiB read setting is an initial capacity.
+Incomplete input and fragment-assembly allowances can remain resident on open
+connections after output drains. The historical per-connection buffer figures
+in `performance.md` describe the retired async core; the readiness replacement
+shares base storage by worker.
 
 By default, `WAR_READ_BUFFER_IDLE_SECS=5` releases unused decoder storage after
 five seconds without a completed binary input larger than the greater of 64 KiB
 and the configured initial read buffer. A new large input postpones the deadline;
 small input, Ping/Pong and outgoing application traffic leave it alone. Sessions
-stay connected and routing continues. Set the interval to `0` to keep the
-decoder's normal indefinite reuse policy, or to `1..=86400` for another interval.
-Large recurring bursts reuse their storage during the interval. A shorter
-interval can increase allocation churn for sparsely recurring large messages.
+stay connected and routing continues. Set the interval to `0` to disable quiet
+private decoder/fragment resets, or to `1..=86400` for another interval. Completed
+oversized worker slabs retire regardless of this timer; recurring large input
+can allocate receive storage again. Ordinary base-size input reuses the worker
+slab without copying its application body.
 
 Reclamation replaces only the decoder's receive buffer with its initial read
 capacity. Published payloads keep their existing shared owners; incomplete
 message assembly and protocol/control state remain intact. An incomplete next
 WebSocket header may be copied, at most 13 bytes. A complete buffered header or
 partially received frame defers the operation for another interval so application
-bytes are not moved or lost. After a successful reset, later tiny routed values
-can share the normal slab again instead of using the old large-input watermark.
+bytes are not moved or lost. Fragment assembly retains its own storage and
+allowance while incomplete. Routing uses current storage capacity independently
+of this timer.
 This needs a narrow local codec hook; its source provenance and complete patch
 are in [vendor/README.md](../vendor/README.md).
 
@@ -245,14 +256,19 @@ blocking flush; that transport is dropped, so an unread client may observe a
 reset/abnormal close instead of the intended WebSocket close code. Responsive
 clients receive and acknowledge the normal close frame. A received Close is
 acknowledged by flushing the exact response already queued by the WebSocket library.
-If cancellation arrives before the output future's first poll, that operation
-has performed no I/O. Its stream can finish a normal close handshake. An inline
-boolean distinguishes this case; the application body remains shared throughout.
+Each retained frame records its write offset. A zero offset proves that frame
+has performed no I/O, allowing a normal close handshake after cancelling the
+queue. A nonzero offset requires transport retirement. The body remains shared.
 An untouched stream may remain until the configured close deadline while waiting
 for acknowledgement; its routing registration and queued bytes are already released.
 Valid peer Close frames bypass input rate accounting before and after channel
 join, so an exhausted quota cannot prevent cleanup. Data, joins, Ping, and Pong
 retain their configured rate limits.
+
+Terminal framing/decoder failures send a best-effort policy Close and retire
+after flushing it. Their denied or invalid body cannot safely be reused to parse
+a Close acknowledgement. Complete CBOR policy failures retain the ordinary
+acknowledgement exchange.
 
 Global variable exhaustion refuses the write and closes the writer with `1013`.
 Per-channel and process variable budgets update atomically with registry changes.

@@ -25,6 +25,25 @@ use std::io::{self, Cursor, Error as IoError, ErrorKind as IoErrorKind, Read, Wr
 /// Read buffer size used for `FrameSocket`.
 const READ_BUF_LEN: usize = 128 * 1024;
 
+/// Receive allocation and its admission lease, owned by either a decoder or an
+/// event loop. Only empty storage can move between connections.
+#[derive(Debug, Default)]
+pub struct ReadStorage {
+    buffer: BytesMut,
+    lease: Option<ReadLease>,
+    capacity: usize,
+}
+
+impl ReadStorage {
+    /// Drop an oversized empty slab before lending storage to another decoder.
+    /// Published immutable owners remain valid; no payload bytes are copied.
+    pub fn discard_if_larger_than(&mut self, maximum: usize) -> bool {
+        if self.capacity <= maximum { return false; }
+        *self = Self::default();
+        true
+    }
+}
+
 /// A reader and writer for WebSocket frames.
 #[derive(Debug)]
 pub struct FrameSocket<Stream> {
@@ -105,6 +124,7 @@ where
 pub(super) struct FrameCodec {
     /// Buffer to read data from the stream.
     in_buffer: BytesMut,
+    storage_capacity: usize,
     // Drop staging storage before releasing its allowance.
     read_lease: Option<ReadLease>,
     in_buf_max_read: usize,
@@ -123,10 +143,40 @@ pub(super) struct FrameCodec {
 }
 
 impl FrameCodec {
+    pub(super) fn set_read_chunk_size(&mut self, size: usize) {
+        self.in_buf_max_read = size.max(FrameHeader::MAX_SIZE);
+    }
+
+    pub(super) fn swap_read_storage(&mut self, storage: &mut ReadStorage) -> bool {
+        if self.header.is_some() || !self.in_buffer.is_empty() || !storage.buffer.is_empty() {
+            return false;
+        }
+        // An empty owner still keeps a zero-byte lease, ensuring its next
+        // allocation cannot accidentally bypass admission after a swap.
+        match (&self.read_lease, &storage.lease) {
+            (Some(a), Some(b)) => assert!(a.same_budget(b), "different receive budgets"),
+            (Some(a), None) => {
+                assert_eq!(storage.buffer.capacity(), 0, "unbudgeted receive storage");
+                storage.lease = Some(a.sibling());
+            }
+            (None, Some(b)) => {
+                assert_eq!(self.in_buffer.capacity(), 0, "unbudgeted decoder storage");
+                self.read_lease = Some(b.sibling());
+            }
+            (None, None) => {}
+        }
+        std::mem::swap(&mut self.in_buffer, &mut storage.buffer);
+        std::mem::swap(&mut self.read_lease, &mut storage.lease);
+        std::mem::swap(&mut self.storage_capacity, &mut storage.capacity);
+        true
+    }
+
+    pub(super) fn read_storage_capacity(&self) -> usize { self.storage_capacity }
     /// Create a new frame codec.
     pub(super) fn new(in_buf_len: usize) -> Self {
         Self {
             in_buffer: BytesMut::with_capacity(in_buf_len),
+            storage_capacity: in_buf_len,
             read_lease: None,
             in_buf_max_read: in_buf_len.max(FrameHeader::MAX_SIZE),
             out_buffer: <_>::default(),
@@ -140,8 +190,10 @@ impl FrameCodec {
     pub(super) fn from_partially_read(part: Vec<u8>, min_in_buf_len: usize) -> Self {
         let mut in_buffer = BytesMut::from_iter(part);
         in_buffer.reserve(min_in_buf_len.saturating_sub(in_buffer.len()));
+        let storage_capacity = in_buffer.capacity();
         Self {
             in_buffer,
+            storage_capacity,
             read_lease: None,
             in_buf_max_read: min_in_buf_len.max(FrameHeader::MAX_SIZE),
             out_buffer: <_>::default(),
@@ -167,17 +219,22 @@ impl FrameCodec {
             return None;
         }
         let copied = self.in_buffer.len();
-        let mut fresh = BytesMut::with_capacity(self.in_buf_max_read);
+        let capacity = if self.in_buffer.capacity() == 0 { 0 } else { self.in_buf_max_read };
+        if let Some(lease) = &mut self.read_lease {
+            lease.for_capacity(capacity).ok()?;
+        }
+        let mut fresh = BytesMut::with_capacity(capacity);
         fresh.extend_from_slice(&self.in_buffer);
         self.in_buffer = fresh;
+        self.storage_capacity = capacity;
         if let Some(lease) = &mut self.read_lease {
-            lease.shrink_to(2 * self.in_buf_max_read);
+            lease.shrink_to(2 * capacity);
         }
         Some(copied)
     }
 
     pub(super) fn set_read_budget(&mut self, mut lease: ReadLease) -> Result<()> {
-        let capacity = self.in_buffer.capacity().max(self.in_buf_max_read);
+        let capacity = self.storage_capacity;
         lease.for_capacity(capacity)?;
         let bytes = 2 * capacity;
         lease.shrink_to(bytes);
@@ -191,6 +248,7 @@ impl FrameCodec {
     fn reserve_input(&mut self, wanted: usize, unbudgeted_additional: usize) -> Result<()> {
         let Some(lease) = &mut self.read_lease else {
             self.in_buffer.reserve(unbudgeted_additional);
+            self.storage_capacity = self.storage_capacity.max(self.in_buffer.capacity());
             return Ok(());
         };
         if self.in_buffer.capacity() >= wanted
@@ -212,6 +270,7 @@ impl FrameCodec {
         let mut fresh = BytesMut::with_capacity(capacity);
         fresh.extend_from_slice(&self.in_buffer);
         self.in_buffer = fresh;
+        self.storage_capacity = capacity;
         Ok(())
     }
 

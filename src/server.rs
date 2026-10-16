@@ -1,116 +1,432 @@
+//! Native readiness-driven relay. One event loop owns each decoder; socket
+//! output is serialized and can be submitted directly by any routing worker.
+//! Idle connections need no task, message channel, or receive allocation.
+mod socket;
+mod timers;
+
+pub use crate::admin::admin_router;
+
 use std::{
-    sync::{Arc, atomic::Ordering::Relaxed},
-    time::Duration,
+    collections::{HashMap, VecDeque},
+    io::{self, Write},
+    num::NonZeroUsize,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicBool,
+            Ordering::{Acquire, Relaxed},
+        },
+    },
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
-use axum::{
-    Json, Router,
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
-    routing::{get, post},
-};
-use tokio::{
-    io::AsyncWriteExt,
-    net::{TcpListener, TcpStream},
-    sync::Semaphore,
-    task::JoinSet,
-    time::{Instant, interval_at, sleep, timeout},
-};
-use tokio_tungstenite::{
-    accept_hdr_async_with_config,
-    tungstenite::{
-        self, Message,
-        handshake::server::{Request, Response as HandshakeResponse},
-        protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
+use bytes::Bytes;
+use mio::{Events, Interest, Poll, Registry, Token, net::TcpListener};
+use slab::Slab;
+use tokio::{net::TcpListener as AsyncListener, task::JoinSet};
+use tokio_tungstenite::tungstenite::{
+    self, Error, Message, WebSocket,
+    handshake::{
+        HandshakeError, MidHandshake,
+        server::{Callback, ErrorResponse, Request, Response, ServerHandshake},
     },
+    protocol::{CloseFrame, ReadLease, ReadStorage, WebSocketConfig, frame::coding::CloseCode},
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
 
 use crate::{
     Relay,
     protocol::{self, Disconnect},
-    transport::{self, WriteFailure},
+    relay::Registration,
 };
+use socket::{Signal, Socket, Stream};
+use timers::Timers;
 
-/// Run pre-bound listeners; useful for embedders and tests with ephemeral ports.
+const LISTENER: Token = Token(0);
+const WAKE: Token = Token(1);
+const READ_QUANTUM: usize = 256;
+const ACCEPT_QUANTUM: usize = 64;
+
+/// Run pre-bound listeners. Tokio services management and signals; native data
+/// sockets belong to a fixed number of readiness workers.
 pub async fn serve(
-    listener: TcpListener,
-    admin: Option<TcpListener>,
+    listener: AsyncListener,
+    admin: Option<AsyncListener>,
     relay: Arc<Relay>,
     shutdown: CancellationToken,
 ) -> Result<()> {
-    let slots = Arc::new(Semaphore::new(relay.config.max_connections));
-    let sessions_stop = CancellationToken::new();
+    let listener = listener.into_std()?;
+    let workers = relay.config.workers.unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map_or(2, usize::from)
+            .min(16)
+    });
+    let mut prepared = Vec::with_capacity(workers);
+    for listener in worker_listeners(listener, workers)? {
+        prepared.push(Worker::new(listener, relay.clone())?);
+    }
+    let signals = StopOnDrop {
+        signals: prepared
+            .iter()
+            .map(|worker| worker.signal.clone())
+            .collect(),
+        relay: relay.clone(),
+    };
     let mut tasks = JoinSet::new();
-    if let Some(admin) = admin {
-        let admin_relay = relay.clone();
-        let token = sessions_stop.clone();
+    for (index, worker) in prepared.into_iter().enumerate() {
+        let (finished, result) = tokio::sync::oneshot::channel();
+        // These loops own dedicated OS threads. An embedder's Tokio blocking
+        // pool may be small or busy and must not limit native I/O concurrency.
+        let thread = std::thread::Builder::new()
+            .name(format!("war-io-{index}"))
+            .spawn(move || {
+                let outcome = worker.run();
+                let _ = finished.send(outcome);
+            })
+            .context("cannot start native I/O worker")?;
         tasks.spawn(async move {
-            axum::serve(admin, admin_router(admin_relay))
-                .with_graceful_shutdown(token.cancelled_owned())
-                .await
-                .context("admin listener failed")
-                .map(|()| true)
+            let outcome = result.await;
+            thread
+                .join()
+                .map_err(|_| anyhow::anyhow!("native I/O worker panicked"))?;
+            outcome.context("native I/O worker stopped without reporting")?
         });
     }
-    let result = loop {
-        tokio::select! {
-            biased;
-            _ = shutdown.cancelled() => break Ok(()),
-            finished = tasks.join_next(), if !tasks.is_empty() => {
-                match finished {
-                    Some(Ok(Err(error))) => break Err(error),
-                    Some(Ok(Ok(true))) => break Err(anyhow::anyhow!("admin listener stopped unexpectedly")),
-                    Some(Err(error)) => warn!(%error, "service task panicked"),
-                    _ => {}
+    let admin_stop = CancellationToken::new();
+    if let Some(admin) = admin {
+        let stop = admin_stop.clone();
+        let router = admin_router(relay.clone());
+        tasks.spawn(async move {
+            axum::serve(admin, router)
+                .with_graceful_shutdown(stop.cancelled_owned())
+                .await
+                .context("admin listener failed")
+        });
+    }
+    let result = tokio::select! {
+        _ = shutdown.cancelled() => Ok(()),
+        result = tasks.join_next() => match result {
+            Some(Ok(Err(error))) => Err(error),
+            Some(Err(error)) => Err(error.into()),
+            _ => Err(anyhow::anyhow!("service worker stopped unexpectedly")),
+        },
+    };
+    relay.begin_shutdown();
+    for signal in &signals.signals {
+        signal.stop();
+    }
+    admin_stop.cancel();
+    shutdown.cancel();
+    let deadline = Duration::from_secs(relay.config.shutdown_timeout_secs);
+    let cleanup = async {
+        while let Some(worker) = tasks.join_next().await {
+            worker.context("service worker panicked")??;
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+    // Workers have their own bounded shutdown deadline. Give cleanup one extra
+    // second to return those results rather than detaching an active data loop.
+    tokio::time::timeout(deadline + Duration::from_secs(1), cleanup)
+        .await
+        .context("service shutdown exceeded its deadline")??;
+    result
+}
+
+fn worker_listeners(
+    listener: std::net::TcpListener,
+    workers: usize,
+) -> io::Result<Vec<std::net::TcpListener>> {
+    let mut listeners = Vec::with_capacity(workers);
+    // Linux distributes new flows across independent accept queues. Cloning one
+    // listen socket lets a single ready worker consume all arrivals instead.
+    #[cfg(target_os = "linux")]
+    {
+        let address = listener.local_addr()?;
+        let original = socket2::SockRef::from(&listener);
+        original.set_reuse_port(true)?;
+        let only_v6 = address.is_ipv6().then(|| original.only_v6()).transpose()?;
+        for _ in 1..workers {
+            let socket = socket2::Socket::new(
+                socket2::Domain::for_address(address),
+                socket2::Type::STREAM,
+                Some(socket2::Protocol::TCP),
+            )?;
+            socket.set_reuse_address(true)?;
+            socket.set_reuse_port(true)?;
+            if let Some(only_v6) = only_v6 {
+                socket.set_only_v6(only_v6)?;
+            }
+            socket.set_nonblocking(true)?;
+            socket.bind(&address.into())?;
+            socket.listen(1024)?;
+            listeners.push(socket.into());
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    for _ in 1..workers {
+        listeners.push(listener.try_clone()?);
+    }
+    listeners.push(listener);
+    Ok(listeners)
+}
+
+struct StopOnDrop {
+    signals: Vec<Arc<Signal>>,
+    relay: Arc<Relay>,
+}
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        // Also covers cancellation of the embedding serve future. Publish
+        // notification suppression before any worker observes the stop signal.
+        self.relay.begin_shutdown();
+        for signal in &self.signals {
+            signal.stop();
+        }
+    }
+}
+
+struct Worker {
+    poll: Poll,
+    registry: Arc<Registry>,
+    listener: TcpListener,
+    signal: Arc<Signal>,
+    relay: Arc<Relay>,
+    connections: Slab<Connection>,
+    tokens: HashMap<Token, usize>,
+    next_token: usize,
+    ready: VecDeque<Token>,
+    timers: Timers,
+    scratch: ReadStorage,
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        // A fatal poll/accept error or panic also retires membership. Suppress
+        // fanout before fields drop, even before the supervisor sees the error.
+        self.relay.begin_shutdown();
+    }
+}
+
+impl Worker {
+    fn new(listener: std::net::TcpListener, relay: Arc<Relay>) -> io::Result<Self> {
+        let poll = Poll::new()?;
+        let registry = Arc::new(poll.registry().try_clone()?);
+        let mut listener = TcpListener::from_std(listener);
+        registry.register(&mut listener, LISTENER, Interest::READABLE)?;
+        let signal = Arc::new(Signal {
+            waker: mio::Waker::new(&registry, WAKE)?,
+            stopping: AtomicBool::new(false),
+            pending: parking_lot::Mutex::new(VecDeque::new()),
+        });
+        Ok(Self {
+            poll,
+            registry,
+            listener,
+            signal,
+            relay,
+            connections: Slab::new(),
+            tokens: HashMap::new(),
+            next_token: 2,
+            ready: VecDeque::new(),
+            timers: Timers::default(),
+            scratch: ReadStorage::default(),
+        })
+    }
+
+    fn schedule(&mut self, token: Token) {
+        let Some(&slot) = self.tokens.get(&token) else {
+            return;
+        };
+        if let Some(connection) = self.connections.get_mut(slot)
+            && connection.token == token
+            && !connection.scheduled
+        {
+            connection.scheduled = true;
+            self.ready.push_back(token);
+        }
+    }
+
+    fn accept(&mut self) -> io::Result<()> {
+        for _ in 0..ACCEPT_QUANTUM {
+            let (mut stream, _) = match self.listener.accept() {
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                accepted => accepted?,
+            };
+            let metrics = &self.relay.metrics;
+            metrics.accepted.fetch_add(1, Relaxed);
+            if self.relay.draining.load(Relaxed)
+                || metrics
+                    .connections
+                    .fetch_update(Relaxed, Relaxed, |count| {
+                        (count < self.relay.config.max_connections).then_some(count + 1)
+                    })
+                    .is_err()
+            {
+                metrics.rejected.fetch_add(1, Relaxed);
+                continue;
+            }
+            let guard = ConnectionGuard(metrics.clone());
+            stream.set_nodelay(true)?;
+            let lease = match &metrics.read_budget {
+                Some(budget) => {
+                    match budget.try_lease(self.relay.config.handshake_read_reservation()) {
+                        Ok(lease) => Some(lease),
+                        Err(_) => {
+                            metrics.rejected.fetch_add(1, Relaxed);
+                            let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                            continue;
+                        }
+                    }
+                }
+                None => None,
+            };
+            // Tokens never repeat, even when slab slots are reused. Use the
+            // full pointer width rather than spending half on a slot index:
+            // on 64-bit hosts, heavy churn cannot exhaust a 32-bit generation.
+            let token = Token(self.next_token);
+            self.next_token = self
+                .next_token
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("connection token space exhausted"))?;
+            let slot = self.connections.vacant_key();
+            let socket = Socket::new(
+                stream,
+                token,
+                self.registry.clone(),
+                self.signal.clone(),
+                &self.relay,
+            )?;
+            let connection = Connection::new(socket, token, lease, guard, &self.relay);
+            let deadline = connection.deadline(&self.relay);
+            self.connections.insert(connection);
+            self.tokens.insert(token, slot);
+            self.timers.set(slot, deadline);
+            self.schedule(token);
+        }
+        // EPOLLET requires an explicit continuation when we yield before
+        // WouldBlock. The listener uses the same bounded ready queue.
+        self.ready.push_back(LISTENER);
+        Ok(())
+    }
+
+    fn run(mut self) -> Result<()> {
+        let mut events = Events::with_capacity(1024);
+        let mut shutdown_deadline = None;
+        loop {
+            if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
+                self.registry.deregister(&mut self.listener)?;
+                shutdown_deadline = Some(
+                    Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
+                );
+                for (_, connection) in self.connections.iter_mut() {
+                    if !connection.scheduled {
+                        connection.scheduled = true;
+                        self.ready.push_back(connection.token);
+                    }
                 }
             }
-            accepted = listener.accept() => {
-                let (socket, _) = match accepted { Ok(accepted) => accepted, Err(error) => break Err(anyhow::Error::new(error).context("relay accept failed")) };
-                relay.metrics.accepted.fetch_add(1, Relaxed);
-                if relay.draining.load(Relaxed) {
-                    relay.metrics.rejected.fetch_add(1, Relaxed);
+            if shutdown_deadline.is_some_and(|d| d <= Instant::now())
+                || (shutdown_deadline.is_some() && self.connections.is_empty())
+            {
+                break;
+            }
+            let now = Instant::now();
+            while let Some(slot) = self.timers.pop_due(now) {
+                if let Some(connection) = self.connections.get(slot) {
+                    self.schedule(connection.token);
+                }
+            }
+            // A bounded ready batch makes progress on buffered continuations
+            // without starving new socket events, timers, or shutdown signals.
+            let batch = self.ready.len().min(1024);
+            for _ in 0..batch {
+                let token = self.ready.pop_front().expect("ready batch");
+                if token == LISTENER {
+                    if shutdown_deadline.is_none() {
+                        self.accept()?;
+                    }
                     continue;
                 }
-                let Ok(permit) = slots.clone().try_acquire_owned() else {
-                    relay.metrics.rejected.fetch_add(1, Relaxed);
+                let Some(&slot) = self.tokens.get(&token) else {
                     continue;
                 };
-                let relay = relay.clone();
-                let token = sessions_stop.clone();
-                relay.metrics.connections.fetch_add(1, Relaxed);
-                // The permit and gauge are owned by the future, including during a handshake.
-                let connection = ConnectionGuard(relay.metrics.clone());
-                tasks.spawn(async move {
-                    let (_connection, _permit) = (connection, permit);
-                    if let Err(error) = connection_task(socket, relay, token).await { debug!(%error, "connection ended"); }
-                    Ok(false)
-                });
+                let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
+                else {
+                    continue;
+                };
+                connection.scheduled = false;
+                connection.socket.notified();
+                let keep =
+                    connection.drive(&self.relay, &mut self.scratch, shutdown_deadline.is_some());
+                match keep {
+                    Drive::Drop => {
+                        self.timers.remove(slot);
+                        self.connections.remove(slot);
+                        self.tokens.remove(&token);
+                        if self.tokens.capacity() > 256
+                            && self.tokens.len() <= self.tokens.capacity() / 8
+                        {
+                            self.tokens.shrink_to(self.tokens.len() * 2);
+                        }
+                        if self.connections.is_empty() {
+                            self.scratch = ReadStorage::default();
+                        }
+                    }
+                    Drive::Wait | Drive::Again => {
+                        let deadline = self.connections[slot].deadline(&self.relay);
+                        self.timers.set(slot, deadline);
+                        if keep == Drive::Again {
+                            self.schedule(token);
+                        }
+                    }
+                }
+            }
+            {
+                let mut pending = self.signal.pending.lock();
+                while let Some(token) = pending.pop_front() {
+                    let Some(&slot) = self.tokens.get(&token) else {
+                        continue;
+                    };
+                    if let Some(connection) = self.connections.get_mut(slot)
+                        && connection.token == token
+                        && !connection.scheduled
+                    {
+                        connection.scheduled = true;
+                        self.ready.push_back(token);
+                    }
+                }
+            }
+            if shutdown_deadline.is_some() && self.connections.is_empty() {
+                break;
+            }
+            let now = Instant::now();
+            let mut timeout = self.timers.next().map(|d| d.saturating_duration_since(now));
+            if let Some(deadline) = shutdown_deadline {
+                timeout = Some(
+                    timeout.map_or(deadline.saturating_duration_since(now), |t| {
+                        t.min(deadline.saturating_duration_since(now))
+                    }),
+                );
+            }
+            if !self.ready.is_empty() {
+                timeout = Some(Duration::ZERO);
+            }
+            match self.poll.poll(&mut events, timeout) {
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                result => result?,
+            }
+            for event in &events {
+                match event.token() {
+                    LISTENER if shutdown_deadline.is_none() => self.accept()?,
+                    LISTENER | WAKE => {}
+                    token => self.schedule(token),
+                }
             }
         }
-    };
-    // Stop notification fanout before any connection sees shutdown. This avoids
-    // quadratic disconnect traffic when a large channel is closed as a unit.
-    relay.begin_shutdown();
-    sessions_stop.cancel();
-    shutdown.cancel();
-    drop(listener);
-    if timeout(
-        Duration::from_secs(relay.config.shutdown_timeout_secs),
-        async { while tasks.join_next().await.is_some() {} },
-    )
-    .await
-    .is_err()
-    {
-        warn!("shutdown deadline reached; cancelling remaining connections");
-        tasks.abort_all();
-        while tasks.join_next().await.is_some() {}
+        Ok(())
     }
-    info!(sessions = relay.counts().0, "relay stopped");
-    result
 }
 
 struct ConnectionGuard(Arc<crate::metrics::Metrics>);
@@ -120,397 +436,550 @@ impl Drop for ConnectionGuard {
     }
 }
 
-type Socket = transport::ServerSocket<transport::HandshakeStream<TcpStream>>;
-
-async fn connection_task(
-    mut socket: TcpStream,
-    relay: Arc<Relay>,
-    shutdown: CancellationToken,
-) -> Result<()> {
-    socket.set_nodelay(true)?;
-    let config = &relay.config;
-    let read_lease = match &relay.metrics.read_budget {
-        Some(budget) => match budget.try_lease(config.handshake_read_reservation()) {
-            Ok(lease) => Some(lease),
-            Err(_) => {
-                relay.metrics.rejected.fetch_add(1, Relaxed);
-                let _ = timeout(config.write_timeout(), socket.write_all(
-                    b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")).await;
-                return Ok(());
-            }
-        },
-        None => None,
-    };
-    let websocket_config = WebSocketConfig::default()
-        .read_buffer_size(config.read_buffer_bytes)
-        .write_buffer_size(4096)
-        // Control frames use library staging. Native data uses the relay output
-        // budget and borrowed vectored writes, independent of the incoming limit.
-        .max_write_buffer_size(config.queue_bytes + 4096)
-        .max_message_size(Some(config.max_message_bytes))
-        // RFC 6455 control payloads may reach 125 bytes even when application
-        // messages have a smaller budget. The message limit still bounds data,
-        // including the sum of fragmented input.
-        .max_frame_size(Some(config.max_message_bytes.max(125)));
-    let handshake = accept_hdr_async_with_config(
-        transport::HandshakeStream::new(socket),
-        |request: &Request, mut response: HandshakeResponse| {
-            if !config.origin_policy.allows(request.headers()) {
-                relay.metrics.rejected.fetch_add(1, Relaxed);
-                relay.metrics.origin_rejected.fetch_add(1, Relaxed);
-                return Err(crate::origin::forbidden());
-            }
-            if let Some(protocols) = request.headers().get("sec-websocket-protocol") {
-                if protocols
-                    .to_str()
-                    .ok()
-                    .is_some_and(|s| s.split(',').any(|s| s.trim() == protocol::SUBPROTOCOL))
-                {
-                    response.headers_mut().insert(
-                        "sec-websocket-protocol",
-                        protocol::SUBPROTOCOL.parse().expect("static header"),
-                    );
-                } else {
-                    return Err(tungstenite::http::Response::builder()
-                        .status(400)
-                        .body(Some("Unsupported subprotocol".into()))
-                        .expect("static response"));
-                }
-            }
-            Ok(response)
-        },
-        Some(websocket_config),
-    );
-    let mut ws = tokio::select! {
-        _ = shutdown.cancelled() => return Ok(()),
-        result = timeout(Duration::from_secs(config.handshake_timeout_secs), handshake) => match result {
-            Ok(Ok(ws)) => ws,
-            Ok(Err(tungstenite::Error::Http(response))) if response.status() == StatusCode::FORBIDDEN => return Ok(()),
-            _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return Ok(()); }
+struct UpgradePolicy(Arc<Relay>);
+impl Callback for UpgradePolicy {
+    fn on_request(
+        self,
+        request: &Request,
+        mut response: Response,
+    ) -> std::result::Result<Response, ErrorResponse> {
+        if !self.0.config.origin_policy.allows(request.headers()) {
+            self.0.metrics.rejected.fetch_add(1, Relaxed);
+            self.0.metrics.origin_rejected.fetch_add(1, Relaxed);
+            return Err(crate::origin::forbidden());
         }
-    };
-    ws.get_mut().handshake_done();
-    if let Some(lease) = read_lease {
-        ws.set_read_budget(lease)?;
+        if let Some(protocols) = request.headers().get("sec-websocket-protocol") {
+            if protocols
+                .to_str()
+                .ok()
+                .is_some_and(|s| s.split(',').any(|s| s.trim() == protocol::SUBPROTOCOL))
+            {
+                response.headers_mut().insert(
+                    "sec-websocket-protocol",
+                    protocol::SUBPROTOCOL.parse().expect("static header"),
+                );
+            } else {
+                return Err(tungstenite::http::Response::builder()
+                    .status(400)
+                    .body(Some("Unsupported subprotocol".into()))
+                    .expect("static response"));
+            }
+        }
+        Ok(response)
     }
-    let mut ws = Socket::new(ws);
-    let mut limiter = RateLimiter::new(config.messages_per_second, config.bytes_per_second);
-    let stopped = shutdown.cancelled();
-    tokio::pin!(stopped);
-    let deadline = sleep(Duration::from_secs(config.join_timeout_secs));
-    tokio::pin!(deadline);
-    let subscription = loop {
-        let incoming = tokio::select! {
-            _ = stopped.as_mut() => { close(&mut ws, Disconnect::SHUTDOWN, &relay, &shutdown).await; return Ok(()); }
-            _ = &mut deadline => { reject_join(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, &relay, &shutdown).await; return Ok(()); }
-            incoming = ws.next() => incoming,
+}
+
+type Upgrade = MidHandshake<ServerHandshake<Stream, UpgradePolicy>>;
+// The live decoder stays inline in the connection slab. Boxing the steady
+// state to match the temporary handshake variant would add an idle allocation.
+#[allow(clippy::large_enum_variant)]
+enum Stage {
+    Upgrade(Option<Box<Upgrade>>),
+    WebSocket(WebSocket<Stream>),
+}
+
+struct Connection {
+    token: Token,
+    scheduled: bool,
+    socket: Arc<Socket>,
+    stage: Stage,
+    handshake_lease: Option<ReadLease>,
+    registration: Option<Registration>,
+    phase_deadline: Instant,
+    closing: Option<Closing>,
+    limiter: RateLimiter,
+    next_ping: Instant,
+    pong_deadline: Option<Instant>,
+    reclaim_deadline: Option<Instant>,
+    _guard: ConnectionGuard,
+}
+
+struct Closing {
+    deadline: Instant,
+    flush_only: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Drive {
+    Drop,
+    Wait,
+    Again,
+}
+
+impl Connection {
+    fn new(
+        socket: Arc<Socket>,
+        token: Token,
+        lease: Option<ReadLease>,
+        guard: ConnectionGuard,
+        relay: &Arc<Relay>,
+    ) -> Self {
+        let config = &relay.config;
+        let ws_config = WebSocketConfig::default()
+            .read_buffer_size(config.read_buffer_bytes)
+            .shared_read_buffer(true)
+            .write_buffer_size(4096)
+            .max_write_buffer_size(config.queue_bytes + 4096)
+            .max_message_size(Some(config.max_message_bytes))
+            .max_frame_size(Some(config.max_message_bytes.max(125)));
+        let handshake = ServerHandshake::start(
+            Stream {
+                socket: socket.clone(),
+                remaining_upgrade: Some(crate::config::MAX_HTTP_UPGRADE_BYTES),
+            },
+            UpgradePolicy(relay.clone()),
+            Some(ws_config),
+        );
+        let now = Instant::now();
+        Self {
+            token,
+            scheduled: false,
+            socket,
+            stage: Stage::Upgrade(Some(Box::new(handshake))),
+            handshake_lease: lease,
+            registration: None,
+            phase_deadline: now + Duration::from_secs(config.handshake_timeout_secs),
+            closing: None,
+            limiter: RateLimiter::new(config.messages_per_second, config.bytes_per_second, now),
+            next_ping: now + Duration::from_secs(config.ping_interval_secs.max(1)),
+            pong_deadline: None,
+            reclaim_deadline: None,
+            _guard: guard,
+        }
+    }
+
+    fn deadline(&self, relay: &Relay) -> Option<Instant> {
+        if let Some(closing) = &self.closing {
+            return Some(closing.deadline);
+        }
+        if matches!(self.stage, Stage::Upgrade(_)) || self.registration.is_none() {
+            return Some(self.phase_deadline);
+        }
+        let mut deadline = self.socket.deadline();
+        for next in [
+            self.pong_deadline,
+            self.reclaim_deadline,
+            (relay.config.ping_interval_secs > 0).then_some(self.next_ping),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            deadline = Some(deadline.map_or(next, |d| d.min(next)));
+        }
+        if relay.config.idle_timeout_secs > 0 {
+            let next = self.socket.state.lock().activity
+                + Duration::from_secs(relay.config.idle_timeout_secs);
+            deadline = Some(deadline.map_or(next, |d| d.min(next)));
+        }
+        deadline
+    }
+
+    fn drive(&mut self, relay: &Arc<Relay>, scratch: &mut ReadStorage, stopping: bool) -> Drive {
+        let now = Instant::now();
+        if let Stage::Upgrade(handshake) = &mut self.stage {
+            if stopping {
+                return Drive::Drop;
+            }
+            if now >= self.phase_deadline {
+                relay.metrics.handshake_errors.fetch_add(1, Relaxed);
+                return Drive::Drop;
+            }
+            match handshake.take().expect("pending handshake").handshake() {
+                Ok(mut ws) => {
+                    ws.get_mut().remaining_upgrade = None;
+                    if let Some(lease) = self.handshake_lease.take()
+                        && ws.set_read_budget(lease).is_err()
+                    {
+                        return Drive::Drop;
+                    }
+                    if self.socket.control_flushed().is_err() {
+                        return Drive::Drop;
+                    }
+                    self.phase_deadline = now + Duration::from_secs(relay.config.join_timeout_secs);
+                    self.stage = Stage::WebSocket(ws);
+                }
+                Err(HandshakeError::Interrupted(mid)) => {
+                    *handshake = Some(Box::new(mid));
+                    return Drive::Wait;
+                }
+                Err(HandshakeError::Failure(Error::Http(response))) if response.status() == 403 => {
+                    return Drive::Drop;
+                }
+                Err(_) => {
+                    relay.metrics.handshake_errors.fetch_add(1, Relaxed);
+                    return Drive::Drop;
+                }
+            }
+        }
+        let Stage::WebSocket(ws) = &mut self.stage else {
+            unreachable!()
         };
-        match incoming {
-            Some(Ok(Message::Close(_))) => {
-                if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
+        ws.swap_read_storage(scratch);
+        let result = self.drive_websocket(relay, now, stopping);
+        let Stage::WebSocket(ws) = &mut self.stage else {
+            unreachable!()
+        };
+        if let Some(mut storage) = ws.take_read_storage() {
+            // A small message on another connection must not inherit and pin a
+            // previous large receive slab. Refill lazily on the next read.
+            storage.discard_if_larger_than(relay.config.read_buffer_bytes.max(14));
+            *scratch = storage;
+        }
+        result
+    }
+
+    fn start_close(
+        &mut self,
+        reason: Disconnect,
+        relay: &Relay,
+        acknowledge: bool,
+        now: Instant,
+    ) -> Drive {
+        if self.closing.is_some() {
+            return Drive::Wait;
+        }
+        if reason.code == 1002 && self.registration.is_some() {
+            relay.metrics.protocol_errors.fetch_add(1, Relaxed);
+        }
+        if reason == Disconnect::RATE {
+            relay.metrics.rate_limited.fetch_add(1, Relaxed);
+        }
+        if self.registration.is_none() && !acknowledge && reason != Disconnect::SHUTDOWN {
+            relay.metrics.join_rejected.fetch_add(1, Relaxed);
+        }
+        // Remove membership before waiting on a peer's Close acknowledgement.
+        self.registration.take();
+        if self.socket.end_output() {
+            return Drive::Drop;
+        }
+        let Stage::WebSocket(ws) = &mut self.stage else {
+            return Drive::Drop;
+        };
+        self.closing = Some(Closing {
+            deadline: now + relay.config.write_timeout(),
+            flush_only: acknowledge,
+        });
+        if !acknowledge {
+            match ws.close(Some(CloseFrame {
+                code: CloseCode::from(reason.code),
+                reason: reason.reason.into(),
+            })) {
+                Ok(()) => {}
+                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                Err(error) => {
+                    tracing::debug!(token = self.token.0, %error, "Close send failed");
                     relay.metrics.close_failures.fetch_add(1, Relaxed);
+                    return Drive::Drop;
                 }
-                return Ok(());
             }
-            Some(Ok(message)) if !limiter.allow(message.len()) => {
-                drop(message);
-                relay.metrics.rate_limited.fetch_add(1, Relaxed);
-                reject_join(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
-                return Ok(());
-            }
-            Some(Ok(Message::Binary(bytes))) => {
-                let result = protocol::join(&bytes).and_then(|name| relay.subscribe(name));
-                drop(bytes);
-                match result {
-                    Ok(subscription) => break subscription,
-                    Err(reason) => {
-                        reject_join(&mut ws, reason, &relay, &shutdown).await;
-                        return Ok(());
+        }
+        Drive::Again
+    }
+
+    fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {
+        let (fatal, requested) = {
+            let state = self.socket.state.lock();
+            (state.fatal, state.requested)
+        };
+        if fatal {
+            return Drive::Drop;
+        }
+        if self.closing.is_none() {
+            if let Some(reason) = requested.or(stopping.then_some(Disconnect::SHUTDOWN)) {
+                // A notification burst may fill an untouched queue while the
+                // peer's Close is already readable. Preserve that handshake
+                // before starting a competing overload Close. Partial output
+                // still forces TCP retirement in start_close.
+                if reason == Disconnect::OVERLOADED {
+                    let Stage::WebSocket(ws) = &mut self.stage else {
+                        unreachable!()
+                    };
+                    if matches!(
+                        ws.read_with_frame_limit(
+                            NonZeroUsize::new(READ_QUANTUM).expect("read quantum")
+                        ),
+                        Ok(Some(Message::Close(_)))
+                    ) {
+                        return self.start_close(
+                            Disconnect {
+                                code: 1000,
+                                reason: "",
+                            },
+                            relay,
+                            true,
+                            now,
+                        );
                     }
                 }
+                return self.start_close(reason, relay, false, now);
             }
-            Some(Ok(Message::Ping(_))) => {
-                if let Err(failure) = transport::output(
-                    ws.flush(),
-                    config.write_timeout(),
-                    stopped.as_mut(),
-                    std::future::pending(),
-                )
-                .await
-                {
-                    if let SessionEnd::Close(reason) = output_failed(&relay, failure) {
-                        close(&mut ws, reason, &relay, &shutdown).await;
-                    }
-                    return Ok(());
-                }
+            if self.socket.deadline().is_some_and(|d| d <= now) {
+                relay.metrics.write_timeouts.fetch_add(1, Relaxed);
+                return Drive::Drop;
             }
-            Some(Ok(Message::Pong(_))) => {}
-            None
-            | Some(Err(
-                tungstenite::Error::Io(_)
-                | tungstenite::Error::ConnectionClosed
-                | tungstenite::Error::AlreadyClosed
-                | tungstenite::Error::Protocol(
-                    tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
-                ),
-            )) => return Ok(()),
-            Some(Err(error)) => {
-                reject_join(&mut ws, input_close_reason(&error), &relay, &shutdown).await;
-                return Ok(());
+            if self.registration.is_none() && now >= self.phase_deadline {
+                return self.start_close(
+                    Disconnect {
+                        code: 1008,
+                        reason: "Channel Join Timeout",
+                    },
+                    relay,
+                    false,
+                    now,
+                );
             }
-            _ => {
-                reject_join(&mut ws, cbor_required(), &relay, &shutdown).await;
-                return Ok(());
+            if self.pong_deadline.is_some_and(|d| d <= now) {
+                return self.start_close(
+                    Disconnect {
+                        code: 1001,
+                        reason: "Heartbeat Timeout",
+                    },
+                    relay,
+                    false,
+                    now,
+                );
             }
-        }
-    };
-    let crate::relay::Subscription {
-        registration,
-        mut outgoing,
-        close: cancellation,
-    } = subscription;
-    let peer = &registration.peer;
-    // These one-shot futures stay registered while the read loop and its output
-    // operations take turns borrowing them. Every completion exits this session;
-    // a completed signal is never polled again.
-    let closing = transport::close_reason(cancellation);
-    tokio::pin!(closing);
-    let period = Duration::from_secs(config.ping_interval_secs.max(1));
-    let mut heartbeat = interval_at(Instant::now() + period, period);
-    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut pong_deadline = None;
-    let idle_timeout = Duration::from_secs(config.idle_timeout_secs);
-    let mut idle_deadline = (config.idle_timeout_secs > 0).then(|| Instant::now() + idle_timeout);
-    let read_buffer_timeout = Duration::from_secs(config.read_buffer_idle_secs);
-    let mut read_buffer_deadline = None;
-    let deadline_wait = sleep(Duration::from_secs(86_400));
-    tokio::pin!(deadline_wait);
-    let mut armed_deadline = None;
-    let end = loop {
-        // Share the existing deadline wait. Disabled idle policy needs no extra
-        // timer or per-message clock read; heartbeat controls are not activity.
-        let mut next_deadline = match (pong_deadline, idle_deadline) {
-            (Some(pong), Some(idle)) => Some(pong.min(idle)),
-            (deadline, None) | (None, deadline) => deadline,
-        };
-        if let Some(read) = read_buffer_deadline {
-            next_deadline = Some(next_deadline.map_or(read, |deadline| deadline.min(read)));
-        }
-        // Activity only moves the idle deadline later. Keep an earlier alarm
-        // and check the live deadline when it fires, instead of retiming every
-        // message. An earlier heartbeat deadline still takes effect immediately.
-        let rearm = match (next_deadline, armed_deadline) {
-            (Some(next), Some(armed)) => next < armed,
-            (None, None) => false,
-            _ => true,
-        };
-        if rearm {
-            deadline_wait.as_mut().reset(
-                next_deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(86_400)),
-            );
-            armed_deadline = next_deadline;
-        }
-        tokio::select! {
-            _ = stopped.as_mut() => break SessionEnd::Close(Disconnect::SHUTDOWN),
-            reason = closing.as_mut() => break SessionEnd::Close(reason),
-            _ = deadline_wait.as_mut(), if next_deadline.is_some() => {
-                // Every completion rearms before this wait is polled again,
-                // including an old alarm preceding the current live deadline.
-                armed_deadline = None;
-                let now = Instant::now();
-                if pong_deadline.is_some_and(|deadline| deadline <= now) {
-                    break SessionEnd::Close(Disconnect { code: 1001, reason: "Heartbeat Timeout" });
-                }
-                if idle_deadline.is_some_and(|deadline| deadline <= now) {
-                    // Queued/in-flight output is active work. Slow recipients
-                    // remain governed by queue budgets and the write deadline.
-                    if outgoing.is_empty() {
+            if self.registration.is_some() && relay.config.idle_timeout_secs > 0 {
+                let output_pending = self.socket.deadline().is_some();
+                let mut state = self.socket.state.lock();
+                if state.activity + Duration::from_secs(relay.config.idle_timeout_secs) <= now {
+                    if !output_pending {
+                        drop(state);
                         relay.metrics.idle_timeouts.fetch_add(1, Relaxed);
-                        break SessionEnd::Close(Disconnect::IDLE);
+                        return self.start_close(Disconnect::IDLE, relay, false, now);
                     }
-                    idle_deadline = Some(now + idle_timeout);
-                }
-                if read_buffer_deadline.is_some_and(|deadline| deadline <= now) {
-                    if let Some(copied) = ws.reclaim_read_buffer() {
-                        relay.metrics.read_buffer_reclaims.fetch_add(1, Relaxed);
-                        relay.metrics.read_buffer_reclaim_header_bytes.fetch_add(copied as u64, Relaxed);
-                        peer.reclaimed_input(config.read_buffer_bytes);
-                        read_buffer_deadline = None;
-                    } else {
-                        relay.metrics.read_buffer_reclaims_deferred.fetch_add(1, Relaxed);
-                        read_buffer_deadline = Some(now + read_buffer_timeout);
-                    }
+                    state.activity = now;
                 }
             }
-            _ = heartbeat.tick(), if config.ping_interval_secs > 0 => {
-                if pong_deadline.is_none() {
-                    if let Err(failure) = transport::output(ws.ping(bytes::Bytes::from_static(b"war")), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
-                    pong_deadline = Some(Instant::now() + Duration::from_secs(config.pong_timeout_secs));
+        }
+        let mut again = match self.socket.flush() {
+            Ok(again) => again,
+            Err(_) => {
+                relay.metrics.write_errors.fetch_add(1, Relaxed);
+                return Drive::Drop;
+            }
+        };
+        let Stage::WebSocket(ws) = &mut self.stage else {
+            unreachable!()
+        };
+        match ws.flush() {
+            Ok(()) => {
+                if self.socket.control_flushed().is_err() {
+                    return Drive::Drop;
                 }
             }
-            packet = outgoing.recv() => {
-                let Some(packet) = packet else { break SessionEnd::Close(Disconnect::SHUTDOWN); };
-                if let Err(failure) = transport::output(ws.binary(&packet.frame), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); }
-                relay.metrics.deliveries.fetch_add(1, Relaxed);
-                relay.metrics.delivered_bytes.fetch_add(packet.frame.len() as u64, Relaxed);
-                if idle_deadline.is_some() { idle_deadline = Some(Instant::now() + idle_timeout); }
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+            Err(Error::ConnectionClosed | Error::AlreadyClosed) => return Drive::Drop,
+            Err(error) => {
+                tracing::debug!(token = self.token.0, %error, closing = self.closing.is_some(), "control flush failed");
+                relay.metrics.close_failures.fetch_add(1, Relaxed);
+                return Drive::Drop;
             }
-            incoming = ws.next() => {
-                match incoming {
-                    Some(Ok(Message::Close(_))) => break SessionEnd::Acknowledge,
-                    Some(Ok(message)) if !limiter.allow(message.len()) => break SessionEnd::Close(Disconnect::RATE),
-                    Some(Ok(Message::Binary(bytes))) => {
-                        let large_input = config.read_buffer_idle_secs > 0 && bytes.len() > config.read_buffer_bytes.max(64 * 1024);
-                        if let Err(reason) = relay.receive(peer, bytes) { break SessionEnd::Close(reason); }
-                        if idle_deadline.is_some() || large_input {
-                            let now = Instant::now();
-                            if idle_deadline.is_some() { idle_deadline = Some(now + idle_timeout); }
-                            if large_input { read_buffer_deadline = Some(now + read_buffer_timeout); }
+        }
+        if let Some(closing) = &self.closing {
+            if closing.deadline <= now {
+                tracing::debug!(
+                    token = self.token.0,
+                    "Close acknowledgement deadline expired"
+                );
+                relay.metrics.close_failures.fetch_add(1, Relaxed);
+                return Drive::Drop;
+            }
+            if !self.socket.state.lock().control_pending && (closing.flush_only || stopping) {
+                return Drive::Drop;
+            }
+        }
+        if self.closing.is_none()
+            && self.registration.is_some()
+            && relay.config.ping_interval_secs > 0
+            && self.next_ping <= now
+        {
+            self.next_ping = now + Duration::from_secs(relay.config.ping_interval_secs);
+            if self.pong_deadline.is_none() {
+                match ws.send(Message::Ping(Bytes::from_static(b"war"))) {
+                    Ok(()) => {
+                        if self.socket.control_flushed().is_err() {
+                            return Drive::Drop;
                         }
                     }
-                    Some(Ok(Message::Ping(_))) => { if let Err(failure) = transport::output(ws.flush(), config.write_timeout(), stopped.as_mut(), closing.as_mut()).await { break output_failed(&relay, failure); } }
-                    Some(Ok(Message::Pong(bytes))) => { if bytes.as_ref() == b"war" { pong_deadline = None; } }
-                    None | Some(Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed)) => break SessionEnd::Drop(Disconnect { code: 1000, reason: "" }),
-                    Some(Err(tungstenite::Error::Io(_) | tungstenite::Error::Protocol(tungstenite::error::ProtocolError::ResetWithoutClosingHandshake))) => {
-                        relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
-                        break SessionEnd::Drop(Disconnect { code: 1001, reason: "Transport Closed" });
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(_) => {
+                        relay.metrics.write_errors.fetch_add(1, Relaxed);
+                        return Drive::Drop;
                     }
-                    Some(Err(error)) => break SessionEnd::Close(input_close_reason(&error)),
-                    _ => break SessionEnd::Close(cbor_required()),
+                }
+                self.pong_deadline =
+                    Some(now + Duration::from_secs(relay.config.pong_timeout_secs));
+            }
+        }
+        if self.reclaim_deadline.is_some_and(|d| d <= now) {
+            if let Some(copied) = ws.reclaim_read_buffer() {
+                relay.metrics.read_buffer_reclaims.fetch_add(1, Relaxed);
+                relay
+                    .metrics
+                    .read_buffer_reclaim_header_bytes
+                    .fetch_add(copied as u64, Relaxed);
+                self.reclaim_deadline = None;
+            } else {
+                relay
+                    .metrics
+                    .read_buffer_reclaims_deferred
+                    .fetch_add(1, Relaxed);
+                self.reclaim_deadline =
+                    Some(now + Duration::from_secs(relay.config.read_buffer_idle_secs));
+            }
+        }
+        for _ in 0..READ_QUANTUM {
+            let Stage::WebSocket(ws) = &mut self.stage else {
+                unreachable!()
+            };
+            match ws.read_with_frame_limit(NonZeroUsize::new(1).expect("one frame")) {
+                Ok(None) => continue,
+                Ok(Some(Message::Close(_))) => {
+                    if self.closing.is_some() {
+                        return Drive::Again;
+                    }
+                    return self.start_close(
+                        Disconnect {
+                            code: 1000,
+                            reason: "",
+                        },
+                        relay,
+                        true,
+                        now,
+                    );
+                }
+                Ok(Some(_)) if self.closing.is_some() => continue,
+                Ok(Some(message)) => {
+                    if !self.limiter.allow(message.len(), now) {
+                        return self.start_close(Disconnect::RATE, relay, false, now);
+                    }
+                    match message {
+                        Message::Binary(bytes) => {
+                            if let Some(registration) = &self.registration {
+                                let large = relay.config.read_buffer_idle_secs > 0
+                                    && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
+                                let capacity = ws.read_storage_capacity().max(bytes.len());
+                                if let Err(reason) =
+                                    relay.receive_with_storage(&registration.peer, bytes, capacity)
+                                {
+                                    return self.start_close(reason, relay, false, now);
+                                }
+                                if large {
+                                    self.reclaim_deadline = Some(
+                                        now + Duration::from_secs(
+                                            relay.config.read_buffer_idle_secs,
+                                        ),
+                                    );
+                                }
+                            } else {
+                                let registration = protocol::join(&bytes).and_then(|channel| {
+                                    relay.subscribe_with_output(channel, self.socket.clone())
+                                });
+                                match registration {
+                                    Ok(registration) => {
+                                        self.registration = Some(registration);
+                                        self.next_ping = now
+                                            + Duration::from_secs(
+                                                relay.config.ping_interval_secs.max(1),
+                                            );
+                                    }
+                                    Err(reason) => {
+                                        return self.start_close(reason, relay, false, now);
+                                    }
+                                }
+                            }
+                            if relay.config.idle_timeout_secs > 0 {
+                                self.socket.state.lock().activity = Instant::now();
+                            }
+                        }
+                        Message::Ping(_) => match ws.flush() {
+                            Ok(()) => {
+                                if self.socket.control_flushed().is_err() {
+                                    return Drive::Drop;
+                                }
+                            }
+                            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                            Err(_) => {
+                                relay.metrics.write_errors.fetch_add(1, Relaxed);
+                                return Drive::Drop;
+                            }
+                        },
+                        Message::Pong(bytes) => {
+                            if bytes.as_ref() == b"war" {
+                                self.pong_deadline = None;
+                            }
+                        }
+                        _ => {
+                            return self.start_close(
+                                Disconnect {
+                                    code: 1003,
+                                    reason: "CBOR Binary Messages Required",
+                                },
+                                relay,
+                                false,
+                                now,
+                            );
+                        }
+                    }
+                }
+                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                    match self.socket.flush() {
+                        Ok(ready) => again |= ready,
+                        Err(_) => {
+                            relay.metrics.write_errors.fetch_add(1, Relaxed);
+                            return Drive::Drop;
+                        }
+                    }
+                    return if again { Drive::Again } else { Drive::Wait };
+                }
+                Err(Error::ConnectionClosed | Error::AlreadyClosed) => return Drive::Drop,
+                Err(
+                    Error::Io(_)
+                    | Error::Protocol(
+                        tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+                    ),
+                ) => {
+                    if self.registration.is_some() {
+                        relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
+                    }
+                    return Drive::Drop;
+                }
+                Err(error) => {
+                    let reason = match error {
+                        Error::Capacity(
+                            tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
+                        ) => Disconnect {
+                            code: 1013,
+                            reason: "Input Memory Limit",
+                        },
+                        Error::Capacity(_) => Disconnect {
+                            code: 1009,
+                            reason: "Message Too Large",
+                        },
+                        _ => Disconnect::PROTOCOL,
+                    };
+                    let result = self.start_close(reason, relay, false, now);
+                    // A framing/decoder rejection has no trustworthy input
+                    // continuation. Flush its best-effort Close, then retire;
+                    // do not reinterpret an acknowledgement as the denied body.
+                    if let Some(closing) = &mut self.closing {
+                        closing.flush_only = true;
+                    }
+                    return result;
                 }
             }
         }
-    };
-    // Capacity signals can race a peer's already queued Close. When no partial
-    // output exists, preserve that handshake instead of sending a competing one.
-    let end = match end {
-        SessionEnd::Close(reason)
-            if reason == Disconnect::OVERLOADED && ws.take_pending_close() =>
-        {
-            SessionEnd::Acknowledge
-        }
-        end => end,
-    };
-    let reason = end.reason();
-    if reason.code == 1002 {
-        relay.metrics.protocol_errors.fetch_add(1, Relaxed);
-    }
-    if reason == Disconnect::RATE {
-        relay.metrics.rate_limited.fetch_add(1, Relaxed);
-    }
-    peer.close(reason);
-    // Routing membership and queued-byte reservations end immediately, before a
-    // potentially slow close handshake. RAII still covers task aborts and panics.
-    drop(registration);
-    drop(outgoing);
-    match end {
-        SessionEnd::Close(reason) => close(&mut ws, reason, &relay, &shutdown).await,
-        SessionEnd::Acknowledge => {
-            if !transport::acknowledge_close(ws.closing(), config.write_timeout()).await {
-                relay.metrics.close_failures.fetch_add(1, Relaxed);
-            }
-        }
-        SessionEnd::Drop(_) => {} // A partial/failed write cannot be safely retried.
-    }
-    Ok(())
-}
-
-fn input_close_reason(error: &tungstenite::Error) -> Disconnect {
-    match error {
-        tungstenite::Error::Capacity(
-            tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
-        ) => Disconnect {
-            code: 1013,
-            reason: "Input Memory Limit",
-        },
-        tungstenite::Error::Capacity(_) => Disconnect {
-            code: 1009,
-            reason: "Message Too Large",
-        },
-        _ => Disconnect::PROTOCOL,
+        Drive::Again
     }
 }
 
-fn cbor_required() -> Disconnect {
-    Disconnect {
-        code: 1003,
-        reason: "CBOR Binary Messages Required",
-    }
-}
-
-enum SessionEnd {
-    Close(Disconnect),
-    Acknowledge,
-    Drop(Disconnect),
-}
-
-impl SessionEnd {
-    fn reason(&self) -> Disconnect {
-        match self {
-            Self::Close(reason) | Self::Drop(reason) => *reason,
-            Self::Acknowledge => Disconnect {
-                code: 1000,
-                reason: "",
-            },
-        }
-    }
-}
-
-fn output_failed(relay: &Relay, failure: WriteFailure) -> SessionEnd {
-    let reason = match failure {
-        WriteFailure::ClosedBeforeStart(reason) => {
-            relay.metrics.aborted_writes.fetch_add(1, Relaxed);
-            relay
-                .metrics
-                .unstarted_writes_cancelled
-                .fetch_add(1, Relaxed);
-            return SessionEnd::Close(reason);
-        }
-        WriteFailure::Closed(reason) => {
-            relay.metrics.aborted_writes.fetch_add(1, Relaxed);
-            reason
-        }
-        WriteFailure::TimedOut => {
-            relay.metrics.write_timeouts.fetch_add(1, Relaxed);
-            Disconnect {
-                code: 1013,
-                reason: "Write Timeout",
-            }
-        }
-        WriteFailure::Transport => {
-            relay.metrics.write_errors.fetch_add(1, Relaxed);
-            Disconnect {
-                code: 1001,
-                reason: "Transport Closed",
-            }
-        }
-    };
-    SessionEnd::Drop(reason)
-}
-
-async fn reject_join(
-    ws: &mut Socket,
-    reason: Disconnect,
-    relay: &Relay,
-    shutdown: &CancellationToken,
-) {
-    relay.metrics.join_rejected.fetch_add(1, Relaxed);
-    close(ws, reason, relay, shutdown).await;
-}
-
-async fn close(ws: &mut Socket, reason: Disconnect, relay: &Relay, shutdown: &CancellationToken) {
-    if !transport::initiate_close(
-        ws.closing(),
-        Some(CloseFrame {
-            code: CloseCode::from(reason.code),
-            reason: reason.reason.into(),
-        }),
-        relay.config.write_timeout(),
-        Some(shutdown),
-    )
-    .await
-    {
-        relay.metrics.close_failures.fetch_add(1, Relaxed);
+impl Drop for Connection {
+    fn drop(&mut self) {
+        // This may be the last strong peer/socket reference. Disable output
+        // before retiring membership and releasing queued byte reservations.
+        self.socket.end_output();
+        self.registration.take();
     }
 }
 
@@ -519,25 +988,25 @@ struct RateLimiter {
     tokens: [f64; 2],
     updated: Instant,
 }
-
 impl RateLimiter {
-    fn new(messages: u64, bytes: u64) -> Self {
+    fn new(messages: u64, bytes: u64, now: Instant) -> Self {
         Self {
             rates: [messages, bytes],
             tokens: [messages as f64, bytes as f64],
-            updated: Instant::now(),
+            updated: now,
         }
     }
-
-    fn allow(&mut self, bytes: usize) -> bool {
-        let now = Instant::now();
+    fn allow(&mut self, bytes: usize, now: Instant) -> bool {
+        if self.rates == [0, 0] {
+            return true;
+        }
         let elapsed = now.duration_since(self.updated).as_secs_f64();
         self.updated = now;
         for (i, cost) in [1.0, bytes as f64].into_iter().enumerate() {
-            if self.rates[i] == 0 {
+            let rate = self.rates[i] as f64;
+            if rate == 0.0 {
                 continue;
             }
-            let rate = self.rates[i] as f64;
             self.tokens[i] = (self.tokens[i] + elapsed * rate).min(rate);
             if self.tokens[i] < cost {
                 return false;
@@ -548,89 +1017,31 @@ impl RateLimiter {
     }
 }
 
-pub fn admin_router(relay: Arc<Relay>) -> Router {
-    Router::new()
-        .route("/healthz", get(|| async { "ok\n" }))
-        .route(
-            "/readyz",
-            get(|State(relay): State<Arc<Relay>>| async move {
-                if relay.draining.load(Relaxed) {
-                    StatusCode::SERVICE_UNAVAILABLE
-                } else {
-                    StatusCode::OK
-                }
-            }),
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worker_listeners_keep_an_embedders_ipv6_only_boundary() {
+        let ipv4 = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
+        let port = ipv4.local_addr().unwrap().port();
+        let original = socket2::Socket::new(
+            socket2::Domain::IPV6,
+            socket2::Type::STREAM,
+            Some(socket2::Protocol::TCP),
         )
-        .route("/metrics", get(metrics))
-        .route("/v1/channels", get(channels))
-        .route("/v1/drain", post(drain))
-        .route("/v1/resume", post(resume))
-        .route("/v1/sessions/{id}/disconnect", post(disconnect))
-        .with_state(relay)
-}
-
-fn authorized(relay: &Relay, headers: &HeaderMap, metrics: bool) -> bool {
-    if metrics && relay.config.admin_token.is_none() {
-        return true;
-    }
-    headers
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .is_some_and(|s| {
-            protocol::secret_matches(relay.config.admin_token.as_deref(), s.as_bytes())
-        })
-}
-
-async fn metrics(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Response {
-    if !authorized(&relay, &headers, true) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-    let (sessions, channels) = relay.counts();
-    (
-        [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
-        relay
-            .metrics
-            .render(sessions, channels, relay.draining.load(Relaxed)),
-    )
-        .into_response()
-}
-
-async fn channels(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Response {
-    if !authorized(&relay, &headers, false) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-    Json(relay.channels()).into_response()
-}
-
-async fn drain(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> StatusCode {
-    set_drain(relay, headers, true)
-}
-async fn resume(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> StatusCode {
-    set_drain(relay, headers, false)
-}
-
-fn set_drain(relay: Arc<Relay>, headers: HeaderMap, draining: bool) -> StatusCode {
-    if !authorized(&relay, &headers, false) {
-        return StatusCode::UNAUTHORIZED;
-    }
-    relay.draining.store(draining, Relaxed);
-    info!(draining, "administrator changed admission state");
-    StatusCode::NO_CONTENT
-}
-
-async fn disconnect(
-    State(relay): State<Arc<Relay>>,
-    headers: HeaderMap,
-    Path(id): Path<u64>,
-) -> StatusCode {
-    if !authorized(&relay, &headers, false) {
-        return StatusCode::UNAUTHORIZED;
-    }
-    if relay.disconnect(id) {
-        info!(id, "administrator disconnected session");
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::NOT_FOUND
+        .unwrap();
+        original.set_only_v6(true).unwrap();
+        original.set_nonblocking(true).unwrap();
+        original
+            .bind(&std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)).into())
+            .unwrap();
+        original.listen(128).unwrap();
+        let listeners = worker_listeners(original.into(), 4).unwrap();
+        assert_eq!(listeners.len(), 4);
+        for listener in listeners {
+            assert!(socket2::SockRef::from(&listener).only_v6().unwrap());
+            assert_eq!(listener.local_addr().unwrap().port(), port);
+        }
     }
 }

@@ -5,7 +5,7 @@ pub mod frame;
 mod message;
 mod read_budget;
 
-pub use self::{frame::CloseFrame, message::Message, read_budget::{ReadBudget, ReadLease}};
+pub use self::{frame::{CloseFrame, ReadStorage}, message::Message, read_budget::{ReadBudget, ReadLease}};
 
 use self::{
     frame::{
@@ -56,6 +56,9 @@ pub struct WebSocketConfig {
     ///
     /// The default value is 128 KiB.
     pub read_buffer_size: usize,
+    /// Allocate receive storage on demand, allowing an event loop to lend its
+    /// reusable storage with [`WebSocket::swap_read_storage`]. Default: false.
+    pub shared_read_buffer: bool,
     /// The target minimum size of the write buffer to reach before writing the data
     /// to the underlying stream.
     /// The default value is 128 KiB.
@@ -97,6 +100,7 @@ impl Default for WebSocketConfig {
     fn default() -> Self {
         Self {
             read_buffer_size: 128 * 1024,
+            shared_read_buffer: false,
             write_buffer_size: 128 * 1024,
             max_write_buffer_size: usize::MAX,
             max_message_size: Some(64 << 20),
@@ -107,6 +111,11 @@ impl Default for WebSocketConfig {
 }
 
 impl WebSocketConfig {
+    /// Set [`Self::shared_read_buffer`].
+    pub fn shared_read_buffer(mut self, shared: bool) -> Self {
+        self.shared_read_buffer = shared;
+        self
+    }
     /// Set [`Self::read_buffer_size`].
     pub fn read_buffer_size(mut self, read_buffer_size: usize) -> Self {
         self.read_buffer_size = read_buffer_size;
@@ -233,6 +242,25 @@ impl<Stream> WebSocket<Stream> {
     pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
         self.context.reclaim_read_buffer()
     }
+
+    /// Exchange empty receive storage with an event loop. Partial payload/header
+    /// bytes stay with their connection; fragment and protocol state never move.
+    /// Published messages retain their original immutable backing allocation.
+    /// Both owners must use the same read budget (or neither use one).
+    pub fn swap_read_storage(&mut self, storage: &mut ReadStorage) -> bool {
+        self.context.frame.swap_read_storage(storage)
+    }
+
+    /// Remove empty receive storage so an idle connection owns no read slab.
+    /// Returns `None` while unconsumed input still belongs to this connection.
+    pub fn take_read_storage(&mut self) -> Option<ReadStorage> {
+        let mut storage = ReadStorage::default();
+        self.swap_read_storage(&mut storage).then_some(storage)
+    }
+
+    /// Capacity of the allocation backing receive views. Splitting off a
+    /// published payload does not make that allocation smaller.
+    pub fn read_storage_capacity(&self) -> usize { self.context.frame.read_storage_capacity() }
 
     /// Attach a pre-reserved decoder staging lease before the first read.
     /// Initial receive storage must already be covered by this lease. Future
@@ -418,7 +446,9 @@ impl WebSocketContext {
     /// Panics if config is invalid e.g. `max_write_buffer_size <= write_buffer_size`.
     pub fn new(role: Role, config: Option<WebSocketConfig>) -> Self {
         let conf = config.unwrap_or_default();
-        Self::_new(role, FrameCodec::new(conf.read_buffer_size), conf)
+        let mut frame = FrameCodec::new(if conf.shared_read_buffer { 0 } else { conf.read_buffer_size });
+        frame.set_read_chunk_size(conf.read_buffer_size);
+        Self::_new(role, frame, conf)
     }
 
     /// Create a WebSocket context that manages a post-handshake stream.
@@ -427,7 +457,9 @@ impl WebSocketContext {
     /// Panics if config is invalid e.g. `max_write_buffer_size <= write_buffer_size`.
     pub fn from_partially_read(part: Vec<u8>, role: Role, config: Option<WebSocketConfig>) -> Self {
         let conf = config.unwrap_or_default();
-        Self::_new(role, FrameCodec::from_partially_read(part, conf.read_buffer_size), conf)
+        let mut frame = FrameCodec::from_partially_read(part, if conf.shared_read_buffer { 0 } else { conf.read_buffer_size });
+        frame.set_read_chunk_size(conf.read_buffer_size);
+        Self::_new(role, frame, conf)
     }
 
     fn _new(role: Role, mut frame: FrameCodec, config: WebSocketConfig) -> Self {

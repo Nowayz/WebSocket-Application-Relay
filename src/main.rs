@@ -20,7 +20,7 @@ fn main() -> Result<()> {
             .map_or(2, usize::from)
             .min(16)
     });
-    tokio::runtime::Builder::new_multi_thread().enable_all().worker_threads(workers).build()?.block_on(async move {
+    tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async move {
         let listener = TcpListener::bind(config.bind).await.context("cannot bind relay listener")?;
         let admin = if config.no_admin { None } else { Some(TcpListener::bind(config.admin_bind).await.context("cannot bind admin listener")?) };
         info!(address = %listener.local_addr()?, workers, protocol = "war.cbor.v1", "relay listening");

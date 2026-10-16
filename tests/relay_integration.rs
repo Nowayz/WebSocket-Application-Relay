@@ -681,12 +681,12 @@ async fn fragmented_input_and_interleaved_control_leave_direct_output_ordered() 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn shared_network_payloads_are_reused_and_small_views_after_large_input_are_compacted() {
+async fn shared_network_payloads_are_reused_without_copying_later_base_slab_values() {
     let server = Server::new(config()).await;
     let (mut sender, sender_id) = server.join("storage").await;
     let (mut recipient, recipient_id) = server.join("storage").await;
-    // Ordinary tiny messages share the normal read slab too; compaction is
-    // reserved for connections whose incoming storage has grown beyond it.
+    // Ordinary tiny messages share the normal read slab too. A completed large
+    // receive slab retires before the worker lends storage to another reader.
     send(&mut sender, recipient_id, &[0xf5]).await;
     assert_eq!(
         data(&mut recipient).await,
@@ -710,7 +710,11 @@ async fn shared_network_payloads_are_reused_and_small_views_after_large_input_ar
         data(&mut recipient).await,
         protocol::envelope(sender_id, &[0xf6])
     );
-    assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+    assert_eq!(
+        server.relay.metrics.routing_reused_bytes.load(Relaxed),
+        large.len() as u64 + 2
+    );
     drop(sender);
     drop(recipient);
     server.stop().await;
@@ -1025,15 +1029,30 @@ async fn incomplete_join_still_times_out_and_releases_staging_while_healthy_rout
     assert_eq!(server.relay.metrics.joined.load(Relaxed), 1);
     assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
-    assert_eq!(
+    // Empty decoders return their receive slabs to their worker. The remaining
+    // allowance is bounded by worker scratch storage, rather than one slab per
+    // live connection; the abandoned fragment collector must be gone.
+    timeout(Duration::from_secs(3), async {
+        while server.relay.metrics.connections.load(Relaxed) != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let workers = server.relay.config.workers.unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map_or(2, usize::from)
+            .min(16)
+    });
+    assert!(
         server
             .relay
             .metrics
             .read_budget
             .as_ref()
             .unwrap()
-            .reserved(),
-        8192
+            .reserved()
+            <= workers * 8192
     );
     server.stop().await;
 }
@@ -1067,6 +1086,78 @@ async fn admin_cancellation_retires_membership_before_closing_incomplete_assembl
     assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
     server.stop().await;
+}
+
+#[tokio::test]
+async fn cancelling_the_embedding_service_stops_workers_without_disconnect_fanout() {
+    let mut server = Server::new(Config {
+        workers: Some(2),
+        ..config()
+    })
+    .await;
+    let mut sockets = Vec::new();
+    for _ in 0..64 {
+        sockets.push(server.join("abort-group").await.0);
+    }
+    let delivered = server.relay.metrics.deliveries.load(Relaxed);
+    let task = server.task.take().unwrap();
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    timeout(Duration::from_secs(3), async {
+        while server.relay.metrics.connections.load(Relaxed) != 0
+            || server
+                .relay
+                .metrics
+                .read_budget
+                .as_ref()
+                .unwrap()
+                .reserved()
+                != 0
+        {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(server.relay.draining.load(Relaxed));
+    assert_eq!(server.relay.counts(), (0, 1));
+    assert_eq!(server.relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.variable_bytes.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.disconnected.load(Relaxed), 64);
+    assert_eq!(server.relay.metrics.deliveries.load(Relaxed), delivered);
+}
+
+#[test]
+fn native_workers_do_not_depend_on_the_embedders_blocking_pool() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+        .block_on(async {
+            let (release, held) = std::sync::mpsc::channel();
+            let (started, active) = tokio::sync::oneshot::channel();
+            let occupied = tokio::task::spawn_blocking(move || {
+                let _ = started.send(());
+                held.recv_timeout(Duration::from_secs(5)).unwrap();
+            });
+            active.await.unwrap();
+            let server = Server::new(Config {
+                workers: Some(4),
+                ..config()
+            })
+            .await;
+            let mut sockets = Vec::new();
+            for _ in 0..16 {
+                let (mut socket, id) = server.join("dedicated-io").await;
+                send(&mut socket, id, &[0x18, 42]).await;
+                assert_eq!(data(&mut socket).await, protocol::envelope(id, &[0x18, 42]));
+                sockets.push(socket);
+            }
+            server.stop().await;
+            release.send(()).unwrap();
+            occupied.await.unwrap();
+        });
 }
 
 #[tokio::test]

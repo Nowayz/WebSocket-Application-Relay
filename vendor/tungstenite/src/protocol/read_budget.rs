@@ -67,6 +67,9 @@ pub struct ReadLease {
 }
 
 impl ReadLease {
+    pub(super) fn same_budget(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.budget, &other.budget)
+    }
     pub(super) fn sibling(&self) -> Self {
         Self { budget: self.budget.clone(), reserved: 0 }
     }

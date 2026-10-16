@@ -66,6 +66,130 @@ fn denied(ws: &mut WebSocket<Paused>) {
     ));
 }
 
+fn shared_socket(wire: Vec<u8>, pool: &Arc<ReadBudget>) -> WebSocket<Paused> {
+    let mut ws = WebSocket::from_raw_socket(
+        Paused(Cursor::new(wire)),
+        Role::Server,
+        Some(
+            WebSocketConfig::default()
+                .read_buffer_size(4096)
+                .shared_read_buffer(true),
+        ),
+    );
+    ws.set_read_budget(pool.try_lease(0).unwrap()).unwrap();
+    ws
+}
+
+#[test]
+fn worker_storage_moves_between_decoders_without_moving_published_payloads() {
+    let pool = ReadBudget::new(1024 * 1024);
+    let mut first = shared_socket(frame(0x82, &[0xa5; 2048]), &pool);
+    let mut second = shared_socket(frame(0x82, &[0x39; 1024]), &pool);
+    assert_eq!(
+        pool.reserved(),
+        0,
+        "idle decoders allocate no receive storage"
+    );
+    let Message::Binary(published) = first.read().unwrap() else {
+        panic!("binary")
+    };
+    let pointer = published.as_ptr();
+    let mut scratch = first.take_read_storage().unwrap();
+    let reserved = pool.reserved();
+    drop(first);
+    assert_eq!(
+        pool.reserved(),
+        reserved,
+        "the allowance travels with storage"
+    );
+    assert!(second.swap_read_storage(&mut scratch));
+    assert_eq!(second.read().unwrap().into_data(), &[0x39; 1024][..]);
+    assert_eq!(published.as_ptr(), pointer);
+    assert_eq!(published, &[0xa5; 2048][..]);
+    scratch = second.take_read_storage().unwrap();
+    drop(second);
+    assert!(pool.reserved() > 0);
+    drop(scratch);
+    assert_eq!(
+        pool.reserved(),
+        0,
+        "published owners are outside staging admission"
+    );
+    assert_eq!(published.as_ptr(), pointer);
+}
+
+#[test]
+fn storage_lending_keeps_every_partial_masked_header_and_payload_with_its_decoder() {
+    let body = vec![0x5a; 65536];
+    let wire = frame(0x82, &body);
+    for cut in (1..=14).chain([15, 4096]) {
+        let pool = ReadBudget::new(1024 * 1024);
+        let mut source = shared_socket(wire[..cut].to_vec(), &pool);
+        let mut other = shared_socket(frame(0x82, b"other connection"), &pool);
+        pending(&mut source);
+        assert!(
+            source.take_read_storage().is_none(),
+            "partial frame cut {cut}"
+        );
+        let mut scratch = Default::default();
+        assert!(other.swap_read_storage(&mut scratch));
+        assert_eq!(other.read().unwrap().into_data(), b"other connection"[..]);
+        if let Some(storage) = other.take_read_storage() {
+            scratch = storage;
+        }
+        assert!(!source.swap_read_storage(&mut scratch));
+        source.get_mut().0.get_mut().extend_from_slice(&wire[cut..]);
+        assert_eq!(source.read().unwrap().into_data(), body);
+        drop(source);
+        drop(other);
+        drop(scratch);
+        assert_eq!(pool.reserved(), 0, "header/payload cut {cut}");
+    }
+}
+
+#[test]
+fn an_oversized_worker_slab_retires_even_when_a_published_body_keeps_its_allocation_alive() {
+    for admission in [false, true] {
+        let pool = ReadBudget::new(1024 * 1024);
+        let mut source = WebSocket::from_raw_socket(
+            Paused(Cursor::new(frame(0x82, &[0x5a; 65536]))),
+            Role::Server,
+            Some(
+                WebSocketConfig::default()
+                    .read_buffer_size(4096)
+                    .shared_read_buffer(true),
+            ),
+        );
+        if admission {
+            source.set_read_budget(pool.try_lease(0).unwrap()).unwrap();
+        }
+        let published = source.read().unwrap().into_data();
+        let pointer = published.as_ptr();
+        let mut scratch = source.take_read_storage().unwrap();
+        assert!(scratch.discard_if_larger_than(4096));
+        assert_eq!(pool.reserved(), 0);
+        assert_eq!(published.as_ptr(), pointer);
+        assert_eq!(published, &[0x5a; 65536][..]);
+        assert!(!scratch.discard_if_larger_than(4096));
+    }
+}
+
+#[test]
+fn a_decoder_still_reserves_before_growth_after_lending_away_its_allocation() {
+    let pool = ReadBudget::new(32768);
+    let mut source = shared_socket(frame(0x82, b"first"), &pool);
+    assert_eq!(source.read().unwrap().into_data(), b"first"[..]);
+    let held = source.take_read_storage().unwrap();
+    let large = frame(0x82, &[0; 65536]);
+    source.get_mut().0.get_mut().extend_from_slice(&large[..14]);
+    denied(&mut source);
+    assert_eq!(pool.rejected(), 1);
+    assert!(pool.peak() <= pool.limit());
+    drop(source);
+    drop(held);
+    assert_eq!(pool.reserved(), 0);
+}
+
 #[test]
 fn concurrent_leases_never_exceed_the_limit_and_release_on_drop() {
     let pool = ReadBudget::new(4096);

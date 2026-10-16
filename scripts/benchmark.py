@@ -36,6 +36,16 @@ def snapshot(pid):
             values[key] = int(value.split()[0])
     fields = Path(f"/proc/{pid}/stat").read_text().split()
     values["cpu_seconds"] = (int(fields[13]) + int(fields[14])) / os.sysconf("SC_CLK_TCK")
+    # Quiescent-gate diagnostics expose flow/worker placement without sampling
+    # inside a timed request. Threads may retire between directory and stat.
+    threads = {}
+    for task in Path(f"/proc/{pid}/task").iterdir():
+        try:
+            fields = (task / "stat").read_text().rsplit(")", 1)[1].split()
+            threads[task.name] = (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+        except FileNotFoundError:
+            continue
+    values["thread_cpu_seconds"] = threads
     return values
 
 

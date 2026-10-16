@@ -13,11 +13,28 @@ patch keeps the existing decoder and gives the connection owner explicit storage
 control. Bounded parsing also lets asynchronous callers yield between fragments.
 No WebSocket framing, validation, masking, or output logic is replaced.
 
+The native readiness runtime enables `WebSocketConfig::shared_read_buffer(true)`.
+This defers its initial receive allocation. `swap_read_storage` lends empty
+worker storage to a decoder; `take_read_storage` returns it between complete
+frames. Unread header bytes, a parsed header awaiting its body, partial payloads,
+fragment assembly, and protocol/control state stay with their connection.
+An empty decoder retains a zero-byte lease, so lending its allocation away can
+never make its next growth unbudgeted. Different admission pools cannot exchange
+storage. Published `Bytes` retain their immutable owner and original pointer.
+
+`ReadStorage` carries both the allocation and its lease. It also records the
+backing capacity before splitting off published views; the tail's available
+capacity alone cannot identify a small view of a large slab. The runtime uses
+`read_storage_capacity` for its compaction decision, and calls
+`discard_if_larger_than` on oversized empty storage before lending it again.
+This drops only the staging owner's view and lease, without copying published
+bodies. Default configuration preserves upstream's eager allocation behavior.
+
 `set_read_budget(ReadLease)` attaches shared admission before the first read.
 Frame and fragment-assembly storage reserve twice their requested capacity before
 growing. Large frames include one configured read chunk of bounded read-ahead in
 that capacity. Old and new staging allocations can therefore overlap during growth.
-Each connection retains separate high-water frame and fragment leases; ordinary
+Retained storage has separate high-water frame and fragment leases; ordinary
 reads within those allowances perform no shared-budget atomics. A failed growth
 permanently stops reads and permits a best-effort Close. `ReadLease` releases its
 allowance on drop, including cancelled connections. Published payload owners are
@@ -26,7 +43,7 @@ outside this staging allowance and require separate consumer limits.
 The modified or added upstream source files are:
 
 - `tungstenite/src/protocol/frame/mod.rs`: preallocation admission and safe buffer
-  replacement between frames. A budgeted growth copies only unfinished input;
+  replacement/lending between frames. A budgeted growth copies only unfinished input;
   published `Bytes` keep their original owner and pointer.
 - `tungstenite/src/protocol/read_budget.rs`: atomic shared allowance and RAII leases.
 - `tungstenite/src/protocol/message.rs`: admission before binary/text fragment
@@ -90,6 +107,10 @@ HTTP/Close admission responses, routing and cancellation/shutdown cleanup.
 `tests/read_fairness.rs` additionally checks bounded parsing, UTF-8/control
 resumption, self-wakeup with entirely buffered input, dropped read futures,
 shared payload pointers and terminal protocol errors.
+Shared-storage tests additionally cover lending across decoders, every partial
+masked header and payload split, admission after lending, and retirement of a
+large worker view while published bodies remain alive, with admission enabled
+and disabled.
 Rebase the patch deliberately when upgrading either package and rerun the
 full relay/client/compatibility checks. Remove these copies when an upstream API
 can provide the same ownership and partial-input guarantees.

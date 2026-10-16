@@ -1,4 +1,5 @@
 //! WebSocket Application Relay: wire protocol, bounded routing, and service runtime.
+mod admin;
 mod common;
 pub mod config;
 mod frame;

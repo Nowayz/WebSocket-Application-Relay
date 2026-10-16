@@ -33,6 +33,25 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def dump_heap(pid, prefix):
+    """Capture a quiescent gate with gperftools' documented dump signal."""
+    # Current gperftools includes the PID in its prefix; older builds do not.
+    before = set(prefix.parent.glob(prefix.name + "*.heap"))
+    os.kill(pid, signal.SIGUSR2)
+    deadline, previous = time.monotonic() + 5, None
+    while time.monotonic() < deadline:
+        created = set(prefix.parent.glob(prefix.name + "*.heap")) - before
+        if len(created) == 1:
+            path = created.pop()
+            data = path.read_bytes()
+            if data == previous and b"MAPPED_LIBRARIES:" in data and data.endswith(b"\n"):
+                return {"path": str(path), "sha256": digest(path),
+                        "header": data.splitlines()[0].decode()}
+            previous = data
+        time.sleep(.025)
+    raise TimeoutError("heap dump did not complete at phase gate")
+
+
 def metrics(port):
     request = urllib.request.Request(f"http://127.0.0.1:{port}/metrics",
                                      headers={"Authorization": f"Bearer {TOKEN}"})
@@ -41,7 +60,7 @@ def metrics(port):
                     (line.split() for line in response.read().decode().splitlines() if line.startswith("war_")))
 
 
-def check(event, stable_sessions, stable_channels):
+def check(event, stable_sessions, stable_channels, read_storage="worker", workers=4):
     observed, counts = event["metrics"], event["details"]["counts"]
     expected = {"war_accepted_total": counts["joins"], "war_joined_total": counts["joins"],
                 "war_disconnected_total": counts["normal_closes"],
@@ -55,8 +74,18 @@ def check(event, stable_sessions, stable_channels):
     expected.update(war_connections=0 if done else stable_sessions,
                     war_sessions=0 if done else stable_sessions,
                     war_channels=1 if done else stable_channels,
-                    war_variable_bytes=0 if done else 6,
-                    war_read_buffer_reserved_bytes=0 if done else stable_sessions * 8192)
+                    war_variable_bytes=0 if done else 6)
+    reserved = observed["war_read_buffer_reserved_bytes"]
+    if read_storage == "connection":
+        expected["war_read_buffer_reserved_bytes"] = 0 if done else stable_sessions * 8192
+    else:
+        # At these quiescent gates all application input is complete. Empty
+        # decoders own no receive allocation; each worker may keep one 4KiB
+        # scratch slab and its 2x growth allowance. An empty worker releases it.
+        bound = 0 if done else workers * 8192
+        assert 0 <= reserved <= bound, (event["event"], "worker receive allowance", reserved, bound)
+        expected["war_read_buffer_reserved_bytes"] = reserved
+        event["worker_read_allowance_bound"] = bound
     expected.update({key: 0 for key in ERRORS})
     for key, value in expected.items():
         assert observed[key] == value, (event["event"], key, observed[key], value)
@@ -69,6 +98,16 @@ def run(args):
         admin = runtime.free_port()
     environment = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
     environment.update(WAR_AUTH_PASSWORD=TOKEN, WAR_ADMIN_TOKEN=TOKEN)
+    server_environment = environment.copy()
+    if args.heap_profile:
+        args.heap_profile = args.heap_profile.resolve()
+        args.heap_profile.parent.mkdir(parents=True, exist_ok=True)
+        assert args.heap_library.is_file(), "gperftools library is missing"
+        assert not list(args.heap_profile.parent.glob(args.heap_profile.name + "*.heap")), "use a fresh heap-profile prefix"
+        server_environment.update(LD_PRELOAD=str(args.heap_library.resolve()),
+                                  HEAPPROFILE=str(args.heap_profile), HEAPPROFILESIGNAL=str(signal.SIGUSR2),
+                                  HEAP_PROFILE_ALLOCATION_INTERVAL=str(100 * 1024**3),
+                                  HEAP_PROFILE_INUSE_INTERVAL=str(100 * 1024**3))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
                       "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
     command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}", "--admin", f"127.0.0.1:{admin}",
@@ -84,11 +123,11 @@ def run(args):
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_sha256": digest(ROOT / "examples/inspection.rs"), "runner_sha256": digest(__file__),
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
-              "profile_diagnostic": args.profile, "events": [], "passed": False,
+              "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "passed": False,
               "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic 1KiB templates and 16-message windows; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=environment)
+        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)
         client = perf = None
         perf_log = None
         try:
@@ -120,7 +159,7 @@ def run(args):
                 result["events"].append(event)
                 if event["event"] == "ready":
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
-                    check(event, stable_sessions, stable_channels)
+                    check(event, stable_sessions, stable_channels, args.read_storage)
                     if args.profile:
                         profile = args.output.with_suffix(".perf.data")
                         perf_log = tempfile.TemporaryFile()
@@ -132,7 +171,7 @@ def run(args):
                         result["profile_path"] = str(profile)
                     ready = event
                 elif event["event"] == "measured":
-                    check(event, stable_sessions, stable_channels)
+                    check(event, stable_sessions, stable_channels, args.read_storage)
                     if perf is not None:
                         perf.send_signal(signal.SIGINT)
                         result["perf_exit_code"] = perf.wait(timeout=10)
@@ -150,11 +189,13 @@ def run(args):
                     result["mixed"] = mixed
                     print(json.dumps(mixed), flush=True)
                 elif event["event"] == "done":
-                    check(event, stable_sessions, stable_channels)
+                    check(event, stable_sessions, stable_channels, args.read_storage)
                     assert event["details"]["passed"]
                     assert event["details"]["counts"]["joins"] == event["details"]["counts"]["normal_closes"]
                 else:
                     raise RuntimeError("unknown phase gate")
+                if args.heap_profile:
+                    event["heap"] = dump_heap(server.pid, args.heap_profile)
                 client.stdin.write("continue\n")
                 client.stdin.flush()
                 if event["event"] == "done":
@@ -207,9 +248,14 @@ if __name__ == "__main__":
     parser.add_argument("--inspection-interval-ms", type=int, default=10)
     parser.add_argument("--pairs", type=int, default=2)
     parser.add_argument("--churn-workers", type=int, default=8)
+    parser.add_argument("--read-storage", choices=["worker", "connection"], default="worker",
+                        help="staging accounting contract; use connection for the frozen async control")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-7")
-    parser.add_argument("--profile", action="store_true")
+    profiles = parser.add_mutually_exclusive_group()
+    profiles.add_argument("--profile", action="store_true")
+    profiles.add_argument("--heap-profile", type=Path, help="diagnostic only: gperftools heap prefix; changes allocator, timings/RSS excluded from ordinary medians")
+    parser.add_argument("--heap-library", type=Path, default=Path("/usr/lib/libtcmalloc.so"))
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     outcome = run(arguments)

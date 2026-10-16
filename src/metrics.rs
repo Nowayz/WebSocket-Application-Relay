@@ -102,7 +102,7 @@ impl Metrics {
             (
                 "unstarted_writes_cancelled_total",
                 self.unstarted_writes_cancelled.load(Relaxed),
-                "Output operations cancelled before their write future was first polled; no partial frame exists.",
+                "Queued output cancelled with no bytes written from its first retained frame; no partial frame exists.",
             ),
             (
                 "routing_reused_bytes_total",
@@ -127,7 +127,7 @@ impl Metrics {
             (
                 "aborted_writes_total",
                 self.aborted_writes.load(Relaxed),
-                "Output operations cancelled by session policy or shutdown.",
+                "Queued output cancelled before completion during session retirement.",
             ),
             (
                 "close_failures_total",

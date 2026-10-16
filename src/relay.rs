@@ -13,6 +13,7 @@ use bytes::Bytes;
 use minicbor::Encoder;
 use parking_lot::RwLock;
 use serde::Serialize;
+#[cfg(test)]
 use tokio::sync::{mpsc, watch};
 
 use crate::{
@@ -25,8 +26,8 @@ use crate::{
     },
 };
 
-/// The registry lock protects membership and ID ownership. It is never held across
-/// await or socket I/O. Hot-path routing takes a read lock and only tries queues.
+/// The registry lock protects membership and ID ownership. Output submission is
+/// nonblocking; the transport writes immediately or retains a shared frame.
 pub struct Relay {
     pub config: Config,
     pub metrics: Arc<Metrics>,
@@ -68,9 +69,7 @@ pub(crate) struct Peer {
     authenticated: AtomicBool,
     listener: AtomicU8,
     closing: AtomicBool,
-    largest_input: AtomicUsize,
-    outgoing: mpsc::Sender<Envelope>,
-    close: watch::Sender<Option<Disconnect>>,
+    output: Arc<dyn PeerOutput>,
     budget: Arc<Budget>,
 }
 
@@ -88,6 +87,30 @@ pub(crate) struct Envelope {
     budget: Arc<Budget>,
 }
 
+/// A transport owns ordering and backpressure. Sending never waits for socket
+/// readiness, and close only signals the owning I/O loop.
+pub(crate) trait PeerOutput: Send + Sync {
+    fn send(&self, packet: Envelope) -> bool;
+    fn close(&self, reason: Disconnect);
+}
+
+#[cfg(test)]
+struct AsyncOutput {
+    outgoing: mpsc::Sender<Envelope>,
+    close: watch::Sender<Option<Disconnect>>,
+}
+
+#[cfg(test)]
+impl PeerOutput for AsyncOutput {
+    fn send(&self, packet: Envelope) -> bool {
+        self.outgoing.try_send(packet).is_ok()
+    }
+
+    fn close(&self, reason: Disconnect) {
+        self.close.send_replace(Some(reason));
+    }
+}
+
 impl Drop for Envelope {
     fn drop(&mut self) {
         self.budget.used.fetch_sub(self.frame.len(), Relaxed);
@@ -99,17 +122,11 @@ impl Drop for Envelope {
 }
 
 impl Peer {
-    // The connection may lower this watermark only after the decoder installed
-    // fresh base-size input storage. Published bodies keep their own ownership.
-    pub(crate) fn reclaimed_input(&self, buffer: usize) {
-        self.largest_input.store(buffer, Relaxed);
-    }
-
     pub(crate) fn close(&self, reason: Disconnect) -> bool {
         if self.closing.swap(true, Relaxed) {
             return false;
         }
-        self.close.send_replace(Some(reason));
+        self.output.close(reason);
         true
     }
 
@@ -152,7 +169,7 @@ impl Peer {
             frame: frame.clone(),
             budget: self.budget.clone(),
         };
-        if self.outgoing.try_send(packet).is_err() {
+        if !self.output.send(packet) {
             self.overloaded();
         }
         Ok(())
@@ -176,6 +193,7 @@ impl Drop for Registration {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct Subscription {
     pub registration: Registration,
     pub outgoing: mpsc::Receiver<Envelope>,
@@ -311,7 +329,24 @@ impl Relay {
         })
     }
 
-    pub(crate) fn subscribe(self: &Arc<Self>, channel: &[u8]) -> Result<Subscription, Disconnect> {
+    #[cfg(test)]
+    fn subscribe(self: &Arc<Self>, channel: &[u8]) -> Result<Subscription, Disconnect> {
+        let (outgoing, receiver) = mpsc::channel(self.config.queue_messages);
+        let (close, close_receiver) = watch::channel(None);
+        let registration =
+            self.subscribe_with_output(channel, Arc::new(AsyncOutput { outgoing, close }))?;
+        Ok(Subscription {
+            registration,
+            outgoing: receiver,
+            close: close_receiver,
+        })
+    }
+
+    pub(crate) fn subscribe_with_output(
+        self: &Arc<Self>,
+        channel: &[u8],
+        output: Arc<dyn PeerOutput>,
+    ) -> Result<Registration, Disconnect> {
         if channel.len() > 16 {
             return Err(Disconnect::CHANNEL_LENGTH);
         }
@@ -336,8 +371,6 @@ impl Relay {
         };
         let key = state.next_key;
         state.next_key = key.checked_add(1).ok_or(Disconnect::OVERLOADED)?;
-        let (outgoing, receiver) = mpsc::channel(self.config.queue_messages);
-        let (close, close_receiver) = watch::channel(None);
         let peer = Arc::new(Peer {
             key,
             id: AtomicU64::new(id),
@@ -345,9 +378,7 @@ impl Relay {
             authenticated: AtomicBool::new(false),
             listener: AtomicU8::new(0),
             closing: AtomicBool::new(false),
-            largest_input: AtomicUsize::new(self.config.read_buffer_bytes),
-            outgoing,
-            close,
+            output,
             budget: Arc::new(Budget {
                 used: AtomicUsize::new(0),
                 limit: self.config.queue_bytes,
@@ -366,17 +397,24 @@ impl Relay {
             .insert(key, peer.clone());
         state.sessions += 1;
         self.metrics.joined.fetch_add(1, Relaxed);
-        Ok(Subscription {
-            registration: Registration {
-                peer,
-                relay: self.clone(),
-            },
-            outgoing: receiver,
-            close: close_receiver,
+        Ok(Registration {
+            peer,
+            relay: self.clone(),
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn receive(&self, peer: &Peer, bytes: Bytes) -> Result<(), Disconnect> {
+        let capacity = self.config.read_buffer_bytes.max(bytes.len());
+        self.receive_with_storage(peer, bytes, capacity)
+    }
+
+    pub(crate) fn receive_with_storage(
+        &self,
+        peer: &Peer,
+        bytes: Bytes,
+        storage_capacity: usize,
+    ) -> Result<(), Disconnect> {
         if peer.closing.load(Relaxed) {
             return Ok(());
         }
@@ -384,13 +422,6 @@ impl Relay {
         self.metrics
             .incoming_bytes
             .fetch_add(bytes.len() as u64, Relaxed);
-        // Only this connection updates its high-water mark. A small view must
-        // not keep a previous large receive slab alive in a slow output queue.
-        let previous_largest = peer.largest_input.load(Relaxed);
-        let largest = previous_largest.max(bytes.len());
-        if largest != previous_largest {
-            peer.largest_input.store(largest, Relaxed);
-        }
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
             return self.control(peer, value);
@@ -417,8 +448,8 @@ impl Relay {
             }
         };
         let value_start = bytes.len() - value.len();
-        let compact = largest > self.config.read_buffer_bytes
-            && bytes.len().saturating_mul(8) < largest
+        let compact = storage_capacity > self.config.read_buffer_bytes
+            && bytes.len().saturating_mul(8) < storage_capacity
             && !bytes.is_unique();
         let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
         let counter = if compact {
@@ -682,28 +713,21 @@ mod tests {
     }
 
     #[test]
-    fn tiny_values_after_large_input_do_not_pin_a_shared_read_slab() {
+    fn tiny_views_of_a_large_current_allocation_are_compacted() {
         let relay = Relay::new(config()).unwrap();
         let mut sender = relay.subscribe(b"a").unwrap();
         let mut recipient = relay.subscribe(b"a").unwrap();
         sender.outgoing.try_recv().unwrap();
         recipient.outgoing.try_recv().unwrap();
-        let unknown = (1..)
-            .find(|id| !relay.state.read().users.contains_key(id))
-            .unwrap();
-        relay
-            .receive(
-                &sender.registration.peer,
-                protocol::envelope(unknown, &protocol::byte_string(&[0; 65536])),
-            )
-            .unwrap();
         let small = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf6]);
         let mut read_slab = bytes::BytesMut::with_capacity(65536);
         read_slab.extend_from_slice(&small);
         let input = read_slab.split().freeze();
         let backing = input.clone();
         let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&sender.registration.peer, input).unwrap();
+        relay
+            .receive_with_storage(&sender.registration.peer, input, 65536)
+            .unwrap();
         let packet = recipient.outgoing.try_recv().unwrap();
         assert_ne!(packet.frame.payload().as_ptr(), pointer);
         assert_eq!(packet.frame.payload(), [0xf6]);

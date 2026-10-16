@@ -24,10 +24,13 @@ management. `--help` lists all limits and environment variables. Set
 enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
 
-Unused enlarged receive storage is released after five seconds without large
-input, while clients stay connected. `--read-buffer-idle-secs 0` disables that
-policy. It preserves published payload ownership and partial input; the narrow
-codec hook and source provenance are documented in [vendor/README.md](vendor/README.md).
+Native sockets run on readiness workers with shared receive storage and direct
+vectored output. Idle sockets own no receive slab or message channel. A worker
+keeps one base-size slab; partial frames retain their own storage, and oversized
+completed slabs retire before reuse by another connection. Published payloads
+keep their immutable owner. `--read-buffer-idle-secs` additionally controls quiet
+decoder/fragment high-water reclamation. The storage hooks and source provenance
+are documented in [vendor/README.md](vendor/README.md).
 
 Operators can optionally retire inactive joined sessions with
 `--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
@@ -160,19 +163,22 @@ recorded results and local dependency setup.
   in-flight write. Routing never awaits a consumer; overflow closes it with `1013`.
   Pending writes observe session cancellation and release their reservations promptly.
 - Process-wide queue and variable byte budgets bound aggregate retained payloads
-  as the number of users and channels grows. Read buffers default to 4 KiB.
+  as the number of users and channels grows. Workers share 4 KiB receive chunks;
+  incomplete input retains separately admitted staging.
 - Channel variables have count and byte limits and disappear with an empty
   ordinary channel. `re_globl` persists, matching the original behavior.
 - OS entropy supplies IDs. Fixed-ID takeover closes the old owner with `4001`;
   old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
-- Tokio drives concurrent connections. Routing uses shared registry reads;
-  membership/ID changes use writes. No registry lock spans an await or socket I/O.
+- Mio workers drive native sockets; Tokio handles management and process signals.
+  Routing submits bounded nonblocking writes directly. Only backpressure creates
+  a recipient queue. A per-socket lock serializes writes from different workers;
+  registry reads protect routing and writes protect membership/ID changes.
   Fanout shares one immutable application body across recipients.
 - SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
   receive `1001`; blocked transports can be dropped. Peer-initiated Close frames
-  receive their exact acknowledgement. Cleanup also runs on task cancellation.
-  A cancelled write that has not started preserves the normal close handshake;
-  cancellation of a possibly partial frame still discards its transport.
+  receive their exact acknowledgement. Dropping the service signals its workers
+  to retire. Untouched queued writes permit a normal close handshake; a partly
+  transmitted frame requires dropping its transport.
 
 Management uses a separate HTTP listener:
 
