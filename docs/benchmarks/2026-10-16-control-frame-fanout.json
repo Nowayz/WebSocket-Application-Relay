@@ -1,0 +1,332 @@
+{
+  "scope": "Eighteen sequential fresh-process fanout cases, nine alternating before/selected repetitions after all inspection timing. Four server workers CPUs0-3; same frozen stress client CPUs4-7.32 clients:one publisher,27 healthy readers,four unread. Each four-second traffic interval uses window16,one-millisecond reader delay and cyclic256B/1KiB/64KiB/256KiB values. Full encoded payloads/order and exact server accounting validated. Server lifecycle CPU covers setup through final cleanup, rather than just the traffic interval; RSS is a250ms sampled maximum. No builds/profiles/other load tests overlap timing.",
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/routing-owner-candidate/war-relay",
+      "sha256": "d58f9c43d408b95da68aab723190b53d94fd5dc503026601e5bf931cdffc40e8"
+    },
+    "selected": {
+      "path": "artifacts/baselines/control-frame-candidate/war-relay",
+      "sha256": "9951e62fafc0b1a7e2485f25e3396b209a9225cbe66209f65823359703ee9a0d"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/e2d7cf9/stress",
+    "sha256": "58019dadf5c21ff0e8378a7ffcb05c176a57c8af2429c316a5b0edf9341353a8"
+  },
+  "helpers": {
+    "stability.py": "608baae680fb42a86663f499c320f7c049ce2deb8b7e622dca52ea5589624bf9",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\nordinary = json.loads((root/'docs/benchmarks/2026-10-16-control-frame-comparison.json').read_text())\nassert ordinary['passed'] and len(ordinary['cases']) == 30\nstress = root/'artifacts/baselines/e2d7cf9/stress'\noutput = root/'docs/benchmarks/2026-10-16-control-frame-fanout.json'\nrecord = {'scope':'Eighteen sequential fresh-process fanout cases, nine alternating before/selected repetitions after all inspection timing. Four server workers CPUs0-3; same frozen stress client CPUs4-7.32 clients:one publisher,27 healthy readers,four unread. Each four-second traffic interval uses window16,one-millisecond reader delay and cyclic256B/1KiB/64KiB/256KiB values. Full encoded payloads/order and exact server accounting validated. Server lifecycle CPU covers setup through final cleanup, rather than just the traffic interval; RSS is a250ms sampled maximum. No builds/profiles/other load tests overlap timing.',\n          'variants':ordinary['variants'],'client':{'path':str(stress.relative_to(root)),'sha256':sha(stress)},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['stability.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nfor repetition in range(1,10):\n    for role in (['before','selected'] if repetition%2 else ['selected','before']):\n        trace = output.with_name(f'{output.stem}-{role}-{repetition}.json')\n        command = [sys.executable,str(root/'scripts/stability.py'),'--server',str(root/ordinary['variants'][role]['path']),\n                   '--stress',str(stress),'--modes','fanout','--fanout-secs','4','--clients','32',\n                   '--unread-clients','4','--reader-delay-ms','1','--payload-sizes','256,1024,65536,262144',\n                   '--window','16','--server-cpus','0-3','--client-cpus','4-7','--output',str(trace)]\n        done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=90)\n        data = json.loads(trace.read_text()); assert len(data['cases']) == 1\n        case = data['cases'][0]\n        assert done.returncode == 0 and case['passed'],done.stdout+done.stderr\n        assert data['server_sha256'] == record['variants'][role]['sha256'] and data['stress_sha256']==record['client']['sha256']\n        result = case['output'][-1]; metrics = case['final']['metrics']\n        assert result['event']=='result' and result['healthy_readers']==27 and result['unread_clients']==4\n        assert all(int(metrics[key]) == 0 for key in ['war_connections','war_sessions','war_queued_bytes','war_variable_bytes','war_read_buffer_reserved_bytes','war_protocol_errors_total'])\n        row = {'kind':role,'repetition':repetition,'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n               'healthy':result['deliveries_per_second'],'p99_ms':result['latency_p99_upper_ms'],\n               'verified':result['verified_deliveries'],'sent':result['sent_messages'],\n               'server_lifecycle_cpu_seconds':case['final']['process']['cpu_seconds']-case['baseline']['process']['cpu_seconds'],\n               'sampled_peak_rss_mib':max(s['process']['VmRSS'] for s in [case['baseline'],*case['samples'],case['final']])/1024,\n               'slow_consumers':int(metrics['war_slow_consumers_total']),\n               'teardown_overflow_signals':case['teardown_overflow_signals']}\n        record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n        print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor role in record['variants']:\n    rows = [row for row in record['cases'] if row['kind']==role]\n    summary = {key:statistics.median(row[key] for row in rows) for key in ['healthy','p99_ms','server_lifecycle_cpu_seconds','sampled_peak_rss_mib','slow_consumers']}\n    summary['ranges'] = {key:[min(row[key] for row in rows),max(row[key] for row in rows)] for key in ['healthy','server_lifecycle_cpu_seconds']}\n    record['medians'][role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "6852081d2e9bb55f35e6e389d1f72a9a8060d1579f9baed49865797f869c45b4",
+  "cases": [
+    {
+      "kind": "before",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-1.json",
+      "trace_sha256": "890dc3cc8693cf156b170fff948a6059147b85aeed65b6aa7b6ad80ac46da2b5",
+      "passed": true,
+      "healthy": 189661.6863642366,
+      "p99_ms": 4.194304,
+      "verified": 759024,
+      "sent": 28112,
+      "server_lifecycle_cpu_seconds": 3.26,
+      "sampled_peak_rss_mib": 6.71875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-1.json",
+      "trace_sha256": "ad913963a2e34fe2d129a2f51a4e27cea0738b441770bd4c427e846cabbe97da",
+      "passed": true,
+      "healthy": 188527.64641139624,
+      "p99_ms": 4.194304,
+      "verified": 754272,
+      "sent": 27936,
+      "server_lifecycle_cpu_seconds": 3.26,
+      "sampled_peak_rss_mib": 6.73828125,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-2.json",
+      "trace_sha256": "cbfdd738bf663daa8d2c816d4f4fe2d143472cb8de3e71f0890ac00a992df1c5",
+      "passed": true,
+      "healthy": 189479.26649492927,
+      "p99_ms": 4.194304,
+      "verified": 758160,
+      "sent": 28080,
+      "server_lifecycle_cpu_seconds": 3.3,
+      "sampled_peak_rss_mib": 6.71484375,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-2.json",
+      "trace_sha256": "2390e4445846b6fdb0fe8eb65c898a846f608d43f8cd3b5615ae359fda0c1f1b",
+      "passed": true,
+      "healthy": 189415.64012380858,
+      "p99_ms": 4.194304,
+      "verified": 757728,
+      "sent": 28064,
+      "server_lifecycle_cpu_seconds": 3.31,
+      "sampled_peak_rss_mib": 6.6171875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-3.json",
+      "trace_sha256": "880d3d5f1a071a295c5b1b8c273ee19425593db196673f98d4958f8081768391",
+      "passed": true,
+      "healthy": 184429.0008163006,
+      "p99_ms": 4.194304,
+      "verified": 737856,
+      "sent": 27328,
+      "server_lifecycle_cpu_seconds": 3.4,
+      "sampled_peak_rss_mib": 6.43359375,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-3.json",
+      "trace_sha256": "21675e6ab95d4c138ca89db160fcf8345559d5c36a7203fd90270f7b577c40be",
+      "passed": true,
+      "healthy": 187513.22289717002,
+      "p99_ms": 4.194304,
+      "verified": 750384,
+      "sent": 27792,
+      "server_lifecycle_cpu_seconds": 3.19,
+      "sampled_peak_rss_mib": 6.73828125,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-4.json",
+      "trace_sha256": "8ef6194e1916718bb05e079366363251c222679dd9f46cfb4ca41853e9cc9f99",
+      "passed": true,
+      "healthy": 188294.93001917662,
+      "p99_ms": 4.194304,
+      "verified": 753408,
+      "sent": 27904,
+      "server_lifecycle_cpu_seconds": 3.31,
+      "sampled_peak_rss_mib": 6.72265625,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-4.json",
+      "trace_sha256": "c0dfc421be2b393b26a4be24265b08285cd63decf68637ceae2ffbbaed71fd13",
+      "passed": true,
+      "healthy": 189660.39110629607,
+      "p99_ms": 4.194304,
+      "verified": 759024,
+      "sent": 28112,
+      "server_lifecycle_cpu_seconds": 3.26,
+      "sampled_peak_rss_mib": 6.73046875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 5,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-5.json",
+      "trace_sha256": "611094bd20da3122b2a5ea4a9f261d92b8b949574d885b07effdd110775dc585",
+      "passed": true,
+      "healthy": 190048.60629833495,
+      "p99_ms": 4.194304,
+      "verified": 760320,
+      "sent": 28160,
+      "server_lifecycle_cpu_seconds": 3.27,
+      "sampled_peak_rss_mib": 6.7421875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 5,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-5.json",
+      "trace_sha256": "b236c221f620ba4de17826588102693526b67c95200e94fb1ca66366c9a34a13",
+      "passed": true,
+      "healthy": 183260.42510880597,
+      "p99_ms": 4.194304,
+      "verified": 733104,
+      "sent": 27152,
+      "server_lifecycle_cpu_seconds": 3.44,
+      "sampled_peak_rss_mib": 6.5390625,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 6,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-6.json",
+      "trace_sha256": "40493fc1894e8229a1ad7fcd1e878b4422574f84a720ca91b5b64077c9fa487f",
+      "passed": true,
+      "healthy": 190790.29585074593,
+      "p99_ms": 4.194304,
+      "verified": 763344,
+      "sent": 28272,
+      "server_lifecycle_cpu_seconds": 3.22,
+      "sampled_peak_rss_mib": 6.6875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 6,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-6.json",
+      "trace_sha256": "74df9b742b03570fd7599bd9f4081e688615e0b4ec27b721aed5620673d7873c",
+      "passed": true,
+      "healthy": 187746.98523729242,
+      "p99_ms": 4.194304,
+      "verified": 751248,
+      "sent": 27824,
+      "server_lifecycle_cpu_seconds": 3.24,
+      "sampled_peak_rss_mib": 6.61328125,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 7,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-7.json",
+      "trace_sha256": "924af6c58065ecbeacdb9ea68da535b3e07f781050fe77fc21db6d8cdebc143a",
+      "passed": true,
+      "healthy": 179125.84070385736,
+      "p99_ms": 4.194304,
+      "verified": 716688,
+      "sent": 26544,
+      "server_lifecycle_cpu_seconds": 3.37,
+      "sampled_peak_rss_mib": 6.55859375,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 7,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-7.json",
+      "trace_sha256": "7b6af20ec7bd261792acfb0f9c9a49bf80c9fb747ac9dbc9f8ad33aebd9f8988",
+      "passed": true,
+      "healthy": 189450.45217059684,
+      "p99_ms": 4.194304,
+      "verified": 758160,
+      "sent": 28080,
+      "server_lifecycle_cpu_seconds": 3.31,
+      "sampled_peak_rss_mib": 6.73046875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 8,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-8.json",
+      "trace_sha256": "470b1967b3ebb54ee0e47f222ad9ecb1b57aaa2ca71c69d204386f7757fcdd5c",
+      "passed": true,
+      "healthy": 184055.5153434997,
+      "p99_ms": 4.194304,
+      "verified": 736560,
+      "sent": 27280,
+      "server_lifecycle_cpu_seconds": 3.39,
+      "sampled_peak_rss_mib": 6.53515625,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 8,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-8.json",
+      "trace_sha256": "8e444f26c39fe8ccc4d4a200624da567abcbe75b5ebf40ac24025b5dbd1b7eb7",
+      "passed": true,
+      "healthy": 179911.0848157312,
+      "p99_ms": 4.194304,
+      "verified": 720576,
+      "sent": 26688,
+      "server_lifecycle_cpu_seconds": 3.39,
+      "sampled_peak_rss_mib": 6.546875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "before",
+      "repetition": 9,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-before-9.json",
+      "trace_sha256": "d67dce056da5798d41f9fb37e58dc214bdd45cc356fabe8aefe0b92837390db7",
+      "passed": true,
+      "healthy": 187737.13094845487,
+      "p99_ms": 4.194304,
+      "verified": 751248,
+      "sent": 27824,
+      "server_lifecycle_cpu_seconds": 3.3,
+      "sampled_peak_rss_mib": 6.6171875,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    },
+    {
+      "kind": "selected",
+      "repetition": 9,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-fanout-selected-9.json",
+      "trace_sha256": "8fc4f59594438dbab2ba8a2116b6e50aee355117eb0f747d0d0096058d83a102",
+      "passed": true,
+      "healthy": 184322.79821084248,
+      "p99_ms": 4.194304,
+      "verified": 737424,
+      "sent": 27312,
+      "server_lifecycle_cpu_seconds": 3.43,
+      "sampled_peak_rss_mib": 6.515625,
+      "slow_consumers": 4,
+      "teardown_overflow_signals": 0
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "before": {
+      "healthy": 187746.98523729242,
+      "p99_ms": 4.194304,
+      "server_lifecycle_cpu_seconds": 3.3,
+      "sampled_peak_rss_mib": 6.6171875,
+      "slow_consumers": 4,
+      "ranges": {
+        "healthy": [
+          179125.84070385736,
+          190048.60629833495
+        ],
+        "server_lifecycle_cpu_seconds": [
+          3.24,
+          3.4
+        ]
+      }
+    },
+    "selected": {
+      "healthy": 188294.93001917662,
+      "p99_ms": 4.194304,
+      "server_lifecycle_cpu_seconds": 3.31,
+      "sampled_peak_rss_mib": 6.71484375,
+      "slow_consumers": 4,
+      "ranges": {
+        "healthy": [
+          183260.42510880597,
+          190790.29585074593
+        ],
+        "server_lifecycle_cpu_seconds": [
+          3.19,
+          3.44
+        ]
+      }
+    }
+  }
+}

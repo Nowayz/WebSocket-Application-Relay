@@ -2853,3 +2853,193 @@ checks. The prototype source is archived under its candidate directory rather
 than retained in the server; its complete patch is also embedded in the record
 for replay from the stated base commit. These finite Linux loopback checks do
 not establish TLS or production capacity.
+
+## Inline control headers and shared encoded replies (2026-10-16)
+
+The control path previously encoded welcome IDs and replies into temporary
+`Bytes` buffers, then cloned the complete encoded packet through another
+`Frame`. A variable read copied its stored CBOR value into a presence array,
+then copied that array into the reply buffer. Departure notifications built an
+encoded packet and wrapped it again for each recipient.
+
+The retained output interface still consumes an owned, charged `Envelope`.
+Its queue, byte-admission checks, lock and partial-write handling are unchanged.
+The frame retains the same three fields and ten-byte inline prefix. Welcome
+uint64s fit there directly. Reply prefixes need at most five bytes; a uint32
+reply fits in ten, with larger integers using an encoded body. Booleans use
+static encoded bodies. Channel-list replies move their existing encoded vector
+into the frame; variable replies share the stored encoded value behind a
+seven-byte presence prefix. The registry guard is released before submitting
+the retained value to output. Departure notifications prepare one frame shared
+by all recipients. Public protocol helpers and wire bytes remain unchanged.
+
+Channel-list bodies reserve their exact CBOR size before encoding. The detached
+snapshot supplies bounded name lengths and full-width member counts; the array
+header and entries are counted with checked arithmetic outside the registry
+guard. The encoder writes into that single reservation. Integer and array-header
+widths are checked against the independent encoder at every width transition.
+
+### Server allocation diagnostic
+
+The [before](benchmarks/2026-10-16-control-frame-heap-before.json) and
+[selected](benchmarks/2026-10-16-control-frame-final-heap-selected.json) captures run
+the same independent Python native-WebSocket client. It checks every full CBOR
+reply, welcome ID, departure notification and normal Close/EOF, then checks
+exact server message, delivery, byte and resource counters. Each of eight
+probes performs 64 operations between quiescent gperftools heap dumps. Four
+server workers use CPUs 0–3 and the client/controller uses CPUs 4–7. Only the
+server receives the replacement allocator. These are allocation diagnostics,
+excluded from ordinary timing and RSS comparisons.
+
+The [before symbols](benchmarks/2026-10-16-control-frame-symbols-before.json)
+and [selected symbols](benchmarks/2026-10-16-control-frame-final-symbols-selected.json)
+account for every raw heap row, whose sums match their headers. Totals include
+one boundary metrics request and heap-dump overhead. They describe the whole
+probe, rather than implying zero process-wide allocation for small replies.
+
+| Requested allocations across 64 operations | Before objects | Selected objects | Before bytes | Selected bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Reconnect, welcome and normal close | 2,546 | 2,354 | 1,028,112 | 1,024,784 |
+| Authenticate | 178 | 50 | 64,784 | 62,352 |
+| Listen flags | 306 | 50 | 66,896 | 62,352 |
+| Complete two-channel listing | 434 | 242 | 77,904 | 73,488 |
+| Missing variable | 242 | 50 | 65,168 | 62,352 |
+| Replace 32 KiB variable | 498 | 370 | 4,787,472 | 4,785,040 |
+| Read stored 32 KiB variable | 244 | 53 | 4,263,864 | 66,512 |
+| Departure with two readers, including join/close | 2,358 | 2,164 | 898,208 | 890,744 |
+
+The 32 KiB reads request 98.44% fewer bytes in this complete probe. The before
+stacks show 64 allocations of 2,098,304 bytes in `protocol::reply` and another
+64 allocating 2,097,536 bytes in its caller. Both copies disappear. The selected
+probe includes one first-share owner allocation and a newly retained worker
+receive slab; its live delta is 4,160 bytes versus 4,136 before. Final variable,
+receive-reservation and queued-output gauges still retire to zero. Stored values
+remain exact-size copies at set time, so replies cannot pin a larger input slab.
+
+Authentication, listen and missing replies remove their per-reply payload
+allocations; the remaining 50 allocations belong to the diagnostic boundary
+and server housekeeping. Reconnects remove three allocations per session in
+this probe. Departure object counts fall, while requested bytes vary with
+transport/worker storage activity. The first revision requested 936,240 bytes
+for that probe, above the original 898,208, while the final capture requests
+890,744. This is not a fixed metadata-only microbenchmark. Allocation savings
+are not substituted for throughput or latency measurements, and no general RSS
+reduction is claimed.
+
+### Initial revision and exact reservation
+
+The first representation change used the encoder's existing geometric vector
+growth. Its [allocation diagnostic](benchmarks/2026-10-16-control-frame-symbols-selected.json)
+records 370 allocation events / 75,664 bytes for 64 two-channel queries. Exact
+reservation removes another 128 events and 2,176 requested bytes in that probe.
+It does not change the variable-read result.
+
+The [initial 30-case matrix](benchmarks/2026-10-16-control-frame-comparison.json)
+and [fixed six-pair CBOR extension](benchmarks/2026-10-16-control-frame-cbor-confirmation.json)
+are retained separately. Across nine initial CBOR pairs, healthy-throughput
+medians are 352,637 before and 334,076 selected (−5.26%), server CPU 1.52853
+versus 1.46104 seconds/wall second, and inspection p99 buckets 4.194304 versus
+2.097152 ms. Healthy run ranges overlap widely and paired changes range from
+−8.21% to +9.66%. These results motivated completing the buffer representation
+with exact reservation; they do not establish a specific causal mechanism.
+The initial [nine-pair fanout study](benchmarks/2026-10-16-control-frame-fanout.json)
+is also preserved. The following comparison uses fresh runs of the final build.
+
+### Final complete workloads
+
+The [final matrix](benchmarks/2026-10-16-control-frame-final-comparison.json)
+uses 42 fresh processes: three alternating pairs for private, churn, full HTTP
+and page-100 HTTP, plus nine alternating pairs for CBOR inspection from the
+start. Each eight-second case holds 8,192 idle rooms and one private pair with
+1 KiB values and window 16. Mixed cases add eight reconnect workers; inspection
+cases add two inspectors targeting 200 complete requests/s. Server workers use
+CPUs 0–3 and the same frozen client uses CPUs 4–7. Workload order rotates and
+build order alternates. Builds, allocation profiling and other load tests do
+not overlap timing. All body, sender, FIFO, listing/order/cursor, Close/EOF,
+exact byte/counter and cleanup checks pass.
+
+| Final medians | Original | Selected |
+| --- | ---: | ---: |
+| Private deliveries/s | 581,336 | 583,299 |
+| Churn: healthy deliveries/s | 355,895 | 356,476 |
+| Churn: complete reconnect cycles/s | 72,093 | 71,677 |
+| Full HTTP: healthy deliveries/s | 323,942 | 328,340 |
+| Full HTTP: complete reconnect cycles/s | 60,721 | 61,384 |
+| Page-100: healthy deliveries/s | 338,058 | 338,369 |
+| Page-100: complete reconnect cycles/s | 67,915 | 68,283 |
+| CBOR: healthy deliveries/s, nine runs | 344,511 | 350,173 |
+| CBOR: complete reconnect cycles/s, nine runs | 65,893 | 65,732 |
+| CBOR: server CPU seconds/wall second | 1.49606 | 1.48355 |
+
+The final CBOR throughput median improves 1.64%, with 0.24% fewer reconnects and
+0.84% less CPU. Run ranges overlap widely: 318,058–348,647 before and
+320,274–359,934 selected. The earlier CBOR decline does not repeat in the final
+matrix, but changing allocation strategy and using fresh controls together does
+not establish the cause of that earlier result. Inspection throughput remains
+about 199.97/s with the same 4.194304 ms p99 bucket.
+
+Private throughput changes +0.34% with +0.38% CPU; churn healthy throughput
+changes +0.16%, reconnect throughput −0.58% and CPU −0.25%. Full HTTP healthy
+throughput changes +1.36%, reconnect throughput +1.09% and CPU −0.67%.
+Page-100 healthy throughput changes +0.09%, reconnect throughput +0.54% and CPU
++0.60%. All healthy-throughput run ranges overlap. Event-gate RSS is essentially
+unchanged. These small mixed results support no general throughput or RSS gain
+claim; the clear retained benefit is lower allocation and copying.
+
+Median latency buckets stay unchanged in all five workloads. Healthy private
+p99 is 0.032768 ms and mixed healthy p99 is 0.131072 ms. Reconnect p99 is
+0.524288 ms except CBOR's 1.048576 ms. Full HTTP inspection p99 is 8.388608 ms,
+page-100 is 2.097152 ms and CBOR is 4.194304 ms. These are histogram bucket
+upper bounds rather than exact percentiles.
+
+The [final fanout study](benchmarks/2026-10-16-control-frame-final-fanout.json)
+adds nine alternating pairs using 32 clients: one publisher, 27 healthy readers
+and four unread clients. Each four-second interval uses window 16, a one-ms
+reader delay and cyclic 256 B / 1 KiB / 64 KiB / 256 KiB values. Complete encoded
+payloads and order are verified, including all expected departure IDs.
+
+| Fanout median of nine | Original | Selected |
+| --- | ---: | ---: |
+| Healthy deliveries/s | 186,061 | 188,080 |
+| p99 upper bucket, ms | 4.194304 | 4.194304 |
+| Server lifecycle CPU seconds | 3.36 | 3.29 |
+
+The ratio of throughput medians improves 1.09%, but the median paired change is
+only +0.06%, with paired changes ranging from −3.28% to +2.68%. Absolute ranges
+overlap: 183,418–189,563 before and 183,245–189,744 selected. Lifecycle CPU
+includes setup and teardown and has 10 ms accounting ticks. This is treated as
+flat fanout performance, alongside the allocation changes, rather than a
+repeatable fanout speed gain. Four unread clients reach the configured output
+limit in each case while healthy readers complete their verified traffic.
+
+### Verification and local runtime
+
+Runtime commit `8f2bc2045e62767abf65691b31496657866b054c` passes the
+[source checks](benchmarks/2026-10-16-control-frame-checks.json): 109 Rust tests,
+strict Clippy, formatting and the locked release build. New checks cover all
+integer/header width transitions, literal wire vectors, missing versus stored
+null, opaque/nonminimal values, and a variable reply retaining the original
+stored body after replacement and channel retirement. Its output reservation
+remains charged until the retained frame is dropped. The original owned send
+interface and socket admission/partial-write lifetime checks remain in place.
+
+The [reference comparison](benchmarks/2026-10-16-control-frame-reference.json)
+passes 48 shared C++ cases and eight documented differences. Seven JavaScript
+checks pass, along with [four release API checks](benchmarks/2026-10-16-control-frame-acceptance.json)
+including 13 normal closes. The [final stress checks](benchmarks/2026-10-16-control-frame-final-stability.json)
+verify 9,143,936 traffic deliveries, 542,207 complete reconnect cycles and 212,968
+healthy deliveries beside an unread client. All processes exit normally, and
+final connection, session, read-reservation, variable and queued-output gauges
+return to zero. The unread peer follows the existing bounded-output policy.
+
+The [headed Chrome check](benchmarks/2026-10-16-control-frame-browser.json)
+passes seven cases against the frozen selected release, including typed values,
+128 KiB delivery and three normal closes. The console is empty. Four native
+listener sockets and live process executable hashes are verified. The native
+relay, legacy bridge and browser check remain on the documented local ports.
+
+The [build manifest](benchmarks/2026-10-16-control-frame-build.json) binds 88
+runtime source files, frozen binaries and the common client, helper sources,
+all initial/final reports and raw allocation captures. The first-stage source
+copies and complete patch are retained so its results remain reproducible.
+These are finite Linux loopback checks without TLS or production-capacity claims.

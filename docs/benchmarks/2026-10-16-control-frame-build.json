@@ -1,0 +1,618 @@
+{
+  "recorded_utc": "2026-10-16T20:13:44.895216+00:00",
+  "runtime_source_revision": "8f2bc2045e62767abf65691b31496657866b054c",
+  "scope": "Inline welcome IDs and control prefixes; move encoded list bodies and share stored variable values. Original owned output interface and frame layout retained. Final42 ordinary cases, including nine precommitted CBOR pairs, plus18 fanout cases. Initial42 ordinary cases and18 fanout cases are preserved separately. Exact CBOR reservation follows the initial control-body representation to avoid geometric buffer growth. Server-only allocation diagnostics excluded from all ordinary timing. Runtime and client source bytes match stated commits; before retained source record is nested under retained in the rejected experiment manifest and has identical code/data to the frozen before release.",
+  "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.91.1\nLLVM version: 21.1.2\n",
+  "build_command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--release",
+    "--bins"
+  ],
+  "binaries": {
+    "native": {
+      "path": "artifacts/baselines/control-frame-final-candidate/war-relay",
+      "sha256": "a2add57eb6bb5a1d1e49b3b31e87f7f2e0430abefd8c798f026bcf6c9accee19"
+    },
+    "bridge": {
+      "path": "artifacts/baselines/control-frame-final-candidate/war-legacy-bridge",
+      "sha256": "157c7a668b259910aa0e15280d97d180dec95d260df7412746916769b7e4b087"
+    },
+    "inspection_client": {
+      "path": "artifacts/baselines/paging-candidate/inspection",
+      "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941"
+    },
+    "stress_client": {
+      "path": "artifacts/baselines/e2d7cf9/stress",
+      "sha256": "58019dadf5c21ff0e8378a7ffcb05c176a57c8af2429c316a5b0edf9341353a8"
+    },
+    "before_control": {
+      "path": "artifacts/baselines/routing-owner-candidate/war-relay",
+      "sha256": "d58f9c43d408b95da68aab723190b53d94fd5dc503026601e5bf931cdffc40e8"
+    }
+  },
+  "client_source": {
+    "path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04"
+  },
+  "client_runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426",
+  "before_runtime_manifest": {
+    "path": "docs/benchmarks/2026-10-16-borrowed-send-experiment.json",
+    "sha256": "5f4fda8d4eaf4b615a5263dbae6e2a36efd62ff70232a83d52b0a031bb6ca4a3"
+  },
+  "runtime_sources": {
+    "Cargo.lock": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620",
+    "Cargo.toml": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4",
+    "src/admin.rs": "12a208e2f36e4e3620098bc37cc42c38f9e028959c007ef5c893e546e5fe9e39",
+    "src/bin/war-legacy-bridge.rs": "fec0f0e226d054bc283d9a2a287381490590ba68ce60087e0f6b7a29754b2151",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "0930bbc73059186ce59437a9ecea1eaba5e9383f0f2681f9967eb5d2c171953b",
+    "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "f00f5850d538de146174769ec8116325b39c62f11e53ff4408fd525f31e258d0",
+    "src/lib.rs": "a39f7cf2307201d7a89af67baf5de5a892f185b7c88d67d55abb5491021b344b",
+    "src/main.rs": "0b70966df79a602285a0bfc4dfbab64468322ae03a9ac12794d30f94180346f3",
+    "src/metrics.rs": "b888f7c7d1b3fe466a97b6aa9b03731f06281403b03c814f165ac38fbba25c24",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54",
+    "src/relay.rs": "6cf1616329d810ea504df3f9301c02190c053f448023903d27d48724e2d9ac89",
+    "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4",
+    "src/relay/listener_tests.rs": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765",
+    "src/server.rs": "1b04f6f8775fff4e658d20a15a78215b3db11e6bf492088f0d9cffabb243e12e",
+    "src/server/close_tests.rs": "b92fb5b0568db5d1702541c7d95b187ef3d0fbecef8a2106702812ff29f8b8eb",
+    "src/server/ownership_tests.rs": "85dd09241fd14032b314475791ee17c8befd770c7c8c1694353221bc3fca0b0f",
+    "src/server/socket.rs": "5077420b0e65066254ddaa680ebb6900b03b98873860b033b388f3a8000110ce",
+    "src/server/timers.rs": "b47267728003a246d44ca0e639b2b9d82474ab9a0e4a0cef6b3b51d075da0824",
+    "src/transport.rs": "2d873f5c47918e6b63573c51e1284bb3aa59934ca6d9496edf515be3fe44754c",
+    "vendor/provenance.json": "48cd086e057e3f0ae9bfbb557a8ccd0ae5a417fc8ded78afe6113ba21c38cc07",
+    "vendor/read-buffer-reclaim.patch": "84e86124bfef4207204412f93c25e8527ea640c034baba8bc2b6890393a2afab",
+    "vendor/tokio-tungstenite/.cargo_vcs_info.json": "7904b96b5c1d841e95481db9b63de2859427e72998c46e04b7a10b32ec2de516",
+    "vendor/tokio-tungstenite/CHANGELOG.md": "e374356eacf72059d3a65ee08a6a41a171c0424d2a67735bae7ee59da50fcb43",
+    "vendor/tokio-tungstenite/Cargo.lock": "d2c691100eab31ebcd1e24bab5e6ad1368340ee8a4f9f16ede4702f492c7be20",
+    "vendor/tokio-tungstenite/Cargo.toml": "d35883d4f3476aa6792059750d5fb0d66051b84e5ccbed911914ea0b2b2992f1",
+    "vendor/tokio-tungstenite/Cargo.toml.orig": "38f845507abfdb2e904396563ee08779d1b3dc4ff609e4f2344f0ee1d2597cbd",
+    "vendor/tokio-tungstenite/LICENSE": "fdd55e2b2da854b0fbdc1e607df7c2ba1e1ebf91ecb77c515511ebeef972bc8f",
+    "vendor/tokio-tungstenite/README.md": "ff6376adb37c3f09445aaa97cfc356e35ba0e4fcfee3452fdd1fa791cdbd97da",
+    "vendor/tokio-tungstenite/examples/README.md": "067ceaf7b70949f087fd582d71bb114e88ef0313560dbd33b345158ffa33eff3",
+    "vendor/tokio-tungstenite/examples/autobahn-client.rs": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732",
+    "vendor/tokio-tungstenite/examples/autobahn-server.rs": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f",
+    "vendor/tokio-tungstenite/examples/client.rs": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7",
+    "vendor/tokio-tungstenite/examples/echo-server.rs": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52",
+    "vendor/tokio-tungstenite/examples/interval-server.rs": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e",
+    "vendor/tokio-tungstenite/examples/server-custom-accept.rs": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535",
+    "vendor/tokio-tungstenite/examples/server-headers.rs": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483",
+    "vendor/tokio-tungstenite/examples/server.rs": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e",
+    "vendor/tokio-tungstenite/src/compat.rs": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9",
+    "vendor/tokio-tungstenite/src/connect.rs": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30",
+    "vendor/tokio-tungstenite/src/handshake.rs": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d",
+    "vendor/tokio-tungstenite/src/lib.rs": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5",
+    "vendor/tokio-tungstenite/src/stream.rs": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172",
+    "vendor/tokio-tungstenite/src/tls.rs": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211",
+    "vendor/tungstenite/.cargo_vcs_info.json": "05db1b097178b9822b792a31c0909ad819609ac829e66892ab29d0ec046ae35c",
+    "vendor/tungstenite/CHANGELOG.md": "7e416d40b723071c0b44f9647de19e18a1180fdddabbb6bea8aca11e3c60427e",
+    "vendor/tungstenite/Cargo.lock": "62974d50013c278220b6cc72e1064015b3c2d0339eaca013ea882c212c9b4356",
+    "vendor/tungstenite/Cargo.toml": "84e09d25e81a69d487b38e57839339f69794c0b642c76c9545f5de53d94eb887",
+    "vendor/tungstenite/Cargo.toml.orig": "bc5bdace1ae1157ffa559d8699d78d39023e5f861b1404552e42792e05f24d8b",
+    "vendor/tungstenite/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "vendor/tungstenite/LICENSE-MIT": "7fea0ee51a4ca5d5cea7464135fd55e8b09caf3a61da3d451ac8a22af95c033f",
+    "vendor/tungstenite/README.md": "39e59dbbfd67127ad101be692fb5f04babdd80eeffeb2ea97b6327fec5ace9b4",
+    "vendor/tungstenite/benches/buffer.rs": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e",
+    "vendor/tungstenite/benches/e2e.rs": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce",
+    "vendor/tungstenite/benches/read.rs": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42",
+    "vendor/tungstenite/benches/write.rs": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8",
+    "vendor/tungstenite/examples/autobahn-client.rs": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4",
+    "vendor/tungstenite/examples/autobahn-server.rs": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776",
+    "vendor/tungstenite/examples/callback-error.rs": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0",
+    "vendor/tungstenite/examples/client.rs": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040",
+    "vendor/tungstenite/examples/server.rs": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157",
+    "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c",
+    "vendor/tungstenite/src/buffer.rs": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30",
+    "vendor/tungstenite/src/client.rs": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637",
+    "vendor/tungstenite/src/error.rs": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b",
+    "vendor/tungstenite/src/handshake/client.rs": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5",
+    "vendor/tungstenite/src/handshake/headers.rs": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75",
+    "vendor/tungstenite/src/handshake/machine.rs": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420",
+    "vendor/tungstenite/src/handshake/mod.rs": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0",
+    "vendor/tungstenite/src/handshake/server.rs": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f",
+    "vendor/tungstenite/src/lib.rs": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7",
+    "vendor/tungstenite/src/protocol/frame/coding.rs": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6",
+    "vendor/tungstenite/src/protocol/frame/frame.rs": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a",
+    "vendor/tungstenite/src/protocol/frame/mask.rs": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6",
+    "vendor/tungstenite/src/protocol/frame/mod.rs": "a678afc526347b3d5b685b273619dcbbb050f15b1c5f267f97cd6df241ed6a6b",
+    "vendor/tungstenite/src/protocol/frame/utf8.rs": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886",
+    "vendor/tungstenite/src/protocol/message.rs": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84",
+    "vendor/tungstenite/src/protocol/mod.rs": "a1214f11d0927de8a622f0c074a27f6739697a8e157883f1f6ec5f2843741453",
+    "vendor/tungstenite/src/protocol/read_budget.rs": "4f112c7459d575424671d2f95a36a681ef903ed33bf643aba6abc53a27530883",
+    "vendor/tungstenite/src/server.rs": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49",
+    "vendor/tungstenite/src/stream.rs": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d",
+    "vendor/tungstenite/src/tls.rs": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9",
+    "vendor/tungstenite/src/utf8.rs": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35",
+    "vendor/tungstenite/src/util.rs": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a",
+    "src/relay/listing.rs": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4"
+  },
+  "source_changes_from_before": [
+    "src/frame.rs",
+    "src/protocol.rs",
+    "src/relay.rs",
+    "src/relay/channel_tests.rs"
+  ],
+  "helper_sources": {
+    "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+    "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36",
+    "clients/js/package.json": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07",
+    "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+    "clients/js/relay.test.mjs": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1",
+    "examples/fragment_waves.rs": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054",
+    "examples/input_budget.rs": "8feaa3b292668f84ba155447e0db9e9bd997c2aa9f2482ee98717354b48c70b1",
+    "examples/inspection.rs": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "examples/load.rs": "b2d2cb93456b4a91e5ff889e739f9b8a647a0c3564b4ef10ecbcd78b8c204c6c",
+    "examples/registry_peak.rs": "1c568805f9b3459b0109caf082bb6a93234bda7dbc4fdb98678da5c28ea11c39",
+    "examples/retention.rs": "143546d2e7e9a419f5c7c53d347864de3bd066b55f93cfa58987e61c26c21c14",
+    "examples/stress.rs": "64438033d1c6f86bdd1a3ea9962b7ad1afc1c8ca060384332916eb8ae4a87306",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4",
+    "scripts/check-js.sh": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b",
+    "scripts/check-vendor.py": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f",
+    "scripts/compare-cpp.py": "33028dea75e856343da3b1266e729e12155e6684de24aed550ce809d6aaa5221",
+    "scripts/compare.py": "4c858bc0be5dbea2b26b1e3418de7000d405deb9580c99e6c70da62633c03943",
+    "scripts/fragment-fairness.py": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+    "scripts/fragment-waves.py": "ae7a92c15649a7f9347503bbd987c4711dcf3ac228da37cafd16441123b3e7ff",
+    "scripts/input-budget.py": "9c259d5c6362a54d522294f5b875c3b8c4f04410e7eca5124b56aead6c53e579",
+    "scripts/input-corpus.py": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292",
+    "scripts/inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "scripts/reference.py": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+    "scripts/registry-peak.py": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc",
+    "scripts/retention.py": "55e78d9dd8c092bb06170baee3b7920e932b4acbc18ee1d0da237e4acedc6701",
+    "scripts/stability.py": "608baae680fb42a86663f499c320f7c049ce2deb8b7e622dca52ea5589624bf9",
+    "tests/read_budget.rs": "af91ad4ee136b6412c7fb63067bdf56beab1dbd8d4769c99eba1ac4ea2552823",
+    "tests/read_buffer_reclaim.rs": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156",
+    "tests/read_fairness.rs": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4",
+    "tests/relay_integration.rs": "fbe383c95869c5e5cec7ccb1ab769308a4acacc3f4a866f2d50b16334360fdc5",
+    "tests/relay_integration/channel_listing.rs": "3bce596425ea23391d3a7616324e9aabe7b0b5041693fa933b12b02dab485717",
+    "tests/relay_integration/listeners.rs": "0b6ecfd78ccd71766dca8d95eeeb840ed503934903b556cce7dedca645c0cecb",
+    "tests/relay_integration/origin_policy.rs": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+  },
+  "local_helpers": {
+    "artifacts/control-frame-study.py": "d445cf964218438060979bf2032721d3581b2bf11dc81e42e6461b20f98c5627",
+    "artifacts/control-frame-cbor-confirmation.py": "ba9cf4a267d7dd01a53572d329bb3f5e52e921f39f01fa6f33839c9fbb8901ff",
+    "artifacts/control-frame-fanout.py": "6852081d2e9bb55f35e6e389d1f72a9a8060d1579f9baed49865797f869c45b4",
+    "artifacts/control-frame-final-study.py": "114e44400ca340bbc76e9e32dc603e63016d42bffffdf8ba57214352e8f2f565",
+    "artifacts/control-frame-final-fanout.py": "14e9c19628c1eff3cf69e326f01bbd5b3aac32114b1751997f97cb7c1ddd829b",
+    "artifacts/control-frame-heap.py": "26b510712efc91dda5e59536c5dcbce7cd2615b47dcff1c439aacdf98947f731",
+    "artifacts/analyze-control-frame-heap.py": "13c25c46e42a488de398f6bceda7a34c448d9ea4dc8125e0e4b8b48bc6ba89b3",
+    "artifacts/control-frame-accept.py": "44124ce3204452e6ce37e61f3c87479129c8515abb3108887814961b29304fcd",
+    "artifacts/paging-accept.mjs": "fa831d7c10a072ba811e727d9cb076f77a87cd4a09027ff9b52131d8ccba51b5",
+    "artifacts/record-control-frame-browser.py": "991510a97070b732fec6cb4c69433ad149bb160e367ce5b8d21cddfce3f45b78",
+    "artifacts/refresh-control-frame-runtime.py": "d093d4fed5eb5a18dd06e3860b15f0045b6b66a63c4d30241ac6e99e08c2f7e3",
+    "artifacts/record-control-frame-final-checkpoint.py": "e5da9f5fb63748804b19eb3266c062078eba753815809653f2b495289d001b3d"
+  },
+  "documentation": {
+    "README.md": "75b5d35ea2f935fc64f1add5b5e079e3eda50a4b93c9a850823de882449c8a2f",
+    "docs/performance.md": "37411a75256061e84ddf04f010ece13e2276a4520cf0b6a03c6b4d5f44bca657"
+  },
+  "evidence_files": {
+    "docs/benchmarks/2026-10-16-control-frame-acceptance.json": "971dc6772034b66f39777e7a17204002a0f523096f7758702bf3b1c4e07940bc",
+    "docs/benchmarks/2026-10-16-control-frame-allocations.json": "e52a5c969c5b62b135b265359d7159e2095d21cf777b52257931de1e2640ed79",
+    "docs/benchmarks/2026-10-16-control-frame-browser.json": "d37d338ed01c971e923c99b33912de87622e4dbbd947e0b9ecb446973500a197",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-4.json": "b97053881da55457d1943e0cd74193e2b31c881b1583cff0fad2bbfdcb411ae7",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-5.json": "47a37c87541c958fe699eff8d5c36ed0c96c2ad1f88254d1ca6df3a0a9724e1e",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-6.json": "df3500370a1c22882bcabcf3d43ee29cbff91c9b9ca97596ad3c1f576efa4892",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-7.json": "7b9e9b15e548857f8d47f7edb90f4d03cdd74554edb03af1856cff3caa467da6",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-8.json": "c7bad5fb00bfb97d6772e196ed4de0a4996640b259a7c30beacf1839cb730298",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-9.json": "c2ddcdffeee385f832d94b6c558cdad595315fbbf0b18e61394b29162d1777cc",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-4.json": "74179cb3f3af7e0be35c67cd098279c9b8020264e71f985d2fb31704c8f1e5ac",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-5.json": "db51c227d3c3882efa5550d882afa853ab4ae7538412e1dbaea5b3aef2e86e2f",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-6.json": "0662348be5bde9123184cfca1b3f757173756d0df5259ed13ffc488ec683a99d",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-7.json": "86c1de0ac01d078d83c369f8a96e2a23cb153b850efee1fe81941d6b8ce8d8f3",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-8.json": "c06ce4789b3f21d6cb733bb028e154e4d10cb7d91ee32c33cc83dbe0420bfa59",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-9.json": "9e6ff57c507cd65dee855134421e2b3a39218a691c40fbf21b52722b408ae000",
+    "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation.json": "99d57bb5ead196dcd707f99f05be54e3fe9ac0c98ec2d6a3e2a8439150091afc",
+    "docs/benchmarks/2026-10-16-control-frame-checks.json": "8b922d59b96c35bdb57de6da01518f933267d6859c894a60383c7621b8264e81",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-1.json": "3a1e473f30b49ff255d69046112f8fc07c4f1c88a066ab004bdd80bff820a049",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-2.json": "75a964c551af2db6a08678b0ad37f101f3dccbf22d626f7e7544cec7e39e2f8b",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-3.json": "e118c6e0512d99ae5ed38f818806f85060c35654303e45e0cafd4d2f018b9750",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-1.json": "5614dddba1c0c09beba9deb5dbb801dae26766168242e2d0ba5c02a98b6c642d",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-2.json": "cd893321fd5f2ced2272b6829d2e3c009d8ad425a25a2ab92b8864e31ddb65ee",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-3.json": "9c5afdd001b491441818b8fa9f8fe11f383e553cec25eb047ccec5f6c81b839e",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-before-1.json": "0b592d117a5cfa23bd1e25a6f4988eec69ed436c48502174fbb83888abc9c0fb",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-before-2.json": "dec9c7dbd7d505525f76a80df317977805be09c82e8d4e1165a86302cdbe4248",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-before-3.json": "f6074b83a0cfa375038fe21299bb148a36ddccc045ca93c936debc2c0821745a",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-selected-1.json": "843acf0b806d05f8c7be737e17ddb5efd3175fea8120b22bcb6497763aedb8c0",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-selected-2.json": "fdcc1e3b61cf338077a663a441f6e03e68068a8198feff73a0ab5e1406fa956c",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-churn-selected-3.json": "83d81990ca9150106ba27c7ecce79bc7469bad814649c5ee779926edda530a8d",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-before-1.json": "4eb90ba9d580528056479626c35ed6eb82c3fafb5e13989b74ff0c99e16a28e7",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-before-2.json": "e415abe5e12fdd099acd01881346812b2c21a1ed20d8a73bcaecea49c7add59c",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-before-3.json": "6cbb45d8ffa14925d39786781c7f8df0b145fd9321dbcf282e5dbf50e8134fe5",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-selected-1.json": "9e955c0be446785107d4b5c5cc9e65f74c45b54626557f006dd7f816847ee7d3",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-selected-2.json": "2bc0d86cd8164018d09b3d0e0aec65575122ecfe344b5e1416b7c164a59e5582",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-full-selected-3.json": "bf0291ccd7c286c61d94cffcc9165097f311c172085e1b1eff80acc9e7cd4354",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-before-1.json": "42cb6c9192c1dd378437ecec1f740596a8cd4ff077e1c2919db1b7169e521dd5",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-before-2.json": "752b586f5f0cfa1c4098e509589112d4b7a94dfb3a365e0e51b4b95700d2d492",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-before-3.json": "faf3fa8cad4818488905fcc55bb0b54136f7e4b7871cc8c7ff3cd898b9f37027",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-selected-1.json": "d70cd0bd085b309a2a696c48cfb6da70bf7137e3c87a78a585239dc6496f6abc",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-selected-2.json": "e4c0a4e3c55f891d143cb2c01c4648e18ecd55a36eb68bab6a377805bfe532d3",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-page100-selected-3.json": "7c90ec7a0365273ce69780f14ec523365684d84574a4f1135bc2e96ce2f505d5",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-before-1.json": "6a4c1b6918742f820835cbf562807f259438734e1edbce3a2af9413027ced19c",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-before-2.json": "92a9cd983b63826b075f95e7ab70625b4b5fc5d7b77d43d015a4f7b4550bae0e",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-before-3.json": "6cec30652920121de7b2bd9418b97fa72a460982ff0e934f6ef74f48dcb7b79f",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-selected-1.json": "ee25cab04398e2aa967bbcbace2fcb3e2aee8e5f4d88872a96d42cc2c2aa9013",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-selected-2.json": "c599d8b48353852fa41b2cfc47e64caf43ec2f18f4fe93e25e9a30e0176b61de",
+    "docs/benchmarks/2026-10-16-control-frame-comparison-private-selected-3.json": "136743c003f5b232f6b348bb7ba833b4bc5f42161c6911886229351dad3fd667",
+    "docs/benchmarks/2026-10-16-control-frame-comparison.json": "1e5f7dc56fe3e454da630e89485620e42ef4ef61dd69c823b92f251276d1d99b",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-1.json": "890dc3cc8693cf156b170fff948a6059147b85aeed65b6aa7b6ad80ac46da2b5",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-2.json": "2390e4445846b6fdb0fe8eb65c898a846f608d43f8cd3b5615ae359fda0c1f1b",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-3.json": "880d3d5f1a071a295c5b1b8c273ee19425593db196673f98d4958f8081768391",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-4.json": "c0dfc421be2b393b26a4be24265b08285cd63decf68637ceae2ffbbaed71fd13",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-5.json": "611094bd20da3122b2a5ea4a9f261d92b8b949574d885b07effdd110775dc585",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-6.json": "74df9b742b03570fd7599bd9f4081e688615e0b4ec27b721aed5620673d7873c",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-7.json": "924af6c58065ecbeacdb9ea68da535b3e07f781050fe77fc21db6d8cdebc143a",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-8.json": "8e444f26c39fe8ccc4d4a200624da567abcbe75b5ebf40ac24025b5dbd1b7eb7",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-before-9.json": "d67dce056da5798d41f9fb37e58dc214bdd45cc356fabe8aefe0b92837390db7",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-1.json": "ad913963a2e34fe2d129a2f51a4e27cea0738b441770bd4c427e846cabbe97da",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-2.json": "cbfdd738bf663daa8d2c816d4f4fe2d143472cb8de3e71f0890ac00a992df1c5",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-3.json": "21675e6ab95d4c138ca89db160fcf8345559d5c36a7203fd90270f7b577c40be",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-4.json": "8ef6194e1916718bb05e079366363251c222679dd9f46cfb4ca41853e9cc9f99",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-5.json": "b236c221f620ba4de17826588102693526b67c95200e94fb1ca66366c9a34a13",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-6.json": "40493fc1894e8229a1ad7fcd1e878b4422574f84a720ca91b5b64077c9fa487f",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-7.json": "7b6af20ec7bd261792acfb0f9c9a49bf80c9fb747ac9dbc9f8ad33aebd9f8988",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-8.json": "470b1967b3ebb54ee0e47f222ad9ecb1b57aaa2ca71c69d204386f7757fcdd5c",
+    "docs/benchmarks/2026-10-16-control-frame-fanout-selected-9.json": "8fc4f59594438dbab2ba8a2116b6e50aee355117eb0f747d0d0096058d83a102",
+    "docs/benchmarks/2026-10-16-control-frame-fanout.json": "eb3bb0db9cc9f085e339aa2a88243cfd22a177745399078a778da40ace48650a",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-1.json": "4ab4e1d857ce4094f2b27276720e21f927be942f7adf0924509ae97c6f7817c0",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-2.json": "c5eeb126692761e71be19a587b72d0789382e03fbc4265f00aef0f339d8f1572",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-3.json": "7565024faea6ec6d07483a488c2f97639366f11c0373c8b7ef277574731cf15d",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-4.json": "c35ea604a03d892c5e7949a0512c8d06a3f6a0dcd9ad66e74bbf17bd7e9897b2",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-5.json": "d2fc33ec6c411989b74aa3d940c1e43554a8b0a19a178d77f44186acba4a95a6",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-6.json": "7b9b64cc46e0026a8287604b0ad3a50b813c9538be8e9b4038abdf9a6f5cca4d",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-7.json": "92712be5821e39f145179439cf8c1e71d56b69d9f89c635cac2abd6ffb2e2837",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-8.json": "445b342d8e8d3c59851e809ae4bdcb2aa7a78bf4f4cf4e64725137d372502258",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-before-9.json": "3bbf9c5a420c31edf4ca47c3daae0edb005122d0a2144f554d9de1d3991428d0",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-1.json": "a54e7cd4f499db50ee4dc83da8aac515a46b80754eeb78de5a8fdf65f47ca902",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-2.json": "5265e765a3ae80dddae4f83ea2a63b2a9263b608fdfb3f267eeb865b8887f782",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-3.json": "95827c51836ec068a53dd76262ea355ff567c803b4678e43bd45fb7751d59e74",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-4.json": "64fc0675a50d003c2ac9a40fb461f46e6bed93fd636aac9b94240d7fcc22912b",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-5.json": "2c19a5f18c633d4c4707d79107bf1de299e344290cc2fdbebde64c9520d2997c",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-6.json": "92b96e9def32ef40595625e2e3dbb6292c911a48a10c4a5c072486910c761290",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-7.json": "56fbd4b9566c1841b6c290563a72e6d006f0243b822f92719097646eea99c5c0",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-8.json": "5dbb45d776e0dfb2a5ca9a6c80b386efd3207b4c62cfa6ec66d37d91c5697178",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-cbor-selected-9.json": "b3cc6128d1fcbc6b64553c625354d113600ebf482f34858c71a1af4e05826609",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-before-1.json": "9ccb1e1e3285536b6470b4ace425dc7c20ae09a9d100fc02d7abdb7bdaa2af20",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-before-2.json": "f1c98fda57d79cc571d51593c0d200090d92d7dece76ed4b7ebe64f1b293aeeb",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-before-3.json": "7001c1bf47e17ecd1458adc4a30fd1a6949500efbaf95258cd63ff3614353fc5",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-selected-1.json": "f66e14b4bb8409158fbb82c008445708cfcce81053e520cb2edc825ed48b25b7",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-selected-2.json": "308c7f31771853e6691a6e272ad8de277429e048133bd8347e3ec3b65cbf0079",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-churn-selected-3.json": "a84ed8c3358d9fd058733865c2dab7a81b54648964a44323762ff099f30633d7",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-before-1.json": "fb671a80260dd839274eac24bc40cee61e40bc3952be69cd8a3c6a11e825d2fd",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-before-2.json": "3f1f6be081d7c3a85a881fbdd63e8d7a0583ac0512aaabddebf8cd06629894e6",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-before-3.json": "c42b7901bf3c62ad05e3b5eadd29b5283c3f2069a7f99fd58c466b5434b3bfbc",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-selected-1.json": "6beffe7aa2b47bdbc9c7a5e2f4e7b252b4020ec60263f614836cb6228f8b058c",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-selected-2.json": "7c080bb70f166dd8bf9c7ede4984ce3bd6c46a1cfe43d724a9d78006c4f3d8fd",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-full-selected-3.json": "c71e07d5b50ebc32c70ba0eb40012068c9c96977d314cd07929824d7df5368c3",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-before-1.json": "e82bb8c73d1e171ce65bc12a8e17ae22e6f5ae6d9916d460be3b3248438b899e",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-before-2.json": "3d1a4cfaa5dc89510e2503d32857cf72f405d8fca9e90a732134a68da6d91918",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-before-3.json": "3329ba33314f87bdf9b612aea21936bd1392d6e3d77f8c17ebe6af5e6ba11b23",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-selected-1.json": "7251d06765adf05567fe1fb6d9d72a595b2916c8d12eb294dbb47dc292bbd4a1",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-selected-2.json": "5b868fcbd8a37682cd6991aac11b018b75ed3d55a271a4273a46c29be596c57a",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-page100-selected-3.json": "98371f8d9d5a05a7dfc0d846fdb50d95896d0533ab79328ea10dd1d0f3a8634d",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-before-1.json": "498eece894ce493b0ac8591b6e51be4c9abd63242636f8db53eec432f74f7851",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-before-2.json": "999cd6e27a1175a27583dbef8ee45ee3e00d4ece8db3d4a04d9d3ea99a409408",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-before-3.json": "8950832613a79483958906c7e02004b439d3884b818aa7772c791a2e5c6a2dd3",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-selected-1.json": "7451c1fdcc5df832643904a5911af83a6307638cf888fd9b3ab0b606f90700d1",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-selected-2.json": "2b252fa844e7754d46c8bb364f00b0f9f6960b349b5bdb172cac7cf1393edb3b",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison-private-selected-3.json": "9a884a399bdf951c390a1036115b0139b9e3814916bb29d512e400e0b1ea625a",
+    "docs/benchmarks/2026-10-16-control-frame-final-comparison.json": "7b18f8cbed84cffcaa55d761e497b24d65c0fe91130d4fb853d3a1509951f699",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-1.json": "ae86045a12d1af7db99477484213fbf6b7b7b3e53c0cc25e602209b1006512d0",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-2.json": "9ae81065d005b53eb14e133ab256855079c6c6b03e5daaf9eb80981d59cf2c66",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-3.json": "19fb8a6ba117eab2b62ba8a2d0e0fa384993e968047fa8e0063ea5cd8b42ba5e",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-4.json": "f764f3626398780e734a0eb40d7e449224b893536e04b92e8ecec2007b435f2b",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-5.json": "c37922e216c6cb22e163301e6b75b52c20fb73fb02b561c2f11333ce31bae687",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-6.json": "42797d58ff04f1294a791e8c5dd276d36c27f43677f067a7ac45b9727276660d",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-7.json": "e5149f00bb9dd705647a8569449513f29b5fc2d28888709531be814884fd0599",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-8.json": "9d809ece55648d200bed71334530abe71970c6aa1a7a16605fcb3dd8bd3ace8c",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-before-9.json": "fc12406bdbfa14c3688d61ebdfad4e75562f447efbf96c2c89faf671a6e1a9f1",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-1.json": "d0c675a3d42dd997cd9f148e00525353bb08090573fe9dbb2ff1b2ccbe9ec50d",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-2.json": "026dc83282902c8c58e9955620ba612a3727ee11fb371f57b0fc1717f99cf023",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-3.json": "7bce1210fd0c420c45377362149e3f83121933a24c2a97ebe828d2b6d93ae190",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-4.json": "4618d9de5b241e3a7e593ba21966dd763d81d643b30c10eb5493a62c079f2543",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-5.json": "7d71e3cfe6390cd9216dab23435827b28eed7dad08098ed4a9e7bdf9e1a84a62",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-6.json": "5f6a0cc80bacebbf2c882c515dac300075ea7d3bb7f42a4ac330bb9604f92dd2",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-7.json": "d0046e6d1ee236bd73ce3cc9bd50e0085467807b34dd3152669ba7b4fd56a83d",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-8.json": "f9a3eb624e6bf5bbf5e0b05e18da5aac934d4500fdee88a8ddb2c1cd3b3bb63b",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout-selected-9.json": "5cb9eb74722004dc56ac8b9c7b222f440183612d72d04e5ecc81582c96309287",
+    "docs/benchmarks/2026-10-16-control-frame-final-fanout.json": "10d7cfcb90033800cc40a7c57f8bd20bb425300ccf2945e9f4941d0a3748de55",
+    "docs/benchmarks/2026-10-16-control-frame-final-heap-selected.json": "415711001d189e39623f67de31cb03fe0903ea64778789c6b9737ac0eb40fb8b",
+    "docs/benchmarks/2026-10-16-control-frame-final-stability.json": "d39b182ab833c9bbb5e3a8c2639ec97ede369683f23888790bd32c487f65475c",
+    "docs/benchmarks/2026-10-16-control-frame-final-symbols-selected.json": "e409ff81aa203e577fadd56e97d080b278441cda2613104aee95efa2b4507910",
+    "docs/benchmarks/2026-10-16-control-frame-heap-before.json": "189823251aa26cc040b8535edaf9d4b5db568737c41fce3178bb875ec568a0a2",
+    "docs/benchmarks/2026-10-16-control-frame-heap-selected.json": "12f3b91a3ebf8bec878e0f8bec606efc4493d5c2df67c0341e3118e0ddfe86b3",
+    "docs/benchmarks/2026-10-16-control-frame-reference.json": "3c2964f22c448db0b35c0646347e4432fd4d45fe541de3daf9efff7cdfa9a897",
+    "docs/benchmarks/2026-10-16-control-frame-symbols-before.json": "68940b7e874d4706b34d790695bc905107471b683e7bf96c3f63ac338bae5333",
+    "docs/benchmarks/2026-10-16-control-frame-symbols-selected.json": "a951007e02c5a8164062643977480377a6dccb040da305d39f0acaaa249cd653"
+  },
+  "browser_artifacts": {
+    "target/browser/check.js": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "target/browser/check.js.map": "82235f3e33f9469ac4577231e2bc79b8a675283f614b1165550fd3c25ed93e90",
+    "target/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "target/browser/relay.js": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "target/browser/relay.js.map": "d08ddb5e70267d2ad9618031a93e11cf7b61405b01d868d3e0a77595514c216b",
+    "output/playwright/control-frame-browser-check.png": "ddbd6c9301f9c7cad0a07b549e507b61bb953e9b4c1a1bef3982c3d91cf6f351",
+    "artifacts/control-frame-browser-eval.txt": "df4f2c2a355bd6f7263b7680bd2fa5959ffde3c9a0bc76d9bcc8ff80db7e773d",
+    "artifacts/control-frame-browser-console.txt": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+  },
+  "initial_stage": {
+    "metadata": {
+      "directory": "artifacts/baselines/control-frame-candidate",
+      "binaries": {
+        "war-relay": "9951e62fafc0b1a7e2485f25e3396b209a9225cbe66209f65823359703ee9a0d",
+        "war-legacy-bridge": "c9218b1baa467df6c5be6883867709b90e3a0a126003ffddcfd18905bb55a23d"
+      },
+      "sources": {
+        "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+        "src/relay.rs": "7fc13819e65d3905406f961d40ab1368096b382b149bc6b4bdf3276ec2e232a0",
+        "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4"
+      },
+      "source_copies": {
+        "artifacts/baselines/control-frame-candidate/src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+        "artifacts/baselines/control-frame-candidate/src/relay.rs": "7fc13819e65d3905406f961d40ab1368096b382b149bc6b4bdf3276ec2e232a0",
+        "artifacts/baselines/control-frame-candidate/src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4"
+      },
+      "disposition": "superseded",
+      "successor": "artifacts/control-frame-final-candidate.json",
+      "patch_base_revision": "9c2609bd19b359c0f10ebfbd20c6ca15cfe0847f"
+    },
+    "patch": {
+      "path": "artifacts/control-frame-initial.patch",
+      "sha256": "19b403edfbf1e58c9e1a929991c1a57ca9b05fb66114960c5ba7f3b4f993a780"
+    },
+    "patch_source": "diff --git a/src/frame.rs b/src/frame.rs\nindex dab1ca2..021be2c 100644\n--- a/src/frame.rs\n+++ b/src/frame.rs\n@@ -13,7 +13,7 @@ pub(crate) struct Frame {\n }\n \n impl Frame {\n-    pub(crate) fn encoded(payload: Bytes) -> Self {\n+    fn encoded(payload: Bytes) -> Self {\n         Self {\n             prefix: [0; 10],\n             prefix_len: 0,\n@@ -21,6 +21,74 @@ impl Frame {\n         }\n     }\n \n+    fn prefixed(payload: Bytes, encode: impl FnOnce(&mut Encoder<Cursor<&mut [u8]>>)) -> Self {\n+        let mut frame = Self::encoded(payload);\n+        let mut encoder = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));\n+        encode(&mut encoder);\n+        frame.prefix_len = encoder.writer().position() as u8;\n+        frame\n+    }\n+\n+    /// Welcome IDs fit completely in the existing inline prefix.\n+    pub(crate) fn integer(value: u64) -> Self {\n+        Self::prefixed(Bytes::new(), |e| {\n+            e.u64(value).expect(\"uint64 fits in nine bytes\");\n+        })\n+    }\n+\n+    /// Wrap an already encoded value without copying its body.\n+    pub(crate) fn envelope(sender: u64, value: Bytes) -> Self {\n+        Self::prefixed(value, |e| {\n+            e.array(2)\n+                .and_then(|e| e.u64(sender))\n+                .expect(\"array and uint64 fit in ten bytes\");\n+        })\n+    }\n+\n+    pub(crate) fn reply(op: u8, value: Bytes) -> Self {\n+        Self::prefixed(value, |e| {\n+            e.array(2)\n+                .and_then(|e| e.u8(0))\n+                .and_then(|e| e.array(2))\n+                .and_then(|e| e.u8(op))\n+                .expect(\"control prefix fits in five bytes\");\n+        })\n+    }\n+\n+    pub(crate) fn reply_bool(op: u8, value: bool) -> Self {\n+        Self::reply(\n+            op,\n+            Bytes::from_static(if value { b\"\\xf5\" } else { b\"\\xf4\" }),\n+        )\n+    }\n+\n+    pub(crate) fn reply_uint(op: u8, value: u64) -> Self {\n+        if value > u64::from(u32::MAX) {\n+            return Self::reply(op, crate::protocol::uint(value));\n+        }\n+        // The longest control prefix plus uint32 is exactly ten bytes.\n+        let mut frame = Self::reply(op, Bytes::new());\n+        let mut e = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));\n+        e.writer_mut().set_position(usize::from(frame.prefix_len));\n+        e.u64(value)\n+            .expect(\"control prefix and uint32 fit in ten bytes\");\n+        frame.prefix_len = e.writer().position() as u8;\n+        frame\n+    }\n+\n+    pub(crate) fn variable(value: Option<Bytes>) -> Self {\n+        let found = value.is_some();\n+        Self::prefixed(value.unwrap_or_else(|| Bytes::from_static(b\"\\xf6\")), |e| {\n+            e.array(2)\n+                .and_then(|e| e.u8(0))\n+                .and_then(|e| e.array(2))\n+                .and_then(|e| e.u8(200))\n+                .and_then(|e| e.array(2))\n+                .and_then(|e| e.bool(found))\n+                .expect(\"variable prefix fits in seven bytes\");\n+        })\n+    }\n+\n     /// `value_start` comes from validation of this complete CBOR envelope.\n     /// A compact copy is reserved for small views of a much larger read slab.\n     pub(crate) fn routed(sender: u64, mut input: Bytes, value_start: usize, compact: bool) -> Self {\n@@ -32,13 +100,7 @@ impl Frame {\n             input.advance(value_start);\n             input\n         };\n-        let mut frame = Self::encoded(payload);\n-        let mut e = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));\n-        e.array(2)\n-            .and_then(|e| e.u64(sender))\n-            .expect(\"ten bytes fit an array and uint64\");\n-        frame.prefix_len = e.writer().position() as u8;\n-        frame\n+        Self::envelope(sender, payload)\n     }\n \n     pub(crate) fn prefix(&self) -> &[u8] {\n@@ -52,6 +114,11 @@ impl Frame {\n     pub(crate) fn len(&self) -> usize {\n         usize::from(self.prefix_len) + self.payload.len()\n     }\n+\n+    #[cfg(test)]\n+    pub(crate) fn to_vec(&self) -> Vec<u8> {\n+        [self.prefix(), self.payload()].concat()\n+    }\n }\n \n #[cfg(test)]\n@@ -59,6 +126,73 @@ mod tests {\n     use super::*;\n     use crate::protocol;\n \n+    #[test]\n+    fn scalar_control_frames_match_known_vectors_and_every_integer_width() {\n+        for value in [\n+            0,\n+            23,\n+            24,\n+            255,\n+            256,\n+            65535,\n+            65536,\n+            u32::MAX as u64,\n+            u32::MAX as u64 + 1,\n+            u64::MAX,\n+        ] {\n+            let welcome = Frame::integer(value);\n+            assert_eq!(welcome.to_vec(), protocol::uint(value));\n+            assert!(welcome.payload().is_empty());\n+            for op in [0, 1, 3, 23, 24, 200, 255] {\n+                let frame = Frame::reply_uint(op, value);\n+                assert_eq!(frame.to_vec(), protocol::reply(op, &protocol::uint(value)));\n+                assert_eq!(frame.len(), frame.to_vec().len());\n+                assert!(frame.prefix().len() <= 10);\n+                assert_eq!(frame.payload().is_empty(), value <= u32::MAX as u64);\n+                for flag in [false, true] {\n+                    assert_eq!(\n+                        Frame::reply_bool(op, flag).to_vec(),\n+                        protocol::reply(op, &[if flag { 0xf5 } else { 0xf4 }])\n+                    );\n+                }\n+            }\n+        }\n+        assert_eq!(\n+            Frame::integer(u64::MAX).to_vec(),\n+            b\"\\x1b\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\xff\"\n+        );\n+        assert_eq!(\n+            Frame::reply_uint(200, u32::MAX as u64).to_vec(),\n+            b\"\\x82\\x00\\x82\\x18\\xc8\\x1a\\xff\\xff\\xff\\xff\"\n+        );\n+        assert_eq!(Frame::reply_bool(4, true).to_vec(), b\"\\x82\\x00\\x82\\x04\\xf5\");\n+    }\n+\n+    #[test]\n+    fn variable_replies_preserve_opaque_values_and_missing_is_distinct_from_null() {\n+        assert_eq!(\n+            Frame::variable(None).to_vec(),\n+            b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf4\\xf6\"\n+        );\n+        for value in [\n+            &b\"\\xf6\"[..],\n+            &b\"\\x40\"[..],\n+            &b\"\\x60\"[..],\n+            &b\"\\x18\\x01\"[..],\n+            &b\"\\xd8\\x20\\xa1\\x61k\\x43\\x00\\xff\\x01\"[..],\n+        ] {\n+            let bytes = Bytes::copy_from_slice(value);\n+            let pointer = bytes.as_ptr();\n+            let frame = Frame::variable(Some(bytes));\n+            assert_eq!(frame.payload().as_ptr(), pointer);\n+            assert_eq!(frame.prefix(), b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf5\");\n+            assert_eq!(frame.payload(), value);\n+            let mut expected = b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf5\".to_vec();\n+            expected.extend_from_slice(value);\n+            assert_eq!(frame.to_vec(), expected);\n+        }\n+    }\n+\n     #[test]\n     fn routed_owned_views_preserve_aliases_and_survive_original_owner_retirement() {\n         let value = protocol::byte_string(&[0xa5; 64]);\ndiff --git a/src/relay.rs b/src/relay.rs\nindex 2aea53c..4a4bf15 100644\n--- a/src/relay.rs\n+++ b/src/relay.rs\n@@ -164,10 +164,6 @@ impl Peer {\n         true\n     }\n \n-    fn enqueue(&self, bytes: &Bytes) -> Result<(), Disconnect> {\n-        self.enqueue_frame(&Frame::encoded(bytes.clone()))\n-    }\n-\n     fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {\n         if self.closing.load(Relaxed) {\n             return Ok(());\n@@ -461,7 +457,7 @@ impl Relay {\n             }),\n         });\n         // Publish only after the welcome packet is first in this session's FIFO.\n-        peer.enqueue(&protocol::uint(id))?;\n+        peer.enqueue_frame(&Frame::integer(id))?;\n         state.users.insert(id, peer.clone());\n         state\n             .channels\n@@ -577,14 +573,7 @@ impl Relay {\n                 if protocol::secret_matches(self.config.auth_password.as_deref(), password) {\n                     peer.authenticated.store(true, Relaxed);\n                 }\n-                peer.enqueue(&protocol::reply(\n-                    0,\n-                    &[if peer.authenticated.load(Relaxed) {\n-                        0xf5\n-                    } else {\n-                        0xf4\n-                    }],\n-                ))?;\n+                peer.enqueue_frame(&Frame::reply_bool(0, peer.authenticated.load(Relaxed)))?;\n             }\n             Command::Listen(flags) => {\n                 if !peer.authenticated.load(Relaxed) {\n@@ -599,7 +588,7 @@ impl Relay {\n                 } else {\n                     peer.listener.store(flags & 7, Relaxed);\n                 }\n-                peer.enqueue(&protocol::reply(1, &protocol::uint(u64::from(flags & 7))))?;\n+                peer.enqueue_frame(&Frame::reply_uint(1, u64::from(flags & 7)))?;\n             }\n             Command::Channels => {\n                 if !peer.authenticated.load(Relaxed) {\n@@ -615,7 +604,7 @@ impl Relay {\n                         .and_then(|e| e.u64(members as u64))\n                         .expect(\"Vec encoding\");\n                 }\n-                peer.enqueue(&protocol::reply(2, &e.into_writer()))?;\n+                peer.enqueue_frame(&Frame::reply(2, e.into_writer().into()))?;\n             }\n             Command::Assign(id) => {\n                 if !peer.authenticated.load(Relaxed) {\n@@ -644,7 +633,7 @@ impl Relay {\n                     }\n                     peer.id.store(id, Relaxed);\n                 }\n-                peer.enqueue(&protocol::reply(3, &protocol::uint(id)))?;\n+                peer.enqueue_frame(&Frame::reply_uint(3, id))?;\n             }\n             Command::SetVariable { key, value } => {\n                 let mut state = self.state.write();\n@@ -675,18 +664,17 @@ impl Relay {\n                     .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));\n                 channel.variable_bytes = next;\n                 self.metrics.variable_bytes.store(total, Relaxed);\n-                peer.enqueue(&protocol::reply(4, &[0xf5]))?;\n+                peer.enqueue_frame(&Frame::reply_bool(4, true))?;\n             }\n             Command::GetVariable(key) => {\n-                let state = self.state.read();\n-                let value = state\n+                let value = self\n+                    .state\n+                    .read()\n                     .channels\n                     .get(&peer.channel)\n-                    .and_then(|c| c.variables.get(key));\n-                let mut found = Vec::with_capacity(3 + value.map_or(1, Bytes::len));\n-                found.extend_from_slice(&[0x82, if value.is_some() { 0xf5 } else { 0xf4 }]);\n-                found.extend_from_slice(value.map_or(&[0xf6][..], Bytes::as_ref));\n-                peer.enqueue(&protocol::reply(200, &found))?;\n+                    .and_then(|c| c.variables.get(key))\n+                    .cloned();\n+                peer.enqueue_frame(&Frame::variable(value))?;\n             }\n         }\n         Ok(())\n@@ -710,10 +698,10 @@ impl Relay {\n         peer.closing.store(true, Relaxed);\n         let id = peer.id.load(Relaxed);\n         let notify = !self.stopping.load(Relaxed);\n-        let frame = notify.then(|| protocol::envelope(BROADCAST, &protocol::uint(id)));\n+        let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));\n         if let Some(frame) = &frame {\n             for recipient in channel.members.values() {\n-                let _ = recipient.enqueue(frame);\n+                let _ = recipient.enqueue_frame(frame);\n             }\n         }\n         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {\n@@ -732,7 +720,7 @@ impl Relay {\n         }\n         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {\n             for recipient in state.listeners(DISCONNECT_MESSAGE) {\n-                let _ = recipient.enqueue(frame.as_ref().expect(\"notifications enabled\"));\n+                let _ = recipient.enqueue_frame(frame.as_ref().expect(\"notifications enabled\"));\n             }\n         }\n         // A displaced session must never erase the new owner of its previous ID.\n@@ -771,6 +759,46 @@ mod tests {\n         }\n     }\n \n+    #[test]\n+    fn variable_reply_keeps_stored_bytes_after_replacement_and_channel_retirement() {\n+        let relay = Relay::new(config()).unwrap();\n+        let mut sub = relay.subscribe(b\"variables\").unwrap();\n+        sub.outgoing.try_recv().unwrap();\n+        let value = protocol::byte_string(&vec![0xa5; 32768]);\n+        let mut input = b\"\\x82\\x44body\".to_vec();\n+        input.extend_from_slice(&value);\n+        relay\n+            .receive(&sub.registration.peer, protocol::request(4, &input))\n+            .unwrap();\n+        sub.outgoing.try_recv().unwrap();\n+        let pointer = relay.state.read().channels[b\"variables\".as_slice()].variables\n+            [b\"body\".as_slice()]\n+        .as_ptr();\n+        relay\n+            .receive(&sub.registration.peer, protocol::request(5, b\"\\x44body\"))\n+            .unwrap();\n+        let held = sub.outgoing.try_recv().unwrap();\n+        assert_eq!(held.frame.payload().as_ptr(), pointer);\n+        assert_eq!(held.frame.payload(), value.as_ref());\n+        assert_eq!(held.frame.prefix(), b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf5\");\n+        relay\n+            .receive(\n+                &sub.registration.peer,\n+                protocol::request(4, b\"\\x82\\x44body\\xf5\"),\n+            )\n+            .unwrap();\n+        sub.outgoing.try_recv().unwrap();\n+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 5);\n+        drop(sub);\n+        assert_eq!(relay.counts(), (0, 1));\n+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);\n+        assert_eq!(held.frame.payload().as_ptr(), pointer);\n+        assert_eq!(held.frame.payload(), value.as_ref());\n+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());\n+        drop(held);\n+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);\n+    }\n+\n     #[test]\n     fn fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns() {\n         let relay = Relay::new(config()).unwrap();\n@@ -1071,7 +1099,7 @@ mod tests {\n                 let expected = protocol::envelope(BROADCAST, &protocol::uint(id));\n                 for survivor in [&mut source, &mut target] {\n                     let departure = survivor.outgoing.try_recv().unwrap();\n-                    assert_eq!(departure.frame.payload(), expected.as_ref());\n+                    assert_eq!(departure.frame.to_vec(), expected.as_ref());\n                 }\n             }\n             {\n@@ -1199,10 +1227,7 @@ mod tests {\n         relay\n             .receive(&source.registration.peer, protocol::request(2, &[0xf6]))\n             .unwrap();\n-        assert_eq!(\n-            source.outgoing.try_recv().unwrap().frame.payload(),\n-            expected\n-        );\n+        assert_eq!(source.outgoing.try_recv().unwrap().frame.to_vec(), expected);\n         assert_eq!(\n             serde_json::to_value(relay.channels()).unwrap(),\n             serde_json::json!([\n@@ -1226,7 +1251,7 @@ mod tests {\n             )\n             .unwrap();\n         assert_eq!(\n-            rejoined.outgoing.try_recv().unwrap().frame.payload(),\n+            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),\n             b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf4\\xf6\"\n         );\n         drop(rejoined);\n@@ -1239,7 +1264,7 @@ mod tests {\n             )\n             .unwrap();\n         assert_eq!(\n-            rejoined.outgoing.try_recv().unwrap().frame.payload(),\n+            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),\n             b\"\\x82\\x00\\x82\\x18\\xc8\\x82\\xf5\\x18\\x2a\"\n         );\n         drop(rejoined);\ndiff --git a/src/relay/channel_tests.rs b/src/relay/channel_tests.rs\nindex 9dbd949..0b79229 100644\n--- a/src/relay/channel_tests.rs\n+++ b/src/relay/channel_tests.rs\n@@ -125,7 +125,7 @@ fn joined_channel_names_share_canonical_storage_and_own_their_input() {\n         let id = first.registration.peer.id.load(Relaxed);\n         drop(first);\n         assert_eq!(\n-            second.outgoing.try_recv().unwrap().frame.payload(),\n+            second.outgoing.try_recv().unwrap().frame.to_vec(),\n             protocol::envelope(BROADCAST, &protocol::uint(id)).as_ref()\n         );\n         assert_eq!(second.registration.peer.channel.as_ref(), name);\n@@ -171,7 +171,7 @@ fn recreated_channels_have_fresh_variables_while_old_name_views_remain_valid() {\n         )\n         .unwrap();\n     assert_eq!(\n-        next.outgoing.try_recv().unwrap().frame.payload(),\n+        next.outgoing.try_recv().unwrap().frame.to_vec(),\n         protocol::reply(200, &[0x82, 0xf4, 0xf6]).as_ref()\n     );\n     assert_eq!(retained_name.as_ref(), name);\n",
+    "patch_replayed_and_sources_verified": true
+  },
+  "heap_captures": [
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0001.heap",
+      "sha256": "94253199e08fa088aae73c31281f8ea61c95aceef4492be6c341c0e1f705a856",
+      "header": "heap profile:    265:   158396 [  3318:  1330119] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0002.heap",
+      "sha256": "4c02eda30d4bfdd46a914fc6d5db9667652c51108ec1fd8abad428eac1b98a82",
+      "header": "heap profile:    265:   158396 [  5864:  2358231] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0003.heap",
+      "sha256": "f3cf00332a57f94227334c7cb64ad85695c5d654f2b9328d61844bad50ca2dcf",
+      "header": "heap profile:    273:   162983 [  5951:  2435673] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0004.heap",
+      "sha256": "cf98e04b9e3db0267e89163f3dc367839a00fc6ef7437997c5c386795ddc1cb7",
+      "header": "heap profile:    273:   162983 [  6129:  2500457] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0005.heap",
+      "sha256": "997bc25af3e1b0898edc9aaabfd366674af3ecdec43bfed601130427499c82dc",
+      "header": "heap profile:    273:   162983 [  6179:  2562809] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0006.heap",
+      "sha256": "bf96a3a4db3d49cbb3b5d7eb2c4327690e9fab5e769d0279335d8ac1f579e24b",
+      "header": "heap profile:    273:   162983 [  6485:  2629705] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0007.heap",
+      "sha256": "1b16eb916e78a570815c68cf5855ac3f5fda046e725189b22e9d12b0340aff84",
+      "header": "heap profile:    273:   162983 [  6535:  2692057] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0008.heap",
+      "sha256": "5503ea0480fc23ab5a39d98cce291b96135076142b2a71659566384478dd5eda",
+      "header": "heap profile:    273:   162983 [  6969:  2769961] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0009.heap",
+      "sha256": "488b96b504f5ac464d286fb48160fd7516489d3e8b824b89cf19870d68bd3acd",
+      "header": "heap profile:    273:   162983 [  7019:  2832313] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0010.heap",
+      "sha256": "384244fedba6ab276c281e79c00ded61a3ba50a325d27012ab6164bcaf0ce22c",
+      "header": "heap profile:    273:   162983 [  7261:  2897481] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0011.heap",
+      "sha256": "53f8260aecac69fc5e497b8cbd80a21027546854454f010ca83b11e8c0b53e25",
+      "header": "heap profile:    274:   191900 [  7318:  3029843] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0012.heap",
+      "sha256": "0c5cd08e0f199a79dbd6328572404a172e314637c4d5e4e6fc0e277397d2f34b",
+      "header": "heap profile:    274:   191900 [  7816:  7817315] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0013.heap",
+      "sha256": "8b51290bd560857383ac41e2a9d667f95762dee5a53857873925042e74c135ba",
+      "header": "heap profile:    274:   191900 [  7866:  7879667] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0014.heap",
+      "sha256": "5f9ea82661fa59e7999d375003d37b8a292c567341d67c1b261f2bacf0406538",
+      "header": "heap profile:    276:   196036 [  8110: 12143531] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0015.heap",
+      "sha256": "3ed53d12eda63710942b8e20135b2a01ab1b5fc85bf236ae1b2f575912842b97",
+      "header": "heap profile:    281:   200508 [  8192: 12220820] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/before-verified_340589.0016.heap",
+      "sha256": "48e662ac04269195c6fc1bc0d845f7474eb0f6e0921aae32cb659112653c27ea",
+      "header": "heap profile:    281:   200508 [ 10550: 13119028] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0001.heap",
+      "sha256": "9fb384955bd3f30a4f183446f8512bcc1fd173acfe441a82cbfef593602f93ae",
+      "header": "heap profile:    265:   158396 [  3125:  1326509] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0002.heap",
+      "sha256": "d952bd1102512faaf36d327f37a3d2a95b93fe5f6b11ede030bdd7e616535c04",
+      "header": "heap profile:    265:   158396 [  5479:  2351293] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0003.heap",
+      "sha256": "bd2b10ff76c4c173cc48e80162a74943a49104e63943109389312b35f635bea6",
+      "header": "heap profile:    273:   162983 [  5562:  2428664] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0004.heap",
+      "sha256": "af71d8bd5828ee542385aa60a62af4604daa63d66366d9b7ca979fb107080de7",
+      "header": "heap profile:    273:   162983 [  5612:  2491016] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0005.heap",
+      "sha256": "a34387d099126aa40a39e69469369a9e74a1068e6c42ce0ba1448759379bde2c",
+      "header": "heap profile:    273:   162983 [  5662:  2553368] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0006.heap",
+      "sha256": "26b8bc7164c087bae37db1b3b852364788974e82ae11524889d50e4d968b6d12",
+      "header": "heap profile:    273:   162983 [  5712:  2615720] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0007.heap",
+      "sha256": "923591e787524d37ebf79caf31ee254428d536956c2c067e9318043cb66ca48c",
+      "header": "heap profile:    273:   162983 [  5762:  2678072] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0008.heap",
+      "sha256": "7cb981a337a6f5791f6a45eee8037994faa6bae96d519c691b2553e7863409d4",
+      "header": "heap profile:    273:   162983 [  6004:  2751560] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0009.heap",
+      "sha256": "b2f10628fed31214156529eb3d0232ac2193321fcaa11e9cd9f5788565c47e60",
+      "header": "heap profile:    273:   162983 [  6054:  2813912] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0010.heap",
+      "sha256": "9f1129430b260e5b67f86d88b9e6ff2a36fcda9f1c514a17d9af160c66d5a94f",
+      "header": "heap profile:    273:   162983 [  6104:  2876264] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0011.heap",
+      "sha256": "b167ba613c24fda3e6ae5a542b19345d8199a465c0b3950d93003828c74929b5",
+      "header": "heap profile:    274:   191900 [  6159:  3008588] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0012.heap",
+      "sha256": "521d3f28f473f6ea3f14b51f56c093e702a36ad5c491be8306e80919b9ef3e4d",
+      "header": "heap profile:    274:   191900 [  6529:  7793628] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0013.heap",
+      "sha256": "4e2adb719fe12eea19a46005a9119f3f2b87ad92859249e83d59dec2c7ae984b",
+      "header": "heap profile:    274:   191900 [  6579:  7855980] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0014.heap",
+      "sha256": "e474c8fb3beb6fbe3cd054cd8211bf3f03adced7dd817badf4e8d13b78c77072",
+      "header": "heap profile:    277:   196060 [  6632:  7922492] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0015.heap",
+      "sha256": "0d7d6ae466600745d6d815bdcc6267f8ebf89df208a60161dcf4fd4ef7b118b8",
+      "header": "heap profile:    282:   200532 [  6712:  7999748] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/final-selected_355549.0016.heap",
+      "sha256": "d00de990c788b89c6ffad839060552d78f72bed5be3641eb6cde57721ffb696d",
+      "header": "heap profile:    282:   200532 [  8876:  8890492] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0001.heap",
+      "sha256": "8a3489ee8b8717a39fc0c478cb4a75187450ad16a68241bbc3d7711009ea5b2a",
+      "header": "heap profile:    265:   158396 [  3125:  1326503] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0002.heap",
+      "sha256": "921c0812171fe5f2e8b4df471c9272f960d2ea9312449c9a1279c233461df3e1",
+      "header": "heap profile:    265:   158396 [  5479:  2351287] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0003.heap",
+      "sha256": "b696f8f1daa7bebbb23dbeb394208221215f050d46d3a08c402fec1c09878850",
+      "header": "heap profile:    273:   162983 [  5562:  2428658] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0004.heap",
+      "sha256": "da73b30ba4190643aaa241289df0d530eefeed40642388dd3794664b2841642e",
+      "header": "heap profile:    273:   162983 [  5612:  2491010] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0005.heap",
+      "sha256": "43d60a4291a34a26cabca05655f3e94fca950aa22e2e6d7427bec2342c57bdbe",
+      "header": "heap profile:    273:   162983 [  5662:  2553362] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0006.heap",
+      "sha256": "f5dc368c58ce2e931e529767b4462e53880e4c7811fed4306d20de425a1e864f",
+      "header": "heap profile:    273:   162983 [  5712:  2615714] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0007.heap",
+      "sha256": "6ae5fb6635dcebbbbbbc59d779c72edd1c6e0a1c51e3da8cbd2ee9de342419a0",
+      "header": "heap profile:    273:   162983 [  5762:  2678066] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0008.heap",
+      "sha256": "db0fc4f5f8b6ca1fab8d73987420899466bad73500e9dc4686c2fc5324f1f90c",
+      "header": "heap profile:    273:   162983 [  6132:  2753730] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0009.heap",
+      "sha256": "7aa9788c26ac858cb847e1248d7cf3fe8ad3b1023da3831e61ac3bf2f3492449",
+      "header": "heap profile:    273:   162983 [  6182:  2816082] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0010.heap",
+      "sha256": "3669717f623682ee1bf2a380843e1059733022a08bbcb6c8e76466fd111f7e89",
+      "header": "heap profile:    273:   162983 [  6232:  2878434] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0011.heap",
+      "sha256": "3b5b0734849a924e275e474de47c2506e841959eb5fb956541fe6ed99eb272fa",
+      "header": "heap profile:    274:   191900 [  6287:  3010758] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0012.heap",
+      "sha256": "fb6072a67b2e95405354074273cd61358b62d111279be705925ee03588ef9a21",
+      "header": "heap profile:    274:   191900 [  6657:  7795798] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0013.heap",
+      "sha256": "f1dfc4badb8def9bf2ce2a1089bffc18ae4bcfa4fd2a70549d850bbed48fc099",
+      "header": "heap profile:    274:   191900 [  6707:  7858150] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0014.heap",
+      "sha256": "b8115e97308b0a90b011c0723be82d88a202b5c9e4d2e1a2a05a0774f10b1113",
+      "header": "heap profile:    277:   196060 [  6760:  7924662] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0015.heap",
+      "sha256": "579e4ae1fbd5125c3284701e38df0a9fc308f353a11fd5530d24f49a785734db",
+      "header": "heap profile:    280:   196396 [  6838:  7997782] @ heapprofile"
+    },
+    {
+      "path": "/home/phil/dev/war_next/artifacts/control-frame-heaps/selected_348500.0016.heap",
+      "sha256": "edc7f6e63a4162c74806def67ee7c487ffdf9d457a15fd5d4becfb737f029732",
+      "header": "heap profile:    280:   196396 [  9024:  8934022] @ heapprofile"
+    }
+  ],
+  "allocator_library": {
+    "path": "/usr/lib/libtcmalloc.so.4.6.5",
+    "sha256": "ccbb0396626ef87993ee197e42baae2a408fa04cab6ad4f04abf98f6381be56a"
+  }
+}

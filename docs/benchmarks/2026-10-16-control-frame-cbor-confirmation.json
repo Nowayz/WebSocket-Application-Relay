@@ -1,0 +1,378 @@
+{
+  "scope": "Fixed six-pair extension of the CBOR inspection workload after the initial three pairs had overlapping ranges and a lower selected median. All six initial CBOR cases retained; twelve fresh cases added. Same frozen client/server binaries,8192 rooms,one private pair,1KiB/window16,eight reconnect workers,200 complete CBOR inspections/s,eight seconds per case. Server CPUs0-3/client4-7. All payload/order/field/Close/EOF/exact counter/resource checks; no builds, profiling or competing load tests overlap.",
+  "before_runtime_revision": "1d766c279e19d567d9dba49d276c1541cbe173d6",
+  "selected_source_hashes": {
+    "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+    "src/relay.rs": "7fc13819e65d3905406f961d40ab1368096b382b149bc6b4bdf3276ec2e232a0",
+    "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/routing-owner-candidate/war-relay",
+      "sha256": "d58f9c43d408b95da68aab723190b53d94fd5dc503026601e5bf931cdffc40e8"
+    },
+    "selected": {
+      "path": "artifacts/baselines/control-frame-candidate/war-relay",
+      "sha256": "9951e62fafc0b1a7e2485f25e3396b209a9225cbe66209f65823359703ee9a0d"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/paging-candidate/inspection",
+    "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941",
+    "source_path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "source_sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426"
+  },
+  "helpers": {
+    "inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\ncandidate = json.loads((root/'artifacts/control-frame-candidate.json').read_text())\nservers = {'before':root/'artifacts/baselines/routing-owner-candidate/war-relay',\n           'selected':root/candidate['directory']/'war-relay'}\nclient = root/'artifacts/baselines/paging-candidate/inspection'\noutput = root/'docs/benchmarks/2026-10-16-control-frame-cbor-confirmation.json'\nrecord = {'scope':'30 sequential fresh processes; three repetitions rotate workload order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Full adds200 complete HTTP listings/s; cbor adds200 complete authenticated CBOR channel queries/s; page100 requests200 first100-row pages/s and verifies full traversals at quiescent gates. Equivalent outputs within each workload; full body/sender/FIFO/field/order/cursor/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.',\n          'before_runtime_revision':'1d766c279e19d567d9dba49d276c1541cbe173d6',\n          'selected_source_hashes':candidate['sources'],\n          'variants':{k:{'path':str(p.relative_to(root)),'sha256':sha(p)} for k,p in servers.items()},\n          'client':{'path':str(client.relative_to(root)),'sha256':sha(client),\n                    'source_path':str((client.parent/'inspection.rs').relative_to(root)),\n                    'source_sha256':sha(client.parent/'inspection.rs'),\n                    'runtime_revision':'2e7806b8e255527cc0dc3cc6ffc6813859f71426'},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nworkloads = ['cbor']\ninitial_path = root/'docs/benchmarks/2026-10-16-control-frame-comparison.json'\ninitial = json.loads(initial_path.read_text())\nassert initial['passed'] and len(initial['cases']) == 30\nrecord['scope'] = 'Fixed six-pair extension of the CBOR inspection workload after the initial three pairs had overlapping ranges and a lower selected median. All six initial CBOR cases retained; twelve fresh cases added. Same frozen client/server binaries,8192 rooms,one private pair,1KiB/window16,eight reconnect workers,200 complete CBOR inspections/s,eight seconds per case. Server CPUs0-3/client4-7. All payload/order/field/Close/EOF/exact counter/resource checks; no builds, profiling or competing load tests overlap.'\nrecord['cases'] = [row for row in initial['cases'] if row['workload']=='cbor']\nassert len(record['cases']) == 6\nrecord['initial_comparison'] = {'path':str(initial_path.relative_to(root)),'sha256':sha(initial_path)}\nrecord['fixed_additional_pairs'] = 6\nfor repetition in range(4,10):\n    offset = (repetition-1)%len(workloads)\n    for workload in workloads[offset:]+workloads[:offset]:\n        roles = ['before','selected'] if repetition%2 else ['selected','before']\n        for role in roles:\n            trace = output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n            command = [sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),\n                       '--client',str(client),'--pairs','1','--seconds','8',\n                       '--mode',('cbor' if workload=='cbor' else 'http' if workload in ['full','page100'] else 'none'),\n                       '--churn-workers','0' if workload=='private' else '8','--output',str(trace)]\n            if workload=='page100': command += ['--page-size','100']\n            done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=120)\n            data = json.loads(trace.read_text())\n            assert done.returncode == 0 and data['passed'],done.stdout+done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n            assert data['client_sha256']==record['client']['sha256']\n            assert data['client_source_sha256']==record['client']['source_sha256']\n            mixed = data['mixed']\n            row = {'kind':role,'workload':workload,'repetition':repetition,\n                   'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n                   'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                   'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                   'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                   'cpu_wall':mixed['server_cpu_seconds_per_wall_second'],'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor workload in workloads:\n    for role in servers:\n        rows = [r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n        fields = ['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_wall','rss_mib']\n        summary = {key:statistics.median(r[key] for r in rows) for key in fields}\n        summary['ranges'] = {key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in ['healthy','churn','cpu_wall']}\n        record['medians'][workload+'/'+role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "ba9cf4a267d7dd01a53572d329bb3f5e52e921f39f01fa6f33839c9fbb8901ff",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-1.json",
+      "trace_sha256": "3a1e473f30b49ff255d69046112f8fc07c4f1c88a066ab004bdd80bff820a049",
+      "passed": true,
+      "healthy": 332632.5987320457,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68011.30815904916,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97150338586368,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4785393031592298,
+      "rss_mib": 18.23828125
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-1.json",
+      "trace_sha256": "5614dddba1c0c09beba9deb5dbb801dae26766168242e2d0ba5c02a98b6c642d",
+      "passed": true,
+      "healthy": 316826.91758900206,
+      "healthy_p99_ms": 0.131072,
+      "churn": 64115.251816415665,
+      "churn_p99_ms": 2.097152,
+      "inspection": 199.97154534891192,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.3823033072243536,
+      "rss_mib": 17.984375
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-2.json",
+      "trace_sha256": "cd893321fd5f2ced2272b6829d2e3c009d8ad425a25a2ab92b8864e31ddb65ee",
+      "passed": true,
+      "healthy": 326931.48324863537,
+      "healthy_p99_ms": 0.131072,
+      "churn": 66402.55205398642,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.9715474733073,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.4610421187268514,
+      "rss_mib": 18.234375
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-2.json",
+      "trace_sha256": "75a964c551af2db6a08678b0ad37f101f3dccbf22d626f7e7544cec7e39e2f8b",
+      "passed": true,
+      "healthy": 353861.3592211415,
+      "healthy_p99_ms": 0.131072,
+      "churn": 65425.13674856073,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.99850746113844,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.4937388526003776,
+      "rss_mib": 17.875
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-before-3.json",
+      "trace_sha256": "e118c6e0512d99ae5ed38f818806f85060c35654303e45e0cafd4d2f018b9750",
+      "passed": true,
+      "healthy": 350537.2756349807,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67987.5368889698,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97106326227978,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.5397771871195542,
+      "rss_mib": 18.24609375
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-comparison-cbor-selected-3.json",
+      "trace_sha256": "9c5afdd001b491441818b8fa9f8fe11f383e553cec25eb047ccec5f6c81b839e",
+      "passed": true,
+      "healthy": 353868.9300128482,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67501.63974168422,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9722704201811,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.5247885619538808,
+      "rss_mib": 18.1640625
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-4.json",
+      "trace_sha256": "74179cb3f3af7e0be35c67cd098279c9b8020264e71f985d2fb31704c8f1e5ac",
+      "passed": true,
+      "healthy": 334075.7414507896,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67334.9263179238,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97231038410496,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.4560483849842643,
+      "rss_mib": 18.24609375
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-4.json",
+      "trace_sha256": "b97053881da55457d1943e0cd74193e2b31c881b1583cff0fad2bbfdcb411ae7",
+      "passed": true,
+      "healthy": 363624.59107348556,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68679.04021738823,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97172817204628,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.528533897215079,
+      "rss_mib": 17.984375
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 5,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-5.json",
+      "trace_sha256": "47a37c87541c958fe699eff8d5c36ed0c96c2ad1f88254d1ca6df3a0a9724e1e",
+      "passed": true,
+      "healthy": 326834.13258808374,
+      "healthy_p99_ms": 0.131072,
+      "churn": 65823.51242700126,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.9719362384262,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.4472968885256097,
+      "rss_mib": 18.1796875
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 5,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-5.json",
+      "trace_sha256": "db51c227d3c3882efa5550d882afa853ab4ae7538412e1dbaea5b3aef2e86e2f",
+      "passed": true,
+      "healthy": 355248.3504017358,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68592.28852460773,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9720518560396,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.5410346246156053,
+      "rss_mib": 18.25
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 6,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-6.json",
+      "trace_sha256": "0662348be5bde9123184cfca1b3f757173756d0df5259ed13ffc488ec683a99d",
+      "passed": true,
+      "healthy": 362149.04938604776,
+      "healthy_p99_ms": 0.131072,
+      "churn": 70185.62561065245,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97186603315723,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.557280906733212,
+      "rss_mib": 18.265625
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 6,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-6.json",
+      "trace_sha256": "df3500370a1c22882bcabcf3d43ee29cbff91c9b9ca97596ad3c1f576efa4892",
+      "passed": true,
+      "healthy": 357434.5081882582,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68517.63777380329,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.972311033925,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.5447861027370706,
+      "rss_mib": 18.2734375
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 7,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-7.json",
+      "trace_sha256": "7b9e9b15e548857f8d47f7edb90f4d03cdd74554edb03af1856cff3caa467da6",
+      "passed": true,
+      "healthy": 352636.9673284001,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67496.7398651829,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97219471620656,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.5310371157959564,
+      "rss_mib": 18.30859375
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 7,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-7.json",
+      "trace_sha256": "86c1de0ac01d078d83c369f8a96e2a23cb153b850efee1fe81941d6b8ce8d8f3",
+      "passed": true,
+      "healthy": 328071.97228145984,
+      "healthy_p99_ms": 0.131072,
+      "churn": 66492.92120107617,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97194441113248,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4497965969807105,
+      "rss_mib": 18.22265625
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 8,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-8.json",
+      "trace_sha256": "c06ce4789b3f21d6cb733bb028e154e4d10cb7d91ee32c33cc83dbe0420bfa59",
+      "passed": true,
+      "healthy": 354551.12490583723,
+      "healthy_p99_ms": 0.131072,
+      "churn": 68018.12365914226,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97243367503512,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.5397877392977704,
+      "rss_mib": 18.3203125
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 8,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-8.json",
+      "trace_sha256": "c7bad5fb00bfb97d6772e196ed4de0a4996640b259a7c30beacf1839cb730298",
+      "passed": true,
+      "healthy": 323330.74903056753,
+      "healthy_p99_ms": 0.131072,
+      "churn": 65096.47047940051,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.9979890952189,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.4462354586448019,
+      "rss_mib": 18.3046875
+    },
+    {
+      "kind": "before",
+      "workload": "cbor",
+      "repetition": 9,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-before-9.json",
+      "trace_sha256": "c2ddcdffeee385f832d94b6c558cdad595315fbbf0b18e61394b29162d1777cc",
+      "passed": true,
+      "healthy": 353279.7974834984,
+      "healthy_p99_ms": 0.131072,
+      "churn": 69078.93359858503,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.97158321314262,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.5697769282231697,
+      "rss_mib": 18.27734375
+    },
+    {
+      "kind": "selected",
+      "workload": "cbor",
+      "repetition": 9,
+      "trace": "docs/benchmarks/2026-10-16-control-frame-cbor-confirmation-cbor-selected-9.json",
+      "trace_sha256": "9e6ff57c507cd65dee855134421e2b3a39218a691c40fbf21b52722b408ae000",
+      "passed": true,
+      "healthy": 324284.1150948506,
+      "healthy_p99_ms": 0.131072,
+      "churn": 65811.18798014557,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97170480365713,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4460453903614456,
+      "rss_mib": 18.31640625
+    }
+  ],
+  "passed": true,
+  "initial_comparison": {
+    "path": "docs/benchmarks/2026-10-16-control-frame-comparison.json",
+    "sha256": "1e5f7dc56fe3e454da630e89485620e42ef4ef61dd69c823b92f251276d1d99b"
+  },
+  "fixed_additional_pairs": 6,
+  "medians": {
+    "cbor/before": {
+      "healthy": 352636.9673284001,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67987.5368889698,
+      "churn_p99_ms": 0.524288,
+      "inspection": 199.9719362384262,
+      "inspection_p99_ms": 4.194304,
+      "cpu_wall": 1.528533897215079,
+      "rss_mib": 18.24609375,
+      "ranges": {
+        "healthy": [
+          323330.74903056753,
+          363624.59107348556
+        ],
+        "churn": [
+          65096.47047940051,
+          69078.93359858503
+        ],
+        "cpu_wall": [
+          1.4462354586448019,
+          1.5697769282231697
+        ]
+      }
+    },
+    "cbor/selected": {
+      "healthy": 334075.7414507896,
+      "healthy_p99_ms": 0.131072,
+      "churn": 67334.9263179238,
+      "churn_p99_ms": 1.048576,
+      "inspection": 199.97194441113248,
+      "inspection_p99_ms": 2.097152,
+      "cpu_wall": 1.4610421187268514,
+      "rss_mib": 18.24609375,
+      "ranges": {
+        "healthy": [
+          316826.91758900206,
+          362149.04938604776
+        ],
+        "churn": [
+          64115.251816415665,
+          70185.62561065245
+        ],
+        "cpu_wall": [
+          1.3823033072243536,
+          1.557280906733212
+        ]
+      }
+    }
+  }
+}

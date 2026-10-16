@@ -111,6 +111,11 @@ and tags. The relay accepts definite-length CBOR, bounds validation to 64 nested
 levels and 65,536 items, and preserves encoded payloads verbatim. It does not
 materialize object trees or convert objects to JSON. See [docs/protocol.md](docs/protocol.md).
 
+Welcome IDs and small control replies use the frame's inline prefix storage.
+Control headers wrap encoded bodies directly. Variable reads share the stored
+value with queued output, so replacing a variable or removing its channel keeps
+an in-flight reply valid without copying the value into another message buffer.
+
 Forwarding keeps the upstream's zero-copy intent: a validated application value
 stays in its received buffer, shared across recipient queues. Routing advances
 the owned input view to the value and transfers that owner directly to the
