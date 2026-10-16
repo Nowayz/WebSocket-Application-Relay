@@ -32,7 +32,10 @@ def sample(pid, admin, started):
 
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None,
-             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None):
+             payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None,
+             source_addresses=0):
+    if not 0 <= source_addresses <= 65534 or (source_addresses and mode != "churn"):
+        raise ValueError("source-addresses requires churn mode and a value in 0..=65534")
     port, admin = runtime.free_port(), runtime.free_port()
     actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
     largest_payload = max(payload_sizes or [actual_payload])
@@ -69,6 +72,8 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                        "--payload-bytes", str(actual_payload), "--window", str(window)]
             if origin is not None:
                 command += ["--origin", origin]
+            if source_addresses:
+                command += ["--source-addresses", str(source_addresses)]
             if mode == "fanout":
                 command += ["--unread-clients", str(unread_clients), "--reader-delay-ms", str(reader_delay_ms)]
                 if payload_sizes:
@@ -105,6 +110,14 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                 time.sleep(0.05)
             result_output = next((entry for entry in output if entry.get("event") == "result"), None)
             counts_match = result_output is not None and result_output["verified_deliveries"] > 0 and int(metrics["war_incoming_messages_total"]) == result_output.get("sent_messages", result_output["verified_deliveries"]) and int(metrics["war_joined_total"]) == result_output["joins"]
+            if mode == "churn" and result_output is not None:
+                # Completed cycles must include every welcome, self-echo and
+                # registration retirement. Frame/Close/EOF checks run in the
+                # client; this verifies the independent service counters.
+                cycles = result_output["verified_deliveries"]
+                counts_match = counts_match and (
+                    int(metrics["war_accepted_total"]) == int(metrics["war_disconnected_total"]) == cycles
+                    and int(metrics["war_deliveries_total"]) == 2 * cycles)
             if mode == "fanout" and result_output is not None:
                 counts_match = counts_match and (
                     result_output["verified_deliveries"] == result_output["sent_messages"] * result_output["healthy_readers"]
@@ -173,7 +186,15 @@ def main():
     parser.add_argument("--unread-clients", type=int, default=0)
     parser.add_argument("--reader-delay-ms", type=int, default=0)
     parser.add_argument("--window", type=int, default=16)
+    parser.add_argument("--source-addresses", type=int, default=0,
+                        help="Churn only: rotate loopback source IPs with an updated stress client")
+    parser.add_argument("--max-connections-per-ip", type=int,
+                        help="Optional native TCP peer quota; omit for the server's default")
     args = parser.parse_args()
+    if not 0 <= args.source_addresses <= 65534 or (args.source_addresses and args.modes != ["churn"]):
+        parser.error("source-addresses requires --modes churn and a value in 0..=65534")
+    if args.max_connections_per_ip is not None and not 0 <= args.max_connections_per_ip <= 4294967295:
+        parser.error("max-connections-per-ip must be in 0..=4294967295")
     output = {"host": platform.platform(), "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
               "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -182,6 +203,9 @@ def main():
               "notes": "Sequential fresh four-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic/fanout output budget is max(1 MiB + 10, 32 * (largest payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds; fanout latency starts at window publication. Not a long-term or production capacity guarantee.",
               "cases": []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    server_args = [part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]
+    if args.max_connections_per_ip is not None:
+        server_args += ["--max-connections-per-ip", str(args.max_connections_per_ip)]
     for mode in args.modes:
         seconds = {"traffic": args.traffic_secs, "churn": args.churn_secs, "slow": args.slow_secs, "fanout": args.fanout_secs}[mode]
         output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
@@ -189,8 +213,8 @@ def main():
                                        client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
                                        payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
                                        reader_delay_ms=args.reader_delay_ms, window=args.window,
-                                       origin=args.origin,
-                                       server_args=[part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]))
+                                       origin=args.origin, source_addresses=args.source_addresses,
+                                       server_args=server_args))
         args.output.write_text(json.dumps(output, indent=2) + "\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

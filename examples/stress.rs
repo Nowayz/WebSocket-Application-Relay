@@ -1,5 +1,6 @@
 //! Bounded-memory stability workloads over real WebSockets, independent of duration.
 use std::{
+    net::{Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -9,13 +10,13 @@ use bytes::Bytes;
 use clap::{Parser, ValueEnum};
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use tokio::{
-    net::TcpStream,
+    net::{TcpSocket, TcpStream},
     sync::{mpsc, watch},
     task::JoinSet,
     time::{sleep, timeout},
 };
 use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream, connect_async_with_config,
+    MaybeTlsStream, WebSocketStream, client_async_with_config, connect_async_with_config,
     tungstenite::{Message, client::IntoClientRequest, protocol::WebSocketConfig},
 };
 use tokio_util::task::AbortOnDropHandle;
@@ -60,6 +61,10 @@ struct Args {
     /// Fanout only: delay the first healthy reader by this much per window.
     #[arg(long, default_value_t = 0)]
     reader_delay_ms: u64,
+    /// Churn only: rotate over 127.64.x.y source IPs on a loopback ws:// URL;
+    /// zero keeps ordinary unbound connections.
+    #[arg(long, default_value_t = 0)]
+    source_addresses: usize,
 }
 
 /// Fixed logarithmic latency histogram. Reported quantiles are bucket upper bounds.
@@ -113,6 +118,17 @@ impl Stats {
 #[tokio::main(worker_threads = 4)]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    ensure!(
+        args.source_addresses <= 65534,
+        "source-addresses must be in 0..=65534"
+    );
+    ensure!(
+        args.source_addresses == 0 || matches!(args.mode, Mode::Churn),
+        "source-addresses requires churn mode"
+    );
+    if args.source_addresses != 0 {
+        source_destination(&args.url)?;
+    }
     ensure!(
         (2..=10_000).contains(&args.clients),
         "clients must be in 2..=10000"
@@ -244,42 +260,53 @@ async fn traffic(args: Args) -> Result<()> {
 }
 
 async fn churn(args: Args) -> Result<()> {
+    let destination = (args.source_addresses != 0)
+        .then(|| source_destination(&args.url))
+        .transpose()?;
     let start = Instant::now();
     let deadline = start + Duration::from_secs(args.duration_secs);
     let mut jobs = JoinSet::new();
     println!(
         "{}",
-        serde_json::json!({"event":"ready", "mode":"churn", "workers":args.clients})
+        serde_json::json!({"event":"ready", "mode":"churn", "workers":args.clients,
+            "source_addresses":args.source_addresses})
     );
     for worker in 0..args.clients {
         let url = args.url.clone();
         let origin = args.origin.clone();
+        let sources = args.source_addresses;
+        let workers = args.clients;
         jobs.spawn(async move {
             let mut stats = Stats::new();
             let channel = format!("churn{worker:x}");
             let mut sequence = 0u64;
             while Instant::now() < deadline {
                 let connected = Instant::now();
-                let (mut ws, id) = join(&url, &channel, origin.as_deref()).await?;
+                let (mut ws, id) = if let Some(destination) = destination {
+                    let index = 1
+                        + (worker as u64 + sequence.wrapping_mul(workers as u64)) % sources as u64;
+                    let source = Ipv4Addr::new(127, 64, (index >> 8) as u8, index as u8);
+                    join_from(&url, &channel, origin.as_deref(), destination, source).await?
+                } else {
+                    join(&url, &channel, origin.as_deref()).await?
+                };
                 stats.joins += 1;
-                let value = protocol::byte_string(&sequence.to_le_bytes());
+                let mut bytes = [0; 16];
+                bytes[..8].copy_from_slice(&(worker as u64).to_le_bytes());
+                bytes[8..].copy_from_slice(&sequence.to_le_bytes());
+                let value = protocol::byte_string(&bytes);
                 ws.send(Message::Binary(protocol::envelope(id, &value)))
                     .await?;
                 ensure!(
                     data(&mut ws).await? == protocol::envelope(id, &value),
                     "churn self-message mismatch"
                 );
-                stats.record(connected.elapsed());
                 ws.close(None).await?;
                 timeout(Duration::from_secs(5), async {
-                    while let Some(frame) = ws.next().await {
-                        if matches!(frame?, Message::Close(_)) {
-                            break;
-                        }
-                    }
-                    Ok::<_, anyhow::Error>(())
+                    verify_churn_close(&mut ws).await
                 })
                 .await??;
+                stats.record(connected.elapsed());
                 sequence += 1;
             }
             Ok::<_, anyhow::Error>(stats)
@@ -291,6 +318,157 @@ async fn churn(args: Args) -> Result<()> {
     }
     report(&args, 0.0, start.elapsed(), &stats, serde_json::Value::Null);
     Ok(())
+}
+
+fn source_destination(url: &str) -> Result<SocketAddr> {
+    let authority = url
+        .strip_prefix("ws://")
+        .context("source binding requires ws://")?
+        .split('/')
+        .next()
+        .context("missing loopback address")?;
+    let destination: SocketAddr = authority
+        .parse()
+        .context("source binding requires an IPv4 loopback literal and port")?;
+    ensure!(
+        destination.is_ipv4() && destination.ip().is_loopback(),
+        "source binding requires an IPv4 loopback destination"
+    );
+    Ok(destination)
+}
+
+async fn join_from(
+    url: &str,
+    channel: &str,
+    origin: Option<&str>,
+    destination: SocketAddr,
+    source: Ipv4Addr,
+) -> Result<(Socket, u64)> {
+    let socket = TcpSocket::new_v4()?;
+    socket.bind((source, 0).into())?;
+    let stream = timeout(Duration::from_secs(10), socket.connect(destination)).await??;
+    stream.set_nodelay(true)?;
+    let mut request = url.into_client_request()?;
+    if let Some(origin) = origin {
+        request.headers_mut().insert("origin", origin.parse()?);
+    }
+    let (mut ws, _) = timeout(
+        Duration::from_secs(10),
+        client_async_with_config(
+            request,
+            MaybeTlsStream::Plain(stream),
+            Some(WebSocketConfig::default().read_buffer_size(4096)),
+        ),
+    )
+    .await??;
+    ws.send(Message::Binary(protocol::text(channel))).await?;
+    let welcome = data(&mut ws).await?;
+    let id = welcome_id(&welcome)?;
+    Ok((ws, id))
+}
+
+fn welcome_id(bytes: &[u8]) -> Result<u64> {
+    let mut decoder = minicbor::Decoder::new(bytes);
+    let id = decoder.u64()?;
+    ensure!(
+        decoder.position() == bytes.len() && id != 0 && id != protocol::BROADCAST,
+        "invalid welcome ID"
+    );
+    Ok(id)
+}
+
+async fn verify_churn_close<S>(ws: &mut WebSocketStream<S>) -> Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    loop {
+        match ws.next().await.context("missing Close acknowledgement")?? {
+            Message::Close(None) => break,
+            Message::Ping(_) => ws.flush().await?,
+            frame => anyhow::bail!("unexpected churn Close acknowledgement: {frame:?}"),
+        }
+    }
+    ws.flush().await?;
+    ensure!(
+        ws.next().await.is_none(),
+        "churn transport did not end after Close"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::AsyncWriteExt;
+    use tokio_tungstenite::tungstenite::protocol::Role;
+
+    #[tokio::test]
+    async fn churn_close_rejects_missing_acknowledgements_wrong_codes_and_application_data() {
+        for bytes in [
+            &[][..],
+            &[0x88, 2, 3, 0xe8],
+            &[0x88, 2, 3, 0xf5],
+            &[0x82, 1, 1],
+        ] {
+            let (client, mut peer) = tokio::io::duplex(128);
+            let mut ws = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
+            ws.close(None).await.unwrap();
+            peer.write_all(bytes).await.unwrap();
+            peer.shutdown().await.unwrap();
+            assert!(
+                timeout(Duration::from_secs(1), verify_churn_close(&mut ws))
+                    .await
+                    .unwrap()
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn churn_close_waits_for_transport_eof_after_the_exact_acknowledgement() {
+        let (client, mut peer) = tokio::io::duplex(128);
+        let mut ws = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
+        ws.close(None).await.unwrap();
+        peer.write_all(&[0x88, 0]).await.unwrap();
+        let mut check = Box::pin(verify_churn_close(&mut ws));
+        assert!(
+            timeout(Duration::from_millis(20), check.as_mut())
+                .await
+                .is_err()
+        );
+        peer.shutdown().await.unwrap();
+        timeout(Duration::from_secs(1), check)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[test]
+    fn source_binding_and_welcome_validation_reject_ambiguous_inputs() {
+        assert_eq!(
+            source_destination("ws://127.0.0.1:1338/path").unwrap(),
+            "127.0.0.1:1338".parse().unwrap()
+        );
+        for url in [
+            "wss://127.0.0.1:1338/",
+            "ws://192.0.2.1:1338/",
+            "ws://localhost:1338/",
+            "ws://[::1]:1338/",
+            "ws://127.0.0.1/",
+        ] {
+            assert!(source_destination(url).is_err());
+        }
+        assert_eq!(welcome_id(&[1]).unwrap(), 1);
+        for bytes in [
+            &[][..],
+            &[0],
+            &[0x61, b'1'],
+            &[1, 0],
+            &[0x1b, 255, 255, 255, 255, 255, 255, 255, 255],
+        ] {
+            assert!(welcome_id(bytes).is_err());
+        }
+    }
 }
 
 async fn slow(args: Args) -> Result<()> {
@@ -616,7 +794,7 @@ async fn join(url: &str, channel: &str, origin: Option<&str>) -> Result<(Socket,
     .await??;
     ws.send(Message::Binary(protocol::text(channel))).await?;
     let welcome = data(&mut ws).await?;
-    let id = minicbor::Decoder::new(&welcome).u64()?;
+    let id = welcome_id(&welcome)?;
     Ok((ws, id))
 }
 
@@ -679,12 +857,13 @@ fn summary(
 ) -> serde_json::Value {
     serde_json::json!({
         "event":"result", "mode":format!("{:?}",args.mode).to_lowercase(), "clients":if matches!(args.mode,Mode::Slow){3}else{args.clients},
-    "payload_bytes":if matches!(args.mode,Mode::Churn){8}else{args.payload_bytes}, "window":if matches!(args.mode,Mode::Traffic | Mode::Fanout){args.window}else{1},
+    "payload_bytes":if matches!(args.mode,Mode::Churn){16}else{args.payload_bytes}, "window":if matches!(args.mode,Mode::Traffic | Mode::Fanout){args.window}else{1},
+    "source_addresses":args.source_addresses,
         "setup_seconds":setup_secs, "elapsed_seconds":elapsed.as_secs_f64(), "verified_deliveries":stats.verified,
         "joins":stats.joins, "disconnect_notifications":stats.disconnects,
         "deliveries_per_second":stats.verified as f64/elapsed.as_secs_f64(),
         "latency_p50_upper_ms":stats.percentile_upper_ms(50), "latency_p99_upper_ms":stats.percentile_upper_ms(99),
         "latency_max_ms":stats.max_ns as f64/1_000_000.0, "slow_observation":slow_observation,
-    "validation":if matches!(args.mode,Mode::Churn){"monotonic 8-byte counter per worker, unique assigned sender ID, every self-message and close handshake verified; fixed latency histogram"}else if matches!(args.mode,Mode::Fanout){"64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram"}else{"64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram"},
+    "validation":if matches!(args.mode,Mode::Churn){"distinct worker ID plus monotonic counter; exact self-message, Close(None) acknowledgement and EOF; latency covers connect through TCP retirement; fixed histogram"}else if matches!(args.mode,Mode::Fanout){"64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram"}else{"64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram"},
     })
 }
