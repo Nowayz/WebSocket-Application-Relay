@@ -7,7 +7,34 @@ protocol, and the latest instruction emphasizes preserving the upstream's
 zero-copy routing intent. The goal remains active; this file is a reviewable checkpoint, not a
 claim that an open-ended improvement effort is complete.
 
-## Implemented and locally exercised
+## Latest verified checkpoint: 2026-10-16
+
+The active branch is `codex/lean-core`; native sockets use fixed Mio readiness
+workers, shared read storage and direct vectored writes. Tokio handles
+management, signals and the optional legacy bridge. Implementation commit
+`58f22492f8ecf14b53662cef7b9ad765cfe62664` compacts sparse connection arenas
+after large populations retire, preserving live socket tokens, payload owners,
+partial input/output and exact deadlines. The preceding queue-memory change
+releases large drained output queues and exposes current/peak slot capacity.
+
+Two surviving clients after two 8,192-peer waves retain 373,548 requested live
+heap bytes versus 3,402,188 in the preceding release's diagnostic. Ordinary
+recovered RSS medians are 12.55 versus 14.93 MiB. This has measured costs:
+recovered throughput −1.87%, private/fanout throughput about −0.7%, and fanout
+lifecycle CPU +1.86%. The [performance report](performance.md#compact-sparse-connection-arenas-2026-10-16)
+records ranges, allocations, methodology and limits; this is a memory-recovery
+improvement with explicit tradeoffs.
+
+Current verification passes 113 Rust tests, strict Clippy/format/release checks,
+seven JavaScript checks, 48 common C++ cases plus eight documented differences,
+four release API checks and seven real Chrome checks. Longer functional checks
+verify 66,022,656 traffic deliveries and 2,738,312 complete reconnect cycles.
+The local native/bridge runtime uses the selected frozen release and is healthy
+at the usual ports 1338/1337/1339, with the browser check on 4180. Source, binary,
+test and diagnostic hashes are in the [current manifest](benchmarks/2026-10-16-arena-build.json).
+This is local acceptance; no hosted deployment is claimed.
+
+## Earlier implementation checkpoints
 
 - Upstream downloaded at `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`; source/history
   and MIT attribution retained on local branch `codex/rust-relay`.
@@ -26,7 +53,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 86 Rust tests and 7 JavaScript socket cases pass, along with
+- Earlier checkpoint checks: 86 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.

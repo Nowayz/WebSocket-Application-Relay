@@ -32,6 +32,11 @@ keep their immutable owner. `--read-buffer-idle-secs` additionally controls quie
 decoder/fragment high-water reclamation. The storage hooks and source provenance
 are documented in [vendor/README.md](vendor/README.md).
 
+After large connection populations retire, sparse worker arenas compact while
+surviving clients stay connected. Socket tokens and shared payload storage stay
+stable; small arenas remain allocated for ordinary reconnect traffic. See the
+[scaling policy](docs/operations.md#scaling-boundary) for thresholds and costs.
+
 Operators can optionally retire inactive joined sessions with
 `--idle-timeout-secs 300` (`WAR_IDLE_TIMEOUT_SECS=300`). Binary application input
 and outgoing relay messages refresh activity; receive-only consumers stay active

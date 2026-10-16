@@ -3189,3 +3189,168 @@ baseline retains its own source copies and binary hashes so the capacity
 observation can be distinguished from the retirement change. Diagnostic heap
 captures and binary snapshots are local artifacts; the JSON reports and
 workload sources are committed.
+
+## Compact sparse connection arenas (2026-10-16)
+
+After a large population retired, a worker's surviving connections kept its
+entire decoder arena and timer index allocated. The previous empty-worker reset
+only helped workers whose last connection left. Two long-lived clients were
+enough to retain several megabytes of empty slots after repeated population
+waves.
+
+The worker now compacts an arena with more than 256 slots when at most one
+eighth of its capacity remains occupied. It uses the existing
+[`Slab::compact` callback](https://docs.rs/slab/0.4.12/slab/struct.Slab.html#method.compact)
+to update token-to-slot mappings and move each indexed timer without changing
+its deadline. Ready queues, poll registrations and cross-worker notifications
+carry monotonic socket tokens, which remain stable. Compaction moves decoder
+metadata; socket owners, receive/fragment allocations and shared application
+bodies keep their storage. No application-body copy or new routing atomic is
+introduced. Timer index/heap capacity shrinks after rekeying.
+
+Small arenas remain warm for ordinary reconnect traffic. Once a compacted arena
+becomes empty, the worker releases it and its timer/token tables even if its
+capacity is now small. This matters: the first prototype trimmed sparse arenas
+but then retained their small allocations at the empty-worker gate. The
+selected revision restores complete cleanup after that population wave.
+Subsequent large waves can allocate arena storage again. Compaction scans old
+slots and rekeys surviving timers on the retiring connection's worker, so its
+latency and allocation costs belong in the comparison.
+
+### Requested heap across population waves
+
+The [heap comparison](benchmarks/2026-10-16-arena-memory.json) records three
+sequential server-only gperftools diagnostics: previous release, initial
+prototype and selected revision. One frozen real-socket client keeps two
+global-room clients alive and fills/retires 8,192 other single-member rooms
+twice. Before and after each wave it exchanges changing 1 KiB values, checking
+every sender/value/order; all temporary peers complete normal Close and EOF.
+Four native workers use CPUs 0–3 and the client uses CPUs 4–7. Each of the
+27 raw captures is hashed, and every allocation row sums to its capture header.
+These use a replacement allocator and are excluded from ordinary timing/RSS.
+Release unwind stacks merge unrelated raw-vector allocation sites, so the
+report uses whole requested heap rather than claiming exact site attribution.
+
+| Whole requested live heap | Previous | Initial prototype | Selected |
+| --- | ---: | ---: | ---: |
+| Two-client connected baseline | 162,844 B | 162,844 B | 162,876 B |
+| Two clients after the second population wave | 3,402,188 B | 448,812 B | 373,548 B |
+| All connections retired | 189,436 B | 439,868 B | 189,468 B |
+| Recovered increase over connected baseline | 3,239,344 B | 285,968 B | 210,672 B |
+| Final increase over connected baseline | 26,592 B | 277,024 B | 26,592 B |
+
+The selected recovered live heap is 89.02% lower; the increase attributable to
+the population waves is 93.50% lower. The final increase returns to the previous
+26,592-byte level. The four-worker connected baseline grows 32 bytes. Cumulative
+requested bytes across the complete diagnostic rise from 214,359,610 to
+222,313,210 (+3.71%), and allocation events rise from 535,476 to 536,096
+(+0.12%). These totals include connection setup, transport/runtime work,
+management sampling and heap dumps, as well as repeated arena growth. They do
+not prove that every saved or added allocation belongs to a connection arena.
+
+### Ordinary population recovery
+
+The [ordinary comparison](benchmarks/2026-10-16-arena-comparison.json) runs three
+alternating fresh-process pairs without profiling, builds or competing load
+tests. Each process executes the same two population waves, with a three-second
+verified traffic interval at the initial baseline and after each recovery.
+Traffic uses 64 cyclic 1 KiB templates and windows of 16. Transient peers occupy
+separate rooms and receive no routing traffic. Retirement is sampled separately
+between population-ready and recovered-traffic-ready gates; its wall/CPU interval
+includes management sampling and control-gate overhead.
+
+| Median of three process medians across two recovered waves | Previous | Selected |
+| --- | ---: | ---: |
+| Recovered healthy deliveries/s | 525,267 | 515,446 |
+| Server CPU ns/verified delivery | 1,103.06 | 1,114.42 |
+| Healthy p99 upper bucket, ms | 0.032768 | 0.032768 |
+| Population retirement wall interval, ms | 146.79 | 146.11 |
+| Population retirement CPU, seconds | 0.055 | 0.055 |
+| Recovered event-boundary RSS, MiB | 14.93 | 12.55 |
+
+Recovered traffic throughput is 1.87% lower and CPU per delivery 1.03% higher.
+The three selected throughput process medians are all below the three preceding
+release medians; this cost is retained alongside the memory benefit. Retirement
+wall ranges overlap, and CPU has 10 ms accounting ticks. No faster-retirement
+claim is supported. Recovered RSS medians fall 15.89% in this workload, but their
+ranges overlap: 13.709–15.557 MiB previous and 11.178–13.961 MiB selected. Final
+empty-process RSS ranges are broad too. Allocator retention, listener flow
+placement and small warm arenas still affect RSS; this is no fixed memory
+ceiling or production-capacity result.
+
+### Routing, reconnects and backpressure
+
+The [12-case routing matrix](benchmarks/2026-10-16-arena-routing-comparison.json)
+uses three alternating pairs for each of private-only and private plus eight
+reconnect workers. Each fresh four-worker server holds 8,192 idle rooms; one
+private pair exchanges 1 KiB values in windows of 16 for eight seconds. The
+unchanged frozen client verifies payloads, sender IDs, FIFO, normal Close/EOF,
+exact counters and final reservations. No build, profiler or competing load
+test overlaps these measurements.
+
+| Median of three | Previous | Selected |
+| --- | ---: | ---: |
+| Private healthy deliveries/s | 583,358 | 579,060 |
+| Private server CPU seconds/wall second | 0.65250 | 0.65125 |
+| Churn: healthy deliveries/s | 362,472 | 360,899 |
+| Churn: complete reconnect cycles/s | 72,240 | 73,768 |
+| Churn: server CPU seconds/wall second | 1.47249 | 1.49124 |
+
+Private healthy throughput changes −0.74%, mixed healthy throughput −0.43%,
+reconnect throughput +2.11% and mixed CPU +1.27%. Healthy and reconnect ranges
+overlap. Private p99 remains 0.032768 ms, mixed healthy p99 0.131072 ms and
+reconnect p99 0.524288 ms, all histogram upper buckets.
+
+The [six fanout cases](benchmarks/2026-10-16-arena-fanout.json) use three
+alternating pairs, 27 healthy readers and four unread peers. Four-second traffic
+intervals cycle 256 B / 1 KiB / 64 KiB / 256 KiB values with window 16 and a
+one-ms reader delay. Healthy median throughput changes from 189,664 to 188,309
+deliveries/s (−0.71%), with overlapping ranges and unchanged 4.194304 ms p99
+bucket. Lifecycle server CPU rises from 3.23 to 3.29 seconds (+1.86%); the three
+selected CPU samples exceed the three previous samples. This is a measured cost,
+not a speed improvement. Every case preserves full payload/order validation,
+unread-peer output limits, normal healthy closes and final cleanup.
+
+The change is retained for substantially lower memory after large population
+waves. Its extra allocation work, recovered-traffic cost and fanout CPU cost
+remain explicit; it is not a universal throughput or latency improvement.
+
+### Verification and provenance
+
+Implementation commit `58f22492f8ecf14b53662cef7b9ad765cfe62664` passes
+[113 Rust tests, strict Clippy, formatting and the locked release build](benchmarks/2026-10-16-arena-checks.json).
+The new real-socket test moves live records for an unfinished HTTP upgrade,
+partial masked input, queued shared output and a Close handshake. It verifies
+stable socket addresses/tokens, unchanged payload aliases, exact completed
+frames, preserved deadlines, stale-event isolation on later slot reuse and
+complete release after the last connection leaves. The timer test also checks
+equal-deadline ordering, a moved connection with no timer and absence of stale
+old-slot entries.
+
+The [C++ reference](benchmarks/2026-10-16-arena-reference.json) passes 48 common
+cases and eight documented differences against preserved upstream commit
+`881c8daaf2cf05adea8f522b28cf372e8f82d4e9`. The performance comparisons above
+use the preceding Rust release. Seven JavaScript checks pass, including the
+original legacy client, and [release API acceptance](benchmarks/2026-10-16-arena-acceptance.json)
+passes four checks with 13 normal closes.
+
+The [longer functional stress checks](benchmarks/2026-10-16-arena-stability.json)
+verify 66,022,656 deliveries over 30 seconds, 2,738,312 complete reconnect cycles
+over 20 seconds and 205,569 healthy deliveries beside an unread peer. Processes
+exit normally and final sessions, connections, read/queue reservations and
+variables clear. Reference/client verification was dispatched before the stress
+runner's terminal completion was observed; stress rates and RSS are therefore
+excluded from performance comparisons. All ordinary comparisons were completed
+sequentially before that functional verification.
+
+The [real Chrome check](benchmarks/2026-10-16-arena-browser.json) passes seven
+checks with no console errors or warnings, including arbitrary CBOR values,
+cross-channel private delivery, 128 KiB payload fidelity and three normal Close
+handshakes. The local native/bridge processes run the frozen selected release;
+health/readiness return 200, the native process owns four listener sockets and
+resources clear after the browser check. The
+[build manifest](benchmarks/2026-10-16-arena-build.json) binds the source commit,
+both release binaries, frozen clients, source/check files, ordinary reports,
+27 diagnostic heap captures, initial prototype source snapshot and browser
+artifacts by SHA-256. These finite Linux loopback checks do not establish TLS,
+adverse-network or production capacity.

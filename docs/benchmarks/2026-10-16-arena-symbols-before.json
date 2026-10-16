@@ -1,0 +1,4802 @@
+{
+  "scope": "Requested live and cumulative allocations from server-only gperftools captures. Return addresses mapped through the recorded PIE base and symbolized with GNU addr2line, including inline frames. Not RSS or ordinary timing.",
+  "binary": "/home/phil/dev/war_next/artifacts/baselines/queue-retirement-candidate/war-relay",
+  "binary_sha256": "cd8309478b436155fa20c775008417d471f060ed1ed6a1b0e0c3318ce99788ea",
+  "analyzer_source": "import argparse\nimport collections\nimport hashlib\nimport json\nfrom pathlib import Path\nimport re\nimport subprocess\n\nparser=argparse.ArgumentParser()\nparser.add_argument('--report',type=Path,required=True)\nparser.add_argument('--output',type=Path,required=True)\nargs=parser.parse_args();report=json.loads(args.report.read_text())\nbinary=Path(report['server_command'][3])\nrecords=[];addresses=set()\nfor event in report['events']:\n    heap=Path(event['process']['heap']['path']);text=heap.read_text()\n    base=int(next(line.split('-')[0] for line in text.splitlines() if str(binary) in line and ' 00000000 ' in line),16)\n    rows=[]\n    for line in text.splitlines():\n        m=re.match(r'\\s*(\\d+):\\s*(\\d+)\\s*\\[\\s*(\\d+):\\s*(\\d+)\\]\\s*@\\s*(.*)',line)\n        if not m:continue\n        stack=[int(x,16)-base-1 for x in m[5].split() if int(x,16)>=base and int(x,16)<base+0x1000000]\n        addresses.update(stack);rows.append({'objects':int(m[1]),'bytes':int(m[2]),'total_objects':int(m[3]),'total_bytes':int(m[4]),'stack':stack})\n    records.append((event,heap,rows))\nordered=sorted(addresses)\nrun=subprocess.run(['addr2line','-a','-f','-C','-i','-e',str(binary)],input=''.join(hex(a)+'\\n' for a in ordered),capture_output=True,text=True,check=True)\nsymbols={};current=None\nfor line in run.stdout.splitlines():\n    if re.fullmatch(r'0x[0-9a-fA-F]+',line):current=int(line,16);symbols[current]=[]\n    elif current is not None:symbols[current].append(line)\nresult={'scope':'Requested live and cumulative allocations from server-only gperftools captures. Return addresses mapped through the recorded PIE base and symbolized with GNU addr2line, including inline frames. Not RSS or ordinary timing.','binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'analyzer_source':Path(__file__).read_text(),'events':[]}\nfor event,heap,rows in records:\n    classes=collections.defaultdict(lambda:{'objects':0,'bytes':0,'total_objects':0,'total_bytes':0})\n    for row in rows:\n        names=[s for address in row['stack'] for s in symbols.get(address,[]) if s and not s.startswith('/')]\n        if any('bytes::bytes::Bytes::copy_from_slice' in name for name in names):label='Bytes::copy_from_slice'\n        elif any('bytes::bytes::shallow_clone_vec' in name for name in names):label='bytes::shallow_clone_vec'\n        else:label=next((s for s in names if not s.startswith('??') and not s.startswith('0x')),'unknown')\n        for key in ['objects','bytes','total_objects','total_bytes']:classes[label][key]+=row[key]\n    summary={'event':event['event'],'wave':event['wave'],'header':event['process']['heap']['header'],'heap_sha256':event['process']['heap']['sha256'],'classes':dict(sorted(classes.items(),key=lambda item:item[1]['bytes'],reverse=True))}\n    result['events'].append(summary)\nargs.output.write_text(json.dumps(result,indent=2)+'\\n')\nfor event in result['events']:\n    print(event['event'],{k:v for k,v in event['classes'].items() if k in ['Bytes::copy_from_slice','bytes::shallow_clone_vec']})\n",
+  "events": [
+    {
+      "event": "traffic_ready",
+      "wave": 0,
+      "header": "heap profile:    265:   162844 [   868:   389642] @ heapprofile",
+      "heap_sha256": "42b3a8b8e1ad92f96a76923f95a6159cd94985180c5417559023c7a5e82e01db",
+      "classes": {
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "alloc::raw_vec::finish_grow": {
+          "objects": 23,
+          "bytes": 8272,
+          "total_objects": 229,
+          "total_bytes": 153406
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 2,
+          "total_bytes": 8192
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 8,
+          "total_bytes": 10796
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 1564,
+          "total_objects": 14,
+          "total_bytes": 6468
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 7,
+          "total_bytes": 3728
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 8,
+          "total_bytes": 17344
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 4,
+          "total_bytes": 288
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 4,
+          "total_bytes": 1024
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 4,
+          "total_bytes": 160
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 128
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 1104
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 112
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 2
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 1312
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 288
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 2624
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5000
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 17104
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 80
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 56
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 896
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 8
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 1312
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 112
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 114
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 36
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 7088
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 32
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 48
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "traffic_done",
+      "wave": 0,
+      "header": "heap profile:    265:   162844 [   918:   451994] @ heapprofile",
+      "heap_sha256": "9b01cd2fc97715c4d58fac04b366f4eb83c4c610fc665978f7548ccc0b61ec32",
+      "classes": {
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "alloc::raw_vec::finish_grow": {
+          "objects": 23,
+          "bytes": 8272,
+          "total_objects": 235,
+          "total_bytes": 193334
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 2,
+          "total_bytes": 8192
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 11,
+          "total_bytes": 14444
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 1564,
+          "total_objects": 14,
+          "total_bytes": 6468
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 9,
+          "total_bytes": 5056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 8,
+          "total_bytes": 17344
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 4,
+          "total_bytes": 288
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 5,
+          "total_bytes": 1280
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 5,
+          "total_bytes": 200
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 24,
+          "total_bytes": 192
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 1656
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 168
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 2
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 1968
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 288
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 2624
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 3,
+          "total_bytes": 7500
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 25656
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 3,
+          "total_bytes": 120
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 56
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 1344
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 3,
+          "total_bytes": 12
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 1968
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 168
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 114
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 36
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 10632
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 32
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 3,
+          "total_bytes": 72
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "population_ready",
+      "wave": 1,
+      "header": "heap profile:  49436: 13057484 [244073: 109468962] @ heapprofile",
+      "heap_sha256": "d017753b32170fd74725ae2eba1052cd308469415ab273edf71d2fa09c185841",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 31,
+          "bytes": 6394128,
+          "total_objects": 49477,
+          "total_bytes": 17129326
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 8203,
+          "bytes": 3490636,
+          "total_objects": 8272,
+          "total_bytes": 6297340
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 8194,
+          "bytes": 1573248,
+          "total_objects": 32776,
+          "total_bytes": 71058368
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 16388,
+          "bytes": 1179936,
+          "total_objects": 16388,
+          "total_bytes": 1179936
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 8192,
+          "bytes": 196608,
+          "total_objects": 8192,
+          "total_bytes": 196608
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 8192,
+          "bytes": 61168,
+          "total_objects": 8192,
+          "total_bytes": 61168
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 4,
+          "bytes": 16384,
+          "total_objects": 4,
+          "total_bytes": 16384
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 14,
+          "total_bytes": 18092
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 11,
+          "total_bytes": 6384
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 6,
+          "total_bytes": 1536
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 4,
+          "bytes": 160,
+          "total_objects": 8,
+          "total_bytes": 320
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 3,
+          "bytes": 96,
+          "total_objects": 3,
+          "total_bytes": 96
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32,
+          "total_bytes": 256
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 2208
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32776,
+          "total_bytes": 10750528
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 224
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 8194
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 2624
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5379,
+          "total_bytes": 1549152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 10000
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 34208
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 160
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 229432
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 1792
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 16
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 2624
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 224
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 40970,
+          "total_bytes": 467058
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 147492
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 36,
+          "total_bytes": 14176
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16388,
+          "total_bytes": 131104
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 96
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "traffic_ready",
+      "wave": 1,
+      "header": "heap profile:    272:  3402156 [268713: 110782354] @ heapprofile",
+      "heap_sha256": "91c0610e9eee39318383f3fb2c7f6492056c4ad41047f24d5e48fbf7bd818de7",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 25,
+          "bytes": 3199056,
+          "total_objects": 57675,
+          "total_bytes": 17308518
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 48940,
+          "total_objects": 8286,
+          "total_bytes": 7212508
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 4,
+          "total_bytes": 16384
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 17,
+          "total_bytes": 21740
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 13,
+          "total_bytes": 7712
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 32776,
+          "total_bytes": 71058368
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 16388,
+          "total_bytes": 1179936
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 7,
+          "total_bytes": 1792
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 3,
+          "bytes": 96,
+          "total_objects": 3,
+          "total_bytes": 96
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 9,
+          "total_bytes": 360
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 61168
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 40,
+          "total_bytes": 320
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 2760
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32776,
+          "total_bytes": 10750528
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 280
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 8194
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 3280
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5379,
+          "total_bytes": 1549152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5,
+          "total_bytes": 12500
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 42760
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 122880
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5,
+          "total_bytes": 200
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 229432
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 2240
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5,
+          "total_bytes": 20
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 196608
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 3280
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 280
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 40970,
+          "total_bytes": 467058
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 147492
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 45,
+          "total_bytes": 17720
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16388,
+          "total_bytes": 131104
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 73728
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5,
+          "total_bytes": 120
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "traffic_done",
+      "wave": 1,
+      "header": "heap profile:    272:  3402156 [268763: 110844706] @ heapprofile",
+      "heap_sha256": "1a037019d177c5cf5848b7a932ee5300e216ba73ced4cd1b4beb268d5a7c3770",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 25,
+          "bytes": 3199056,
+          "total_objects": 57681,
+          "total_bytes": 17348446
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 48940,
+          "total_objects": 8286,
+          "total_bytes": 7212508
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 4,
+          "total_bytes": 16384
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 20,
+          "total_bytes": 25388
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 15,
+          "total_bytes": 9040
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 32776,
+          "total_bytes": 71058368
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 16388,
+          "total_bytes": 1179936
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 8,
+          "total_bytes": 2048
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 3,
+          "bytes": 96,
+          "total_objects": 3,
+          "total_bytes": 96
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 10,
+          "total_bytes": 400
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 61168
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 48,
+          "total_bytes": 384
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 3312
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32776,
+          "total_bytes": 10750528
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 336
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 8194
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 3936
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 5379,
+          "total_bytes": 1549152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 15000
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 24,
+          "total_bytes": 51312
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 122880
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 240
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 229432
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 2688
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 24
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 196608
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 3936
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 336
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 40970,
+          "total_bytes": 467058
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8194,
+          "total_bytes": 147492
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 54,
+          "total_bytes": 21264
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16388,
+          "total_bytes": 131104
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 73728
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 144
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "population_ready",
+      "wave": 2,
+      "header": "heap profile:  49437: 13057516 [511597: 213311050] @ heapprofile",
+      "heap_sha256": "fd1d686bcb9e6e8c9c867142fc46f2acb2cfab155d497b0868856d4d611d8d25",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 31,
+          "bytes": 6394128,
+          "total_objects": 106883,
+          "total_bytes": 27902934
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 8203,
+          "bytes": 3490636,
+          "total_objects": 16520,
+          "total_bytes": 13408244
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 8194,
+          "bytes": 1573248,
+          "total_objects": 65544,
+          "total_bytes": 142099392
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 16388,
+          "bytes": 1179936,
+          "total_objects": 32772,
+          "total_bytes": 2359584
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 8192,
+          "bytes": 196608,
+          "total_objects": 16384,
+          "total_bytes": 393216
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 8192,
+          "bytes": 61168,
+          "total_objects": 16384,
+          "total_bytes": 122336
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 4,
+          "bytes": 16384,
+          "total_objects": 6,
+          "total_bytes": 24576
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 23,
+          "total_bytes": 29036
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 17,
+          "total_bytes": 10368
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 9,
+          "total_bytes": 2304
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 4,
+          "bytes": 160,
+          "total_objects": 13,
+          "total_bytes": 520
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 56,
+          "total_bytes": 448
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 3864
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 65544,
+          "total_bytes": 21498432
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 392
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 16386
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 4592
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10504,
+          "total_bytes": 3025152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 17500
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 28,
+          "total_bytes": 59864
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 122880
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 280
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 458808
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 3136
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 28
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 4592
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 392
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 81930,
+          "total_bytes": 934002
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 294948
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 63,
+          "total_bytes": 24808
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32772,
+          "total_bytes": 262176
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8192,
+          "total_bytes": 73728
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 168
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "traffic_ready",
+      "wave": 2,
+      "header": "heap profile:    273:  3402188 [536237: 214624442] @ heapprofile",
+      "heap_sha256": "c3d2df280cb6cdaf195195efc9a3a584a37fadadd56dacb11a9ea4dd614c0cfd",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 25,
+          "bytes": 3199056,
+          "total_objects": 115081,
+          "total_bytes": 28082126
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 48940,
+          "total_objects": 16534,
+          "total_bytes": 14323412
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 6,
+          "total_bytes": 24576
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 26,
+          "total_bytes": 32684
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 19,
+          "total_bytes": 11696
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 65544,
+          "total_bytes": 142099392
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 32772,
+          "total_bytes": 2359584
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 10,
+          "total_bytes": 2560
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 14,
+          "total_bytes": 560
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 122336
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 64,
+          "total_bytes": 512
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 4416
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 65544,
+          "total_bytes": 21498432
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 448
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 16386
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 5248
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10504,
+          "total_bytes": 3025152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 20000
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32,
+          "total_bytes": 68416
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 245760
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 320
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 458808
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 3584
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 32
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 393216
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 5248
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 448
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 81930,
+          "total_bytes": 934002
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 294948
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 72,
+          "total_bytes": 28352
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32772,
+          "total_bytes": 262176
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 147456
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 8,
+          "total_bytes": 192
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "traffic_done",
+      "wave": 2,
+      "header": "heap profile:    273:  3402188 [536287: 214686794] @ heapprofile",
+      "heap_sha256": "6724e6985480de3e85154902a9ad3ed05a6be481e01eb89a08a0d126de794817",
+      "classes": {
+        "alloc::raw_vec::finish_grow": {
+          "objects": 25,
+          "bytes": 3199056,
+          "total_objects": 115087,
+          "total_bytes": 28122054
+        },
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 9,
+          "bytes": 48940,
+          "total_objects": 16534,
+          "total_bytes": 14323412
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 2,
+          "bytes": 8192,
+          "total_objects": 6,
+          "total_bytes": 24576
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 29,
+          "total_bytes": 36332
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 21,
+          "total_bytes": 13024
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 2,
+          "bytes": 384,
+          "total_objects": 65544,
+          "total_bytes": 142099392
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 4,
+          "bytes": 288,
+          "total_objects": 32772,
+          "total_bytes": 2359584
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 11,
+          "total_bytes": 2816
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 2,
+          "bytes": 80,
+          "total_objects": 15,
+          "total_bytes": 600
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 122336
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 72,
+          "total_bytes": 576
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 4968
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 65544,
+          "total_bytes": 21498432
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 504
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 16386
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 5904
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10504,
+          "total_bytes": 3025152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 9,
+          "total_bytes": 22500
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 36,
+          "total_bytes": 76968
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 245760
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 9,
+          "total_bytes": 360
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 458808
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 4032
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 9,
+          "total_bytes": 36
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 393216
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 5904
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 18,
+          "total_bytes": 504
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 81930,
+          "total_bytes": 934002
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 294948
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 81,
+          "total_bytes": 31896
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32772,
+          "total_bytes": 262176
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 147456
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 9,
+          "total_bytes": 216
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    },
+    {
+      "event": "done",
+      "wave": 2,
+      "header": "heap profile:    255:   189436 [536344: 214749252] @ heapprofile",
+      "heap_sha256": "fe46568ef08a6157312dcf70ccf598264c07a048aa6f181c448786e245cac1c2",
+      "classes": {
+        "war_relay::server::Worker::run": {
+          "objects": 4,
+          "bytes": 49152,
+          "total_objects": 4,
+          "total_bytes": 49152
+        },
+        "hashbrown::raw::RawTableInner::fallible_with_capacity": {
+          "objects": 7,
+          "bytes": 40204,
+          "total_objects": 16534,
+          "total_bytes": 14323412
+        },
+        "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default": {
+          "objects": 1,
+          "bytes": 32768,
+          "total_objects": 1,
+          "total_bytes": 32768
+        },
+        "<tokio::signal::unix::OsStorage as core::default::Default>::default": {
+          "objects": 65,
+          "bytes": 24064,
+          "total_objects": 65,
+          "total_bytes": 24064
+        },
+        "tokio::runtime::driver::Driver::new": {
+          "objects": 3,
+          "bytes": 18544,
+          "total_objects": 4,
+          "total_bytes": 18672
+        },
+        "alloc::raw_vec::finish_grow": {
+          "objects": 19,
+          "bytes": 3984,
+          "total_objects": 115095,
+          "total_bytes": 28162016
+        },
+        "hashbrown::raw::RawTable<T,A>::reserve_rehash": {
+          "objects": 2,
+          "bytes": 3500,
+          "total_objects": 32,
+          "total_bytes": 39980
+        },
+        "war_relay::main::{{closure}}": {
+          "objects": 20,
+          "bytes": 3384,
+          "total_objects": 21,
+          "total_bytes": 4440
+        },
+        "war_relay::main": {
+          "objects": 2,
+          "bytes": 2416,
+          "total_objects": 4,
+          "total_bytes": 2737
+        },
+        "std::sys::thread::unix::Thread::new": {
+          "objects": 12,
+          "bytes": 1568,
+          "total_objects": 12,
+          "total_bytes": 1568
+        },
+        "tokio::runtime::builder::Builder::build": {
+          "objects": 4,
+          "bytes": 1520,
+          "total_objects": 4,
+          "total_bytes": 1520
+        },
+        "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}": {
+          "objects": 3,
+          "bytes": 1072,
+          "total_objects": 23,
+          "total_bytes": 14352
+        },
+        "parking_lot_core::parking_lot::HashTable::new": {
+          "objects": 2,
+          "bytes": 1056,
+          "total_objects": 2,
+          "total_bytes": 1056
+        },
+        "war_relay::relay::Relay::new": {
+          "objects": 3,
+          "bytes": 888,
+          "total_objects": 3,
+          "total_bytes": 888
+        },
+        "war_relay::server::serve::{{closure}}::{{closure}}": {
+          "objects": 1,
+          "bytes": 704,
+          "total_objects": 1,
+          "total_bytes": 704
+        },
+        "<alloc::sync::Arc<T> as core::default::Default>::default": {
+          "objects": 2,
+          "bytes": 496,
+          "total_objects": 2,
+          "total_bytes": 496
+        },
+        "std::sys::pal::unix::stack_overflow::thread_info::set_current_info": {
+          "objects": 1,
+          "bytes": 456,
+          "total_objects": 1,
+          "total_bytes": 456
+        },
+        "tokio::runtime::blocking::create_blocking_pool": {
+          "objects": 3,
+          "bytes": 360,
+          "total_objects": 3,
+          "total_bytes": 360
+        },
+        "war_relay::server::Worker::new": {
+          "objects": 8,
+          "bytes": 352,
+          "total_objects": 8,
+          "total_bytes": 352
+        },
+        "tokio::signal::unix::signal": {
+          "objects": 2,
+          "bytes": 320,
+          "total_objects": 2,
+          "total_bytes": 320
+        },
+        "axum::routing::path_router::Node::insert": {
+          "objects": 9,
+          "bytes": 288,
+          "total_objects": 31,
+          "total_bytes": 784
+        },
+        "tokio::task::join_set::JoinSet<T>::insert": {
+          "objects": 5,
+          "bytes": 280,
+          "total_objects": 5,
+          "total_bytes": 280
+        },
+        "tokio::task::join_set::JoinSet<T>::spawn": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 1,
+          "total_bytes": 256
+        },
+        "tokio::runtime::io::registration_set::RegistrationSet::allocate": {
+          "objects": 1,
+          "bytes": 256,
+          "total_objects": 12,
+          "total_bytes": 3072
+        },
+        "signal_hook_registry::register_unchecked_impl": {
+          "objects": 3,
+          "bytes": 248,
+          "total_objects": 6,
+          "total_bytes": 656
+        },
+        "std::thread::Thread::new": {
+          "objects": 4,
+          "bytes": 192,
+          "total_objects": 4,
+          "total_bytes": 192
+        },
+        "war_relay::admin::admin_router": {
+          "objects": 1,
+          "bytes": 176,
+          "total_objects": 9,
+          "total_bytes": 408
+        },
+        "std::sync::poison::once::Once::call_once_force::{{closure}}": {
+          "objects": 24,
+          "bytes": 162,
+          "total_objects": 24,
+          "total_bytes": 162
+        },
+        "std::thread::spawnhook::ChildSpawnHooks::run": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "std::sys::thread_local::native::lazy::Storage<T,D>::get_or_init_slow": {
+          "objects": 4,
+          "bytes": 128,
+          "total_objects": 4,
+          "total_bytes": 128
+        },
+        "tokio_util::sync::cancellation_token::CancellationToken::new": {
+          "objects": 1,
+          "bytes": 112,
+          "total_objects": 1,
+          "total_bytes": 112
+        },
+        "matchit::escape::UnescapedRef::to_owned": {
+          "objects": 13,
+          "bytes": 94,
+          "total_objects": 15,
+          "total_bytes": 113
+        },
+        "std::sync::poison::once::Once::call_once::{{closure}}": {
+          "objects": 1,
+          "bytes": 80,
+          "total_objects": 3,
+          "total_bytes": 296
+        },
+        "core::ops::function::FnOnce::call_once": {
+          "objects": 7,
+          "bytes": 56,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::thread::current::init_current": {
+          "objects": 1,
+          "bytes": 48,
+          "total_objects": 1,
+          "total_bytes": 48
+        },
+        "alloc::ffi::c_str::CString::_from_vec_unchecked": {
+          "objects": 4,
+          "bytes": 36,
+          "total_objects": 4,
+          "total_bytes": 36
+        },
+        "std::thread::spawnhook::run_spawn_hooks": {
+          "objects": 1,
+          "bytes": 32,
+          "total_objects": 1,
+          "total_bytes": 32
+        },
+        "tracing_log::log_tracer::Builder::init": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "tokio::runtime::builder::Builder::new": {
+          "objects": 1,
+          "bytes": 16,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "axum::routing::method_routing::append_allow_header": {
+          "objects": 3,
+          "bytes": 12,
+          "total_objects": 7,
+          "total_bytes": 24
+        },
+        "matchit::tree::normalize_params": {
+          "objects": 1,
+          "bytes": 8,
+          "total_objects": 2,
+          "total_bytes": 11
+        },
+        "std::rt::lang_start_internal": {
+          "objects": 1,
+          "bytes": 4,
+          "total_objects": 8,
+          "total_bytes": 2076
+        },
+        "Bytes::copy_from_slice": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16384,
+          "total_bytes": 122336
+        },
+        "<war_relay::config::Config as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 66,
+          "total_bytes": 936
+        },
+        "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 80,
+          "total_bytes": 640
+        },
+        "clap_builder::parser::parser::Parser::get_matches_with": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 34
+        },
+        "std::sys::env::unix::getenv::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 5
+        },
+        "tungstenite::protocol::frame::FrameCodec::reserve_input": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 24576
+        },
+        "<axum::boxed::MakeErasedHandler<H,S> as axum::boxed::ErasedIntoRoute<S,core::convert::Infallible>>::clone_box": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 56
+        },
+        "std::env::args_os": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 14,
+          "total_bytes": 512
+        },
+        "std::sys::pal::unix::stack_overflow::imp::make_handler": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 12,
+          "total_bytes": 864
+        },
+        "clap_builder::parser::parser::Parser::add_defaults": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 42,
+          "total_bytes": 598
+        },
+        "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 5520
+        },
+        "clap_builder::builder::command::Command::_build_self": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 64
+        },
+        "bytes::bytes_mut::BytesMut::split_to": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16,
+          "total_bytes": 640
+        },
+        "http::header::map::HeaderMap<T>::try_append2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 65544,
+          "total_bytes": 21498432
+        },
+        "http::extensions::Extensions::insert": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 560
+        },
+        "axum::routing::Router<S>::route": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 7,
+          "total_bytes": 1232
+        },
+        "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 16386
+        },
+        "core::iter::traits::iterator::Iterator::collect": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 576
+        },
+        "http::header::map::HeaderMap<T>::try_insert2": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 6560
+        },
+        "war_relay::server::Worker::accept": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 65544,
+          "total_bytes": 142099392
+        },
+        "war_relay::server::Connection::drive": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10504,
+          "total_bytes": 3025152
+        },
+        "war_relay::metrics::Metrics::render": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 25000
+        },
+        "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 40,
+          "total_bytes": 85520
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::parse_ref_": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 27,
+          "total_bytes": 696
+        },
+        "tungstenite::protocol::WebSocketContext::do_close": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 245790
+        },
+        "alloc::fmt::format::format_inner": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 4,
+          "total_bytes": 56
+        },
+        "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 400
+        },
+        "tungstenite::handshake::derive_accept_key": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 458808
+        },
+        "clap_builder::builder::command::Command::required_graph": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 200
+        },
+        "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 4480
+        },
+        "axum::routing::route::set_content_length": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 40
+        },
+        "alloc::alloc::exchange_malloc": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32772,
+          "total_bytes": 2359584
+        },
+        "bytes::shallow_clone_vec": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16385,
+          "total_bytes": 393240
+        },
+        "clap_builder::parser::validator::Validator::validate": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 6,
+          "total_bytes": 48
+        },
+        "<P as clap_builder::builder::value_parser::AnyValueParser>::possible_values": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 2,
+          "total_bytes": 32
+        },
+        "http::header::map::HeaderMap<T>::try_reserve": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 6560
+        },
+        "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 20,
+          "total_bytes": 560
+        },
+        "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 81930,
+          "total_bytes": 934002
+        },
+        "clap_builder::builder::arg::Arg::value_parser": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 320
+        },
+        "data_encoding::Encoding::decode": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 294948
+        },
+        "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 90,
+          "total_bytes": 35440
+        },
+        "http::response::Builder::and_then": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 32772,
+          "total_bytes": 262176
+        },
+        "war_relay::protocol::uint": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 16386,
+          "total_bytes": 147474
+        },
+        "tracing_subscriber::filter::env::builder::Builder::parse": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 320
+        },
+        "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 10,
+          "total_bytes": 240
+        },
+        "war_relay::server::worker_listeners": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        },
+        "<war_relay::origin::OriginPolicy as clap_builder::derive::Args>::augment_args": {
+          "objects": 0,
+          "bytes": 0,
+          "total_objects": 1,
+          "total_bytes": 16
+        }
+      }
+    }
+  ]
+}

@@ -389,10 +389,21 @@ these four metrics are zero.
 Native decoders live in a worker-owned connection arena. Ready queues carry
 monotonic socket tokens, so reusing an arena slot cannot redirect an old event to
 a new connection. Each connection has at most one indexed timer; repeated input
-does not accumulate stale deadline entries. Once a worker becomes empty, an
-arena larger than 256 slots and its timer/token tables are released. Small arenas
-remain available for churn. An arena can retain its high water while the worker
-has live connections; this is separate from the sparse registry trimming below.
+does not accumulate stale deadline entries. On retirement, an arena with more
+than 256 slots compacts when at most one eighth of its capacity remains live.
+The worker updates token-to-slot mappings and preserves each indexed deadline.
+Ready events and cross-worker notifications retain their socket tokens. This
+moves decoder metadata; socket owners and shared application bodies keep their
+allocations.
+
+Compaction also trims timer storage. An empty worker releases an arena larger
+than 256 slots, or an arena that previously needed compaction, along with its
+timer/token tables. Small arenas that never needed compaction remain available
+for ordinary reconnect traffic. Repeated large population waves can allocate
+metadata again; compaction runs on the retiring connection's worker. The
+[population recovery measurements](performance.md#compact-sparse-connection-arenas-2026-10-16)
+separate its memory benefit from traffic and retirement costs. Allocators can
+retain freed pages, so arena reclamation does not set a process RSS ceiling.
 
 I/O workers own dedicated OS threads and are independent of an embedder's Tokio
 blocking-pool capacity. On Linux each worker has a separate `SO_REUSEPORT` listen
