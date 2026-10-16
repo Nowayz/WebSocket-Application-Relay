@@ -9,53 +9,53 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
-Benchmark/helper commit `eac47f1` now verifies exact Close acknowledgements and
-TCP EOF before recording a churn cycle. Its 16-byte worker/counter values and
-rotating source pools close a gap in the earlier stress client's validation;
-[historical stress claims are qualified](stability.md#churn-validation-correction-2026-10-16).
-Twelve equivalent cases measure admission with one versus 4,096 source IPs.
-The rotating pool has −0.60% enabled throughput and +1.85% CPU per complete cycle,
-with overlapping ranges and unchanged full-cycle p99 bucket. The profile keeps
-the existing admission index justified; runtime binaries are unchanged.
-The [current benchmark manifest](benchmarks/2026-10-16-address-churn-build.json)
-binds this helper checkpoint to the preceding native release.
+Implementation `3b2bcc934e1e68031b553151ff6b22c8781bd109` fixes a reproduced
+management failure: an authorized resume could clear draining after shutdown
+started. One atomic open/draining/stopping state makes shutdown terminal.
+Normal drain/resume remains reversible; authorized resume after stopping returns
+`409`, readiness stays `503` and admission stays refused. The
+[embedding migration](operations.md#drain-and-restart) replaces the public drain
+atomic with checked methods. Payload routing and shared body ownership remain
+unchanged.
 
-The active branch is `codex/lean-core`; native sockets use fixed Mio readiness
-workers, shared read storage and direct vectored writes. Tokio handles
-management, signals and the optional legacy bridge. Implementation commit
-`ef3d8fcd3826fbc6a4110167a792867dbf05dfd1` adds optional direct-peer IP admission
-at both public ingresses, disabled by default, with canonical address leases
-shared across native workers and retained through transport lifetime. Release
-checks reproduce a stalled single-address population exhausting the shared cap,
-then show that a per-IP quota preserves admission from another address. The
-[operating policy](operations.md#direct-peer-connection-admission) documents
-NAT/proxy aggregation and the separate native/bridge limits.
+Four checks cover the before-fix failure, lifecycle transitions, concurrent
+management changes and real HTTP/WebSocket behavior with four native workers.
+Current verification passes 127 Rust tests, strict Clippy and formatting, release
+builds, seven JavaScript checks, 48 common C++ compatibility cases plus eight
+explicit differences, four release API checks and seven real Chrome checks.
+Release API probes also verify ordinary authorized drain/resume and unauthorized
+requests. The [stability record](stability.md#terminal-shutdown-admission-2026-10-16)
+describes the exact shutdown model and validation limits.
 
-The preceding implementation
-`58f22492f8ecf14b53662cef7b9ad765cfe62664` compacts sparse connection arenas
-after large populations retire, preserving live socket tokens, payload owners,
-partial input/output and exact deadlines. The preceding queue-memory change
-releases large drained output queues and exposes current/peak slot capacity.
+Twenty sequential timed processes use the same frozen inspection client and
+before/selected binaries. Initial private throughput is −1.70%; a longer
+four-pair check is −0.58% with overlapping ranges and +0.46% CPU per delivery.
+Mixed private/churn medians are −1.53%/−0.98%, with overlapping ranges. Private
+and mixed latency buckets are unchanged. Both records remain published in the
+[performance report](performance.md#terminal-shutdown-admission-2026-10-16);
+this fix carries explicit observed costs and makes no speed claim.
 
-At that arena checkpoint, two surviving clients after two 8,192-peer waves
-retained 373,548 requested live heap bytes versus 3,402,188 in its preceding
-release's diagnostic. Ordinary
-recovered RSS medians are 12.55 versus 14.93 MiB. This has measured costs:
-recovered throughput −1.87%, private/fanout throughput about −0.7%, and fanout
-lifecycle CPU +1.86%. The [performance report](performance.md#compact-sparse-connection-arenas-2026-10-16)
-records ranges, allocations, methodology and limits; this is a memory-recovery
-improvement with explicit tradeoffs.
+Separate socket checks verify 8,956,448 ordinary deliveries, 549,874 complete
+churn cycles across 4,096 source IPs, 210,814 healthy deliveries beside an unread
+recipient and 727,488 fanout deliveries. Every process exits normally and
+resources clear. The stronger churn client requires its exact Close
+acknowledgement and TCP EOF; the frozen mixed timing client has its own recorded
+contract. [Earlier stress validation is qualified](stability.md#churn-validation-correction-2026-10-16).
 
-Current verification passes 123 Rust tests and strict Clippy/format checks; the
-unchanged runtime release retains its recorded release checks,
-seven JavaScript checks, 48 common C++ cases plus eight documented differences,
-four release API checks and seven real Chrome checks. The new client separately
-verifies 395,385 complete unbound churn cycles plus traffic/slow-reader/fanout
-compatibility, and 412,582 complete cycles through the published CLI command.
-The local native/bridge runtime uses the selected frozen release and is healthy
-at the usual ports 1338/1337/1339, with the browser check on 4180. Source, binary,
-test and diagnostic hashes for that runtime are in its [manifest](benchmarks/2026-10-16-ip-admission-build.json).
-This is local acceptance; no hosted deployment is claimed.
+The active branch is `codex/lean-core`. Native sockets use fixed Mio readiness
+workers, shared read storage and direct vectored writes; Tokio handles management,
+signals and the optional legacy bridge. Previous releases add optional direct-peer
+IP admission (disabled by default), sparse connection-arena recovery and release
+of large drained output queues. Their source, measurements and tradeoffs remain
+in the historical reports.
+
+Local native/bridge services run the selected frozen binaries at ports
+1338/1337, management at 1339, and the browser check at 4180. Fresh Chrome
+acceptance verifies all seven checks, clean closes, zero retained resources and
+four native worker listeners. The
+[current manifest](benchmarks/2026-10-16-shutdown-state-build.json) binds source,
+binaries, clients, checks and all timed traces. This is local acceptance; no
+hosted deployment is claimed. The ongoing goal remains active.
 
 ## Earlier implementation checkpoints
 

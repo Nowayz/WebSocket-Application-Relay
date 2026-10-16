@@ -360,8 +360,25 @@ curl --fail -H "Authorization: Bearer $WAR_ADMIN_TOKEN" http://127.0.0.1:1339/me
 ```
 
 Draining preserves existing connections and rejects new connections/joins.
-Readiness becomes `503`; liveness stays `200`. Either wait for sessions to leave,
-send SIGTERM for bounded closure, or POST `/v1/resume` to return to service.
+Readiness becomes `503`; liveness stays `200`. POST `/v1/resume` returns `204`
+and restores admission while the relay is manually drained. Alternatively, wait
+for sessions to leave and send SIGTERM for bounded closure.
+
+Shutdown is terminal. After SIGINT/SIGTERM, worker failure or cancellation of an
+embedded service starts shutdown, a concurrent management request cannot reopen
+admission. An authorized POST `/v1/resume` returns `409 Conflict`; POST `/v1/drain`
+remains an idempotent `204`. Authentication still precedes either operation, so
+requests without a valid token return `401`. While the management listener
+remains available, `/readyz` stays `503` and `war_draining` stays `1`.
+
+Rust embedding API: replace `relay.draining.load(...)` with
+`relay.is_draining()`, and `relay.draining.store(value, ...)` with
+`relay.set_draining(value)`. Check its boolean result: `false` means a resume
+was refused because shutdown has started. `relay.is_stopping()` distinguishes
+terminal shutdown from a reversible manual drain. The lifecycle uses one atomic
+value; stopping cannot be overwritten by a concurrent drain/resume transition.
+Create a new `Relay` when restarting an embedded service.
+
 An application host can restart and reclaim its fixed ID without restarting the
 relay or unrelated sessions. Restarting the relay itself ends its sessions and
 loses in-memory variables; clients must reconnect and rebuild application state.

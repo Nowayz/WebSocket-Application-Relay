@@ -1,0 +1,214 @@
+{
+  "scope": "Eight sequential fresh processes; four paired private-only repetitions reverse implementation order. Supplemental check after the first comparison showed lower selected private throughput. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Twelve-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Equivalent outputs within each workload; full body/sender/FIFO/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.",
+  "before_runtime_revision": "ef3d8fcd3826fbc6a4110167a792867dbf05dfd1",
+  "selected_source_hashes": {
+    "src/admin.rs": "835c1362f83dbb39c57c83ab067d9f6fa5d0f92eb19799389e9a0b491151249d",
+    "src/relay.rs": "47224d79f430c8adbe9bd5452cd200fda1f5669cefe86028d5b7712032a6744f",
+    "src/server.rs": "8824ec99690111ac4577ee3d843df807962e6fb35f582f5f8e35ec08e4eb9f1b",
+    "tests/relay_integration.rs": "1e8ae87dc89b97b2faf6cbdeaa7a64b7286276d93a4c2ef2fbf6c449340beacb"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/ip-admission/war-relay",
+      "sha256": "60182be9581cb0c52e0a05c35c715b32b34f9d55740fa6acd54149700e19abb6"
+    },
+    "selected": {
+      "path": "artifacts/baselines/shutdown-state/war-relay",
+      "sha256": "8bebc344c998ddeb358661c1ef6d0f959b92d3d09fd65c5f0c027b253f371a2f"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/paging-candidate/inspection",
+    "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941",
+    "source_path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "source_sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426"
+  },
+  "helpers": {
+    "inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\ncandidate = json.loads((root/'artifacts/shutdown-state-candidate.json').read_text())\nservers = {'before':root/'artifacts/baselines/ip-admission/war-relay',\n           'selected':root/candidate['directory']/'war-relay'}\nclient = root/'artifacts/baselines/paging-candidate/inspection'\noutput = root/'docs/benchmarks/2026-10-16-shutdown-state-private-recheck.json'\nrecord = {'scope':'Eight sequential fresh processes; four paired private-only repetitions reverse implementation order. Supplemental check after the first comparison showed lower selected private throughput. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Twelve-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Equivalent outputs within each workload; full body/sender/FIFO/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.',\n          'before_runtime_revision':'ef3d8fcd3826fbc6a4110167a792867dbf05dfd1',\n          'selected_source_hashes':candidate['sources'],\n          'variants':{k:{'path':str(p.relative_to(root)),'sha256':sha(p)} for k,p in servers.items()},\n          'client':{'path':str(client.relative_to(root)),'sha256':sha(client),\n                    'source_path':str((client.parent/'inspection.rs').relative_to(root)),\n                    'source_sha256':sha(client.parent/'inspection.rs'),\n                    'runtime_revision':'2e7806b8e255527cc0dc3cc6ffc6813859f71426'},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nworkloads = ['private']\nfor repetition in range(1,5):\n    offset = (repetition-1)%len(workloads)\n    for workload in workloads[offset:]+workloads[:offset]:\n        roles = ['before','selected'] if repetition%2 else ['selected','before']\n        for role in roles:\n            trace = output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n            command = [sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),\n                       '--client',str(client),'--pairs','1','--seconds','12',\n                       '--mode',('cbor' if workload=='cbor' else 'http' if workload in ['full','page100'] else 'none'),\n                       '--churn-workers','0' if workload=='private' else '8','--output',str(trace)]\n            if workload=='page100': command += ['--page-size','100']\n            done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=120)\n            data = json.loads(trace.read_text())\n            assert done.returncode == 0 and data['passed'],done.stdout+done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n            assert data['client_sha256']==record['client']['sha256']\n            assert data['client_source_sha256']==record['client']['source_sha256']\n            mixed = data['mixed']\n            row = {'kind':role,'workload':workload,'repetition':repetition,\n                   'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n                   'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                   'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                   'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                   'cpu_wall':mixed['server_cpu_seconds_per_wall_second'],'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor workload in workloads:\n    for role in servers:\n        rows = [r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n        fields = ['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_wall','rss_mib']\n        summary = {key:statistics.median(r[key] for r in rows) for key in fields}\n        summary['ranges'] = {key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in ['healthy','churn','cpu_wall']}\n        record['medians'][workload+'/'+role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "655fc0c8c304c6aa08622f7f5fa207decbb76e21286555d96342dcf37cfc4138",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-before-1.json",
+      "trace_sha256": "473aee0abc225d86cf38ab78c3d45dc291f765049ba07ab989aa4b466d82b52b",
+      "passed": true,
+      "healthy": 583314.5484438505,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6516635554619371,
+      "rss_mib": 17.42578125
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-selected-1.json",
+      "trace_sha256": "395a0a93ba391416701504e0471df6fe82ff576c3f7c20c28c785d33498be626",
+      "passed": true,
+      "healthy": 573233.289951382,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6508317702523652,
+      "rss_mib": 17.33203125
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-selected-2.json",
+      "trace_sha256": "931b94c9ead4c50fc31e34108db5f8f70b879fc15aa45ab472ad1ffaba83a3df",
+      "passed": true,
+      "healthy": 573746.624968401,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499984422245667,
+      "rss_mib": 17.3515625
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-before-2.json",
+      "trace_sha256": "182e42dad8cc240917862aa208b2fb90e7eb88a7cd3ed0160e63753056ba47c9",
+      "passed": true,
+      "healthy": 573643.5158872642,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499979406440245,
+      "rss_mib": 17.35546875
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-before-3.json",
+      "trace_sha256": "a0f2250784f4eef3aaddafd43f444d540302fc54f1967f9d46cadde481cc9262",
+      "passed": true,
+      "healthy": 579113.5026695386,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6516638564748962,
+      "rss_mib": 17.3515625
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-selected-3.json",
+      "trace_sha256": "fe63ccb93c46023c8268711009b8e0cf91aa525d71d964d5aa34d981a742c316",
+      "passed": true,
+      "healthy": 574150.220230009,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499979851145792,
+      "rss_mib": 17.4296875
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-selected-4.json",
+      "trace_sha256": "f64f494776682e3c18f2c31051e9714600153c45629172265ea5c568960518f1",
+      "passed": true,
+      "healthy": 574876.4520030416,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524974863078088,
+      "rss_mib": 17.27734375
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 4,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-private-recheck-private-before-4.json",
+      "trace_sha256": "278d36882b52ab6fc0bb15425b74ff4f0dfc9188a5d85d01febaefd83d1268b5",
+      "passed": true,
+      "healthy": 575530.5497109756,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6508316932917022,
+      "rss_mib": 17.3359375
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/before": {
+      "healthy": 577322.0261902572,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512476243768197,
+      "rss_mib": 17.353515625,
+      "ranges": {
+        "healthy": [
+          573643.5158872642,
+          583314.5484438505
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6499979406440245,
+          0.6516638564748962
+        ]
+      }
+    },
+    "private/selected": {
+      "healthy": 573948.422599205,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.650415106238466,
+      "rss_mib": 17.341796875,
+      "ranges": {
+        "healthy": [
+          573233.289951382,
+          574876.4520030416
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6499979851145792,
+          0.6524974863078088
+        ]
+      }
+    }
+  }
+}

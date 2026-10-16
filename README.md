@@ -212,12 +212,18 @@ Management uses a separate HTTP listener:
 | Endpoint | Purpose | Authorization |
 | --- | --- | --- |
 | `GET /healthz` | Liveness | None |
-| `GET /readyz` | `503` while draining | None |
+| `GET /readyz` | `503` while draining or stopping | None |
 | `GET /metrics` | Prometheus counters/gauges | Bearer token when configured |
 | `GET /v1/channels` | Populations and variable usage | Bearer token required |
 | `POST /v1/drain` | Reject new connections/joins | Bearer token required |
-| `POST /v1/resume` | Resume admission | Bearer token required |
+| `POST /v1/resume` | Resume a manual drain; `409` after shutdown starts | Bearer token required |
 | `POST /v1/sessions/{decimal_id}/disconnect` | Close session with `4000` | Bearer token required |
+
+Manual drain preserves existing sessions and can be resumed. Shutdown is terminal:
+readiness and admission remain drained even if a management request races with
+worker shutdown. Rust embedders use `Relay::is_draining()` and
+`Relay::set_draining(bool)` in place of the former public atomic field; resuming
+a stopping relay returns `false`. Restart with a new `Relay` instance.
 
 For bounded channel browsing, use `GET /v1/channels?limit=100`. Pass the last row's
 URL-encoded `name_base64` as `after` to continue. Limits are 1–1,000; the JSON row

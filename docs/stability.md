@@ -731,3 +731,37 @@ client/server exit zero are checked independently at the gates. This is finite
 loopback evidence with default queues, rates/heartbeats disabled, and separately
 recorded latency/CPU tradeoffs in the
 [inspection measurement](performance.md#concurrent-channel-inspection-2026-10-16).
+
+## Terminal shutdown admission, 2026-10-16
+
+A management regression reproduced a shutdown being resumed: after shutdown
+set the former separate drain/stopping atomics, an authorized resume returned
+`204`, clearing the drain observed by readiness and admission. The regression
+expected `409` and failed before the fix. This was a deterministic local handler
+reproduction; it does not establish that the short CLI signal race occurred in
+production.
+
+One private atomic lifecycle now represents open, draining and stopping.
+Drain/resume uses compare-and-update and cannot overwrite stopping. Redundant
+drain remains successful; authorized resume after stopping returns `409`.
+Readiness remains `503`, metrics report `war_draining 1`, and fresh connections
+and pending joins remain refused. The public Rust atomic field is replaced by
+checked methods; see [the embedding migration](operations.md#drain-and-restart).
+Forwarding, shared application-body ownership and recipient queues are unchanged.
+
+Four focused checks cover the reproduced handler failure, reversible/terminal
+transitions, concurrent management changes versus shutdown, and a real HTTP
+management listener with four native workers. The socket check keeps an existing
+session usable during manual drain, verifies normal resume, then publishes
+shutdown before worker notification. Unauthorized resume is `401`, authorized
+resume is `409`, a pending join receives `1013` and EOF, and a fresh transport
+closes without admission. Cancelling the data service produces `1001` for the
+joined peer and releases its resources. A separately hosted management listener
+still refuses resume after the data service has ended.
+
+The [checkpoint evidence](benchmarks/2026-10-16-shutdown-state-build.json) binds
+127 Rust tests, strict Clippy/formatting and release builds to the source and
+frozen binaries. It also binds C++ compatibility, JavaScript, API, socket stress
+and real browser checks. The [routing comparison](performance.md#terminal-shutdown-admission-2026-10-16)
+retains the measured throughput costs and supplemental check. These finite
+local checks do not establish long-term or hosted behavior.

@@ -1,0 +1,326 @@
+{
+  "scope": "12 sequential fresh processes; three repetitions alternate private/churn order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Equivalent outputs within each workload; full body/sender/FIFO/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.",
+  "before_runtime_revision": "ef3d8fcd3826fbc6a4110167a792867dbf05dfd1",
+  "selected_source_hashes": {
+    "src/admin.rs": "835c1362f83dbb39c57c83ab067d9f6fa5d0f92eb19799389e9a0b491151249d",
+    "src/relay.rs": "47224d79f430c8adbe9bd5452cd200fda1f5669cefe86028d5b7712032a6744f",
+    "src/server.rs": "8824ec99690111ac4577ee3d843df807962e6fb35f582f5f8e35ec08e4eb9f1b",
+    "tests/relay_integration.rs": "1e8ae87dc89b97b2faf6cbdeaa7a64b7286276d93a4c2ef2fbf6c449340beacb"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/ip-admission/war-relay",
+      "sha256": "60182be9581cb0c52e0a05c35c715b32b34f9d55740fa6acd54149700e19abb6"
+    },
+    "selected": {
+      "path": "artifacts/baselines/shutdown-state/war-relay",
+      "sha256": "8bebc344c998ddeb358661c1ef6d0f959b92d3d09fd65c5f0c027b253f371a2f"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/paging-candidate/inspection",
+    "sha256": "a062cbd6b00b7dd3c6b3ac2095ae6d4cccec5d01b7307ad3f654a3b866bc1941",
+    "source_path": "artifacts/baselines/paging-candidate/inspection.rs",
+    "source_sha256": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "runtime_revision": "2e7806b8e255527cc0dc3cc6ffc6813859f71426"
+  },
+  "helpers": {
+    "inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\ncandidate = json.loads((root/'artifacts/shutdown-state-candidate.json').read_text())\nservers = {'before':root/'artifacts/baselines/ip-admission/war-relay',\n           'selected':root/candidate['directory']/'war-relay'}\nclient = root/'artifacts/baselines/paging-candidate/inspection'\noutput = root/'docs/benchmarks/2026-10-16-shutdown-state-comparison.json'\nrecord = {'scope':'12 sequential fresh processes; three repetitions alternate private/churn order and reverse implementation order. Four server workers on CPUs0-3, one frozen client on CPUs4-7. Eight-second cases hold8192 idle rooms and one private pair, 1KiB values/window16. Private has no churn/inspection. Churn adds eight reconnect workers. Equivalent outputs within each workload; full body/sender/FIFO/Close/EOF/exact counter/resource checks. No builds, profilers or competing load tests overlap ordinary timing.',\n          'before_runtime_revision':'ef3d8fcd3826fbc6a4110167a792867dbf05dfd1',\n          'selected_source_hashes':candidate['sources'],\n          'variants':{k:{'path':str(p.relative_to(root)),'sha256':sha(p)} for k,p in servers.items()},\n          'client':{'path':str(client.relative_to(root)),'sha256':sha(client),\n                    'source_path':str((client.parent/'inspection.rs').relative_to(root)),\n                    'source_sha256':sha(client.parent/'inspection.rs'),\n                    'runtime_revision':'2e7806b8e255527cc0dc3cc6ffc6813859f71426'},\n          'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n          'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\nworkloads = ['private','churn']\nfor repetition in range(1,4):\n    offset = (repetition-1)%len(workloads)\n    for workload in workloads[offset:]+workloads[:offset]:\n        roles = ['before','selected'] if repetition%2 else ['selected','before']\n        for role in roles:\n            trace = output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n            command = [sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),\n                       '--client',str(client),'--pairs','1','--seconds','8',\n                       '--mode',('cbor' if workload=='cbor' else 'http' if workload in ['full','page100'] else 'none'),\n                       '--churn-workers','0' if workload=='private' else '8','--output',str(trace)]\n            if workload=='page100': command += ['--page-size','100']\n            done = subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=120)\n            data = json.loads(trace.read_text())\n            assert done.returncode == 0 and data['passed'],done.stdout+done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n            assert data['client_sha256']==record['client']['sha256']\n            assert data['client_source_sha256']==record['client']['source_sha256']\n            mixed = data['mixed']\n            row = {'kind':role,'workload':workload,'repetition':repetition,\n                   'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n                   'healthy':mixed['healthy']['per_second'],'healthy_p99_ms':mixed['healthy']['p99_upper_ms'],\n                   'churn':mixed['churn']['per_second'],'churn_p99_ms':mixed['churn']['p99_upper_ms'],\n                   'inspection':mixed['inspection']['per_second'],'inspection_p99_ms':mixed['inspection']['p99_upper_ms'],\n                   'cpu_wall':mixed['server_cpu_seconds_per_wall_second'],'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n            record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n')\n            print(json.dumps(row),flush=True)\nrecord['medians'] = {}\nfor workload in workloads:\n    for role in servers:\n        rows = [r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n        fields = ['healthy','healthy_p99_ms','churn','churn_p99_ms','inspection','inspection_p99_ms','cpu_wall','rss_mib']\n        summary = {key:statistics.median(r[key] for r in rows) for key in fields}\n        summary['ranges'] = {key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in ['healthy','churn','cpu_wall']}\n        record['medians'][workload+'/'+role] = summary\nrecord['passed'] = True; output.write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "e21bc18c634e88b445521e0c4d8e5514e63ac6cf2c850e98eb3b6bff93559e43",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-before-1.json",
+      "trace_sha256": "251089a419bd56ba5997c61e4dc123d359d72398caaf2d39593a89dfeb5a9a9c",
+      "passed": true,
+      "healthy": 591805.7978166507,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6537475673235835,
+      "rss_mib": 17.4140625
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-selected-1.json",
+      "trace_sha256": "5d8e08c554778069bbe66dfc1046a4ab8f99b46df1ebee30812ae550b93ff0f8",
+      "passed": true,
+      "healthy": 581712.6113786106,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6537461917649965,
+      "rss_mib": 17.33984375
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-before-1.json",
+      "trace_sha256": "b19bbbbf104702d69bdb954701bb6a7ac2d9b8d10c1482058b87ac55b460ca81",
+      "passed": true,
+      "healthy": 366290.3249633834,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72687.64571576458,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4512354395734304,
+      "rss_mib": 17.69140625
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-selected-1.json",
+      "trace_sha256": "575a40b1ba869dcd77e9840ab0f60e8dc43647890376d0f27deac66dbada9374",
+      "passed": true,
+      "healthy": 367219.58611237985,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72360.25524782199,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4524825415229716,
+      "rss_mib": 17.640625
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-selected-2.json",
+      "trace_sha256": "ba7802c44f40ad3ffc6506d79adf635cd4e9bbbe206352d2cf89b3eaa664ffd8",
+      "passed": true,
+      "healthy": 360675.58608847123,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71597.77081401939,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4599902286503972,
+      "rss_mib": 17.6171875
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-before-2.json",
+      "trace_sha256": "50140115b728ffe97ebc472c0765e66db9d09ff8abccd67cab35e2ec4764869f",
+      "passed": true,
+      "healthy": 368339.6505915812,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72987.5344581349,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4612406796589799,
+      "rss_mib": 17.546875
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-selected-2.json",
+      "trace_sha256": "817e8f4a1e5cb524c2bb0b2fad6c4a952b85cb2554b590928413860ab52d9554",
+      "passed": true,
+      "healthy": 576887.100349101,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524967203067974,
+      "rss_mib": 17.37890625
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-before-2.json",
+      "trace_sha256": "fce22c7917f2f70fb65dc369a79d0ff4731765840348efa3c0f495d4d1d5e3bc",
+      "passed": true,
+      "healthy": 586879.202420202,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524968896288892,
+      "rss_mib": 17.4140625
+    },
+    {
+      "kind": "before",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-before-3.json",
+      "trace_sha256": "5009dacd2f917296073ac66d85f2de8470a168757401d7a956ab39bf82f70b26",
+      "passed": true,
+      "healthy": 584902.2123926134,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6512480096232706,
+      "rss_mib": 17.30078125
+    },
+    {
+      "kind": "selected",
+      "workload": "private",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-private-selected-3.json",
+      "trace_sha256": "26673375e90491ad310244e0b1d42a37534a5996cf4f777c5abafc032c63ce70",
+      "passed": true,
+      "healthy": 564263.1495541671,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6499967164603372,
+      "rss_mib": 17.40234375
+    },
+    {
+      "kind": "before",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-before-3.json",
+      "trace_sha256": "8d5fc12def7f2aa8840f1b1db959a978d38f8468d03e7871f34c290006ec4dd3",
+      "passed": true,
+      "healthy": 358623.39142045274,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71753.3279159213,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4774810132608691,
+      "rss_mib": 17.62890625
+    },
+    {
+      "kind": "selected",
+      "workload": "churn",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-shutdown-state-comparison-churn-selected-3.json",
+      "trace_sha256": "bff84f10d47b8f268b06737d6d949a4339134f8cf34cf55d80e7928216fd0a12",
+      "passed": true,
+      "healthy": 360580.5888625568,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71978.44407492175,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4774860227975386,
+      "rss_mib": 17.6171875
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "private/before": {
+      "healthy": 586879.202420202,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524968896288892,
+      "rss_mib": 17.4140625,
+      "ranges": {
+        "healthy": [
+          584902.2123926134,
+          591805.7978166507
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6512480096232706,
+          0.6537475673235835
+        ]
+      }
+    },
+    "private/selected": {
+      "healthy": 576887.100349101,
+      "healthy_p99_ms": 0.032768,
+      "churn": 0.0,
+      "churn_p99_ms": 0.0,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 0.6524967203067974,
+      "rss_mib": 17.37890625,
+      "ranges": {
+        "healthy": [
+          564263.1495541671,
+          581712.6113786106
+        ],
+        "churn": [
+          0.0,
+          0.0
+        ],
+        "cpu_wall": [
+          0.6499967164603372,
+          0.6537461917649965
+        ]
+      }
+    },
+    "churn/before": {
+      "healthy": 366290.3249633834,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72687.64571576458,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4612406796589799,
+      "rss_mib": 17.62890625,
+      "ranges": {
+        "healthy": [
+          358623.39142045274,
+          368339.6505915812
+        ],
+        "churn": [
+          71753.3279159213,
+          72987.5344581349
+        ],
+        "cpu_wall": [
+          1.4512354395734304,
+          1.4774810132608691
+        ]
+      }
+    },
+    "churn/selected": {
+      "healthy": 360675.58608847123,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71978.44407492175,
+      "churn_p99_ms": 0.524288,
+      "inspection": 0.0,
+      "inspection_p99_ms": 0.0,
+      "cpu_wall": 1.4599902286503972,
+      "rss_mib": 17.6171875,
+      "ranges": {
+        "healthy": [
+          360580.5888625568,
+          367219.58611237985
+        ],
+        "churn": [
+          71597.77081401939,
+          72360.25524782199
+        ],
+        "cpu_wall": [
+          1.4524825415229716,
+          1.4774860227975386
+        ]
+      }
+    }
+  }
+}

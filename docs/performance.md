@@ -3574,3 +3574,62 @@ workload passed but its collector failed before saving the report; its local
 capture is preserved separately, and the published profile is a fresh complete
 run. Raw perf data stays local and is ignored by Git. These are Linux loopback
 checks with a bounded active population, without TLS or production acceptance.
+
+## Terminal shutdown admission, 2026-10-16
+
+This is a management correctness fix with measured routing costs. Separate
+public drain and private stopping booleans let an authorized resume clear
+shutdown admission. A regression returned `204` where terminal shutdown must
+return `409`. One atomic state makes shutdown terminal and leaves ordinary
+manual drain/resume reversible. The state is read at admission and departure;
+no new payload-path check, allocation or body copy is introduced. The
+[stability record](stability.md#terminal-shutdown-admission-2026-10-16) describes
+the failure and real HTTP/WebSocket checks.
+
+The [first comparison](benchmarks/2026-10-16-shutdown-state-comparison.json)
+runs 12 sequential fresh processes: three alternating before/selected pairs
+for private routing and private routing with eight reconnect workers. Each
+8-second case retains 8,192 idle rooms and one active private pair, 1 KiB values
+and a window of 16. Four server workers use CPUs 0–3; the same frozen inspection
+client uses CPUs 4–7. Every body, sender, FIFO order, Close/EOF, counter total
+and final resource release is checked. Builds, profilers and other load tests
+do not overlap ordinary timings. The baseline is runtime `ef3d8fc`.
+
+| Workload | Before median | Selected median | Change |
+| --- | ---: | ---: | ---: |
+| Private deliveries/s | 586,879 | 576,887 | −1.70% |
+| Mixed healthy deliveries/s | 366,290 | 360,676 | −1.53% |
+| Mixed reconnect cycles/s | 72,688 | 71,978 | −0.98% |
+| Mixed server CPU seconds/wall second | 1.46124 | 1.45999 | −0.09% |
+
+The first private throughput ranges do not overlap: 584,902–591,806 before
+versus 564,263–581,713 selected. Private server CPU per delivery rises about
+1.73%. Mixed throughput and CPU ranges overlap; CPU there covers both routing
+and reconnection and is not assigned to either operation independently.
+
+Because every first private pair favored the baseline, a
+[supplemental private check](benchmarks/2026-10-16-shutdown-state-private-recheck.json)
+uses four more alternating pairs and 12-second cases, with the identical frozen
+binaries/client and remaining workload. Median throughput is 577,322 versus
+573,948 deliveries/s (−0.58%); CPU per delivery is +0.46%. Ranges overlap at
+573,644–583,315 versus 573,233–574,876 deliveries/s. Both records remain
+published; the recheck does not replace the initial result. Private p99 is the
+same 0.032768 ms histogram bucket throughout. Mixed healthy/churn p99 remain
+0.131072/0.524288 ms. RSS at the timed gate stays approximately 17.3–17.7 MiB.
+
+The change is retained for the reproduced shutdown failure, with the observed
+small throughput reductions stated explicitly. No speedup or production
+capacity claim follows from these Linux loopback runs. Application bodies
+continue to share their original storage. The
+[manifest](benchmarks/2026-10-16-shutdown-state-build.json) binds source, binary,
+client and helper hashes, all 20 timed traces and the separate functional
+acceptance checks. The stress checks use the newer exact-acknowledgement/EOF
+client; the mixed timing client retains its independently recorded eight-byte
+counter contract, identical on both sides.
+
+The separate stress cases record zero routed-body copy bytes for ordinary
+traffic, churn and the slow-reader workload. Mixed-size fanout reuses
+2,209,485,464 value bytes and compacts 6,496,872 (0.293%) under the existing
+small-view policy after receive storage grows. This bounded copy prevents a
+small value from retaining a large shared slab; it is counted once before
+fanout. The same policy is present in the baseline and was not changed here.
