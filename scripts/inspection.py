@@ -111,13 +111,15 @@ def run(args):
                                   HEAP_PROFILE_ALLOCATION_INTERVAL=str(100 * 1024**3),
                                   HEAP_PROFILE_INUSE_INTERVAL=str(100 * 1024**3))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
-                      "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
+                      "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
     command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}", "--admin", f"127.0.0.1:{admin}",
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
     if getattr(args, "page_size", None) is not None:
         command += ["--page-size", str(args.page_size)]
+    if args.fanout_readers:
+        command += ["--fanout-readers", str(args.fanout_readers)]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -126,6 +128,8 @@ def run(args):
               "host": platform.platform(), "server_command": server_command, "command": command,
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_sha256": digest(ROOT / "examples/inspection.rs"), "runner_sha256": digest(__file__),
+              "client_sources_sha256": {str(p.relative_to(ROOT)): digest(p) for p in
+                                       [ROOT / "examples/inspection.rs"] + sorted((ROOT / "examples/inspection").glob("*.rs"))},
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
               "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "passed": False,
               "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic 1KiB templates and 16-message windows; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
@@ -165,11 +169,12 @@ def run(args):
                 if not line:
                     raise RuntimeError("inspection client stopped before final gate")
                 event = json.loads(line)
-                event.update(metrics=metrics(admin), process=runtime.snapshot(server.pid), seconds=time.monotonic() - started)
+                event.update(metrics=metrics(admin), process=runtime.snapshot(server.pid),
+                             client_process=runtime.snapshot(client.pid), seconds=time.monotonic() - started)
                 result["events"].append(event)
                 if event["event"] == "ready":
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
-                    check(event, stable_sessions, stable_channels, args.read_storage)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
                     if args.profile:
                         profile = args.output.with_suffix(".perf.data")
                         perf_log = tempfile.TemporaryFile()
@@ -181,7 +186,7 @@ def run(args):
                         result["profile_path"] = str(profile)
                     ready = event
                 elif event["event"] == "measured":
-                    check(event, stable_sessions, stable_channels, args.read_storage)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
                     if perf is not None:
                         perf.send_signal(signal.SIGINT)
                         result["perf_exit_code"] = perf.wait(timeout=10)
@@ -193,13 +198,16 @@ def run(args):
                     mixed = dict(event["details"])
                     mixed["server_cpu_seconds"] = event["process"]["cpu_seconds"] - ready["process"]["cpu_seconds"]
                     mixed["server_cpu_seconds_per_wall_second"] = mixed["server_cpu_seconds"] / mixed["elapsed_seconds"]
+                    mixed["client_cpu_seconds"] = event["client_process"]["cpu_seconds"] - ready["client_process"]["cpu_seconds"]
+                    mixed["client_cpu_seconds_per_wall_second"] = mixed["client_cpu_seconds"] / mixed["elapsed_seconds"]
                     assert mixed["healthy"]["verified"] > 0
                     assert (mixed["churn"]["verified"] > 0) == (args.churn_workers > 0)
                     assert (mixed["inspection"]["verified"] > 0) == (args.mode != "none" and args.inspectors > 0)
+                    assert (mixed.get("fanout", {}).get("verified", 0) > 0) == (args.fanout_readers > 0)
                     result["mixed"] = mixed
                     print(json.dumps(mixed), flush=True)
                 elif event["event"] == "done":
-                    check(event, stable_sessions, stable_channels, args.read_storage)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
                     assert event["details"]["passed"]
                     assert event["details"]["counts"]["joins"] == event["details"]["counts"]["normal_closes"]
                 else:
@@ -259,6 +267,9 @@ if __name__ == "__main__":
     parser.add_argument("--inspection-interval-ms", type=int, default=10)
     parser.add_argument("--pairs", type=int, default=2)
     parser.add_argument("--churn-workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=4, help="Native server worker count")
+    parser.add_argument("--fanout-readers", type=int, default=0,
+                        help="Add a verified broadcast room; requires the updated client")
     parser.add_argument("--read-storage", choices=["worker", "connection"], default="worker",
                         help="staging accounting contract; use connection for the frozen async control")
     parser.add_argument("--server-cpus", default="0-3")

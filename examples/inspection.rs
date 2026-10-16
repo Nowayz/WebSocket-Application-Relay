@@ -1,5 +1,7 @@
 //! Concurrent inspection, private traffic and connection churn over real sockets.
 //! The controller gates setup, measurement and cleanup; every output is checked.
+#[path = "inspection/fanout.rs"]
+mod fanout;
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
@@ -105,6 +107,9 @@ struct Args {
     pairs: usize,
     #[arg(long, default_value_t = 8)]
     churn_workers: usize,
+    /// Add a stable broadcast room with this many fully verifying readers.
+    #[arg(long, default_value_t = 0)]
+    fanout_readers: usize,
 }
 
 #[derive(Default, Serialize)]
@@ -662,6 +667,7 @@ async fn main() -> Result<()> {
             && (1..=60).contains(&args.seconds)
             && (1..=8).contains(&args.pairs)
             && args.churn_workers <= 64
+            && args.fanout_readers <= 1024
             && args.inspectors <= 8
             && (1..=1000).contains(&args.inspection_interval_ms),
         "invalid workload bounds"
@@ -776,6 +782,17 @@ async fn main() -> Result<()> {
     } else {
         None
     };
+    let fanout = if args.fanout_readers > 0 {
+        let group =
+            fanout::Fanout::new(&args.url, args.fanout_readers, args.wire, &mut counts).await?;
+        stable.push((
+            Bytes::from_static(b"fanout"),
+            args.fanout_readers as u64 + 1,
+        ));
+        Some(group)
+    } else {
+        None
+    };
     let expected = Arc::new(Expected::new(&stable, args.churn_workers, args.page_size));
     let mut buffer = Vec::with_capacity(1024 * 1024);
     let mut inspections_verified = 0u64;
@@ -795,10 +812,11 @@ async fn main() -> Result<()> {
     }
     gate(
         "ready",
-        serde_json::json!({"counts":counts,"stable_channels":stable.len(),"stable_sessions":args.rooms+args.pairs*2+if matches!(args.mode,Mode::Cbor|Mode::Binary) {inspectors}else{0}+usize::from(args.protocol_only)}),
+        serde_json::json!({"counts":counts,"stable_channels":stable.len(),"stable_sessions":counts.joins}),
     )?;
     let started = Instant::now();
     let until = started + Duration::from_secs(args.seconds);
+    let fanout = fanout.map(|group| tokio::spawn(group.run(until)));
     let traffic: Vec<_> = pairs
         .into_iter()
         .map(|pair| tokio::spawn(healthy(pair, until)))
@@ -833,6 +851,7 @@ async fn main() -> Result<()> {
     let mut pairs = Vec::new();
     let mut sockets = Vec::new();
     let mut churn_lifecycles = Vec::new();
+    let mut fanout_stats = Histogram::new();
     for task in traffic {
         let (pair, n, stats) = task.await??;
         counts.merge(&n);
@@ -851,10 +870,18 @@ async fn main() -> Result<()> {
         inspection_stats.merge(&stats);
         sockets.push(s);
     }
+    let fanout = if let Some(task) = fanout {
+        let (group, n, stats) = task.await??;
+        counts.merge(&n);
+        fanout_stats.merge(&stats);
+        Some(group)
+    } else {
+        None
+    };
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed)}),
+        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed)}),
     )?;
     // For short C++ churn runs, verify its delayed retirement explicitly. The
     // controller bounds the entire case to finish before the first 30-second GC.
@@ -882,6 +909,9 @@ async fn main() -> Result<()> {
         let bytes = exchange(socket, args.wire.query(), &mut counts).await?;
         args.wire.check_query(&expected, &bytes, true)?;
         inspections_verified += 1;
+    }
+    if let Some(group) = fanout {
+        group.close(&mut counts).await?;
     }
     for socket in &mut idle {
         close(socket, &mut counts).await?;
