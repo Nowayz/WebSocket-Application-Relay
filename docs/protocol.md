@@ -78,7 +78,9 @@ return `[false, null]`, while a stored null returns `[true, null]`. Byte budgets
 count key bytes plus encoded value bytes. Ordinary-channel values disappear with
 the last member; global variables persist until restart.
 
-ID reassignment is atomic with routing. It closes a displaced owner with `4001`.
+Routing selects the sender ID and target session atomically with ID reassignment.
+A route begun after an assignment acknowledgement uses the current owner;
+already accepted output may finish later. Reassignment closes a displaced owner with `4001`.
 Assigning one's current ID succeeds. A displaced owner's disconnect event reports
 its actual departed ID, fixing upstream's occasional zero-ID event after takeover.
 Global-channel disconnect notifications are delivered once instead of duplicating

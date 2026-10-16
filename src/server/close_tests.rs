@@ -40,22 +40,17 @@ fn exercise_blocked_close(server_initiated: bool) {
         .unwrap();
     listener.set_nonblocking(true).unwrap();
     let worker = Worker::new(listener, relay.clone()).unwrap();
+    relay.metrics.connections.fetch_add(1, Relaxed);
     let socket = Socket::new(
         mio::net::TcpStream::from_std(server),
         Token(2),
         worker.registry.clone(),
         worker.signal.clone(),
+        ConnectionGuard(relay.metrics.clone()),
         &relay,
     )
     .unwrap();
-    relay.metrics.connections.fetch_add(1, Relaxed);
-    let mut connection = Connection::new(
-        socket.clone(),
-        Token(2),
-        None,
-        ConnectionGuard(relay.metrics.clone()),
-        &relay,
-    );
+    let mut connection = Connection::new(socket.clone(), Token(2), None, &relay);
     connection.stage = Stage::WebSocket(WebSocket::from_raw_socket(
         Stream {
             socket: socket.clone(),

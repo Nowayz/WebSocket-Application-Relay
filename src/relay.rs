@@ -39,8 +39,38 @@ pub struct Relay {
 struct Registry {
     users: HashMap<u64, Arc<Peer>>,
     channels: HashMap<Bytes, Channel>,
+    // Only authenticated global members opting into each class belong here.
+    // Routing visits eligible listeners, independent of the idle population.
+    listeners: [Vec<Arc<Peer>>; 3],
     next_key: u64,
     sessions: usize,
+}
+
+impl Registry {
+    fn set_listener_flags(&mut self, peer: &Peer, flags: u8) {
+        let previous = peer.listener.load(Relaxed);
+        peer.listener.store(flags, Relaxed);
+        for (bit, listeners) in self.listeners.iter_mut().enumerate() {
+            let mask = 1 << bit;
+            if (previous ^ flags) & mask == 0 {
+                continue;
+            }
+            if flags & mask != 0 {
+                if let Some(member) = self.channels[GLOBAL_CHANNEL].members.get(&peer.key) {
+                    listeners.push(member.clone());
+                }
+            } else if let Some(position) = listeners.iter().position(|p| p.key == peer.key) {
+                listeners.swap_remove(position);
+                if listeners.capacity() > 256 && listeners.len() <= listeners.capacity() / 8 {
+                    listeners.shrink_to(listeners.len() * 2);
+                }
+            }
+        }
+    }
+
+    fn listeners(&self, flag: u8) -> &[Arc<Peer>] {
+        &self.listeners[flag.trailing_zeros() as usize]
+    }
 }
 
 fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
@@ -263,6 +293,7 @@ impl Relay {
             state: RwLock::new(Registry {
                 users: HashMap::new(),
                 channels,
+                listeners: Default::default(),
                 next_key: 1,
                 sessions: 0,
             }),
@@ -458,6 +489,15 @@ impl Relay {
             &self.metrics.routing_reused_bytes
         };
         counter.fetch_add(frame.payload().len() as u64, Relaxed);
+        if let Some(recipient) = private_recipient
+            && state.listeners(PRIVATE_MESSAGE).is_empty()
+        {
+            // Lookup and sender identity form one registry snapshot. The
+            // retained target owns its lifetime through the socket write.
+            let recipient = recipient.clone();
+            drop(state);
+            return recipient.enqueue_frame(&frame);
+        }
         if target == BROADCAST {
             if peer.channel.as_ref() == GLOBAL_CHANNEL {
                 for recipient in state.users.values() {
@@ -473,18 +513,14 @@ impl Relay {
                         }
                     }
                 }
-                for recipient in state.channels[GLOBAL_CHANNEL].members.values() {
-                    if recipient.listener.load(Relaxed) & CHANNEL_MESSAGE != 0 {
-                        recipient.enqueue_frame(&frame)?;
-                    }
+                for recipient in state.listeners(CHANNEL_MESSAGE) {
+                    recipient.enqueue_frame(&frame)?;
                 }
             }
         } else if let Some(recipient) = private_recipient {
             recipient.enqueue_frame(&frame)?;
-            for listener in state.channels[GLOBAL_CHANNEL].members.values() {
-                if listener.key != recipient.key
-                    && listener.listener.load(Relaxed) & PRIVATE_MESSAGE != 0
-                {
+            for listener in state.listeners(PRIVATE_MESSAGE) {
+                if listener.key != recipient.key {
                     listener.enqueue_frame(&frame)?;
                 }
             }
@@ -511,7 +547,15 @@ impl Relay {
                 if !peer.authenticated.load(Relaxed) {
                     return self.unauthorized();
                 }
-                peer.listener.store(flags & 7, Relaxed);
+                if peer.channel.as_ref() == GLOBAL_CHANNEL {
+                    let mut state = self.state.write();
+                    if peer.closing.load(Relaxed) {
+                        return Ok(());
+                    }
+                    state.set_listener_flags(peer, flags & 7);
+                } else {
+                    peer.listener.store(flags & 7, Relaxed);
+                }
                 peer.enqueue(&protocol::reply(1, &protocol::uint(u64::from(flags & 7))))?;
             }
             Command::Channels => {
@@ -640,11 +684,12 @@ impl Relay {
             // the persistent global room can release spare membership slots.
             shrink_sparse_map(&mut channel.members);
         }
+        if peer.channel.as_ref() == GLOBAL_CHANNEL {
+            state.set_listener_flags(peer, 0);
+        }
         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
-            for recipient in state.channels[GLOBAL_CHANNEL].members.values() {
-                if recipient.listener.load(Relaxed) & DISCONNECT_MESSAGE != 0 {
-                    let _ = recipient.enqueue(frame.as_ref().expect("notifications enabled"));
-                }
+            for recipient in state.listeners(DISCONNECT_MESSAGE) {
+                let _ = recipient.enqueue(frame.as_ref().expect("notifications enabled"));
             }
         }
         // A displaced session must never erase the new owner of its previous ID.
@@ -666,6 +711,9 @@ fn random_id() -> Result<u64> {
     getrandom::fill(&mut bytes).context("operating system entropy unavailable")?;
     Ok(u64::from_ne_bytes(bytes))
 }
+
+#[cfg(test)]
+mod listener_tests;
 
 #[cfg(test)]
 mod tests {

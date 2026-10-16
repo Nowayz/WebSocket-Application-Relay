@@ -17,6 +17,7 @@ use std::{
 use mio::{Interest, Registry, Token, Waker, net::TcpStream};
 use parking_lot::Mutex;
 
+use super::ConnectionGuard;
 use crate::{
     frame::Frame,
     metrics::Metrics,
@@ -49,6 +50,9 @@ pub(super) struct Socket {
     queue_limit: usize,
     write_timeout: Duration,
     track_activity: bool,
+    // Drop after State (and its TCP descriptor), including when a route keeps
+    // this socket alive beyond the decoder's retirement.
+    _guard: ConnectionGuard,
 }
 
 pub(super) struct State {
@@ -75,6 +79,7 @@ impl Socket {
         token: Token,
         registry: Arc<Registry>,
         signal: Arc<Signal>,
+        guard: ConnectionGuard,
         relay: &crate::Relay,
     ) -> io::Result<Arc<Self>> {
         let socket = Arc::new(Self {
@@ -97,6 +102,7 @@ impl Socket {
             queue_limit: relay.config.queue_messages,
             write_timeout: relay.config.write_timeout(),
             track_activity: relay.config.idle_timeout_secs > 0,
+            _guard: guard,
         });
         socket
             .registry
@@ -479,11 +485,13 @@ mod tests {
             stopping: AtomicBool::new(false),
             pending: Mutex::new(VecDeque::new()),
         });
+        relay.metrics.connections.fetch_add(1, Relaxed);
         let socket = Socket::new(
             TcpStream::from_std(stream),
             Token(2),
             registry,
             signal,
+            ConnectionGuard(relay.metrics.clone()),
             &relay,
         )
         .unwrap();

@@ -70,6 +70,8 @@ def run(args):
                "--peak-clients", str(args.peak_clients), "--waves", str(args.waves),
                "--seconds", str(args.seconds), "--payload-bytes", str(args.payload_bytes)]
     command += ["--scope", args.scope]
+    if args.measure_populated:
+        command.append("--measure-populated")
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -82,6 +84,7 @@ def run(args):
               "runner_sha256": digest(__file__), "profile_diagnostic": args.profile,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "scope": "Two retained clients, 64 prebuilt cyclic values, 16 message windows; every encoded sender/value/order checked. Global: broadcast with transient peers in separate rooms. Room: ordinary room broadcast, transient peers in the same room. Private: private delivery with all peers in the global room, exercising its listener index with default zero listener flags. Channels: repeated authenticated queries on the sender, exact independent CBOR reply, separate temporary rooms; authenticated HTTP inspection checks every field and base64 ordering at each gate, outside timed snapshots. Both shared-room modes verify every departing ID and exact FIFO prefix at each remaining peer, pacing 16 departures per window by reader progress so default queue limits remain intact. All peers verify exact normal Close and EOF. Gated event-boundary metrics/CPU/RSS snapshots, no continuous RSS peak claim. Loopback, no TLS; heartbeat and rates disabled. CPU deltas include one management sample at each boundary, at host tick resolution. Profiled cases are diagnostic, not timing samples.",
+              "population_traffic_scope": "When requested, a separate private traffic phase holds every global-room member connected with zero listener flags. Only the addressed recipient receives data; all members subsequently verify exact FIFO departure notifications, Close and EOF. Population setup and retirement are outside routing timing.",
               "events": [], "traffic": [], "passed": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
@@ -103,7 +106,7 @@ def run(args):
             client = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=client_errors, text=True, env=env)
             ready = {}
-            limit = (args.waves + 1) * args.seconds + args.peak_clients * args.waves * .02 + 40
+            limit = (args.waves + 1 + args.waves * args.measure_populated) * args.seconds + args.peak_clients * args.waves * .02 + 40
             while True:
                 if time.monotonic() - started > limit:
                     raise TimeoutError("registry workload exceeded its outer deadline")
@@ -123,11 +126,12 @@ def run(args):
                     event["management_inspection"] = inspection(admin, event["event"], args.peak_clients)
                 result["events"].append(event)
                 observed, wave = event["metrics"], event["wave"]
-                if event["event"] == "traffic_ready":
-                    assert observed["war_connections"] == observed["war_sessions"] == 2
+                if event["event"] in ("traffic_ready", "population_traffic_ready"):
+                    populated = event["event"] == "population_traffic_ready"
+                    assert observed["war_connections"] == observed["war_sessions"] == (args.peak_clients + 2 if populated else 2)
                     assert observed["war_channels"] == (2 if args.scope == "room" else 1)
                     ready[wave] = event
-                    if args.profile and wave == 1:
+                    if args.profile and wave == 1 and populated == args.measure_populated:
                         profile = args.output.with_suffix(".perf.data")
                         perf_log = tempfile.TemporaryFile()
                         perf = subprocess.Popen(["perf", "record", "-e", "cycles:u", "-F", "499",
@@ -137,7 +141,7 @@ def run(args):
                         if perf.poll() is not None:
                             raise RuntimeError("perf could not attach")
                         result["profile_path"] = str(profile)
-                elif event["event"] == "traffic_done":
+                elif event["event"] in ("traffic_done", "population_traffic_done"):
                     if perf is not None:
                         perf.send_signal(signal.SIGINT)
                         result["perf_exit_code"] = perf.wait(timeout=10)
@@ -158,7 +162,7 @@ def run(args):
                                 "war_routing_copied_bytes_total": 0}
                     for key, value in expected.items():
                         assert observed[key] - before["metrics"][key] == value, key
-                    row = {"wave": wave, **output, "server_cpu_seconds": cpu,
+                    row = {"wave": wave, "populated": event["event"] == "population_traffic_done", **output, "server_cpu_seconds": cpu,
                            "server_ns_per_delivery": cpu * 1e9 / output["verified"]}
                     result["traffic"].append(row)
                     print(json.dumps(row), flush=True)
@@ -230,8 +234,11 @@ if __name__ == "__main__":
     parser.add_argument("--client-cpus", default="4-7")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--scope", choices=["global", "room", "private", "channels"], default="global")
+    parser.add_argument("--measure-populated", action="store_true", help="also measure private routing while all global-room members remain connected")
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
+    if arguments.measure_populated and arguments.scope != "private":
+        parser.error("--measure-populated requires --scope private")
     outcome = run(arguments)
     print(json.dumps({"passed": outcome["passed"], "error": outcome.get("error")}), flush=True)
     raise SystemExit(0 if outcome["passed"] else 1)

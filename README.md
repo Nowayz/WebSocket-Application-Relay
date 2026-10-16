@@ -173,6 +173,9 @@ recorded results and local dependency setup.
   Routing submits bounded nonblocking writes directly. Only backpressure creates
   a recipient queue. A per-socket lock serializes writes from different workers;
   registry reads protect routing and writes protect membership/ID changes.
+  Private routing with no eligible observers retains the target under the
+  registry lock, then releases that lock before output. Global listener indexes
+  visit opted-in sessions for channel, private and departure events.
   Fanout shares one immutable application body across recipients.
 - SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
   receive `1001`; blocked transports can be dropped. Peer-initiated Close frames

@@ -250,7 +250,9 @@ suppressed to avoid quadratic traffic among sessions that are all closing.
 
 A close decision removes routing membership and releases queued reservations
 before waiting for a graceful handshake. TCP connection capacity remains charged
-until the transport ends. Policy cancellation interrupts an in-flight socket
+until the transport ends. The socket owns that reservation, including when an
+in-flight private route retains its target beyond decoder retirement.
+Policy cancellation interrupts an in-flight socket
 write immediately. A partial or failed frame is never followed by a second
 blocking flush; that transport is dropped, so an unread client may observe a
 reset/abnormal close instead of the intended WebSocket close code. Responsive

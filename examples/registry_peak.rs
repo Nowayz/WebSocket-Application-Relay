@@ -51,6 +51,9 @@ struct Args {
     /// inspect a retained channel-name table after separate rooms depart.
     #[arg(long, value_enum, default_value = "global")]
     scope: Scope,
+    /// Also measure private delivery while the global-room population is live.
+    #[arg(long)]
+    measure_populated: bool,
 }
 
 #[tokio::main(worker_threads = 4)]
@@ -65,6 +68,10 @@ async fn main() -> Result<()> {
         "seconds must be in 1..=60"
     );
     ensure!((1..=8).contains(&args.waves), "waves must be in 1..=8");
+    ensure!(
+        !args.measure_populated || matches!(args.scope, Scope::Private),
+        "measure-populated requires private scope"
+    );
     ensure!(
         (8..=65536).contains(&args.payload_bytes),
         "payload-bytes must be in 8..=65536"
@@ -138,6 +145,18 @@ async fn main() -> Result<()> {
             wave,
             serde_json::json!({"sessions":args.peak_clients+2,"channels":match args.scope {Scope::Global | Scope::Channels =>args.peak_clients+1, Scope::Room=>2, Scope::Private=>1}}),
         )?;
+        if args.measure_populated {
+            gate(
+                "population_traffic_ready",
+                wave,
+                serde_json::json!({"sessions":args.peak_clients+2}),
+            )?;
+            gate(
+                "population_traffic_done",
+                wave,
+                traffic(&mut sender, &mut receiver, &packets, args.seconds, false).await?,
+            )?;
+        }
         if same_room {
             let (next_sender, next_receiver, deliveries, bytes) =
                 depart_room(sender, receiver, &mut fillers).await?;

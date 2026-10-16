@@ -6,6 +6,8 @@ mod timers;
 
 #[cfg(all(test, target_os = "linux"))]
 mod close_tests;
+#[cfg(test)]
+mod ownership_tests;
 
 pub use crate::admin::admin_router;
 
@@ -299,9 +301,10 @@ impl Worker {
                 token,
                 self.registry.clone(),
                 self.signal.clone(),
+                guard,
                 &self.relay,
             )?;
-            let connection = Connection::new(socket, token, lease, guard, &self.relay);
+            let connection = Connection::new(socket, token, lease, &self.relay);
             let deadline = connection.deadline(&self.relay);
             self.connections.insert(connection);
             self.tokens.insert(token, slot);
@@ -502,7 +505,6 @@ struct Connection {
     next_ping: Instant,
     pong_deadline: Option<Instant>,
     reclaim_deadline: Option<Instant>,
-    _guard: ConnectionGuard,
 }
 
 struct Closing {
@@ -522,7 +524,6 @@ impl Connection {
         socket: Arc<Socket>,
         token: Token,
         lease: Option<ReadLease>,
-        guard: ConnectionGuard,
         relay: &Arc<Relay>,
     ) -> Self {
         let config = &relay.config;
@@ -555,7 +556,6 @@ impl Connection {
             next_ping: now + Duration::from_secs(config.ping_interval_secs.max(1)),
             pong_deadline: None,
             reclaim_deadline: None,
-            _guard: guard,
         }
     }
 
