@@ -1714,3 +1714,88 @@ async fn an_abrupt_transport_drop_is_counted_separately_from_protocol_violations
     assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 1);
     server.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn private_routing_keeps_progress_through_registry_growth_and_retirement() {
+    let server = Server::new(Config {
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut sender, id) = server.join("registry-health").await;
+    let (mut receiver, target) = server.join("registry-health").await;
+    let finished = CancellationToken::new();
+    let phase = AtomicU64::new(0);
+    let population = async {
+        let service = &server;
+        let sockets = futures_util::stream::iter(0..2048)
+            .map(|i| async move {
+                let room = format!("wave-{i}");
+                service.join(&room).await.0
+            })
+            .buffer_unordered(32)
+            .collect::<Vec<_>>()
+            .await;
+        assert_eq!(server.relay.counts(), (2050, 2050));
+        phase.store(1, Relaxed);
+        futures_util::stream::iter(sockets)
+            .map(|mut socket| async move {
+                socket
+                    .send(Message::Close(Some(
+                        tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                            code: 1000.into(),
+                            reason: "registry-wave".into(),
+                        },
+                    )))
+                    .await
+                    .unwrap();
+                assert_eq!(close_code(&mut socket).await, 1000);
+                assert!(
+                    timeout(Duration::from_secs(3), socket.next())
+                        .await
+                        .unwrap()
+                        .is_none()
+                );
+            })
+            .buffer_unordered(32)
+            .collect::<Vec<_>>()
+            .await;
+        finished.cancel();
+    };
+    let healthy = async {
+        let mut counts = [0u64; 2];
+        let mut payload = [0x5a; 1024];
+        while !finished.is_cancelled() {
+            let stage = phase.load(Relaxed) as usize;
+            let sequence: u64 = counts.iter().sum();
+            payload[..8].copy_from_slice(&sequence.to_le_bytes());
+            let value = protocol::byte_string(&payload);
+            send(&mut sender, target, &value).await;
+            assert_eq!(data(&mut receiver).await, protocol::envelope(id, &value));
+            counts[stage] += 1;
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        counts
+    };
+    let (_, progress) = tokio::join!(population, healthy);
+    assert!(
+        progress[0] > 0 && progress[1] > 0,
+        "no progress in phase: {progress:?}"
+    );
+    assert_eq!(server.relay.counts(), (2, 2));
+    let metrics = &server.relay.metrics;
+    assert_eq!(metrics.joined.load(Relaxed), 2050);
+    assert_eq!(metrics.disconnected.load(Relaxed), 2048);
+    assert_eq!(metrics.close_failures.load(Relaxed), 0);
+    assert_eq!(metrics.transport_disconnects.load(Relaxed), 0);
+    assert_eq!(metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(metrics.routing_copied_bytes.load(Relaxed), 0);
+    // Both original peers remain usable after all retirement thresholds.
+    send(&mut sender, target, &[0xa1, 0x61, b'x', 0xf5]).await;
+    assert_eq!(
+        data(&mut receiver).await,
+        protocol::envelope(id, &[0xa1, 0x61, b'x', 0xf5])
+    );
+    server.stop().await;
+}

@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 80 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 83 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -467,6 +467,67 @@ The [summary](benchmarks/2026-10-16-origin-summary.json),
 The ongoing goal remains active, with no hosted deployment, cluster capacity or
 TLS-proxy acceptance claimed.
 
+## Latest checkpoint: ID registry lifetime, 2026-10-16
+
+An unchanged-release probe reproduced slower global routing after 8,192 peers
+had joined and left separate rooms. The two original global clients stayed
+connected; their ID map retained spare buckets from the large population.
+A separate user-cycle profile and annotated group-scan loop identified this
+work inside routing. The selected change reduces excess ID-table capacity after
+session removal and occupied fixed-ID takeover, keeping small tables and
+regrowth headroom. It adds no per-message check, allocation or body movement.
+Peer and payload pointers, in-flight byte reservations and late displaced-owner
+cleanup are verified directly. Other registry tables keep their existing policy.
+
+Three final processes per build, each with three 8,192-peer waves, verify
+31,309,200 ordered deliveries and 147,468 normal Close handshakes. Post-wave
+medians improve from 416,192 to 447,340 deliveries/s (+7.48%) and from 1,638
+to 1,464 server ns/delivery (−10.64%), with the same p99 bucket. Fresh CPU differs
+by +0.62%. Filling/draining stay in the same 10 ms CPU bins; rehash allocation
+and brief write-lock work remain a tradeoff. Two separate 2,250-sample profiles
+have zero lost samples; `Relay::receive` drops from 23.97% to 7.91% of sampled
+user cycles. Profiled timings are excluded from comparisons.
+
+All 26 ordinary cost cases pass: 63,091,904 traffic deliveries and 2,531,922
+normal churn lifecycles, with zero routed-value compaction and complete cleanup.
+At 1 KiB, median throughput/CPU differ by +0.81%/−0.40%; churn differs by
++0.07%/+0.12%. A short 64 KiB tail spread received four longer alternating pairs:
+median p99 is then 4.194304 ms in both builds, throughput differs by −1.57%, and
+CPU/delivery by +0.27%, with overlapping ranges. One selected long run retains
+the higher 8.388608 ms bucket. The gain is scoped to routing after population
+waves; these data do not establish a general ordinary-traffic speed improvement.
+
+All 83 Rust tests pass, with the three new regressions also passing in release,
+plus strict Clippy/formatting, 62-file vendor verification, seven JS socket cases,
+the independent 776-case/2,311-exchange release corpus and the original C++
+48-common-case/eight-explicit-difference comparison. A four-worker network
+regression keeps exact private delivery active during 2,048 concurrent arrivals
+and departures. The new probe also checks normal service exit; a real-socket
+wrapper that deliberately exits 7 reproduces the earlier verifier's false
+success and is correctly rejected by the final runner. All captured population-comparison
+services independently exit zero; calibration is excluded from timing results.
+
+Quiescent native/bridge services were verified by PID, cwd and executable hash
+before SIGTERM, and both exited zero. The replacements pass a live 1,024-peer
+wave: typed global delivery remains exact after retirement, all 1,026 peers
+close normally and no additional body copies occur. Default decoder retirement
+returns two connected sessions to 16 KiB in 5.025 seconds; subsequent typed
+routing again adds zero copies. Seven fresh Chrome checks and three named live
+legacy/Close cases pass. Health/readiness return 200; final resource gauges and
+unexpected-error counters are zero.
+
+Current native SHA-256 begins `579dc1751408`; bridge begins `5d3460dbdf5a`.
+Native remains `ws://127.0.0.1:1338`, legacy `ws://127.0.0.1:1337`, management
+`http://127.0.0.1:1339`, and browser check `http://127.0.0.1:4180/`. Origin stays
+unrestricted and application-idle Close stays disabled for manual testing;
+normal decoder retirement and 1 GiB staging admission remain enabled.
+The [summary](benchmarks/2026-10-16-registry-summary.json),
+[manifest](benchmarks/2026-10-16-registry-build.json), and
+[live record](benchmarks/2026-10-16-registry-live.json) bind the observations.
+This is finite local evidence; larger active fanout, other table scan costs,
+multi-hour/TLS/proxy paths and cluster operation remain unmeasured. The ongoing
+goal stays active, with no hosted publication or deployment claimed.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -477,6 +538,9 @@ TLS-proxy acceptance claimed.
 2. Profile the remaining small-message CPU cost before changing counters, queue
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
+   The ID ownership map now shrinks after substantial retirement, with measured
+   global-routing recovery after large population waves. Channel/membership-table
+   scan costs after large populations remain unmeasured.
    Concurrent retention, staging pressure and delayed storage reclamation now
    cover up to 64 producers plus independent healthy traffic across repeated
    waves. Process-wide reservations precede decoder allocations and cover

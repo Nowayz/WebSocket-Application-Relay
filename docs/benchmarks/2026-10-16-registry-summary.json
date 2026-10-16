@@ -1,0 +1,285 @@
+{
+  "timestamp_utc": "2026-10-16T11:29:04.110352+00:00",
+  "base_revision": "241a1722b8d60212144d932aea18d927976e3969",
+  "passed": true,
+  "change": "Shrink sparse native ID ownership metadata on departure and occupied fixed-ID takeover; preserve shared peers/payloads and existing protocol/transport behavior. Add gated population probe with normal-exit validation.",
+  "release": {
+    "native_sha256": "579dc1751408d3d1055c3a45805d979f89bfd7f3c84d871a6d5d05aebf5c465b",
+    "bridge_sha256": "5d3460dbdf5acdcd2269d5181aa1ae436f91233d203a3a00529c962c8a433964"
+  },
+  "validation": {
+    "rust_debug": {
+      "command": "cargo test --locked",
+      "passed": true,
+      "tests": 83,
+      "groups": {
+        "unit": 26,
+        "read_budget": 9,
+        "read_buffer_reclaim": 3,
+        "read_fairness": 3,
+        "network": 42
+      }
+    },
+    "new_release_regressions": {
+      "commands": [
+        "cargo test --locked --release sparse_id -- --nocapture",
+        "cargo test --locked --release private_routing_keeps_progress -- --nocapture"
+      ],
+      "passed": true,
+      "tests": 3
+    },
+    "clippy": {
+      "command": "cargo clippy --locked --all-targets -- -D warnings",
+      "passed": true
+    },
+    "format": {
+      "command": "cargo fmt --check",
+      "passed": true
+    },
+    "vendor": {
+      "command": "python3 scripts/check-vendor.py",
+      "passed": true,
+      "verified_files": 62
+    },
+    "javascript": {
+      "command": "./scripts/check-js.sh",
+      "passed": true,
+      "regular_cases": 6,
+      "enabled_idle_case": 1
+    },
+    "independent_release_input_corpus": {
+      "passed": true,
+      "cases": 776,
+      "exchanges": 2311
+    },
+    "cpp_reference": {
+      "passed": true,
+      "common_cases": 48,
+      "explicit_differences": 8,
+      "upstream_commit": "881c8daaf2cf05adea8f522b28cf372e8f82d4e9"
+    },
+    "final_population_comparison": {
+      "passed": true,
+      "processes": 6,
+      "waves_each": 3,
+      "peak_transient_peers": 8192,
+      "verified_deliveries": 31309200,
+      "normal_closes": 147468,
+      "normal_server_exit_verified": true
+    },
+    "ordinary_cost_guard": {
+      "passed": true,
+      "cases": 26,
+      "zero_routed_compaction": true,
+      "exact_departures_and_resources": true
+    },
+    "live": {
+      "passed": true,
+      "peak_sessions": 1026,
+      "normal_population_closes": 1026,
+      "fresh_chrome_checks": 7,
+      "legacy_named_cases": 3,
+      "healthz": 200,
+      "readyz": 200,
+      "extra_routed_body_copies": 0
+    },
+    "verifier_calibration": {
+      "old_false_positive_reproduced": true,
+      "wrapper_service_exit": 7,
+      "old_cli_exit": 0,
+      "corrected_cli_exit": 1,
+      "normal_smoke_passed": true,
+      "excluded_from_timings": true
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "passed": true
+    }
+  },
+  "population_comparison": {
+    "medians": {
+      "control": {
+        "fresh_verified_per_second": 449174.4859002767,
+        "fresh_server_ns_per_delivery": 1439.6646917039693,
+        "post_wave_verified_per_second": 416191.7375217442,
+        "post_wave_server_ns_per_delivery": 1637.7569281112587,
+        "post_wave_p99_upper_ms": 0.032768,
+        "median_wave_join_cpu_seconds": 0.16000000000000014,
+        "median_wave_close_cpu_seconds": 0.08999999999999986
+      },
+      "trimmed": {
+        "fresh_verified_per_second": 446402.7799094322,
+        "fresh_server_ns_per_delivery": 1448.608738246855,
+        "post_wave_verified_per_second": 447339.6545425958,
+        "post_wave_server_ns_per_delivery": 1463.52625135209,
+        "post_wave_p99_upper_ms": 0.032768,
+        "median_wave_join_cpu_seconds": 0.16000000000000014,
+        "median_wave_close_cpu_seconds": 0.08999999999999986
+      }
+    },
+    "post_wave_cpu_change_percent": -10.638372139881591,
+    "post_wave_throughput_change_percent": 7.4840306072208485,
+    "interpretation": "Scoped improvement after large population waves. Filling/draining stay in the same 10 ms CPU bins, without a free-rehash claim. Per-process wave medians are aggregated across fresh processes; profiles are diagnostic only."
+  },
+  "ordinary_guard": {
+    "initial_medians": {
+      "traffic/1024/control": {
+        "verified_per_second": 1744395.3118118132,
+        "cpu_ns_per_verified": 1610.6991695441434,
+        "p99_upper_ms": 1.048576,
+        "throughput_range": [
+          1725208.2685477727,
+          1760161.8390266756
+        ]
+      },
+      "traffic/1024/selected": {
+        "verified_per_second": 1758556.8012368965,
+        "cpu_ns_per_verified": 1604.2475451016214,
+        "p99_upper_ms": 1.048576,
+        "throughput_range": [
+          1751419.8931731405,
+          1766578.447899119
+        ]
+      },
+      "traffic/65536/control": {
+        "verified_per_second": 200104.72162424983,
+        "cpu_ns_per_verified": 11601.362691815857,
+        "p99_upper_ms": 4.194304,
+        "throughput_range": [
+          197556.52451345016,
+          202661.68240614256
+        ]
+      },
+      "traffic/65536/selected": {
+        "verified_per_second": 196875.00405807447,
+        "cpu_ns_per_verified": 11651.165624238485,
+        "p99_upper_ms": 8.388608,
+        "throughput_range": [
+          195854.11175362798,
+          200985.59295762095
+        ]
+      },
+      "churn/8/control": {
+        "verified_per_second": 106446.97781258753,
+        "cpu_ns_per_verified": 17227.52361566261,
+        "p99_upper_ms": 2.097152,
+        "throughput_range": [
+          103887.2516182979,
+          108770.0420201199
+        ]
+      },
+      "churn/8/selected": {
+        "verified_per_second": 106523.10463855845,
+        "cpu_ns_per_verified": 17248.824263815488,
+        "p99_upper_ms": 2.097152,
+        "throughput_range": [
+          100445.58444293281,
+          106848.65124360124
+        ]
+      }
+    },
+    "long_64k_medians": {
+      "traffic/65536/control": {
+        "verified_per_second": 205511.10111884866,
+        "cpu_ns_per_verified": 11530.398181527806,
+        "p99_upper_ms": 4.194304,
+        "throughput_range": [
+          201563.03764697394,
+          210230.33047754475
+        ]
+      },
+      "traffic/65536/selected": {
+        "verified_per_second": 202277.94154803286,
+        "cpu_ns_per_verified": 11561.3700381846,
+        "p99_upper_ms": 4.194304,
+        "throughput_range": [
+          193852.2966006735,
+          206882.7812091836
+        ]
+      }
+    },
+    "totals": {
+      "traffic": {
+        "cases": 20,
+        "verified": 63091904
+      },
+      "churn": {
+        "cases": 6,
+        "verified": 2531922
+      }
+    },
+    "interpretation": "The short large-frame p99 bucket spread prompted four longer alternating pairs. Long median p99 matches at 4.194304 ms; one selected run remains in the 8.388608 ms bucket. Ranges overlap, with about -1.57% throughput and +0.27% CPU/delivery median changes. No general ordinary-traffic speed or latency gain is claimed."
+  },
+  "live": {
+    "runtime": {
+      "native": {
+        "pid": 116344,
+        "cwd": "/home/phil/dev/war_next",
+        "executable": "/home/phil/dev/war_next/target/release/war-relay",
+        "sha256": "579dc1751408d3d1055c3a45805d979f89bfd7f3c84d871a6d5d05aebf5c465b",
+        "command": [
+          "./target/release/war-relay",
+          "--idle-timeout-secs",
+          "0"
+        ]
+      },
+      "bridge": {
+        "pid": 116361,
+        "cwd": "/home/phil/dev/war_next",
+        "executable": "/home/phil/dev/war_next/target/release/war-legacy-bridge",
+        "sha256": "5d3460dbdf5acdcd2269d5181aa1ae436f91233d203a3a00529c962c8a433964",
+        "command": [
+          "./target/release/war-legacy-bridge"
+        ]
+      }
+    },
+    "peak_sessions": 1026,
+    "normal_closes": 1026,
+    "extra_routed_body_copies": 0,
+    "reclamation": {
+      "passed": true,
+      "observed_seconds": 5.024961598,
+      "extra_routed_body_copies": 0
+    },
+    "browser_checks": 7,
+    "legacy_cases": 3,
+    "health": {
+      "healthz": 200,
+      "readyz": 200,
+      "browser": 200
+    },
+    "resources_zero": true
+  },
+  "evidence_sha256": {
+    "docs/benchmarks/2026-10-16-registry-corpus.json": "507a2b369671435c08cbee56f17973f5cff537722a2ad3b84712bc2afe9a7fc0",
+    "docs/benchmarks/2026-10-16-registry-cost.json": "0ba6f48bb8bc25baf2713cca4e0ce7b9c7edc06ac9e5a936e6b8b565c5c38414",
+    "docs/benchmarks/2026-10-16-registry-large-confirm.json": "333d9f3b99411402f01f4b6d7deeaa5e8177c588cad11c31d8ba350ecfb1ca8f",
+    "docs/benchmarks/2026-10-16-registry-live.json": "21d87ace1af29025b062cd479c475097de643e87179ee6b91b1f0b026a8f621b",
+    "docs/benchmarks/2026-10-16-registry-peak-after-1.json": "5498a0b34e96ab716afdef63335facc241beb3be4217a6e191ac6b6b45610870",
+    "docs/benchmarks/2026-10-16-registry-peak-comparison.json": "b9805ef4ddfb7040ae51315da176d16952e7d453e6c5930f520ccb243c690916",
+    "docs/benchmarks/2026-10-16-registry-peak-control-1.json": "c0b82e8624ef2db4dfd7a2fb9d483105113ecbc660f8292bf8101a89f64054aa",
+    "docs/benchmarks/2026-10-16-registry-peak-control-2.json": "28e3146b66cd1796517ccef9cbafb2f0f5053bf0de4d3def614cfc1060cb0788",
+    "docs/benchmarks/2026-10-16-registry-peak-control-3.json": "73eab5f8d18738b2b66341930c1faed3955e01bb180ade74b2e6c41ee8f56d0c",
+    "docs/benchmarks/2026-10-16-registry-peak-control-4.json": "8e5092eb63b9a9c8e450bb95dbe5198f8ab0f03827961a3c8a0dd06ac1dcfef5",
+    "docs/benchmarks/2026-10-16-registry-peak-control-5.json": "4ade824ef1ac1d579fd84956ff3b3587724cc2e0676ae45f0e243606b9891dfb",
+    "docs/benchmarks/2026-10-16-registry-peak-final-comparison.json": "d1918e1ecf85a529af8767ccbc2414073f09e922030ca7b903ce8898e7d32315",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-1.json": "22d959b2c10ba29b75e8028dbd20c14c4755352ff2631f3e998bb6ccb1423c28",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-2.json": "e537e4437606f884bdd51e3a8a5b3d7b406cd107d1cccbf4fc1f6b2018933816",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-3.json": "ce624e02e05f1446339e4f8858b40644e87e3657e2de53a02c4697930696af5d",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-1.json": "cb01c0709885c67d423936606b8598ff968f63ca77322dbbb9ba9616aa77b349",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-2.json": "8bf4c674bf30fdaacae36c0ae60fb425217626ca2b5afab465e646ba2a47a0e3",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-3.json": "fe3f28e63fad020067f0b974301ff59c2e502e59f0bf6159047ae6ee7b61230a",
+    "docs/benchmarks/2026-10-16-registry-peak-profile-after.json": "cceb51fdc7560b71c21352288b420919145e33e333665f76722e56e54757d38b",
+    "docs/benchmarks/2026-10-16-registry-peak-profile-control.json": "8c6c8d426fd66eb1204d2b943a8e1062d727210e7da868d329b90a16ff2ec160",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-3.json": "c06c2f93c896c6bf1a2adf63db717e93eb99e8fa649dbad9eac4914b7f872687",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-4.json": "77d067d509113fa3888f79ddaf06c0a4130c7f0eaf2697a46fb05aab61c58da2",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-5.json": "e4fb348dca99e0e07cd9e393c1f96e02070936b21ceeb81c675af94cf91954a0",
+    "docs/benchmarks/2026-10-16-registry-reclaim-live.json": "e6d435c63e9f66b9d9ba8f06f48c146fb4bc7caa02b89960a2313ddab25b3dca",
+    "docs/benchmarks/2026-10-16-registry-reference.json": "ff127c5aeb223b7d5a21cb0409fe5b1a85b88e90ffc3de49046c0a8d68687bb0",
+    "docs/benchmarks/2026-10-16-registry-verifier-after.json": "d1bdf636d91b823d635bab1559cd5821ae9e2da00e8df3e520b5370d5d62f498",
+    "docs/benchmarks/2026-10-16-registry-verifier-before.json": "c62bc9cf1cacb6f84f7cb1ab6d636632e2d1bd4b32e70864abcde5bfb43ead85",
+    "docs/benchmarks/2026-10-16-registry-verifier-smoke.json": "34e99e832a1cde37eb6e43623d66ff52ea34eaa1c57de0b1edadb109cbcbd0d4",
+    "docs/benchmarks/2026-10-16-registry-build.json": "2f8ffcf157921a534fed89649242c1107bea675544fceb652b1e3c638b7c2760"
+  },
+  "limits": "Local plaintext sockets, one host, no deployment or hosted CI. Two retained global clients and transient peers in distinct rooms; single-room mass departure and channel/membership table capacity are outside this optimization. Profiles and verifier calibration are excluded from timing comparisons. Phase RSS is not continuous peak RSS. Rehashing allocates metadata under the registry write lock; OS/allocator page return and much larger populations are unmeasured. Native shared-body semantics, rate/storage policy, Origin defaults and routing scopes remain intact."
+}

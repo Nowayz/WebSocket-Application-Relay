@@ -41,6 +41,20 @@ struct Registry {
     sessions: usize,
 }
 
+impl Registry {
+    fn shrink_users_if_sparse(&mut self) {
+        // HashMap iteration scans spare buckets too. After a large ID retirement
+        // wave, release excess slots so global routing follows the live owners.
+        // Keep small maps and 2x headroom to avoid churn. Only metadata/Arc
+        // handles move, never peers, queues or shared application bodies.
+        let remaining = self.users.len();
+        let capacity = self.users.capacity();
+        if capacity > 256 && remaining <= capacity / 8 {
+            self.users.shrink_to(remaining * 2);
+        }
+    }
+}
+
 #[derive(Default)]
 struct Channel {
     members: HashMap<u64, Arc<Peer>>,
@@ -455,6 +469,7 @@ impl Relay {
                     let owner = state.users.remove(&old).ok_or(Disconnect::PROTOCOL)?;
                     if let Some(previous) = state.users.insert(id, owner) {
                         previous.close(Disconnect::TAKEN);
+                        state.shrink_users_if_sparse();
                     }
                     peer.id.store(id, Relaxed);
                 }
@@ -550,6 +565,7 @@ impl Relay {
             .is_some_and(|owner| owner.key == peer.key)
         {
             state.users.remove(&id);
+            state.shrink_users_if_sparse();
         }
         state.sessions -= 1;
         self.metrics.disconnected.fetch_add(1, Relaxed);
@@ -695,6 +711,136 @@ mod tests {
         );
         drop(next);
         assert_eq!(relay.counts(), (0, 1));
+    }
+
+    #[test]
+    fn sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads() {
+        let relay = Relay::new(config()).unwrap();
+        let mut old = relay.subscribe(b"old").unwrap();
+        let mut owner = relay.subscribe(b"owner").unwrap();
+        let mut source = relay.subscribe(b"source").unwrap();
+        for subscription in [&mut old, &mut owner, &mut source] {
+            subscription.outgoing.try_recv().unwrap();
+        }
+        let id = old.registration.peer.id.load(Relaxed);
+        let source_id = source.registration.peer.id.load(Relaxed);
+        relay
+            .receive(
+                &owner.registration.peer,
+                protocol::request(0, &protocol::text("test-password")),
+            )
+            .unwrap();
+        relay
+            .receive(
+                &owner.registration.peer,
+                protocol::request(3, &protocol::uint(id)),
+            )
+            .unwrap();
+        assert_eq!(*old.close.borrow(), Some(Disconnect::TAKEN));
+        owner.outgoing.try_recv().unwrap();
+        owner.outgoing.try_recv().unwrap();
+        let fillers: Vec<_> = (0..1024)
+            .map(|i| {
+                let mut subscription = relay.subscribe(format!("burst-{i}").as_bytes()).unwrap();
+                subscription.outgoing.try_recv().unwrap();
+                subscription
+            })
+            .collect();
+        let peak_capacity = relay.state.read().users.capacity();
+        assert!(peak_capacity >= 1026);
+        let value = protocol::byte_string(&[0x5a; 8192]);
+        let input = protocol::envelope(id, &value);
+        let payload_pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        relay.receive(&source.registration.peer, input).unwrap();
+        let packet = owner.outgoing.try_recv().unwrap();
+        assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
+        drop(fillers);
+        {
+            let state = relay.state.read();
+            assert_eq!(state.users.len(), 2);
+            assert!(state.users.capacity() <= 256);
+            assert!(state.users.capacity() < peak_capacity / 4);
+            assert!(Arc::ptr_eq(&state.users[&id], &owner.registration.peer));
+            assert!(Arc::ptr_eq(
+                &state.users[&source_id],
+                &source.registration.peer
+            ));
+        }
+        // The displaced owner is still registered. Its delayed cleanup cannot
+        // erase the replacement after rehashing the ownership table.
+        drop(old);
+        assert!(Arc::ptr_eq(
+            &relay.state.read().users[&id],
+            &owner.registration.peer
+        ));
+        relay
+            .receive(
+                &owner.registration.peer,
+                protocol::envelope(source_id, &[0x18, 42]),
+            )
+            .unwrap();
+        let reply = source.outgoing.try_recv().unwrap();
+        assert_eq!(
+            [reply.frame.prefix(), reply.frame.payload()].concat(),
+            protocol::envelope(id, &[0x18, 42])
+        );
+        drop(reply);
+        drop(source);
+        drop(owner);
+        assert_eq!(relay.counts(), (0, 1));
+        assert!(relay.state.read().users.is_empty());
+        assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
+        assert_eq!(packet.frame.payload(), value.as_ref());
+        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), packet.frame.len());
+        drop(packet);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish() {
+        let relay = Relay::new(config()).unwrap();
+        let mut subscriptions: Vec<_> = (0..1024)
+            .map(|i| {
+                let mut sub = relay.subscribe(format!("owner-{i}").as_bytes()).unwrap();
+                sub.outgoing.try_recv().unwrap();
+                sub
+            })
+            .collect();
+        let id = subscriptions[0].registration.peer.id.load(Relaxed);
+        assert!(relay.state.read().users.capacity() >= 1024);
+        for i in 1..subscriptions.len() {
+            let peer = subscriptions[i].registration.peer.clone();
+            relay
+                .receive(
+                    &peer,
+                    protocol::request(0, &protocol::text("test-password")),
+                )
+                .unwrap();
+            subscriptions[i].outgoing.try_recv().unwrap();
+            relay
+                .receive(&peer, protocol::request(3, &protocol::uint(id)))
+                .unwrap();
+            subscriptions[i].outgoing.try_recv().unwrap();
+            assert_eq!(
+                *subscriptions[i - 1].close.borrow(),
+                Some(Disconnect::TAKEN)
+            );
+        }
+        {
+            let state = relay.state.read();
+            assert_eq!(state.sessions, 1024);
+            assert_eq!(state.users.len(), 1);
+            assert!(state.users.capacity() <= 256);
+            assert!(Arc::ptr_eq(
+                &state.users[&id],
+                &subscriptions.last().unwrap().registration.peer
+            ));
+        }
+        // All displaced registrations still exist until this point.
+        drop(subscriptions);
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     }
 
     #[test]

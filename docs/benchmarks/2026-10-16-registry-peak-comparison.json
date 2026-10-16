@@ -1,0 +1,352 @@
+{
+  "timestamp_utc": "2026-10-16T11:03:17.792356+00:00",
+  "base_revision": "241a1722b8d60212144d932aea18d927976e3969",
+  "servers_sha256": {
+    "control": "2849ab15658600bf6b2aea76d25e549448703c7a64157d41ff721cca6b41e60f",
+    "trimmed": "88806b8ec0e52992bc1909042b416acc1f46812ba957d3b0733ed11d65c3720e"
+  },
+  "client_sha256": "e9fce89db3f26702a8633252c5035e1c0b37e6e079619e728bfb0c9fd5305bc3",
+  "runner_sha256": "855466cfb818abfeb085cb0e378ad2092f12b20ea08b902dcb0f639defc68c27",
+  "client_source_sha256": "b573e3ee00e220ed3ea280b08a78e2fdd0db654712ecdc9b0cfda808b4a28a81",
+  "comparison_source": "import datetime,hashlib,json,statistics,subprocess\nfrom pathlib import Path\nroot=Path('/home/phil/dev/war_next'); sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nservers={'control':root/'artifacts/baselines/241a172/war-relay','trimmed':root/'artifacts/candidates/registry-trim/war-relay'}\nclient=root/'artifacts/baselines/241a172/registry_peak'; cases=[]\noutput=root/'docs/benchmarks/2026-10-16-registry-peak-comparison.json'\nrecord={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'base_revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'servers_sha256':{k:sha(p) for k,p in servers.items()},'client_sha256':sha(client),'runner_sha256':sha(root/'scripts/registry-peak.py'),'client_source_sha256':sha(root/'examples/registry_peak.rs'),'comparison_source':Path(__file__).read_text(),'notes':'Three repetitions per build, order reversed on the second. Sequential four-worker relays on CPUs 0-3 and the same frozen client on CPUs 4-7. Two retained global sessions, three waves of 8192 transient peers in distinct rooms, three seconds of verified traffic before any wave and after each. Timed routing excludes filling/draining; their native CPU cost is recorded separately. Post-wave medians are first taken per process, then across process medians. No profiled timing is included.','cases':cases}\nfor repetition in range(1,4):\n for label in (['control','trimmed'] if repetition!=2 else ['trimmed','control']):\n  trace=root/f'docs/benchmarks/2026-10-16-registry-peak-{label}-{repetition+2}.json'\n  command=['python3','scripts/registry-peak.py','--server',str(servers[label]),'--client',str(client),'--peak-clients','8192','--waves','3','--seconds','3','--output',str(trace)]\n  with open(root/f'artifacts/registry-peak-{label}-{repetition+2}.log','w') as log:\n   process=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,cwd=root)\n  data=json.loads(trace.read_text()); assert process.returncode==0 and data['passed'],data.get('error')\n  assert data['server_sha256']==record['servers_sha256'][label] and data['client_sha256']==record['client_sha256']\n  traffic=data['traffic']; events=data['events']\n  def event(kind,wave): return next(e for e in events if e['event']==kind and e['wave']==wave)\n  joins=[event('population_ready',w)['process']['cpu_seconds']-event('traffic_done',w-1)['process']['cpu_seconds'] for w in range(1,4)]\n  closes=[event('traffic_ready',w)['process']['cpu_seconds']-event('population_ready',w)['process']['cpu_seconds'] for w in range(1,4)]\n  row={'label':label,'repetition':repetition,'command':command,'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,'fresh':traffic[0],'post_wave_median_deliveries_per_second':statistics.median(t['deliveries_per_second'] for t in traffic[1:]),'post_wave_median_server_ns_per_delivery':statistics.median(t['server_ns_per_delivery'] for t in traffic[1:]),'post_wave_median_p99_upper_ms':statistics.median(t['p99_upper_ms'] for t in traffic[1:]),'join_cpu_seconds':joins,'close_cpu_seconds':closes,'verified_deliveries':sum(t['verified'] for t in traffic),'normal_closes':data['events'][-1]['details']['normal_closes']}\n  cases.append(row);output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps({k:row[k] for k in ['label','repetition','post_wave_median_deliveries_per_second','post_wave_median_server_ns_per_delivery','passed']}),flush=True)\nrecord['medians']={}\nfor label in servers:\n rows=[r for r in cases if r['label']==label]\n record['medians'][label]={'fresh_verified_per_second':statistics.median(r['fresh']['deliveries_per_second'] for r in rows),'fresh_server_ns_per_delivery':statistics.median(r['fresh']['server_ns_per_delivery'] for r in rows),'post_wave_verified_per_second':statistics.median(r['post_wave_median_deliveries_per_second'] for r in rows),'post_wave_server_ns_per_delivery':statistics.median(r['post_wave_median_server_ns_per_delivery'] for r in rows),'post_wave_p99_upper_ms':statistics.median(r['post_wave_median_p99_upper_ms'] for r in rows),'median_wave_join_cpu_seconds':statistics.median(v for r in rows for v in r['join_cpu_seconds']),'median_wave_close_cpu_seconds':statistics.median(v for r in rows for v in r['close_cpu_seconds'])}\nrecord.update(passed=True,total_verified_deliveries=sum(r['verified_deliveries'] for r in cases),total_normal_closes=sum(r['normal_closes'] for r in cases))\noutput.write_text(json.dumps(record,indent=2)+'\\n'); print(json.dumps(record['medians']),flush=True)\n",
+  "notes": "Three repetitions per build, order reversed on the second. Sequential four-worker relays on CPUs 0-3 and the same frozen client on CPUs 4-7. Two retained global sessions, three waves of 8192 transient peers in distinct rooms, three seconds of verified traffic before any wave and after each. Timed routing excludes filling/draining; their native CPU cost is recorded separately. Post-wave medians are first taken per process, then across process medians. No profiled timing is included.",
+  "cases": [
+    {
+      "label": "control",
+      "repetition": 1,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-control-3.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-control-3.json",
+      "trace_sha256": "73eab5f8d18738b2b66341930c1faed3955e01bb180ade74b2e6c41ee8f56d0c",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1399020848,
+        "deliveries_per_second": 449697.8459265382,
+        "elapsed_seconds": 3.000023265,
+        "max_latency_ms": 0.636763,
+        "p99_upper_ms": 0.032768,
+        "sent": 1349104,
+        "sent_encoded_bytes": 1399020848,
+        "value_bytes": 1385529808,
+        "verified": 1349104,
+        "server_cpu_seconds": 1.94,
+        "server_ns_per_delivery": 1437.991437279854
+      },
+      "post_wave_median_deliveries_per_second": 407247.8615510655,
+      "post_wave_median_server_ns_per_delivery": 1686.0921948664218,
+      "post_wave_median_p99_upper_ms": 0.065536,
+      "join_cpu_seconds": [
+        0.16999999999999993,
+        0.16000000000000014,
+        0.16000000000000014
+      ],
+      "close_cpu_seconds": [
+        0.0900000000000003,
+        0.08999999999999986,
+        0.07999999999999918
+      ],
+      "verified_deliveries": 5014352,
+      "normal_closes": 24578
+    },
+    {
+      "label": "trimmed",
+      "repetition": 1,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/candidates/registry-trim/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-trimmed-3.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-trimmed-3.json",
+      "trace_sha256": "c06c2f93c896c6bf1a2adf63db717e93eb99e8fa649dbad9eac4914b7f872687",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1387506000,
+        "deliveries_per_second": 445999.9788893343,
+        "elapsed_seconds": 3.000000142,
+        "max_latency_ms": 1.038582,
+        "p99_upper_ms": 0.032768,
+        "sent": 1338000,
+        "sent_encoded_bytes": 1387506000,
+        "value_bytes": 1374126000,
+        "verified": 1338000,
+        "server_cpu_seconds": 1.95,
+        "server_ns_per_delivery": 1457.3991031390135
+      },
+      "post_wave_median_deliveries_per_second": 445370.27325625863,
+      "post_wave_median_server_ns_per_delivery": 1459.4584885099455,
+      "post_wave_median_p99_upper_ms": 0.032768,
+      "join_cpu_seconds": [
+        0.17000000000000015,
+        0.16000000000000014,
+        0.15999999999999925
+      ],
+      "close_cpu_seconds": [
+        0.08999999999999986,
+        0.08999999999999986,
+        0.09000000000000075
+      ],
+      "verified_deliveries": 5351584,
+      "normal_closes": 24578
+    },
+    {
+      "label": "trimmed",
+      "repetition": 2,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/candidates/registry-trim/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-trimmed-4.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-trimmed-4.json",
+      "trace_sha256": "77d067d509113fa3888f79ddaf06c0a4130c7f0eaf2697a46fb05aab61c58da2",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1382611360,
+        "deliveries_per_second": 444424.63312768703,
+        "elapsed_seconds": 3.000013727,
+        "max_latency_ms": 1.547099,
+        "p99_upper_ms": 0.032768,
+        "sent": 1333280,
+        "sent_encoded_bytes": 1382611360,
+        "value_bytes": 1369278560,
+        "verified": 1333280,
+        "server_cpu_seconds": 1.95,
+        "server_ns_per_delivery": 1462.5585023400936
+      },
+      "post_wave_median_deliveries_per_second": 448703.72554288787,
+      "post_wave_median_server_ns_per_delivery": 1464.260100406406,
+      "post_wave_median_p99_upper_ms": 0.032768,
+      "join_cpu_seconds": [
+        0.15999999999999992,
+        0.16000000000000014,
+        0.16999999999999993
+      ],
+      "close_cpu_seconds": [
+        0.0900000000000003,
+        0.08999999999999986,
+        0.08999999999999986
+      ],
+      "verified_deliveries": 5367552,
+      "normal_closes": 24578
+    },
+    {
+      "label": "control",
+      "repetition": 2,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-control-4.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-control-4.json",
+      "trace_sha256": "8e5092eb63b9a9c8e450bb95dbe5198f8ab0f03827961a3c8a0dd06ac1dcfef5",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1374696976,
+        "deliveries_per_second": 441881.542372729,
+        "elapsed_seconds": 3.000007633,
+        "max_latency_ms": 2.052916,
+        "p99_upper_ms": 0.032768,
+        "sent": 1325648,
+        "sent_encoded_bytes": 1374696976,
+        "value_bytes": 1361440496,
+        "verified": 1325648,
+        "server_cpu_seconds": 1.94,
+        "server_ns_per_delivery": 1463.4352407275537
+      },
+      "post_wave_median_deliveries_per_second": 423192.71659462864,
+      "post_wave_median_server_ns_per_delivery": 1603.1081437893704,
+      "post_wave_median_p99_upper_ms": 0.032768,
+      "join_cpu_seconds": [
+        0.18000000000000016,
+        0.16000000000000014,
+        0.15000000000000036
+      ],
+      "close_cpu_seconds": [
+        0.08000000000000007,
+        0.08999999999999986,
+        0.08999999999999986
+      ],
+      "verified_deliveries": 5131184,
+      "normal_closes": 24578
+    },
+    {
+      "label": "control",
+      "repetition": 3,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-control-5.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-control-5.json",
+      "trace_sha256": "4ade824ef1ac1d579fd84956ff3b3587724cc2e0676ae45f0e243606b9891dfb",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1393163872,
+        "deliveries_per_second": 447817.3175423613,
+        "elapsed_seconds": 3.000009038,
+        "max_latency_ms": 0.858777,
+        "p99_upper_ms": 0.032768,
+        "sent": 1343456,
+        "sent_encoded_bytes": 1393163872,
+        "value_bytes": 1379729312,
+        "verified": 1343456,
+        "server_cpu_seconds": 1.94,
+        "server_ns_per_delivery": 1444.0368720672652
+      },
+      "post_wave_median_deliveries_per_second": 418617.47332778934,
+      "post_wave_median_server_ns_per_delivery": 1589.5178089894823,
+      "post_wave_median_p99_upper_ms": 0.065536,
+      "join_cpu_seconds": [
+        0.16999999999999993,
+        0.16000000000000014,
+        0.15999999999999925
+      ],
+      "close_cpu_seconds": [
+        0.0900000000000003,
+        0.08999999999999986,
+        0.09000000000000075
+      ],
+      "verified_deliveries": 5127888,
+      "normal_closes": 24578
+    },
+    {
+      "label": "trimmed",
+      "repetition": 3,
+      "command": [
+        "python3",
+        "scripts/registry-peak.py",
+        "--server",
+        "/home/phil/dev/war_next/artifacts/candidates/registry-trim/war-relay",
+        "--client",
+        "/home/phil/dev/war_next/artifacts/baselines/241a172/registry_peak",
+        "--peak-clients",
+        "8192",
+        "--waves",
+        "3",
+        "--seconds",
+        "3",
+        "--output",
+        "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-registry-peak-trimmed-5.json"
+      ],
+      "trace": "docs/benchmarks/2026-10-16-registry-peak-trimmed-5.json",
+      "trace_sha256": "e4fb348dca99e0e07cd9e393c1f96e02070936b21ceeb81c675af94cf91954a0",
+      "passed": true,
+      "fresh": {
+        "wave": 0,
+        "delivered_encoded_bytes": 1389978208,
+        "deliveries_per_second": 446793.7100813334,
+        "elapsed_seconds": 3.000006423,
+        "max_latency_ms": 0.716621,
+        "p99_upper_ms": 0.032768,
+        "sent": 1340384,
+        "sent_encoded_bytes": 1389978208,
+        "value_bytes": 1376574368,
+        "verified": 1340384,
+        "server_cpu_seconds": 1.94,
+        "server_ns_per_delivery": 1447.3464320672285
+      },
+      "post_wave_median_deliveries_per_second": 448470.43908532755,
+      "post_wave_median_server_ns_per_delivery": 1470.9414024975986,
+      "post_wave_median_p99_upper_ms": 0.032768,
+      "join_cpu_seconds": [
+        0.16999999999999993,
+        0.16000000000000014,
+        0.15000000000000036
+      ],
+      "close_cpu_seconds": [
+        0.0900000000000003,
+        0.08999999999999986,
+        0.08999999999999986
+      ],
+      "verified_deliveries": 5365488,
+      "normal_closes": 24578
+    }
+  ],
+  "medians": {
+    "control": {
+      "fresh_verified_per_second": 447817.3175423613,
+      "fresh_server_ns_per_delivery": 1444.0368720672652,
+      "post_wave_verified_per_second": 418617.47332778934,
+      "post_wave_server_ns_per_delivery": 1603.1081437893704,
+      "post_wave_p99_upper_ms": 0.065536,
+      "median_wave_join_cpu_seconds": 0.16000000000000014,
+      "median_wave_close_cpu_seconds": 0.08999999999999986
+    },
+    "trimmed": {
+      "fresh_verified_per_second": 445999.9788893343,
+      "fresh_server_ns_per_delivery": 1457.3991031390135,
+      "post_wave_verified_per_second": 448470.43908532755,
+      "post_wave_server_ns_per_delivery": 1464.260100406406,
+      "post_wave_p99_upper_ms": 0.032768,
+      "median_wave_join_cpu_seconds": 0.16000000000000014,
+      "median_wave_close_cpu_seconds": 0.08999999999999986
+    }
+  },
+  "passed": true,
+  "total_verified_deliveries": 31358048,
+  "total_normal_closes": 147468,
+  "prototype_source_sha256": "631d2674c6db5090522600fe3348997fba43bb5304ddbfa67072b13890d0e247",
+  "prototype_status": "Departure-only prototype, retained as exploratory evidence. The selected change also handles ID retirement through occupied fixed-ID takeover and receives a separate final comparison."
+}

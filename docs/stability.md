@@ -557,3 +557,51 @@ finite prior protocol contract with the policy disabled. Evidence is bound in
 The [operations guide](operations.md#browser-origin-admission) documents the
 proxy and authentication boundary. Other browser engines and a deployed TLS
 proxy are outside these checks.
+
+## ID registry lifetime across large populations, 2026-10-16
+
+Global routing now reduces excess ID-table capacity when IDs retire, through
+either session removal or occupied fixed-ID takeover. The testable invariant
+is that this moves table metadata only. Registered peers and published payloads
+must retain their owners, addresses and byte reservations; a displaced session
+must never remove its replacement's ID during later cleanup.
+
+Two unit regressions exercise 1,024 transient owners. One holds an in-flight
+encoded value while the table shrinks repeatedly, checks peer and payload
+pointer identity, verifies later private delivery, then drops both peers while
+the held frame still owns its reservation. The other makes 1,023 consecutive
+takeovers while all displaced registrations remain alive, verifies the final
+owner and reduced table capacity, then retires every registration. That second
+case fails against the initial departure-only prototype; both retirement paths
+use the shared helper in the selected implementation.
+
+A four-worker socket regression keeps private delivery active during 2,048
+arrivals and departures, with 32 concurrent client handshakes/Close operations.
+Every healthy value remains byte-identical, progress occurs during both phases,
+all transient peers receive normal Close acknowledgements and EOF, and the two
+original peers remain usable. Resource guards return to zero at shutdown.
+
+The new `registry_peak` example and `scripts/registry-peak.py` additionally keep
+the same two global clients connected through population waves. Transient peers
+use separate ordinary rooms and no global disconnect listener, isolating ID-map
+history from departure fanout. Every data frame, sender, byte, FIFO position,
+Close code/reason/EOF and final disconnect is verified. Gated phase boundaries
+let the runner compare exact message/byte/delivery counts and separate native
+routing CPU from filling/draining. All final session, connection, queue, variable
+and staging gauges must be zero, with only the persistent global channel.
+The selected comparison verifies 31,309,200 deliveries and 147,468 normal Close
+handshakes across six processes, three 8,192-peer waves per process. Profiles
+and prototype measurements remain distinct from selected timing evidence.
+
+The runtime change preserves routing, listener, variable, ID and CBOR contracts.
+The [performance record](performance.md#id-registry-capacity-after-population-waves-2026-10-16)
+documents cost, allocation tradeoffs and finite-workload limits. Other registry
+tables and much larger active fanout remain outside this optimization.
+
+The runner also validates service exit after its data and resource checks.
+A calibration wrapper serves real sockets and closes its relay child cleanly,
+then deliberately exits with status 7. This reproduced a false success in the
+initial timing runner; the corrected runner returns failure and CLI status 1.
+A normal-service smoke case passes. All recorded population-comparison services independently
+have exit status zero; their exact earlier runner snapshot is retained for
+provenance. Calibration records are excluded from performance results.

@@ -1,0 +1,312 @@
+{
+  "timestamp_utc": "2026-10-16T11:29:04.110352+00:00",
+  "base_revision": "241a1722b8d60212144d932aea18d927976e3969",
+  "change": "Shrink sparse native ID ownership metadata on departure and occupied fixed-ID takeover; preserve shared peers/payloads and existing protocol/transport behavior. Add gated population probe with normal-exit validation.",
+  "runtime_source_sha256": {
+    "Cargo.lock": "75c42aa094a3cd5008045e4b402d0923c717b5702160e776134a7bca9308462f",
+    "Cargo.toml": "b253df492373b74abe06c48a6dc00c76a854271c3b031960a415a01692a26e9a",
+    "src/bin/war-legacy-bridge.rs": "fec0f0e226d054bc283d9a2a287381490590ba68ce60087e0f6b7a29754b2151",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "0930bbc73059186ce59437a9ecea1eaba5e9383f0f2681f9967eb5d2c171953b",
+    "src/frame.rs": "7d2202188943f4e0af4c40148065b36e9c4e7dfc78b6d206edfb57002f97b936",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "f00f5850d538de146174769ec8116325b39c62f11e53ff4408fd525f31e258d0",
+    "src/lib.rs": "5a4006a63db3615f2d276c6ef7c4273dce5acd76c56adb5191b8544db515e75d",
+    "src/main.rs": "1ae3c820c5acebe1d9cb4f49d45666cce793361fc996e823f95f6a0f081567b8",
+    "src/metrics.rs": "1aa6b501d0801ddc1caaa940395618d009ee7b087e61444c79a5fdc187234966",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "af8056091a80bb82383f17b1069fdf161004044d1236d9d2596a5fca853c86ca",
+    "src/relay.rs": "f8e232b19d344942f0b8057062476b3a78746cd8aa29f3ec3f4e78894993ce30",
+    "src/server.rs": "57fde00edce9f55ee73bf36da915765f1782bcffde38521610b4776d16969cb1",
+    "src/transport.rs": "a079aecd0a6920760e4646f9a68fb7207d82a760b253ff4bf5e4fabaf599947a",
+    "vendor/tokio-tungstenite/examples/autobahn-client.rs": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732",
+    "vendor/tokio-tungstenite/examples/autobahn-server.rs": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f",
+    "vendor/tokio-tungstenite/examples/client.rs": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7",
+    "vendor/tokio-tungstenite/examples/echo-server.rs": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52",
+    "vendor/tokio-tungstenite/examples/interval-server.rs": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e",
+    "vendor/tokio-tungstenite/examples/server-custom-accept.rs": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535",
+    "vendor/tokio-tungstenite/examples/server-headers.rs": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483",
+    "vendor/tokio-tungstenite/examples/server.rs": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e",
+    "vendor/tokio-tungstenite/src/compat.rs": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9",
+    "vendor/tokio-tungstenite/src/connect.rs": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30",
+    "vendor/tokio-tungstenite/src/handshake.rs": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d",
+    "vendor/tokio-tungstenite/src/lib.rs": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5",
+    "vendor/tokio-tungstenite/src/stream.rs": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172",
+    "vendor/tokio-tungstenite/src/tls.rs": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211",
+    "vendor/tungstenite/benches/buffer.rs": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e",
+    "vendor/tungstenite/benches/e2e.rs": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce",
+    "vendor/tungstenite/benches/read.rs": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42",
+    "vendor/tungstenite/benches/write.rs": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8",
+    "vendor/tungstenite/examples/autobahn-client.rs": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4",
+    "vendor/tungstenite/examples/autobahn-server.rs": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776",
+    "vendor/tungstenite/examples/callback-error.rs": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0",
+    "vendor/tungstenite/examples/client.rs": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040",
+    "vendor/tungstenite/examples/server.rs": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157",
+    "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c",
+    "vendor/tungstenite/src/buffer.rs": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30",
+    "vendor/tungstenite/src/client.rs": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637",
+    "vendor/tungstenite/src/error.rs": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b",
+    "vendor/tungstenite/src/handshake/client.rs": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5",
+    "vendor/tungstenite/src/handshake/headers.rs": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75",
+    "vendor/tungstenite/src/handshake/machine.rs": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420",
+    "vendor/tungstenite/src/handshake/mod.rs": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0",
+    "vendor/tungstenite/src/handshake/server.rs": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f",
+    "vendor/tungstenite/src/lib.rs": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7",
+    "vendor/tungstenite/src/protocol/frame/coding.rs": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6",
+    "vendor/tungstenite/src/protocol/frame/frame.rs": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a",
+    "vendor/tungstenite/src/protocol/frame/mask.rs": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6",
+    "vendor/tungstenite/src/protocol/frame/mod.rs": "ad52a31ecd83380c6c5ec946ffa63ea3381680ce4f6b3ecb7d925aae8a8a13bb",
+    "vendor/tungstenite/src/protocol/frame/utf8.rs": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886",
+    "vendor/tungstenite/src/protocol/message.rs": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84",
+    "vendor/tungstenite/src/protocol/mod.rs": "816ea883fe576585a4273c65720f49c54d98f2e57e400b31f9ae1f3e33569755",
+    "vendor/tungstenite/src/protocol/read_budget.rs": "1dcc46e726f463c16b548b570c6795c4a651c568f5d35280190df625d7876abc",
+    "vendor/tungstenite/src/server.rs": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49",
+    "vendor/tungstenite/src/stream.rs": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d",
+    "vendor/tungstenite/src/tls.rs": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9",
+    "vendor/tungstenite/src/utf8.rs": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35",
+    "vendor/tungstenite/src/util.rs": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a"
+  },
+  "validation_source_sha256": {
+    ".github/workflows/rust.yml": "263dd38a77070bb63a24de8aa0eb88fd597b831c66e3b33377494befc8243f4a",
+    "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+    "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36",
+    "clients/js/package.json": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07",
+    "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+    "clients/js/relay.test.mjs": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1",
+    "examples/registry_peak.rs": "b573e3ee00e220ed3ea280b08a78e2fdd0db654712ecdc9b0cfda808b4a28a81",
+    "examples/stress.rs": "64438033d1c6f86bdd1a3ea9962b7ad1afc1c8ca060384332916eb8ae4a87306",
+    "scripts/benchmark.py": "e4e3aeaaac3d90b11df284fcf455a7dbc439f12d6be9d7d30d2dc9a47ff28af2",
+    "scripts/check-js.sh": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b",
+    "scripts/check-vendor.py": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f",
+    "scripts/fragment-fairness.py": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+    "scripts/input-corpus.py": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292",
+    "scripts/reference.py": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+    "scripts/registry-peak.py": "5174b8c02e5d678783cebe6423d203ba26be675051ec89c2d1cb7b878cdfec52",
+    "scripts/stability.py": "be39874c0db79075b602e2c64bd6f356af60a67eca79a2ad5aefc3599bb28ba9",
+    "tests/read_budget.rs": "539f4e96843a4da04a703e5f4eef935a569ccb3791ca10c16950fcbe9b621508",
+    "tests/read_buffer_reclaim.rs": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156",
+    "tests/read_fairness.rs": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4",
+    "tests/relay_integration.rs": "e7d23db37cc571ea17592a7ceff11b8992b7ea2f7ecd00b570fc08982e27ee1c",
+    "tests/relay_integration/origin_policy.rs": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+  },
+  "documentation_sha256": {
+    "README.md": "d28b811918e660b316c40fb4a4e1c3cc2468ed45ddef5448e024e71f66f1ab66",
+    "deploy/war-relay.env.example": "120ba43752d7b19ef9632b5886be0f99069a6f17951aa26b8a694407c69ec888",
+    "docs/STATUS.md": "469ba660e44b193505e5a0e7d9033f4416fd29530ebb8a9c5cbd0a2a4b67943d",
+    "docs/operations.md": "f31a6fec8eae6fe527d2ce185a99062c17746e72913fe9cce5103ae6b9298d25",
+    "docs/performance.md": "a60faaa1679195d812ea75480447af8dc2a24b3893c270fd86c269fb2a218dc4",
+    "docs/protocol.md": "2d5d48def23217dd1377aab4a55217bd6d4ab61896194275088a79cff927a91d",
+    "docs/stability.md": "f10516ba2add686132c6420e9ff2fcc248a8c77222e4640df159cfe4c5a04750"
+  },
+  "local_helper_sha256": {
+    "artifacts/registry-peak-timing-runner.py": "855466cfb818abfeb085cb0e378ad2092f12b20ea08b902dcb0f639defc68c27",
+    "artifacts/compare-registry.py": "2a6697d04c97ee30761d8552f06c287598f22740bfe6822b07cde22e846abfff",
+    "artifacts/compare-registry-final.py": "4d57bd02d84f6ad9ad2dff95be2e1c9b9198fa79dcef15865215f4cdeeeae8df",
+    "artifacts/registry-cost.py": "9516ad37b64750e4676a3efc68fde10d25492720de1ed948efba6c7faf5134d9",
+    "artifacts/registry-large-confirm.py": "69610119140ac744c6138614386d483a7fdb27db46b36b049cf5088438a9f7e7",
+    "artifacts/registry-exit-wrapper.py": "c7bf5cab3e8a165a7275ce895bbd13833d47ac97fa49af5e08779fdcef45dabd",
+    "artifacts/check-registry-live.mjs": "9e9f0eea6b09f566a73eb6284f5064f3ce4512ca5286ff59a61c1136db7e01ff",
+    "artifacts/check-registry-reclaim-live.mjs": "35f36fccb1cad9a6da6617af2c2746963d87267520866ccad22828015722869e",
+    "artifacts/candidates/registry-trim/relay.rs": "631d2674c6db5090522600fe3348997fba43bb5304ddbfa67072b13890d0e247",
+    "artifacts/candidates/registry-retirement/relay.rs": "f8e232b19d344942f0b8057062476b3a78746cd8aa29f3ec3f4e78894993ce30",
+    "artifacts/record-registry-checkpoint.py": "5ffb5dfcd53426363096eebed36b1f4b85fef8b82f40aae6638e8521a2a4f10b"
+  },
+  "validation_logs_sha256": {
+    "artifacts/registry-tests.log": "3f88948d4c7b69f7d7de47ee7e942f3438de5ecb41682d97656f33805bb3251c",
+    "artifacts/registry-clippy.log": "55a2609482f2c9dfc03da7f30c001ca95da95a5acdaf6326121d4ffba109c72b",
+    "artifacts/registry-release-tests.log": "41d27e8b968ffc5a508845ec7332ec3c9828199dbcbcf885e7b55c868f0fe0ea",
+    "artifacts/registry-js.log": "bf393999f0d7858f19a848dc8d8be24b50bdd725f203a8e79149c0136f733380",
+    "artifacts/registry-vendor.log": "a8f4f27e7d2c2186e0f90064be31e1557f6456e4f6cb341f8d638cfe865121bf",
+    "artifacts/registry-takeover-before.log": "0172bedf80262721de0b9b54bddb354c83e5207966f66a96cdc741df39b15999",
+    "artifacts/registry-concurrent-test.log": "2d53414e507f82d08681965e08c8f1db075b8280f9b86d9e49f6d295d64d3ef1",
+    "artifacts/registry-build.log": "cf4c40c8918559e28b72208680cd30e08203b61387d68bebfddd2515c34293ac"
+  },
+  "vendor_provenance": {
+    "tungstenite": {
+      "version": "0.30.0",
+      "package_sha256": "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22",
+      "upstream_git": "7f4aeaf0944992c5664c8fb8e0d54577c7e18020",
+      "modified_files": [
+        "src/error.rs",
+        "src/protocol/frame/mod.rs",
+        "src/protocol/message.rs",
+        "src/protocol/mod.rs",
+        "src/protocol/read_budget.rs"
+      ]
+    },
+    "tokio-tungstenite": {
+      "version": "0.30.0",
+      "package_sha256": "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71",
+      "upstream_git": "4994a078037a18a9347b8cf49291a5031d63d9e0",
+      "modified_files": [
+        "src/lib.rs"
+      ]
+    }
+  },
+  "vendor_patch_sha256": "b2f3fe7568f3fbf859c606d082bf8fbac12f6aea180148229b22f5d5f908a7d0",
+  "release_command": "cargo build --locked --release --bins",
+  "candidate": {
+    "native_sha256": "579dc1751408d3d1055c3a45805d979f89bfd7f3c84d871a6d5d05aebf5c465b",
+    "bridge_sha256": "5d3460dbdf5acdcd2269d5181aa1ae436f91233d203a3a00529c962c8a433964"
+  },
+  "control": {
+    "revision": "241a172",
+    "native_sha256": "2849ab15658600bf6b2aea76d25e549448703c7a64157d41ff721cca6b41e60f",
+    "bridge_sha256": "546d7e85772b8e93e76740b7e9154ddc927929f1f9a7dcb116db390deaa0ab45"
+  },
+  "fixed_clients": {
+    "population": {
+      "sha256": "e9fce89db3f26702a8633252c5035e1c0b37e6e079619e728bfb0c9fd5305bc3",
+      "source_sha256": "b573e3ee00e220ed3ea280b08a78e2fdd0db654712ecdc9b0cfda808b4a28a81",
+      "build_base": "241a172 plus the new example; frozen before runtime edits"
+    },
+    "ordinary_stress": {
+      "sha256": "58019dadf5c21ff0e8378a7ffcb05c176a57c8af2429c316a5b0edf9341353a8",
+      "source_sha256": "64438033d1c6f86bdd1a3ea9962b7ad1afc1c8ca060384332916eb8ae4a87306",
+      "build_base": "241a172"
+    }
+  },
+  "timing_runner": {
+    "sha256": "855466cfb818abfeb085cb0e378ad2092f12b20ea08b902dcb0f639defc68c27",
+    "retained_path": "artifacts/registry-peak-timing-runner.py",
+    "selected_runner_sha256": "5174b8c02e5d678783cebe6423d203ba26be675051ec89c2d1cb7b878cdfec52",
+    "correction_after_timing": "Validate terminal service exit after data/resource checks. Every recorded population-comparison service independently has exit 0; normal timing behavior and protocol checks are unchanged.",
+    "fix_patch": "--- a/scripts/registry-peak.py\n+++ b/scripts/registry-peak.py\n@@ -163,6 +163,9 @@\n             logs.seek(0)\n             client_errors.seek(0)\n             result.update(server_log=logs.read().decode(errors=\"replace\"), client_log=client_errors.read().decode(errors=\"replace\"))\n+            if result[\"server_exit_code\"] != 0:\n+                result[\"passed\"] = False\n+                result.setdefault(\"error\", f\"server exited with status {result['server_exit_code']}\")\n             args.output.write_text(json.dumps(result, indent=2) + \"\\n\")\n     return result\n \n"
+  },
+  "prototype": {
+    "scope": "departure-only exploratory version, not the selected release; takeover regression failed and prompted both retirement paths",
+    "native_sha256": "88806b8ec0e52992bc1909042b416acc1f46812ba957d3b0733ed11d65c3720e",
+    "source_sha256": "631d2674c6db5090522600fe3348997fba43bb5304ddbfa67072b13890d0e247",
+    "source_path": "artifacts/candidates/registry-trim/relay.rs"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+    "node": "v24.21.0"
+  },
+  "validation": {
+    "rust_debug": {
+      "command": "cargo test --locked",
+      "passed": true,
+      "tests": 83,
+      "groups": {
+        "unit": 26,
+        "read_budget": 9,
+        "read_buffer_reclaim": 3,
+        "read_fairness": 3,
+        "network": 42
+      }
+    },
+    "new_release_regressions": {
+      "commands": [
+        "cargo test --locked --release sparse_id -- --nocapture",
+        "cargo test --locked --release private_routing_keeps_progress -- --nocapture"
+      ],
+      "passed": true,
+      "tests": 3
+    },
+    "clippy": {
+      "command": "cargo clippy --locked --all-targets -- -D warnings",
+      "passed": true
+    },
+    "format": {
+      "command": "cargo fmt --check",
+      "passed": true
+    },
+    "vendor": {
+      "command": "python3 scripts/check-vendor.py",
+      "passed": true,
+      "verified_files": 62
+    },
+    "javascript": {
+      "command": "./scripts/check-js.sh",
+      "passed": true,
+      "regular_cases": 6,
+      "enabled_idle_case": 1
+    },
+    "independent_release_input_corpus": {
+      "passed": true,
+      "cases": 776,
+      "exchanges": 2311
+    },
+    "cpp_reference": {
+      "passed": true,
+      "common_cases": 48,
+      "explicit_differences": 8,
+      "upstream_commit": "881c8daaf2cf05adea8f522b28cf372e8f82d4e9"
+    },
+    "final_population_comparison": {
+      "passed": true,
+      "processes": 6,
+      "waves_each": 3,
+      "peak_transient_peers": 8192,
+      "verified_deliveries": 31309200,
+      "normal_closes": 147468,
+      "normal_server_exit_verified": true
+    },
+    "ordinary_cost_guard": {
+      "passed": true,
+      "cases": 26,
+      "zero_routed_compaction": true,
+      "exact_departures_and_resources": true
+    },
+    "live": {
+      "passed": true,
+      "peak_sessions": 1026,
+      "normal_population_closes": 1026,
+      "fresh_chrome_checks": 7,
+      "legacy_named_cases": 3,
+      "healthz": 200,
+      "readyz": 200,
+      "extra_routed_body_copies": 0
+    },
+    "verifier_calibration": {
+      "old_false_positive_reproduced": true,
+      "wrapper_service_exit": 7,
+      "old_cli_exit": 0,
+      "corrected_cli_exit": 1,
+      "normal_smoke_passed": true,
+      "excluded_from_timings": true
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "passed": true
+    }
+  },
+  "evidence_sha256": {
+    "docs/benchmarks/2026-10-16-registry-corpus.json": "507a2b369671435c08cbee56f17973f5cff537722a2ad3b84712bc2afe9a7fc0",
+    "docs/benchmarks/2026-10-16-registry-cost.json": "0ba6f48bb8bc25baf2713cca4e0ce7b9c7edc06ac9e5a936e6b8b565c5c38414",
+    "docs/benchmarks/2026-10-16-registry-large-confirm.json": "333d9f3b99411402f01f4b6d7deeaa5e8177c588cad11c31d8ba350ecfb1ca8f",
+    "docs/benchmarks/2026-10-16-registry-live.json": "21d87ace1af29025b062cd479c475097de643e87179ee6b91b1f0b026a8f621b",
+    "docs/benchmarks/2026-10-16-registry-peak-after-1.json": "5498a0b34e96ab716afdef63335facc241beb3be4217a6e191ac6b6b45610870",
+    "docs/benchmarks/2026-10-16-registry-peak-comparison.json": "b9805ef4ddfb7040ae51315da176d16952e7d453e6c5930f520ccb243c690916",
+    "docs/benchmarks/2026-10-16-registry-peak-control-1.json": "c0b82e8624ef2db4dfd7a2fb9d483105113ecbc660f8292bf8101a89f64054aa",
+    "docs/benchmarks/2026-10-16-registry-peak-control-2.json": "28e3146b66cd1796517ccef9cbafb2f0f5053bf0de4d3def614cfc1060cb0788",
+    "docs/benchmarks/2026-10-16-registry-peak-control-3.json": "73eab5f8d18738b2b66341930c1faed3955e01bb180ade74b2e6c41ee8f56d0c",
+    "docs/benchmarks/2026-10-16-registry-peak-control-4.json": "8e5092eb63b9a9c8e450bb95dbe5198f8ab0f03827961a3c8a0dd06ac1dcfef5",
+    "docs/benchmarks/2026-10-16-registry-peak-control-5.json": "4ade824ef1ac1d579fd84956ff3b3587724cc2e0676ae45f0e243606b9891dfb",
+    "docs/benchmarks/2026-10-16-registry-peak-final-comparison.json": "d1918e1ecf85a529af8767ccbc2414073f09e922030ca7b903ce8898e7d32315",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-1.json": "22d959b2c10ba29b75e8028dbd20c14c4755352ff2631f3e998bb6ccb1423c28",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-2.json": "e537e4437606f884bdd51e3a8a5b3d7b406cd107d1cccbf4fc1f6b2018933816",
+    "docs/benchmarks/2026-10-16-registry-peak-final-control-3.json": "ce624e02e05f1446339e4f8858b40644e87e3657e2de53a02c4697930696af5d",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-1.json": "cb01c0709885c67d423936606b8598ff968f63ca77322dbbb9ba9616aa77b349",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-2.json": "8bf4c674bf30fdaacae36c0ae60fb425217626ca2b5afab465e646ba2a47a0e3",
+    "docs/benchmarks/2026-10-16-registry-peak-final-trimmed-3.json": "fe3f28e63fad020067f0b974301ff59c2e502e59f0bf6159047ae6ee7b61230a",
+    "docs/benchmarks/2026-10-16-registry-peak-profile-after.json": "cceb51fdc7560b71c21352288b420919145e33e333665f76722e56e54757d38b",
+    "docs/benchmarks/2026-10-16-registry-peak-profile-control.json": "8c6c8d426fd66eb1204d2b943a8e1062d727210e7da868d329b90a16ff2ec160",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-3.json": "c06c2f93c896c6bf1a2adf63db717e93eb99e8fa649dbad9eac4914b7f872687",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-4.json": "77d067d509113fa3888f79ddaf06c0a4130c7f0eaf2697a46fb05aab61c58da2",
+    "docs/benchmarks/2026-10-16-registry-peak-trimmed-5.json": "e4fb348dca99e0e07cd9e393c1f96e02070936b21ceeb81c675af94cf91954a0",
+    "docs/benchmarks/2026-10-16-registry-reclaim-live.json": "e6d435c63e9f66b9d9ba8f06f48c146fb4bc7caa02b89960a2313ddab25b3dca",
+    "docs/benchmarks/2026-10-16-registry-reference.json": "ff127c5aeb223b7d5a21cb0409fe5b1a85b88e90ffc3de49046c0a8d68687bb0",
+    "docs/benchmarks/2026-10-16-registry-verifier-after.json": "d1bdf636d91b823d635bab1559cd5821ae9e2da00e8df3e520b5370d5d62f498",
+    "docs/benchmarks/2026-10-16-registry-verifier-before.json": "c62bc9cf1cacb6f84f7cb1ab6d636632e2d1bd4b32e70864abcde5bfb43ead85",
+    "docs/benchmarks/2026-10-16-registry-verifier-smoke.json": "34e99e832a1cde37eb6e43623d66ff52ea34eaa1c57de0b1edadb109cbcbd0d4"
+  },
+  "official_reference": {
+    "url": "https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter",
+    "use": "Iteration scans empty buckets; the measured Rust 1.91.1 mechanism is independently established by the annotated native profile."
+  },
+  "limits": "Local plaintext sockets, one host, no deployment or hosted CI. Two retained global clients and transient peers in distinct rooms; single-room mass departure and channel/membership table capacity are outside this optimization. Profiles and verifier calibration are excluded from timing comparisons. Phase RSS is not continuous peak RSS. Rehashing allocates metadata under the registry write lock; OS/allocator page return and much larger populations are unmeasured. Native shared-body semantics, rate/storage policy, Origin defaults and routing scopes remain intact."
+}

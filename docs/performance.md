@@ -1041,3 +1041,101 @@ https://app.example --allowed-origin https://app.example --output
 artifacts/origin-churn.json`. Other browser engines, TLS/proxies, adversarial
 Origin admission rates, legacy CPU cost and larger/longer deployments remain
 unmeasured.
+
+## ID registry capacity after population waves, 2026-10-16
+
+Two global clients routed more slowly after 8,192 peers in separate rooms had
+joined and departed. An initial unchanged-release run measured 1,444 versus
+1,686 server ns per verified delivery before/after the wave. The ID ownership
+map retained its large table, and `values()` kept visiting empty buckets, as
+described by the [standard-library iteration contract](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter).
+The transient rooms were empty and removed; global membership stayed at two.
+Thus this global broadcast path isolated the ID index's history from departure
+fanout and room membership scans.
+
+A separate `cycles:u`/DWARF profile attributed 23.97% of sampled user cycles to
+`Relay::receive`. Its annotated SIMD empty-control-byte group loop accounted
+for about 61.4% of that function, or 14.7% of sampled user cycles. The source
+path, workload and instructions identify the ID-map scan. The selected profile
+reduces `Relay::receive` to 7.91%. Each profile has 2,250 samples and no lost
+samples. Profiled timings are diagnostic and excluded from timing comparisons;
+the reports and annotations are retained with digests of the local binary data.
+
+The shared retirement helper checks only maps above 256 capacity and no more
+than one-eighth occupied, then shrinks with room for twice the remaining IDs.
+This hysteresis keeps ordinary small churn from allocating replacement tables.
+It runs under the existing write lock after session removal or occupied-ID
+takeover. It moves keys and `Arc` handles; peers, queues and shared application
+bodies retain their addresses. There is no additional per-message check,
+allocation, body movement, timer, background sweep or operator setting.
+
+The departure-only prototype recovered routing cost but missed takeover-driven
+retirement while displaced registrations were still alive. A failing 1,024-owner
+regression demonstrated the gap, and the selected helper covers both paths.
+Prototype records and its frozen source/binary remain distinct from the final
+comparison. The [stability checks](stability.md#id-registry-lifetime-across-large-populations-2026-10-16)
+cover delayed cleanup, stable payload pointers and healthy concurrent routing.
+
+The final comparison uses three fresh processes per build, reversing order on
+the second repetition. Relays use four workers on CPUs 0–3, with one frozen
+client on CPUs 4–7. The same two global clients stay connected through three
+8,192-peer waves per process. Transient peers use distinct ordinary rooms and
+verify exact normal Close and EOF. Three-second traffic phases precede the first
+wave and follow every wave: 64 prebuilt 1 KiB values, 16-message windows, every
+encoded sender/value and FIFO position checked. Stdin gates separate filling,
+draining and traffic; native CPU includes boundary management sampling at the
+host's 10 ms tick resolution. Incoming rates and heartbeats are disabled in this
+probe, with default message/storage admission policies retained.
+
+Post-wave values below are medians of each process's three-wave median, then
+medians across its three processes. Fresh phases remain separate:
+
+| Median / two global clients | Prior `241a172` | Selected |
+| --- | ---: | ---: |
+| Fresh deliveries/s | 449,174 | 446,403 |
+| Fresh server ns/delivery | 1,440 | 1,449 |
+| After waves, deliveries/s | 416,192 | 447,340 |
+| After waves, server ns/delivery | 1,638 | 1,464 |
+| After waves, p99 upper bucket | 0.032768 ms | 0.032768 ms |
+| Fill one 8,192-peer wave, server CPU | 0.16 s | 0.16 s |
+| Drain one wave, server CPU | 0.09 s | 0.09 s |
+
+The selected post-wave workload uses **10.64% less server CPU per delivery**
+with **7.48% higher throughput**. Fresh CPU differs by +0.62%. Repeated regrowth
+and draining stay in the same measured CPU bins; this does not claim that
+rehashing is free. It allocates metadata and briefly holds the write lock.
+Map hash seeds/IDs vary across processes. This comparison verifies 31,309,200
+deliveries and 147,468 normal Close handshakes, with exact counters, zero body
+compaction and complete final resource release in all six processes.
+
+Eighteen separate four-second cost runs check ordinary 64-client traffic and
+churn with the same frozen stress client. At 1 KiB, median throughput differs
+by +0.81% and CPU/delivery by −0.40%, with p99 at 1.048576 ms in both builds.
+Churn differs by +0.07% throughput and +0.12% CPU/lifecycle, with p99 at 2.097152 ms.
+The short 64 KiB comparison had a higher median p99 bucket in the selected build,
+so four ten-second alternating pairs followed. Those throughput medians are
+205,511 versus 202,278 deliveries/s (−1.57%) and CPU is 11,530 versus 11,561
+ns/delivery (+0.27%), with overlapping ranges and the same 4.194304 ms median
+p99 bound. One selected long run has the 8.388608 ms bucket; all raw results
+are retained. These guards support a scoped improvement after population waves,
+not a general ordinary-traffic speed or latency improvement.
+
+All 26 cost runs pass exact counts, error/resource checks and zero routed-value
+compaction. Traffic deliberately drops 64 TCP handles at its deadline; every
+departure is accounted for. Churn and the population probe separately verify
+normal Close. The quiescent local runtime was updated after validation; a live
+1,024-peer wave preserves typed global delivery, and all 1,026 peers close
+cleanly. Fresh browser/legacy checks and default decoder reclamation also pass.
+
+The [final comparison](benchmarks/2026-10-16-registry-peak-final-comparison.json),
+[ordinary cost guard](benchmarks/2026-10-16-registry-cost.json),
+[long large-frame confirmation](benchmarks/2026-10-16-registry-large-confirm.json),
+[summary](benchmarks/2026-10-16-registry-summary.json), and
+[manifest](benchmarks/2026-10-16-registry-build.json) bind traces and sources.
+Reproduce with `cargo build --release --bins --example registry_peak`, then
+`python3 scripts/registry-peak.py --waves 3 --peak-clients 8192 --seconds 3
+--output artifacts/registry-peak.json`. The benchmark requires its harness gates.
+Channel/membership-table capacity, mass departure within one room, much larger
+active fanout, multi-hour behavior and deployed TLS/network paths remain outside
+this optimization. Event-boundary RSS does not measure continuous peak RSS,
+and freeing ID buckets does not imply that the allocator returns pages to the OS.

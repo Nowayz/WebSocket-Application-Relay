@@ -354,6 +354,22 @@ these four metrics are zero.
 
 ## Scaling boundary
 
+The native ID ownership table releases excess capacity after large departures
+and occupied fixed-ID takeovers. This prevents a later small global audience
+from scanning the table's previous population on every broadcast. The check
+runs during ID retirement under the existing registry write lock; normal
+messages add no allocation, trimming check or body movement. Small tables retain
+their storage, and larger tables keep regrowth headroom. A subsequent population
+wave can allocate metadata again. [Measured cost and limits](performance.md#id-registry-capacity-after-population-waves-2026-10-16)
+cover three repeated 8,192-peer waves per process, alongside ordinary traffic
+and churn guards.
+
+Rehashing moves ID keys and `Arc` handles. Peers, their queues and published
+application bodies keep their existing owners and addresses. This policy trims
+the ID index; channel/membership tables, socket state and allocator-retained
+pages have separate lifetimes, so it is not a process RSS cap. Displaced sessions
+continue counting toward connection/session limits until their normal cleanup.
+
 Workers share one process-local registry; private routing and variables do not
 cross process boundaries. Multiple independent replicas need an explicit ownership
 and routing scheme before applications can treat them as one relay. Measure
