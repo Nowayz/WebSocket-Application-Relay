@@ -57,6 +57,16 @@ buffer size and leaves active fragment-assembly storage and its allowance in
 place. An inactive fragment high-water allowance releases at this safe reset.
 Setting no budget retains upstream's original growth behavior.
 
+Budgeted binary/text fragment assembly caps intermediate geometric growth at the
+already-checked message limit. If a final fragment requires growth, the decoder
+uses the now-known complete length; it retains existing sufficient capacity.
+For example, a 3 MiB prefix followed by a final 1 MiB grows assembly to 4 MiB
+rather than doubling to 6 MiB, including under a 16 MiB configured message limit.
+The actual-length check still precedes reservation and allocation. This also
+applies below the usual eight-byte minimum growth, while preserving incomplete
+UTF-8 state and published payload ownership. The no-budget path keeps upstream's
+original allocation behavior.
+
 `tests/read_buffer_reclaim.rs` exercises shared-owner release, every masked
 header split, deferred partial payloads, and a coalesced small message through
 the public API. `tests/read_budget.rs` covers concurrent admission, refusal before

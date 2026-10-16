@@ -110,8 +110,11 @@ their required work. See [docs/performance.md](docs/performance.md).
 Native decoder staging has a shared 1 GiB allowance, configurable with
 `--total-read-buffer-bytes` / `WAR_TOTAL_READ_BUFFER_BYTES` (`0` disables).
 Frame and fragment storage reserve twice the requested capacity before growth,
-retaining headroom for reuse. Exhaustion returns HTTP `503` before upgrade or a
-best-effort WebSocket `1013` before reading a refused body. This preserves shared
+retaining headroom for reuse. Intermediate fragment growth stays within the
+message ceiling; final growth uses the known complete length. Exhaustion returns
+HTTP `503` before upgrade or a best-effort WebSocket `1013` before refused
+decoder growth. Frame capacity is admitted before reading its body; fragment
+assembly is admitted before appending the decoded frame. This preserves shared
 payload ownership and avoids per-packet budget atomics within the high water.
 It is a staging allowance, not an RSS limit; see [operations](docs/operations.md)
 for the accounting boundary, reclamation and metrics.
@@ -275,6 +278,26 @@ All 64 sources join, advertise 8 MiB frames, and only admitted sources supply
 self echoes. The probe drops admitted incomplete transports intentionally, then
 verifies new admission/routing, two normal Close handshakes and final resource
 release. Its memory samples are server-only and explicitly phase-bracketed.
+
+To check complete fragmented messages across repeated allocation/reclamation
+waves while a separate healthy session continues routing:
+
+```sh
+cargo build --release --bins --example fragment_waves
+python3 scripts/fragment-waves.py --max-message-bytes 16777216 \
+  --output artifacts/fragment-waves.json
+```
+
+Eight sources each self-route a 4 MiB CBOR message in 3 MiB and 1 MiB fragments,
+for three waves under the usual 16 MiB message ceiling. Interleaved Ping/Pong
+proves the first fragments were assembled before completion; returned encoded
+values and independent 1 KiB echoes are verified byte for byte. Each wave waits
+for cache retirement, then verifies a fresh join/route and normal Close. All
+surviving sockets complete normal Close and release their reservations. The
+probe uses a one-second reclamation interval and 256 MiB staging allowance to
+keep runs short; production defaults remain five seconds and 1 GiB. Use
+`--clients 64 --message-bytes 1048576` for the larger active cohort, or
+`--reclaim-secs 0 --cooldown-secs 0` to observe retained decoder capacity.
 
 The load tool verifies every frame and its order. Reports include setup time,
 verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons use

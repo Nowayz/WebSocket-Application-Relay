@@ -741,7 +741,7 @@ impl WebSocketContext {
                     (OpData::Continue, Some(incomplete)) => {
                         let payload = frame.into_payload();
                         if let Some(lease) = self.fragment_lease.as_mut() {
-                            incomplete.extend_budgeted(payload, self.config.max_message_size, Some(lease))?;
+                            incomplete.extend_budgeted(payload, self.config.max_message_size, fin, Some(lease))?;
                         } else {
                             incomplete.extend(payload, self.config.max_message_size)?;
                         }
@@ -766,7 +766,7 @@ impl WebSocketContext {
                     (Some((payload, t)), false) => {
                         let mut incomplete = IncompleteMessage::new(t);
                         if let Some(lease) = self.fragment_lease.as_mut() {
-                            incomplete.extend_budgeted(payload, self.config.max_message_size, Some(lease))?;
+                            incomplete.extend_budgeted(payload, self.config.max_message_size, false, Some(lease))?;
                         } else {
                             incomplete.extend(payload, self.config.max_message_size)?;
                         }

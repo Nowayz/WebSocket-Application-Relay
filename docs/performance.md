@@ -724,3 +724,96 @@ final staging/connection/session/queue/variable gauges were zero. Health and
 readiness returned 200. [Live evidence](benchmarks/2026-10-15-input-budget-live.json)
 records exact process hashes, the browser report, and the post-reboot boundary;
 performance results were collected before the reboot.
+
+## Fragment assembly capacity and repeated pressure, 2026-10-16
+
+The next real-socket regression was a complete 4 MiB CBOR message split into a
+3 MiB first fragment and a final 1 MiB continuation. Under a 16 MiB staging
+allowance, the previous release (`8ab12a0`) returned `1013 Input Memory Limit`.
+The frame storage and necessary 4 MiB assembly fit; geometric assembly growth
+requested 6 MiB, which made the conservative twice-capacity allowances exceed
+the budget. The failure also occurred with the normal 16 MiB message ceiling.
+The [control record](benchmarks/2026-10-16-fragment-final-control-tight.json)
+expects and verifies that refusal; its passing status describes the reproduction,
+not acceptance of a valid message.
+
+Budgeted assembly now bounds intermediate geometric growth by the configured
+message ceiling. When a final fragment needs growth, it allocates the now-known
+complete length. Thus the example grows assembly to 4 MiB, including with a
+larger configured ceiling. Existing sufficient capacity stays in place; the
+decoder does not shrink or copy a completed payload. Actual-length validation
+still precedes admission, and the unmetered path retains upstream allocation
+behavior. Binary and text assembly use the same bounds, including tiny limits
+and UTF-8 characters split between fragments. The
+[fixed release check](benchmarks/2026-10-16-fragment-final-after.json) completes
+the message with a peak staging allowance of 14,696,448 bytes and zero refusals.
+
+Three alternating fresh-process pairs compared the prior and final servers with
+the same frozen client binary. Eight sources each sent three verified 4 MiB
+messages, each as masked 3 MiB/1 MiB fragments, under a 256 MiB staging allowance
+and a 16 MiB message ceiling. Interleaved Ping/Pong proved first-fragment
+assembly before completion. An independent session verified 1 KiB echoes every
+20 ms, including during assembly and retirement. Each wave waited two seconds
+for the explicitly configured one-second decoder reset, then a fresh client
+joined, self-routed and completed normal Close. Four server workers used
+plaintext loopback; runs were sequential, without concurrent compilation.
+
+| Eight-source, three-wave result | Prior release | Final release |
+| --- | ---: | ---: |
+| Verified fragmented messages per run | 24 | 24 |
+| Peak staging allowance, all three runs | 144.0703 MiB | 112.0703 MiB |
+| Median sampled peak server RSS | 90.08 MiB | 77.50 MiB |
+| Sampled peak RSS range | 79.39–90.13 MiB | 62.36–81.46 MiB |
+| Connected allowance after every reset | 72 KiB | 72 KiB |
+| Verified normal Close handshakes per run | 12 | 12 |
+
+The allowance reduction is exactly **32 MiB, or 22.2%**, for this workload.
+Median sampled peak RSS was 14.0% lower, with substantial host/allocator
+variation; RSS was sampled about every 50 ms and is a separate measure from
+staging allowance. Healthy maximum round trips ranged from 0.30 to 1.07 ms
+across both candidates. These short spaced-message runs establish verified
+concurrent progress and storage behavior, not a CPU, throughput or production
+latency improvement. Every run returned final staging/connection/session/queue/
+variable gauges to zero, retained only the persistent global channel, and had
+zero protocol/write/Close/transport/admission errors. The encoded CBOR value was
+checked byte for byte and routed-body compaction stayed zero. Required WebSocket
+unmasking and fragment assembly are outside that routing-copy metric.
+
+Additional final-release cases use the same 16 MiB message ceiling:
+
+- **64 sources plus the healthy session**, three waves of 1 MiB messages:
+  all 192 messages completed. Each wave returned to 532,480 bytes of connected
+  allowance (65 × 8 KiB); final allowance was zero.
+- **Default five-second retirement**, two 4 MiB waves under a 16 MiB staging
+  allowance: both completed, both resets occurred, and the two connected
+  sessions returned to 16 KiB before final Close.
+- **Retirement disabled**: all 24 messages completed and the expected
+  117,514,240-byte high water remained between waves. There were no decoder
+  resets; transport retirement released the entire allowance.
+- **Admission disabled**: all 24 messages completed with allowance gauges zero;
+  all 24 scheduled decoder resets still occurred.
+- **64 KiB and 64 KiB + 1 byte**, split after one byte: both 16-message cases
+  completed. The exact threshold caused zero resets; one byte above caused
+  all 16, returning to the 72 KiB connected allowance after each wave.
+- The separate **64-source incomplete-frame** check still admitted exactly one
+  8 MiB advertised frame under a 24 MiB staging allowance and refused 63 with
+  `1013`, while healthy routing and later admission stayed verified. Its admitted
+  unfinished transport intentionally drops TCP; ordinary Close is verified
+  separately.
+
+The [final summary](benchmarks/2026-10-16-fragment-final-summary.json) binds every
+final comparison and pressure trace by hash, including per-wave observations and
+exact counters. The [build manifest](benchmarks/2026-10-16-fragment-final-build.json)
+binds the source files, original package provenance, complete vendor patch,
+release binaries and unchanged verifying client. Earlier `fragment-cap`,
+`fragment-limit` and `fragment-wave` records preserve an exploratory change that
+only capped growth at the configured ceiling. Its
+[remaining below-ceiling failure](benchmarks/2026-10-16-fragment-final-before.json)
+motivated passing the existing final-fragment flag to assembly; those earlier
+records are not measurements of the final implementation.
+
+Reproduce the workload with `cargo build --release --bins --example fragment_waves`
+and `python3 scripts/fragment-waves.py --max-message-bytes 16777216 --output
+artifacts/fragment-waves.json`. The benchmark overrides the reset interval to
+one second; the ordinary server default remains five seconds. See the README
+for the larger cohort and disabled-reset variants.

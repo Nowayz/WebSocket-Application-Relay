@@ -192,3 +192,119 @@ fn fragmented_utf8_carries_partial_codepoints_and_control_frames() {
     drop(ws);
     assert_eq!(pool.reserved(), 0);
 }
+
+#[test]
+fn fragment_growth_fits_the_message_limit_and_rejects_only_actual_excess() {
+    for limit in [1, 2, 3, 4, 5, 7, 8, 9, 17, 31, 33, 65] {
+        let body = vec![0x5a; limit];
+        let split = (limit * 3 / 4).max(1);
+        let pool = ReadBudget::new(8192 + 2 * limit);
+        let mut wire = frame(0x02, &body[..split]);
+        wire.extend(frame(0x80, &body[split..]));
+        let mut ws = socket(wire, &pool);
+        ws.set_config(|config| config.max_message_size = Some(limit));
+        let Message::Binary(published) = ws.read().unwrap() else {
+            panic!("binary")
+        };
+        assert_eq!(published.as_ref(), body);
+        assert_eq!(pool.reserved(), 8192 + 2 * limit);
+        assert_eq!(pool.rejected(), 0);
+        let pointer = published.as_ptr();
+        assert_eq!(ws.reclaim_read_buffer(), Some(0));
+        assert_eq!(pool.reserved(), 8192);
+        drop(ws);
+        assert_eq!(pool.reserved(), 0);
+        assert_eq!(published.as_ptr(), pointer);
+        assert_eq!(published.as_ref(), body);
+
+        let mut wire = frame(0x02, &body[..split]);
+        let mut tail = body[split..].to_vec();
+        tail.push(0x5a);
+        wire.extend(frame(0x80, &tail));
+        let mut ws = socket(wire, &pool);
+        ws.set_config(|config| config.max_message_size = Some(limit));
+        assert!(matches!(
+            ws.read(),
+            Err(Error::Capacity(CapacityError::MessageTooLong { .. }))
+        ));
+        assert_eq!(
+            pool.rejected(),
+            0,
+            "message validation must precede growth admission"
+        );
+        drop(ws);
+        assert_eq!(pool.reserved(), 0);
+    }
+}
+
+#[test]
+fn text_assembly_caps_capacity_across_every_utf8_split() {
+    for text in ["x", "π", "€", "😀", "€x", "😀xy"] {
+        let body = text.as_bytes();
+        for split in 1..=body.len() {
+            let pool = ReadBudget::new(8192 + 2 * body.len());
+            let mut wire = frame(0x01, &body[..split]);
+            wire.extend(frame(0x80, &body[split..]));
+            let mut ws = socket(wire, &pool);
+            ws.set_config(|config| config.max_message_size = Some(body.len()));
+            assert_eq!(ws.read().unwrap(), Message::text(text));
+            assert_eq!(pool.reserved(), 8192 + 2 * body.len());
+            assert_eq!(pool.rejected(), 0);
+            assert_eq!(ws.reclaim_read_buffer(), Some(0));
+            assert_eq!(pool.reserved(), 8192);
+            drop(ws);
+            assert_eq!(pool.reserved(), 0);
+        }
+    }
+}
+
+#[test]
+fn final_growth_uses_the_known_length_with_a_larger_configured_limit() {
+    for opcode in [0x01, 0x02] {
+        for length in [9, 17, 33, 65, 257] {
+            let body = vec![0x5a; length];
+            let split = length * 3 / 4;
+            let pool = ReadBudget::new(8192 + 2 * length);
+            let mut wire = frame(opcode, &body[..split]);
+            wire.extend(frame(0x80, &body[split..]));
+            let mut ws = socket(wire, &pool);
+            ws.set_config(|config| config.max_message_size = Some(length * 4));
+            let published = ws.read().unwrap();
+            let data: &[u8] = match &published {
+                Message::Binary(bytes) => bytes,
+                Message::Text(text) => text.as_bytes(),
+                _ => panic!("expected assembled data"),
+            };
+            let pointer = data.as_ptr();
+            assert_eq!(data, body);
+            assert_eq!(pool.reserved(), 8192 + 2 * length);
+            assert_eq!(pool.rejected(), 0);
+            assert_eq!(ws.reclaim_read_buffer(), Some(0));
+            drop(ws);
+            assert_eq!(pool.reserved(), 0);
+            assert_eq!(data.as_ptr(), pointer);
+            assert_eq!(data, body);
+        }
+    }
+}
+
+#[test]
+fn intermediate_growth_stays_within_the_configured_message_ceiling() {
+    for opcode in [0x01, 0x02] {
+        for length in [9, 17, 33, 65] {
+            let body = vec![0x5a; length];
+            let split = length * 3 / 4;
+            let pool = ReadBudget::new(8192 + 2 * length);
+            let mut wire = frame(opcode, &body[..split]);
+            wire.extend(frame(0x00, &body[split..]));
+            wire.extend(frame(0x80, &[]));
+            let mut ws = socket(wire, &pool);
+            ws.set_config(|config| config.max_message_size = Some(length));
+            assert_eq!(ws.read().unwrap().into_data().as_ref(), body);
+            assert_eq!(pool.reserved(), 8192 + 2 * length);
+            assert_eq!(pool.rejected(), 0);
+            drop(ws);
+            assert_eq!(pool.reserved(), 0);
+        }
+    }
+}

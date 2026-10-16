@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 60 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 65 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -230,7 +230,7 @@ installation path. No system service or public endpoint has been installed.
 Caddy is not installed here, so its example was not executed. Measurements are
 local single-host plaintext sockets; no production or cluster claim is made.
 
-## Decoder staging admission (current checkpoint)
+## Decoder staging admission
 
 The native relay now reserves decoder staging before allocating, in addition to
 reclaiming unused storage. `--total-read-buffer-bytes` /
@@ -239,8 +239,10 @@ reclaiming unused storage. `--total-read-buffer-bytes` /
 retain twice their requested capacity. Large frames include one charged read
 chunk of read-ahead. Ordinary reads within the high water perform no shared
 budget atomics or guard allocations. Refusals return HTTP `503` or a best-effort
-WebSocket `1013`, before receiving the refused body. Reclaim/drop/cancellation
-release the allowances; completed payloads retain their existing shared owners.
+WebSocket `1013`, before refused decoder growth. Frame admission precedes body
+reads; fragment admission precedes appending the decoded frame. Reclaim/drop/
+cancellation release the allowances; completed payloads retain their existing
+shared owners.
 This controls staging requests, not total process RSS or published body storage.
 
 Three paired 64-source partial-frame runs with a 24 MiB allowance reduced median
@@ -263,11 +265,55 @@ Clippy/format/vendor checks, seven Chrome checks, three live legacy checks and
 the five-second live reclamation/shared-routing check passed again. Final live
 connection/session/queue/variable/staging gauges and error counters were zero.
 
+At that checkpoint the native release hash began `a420b7a37a1d` and the bridge
+began `d82df74b7cf8`. Exact hashes, sources, measurements and post-reboot live
+evidence are in `benchmarks/2026-10-15-input-budget-{build,summary,live}.json`.
+
+## Fragment capacity under pressure (current checkpoint)
+
+A new real-socket check found that a valid 4 MiB message split into 3 MiB/1 MiB
+fragments was refused under a 16 MiB staging allowance: geometric assembly
+growth requested 6 MiB although the final length was known to be 4 MiB. The
+decoder now bounds intermediate growth by the configured message ceiling and
+final growth by the complete length, while retaining already sufficient capacity.
+Actual-length validation still precedes allocation/admission. Text and binary
+assembly preserve ownership and split UTF-8 state; unmetered behavior is retained.
+No published application body moves as a result of this change.
+
+Three alternating release pairs used the same frozen verifying client and the
+normal 16 MiB message ceiling, eight producers, three 4 MiB waves and independent
+healthy traffic. Peak staging allowance fell from 144.07 to 112.07 MiB (22.2%).
+Median sampled peak server RSS fell from 90.08 to 77.50 MiB, with wide ranges;
+no general RSS, CPU or throughput improvement is claimed. All 24 messages,
+12 normal Close handshakes, per-wave resets and final resource release passed
+in every run, with zero routed-body compaction. A 64-producer/one-healthy-client
+case verified all 192 fragmented messages, 68 normal Close handshakes and all
+three returns to the expected 532,480-byte connected allowance.
+
+Fifteen complete-fragment workloads, including the expected old-release refusal,
+and a 64-source partial-frame check passed. They cover the default five-second
+reset, disabled reset/admission, the exact 64 KiB reset threshold and one byte
+above it, tight staging admission, and the README command with a freshly built
+client. All 65 Rust tests, strict Clippy, formatting, the 62-file vendor audit,
+seven JavaScript socket cases and the 46-common-case/eight-explicit-difference
+original C++ comparison passed. Sources, exact hashes, raw observations and
+limitations are bound in `benchmarks/2026-10-16-fragment-final-{build,summary}.json`;
+`performance.md` describes the measurements and earlier exploratory candidate.
+
+The verified final native/bridge binaries replaced the quiescent post-reboot
+processes. A fresh headed Chrome run passed all seven checks with no console
+messages, and three live legacy/Close cases passed. Live decoder retirement
+returned two connected sessions to their 16 KiB base after 5.019 seconds; typed
+routing after retirement added no body copies. Health/readiness returned 200,
+and final connection/session/queue/variable/staging gauges and error counters
+were zero. `benchmarks/2026-10-16-fragment-final-live.json` records the process
+identities, exact release hashes, browser report and live probe source.
+
 Current local endpoints are native `ws://127.0.0.1:1338`, optional bridge
-`ws://127.0.0.1:1337`, management `http://127.0.0.1:1339`, and the browser check
-`http://127.0.0.1:4180/`. The selected native release hash begins `a420b7a37a1d`;
-the bridge begins `d82df74b7cf8`. Exact hashes, sources, measurements and post-reboot
-live evidence are in `benchmarks/2026-10-15-input-budget-{build,summary,live}.json`.
+`ws://127.0.0.1:1337`, management `http://127.0.0.1:1339`, and browser check
+`http://127.0.0.1:4180/`. Native SHA-256 begins `6f801ea16bdb`; bridge begins
+`933efb31e760`. Application-idle Close is disabled for manual testing; normal
+five-second decoder retirement and 1 GiB staging admission remain enabled.
 No hosted deployment or multi-node capacity is claimed; the ongoing goal remains
 active.
 
@@ -281,12 +327,14 @@ active.
 2. Profile the remaining small-message CPU cost before changing counters, queue
    representation, or read storage. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
-   Concurrent retention and delayed storage reclamation now cover up to 64
-   producers. Process-wide reservations now precede decoder allocations and
-   cover incomplete frames plus fragment assembly; extend pressure checks to
-   larger active populations and mixed reclamation/admission waves. Preserve
+   Concurrent retention, staging pressure and delayed storage reclamation now
+   cover up to 64 producers plus independent healthy traffic across repeated
+   waves. Process-wide reservations precede decoder allocations and cover
+   incomplete frames plus fragment assembly; final-fragment growth uses its
+   known complete length. Extend duration, larger populations and adversarial
+   fragment schedules when the measurements justify the next change. Preserve
    shared bodies, exact peer Close acknowledgements, and immediate dropping of
-   partial output. Extend mixed healthy traffic during large reclamation waves.
+   partial output.
 3. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
    multi-hour, TLS, and much larger concurrent populations remain unmeasured.

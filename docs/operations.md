@@ -61,14 +61,23 @@ HTTP `503`. Once upgraded, separate frame and fragment-assembly leases reserve
 twice their requested capacities **before allocation**, covering overlap of old
 and new staging allocations during growth. Large frame allocations include one
 configured read chunk of bounded read-ahead so the next header can reuse storage;
-that capacity is also charged. Denied frame/fragment growth stops
-input and sends a best-effort `1013` / `Input Memory Limit`; this does not wait for
-the advertised body. A refused incomplete frame cannot be resumed unreserved.
+that capacity is also charged. Frame growth is admitted before reading its
+advertised body; fragment assembly is admitted before appending a decoded frame.
+Denial stops input and sends a best-effort `1013` / `Input Memory Limit`.
+A refused incomplete frame cannot be resumed unreserved.
 
 Each lease retains its high-water allowance, so normal reads within it perform
 no shared-budget atomics or per-packet guard allocation. The allowance releases
 on transport drop/cancellation, or shrinks on a safe decoder reset. Fragment
 assembly retains its reservation while a fragmented message is incomplete.
+After checking the actual assembled length, intermediate growth caps geometric
+spare capacity at the configured message limit. When a final fragment requires
+growth, the decoder uses the now-known complete length, even if the configured
+ceiling is larger. Existing sufficient capacity is retained. A 3 MiB prefix
+followed by a final 1 MiB therefore grows assembly to 4 MiB rather than 6 MiB,
+including under the default 16 MiB message limit. Binary and text assembly use
+the same rule, including limits below the usual minimum growth size. Exceeding
+the actual message limit still fails before growth admission.
 After a message completes, its high water can remain until the configured large
 input reclamation policy runs or the session ends. This conservative headroom
 can refuse growth while RSS remains lower than the limit; disabling reclamation

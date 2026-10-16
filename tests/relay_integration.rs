@@ -170,6 +170,91 @@ async fn prime_read_storage(source: &mut Socket, source_id: u64, receiver_id: u6
 }
 
 #[tokio::test]
+async fn fragmented_final_growth_fits_staging_at_and_below_the_message_limit() {
+    use tokio_tungstenite::tungstenite::protocol::frame::{
+        Frame,
+        coding::{Data, OpCode},
+    };
+    const MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+    for max_message_bytes in [MESSAGE_BYTES, 4 * MESSAGE_BYTES] {
+        let server = Server::new(Config {
+            max_message_bytes,
+            total_read_buffer_bytes: 16 * 1024 * 1024,
+            messages_per_second: 0,
+            bytes_per_second: 0,
+            ..config()
+        })
+        .await;
+        let (mut source, source_id) = server.join("fragment-limit").await;
+        let (mut healthy, healthy_id) = server.join("fragment-health").await;
+        // An explicit uint64 target makes the packet exactly 4 MiB,
+        // including for the rare randomly assigned ID with a shorter preferred form.
+        let mut packet = vec![0x82, 0x1b];
+        packet.extend_from_slice(&source_id.to_be_bytes());
+        packet.extend_from_slice(&protocol::byte_string(&vec![0x5a; MESSAGE_BYTES - 15]));
+        assert_eq!(packet.len(), MESSAGE_BYTES);
+        let packet = Bytes::from(packet);
+        let split = MESSAGE_BYTES * 3 / 4;
+        source
+            .send(Message::Frame(Frame::message(
+                packet.slice(..split),
+                OpCode::Data(Data::Binary),
+                false,
+            )))
+            .await
+            .unwrap();
+        source
+            .send(Message::Ping(Bytes::from_static(b"assembled-first")))
+            .await
+            .unwrap();
+        assert_eq!(
+            timeout(Duration::from_secs(3), source.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            Message::Pong(Bytes::from_static(b"assembled-first"))
+        );
+        send(&mut healthy, healthy_id, &[0x18, 42]).await;
+        assert_eq!(
+            data(&mut healthy).await,
+            protocol::envelope(healthy_id, &[0x18, 42])
+        );
+        source
+            .send(Message::Frame(Frame::message(
+                packet.slice(split..),
+                OpCode::Data(Data::Continue),
+                true,
+            )))
+            .await
+            .unwrap();
+        let reply = timeout(Duration::from_secs(3), source.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let budget = server.relay.metrics.read_budget.as_ref().unwrap();
+        assert!(
+            matches!(reply, Message::Binary(_)),
+            "valid fragmented input was refused: {reply:?}; peak={}, rejected={}",
+            budget.peak(),
+            budget.rejected()
+        );
+        let Message::Binary(reply) = reply else {
+            unreachable!()
+        };
+        let mut decoder = Decoder::new(&reply);
+        assert_eq!(decoder.array().unwrap(), Some(2));
+        assert_eq!(decoder.u64().unwrap(), source_id);
+        assert_eq!(&reply[decoder.position()..], &packet[10..]);
+        assert_eq!(budget.rejected(), 0);
+        assert!(budget.peak() <= server.relay.config.total_read_buffer_bytes);
+        assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+        server.stop().await;
+    }
+}
+
+#[tokio::test]
 async fn input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing() {
     let server = Server::new(Config {
         total_read_buffer_bytes: 100000,

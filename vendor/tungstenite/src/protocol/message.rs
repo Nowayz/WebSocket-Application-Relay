@@ -29,9 +29,11 @@ mod string_collect {
                 .saturating_add(self.incomplete.map(|i| i.buffer_len as usize).unwrap_or(0))
         }
 
-        pub fn reserve_budgeted(&mut self, required: usize, lease: &mut ReadLease) -> Result<()> {
+        pub fn reserve_budgeted(&mut self, required: usize, capacity_limit: usize, lease: &mut ReadLease) -> Result<()> {
             if self.data.capacity() < required {
-                let capacity = required.max(self.data.capacity().saturating_mul(2)).max(8);
+                // The caller checked the length and provided either the message
+                // ceiling or the known final length as a growth bound.
+                let capacity = required.max(self.data.capacity().saturating_mul(2)).max(8).min(capacity_limit);
                 lease.for_capacity(capacity)?;
                 let mut fresh = String::with_capacity(capacity);
                 fresh.push_str(&self.data);
@@ -125,13 +127,14 @@ impl IncompleteMessage {
 
     /// Add more data to an existing message.
     pub fn extend<T: AsRef<[u8]>>(&mut self, tail: T, size_limit: Option<usize>) -> Result<()> {
-        self.extend_budgeted(tail, size_limit, None)
+        self.extend_budgeted(tail, size_limit, false, None)
     }
 
     pub(super) fn extend_budgeted<T: AsRef<[u8]>>(
         &mut self,
         tail: T,
         size_limit: Option<usize>,
+        final_fragment: bool,
         lease: Option<&mut ReadLease>,
     ) -> Result<()> {
         // Always have a max size. This ensures an error in case of concatenating two buffers
@@ -147,11 +150,14 @@ impl IncompleteMessage {
             }));
         }
 
+        let required = my_size + portion_size;
+        // Intermediate fragments retain bounded geometric growth. On the last
+        // fragment, the complete size is known and no spare growth is useful.
+        let capacity_limit = if final_fragment { required } else { max_size };
         match self.collector {
             IncompleteMessageCollector::Binary(ref mut v) => {
-                let required = my_size + portion_size;
                 if let Some(lease) = lease.filter(|_| v.capacity() < required) {
-                    let capacity = required.max(v.capacity().saturating_mul(2)).max(8);
+                    let capacity = required.max(v.capacity().saturating_mul(2)).max(8).min(capacity_limit);
                     lease.for_capacity(capacity)?;
                     let mut fresh = Vec::with_capacity(capacity);
                     fresh.extend_from_slice(v);
@@ -162,7 +168,7 @@ impl IncompleteMessage {
             }
             IncompleteMessageCollector::Text(ref mut t) => {
                 if let Some(lease) = lease {
-                    t.reserve_budgeted(my_size + portion_size, lease)?;
+                    t.reserve_budgeted(required, capacity_limit, lease)?;
                 }
                 t.extend(tail)
             }
