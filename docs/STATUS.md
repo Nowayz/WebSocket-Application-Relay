@@ -12,26 +12,36 @@ claim that an open-ended improvement effort is complete.
 The active branch is `codex/lean-core`; native sockets use fixed Mio readiness
 workers, shared read storage and direct vectored writes. Tokio handles
 management, signals and the optional legacy bridge. Implementation commit
+`ef3d8fcd3826fbc6a4110167a792867dbf05dfd1` adds optional direct-peer IP admission
+at both public ingresses, disabled by default, with canonical address leases
+shared across native workers and retained through transport lifetime. Release
+checks reproduce a stalled single-address population exhausting the shared cap,
+then show that a per-IP quota preserves admission from another address. The
+[operating policy](operations.md#direct-peer-connection-admission) documents
+NAT/proxy aggregation and the separate native/bridge limits.
+
+The preceding implementation
 `58f22492f8ecf14b53662cef7b9ad765cfe62664` compacts sparse connection arenas
 after large populations retire, preserving live socket tokens, payload owners,
 partial input/output and exact deadlines. The preceding queue-memory change
 releases large drained output queues and exposes current/peak slot capacity.
 
-Two surviving clients after two 8,192-peer waves retain 373,548 requested live
-heap bytes versus 3,402,188 in the preceding release's diagnostic. Ordinary
+At that arena checkpoint, two surviving clients after two 8,192-peer waves
+retained 373,548 requested live heap bytes versus 3,402,188 in its preceding
+release's diagnostic. Ordinary
 recovered RSS medians are 12.55 versus 14.93 MiB. This has measured costs:
 recovered throughput −1.87%, private/fanout throughput about −0.7%, and fanout
 lifecycle CPU +1.86%. The [performance report](performance.md#compact-sparse-connection-arenas-2026-10-16)
 records ranges, allocations, methodology and limits; this is a memory-recovery
 improvement with explicit tradeoffs.
 
-Current verification passes 113 Rust tests, strict Clippy/format/release checks,
+Current verification passes 120 Rust tests, strict Clippy/format/release checks,
 seven JavaScript checks, 48 common C++ cases plus eight documented differences,
-four release API checks and seven real Chrome checks. Longer functional checks
-verify 66,022,656 traffic deliveries and 2,738,312 complete reconnect cycles.
+four release API checks and seven real Chrome checks. Enabled-policy functional
+checks verify 17,643,120 traffic deliveries and 1,093,917 complete reconnect cycles.
 The local native/bridge runtime uses the selected frozen release and is healthy
 at the usual ports 1338/1337/1339, with the browser check on 4180. Source, binary,
-test and diagnostic hashes are in the [current manifest](benchmarks/2026-10-16-arena-build.json).
+test and diagnostic hashes are in the [current manifest](benchmarks/2026-10-16-ip-admission-build.json).
 This is local acceptance; no hosted deployment is claimed.
 
 ## Earlier implementation checkpoints
@@ -789,8 +799,10 @@ The continuing improvement goal remains active.
    counter expectations and source fidelity. The current finite corpus is not
    exhaustive fuzz coverage.
 5. Extend connection-admission policy for public multi-application operation
-   (per-IP limits and tenant boundaries) with an explicit compatibility and
-   trusted-proxy model. Optional browser-origin admission now covers both public
+   and tenant boundaries with an explicit compatibility and trusted-proxy model.
+   Optional direct-peer IP quotas now cover both public ingresses; broader
+   address populations and connection-rate workloads remain useful measurements.
+   Optional browser-origin admission also covers both public
    ingresses; the existing global/private scopes intentionally match WAR.
 6. Design node ownership and cross-node routing only after single-node capacity
    and operational needs are established. No replicas are currently a cluster.

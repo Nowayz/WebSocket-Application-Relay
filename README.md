@@ -24,6 +24,12 @@ management. `--help` lists all limits and environment variables. Set
 enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
 
+Optional `--max-connections-per-ip 32` admission bounds concurrent TCP sockets
+from each direct peer address, including unfinished upgrades. Both native and
+legacy ingresses support it; the default `0` preserves unrestricted per-IP
+admission. See the [address and proxy model](docs/operations.md#direct-peer-connection-admission)
+before enabling it behind a proxy or bridge.
+
 Native sockets run on readiness workers with shared receive storage and direct
 vectored output. Idle sockets own no receive slab or message channel. A worker
 keeps one base-size slab; partial frames retain their own storage, and oversized

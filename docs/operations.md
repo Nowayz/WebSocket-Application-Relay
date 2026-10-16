@@ -71,6 +71,50 @@ No Origin values are used as metric labels. Checks borrow bounded configuration
 and header bytes once at upgrade; application messages retain their shared-body
 forwarding path.
 
+## Direct-peer connection admission
+
+Both binaries accept `--max-connections-per-ip` / `WAR_MAX_CONNECTIONS_PER_IP`.
+The default `0` disables this policy. A positive value caps admitted concurrent
+TCP connections from each direct peer IP, shared across native I/O workers.
+For example:
+
+```sh
+./target/release/war-relay --max-connections-per-ip 32
+./target/release/war-legacy-bridge --max-connections-per-ip 32
+```
+
+The limit includes unfinished HTTP upgrades, unjoined WebSockets, joined
+sessions and closing transports. The native global cap is checked first; a
+per-IP refusal closes TCP before HTTP/WebSocket upgrade and increments both
+`war_ip_rejected_total` and `war_rejected_total`. Denied connections receive no
+WebSocket Close frame. Existing socket owners retain their address lease through
+queued output, retirement and captured routing targets. EOF, handshake/join
+failure, timeout, normal close and service cancellation release the lease.
+
+Addresses come from the accepted TCP connection. IPv4-mapped IPv6 addresses use
+the same quota as their IPv4 form; other IPv6 addresses each have their own
+quota. HTTP `Forwarded`, `X-Forwarded-For` and similar headers do not change this
+identity. NAT users share a quota. A TLS reverse proxy's backend connections
+share its address too: enforce client-address quotas at that edge, or size/
+disable this backend limit for the proxy's aggregate. The legacy bridge's
+upstream connections likewise share its source address at the native relay.
+Configure public ingresses independently; enabling only the native limit
+limits the bridge's aggregate upstream connections rather than each downstream
+client's address.
+
+The index allocates one shared entry per active canonical address. Connection
+leases reuse those entries, and their final owner removes them; sparse index
+capacity trims after large address populations retire. Disabled policy allocates
+no IP index. Admission does no per-message parsing or accounting. This bounds
+concurrent transports; applications needing per-user or tenant quotas still
+need an identity-aware edge or separate relay instances.
+
+Existing `legacy_bridge::serve` and `serve_with_origin_policy` callers retain a
+disabled IP policy. Embedders use `serve_with_limits` to set both connection caps
+and the origin policy. The bridge has no management listener or IP-denial metric;
+`war_ip_rejected_total` describes only native admissions. Accepted configuration
+values are `0..=4294967295`, with the shared connection cap still applying.
+
 ## Important defaults and budgets
 
 `war-relay --help` is the source of truth for CLI options and matching `WAR_*`
@@ -79,6 +123,7 @@ variables. All bounds are per process.
 | Budget | Default | Counts |
 | --- | ---: | --- |
 | Connections | 10,000 | TCP handshakes, unjoined sockets, joined sessions, and closing transports |
+| Connections per direct peer IP | Disabled (`0`) | Optional native/bridge TCP admission; shared NAT/proxy addresses share a quota |
 | Channels | 10,000 | Includes persistent `re_globl` |
 | Members per channel | 10,000 | Includes closing sessions until removal |
 | Incoming message | 16 MiB | Complete reassembled WebSocket data message |

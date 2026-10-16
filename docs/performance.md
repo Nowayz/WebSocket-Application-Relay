@@ -3354,3 +3354,113 @@ both release binaries, frozen clients, source/check files, ordinary reports,
 27 diagnostic heap captures, initial prototype source snapshot and browser
 artifacts by SHA-256. These finite Linux loopback checks do not establish TLS,
 adverse-network or production capacity.
+
+## Optional direct-peer IP admission (2026-10-16)
+
+Implementation `ef3d8fcd3826fbc6a4110167a792867dbf05dfd1` adds an optional
+concurrent TCP quota per canonical peer IP at native and legacy ingresses.
+Default `--max-connections-per-ip 0` preserves previous admission. The
+[baseline observation](benchmarks/2026-10-16-ip-admission-before.json) holds eight
+unfinished upgrades from one address against a shared cap of eight; a valid
+upgrade from a second address is refused despite zero joined sessions. The
+[release acceptance](benchmarks/2026-10-16-ip-admission-acceptance.json) repeats
+the workload at both ingresses with the policy disabled and with a limit of two.
+Enabled cases refuse six stalled sockets, keep a second address usable, and
+admit a replacement from the first address after one held socket closes. All
+verified clients complete exact self-echo and normal Close/EOF.
+
+Native workers share one optional index. A live entry's strong references count
+connection leases; the index holds weak references. Acquisition is serialized,
+and existing leases can only decrease the observed count. Rejected candidates
+drop outside the index lock, and final cleanup checks identity before removing
+an expired entry so it cannot delete a concurrent replacement. The index trims
+large sparse capacity. Native leases follow the socket guard through captured
+routing targets; the bridge stores its lease after the underlying stream so
+field destruction closes TCP first. The policy introduces no per-message work
+or independent allocation per connection lease. IP normalization uses
+[`IpAddr::to_canonical`](https://doc.rust-lang.org/std/net/enum.IpAddr.html#method.to_canonical);
+forwarding headers do not supply identity. See the
+[operating policy](operations.md#direct-peer-connection-admission) for NAT,
+reverse-proxy, bridge and embedding behavior.
+
+### Ordinary routing and reconnect comparison
+
+The [18 cases](benchmarks/2026-10-16-ip-admission-comparison.json) rotate three
+build/policy roles across three repetitions: the preceding arena release,
+the new release disabled, and the same new release enabled with limit 9,000.
+Each fresh server holds 8,192 idle rooms and one private pair using changing
+1 KiB values/window 16 for eight seconds; churn adds eight reconnect workers.
+Four native workers use CPUs 0–3, the same frozen client uses CPUs 4–7, and no
+build, profile or competing load test overlaps timing. The high enabled limit
+admits the full identical workload; no IP refusals occur. All payload, sender,
+order, Close/EOF, counter and final-reservation checks remain active.
+
+| Median of three | Previous | New, disabled | New, enabled |
+| --- | ---: | ---: | ---: |
+| Private healthy deliveries/s | 580,928 | 586,583 | 583,423 |
+| Private server CPU seconds/wall second | 0.65375 | 0.65125 | 0.65500 |
+| Churn: healthy deliveries/s | 357,621 | 360,422 | 362,823 |
+| Complete reconnect cycles/s | 72,016 | 71,422 | 71,460 |
+| Churn server CPU seconds/wall second | 1.47499 | 1.44999 | 1.44999 |
+| Private ready RSS, MiB | 17.39 | 17.36 | 17.41 |
+
+Against the previous release, private throughput changes +0.97% disabled and
++0.43% enabled; reconnect throughput changes −0.83% and −0.77%. Their ranges
+overlap. Mixed healthy throughput changes +0.78%/+1.45%; the enabled samples are
+slightly above the previous range, while its CPU range overlaps. Private p99
+remains 0.032768 ms, mixed healthy p99 0.131072 ms and reconnect p99 0.524288 ms,
+all histogram upper buckets. These short single-address cases show no material
+default-path regression; they do not establish zero admission cost or a general
+speed gain, and do not measure high rates of distinct source addresses.
+
+### Requested allocation cost
+
+The [allocation record](benchmarks/2026-10-16-ip-admission-memory.json) preserves
+six server-only gperftools diagnostics and 18 hashed captures. All raw rows sum
+to their capture headers. Initial four-worker captures have arena-growth noise
+from flow placement, so three one-worker controls keep arena capacity stable.
+Every role holds 8,194 clients and runs the same verified one-second private
+workload. Profile timing/RSS are excluded from ordinary comparisons.
+
+| One-worker whole requested live heap | Previous | Disabled | Enabled |
+| --- | ---: | ---: | ---: |
+| Connected baseline | 15,137,271 B | 15,202,848 B | 15,203,124 B |
+| After verified traffic | 15,137,271 B | 15,202,848 B | 15,203,124 B |
+| All connections retired | 147,269 B | 147,294 B | 147,522 B |
+
+Disabled adds 65,577 requested bytes at this population, approximately eight
+bytes per connected socket plus fixed overhead. Enabled adds 276 bytes across
+three live allocations for the workload's one canonical address. After all
+clients leave, its address entry retires; the optional limiter and small index
+retain 228 bytes above disabled. Every diagnostic records the same traffic
+interval delta: zero live growth, 50 cumulative allocations and 62,456 requested
+bytes, including boundary management/dump overhead. No additional per-message
+allocation appears in this workload. These are requested allocation sizes under
+a replacement allocator, not OS RSS or allocator-size-class guarantees.
+
+### Verification and runtime
+
+The [source checks](benchmarks/2026-10-16-ip-admission-checks.json) pass 120 Rust
+tests, strict Clippy, format and the locked release build. Four new library tests
+cover canonical addresses, concurrent limits, expired-entry replacement and
+4,096-address retirement; the retained-target ownership test now also requires
+its IP lease to survive decoder retirement. Three new network cases cover four
+workers, spoofed forwarding headers, the global cap, timeout recovery, normal
+closure and legacy cancellation.
+
+With the limit set to 64, four sequential
+[stress cases](benchmarks/2026-10-16-ip-admission-stability.json) verify 17,643,120
+traffic deliveries, 1,093,917 complete reconnect cycles, 212,228 healthy deliveries
+beside an unread peer and 755,136 fanout deliveries. None records an IP refusal;
+all processes exit normally and final resources clear. The
+[C++ comparison](benchmarks/2026-10-16-ip-admission-reference.json) passes 48
+common cases and eight documented differences with default IP admission;
+performance numbers above compare Rust releases. Seven JavaScript checks and
+[four release API checks](benchmarks/2026-10-16-ip-admission-api.json) pass too.
+The [Chrome check](benchmarks/2026-10-16-ip-admission-browser.json) binds the local
+selected binaries, seven browser checks, three clean closes, four native
+listener sockets and healthy/ready endpoints. The
+[build manifest](benchmarks/2026-10-16-ip-admission-build.json) binds source,
+clients, reports, heap captures, documentation and browser artifacts. Local
+manual services retain the disabled default. These checks do not establish TLS,
+production capacity, per-user identity or trusted-proxy admission.
