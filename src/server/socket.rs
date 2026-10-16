@@ -402,7 +402,7 @@ mod tests {
     use super::*;
     use crate::{Config, Relay, protocol};
     use mio::Poll;
-    use tokio_tungstenite::tungstenite::{Message, WebSocket, protocol::Role};
+    use tokio_tungstenite::tungstenite::{Error, Message, WebSocket, protocol::Role};
 
     struct Probe {
         wire: Vec<u8>,
@@ -467,15 +467,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn ordinary_output_has_no_queue_allocation_and_control_never_splits_a_partial_data_frame() {
+    fn connected() -> (Arc<Relay>, Arc<Socket>, std::net::TcpStream, Poll) {
         let relay = Relay::new(Config {
             ping_interval_secs: 0,
             ..Config::default()
         })
         .unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let _reader = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let reader = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (stream, _) = listener.accept().unwrap();
         stream.set_nonblocking(true).unwrap();
         let poll = Poll::new().unwrap();
@@ -495,6 +494,62 @@ mod tests {
             &relay,
         )
         .unwrap();
+        (relay, socket, reader, poll)
+    }
+
+    #[test]
+    fn queued_output_keeps_payload_and_charge_after_membership_retires() {
+        let (relay, socket, reader, _poll) = connected();
+        reader
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let registration = relay
+            .subscribe_with_output(b"retained", socket.clone())
+            .unwrap();
+        let id = registration.peer.id.load(Relaxed);
+        let mut reader = WebSocket::from_raw_socket(reader, Role::Client, None);
+        assert_eq!(reader.read().unwrap(), Message::Binary(protocol::uint(id)));
+        reader.get_mut().set_nonblocking(true).unwrap();
+        let body = protocol::byte_string(&vec![0x5a; 2 * WRITE_QUANTUM]);
+        let input = protocol::envelope(id, &body);
+        let charged = input.len();
+        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        relay.receive(&registration.peer, input).unwrap();
+        {
+            let state = socket.state.lock();
+            assert_eq!(state.queue.len(), 1);
+            assert!(state.queue[0].offset > 0);
+            assert_eq!(state.queue[0].packet.frame.payload().as_ptr(), pointer);
+        }
+        drop(registration);
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), charged);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            socket.flush().unwrap();
+            match reader.read() {
+                Ok(message) => {
+                    assert_eq!(message, Message::Binary(protocol::envelope(id, &body)));
+                    break;
+                }
+                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "queued frame did not complete");
+                    std::thread::yield_now();
+                }
+                other => panic!("{other:?}"),
+            }
+        }
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.deliveries.load(Relaxed), 2);
+        assert_eq!(socket.state.lock().queue.len(), 0);
+        assert!(!socket.end_output());
+        drop(socket);
+        assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn ordinary_output_has_no_queue_allocation_and_control_never_splits_a_partial_data_frame() {
+        let (relay, socket, _reader, _poll) = connected();
         let registration = relay
             .subscribe_with_output(b"test", socket.clone())
             .unwrap();
