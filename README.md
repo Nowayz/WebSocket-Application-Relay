@@ -112,11 +112,13 @@ levels and 65,536 items, and preserves encoded payloads verbatim. It does not
 materialize object trees or convert objects to JSON. See [docs/protocol.md](docs/protocol.md).
 
 Forwarding keeps the upstream's zero-copy intent: a validated application value
-stays in its received buffer, shared across recipient queues. The server builds
-only the small replacement sender header and writes headers plus the borrowed
-body with vectored I/O. Changing a CBOR ID's encoded width does not shift the
-body. Tiny slices of much larger receive storage are compacted deliberately to
-avoid pinning that storage in a slow queue. This concerns user-space forwarding;
+stays in its received buffer, shared across recipient queues. Routing advances
+the owned input view to the value and transfers that owner directly to the
+outgoing frame. The server builds only the small replacement sender header and
+writes headers plus the borrowed body with vectored I/O. Changing a CBOR ID's
+encoded width does not shift the body. Tiny slices of much larger receive storage
+are compacted deliberately to avoid pinning that storage in a slow queue. This
+concerns user-space forwarding;
 WebSocket unmasking, fragmented-message assembly, and kernel transfers still do
 their required work. See [docs/performance.md](docs/performance.md).
 

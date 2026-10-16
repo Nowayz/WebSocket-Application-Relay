@@ -2571,3 +2571,125 @@ The [build manifest](benchmarks/2026-10-16-paging-build.json) binds committed
 runtime sources, vendor files, helper/client sources, frozen binaries, raw
 captures, traversal correction and all reports. These remain finite Linux
 loopback checks without TLS or production capacity claims.
+
+## Transfer the received body owner (2026-10-16)
+
+The investigation starts from the private-control difference recorded in the
+paging checkpoint. Both `dced6e1` (before paging) and `2e7806b` (paging) use the
+same `Frame::routed` implementation: it receives an owned `Bytes`, creates a
+shared slice of its CBOR value, then drops the original owner. That establishes
+the correct payload lifetime but adds a transient clone/drop pair.
+
+The change consumes the existing input view instead: advance its start to the
+validated value offset and move that owner into the frame. The pinned
+[`Buf::advance`](https://docs.rs/bytes/1.12.1/bytes/buf/trait.Buf.html#tymethod.advance)
+implementation for `Bytes` checks bounds, then adjusts its pointer and length.
+It does not move body bytes or introduce another shared reference. Frame
+prefixes, queue clones and the deliberate tiny-value compaction path keep their
+existing roles. Existing aliases retain their original views.
+
+### Profiling evidence
+
+Three separate fresh-process diagnostics run one private pair with 8,192 idle
+rooms, 1 KiB values and window 16 for eight seconds. Four server workers use
+CPUs 0–3 and the same frozen client uses CPUs 4–7. `perf record` samples
+`cycles:u` at 499 Hz with 8 KiB DWARF stacks; all payload, sender, FIFO, full-list,
+Close/EOF, counter and final-resource checks still pass. These diagnostic
+throughput/CPU figures are excluded from ordinary medians.
+
+| Self sample share / private diagnostic | Before paging | Paging | Owner transfer |
+| --- | ---: | ---: | ---: |
+| `bytes::bytes_mut::shared_v_clone` | 10.03% | 9.75% | 1.67% |
+| `bytes::bytes_mut::shared_v_drop` | 9.34% | 8.47% | 4.00% |
+| Samples | 3,512 | 3,474 | 3,459 |
+| Lost samples | 0 | 0 | 0 |
+
+These relative user-space samples identify avoidable ownership work and support
+its removal. They are not wall-time percentages or an equivalent percentage
+throughput gain. Other frame/queue ownership operations remain. The old source
+contains the same transient slice in both controls, so this finding does not
+establish what caused the earlier paging regression.
+
+### Equivalent ordinary workloads
+
+The [ordinary comparison](benchmarks/2026-10-16-routing-owner-comparison.json)
+runs 27 fresh processes, with three repetitions rotating workload and build
+order. No build, profiler or other load test overlaps these timing windows.
+All cases use the same frozen inspection client, four server workers on CPUs
+0–3, client CPUs 4–7, 8,192 idle rooms and one private pair with 1 KiB values,
+window 16 and eight seconds of traffic. Churn adds eight reconnect workers.
+Full and page-100 add 200 HTTP inspections/s while churn continues. Comparisons
+within each workload request equivalent results. Page-100 also verifies complete
+cursor traversals at quiescent checkpoints.
+
+| Median of three | Paging control | Owner transfer |
+| --- | ---: | ---: |
+| Private deliveries/s | 574,695 | 585,314 |
+| Private p99 upper bucket, ms | 0.032768 | 0.032768 |
+| Private server CPU seconds/wall second | 0.65250 | 0.65250 |
+| Churn: healthy deliveries/s | 352,853 | 356,984 |
+| Churn: complete reconnect cycles/s | 70,446 | 70,697 |
+| Full listing: healthy deliveries/s | 321,515 | 323,729 |
+| Full listing: complete reconnect cycles/s | 60,500 | 59,911 |
+| Full listing: reconnect p99 upper bucket, ms | 0.524288 | 1.048576 |
+| Full listing: server CPU seconds/wall second | 1.64227 | 1.63601 |
+| Page-100: healthy deliveries/s | 332,215 | 336,435 |
+| Page-100: complete reconnect cycles/s | 67,872 | 66,940 |
+| Page-100: server CPU seconds/wall second | 1.47354 | 1.44479 |
+
+Private throughput improves 1.85%, with control range 572,982–577,136 and selected
+range 579,812–586,757 deliveries/s. The additional pre-paging control is 575,387
+deliveries/s (range 568,573–577,774), just 0.12% above the paging control in this
+run. The earlier 2.4% paging gap is not reproduced; this change does not establish
+its cause. The selected private result is 1.73% above the pre-paging control.
+
+Mixed-workload ranges overlap. Healthy throughput improves 1.17% with churn,
+0.69% with full listings and 1.27% with page-100, while reconnect throughput
+changes +0.36%, −0.97% and −1.37% respectively. The full-list reconnect p99 moves
+to a worse histogram bucket. Page-100 server CPU falls 1.95%; full-list CPU falls
+0.38%; churn CPU rises 0.26%. HTTP throughput stays about 199.97/s, with unchanged
+p99 buckets of 8.388608 ms for full listings and 2.097152 ms for page-100. RSS
+stays essentially unchanged. These mixed results do not support a general speed
+claim. The retained change simplifies ownership and removes sampled callback
+work, with a modest repeatable private-path gain and the recorded mixed costs.
+
+### Verification and provenance
+
+The runtime change is commit `1d766c279e19d567d9dba49d276c1541cbe173d6`.
+The [checks](benchmarks/2026-10-16-routing-owner-checks.json) cover 104 Rust
+tests, strict Clippy, formatting, the locked release build and seven JavaScript
+checks. The new ownership test exercises exact and spare-capacity vectors,
+copied and offset views, existing aliases, queue-style clones and retirement
+of the original owners. It verifies unchanged payload pointers, uniqueness,
+bytes and replacement sender IDs. Existing compaction and nonminimal CBOR
+encoding checks also pass.
+
+The [C++ reference comparison](benchmarks/2026-10-16-routing-owner-reference.json)
+passes 48 shared cases and eight documented differences. The
+[stability checks](benchmarks/2026-10-16-routing-owner-stability.json) verify
+9,107,728 traffic deliveries, 556,331 complete reconnect cycles and 210,637
+healthy deliveries alongside an unread peer. The
+[fanout check](benchmarks/2026-10-16-routing-owner-fanout.json) verifies 749,952
+healthy deliveries across 27 readers, four unread readers, a one-millisecond
+reader delay, window 16 and cyclic 256 B / 1 KiB / 64 KiB / 256 KiB values.
+Unread peers reach the configured output limit and are disconnected under the
+existing policy; healthy payloads and order remain correct. Final connection,
+session, receive-reservation, variable and queued-output counters all return
+to zero. All four stress processes exit normally without forced termination.
+
+The [release API check](benchmarks/2026-10-16-routing-owner-acceptance.json)
+verifies channel traversal, authorization precedence, retired cursors and 13
+normal closes. The [headed Chrome check](benchmarks/2026-10-16-routing-owner-browser.json)
+passes seven cases, including typed 128 KiB delivery and three normal closes,
+against the selected release. The native relay, legacy bridge and browser check
+remain available on the documented local ports, with four native listener
+sockets verified.
+
+The [profile summary](benchmarks/2026-10-16-routing-owner-profiles.json)
+contains exact binary and capture hashes and the symbol reports. Original raw
+captures are retained locally under `artifacts/routing-owner-profiles/`, with
+their original capture paths and updated replay commands recorded. The
+[build manifest](benchmarks/2026-10-16-routing-owner-build.json) binds the 88
+runtime source files, common client, helper sources, controls, reports and live
+runtime evidence. These finite Linux loopback checks do not establish TLS or
+production capacity.
