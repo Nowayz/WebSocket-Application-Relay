@@ -9,6 +9,17 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Benchmark/helper commit `eac47f1` now verifies exact Close acknowledgements and
+TCP EOF before recording a churn cycle. Its 16-byte worker/counter values and
+rotating source pools close a gap in the earlier stress client's validation;
+[historical stress claims are qualified](stability.md#churn-validation-correction-2026-10-16).
+Twelve equivalent cases measure admission with one versus 4,096 source IPs.
+The rotating pool has −0.60% enabled throughput and +1.85% CPU per complete cycle,
+with overlapping ranges and unchanged full-cycle p99 bucket. The profile keeps
+the existing admission index justified; runtime binaries are unchanged.
+The [current benchmark manifest](benchmarks/2026-10-16-address-churn-build.json)
+binds this helper checkpoint to the preceding native release.
+
 The active branch is `codex/lean-core`; native sockets use fixed Mio readiness
 workers, shared read storage and direct vectored writes. Tokio handles
 management, signals and the optional legacy bridge. Implementation commit
@@ -35,13 +46,15 @@ lifecycle CPU +1.86%. The [performance report](performance.md#compact-sparse-con
 records ranges, allocations, methodology and limits; this is a memory-recovery
 improvement with explicit tradeoffs.
 
-Current verification passes 120 Rust tests, strict Clippy/format/release checks,
+Current verification passes 123 Rust tests and strict Clippy/format checks; the
+unchanged runtime release retains its recorded release checks,
 seven JavaScript checks, 48 common C++ cases plus eight documented differences,
-four release API checks and seven real Chrome checks. Enabled-policy functional
-checks verify 17,643,120 traffic deliveries and 1,093,917 complete reconnect cycles.
+four release API checks and seven real Chrome checks. The new client separately
+verifies 395,385 complete unbound churn cycles plus traffic/slow-reader/fanout
+compatibility, and 412,582 complete cycles through the published CLI command.
 The local native/bridge runtime uses the selected frozen release and is healthy
 at the usual ports 1338/1337/1339, with the browser check on 4180. Source, binary,
-test and diagnostic hashes are in the [current manifest](benchmarks/2026-10-16-ip-admission-build.json).
+test and diagnostic hashes for that runtime are in its [manifest](benchmarks/2026-10-16-ip-admission-build.json).
 This is local acceptance; no hosted deployment is claimed.
 
 ## Earlier implementation checkpoints

@@ -3464,3 +3464,113 @@ listener sockets and healthy/ready endpoints. The
 clients, reports, heap captures, documentation and browser artifacts. Local
 manual services retain the disabled default. These checks do not establish TLS,
 production capacity, per-user identity or trusted-proxy admission.
+
+## Address churn with complete lifecycle validation (2026-10-16)
+
+Benchmark commit `eac47f1` fixes a verification gap and adds rotating loopback
+source addresses. Earlier frozen stress clients stopped their churn latency
+clock after self-echo, accepted any Close payload, and did not wait for TCP EOF
+after receiving Close. The loop also lacked an explicit acknowledgement check
+before stream termination, relying on the codec's handling of unexpected EOF.
+Their historical
+numbers remain recorded, with the
+[validation qualification](stability.md#churn-validation-correction-2026-10-16).
+The current client requires a complete valid welcome ID, a 16-byte worker ID/
+counter self-echo, the exact empty Close acknowledgement and TCP EOF. It records
+latency only after the transport retires. Distinct worker bytes also prevent a
+misrouted echo from matching another worker at the same sequence number.
+
+The runner checks accepted, joined, disconnected, incoming-message and delivery
+totals independently of the client. Three new tests supply raw missing/wrong
+Close frames, an application frame and a valid acknowledgement whose peer keeps
+TCP open. They prove that successful echo or receipt of Close alone cannot count
+as a complete cycle. Source binding accepts only an IPv4 loopback literal and
+plain `ws://`, with pool size in `0..=65534`; zero keeps ordinary connections.
+
+### Equivalent comparisons
+
+The [12 cases](benchmarks/2026-10-16-address-churn-comparison.json) use one frozen
+client and the unchanged native release from
+`ef3d8fcd3826fbc6a4110167a792867dbf05dfd1`. Thirty-two workers execute eight-second
+churn workloads with either one source IP or 4,096 rotating `127.64.x.y`
+addresses. Both pools bind explicitly, keeping that syscall on both sides of
+each admission comparison. For pool 4,096, each worker rotates through a disjoint
+subset, creating and retiring entries instead of sharing one persistent entry.
+At most 32 client transports are active; the pool is not a claim about 4,096
+simultaneous addresses.
+
+Three repetitions alternate pool and policy order. Native admission is disabled
+(`0`) or enabled (`64`), allowing the same entire workload. Four server workers
+use CPUs 0–3 and the client uses CPUs 4–7. No build, profiler or other load test
+overlaps ordinary timing. Every trace verifies exact payloads, Close/EOF and
+lifecycle/delivery/value-byte counters; IP denials, copies, protocol/write/Close
+errors and final live read/output reservations all remain zero.
+
+| Median of three processes | One address, disabled | One address, enabled | 4,096 addresses, disabled | 4,096 addresses, enabled |
+| --- | ---: | ---: | ---: | ---: |
+| Complete cycles/s | 138,809 | 138,577 | 139,065 | 138,230 |
+| Lifecycle server CPU, seconds | 16.02 | 15.91 | 15.79 | 16.20 |
+| Server CPU ns/complete cycle | 14,426 | 14,351 | 14,383 | 14,649 |
+| Full-cycle p99 upper bucket, ms | 1.048576 | 1.048576 | 1.048576 | 1.048576 |
+| Sampled peak RSS, MiB | 6.36 | 6.18 | 6.18 | 6.23 |
+
+CPU-per-cycle values are medians of per-process ratios, not ratios of the CPU
+and throughput medians. Enabled throughput changes −0.17% for one address and
+−0.60% for the rotating pool; CPU per cycle changes −0.52% and +1.85%. Ranges
+overlap, including 135,228–139,799 versus 138,088–140,090 cycles/s for the rotating
+pool. Its CPU-per-cycle ranges are 14,117–14,534 versus 14,499–14,655 ns. These
+finite runs support a small measured rotating-address cost and unchanged latency
+buckets, rather than a general speed or capacity claim.
+
+### Profile and implementation decision
+
+A separate [enabled rotating-address profile](benchmarks/2026-10-16-address-churn-profile.json)
+records `cycles:u` at 499 Hz with 8 KiB DWARF stacks. It captures 9,473 samples,
+with zero lost samples in the
+[symbol report](benchmarks/2026-10-16-address-churn-profile-4096-enabled-1.perf.txt).
+The profile includes connection setup through normal process cleanup; its timing
+is excluded from ordinary medians. IP acquisition has 1.19% self sample share
+and address-entry destruction 0.87%. Connection driving has 10.13%, bounded
+WebSocket reading 3.12% and exclusive registry-lock slow acquisition 2.41%.
+Shared hashing/allocation symbols also serve other paths, so their whole shares
+cannot be attributed to admission. This is a user-cycle diagnostic, not a kernel
+or total-CPU decomposition.
+
+The measured cost supports retaining the current single admission index. This
+checkpoint improves verification and workload coverage; native/bridge binaries,
+routing ownership and admission implementation remain exactly those of the
+preceding runtime release. No sharding or alternate lifetime model is selected
+from these measurements.
+
+### Reproduction and verification
+
+The normal runner now accepts both controls:
+
+```sh
+cargo build --locked --release --bins --example stress
+python3 scripts/stability.py --modes churn --clients 32 --churn-secs 8 \
+  --source-addresses 4096 --max-connections-per-ip 64 \
+  --output artifacts/address-churn.json
+```
+
+Use the same frozen client and source pool with limit `0` for the control.
+The [published-command check](benchmarks/2026-10-16-address-churn-cli.json)
+verifies 412,582 complete cycles; the earlier
+[smoke check](benchmarks/2026-10-16-address-churn-smoke.json) verifies 418,550.
+The [other-mode checks](benchmarks/2026-10-16-address-churn-compatibility.json)
+verify 8,847,552 ordinary deliveries, 395,385 unbound complete churn cycles,
+208,037 healthy deliveries beside an unread recipient and 758,160 fanout
+deliveries. Every process exits normally and resources clear. Full-cycle latency
+and the 16-byte values should be compared only with equivalent new-client runs.
+
+[Source checks](benchmarks/2026-10-16-address-churn-checks.json) pass 123 Rust
+tests, strict Clippy, formatting, Python compilation and CLI validation. The
+[manifest](benchmarks/2026-10-16-address-churn-build.json) binds the helper commit,
+the unchanged 90 runtime sources/binaries, current and frozen client/helper
+sources, raw traces, perf data/report and documentation. Timings used the helper
+snapshot before the final CLI-only policy switch was exposed; its `run_case`
+function has the identical AST in the final helper. The first diagnostic's
+workload passed but its collector failed before saving the report; its local
+capture is preserved separately, and the published profile is a fresh complete
+run. Raw perf data stays local and is ignored by Git. These are Linux loopback
+checks with a bounded active population, without TLS or production acceptance.

@@ -1,0 +1,311 @@
+{
+  "recorded_utc": "2026-10-16T21:40:48.613326+00:00",
+  "scope": "32 concurrent workers perform fully verified connect/join/16-byte worker+counter self-echo/exact empty Close acknowledgement/TCP EOF cycles. Latency includes the full lifecycle. Both source pools bind explicit127.64.x.y addresses on an IPv4 loopback ws:// URL. Source pool4096 assigns disjoint rotating subsets to workers; pool1 shares one address. Native admission limit0/64; all workloads fit the enabled quota. Same frozen client and server; four server workers CPUs0-3/client CPUs4-7. Eight-second cases, exact lifecycle/message/delivery/value-byte counters, resource/error cleanup. Ordinary comparisons rotate pool/role order across three repetitions and exclude builds/profiles/competing loads. Prior8-byte stress counts and connect-to-echo latency are not equivalent to this stronger contract.",
+  "profile_diagnostic": false,
+  "runtime_source_revision": "ef3d8fcd3826fbc6a4110167a792867dbf05dfd1",
+  "server": {
+    "path": "artifacts/baselines/ip-admission/war-relay",
+    "sha256": "60182be9581cb0c52e0a05c35c715b32b34f9d55740fa6acd54149700e19abb6"
+  },
+  "client": {
+    "path": "artifacts/baselines/address-churn-client/stress",
+    "sha256": "1296af910bbfad5dc04829da121dfd6e791aaffc7aa439d8d352839ef9c12a66",
+    "source_path": "artifacts/baselines/address-churn-client/stress.rs",
+    "source_sha256": "0357bb650d0a41ec6aaf2fcf6cb3eb422eea97deaaa5d23bd33cb5f46281520d"
+  },
+  "helpers": {
+    "scripts/stability.py": "61b044e875b9c3d32e3f186c8b1023f1398d58c7563c558e93ff1ba988ed0f0f",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import argparse\nimport datetime\nimport hashlib\nimport json\nfrom pathlib import Path\nimport re\nimport signal\nimport statistics\nimport subprocess\nimport sys\nimport tempfile\nimport time\n\nroot=Path(__file__).resolve().parents[1]\nsys.path.insert(0,str(root/'scripts'))\nimport stability\nparser=argparse.ArgumentParser();parser.add_argument('--profile',action='store_true');args=parser.parse_args()\nsha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nserver=root/'artifacts/baselines/ip-admission/war-relay'\nclient=root/'artifacts/baselines/address-churn-client/stress'\nsource=client.parent/'stress.rs';assert sha(source)==sha(root/'examples/stress.rs')\nprefix='address-churn-profile' if args.profile else 'address-churn-comparison'\noutput=root/f'docs/benchmarks/2026-10-16-{prefix}.json'\nrecord={'recorded_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),\n    'scope':'32 concurrent workers perform fully verified connect/join/16-byte worker+counter self-echo/exact empty Close acknowledgement/TCP EOF cycles. Latency includes the full lifecycle. Both source pools bind explicit127.64.x.y addresses on an IPv4 loopback ws:// URL. Source pool4096 assigns disjoint rotating subsets to workers; pool1 shares one address. Native admission limit0/64; all workloads fit the enabled quota. Same frozen client and server; four server workers CPUs0-3/client CPUs4-7. Eight-second cases, exact lifecycle/message/delivery/value-byte counters, resource/error cleanup. Ordinary comparisons rotate pool/role order across three repetitions and exclude builds/profiles/competing loads. Prior8-byte stress counts and connect-to-echo latency are not equivalent to this stronger contract.',\n    'profile_diagnostic':args.profile,'runtime_source_revision':'ef3d8fcd3826fbc6a4110167a792867dbf05dfd1',\n    'server':{'path':str(server.relative_to(root)),'sha256':sha(server)},\n    'client':{'path':str(client.relative_to(root)),'sha256':sha(client),'source_path':str(source.relative_to(root)),'source_sha256':sha(source)},\n    'helpers':{str(p.relative_to(root)):sha(p) for p in [root/'scripts/stability.py',root/'scripts/benchmark.py']},\n    'driver_source':Path(__file__).read_text(),'driver_sha256':sha(__file__),'cases':[],'passed':False}\njobs=[(1,4096,'enabled')] if args.profile else [\n    (rep,pool,role) for rep in range(1,4)\n    for pool in ([1,4096] if rep%2 else [4096,1])\n    for role in (['disabled','enabled'] if rep%2 else ['enabled','disabled'])]\nfor rep,pool,role in jobs:\n    trace=output.with_name(f'{output.stem}-{pool}-{role}-{rep}.json')\n    perf_path=trace.with_suffix('.perf.data')\n    recorder=None;perf_log=None;original_sample=stability.sample\n    def sample(pid,admin,started):\n        global recorder,perf_log\n        result=original_sample(pid,admin,started)\n        if args.profile and recorder is None:\n            perf_log=tempfile.TemporaryFile()\n            recorder=subprocess.Popen(['perf','record','-e','cycles:u','-F','499','--call-graph','dwarf,8192',\n                '-p',str(pid),'-o',str(perf_path)],stdout=perf_log,stderr=perf_log)\n            time.sleep(.1);assert recorder.poll() is None,'perf recorder could not attach'\n        return result\n    try:\n        stability.sample=sample\n        case=stability.run_case('churn',8,32,server_binary=server,stress_binary=client,\n            server_cpus='0-3',client_cpus='4-7',server_args=['--max-connections-per-ip','64' if role=='enabled' else '0'],source_addresses=pool)\n    finally:\n        stability.sample=original_sample\n        if recorder is not None:\n            if recorder.poll() is None:recorder.send_signal(signal.SIGINT)\n            perf_exit=recorder.wait(timeout=10)\n            perf_log.seek(0);perf_text=perf_log.read().decode();perf_log.close()\n    assert case['passed'] and case['server_exit_code']==case['exit_code']==0\n    metrics=case['final']['metrics'];result=case['output'][-1];cycles=result['verified_deliveries']\n    assert result['payload_bytes']==16 and result['source_addresses']==pool\n    assert int(metrics['war_accepted_total'])==int(metrics['war_joined_total'])==int(metrics['war_disconnected_total'])==cycles\n    assert int(metrics['war_incoming_messages_total'])==cycles and int(metrics['war_deliveries_total'])==2*cycles\n    assert int(metrics['war_routing_reused_bytes_total'])==17*cycles\n    for key in ['war_connections','war_sessions','war_queued_bytes','war_variable_bytes','war_read_buffer_reserved_bytes',\n                'war_output_queue_capacity_bytes','war_ip_rejected_total','war_routing_copied_bytes_total',\n                'war_handshake_errors_total','war_protocol_errors_total','war_write_errors_total','war_close_failures_total',\n                'war_transport_disconnects_total','war_rejected_total']:\n        assert int(metrics[key])==0,key\n    case['profile_diagnostic']=args.profile\n    trace.write_text(json.dumps(case,indent=2)+'\\n')\n    if args.profile:\n        assert perf_exit in (0,-signal.SIGINT),perf_text\n        report_path=trace.with_suffix('.perf.txt')\n        report=subprocess.run(['perf','report','--stdio','--no-children','-g','none','--sort','symbol','--percent-limit','0.1',\n            '-i',str(perf_path)],capture_output=True,text=True,check=True)\n        report_path.write_text(report.stdout)\n        symbols=[]\n        for line in report.stdout.splitlines():\n            match=re.match(r'^\\s*([0-9.]+)%\\s+\\[(.)\\]\\s+(.+)$',line)\n            if match:symbols.append({'self_user_cycles_percent':float(match[1]),'kind':match[2],'symbol':match[3]})\n        record['profile']={'event':'cycles:u','frequency_hz':499,'call_graph':'dwarf,8192','perf_exit_code':perf_exit,\n            'recorder_log':perf_text,'report_stderr':report.stderr,\n            'data':{'path':str(perf_path.relative_to(root)),'sha256':sha(perf_path)},\n            'report':{'path':str(report_path.relative_to(root)),'sha256':sha(report_path)},'symbols':symbols}\n    trace.write_text(json.dumps(case,indent=2)+'\\n')\n    cpu=case['final']['process']['cpu_seconds']-case['baseline']['process']['cpu_seconds']\n    row={'kind':role,'source_addresses':pool,'repetition':rep,'trace':str(trace.relative_to(root)),\n        'trace_sha256':sha(trace),'cycles':cycles,'per_second':result['deliveries_per_second'],\n        'p99_ms':result['latency_p99_upper_ms'],'cpu_seconds':cpu,'cpu_ns_per_cycle':cpu*1e9/cycles,\n        'sampled_peak_rss_mib':max(s['process']['VmRSS'] for s in [case['baseline'],*case['samples'],case['final']])/1024,'passed':True}\n    record['cases'].append(row);output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(row),flush=True)\nif not args.profile:\n    record['medians']={}\n    for pool in [1,4096]:\n        for role in ['disabled','enabled']:\n            rows=[r for r in record['cases'] if r['source_addresses']==pool and r['kind']==role]\n            keys=['per_second','p99_ms','cpu_seconds','cpu_ns_per_cycle','sampled_peak_rss_mib']\n            summary={k:statistics.median(r[k] for r in rows) for k in keys}\n            summary['ranges']={k:[min(r[k] for r in rows),max(r[k] for r in rows)] for k in keys}\n            record['medians'][f'{pool}/{role}']=summary\nrecord['passed']=True;output.write_text(json.dumps(record,indent=2)+'\\n')\nif not args.profile:print(json.dumps(record['medians']),flush=True)\n",
+  "driver_sha256": "c9e40d636d272b6d5fdcf9f619f660e6714249df1763a660033cc542edd32556",
+  "cases": [
+    {
+      "kind": "disabled",
+      "source_addresses": 1,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-1.json",
+      "trace_sha256": "9fd2f94cd63db54f248494e179578e5a8bdb2a61dcbfbe5f35a176fcad7bbdcb",
+      "cycles": 1141971,
+      "per_second": 142743.70695953027,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.04,
+      "cpu_ns_per_cycle": 14045.890832604331,
+      "sampled_peak_rss_mib": 6.34375,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 1,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-1.json",
+      "trace_sha256": "b5b8cd6829faa778949fbdbbec37e7f5a221c6c5455a55455a1bbdc2cf4e8dcb",
+      "cycles": 1139150,
+      "per_second": 142391.0962037434,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.28,
+      "cpu_ns_per_cycle": 14291.357591186412,
+      "sampled_peak_rss_mib": 6.3671875,
+      "passed": true
+    },
+    {
+      "kind": "disabled",
+      "source_addresses": 4096,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-1.json",
+      "trace_sha256": "76c88a3c0782f1db1f5491137ec946d7732870ceebe2f7b4dfd66000c988da93",
+      "cycles": 1118488,
+      "per_second": 139798.5264065821,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.79,
+      "cpu_ns_per_cycle": 14117.27260372932,
+      "sampled_peak_rss_mib": 6.30078125,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 4096,
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-1.json",
+      "trace_sha256": "9fe93c263c6b52a6635629a25ca033dd724befd8122fe505e55dd5139d64a1a1",
+      "cycles": 1120744,
+      "per_second": 140089.5783120497,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.25,
+      "cpu_ns_per_cycle": 14499.296895633615,
+      "sampled_peak_rss_mib": 6.3046875,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 4096,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-2.json",
+      "trace_sha256": "ac07c7a3c5d5953d9951f07fd0ec7cc834882ba6a62bb8976cfcf0ca2a167fef",
+      "cycles": 1105860,
+      "per_second": 138229.72790647915,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.2,
+      "cpu_ns_per_cycle": 14649.23227171613,
+      "sampled_peak_rss_mib": 6.21875,
+      "passed": true
+    },
+    {
+      "kind": "disabled",
+      "source_addresses": 4096,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-2.json",
+      "trace_sha256": "4199bb6ac2cb9e01da0a85e53b31a524b76ffc14cd749930c08a9c3f343540ea",
+      "cycles": 1112589,
+      "per_second": 139064.81336669825,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.17,
+      "cpu_ns_per_cycle": 14533.668767172785,
+      "sampled_peak_rss_mib": 6.16015625,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 1,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-2.json",
+      "trace_sha256": "78d2d333c36d77ed6f5d3edefe61a1aabf691d31d0ad3301b10902ba93f6a9f3",
+      "cycles": 1108637,
+      "per_second": 138576.75346448098,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.91,
+      "cpu_ns_per_cycle": 14350.955272104395,
+      "sampled_peak_rss_mib": 6.17578125,
+      "passed": true
+    },
+    {
+      "kind": "disabled",
+      "source_addresses": 1,
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-2.json",
+      "trace_sha256": "e07a8b30a124279e60bdca66ea2fefccd10a4e1a1ed21f3333244643fceaa944",
+      "cycles": 1101705,
+      "per_second": 137710.49078766315,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.96,
+      "cpu_ns_per_cycle": 14486.636622326303,
+      "sampled_peak_rss_mib": 6.35546875,
+      "passed": true
+    },
+    {
+      "kind": "disabled",
+      "source_addresses": 1,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-3.json",
+      "trace_sha256": "061cb2ee0f43d54f6bd03f1de4c86e3f4d218f576595f77212f3be3932be8c18",
+      "cycles": 1110491,
+      "per_second": 138809.11975088026,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.02,
+      "cpu_ns_per_cycle": 14426.05117916309,
+      "sampled_peak_rss_mib": 6.36328125,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 1,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-3.json",
+      "trace_sha256": "89e417f184012133b0a0245903169bfaad16416e1c4bffdb6ed067a80ea430e6",
+      "cycles": 1093368,
+      "per_second": 136668.15448360605,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.9,
+      "cpu_ns_per_cycle": 14542.221831990693,
+      "sampled_peak_rss_mib": 6.18359375,
+      "passed": true
+    },
+    {
+      "kind": "disabled",
+      "source_addresses": 4096,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-3.json",
+      "trace_sha256": "964b9712d24d3c3844bd53ae83de783b7cd4e42dbafe6e79e0c8cd1b0ab5ce60",
+      "cycles": 1081840,
+      "per_second": 135227.6661902265,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.56,
+      "cpu_ns_per_cycle": 14382.90320195223,
+      "sampled_peak_rss_mib": 6.18359375,
+      "passed": true
+    },
+    {
+      "kind": "enabled",
+      "source_addresses": 4096,
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-3.json",
+      "trace_sha256": "e4c7cebf1a8282cf52f84b15296436e34780f6c95c70d7086c5b4defba350593",
+      "cycles": 1104745,
+      "per_second": 138088.29615584968,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.19,
+      "cpu_ns_per_cycle": 14654.9656255516,
+      "sampled_peak_rss_mib": 6.234375,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "1/disabled": {
+      "per_second": 138809.11975088026,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.02,
+      "cpu_ns_per_cycle": 14426.05117916309,
+      "sampled_peak_rss_mib": 6.35546875,
+      "ranges": {
+        "per_second": [
+          137710.49078766315,
+          142743.70695953027
+        ],
+        "p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "cpu_seconds": [
+          15.96,
+          16.04
+        ],
+        "cpu_ns_per_cycle": [
+          14045.890832604331,
+          14486.636622326303
+        ],
+        "sampled_peak_rss_mib": [
+          6.34375,
+          6.36328125
+        ]
+      }
+    },
+    "1/enabled": {
+      "per_second": 138576.75346448098,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.91,
+      "cpu_ns_per_cycle": 14350.955272104395,
+      "sampled_peak_rss_mib": 6.18359375,
+      "ranges": {
+        "per_second": [
+          136668.15448360605,
+          142391.0962037434
+        ],
+        "p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "cpu_seconds": [
+          15.9,
+          16.28
+        ],
+        "cpu_ns_per_cycle": [
+          14291.357591186412,
+          14542.221831990693
+        ],
+        "sampled_peak_rss_mib": [
+          6.17578125,
+          6.3671875
+        ]
+      }
+    },
+    "4096/disabled": {
+      "per_second": 139064.81336669825,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 15.79,
+      "cpu_ns_per_cycle": 14382.90320195223,
+      "sampled_peak_rss_mib": 6.18359375,
+      "ranges": {
+        "per_second": [
+          135227.6661902265,
+          139798.5264065821
+        ],
+        "p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "cpu_seconds": [
+          15.56,
+          16.17
+        ],
+        "cpu_ns_per_cycle": [
+          14117.27260372932,
+          14533.668767172785
+        ],
+        "sampled_peak_rss_mib": [
+          6.16015625,
+          6.30078125
+        ]
+      }
+    },
+    "4096/enabled": {
+      "per_second": 138229.72790647915,
+      "p99_ms": 1.048576,
+      "cpu_seconds": 16.2,
+      "cpu_ns_per_cycle": 14649.23227171613,
+      "sampled_peak_rss_mib": 6.234375,
+      "ranges": {
+        "per_second": [
+          138088.29615584968,
+          140089.5783120497
+        ],
+        "p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "cpu_seconds": [
+          16.19,
+          16.25
+        ],
+        "cpu_ns_per_cycle": [
+          14499.296895633615,
+          14654.9656255516
+        ],
+        "sampled_peak_rss_mib": [
+          6.21875,
+          6.3046875
+        ]
+      }
+    }
+  }
+}

@@ -115,6 +115,10 @@ and the origin policy. The bridge has no management listener or IP-denial metric
 `war_ip_rejected_total` describes only native admissions. Accepted configuration
 values are `0..=4294967295`, with the shared connection cap still applying.
 
+The [address-churn measurements](performance.md#address-churn-with-complete-lifecycle-validation-2026-10-16)
+separately exercise one shared address and a rotating 4,096-address pool with
+complete Close/EOF validation. Concurrent quotas do not cap connection rate.
+
 ## Important defaults and budgets
 
 `war-relay --help` is the source of truth for CLI options and matching `WAR_*`

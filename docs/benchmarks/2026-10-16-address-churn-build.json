@@ -1,0 +1,988 @@
+{
+  "recorded_utc": "2026-10-16T21:52:50.584120+00:00",
+  "helper_source_revision": "eac47f106660781f3a77a93eb9205290f5fa29ba",
+  "runtime_source_revision": "ef3d8fcd3826fbc6a4110167a792867dbf05dfd1",
+  "scope": "Strengthen stress churn to exact acknowledgement and EOF with full-cycle latency and distinct worker/counter values. Add bounded rotating loopback source pools and CLI admission controls. Native/bridge runtime bytes unchanged.12 ordinary cases/13,339,588 completed cycles exclude builds/profiles/competing loads; one published profile has9473 samples and zero loss. Preserve older-contract qualification and executed helper snapshot; final run_case AST is identical.",
+  "prior_manifest": {
+    "path": "docs/benchmarks/2026-10-16-ip-admission-build.json",
+    "sha256": "1a9d50eaa66d9b791657c857b86cec36c41fe73d63e20f1bcea36341b8d5993d"
+  },
+  "runtime_sources": {
+    "Cargo.lock": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620",
+    "Cargo.toml": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4",
+    "src/admin.rs": "12a208e2f36e4e3620098bc37cc42c38f9e028959c007ef5c893e546e5fe9e39",
+    "src/admission.rs": "cef4441d064bfe1aff33a6fcee33b475cd609ccd89e4068732e3c5ddbfded75d",
+    "src/bin/war-legacy-bridge.rs": "b40f4accdc5e8e72e7d21c29463b9a140297e92ab0e8ab6a6f375fa4f1212fb4",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "67cd5d0aea87f460c8c155ba21cb38ee6abab910d2fb0e830403c9cedeaad8a8",
+    "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "fb9ba63e9e8da4cf50a475d3e68debb86f31683424175a1b910fde7dd6781f73",
+    "src/lib.rs": "7cb9923b3c87e649a19cea41f74833ca0ad2d1a03fcb72ba7da3fe5cfcedce83",
+    "src/main.rs": "0b70966df79a602285a0bfc4dfbab64468322ae03a9ac12794d30f94180346f3",
+    "src/metrics.rs": "b80afb83cb679fe7c2e5bff436883a74e440969b911b3733c3a69cf091dc6056",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54",
+    "src/relay.rs": "6b200d2b328b1156ec207ce2967bf7b9ad6f46437b5f49cee03d835f3e0f090c",
+    "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4",
+    "src/relay/listener_tests.rs": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765",
+    "src/relay/listing.rs": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4",
+    "src/server.rs": "e89ddb44c694f3b1d4045f2d34c7e8f92437dbc2623728a5f38c083e6def58c4",
+    "src/server/arena_tests.rs": "5cb2480ab7813ffaa34c635baf2c49eb242ef03b3cfb4a1cf946c0baca1c2883",
+    "src/server/close_tests.rs": "157d9ca4d4d444a0c1a7785b79cc3d82a971f8c7e3379cfb774c5f780c1fcb10",
+    "src/server/ownership_tests.rs": "16fbc340ffb4412efb96ae9d19f924484bf2692ec1c2a636e1586c1dadf85574",
+    "src/server/socket.rs": "b0c2748c7d22ec7b51be5bdb0b900fa2d2d5bb1e1994cdf8ac8692187956d06d",
+    "src/server/timers.rs": "9402ecec9e77b18a8c91bc6b9ade140a1564c445e1919f61b943357e7c2b16d1",
+    "src/transport.rs": "cd7c53af960c17a4ea27b140561fda6df99b9b39a4b04d87ee098cbbe26d8a43",
+    "vendor/provenance.json": "48cd086e057e3f0ae9bfbb557a8ccd0ae5a417fc8ded78afe6113ba21c38cc07",
+    "vendor/read-buffer-reclaim.patch": "84e86124bfef4207204412f93c25e8527ea640c034baba8bc2b6890393a2afab",
+    "vendor/tokio-tungstenite/.cargo_vcs_info.json": "7904b96b5c1d841e95481db9b63de2859427e72998c46e04b7a10b32ec2de516",
+    "vendor/tokio-tungstenite/CHANGELOG.md": "e374356eacf72059d3a65ee08a6a41a171c0424d2a67735bae7ee59da50fcb43",
+    "vendor/tokio-tungstenite/Cargo.lock": "d2c691100eab31ebcd1e24bab5e6ad1368340ee8a4f9f16ede4702f492c7be20",
+    "vendor/tokio-tungstenite/Cargo.toml": "d35883d4f3476aa6792059750d5fb0d66051b84e5ccbed911914ea0b2b2992f1",
+    "vendor/tokio-tungstenite/Cargo.toml.orig": "38f845507abfdb2e904396563ee08779d1b3dc4ff609e4f2344f0ee1d2597cbd",
+    "vendor/tokio-tungstenite/LICENSE": "fdd55e2b2da854b0fbdc1e607df7c2ba1e1ebf91ecb77c515511ebeef972bc8f",
+    "vendor/tokio-tungstenite/README.md": "ff6376adb37c3f09445aaa97cfc356e35ba0e4fcfee3452fdd1fa791cdbd97da",
+    "vendor/tokio-tungstenite/examples/README.md": "067ceaf7b70949f087fd582d71bb114e88ef0313560dbd33b345158ffa33eff3",
+    "vendor/tokio-tungstenite/examples/autobahn-client.rs": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732",
+    "vendor/tokio-tungstenite/examples/autobahn-server.rs": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f",
+    "vendor/tokio-tungstenite/examples/client.rs": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7",
+    "vendor/tokio-tungstenite/examples/echo-server.rs": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52",
+    "vendor/tokio-tungstenite/examples/interval-server.rs": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e",
+    "vendor/tokio-tungstenite/examples/server-custom-accept.rs": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535",
+    "vendor/tokio-tungstenite/examples/server-headers.rs": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483",
+    "vendor/tokio-tungstenite/examples/server.rs": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e",
+    "vendor/tokio-tungstenite/src/compat.rs": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9",
+    "vendor/tokio-tungstenite/src/connect.rs": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30",
+    "vendor/tokio-tungstenite/src/handshake.rs": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d",
+    "vendor/tokio-tungstenite/src/lib.rs": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5",
+    "vendor/tokio-tungstenite/src/stream.rs": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172",
+    "vendor/tokio-tungstenite/src/tls.rs": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211",
+    "vendor/tungstenite/.cargo_vcs_info.json": "05db1b097178b9822b792a31c0909ad819609ac829e66892ab29d0ec046ae35c",
+    "vendor/tungstenite/CHANGELOG.md": "7e416d40b723071c0b44f9647de19e18a1180fdddabbb6bea8aca11e3c60427e",
+    "vendor/tungstenite/Cargo.lock": "62974d50013c278220b6cc72e1064015b3c2d0339eaca013ea882c212c9b4356",
+    "vendor/tungstenite/Cargo.toml": "84e09d25e81a69d487b38e57839339f69794c0b642c76c9545f5de53d94eb887",
+    "vendor/tungstenite/Cargo.toml.orig": "bc5bdace1ae1157ffa559d8699d78d39023e5f861b1404552e42792e05f24d8b",
+    "vendor/tungstenite/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "vendor/tungstenite/LICENSE-MIT": "7fea0ee51a4ca5d5cea7464135fd55e8b09caf3a61da3d451ac8a22af95c033f",
+    "vendor/tungstenite/README.md": "39e59dbbfd67127ad101be692fb5f04babdd80eeffeb2ea97b6327fec5ace9b4",
+    "vendor/tungstenite/benches/buffer.rs": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e",
+    "vendor/tungstenite/benches/e2e.rs": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce",
+    "vendor/tungstenite/benches/read.rs": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42",
+    "vendor/tungstenite/benches/write.rs": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8",
+    "vendor/tungstenite/examples/autobahn-client.rs": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4",
+    "vendor/tungstenite/examples/autobahn-server.rs": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776",
+    "vendor/tungstenite/examples/callback-error.rs": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0",
+    "vendor/tungstenite/examples/client.rs": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040",
+    "vendor/tungstenite/examples/server.rs": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157",
+    "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c",
+    "vendor/tungstenite/src/buffer.rs": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30",
+    "vendor/tungstenite/src/client.rs": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637",
+    "vendor/tungstenite/src/error.rs": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b",
+    "vendor/tungstenite/src/handshake/client.rs": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5",
+    "vendor/tungstenite/src/handshake/headers.rs": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75",
+    "vendor/tungstenite/src/handshake/machine.rs": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420",
+    "vendor/tungstenite/src/handshake/mod.rs": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0",
+    "vendor/tungstenite/src/handshake/server.rs": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f",
+    "vendor/tungstenite/src/lib.rs": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7",
+    "vendor/tungstenite/src/protocol/frame/coding.rs": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6",
+    "vendor/tungstenite/src/protocol/frame/frame.rs": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a",
+    "vendor/tungstenite/src/protocol/frame/mask.rs": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6",
+    "vendor/tungstenite/src/protocol/frame/mod.rs": "a678afc526347b3d5b685b273619dcbbb050f15b1c5f267f97cd6df241ed6a6b",
+    "vendor/tungstenite/src/protocol/frame/utf8.rs": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886",
+    "vendor/tungstenite/src/protocol/message.rs": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84",
+    "vendor/tungstenite/src/protocol/mod.rs": "a1214f11d0927de8a622f0c074a27f6739697a8e157883f1f6ec5f2843741453",
+    "vendor/tungstenite/src/protocol/read_budget.rs": "4f112c7459d575424671d2f95a36a681ef903ed33bf643aba6abc53a27530883",
+    "vendor/tungstenite/src/server.rs": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49",
+    "vendor/tungstenite/src/stream.rs": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d",
+    "vendor/tungstenite/src/tls.rs": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9",
+    "vendor/tungstenite/src/utf8.rs": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35",
+    "vendor/tungstenite/src/util.rs": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a"
+  },
+  "binaries": {
+    "war-relay": {
+      "path": "artifacts/baselines/ip-admission/war-relay",
+      "sha256": "60182be9581cb0c52e0a05c35c715b32b34f9d55740fa6acd54149700e19abb6"
+    },
+    "war-legacy-bridge": {
+      "path": "artifacts/baselines/ip-admission/war-legacy-bridge",
+      "sha256": "f61a7c971abd52a6959c1468b926a5d24ed3295898f0270c61579cd32a105f9b"
+    }
+  },
+  "helper_sources": {
+    "clients/js/browser/check.mjs": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "clients/js/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "clients/js/build-browser.mjs": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d",
+    "clients/js/package-lock.json": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36",
+    "clients/js/package.json": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07",
+    "clients/js/relay.mjs": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8",
+    "clients/js/relay.test.mjs": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1",
+    "examples/fragment_waves.rs": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054",
+    "examples/input_budget.rs": "8feaa3b292668f84ba155447e0db9e9bd997c2aa9f2482ee98717354b48c70b1",
+    "examples/inspection.rs": "058433c711f2e000a0aa305718208b1cfad37c34469e557750879ab9a7372f04",
+    "examples/load.rs": "b2d2cb93456b4a91e5ff889e739f9b8a647a0c3564b4ef10ecbcd78b8c204c6c",
+    "examples/queue_waves.rs": "413bc55d2ea14673ee7cbda6b30a7af611e400b57e8b8b00779e1a1cf5dcf63e",
+    "examples/registry_peak.rs": "1c568805f9b3459b0109caf082bb6a93234bda7dbc4fdb98678da5c28ea11c39",
+    "examples/retention.rs": "143546d2e7e9a419f5c7c53d347864de3bd066b55f93cfa58987e61c26c21c14",
+    "examples/stress.rs": "0357bb650d0a41ec6aaf2fcf6cb3eb422eea97deaaa5d23bd33cb5f46281520d",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4",
+    "scripts/check-js.sh": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b",
+    "scripts/check-vendor.py": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f",
+    "scripts/compare-cpp.py": "33028dea75e856343da3b1266e729e12155e6684de24aed550ce809d6aaa5221",
+    "scripts/compare.py": "4c858bc0be5dbea2b26b1e3418de7000d405deb9580c99e6c70da62633c03943",
+    "scripts/fragment-fairness.py": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+    "scripts/fragment-waves.py": "ae7a92c15649a7f9347503bbd987c4711dcf3ac228da37cafd16441123b3e7ff",
+    "scripts/input-budget.py": "9c259d5c6362a54d522294f5b875c3b8c4f04410e7eca5124b56aead6c53e579",
+    "scripts/input-corpus.py": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292",
+    "scripts/inspection.py": "f24b85c6fe9ce2b6d7b6cee0ad670b708c060e058c97c4b57ff1683ba3e4d157",
+    "scripts/queue-waves.py": "aab226bcf1412f1e7e467132e8658303b1de4e165e02535a9336a605dfcac5be",
+    "scripts/reference.py": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+    "scripts/registry-peak.py": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc",
+    "scripts/retention.py": "55e78d9dd8c092bb06170baee3b7920e932b4acbc18ee1d0da237e4acedc6701",
+    "scripts/stability.py": "2ed8e6f67c44c879e7d16ddca65513f55186e608f611cf1500f07ed3ab1bb64d",
+    "tests/read_budget.rs": "af91ad4ee136b6412c7fb63067bdf56beab1dbd8d4769c99eba1ac4ea2552823",
+    "tests/read_buffer_reclaim.rs": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156",
+    "tests/read_fairness.rs": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4",
+    "tests/relay_integration.rs": "b5be757378e8f83d4d6330f4419852332f088fdc50d5caf4c49412866d0d705c",
+    "tests/relay_integration/admission.rs": "0c9acd78a4c4166a84d74dc25d4ff18b286e93a2cc271c6f36eb72f57c0fe125",
+    "tests/relay_integration/channel_listing.rs": "3bce596425ea23391d3a7616324e9aabe7b0b5041693fa933b12b02dab485717",
+    "tests/relay_integration/listeners.rs": "0b6ecfd78ccd71766dca8d95eeeb840ed503934903b556cce7dedca645c0cecb",
+    "tests/relay_integration/origin_policy.rs": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+  },
+  "repository_files": {
+    ".gitignore": "633f3332046f0fbcb4e29b3e4b07a959bf17a7d3b9c3c188cea89eb7a27a01ed"
+  },
+  "client": {
+    "path": "artifacts/baselines/address-churn-client/stress",
+    "sha256": "1296af910bbfad5dc04829da121dfd6e791aaffc7aa439d8d352839ef9c12a66",
+    "source": {
+      "path": "artifacts/baselines/address-churn-client/stress.rs",
+      "sha256": "0357bb650d0a41ec6aaf2fcf6cb3eb422eea97deaaa5d23bd33cb5f46281520d"
+    }
+  },
+  "executed_helper_snapshots": {
+    "scripts/stability.py": {
+      "path": "artifacts/baselines/address-churn-client/stability.py",
+      "sha256": "61b044e875b9c3d32e3f186c8b1023f1398d58c7563c558e93ff1ba988ed0f0f"
+    },
+    "scripts/benchmark.py": {
+      "path": "artifacts/baselines/address-churn-client/benchmark.py",
+      "sha256": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+    }
+  },
+  "run_case_ast_sha256": "a213912a72aa198e9aea8983362c348ca4adce18de7373af4f318b22b2c8628e",
+  "local_helpers": {
+    "artifacts/address-churn-study.py": "c9e40d636d272b6d5fdcf9f619f660e6714249df1763a660033cc542edd32556",
+    "artifacts/record-address-churn-checkpoint.py": "66ad86f31af41520e98ba70d4525946f8458e91609b942be18c8d7b83d9530e2"
+  },
+  "documentation": {
+    "README.md": "e62b2a69792cc1cdbc8e4b4f7b69bd0d95db355cd2132d60885f09424cca9e7f",
+    "docs/operations.md": "b0b41ea6e50b6a0e559b91d5992e4a051a48cd429054c317be1cd629413b153d",
+    "docs/performance.md": "c011fe252c52778b10d022b641bd0ea22b877c4552e25d79a16456ec85025d13",
+    "docs/STATUS.md": "798f0f971bb0d990fa5e379b810227a4d642b0199e2212575c34e2f80f670505",
+    "docs/stability.md": "8ccef137a610c90aa24dd8a9a81383a3446a375344c67d3de6c82402e2b123e8"
+  },
+  "evidence_files": {
+    "docs/benchmarks/2026-10-16-address-churn-checks.json": "6a11c4b002e09fbb1d63f6c0c17302ba30f521ae54df48020041821a015abfdf",
+    "docs/benchmarks/2026-10-16-address-churn-cli.json": "a7dd98fb7c1d77a018ad3b140b1ae730baa52019458343d3429b5c395b494bf7",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-1.json": "9fd2f94cd63db54f248494e179578e5a8bdb2a61dcbfbe5f35a176fcad7bbdcb",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-2.json": "e07a8b30a124279e60bdca66ea2fefccd10a4e1a1ed21f3333244643fceaa944",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-disabled-3.json": "061cb2ee0f43d54f6bd03f1de4c86e3f4d218f576595f77212f3be3932be8c18",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-1.json": "b5b8cd6829faa778949fbdbbec37e7f5a221c6c5455a55455a1bbdc2cf4e8dcb",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-2.json": "78d2d333c36d77ed6f5d3edefe61a1aabf691d31d0ad3301b10902ba93f6a9f3",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-1-enabled-3.json": "89e417f184012133b0a0245903169bfaad16416e1c4bffdb6ed067a80ea430e6",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-1.json": "76c88a3c0782f1db1f5491137ec946d7732870ceebe2f7b4dfd66000c988da93",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-2.json": "4199bb6ac2cb9e01da0a85e53b31a524b76ffc14cd749930c08a9c3f343540ea",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-disabled-3.json": "964b9712d24d3c3844bd53ae83de783b7cd4e42dbafe6e79e0c8cd1b0ab5ce60",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-1.json": "9fe93c263c6b52a6635629a25ca033dd724befd8122fe505e55dd5139d64a1a1",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-2.json": "ac07c7a3c5d5953d9951f07fd0ec7cc834882ba6a62bb8976cfcf0ca2a167fef",
+    "docs/benchmarks/2026-10-16-address-churn-comparison-4096-enabled-3.json": "e4c7cebf1a8282cf52f84b15296436e34780f6c95c70d7086c5b4defba350593",
+    "docs/benchmarks/2026-10-16-address-churn-comparison.json": "030cbe15c80179ddf0e82d365bad36b9a133a00059a8309eff9a909f310ad7c4",
+    "docs/benchmarks/2026-10-16-address-churn-compatibility.json": "d0ffaf55819537922472a157188589fce749b8d1186e2189c707baa41557e0d5",
+    "docs/benchmarks/2026-10-16-address-churn-profile-4096-enabled-1.json": "76d24984735680171ae4bdbb9cff18b08fb65fd54a42cd73a5c8ccd3aa55a63b",
+    "docs/benchmarks/2026-10-16-address-churn-profile.json": "955ca96af94f05458452a4fc22b4c13aa2f542a4f8f7cb7461bca4419a3a9f30",
+    "docs/benchmarks/2026-10-16-address-churn-smoke.json": "6da22f4fb350f5ac29e8cb116598d137e69b938541e8f9a9521e9fad4c9af00b"
+  },
+  "profile": {
+    "event": "cycles:u",
+    "frequency_hz": 499,
+    "call_graph": "dwarf,8192",
+    "perf_exit_code": -2,
+    "recorder_log": "[ perf record: Woken up 306 times to write data ]\n[ perf record: Captured and wrote 75.627 MB /home/phil/dev/war_next/docs/benchmarks/2026-10-16-address-churn-profile-4096-enabled-1.perf.data (9473 samples) ]\n",
+    "report_stderr": "",
+    "data": {
+      "path": "docs/benchmarks/2026-10-16-address-churn-profile-4096-enabled-1.perf.data",
+      "sha256": "df4e1828b15f3da23a473c5f619f11f3b37f39bf0baab5856cf38835831df320"
+    },
+    "report": {
+      "path": "docs/benchmarks/2026-10-16-address-churn-profile-4096-enabled-1.perf.txt",
+      "sha256": "8d48cf254fd9e02dfe1bf2c38f7f9aa7696e4854c06b7e60c4f6889d93eb0e17",
+      "normalization": "Trailing horizontal padding removed for publication; raw stdout preserved separately."
+    },
+    "symbols": [
+      {
+        "self_user_cycles_percent": 10.13,
+        "kind": ".",
+        "symbol": "war_relay::server::Connection::drive                                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 3.12,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::WebSocketContext::read_bounded                                                                                                               -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.97,
+        "kind": ".",
+        "symbol": "<war_relay::server::socket::Stream as std::io::Read>::read                                                                                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.91,
+        "kind": ".",
+        "symbol": "war_relay::server::Worker::accept                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.86,
+        "kind": ".",
+        "symbol": "<war_relay::relay::Registration as core::ops::drop::Drop>::drop                                                                                                     -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.81,
+        "kind": ".",
+        "symbol": "__vdso_clock_gettime                                                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.67,
+        "kind": ".",
+        "symbol": "core::hash::BuildHasher::hash_one                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.41,
+        "kind": ".",
+        "symbol": "parking_lot::raw_rwlock::RawRwLock::lock_exclusive_slow                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.4,
+        "kind": "k",
+        "symbol": "0xffffffff8ac00080                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.33,
+        "kind": ".",
+        "symbol": "war_relay::server::Worker::run                                                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.27,
+        "kind": ".",
+        "symbol": "war_relay::relay::Relay::subscribe_with_output                                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 2.03,
+        "kind": ".",
+        "symbol": "war_relay::relay::Relay::receive_with_storage                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.87,
+        "kind": ".",
+        "symbol": "<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.62,
+        "kind": ".",
+        "symbol": "httparse::parse_headers_iter_uninit                                                                                                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.6,
+        "kind": ".",
+        "symbol": "malloc                                                                                                                                                              -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.56,
+        "kind": ".",
+        "symbol": "war_relay::server::socket::Socket::flush                                                                                                                            -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.44,
+        "kind": ".",
+        "symbol": "http::header::map::HeaderMap<T>::try_append2                                                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.32,
+        "kind": ".",
+        "symbol": "parking_lot::raw_rwlock::RawRwLock::lock_shared_slow                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.19,
+        "kind": ".",
+        "symbol": "war_relay::admission::IpLimit::acquire                                                                                                                              -      -            "
+      },
+      {
+        "self_user_cycles_percent": 1.12,
+        "kind": ".",
+        "symbol": "realloc                                                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.96,
+        "kind": ".",
+        "symbol": "war_relay::relay::Peer::enqueue_frame                                                                                                                               -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.94,
+        "kind": ".",
+        "symbol": "http::header::name::StandardHeader::from_bytes                                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.93,
+        "kind": ".",
+        "symbol": "http::header::name::parse_hdr                                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.88,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<war_relay::server::socket::Socket>                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.87,
+        "kind": ".",
+        "symbol": "<war_relay::admission::Entry as core::ops::drop::Drop>::drop                                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.86,
+        "kind": ".",
+        "symbol": "0x000000000018f393                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.78,
+        "kind": ".",
+        "symbol": "bytes::bytes_mut::shared_v_drop                                                                                                                                     -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.76,
+        "kind": ".",
+        "symbol": "sha1::compress::x86_sha::compress                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.73,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::frame::FrameCodec::swap_read_storage                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.72,
+        "kind": ".",
+        "symbol": "<core::hash::sip::Hasher<S> as core::hash::Hasher>::write                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.7,
+        "kind": ".",
+        "symbol": "tungstenite::handshake::server::create_response                                                                                                                     -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.67,
+        "kind": ".",
+        "symbol": "war_relay::server::timers::Timers::remove                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.67,
+        "kind": ".",
+        "symbol": "<war_relay::server::socket::Stream as std::io::Write>::write                                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.65,
+        "kind": ".",
+        "symbol": "0x000000000018f49d                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.65,
+        "kind": ".",
+        "symbol": "http::header::name::HeaderName::from_bytes                                                                                                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.65,
+        "kind": ".",
+        "symbol": "0x00000000000a62e8                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.64,
+        "kind": ".",
+        "symbol": "war_relay::server::Worker::schedule                                                                                                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.64,
+        "kind": ".",
+        "symbol": "core::fmt::write                                                                                                                                                    -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.63,
+        "kind": "k",
+        "symbol": "0xffffffff8ac0008f                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.62,
+        "kind": ".",
+        "symbol": "bytes::bytes_mut::BytesMut::split_to                                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.59,
+        "kind": ".",
+        "symbol": "tungstenite::handshake::server::<impl tungstenite::handshake::machine::TryParse for http::request::Request<()>>::try_parse                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.58,
+        "kind": ".",
+        "symbol": "http::response::Builder::and_then                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.57,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::frame::FrameCodec::reserve_input                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.56,
+        "kind": ".",
+        "symbol": "<std::io::default_write_fmt::Adapter<T> as core::fmt::Write>::write_str                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.55,
+        "kind": ".",
+        "symbol": "0x000000000018f380                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.55,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::WebSocketContext::set_read_budget                                                                                                            -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.54,
+        "kind": ".",
+        "symbol": "war_relay::server::Connection::deadline                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.53,
+        "kind": ".",
+        "symbol": "<http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.53,
+        "kind": ".",
+        "symbol": "war_relay::server::timers::Timers::set                                                                                                                              -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.52,
+        "kind": "k",
+        "symbol": "0xffffffff8ac00084                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.5,
+        "kind": ".",
+        "symbol": "core::hash::BuildHasher::hash_one                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.5,
+        "kind": ".",
+        "symbol": "tungstenite::handshake::derive_accept_key                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.5,
+        "kind": ".",
+        "symbol": "0x00000000000a62ff                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.46,
+        "kind": "k",
+        "symbol": "0xffffffff8ac00087                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.46,
+        "kind": ".",
+        "symbol": "cfree                                                                                                                                                               -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.46,
+        "kind": ".",
+        "symbol": "hashbrown::map::HashMap<K,V,S,A>::insert                                                                                                                            -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.42,
+        "kind": ".",
+        "symbol": "war_relay::server::socket::Socket::end_output                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.41,
+        "kind": ".",
+        "symbol": "0x000000000018fc87                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.39,
+        "kind": ".",
+        "symbol": "httparse::simd::avx2::match_header_value_vectored                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.37,
+        "kind": ".",
+        "symbol": "clock_gettime                                                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.37,
+        "kind": ".",
+        "symbol": "<&str as http::header::map::as_header_name::Sealed>::find                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.36,
+        "kind": "k",
+        "symbol": "0xffffffff8c1a972b                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.36,
+        "kind": ".",
+        "symbol": "war_relay::server::socket::Socket::writable                                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.34,
+        "kind": ".",
+        "symbol": "tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse               -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.34,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::WebSocketContext::new                                                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.33,
+        "kind": ".",
+        "symbol": "war_relay::server::timers::Timers::swap                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.33,
+        "kind": ".",
+        "symbol": "0x000000000018f460                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.33,
+        "kind": "k",
+        "symbol": "0xffffffff8ac000ab                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.33,
+        "kind": ".",
+        "symbol": "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.32,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<war_relay::relay::Peer>                                                                                                                    -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.32,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<tungstenite::protocol::WebSocketContext>                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.32,
+        "kind": ".",
+        "symbol": "httparse::Request::parse_with_config_and_uninit_headers                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.3,
+        "kind": ".",
+        "symbol": "0x000000000018fcaf                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.3,
+        "kind": ".",
+        "symbol": "core::hash::BuildHasher::hash_one                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.29,
+        "kind": ".",
+        "symbol": "bytes::bytes::promotable_even_drop                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.29,
+        "kind": ".",
+        "symbol": "data_encoding::decode_base_mut                                                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.27,
+        "kind": ".",
+        "symbol": "std::io::impls::<impl std::io::Write for &mut W>::write_fmt                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.27,
+        "kind": ".",
+        "symbol": "data_encoding::encode_mut                                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.26,
+        "kind": ".",
+        "symbol": "hashbrown::map::HashMap<K,V,S,A>::get_inner                                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.25,
+        "kind": ".",
+        "symbol": "alloc::sync::Arc<T,A>::drop_slow                                                                                                                                    -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.24,
+        "kind": ".",
+        "symbol": "http::header::name::StandardHeader::as_str                                                                                                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.24,
+        "kind": ".",
+        "symbol": "http::header::map::hash_elem_using                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.24,
+        "kind": ".",
+        "symbol": "bytes::bytes::shallow_clone_vec                                                                                                                                     -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.23,
+        "kind": ".",
+        "symbol": "sha1::block_api::compress                                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.23,
+        "kind": ".",
+        "symbol": "parking_lot::raw_rwlock::RawRwLock::unlock_exclusive_slow                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.23,
+        "kind": ".",
+        "symbol": "0x00000000000a799d                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.22,
+        "kind": ".",
+        "symbol": "alloc::sync::Arc<T,A>::drop_slow                                                                                                                                    -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.22,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::WebSocketContext::buffer_frame                                                                                                               -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.21,
+        "kind": ".",
+        "symbol": "0x000000000018f470                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.21,
+        "kind": ".",
+        "symbol": "0x00000000000a7de6                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.21,
+        "kind": ".",
+        "symbol": "0x00000000000a79b9                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.21,
+        "kind": ".",
+        "symbol": "<&T as core::fmt::Display>::fmt                                                                                                                                     -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.21,
+        "kind": ".",
+        "symbol": "core::str::converts::from_utf8                                                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.2,
+        "kind": ".",
+        "symbol": "http::response::Builder::and_then                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.2,
+        "kind": ".",
+        "symbol": "__libc_calloc                                                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.19,
+        "kind": ".",
+        "symbol": "war_relay::origin::OriginPolicy::allows                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.19,
+        "kind": ".",
+        "symbol": "bytes::bytes::shared_drop                                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.18,
+        "kind": ".",
+        "symbol": "<war_relay::server::UpgradePolicy as tungstenite::handshake::server::Callback>::on_request                                                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.18,
+        "kind": ".",
+        "symbol": "core::fmt::num::imp::<impl core::fmt::Display for u16>::fmt                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.18,
+        "kind": ".",
+        "symbol": "bytes::bytes::Bytes::copy_from_slice                                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.17,
+        "kind": ".",
+        "symbol": "0x000000000018f384                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.17,
+        "kind": ".",
+        "symbol": "0x000000000018fcc4                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.16,
+        "kind": ".",
+        "symbol": "http::header::map::HeaderMap<T>::get                                                                                                                                -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.16,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<core::option::Option<war_relay::relay::Registration>>                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.15,
+        "kind": ".",
+        "symbol": "accept4                                                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.15,
+        "kind": ".",
+        "symbol": "0x000000000018f44b                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.15,
+        "kind": ".",
+        "symbol": "war_relay::protocol::validate_value                                                                                                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<[war_relay::server::socket::Pending]>                                                                                                      -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": ".",
+        "symbol": "alloc::sync::Arc<T,A>::drop_slow                                                                                                                                    -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": "k",
+        "symbol": "0xffffffff8ac000ad                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": "k",
+        "symbol": "0xffffffff8b40edd6                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": ".",
+        "symbol": "minicbor::decode::decoder::Decoder::unsigned                                                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": ".",
+        "symbol": "core::hash::BuildHasher::hash_one                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.14,
+        "kind": ".",
+        "symbol": "0x00000000000a7961                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.13,
+        "kind": "k",
+        "symbol": "0xffffffff8b410b05                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.13,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<war_relay::server::Connection>                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.13,
+        "kind": "k",
+        "symbol": "0xffffffff8b40ed58                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.13,
+        "kind": ".",
+        "symbol": "0x000000000018fc95                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.13,
+        "kind": ".",
+        "symbol": "0x000000000018fc8e                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.12,
+        "kind": ".",
+        "symbol": "war_relay::protocol::string_bytes                                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.12,
+        "kind": ".",
+        "symbol": "0x000000000018f4e8                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.12,
+        "kind": ".",
+        "symbol": "0x00000000000a7cf1                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.12,
+        "kind": ".",
+        "symbol": "data_encoding::Encoding::decode_len                                                                                                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.12,
+        "kind": ".",
+        "symbol": "std::collections::hash::map::Entry<K,V>::or_default                                                                                                                 -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.11,
+        "kind": ".",
+        "symbol": "tungstenite::protocol::WebSocketContext::do_close                                                                                                                   -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.11,
+        "kind": ".",
+        "symbol": "hashbrown::raw::RawTable<T,A>::reserve_rehash                                                                                                                       -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.11,
+        "kind": ".",
+        "symbol": "0x00000000000a6fc4                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.11,
+        "kind": ".",
+        "symbol": "minicbor::decode::decoder::Decoder::str                                                                                                                             -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.11,
+        "kind": ".",
+        "symbol": "0x000000000018fc47                                                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "hashbrown::rustc_entry::<impl hashbrown::map::HashMap<K,V,S,A>>::rustc_entry                                                                                        -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "core::fmt::Formatter::pad                                                                                                                                           -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "minicbor::decode::decoder::Decoder::type_of                                                                                                                         -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "epoll_wait                                                                                                                                                          -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "core::ptr::drop_in_place<war_relay::server::Stage>                                                                                                                  -      -            "
+      },
+      {
+        "self_user_cycles_percent": 0.1,
+        "kind": ".",
+        "symbol": "data_encoding::decode_pad_mut                                                                                                                                       -      -            "
+      }
+    ],
+    "raw_report": {
+      "path": "artifacts/address-churn-raw-perf.txt",
+      "sha256": "73ef8129331b810c315ef6c420b847b50f4271582bb3e09c6fe4e2709a92a9a6"
+    }
+  },
+  "excluded_first_diagnostic": {
+    "reason": "Workload passed; collector NameError before final report. Excluded from claims; published profile is a fresh complete run.",
+    "data": {
+      "path": "artifacts/address-churn-first-diagnostic.perf.data",
+      "sha256": "56771d0293692b7c172568858a9ca7248f1cf4697d2297a8e1a590ff23203c2e"
+    },
+    "log": {
+      "path": "artifacts/address-churn-first-diagnostic.log",
+      "sha256": "0722ac17462440896eafba7ce7a6c29062ecdff4154490fa173eccfe3d7a8f0c"
+    }
+  },
+  "live_runtime": {
+    "war-relay": {
+      "pid": 388564,
+      "sha256": "60182be9581cb0c52e0a05c35c715b32b34f9d55740fa6acd54149700e19abb6",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/ip-admission/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:1338",
+        "--admin-bind",
+        "127.0.0.1:1339"
+      ]
+    },
+    "war-legacy-bridge": {
+      "pid": 388565,
+      "sha256": "f61a7c971abd52a6959c1468b926a5d24ed3295898f0270c61579cd32a105f9b",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/ip-admission/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:1337",
+        "--upstream",
+        "ws://127.0.0.1:1338"
+      ]
+    }
+  },
+  "health": {
+    "healthz": 200,
+    "readyz": 200,
+    "metrics": 200
+  },
+  "metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 809994,
+    "war_read_buffer_limit_bytes": 1073741824,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 131173,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 3,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 3,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 3,
+    "war_incoming_messages_total": 8,
+    "war_incoming_bytes_total": 131323,
+    "war_deliveries_total": 12,
+    "war_delivered_bytes_total": 131301,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 0
+  }
+}

@@ -440,6 +440,23 @@ order. [docs/performance.md](docs/performance.md) records results and limits;
 
 The stability runner checks sustained traffic, reconnect churn, and an unread
 recipient while verifying healthy delivery and sampling memory/management latency.
+Current churn measurements include connect, join, a distinct worker/counter
+self-echo, the exact Close acknowledgement and TCP EOF. Historical stress
+clients used a shorter latency interval and weaker Close checks; the
+[validation correction](docs/stability.md#churn-validation-correction-2026-10-16)
+records that limit. To exercise address-entry creation and retirement locally:
+
+```sh
+python3 scripts/stability.py --modes churn --clients 32 --churn-secs 8 \
+  --source-addresses 4096 --max-connections-per-ip 64 \
+  --output artifacts/address-churn.json
+```
+
+Source binding requires an IPv4 loopback `ws://` literal and a host supporting
+the selected `127.64.x.y` source addresses. Zero source addresses retains ordinary
+unbound connections. Keep source pool and client build identical when comparing
+admission settings.
+
 Its `fanout` mode adds mixed sizes, concurrent healthy readers, optional unread
 recipients, a delayed reader, and simultaneous graceful departure:
 

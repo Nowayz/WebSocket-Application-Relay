@@ -11,8 +11,31 @@ latency histogram, so retained workload memory is independent of run duration.
 Every expected frame at a healthy recipient is compared with its bytes and order. Its 64 distinct
 cyclic templates exceed the maximum outstanding window of 32: the next window
 does not begin until all current expected frames arrive. Churn instead uses a
-monotonic eight-byte counter per worker, verifies its self-message against the
-new session ID, and completes a close handshake before reconnecting.
+16-byte worker ID/counter value, verifies its exact self-message against the
+new session ID, requires the exact empty Close acknowledgement and TCP EOF,
+and then records latency for the complete lifecycle. Optional source binding
+rotates over `127.64.x.y` addresses on an IPv4 loopback `ws://` destination.
+
+### Churn validation correction (2026-10-16)
+
+Earlier frozen stress clients used an eight-byte counter and stopped their
+latency clock after the self-echo. Their Close loop accepted any Close payload
+and did not wait for TCP EOF after receiving it. It also lacked an explicit
+acknowledgement check before stream termination; the underlying codec can still
+reject an abrupt EOF as a protocol error.
+Historical stress reports retain their original numbers and source/binary
+hashes, but their labels about complete close verification were too strong.
+Use those latency figures as connect-to-echo measurements and those cycle
+counts with the earlier validation limit. The independent integration,
+reference and inspection clients have their own Close checks.
+
+The current stress client distinguishes workers in the payload, rejects missing
+or mismatched acknowledgements, and waits for EOF after the exact reply. Tests
+feed raw missing/wrong/application frames and hold TCP open after a valid Close
+to prove these distinctions. The runner cross-checks accepted, joined,
+disconnected and welcome/self-delivery totals for every completed churn cycle.
+Results from the new contract should be compared using the same new client on
+both sides. Frozen historical stress clients still use their earlier contract.
 
 The runner starts a fresh four-worker server for each case and samples server RSS,
 CPU, HTTP response time, and relay counters every 250 ms. Cases run sequentially,
@@ -74,7 +97,7 @@ the measured build. New records also include working-tree state and source hashe
 | Sustained throughput | 1,258,301 deliveries/s | 1,177,575 deliveries/s |
 | Sustained p99 histogram upper bound | 1.049 ms | 1.049 ms |
 | Peak server RSS in traffic case | 6.69 MiB | 6.73 MiB |
-| 64 reconnect workers, up to 20 s | Failed after first wave: missing Close reply | 1,911,994 complete connection lifecycles |
+| 64 reconnect workers, up to 20 s | Failed after first wave: missing Close reply | 1,911,994 reported cycles under the earlier Close validator |
 | Reconnect protocol/close failures | Failed workload | Zero |
 | Unread recipient, 12 s, 65,536-byte payloads | Gone at 10.058 s sample | Gone at 0.276 s sample |
 | Healthy deliveries during unread-client case | 565,437, all verified | 530,408, all verified |
