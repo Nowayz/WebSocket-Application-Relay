@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn detached_http_listing_preserves_json_and_base64_order_for_bounded_names() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let mut names = vec![
+        Vec::new(),
+        b"abc".to_vec(),
+        b"abc\0".to_vec(),
+        "π世界".as_bytes().to_vec(),
+    ];
+    names.extend((0..=255).map(|byte| vec![byte]));
+    names.extend((2..=16).map(|len| vec![0x5a; len]));
+    let mut subscriptions: Vec<_> = names
+        .iter()
+        .map(|name| {
+            let mut sub = relay.subscribe(name).unwrap();
+            sub.outgoing.try_recv().unwrap();
+            sub
+        })
+        .collect();
+    relay
+        .receive(
+            &subscriptions[0].registration.peer,
+            protocol::request(4, b"\x82\x43key\xf5"),
+        )
+        .unwrap();
+    subscriptions[0].outgoing.try_recv().unwrap();
+    let expected = serde_json::to_vec(&relay.channels()).unwrap();
+    let snapshot = relay.channel_listing();
+    // Snapshot serialization must not consult membership, values or name views
+    // after the original channels and the entire registry have retired.
+    drop(subscriptions);
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    drop(relay);
+    assert_eq!(serde_json::to_vec(&snapshot).unwrap(), expected);
+}
+
+#[test]
 fn joined_channel_names_share_canonical_storage_and_own_their_input() {
     for name in [
         GLOBAL_CHANNEL,

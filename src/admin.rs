@@ -64,7 +64,7 @@ async fn channels(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Respon
     if !authorized(&relay, &headers, false) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    Json(relay.channels()).into_response()
+    Json(relay.channel_listing()).into_response()
 }
 
 async fn drain(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> StatusCode {

@@ -259,15 +259,41 @@ impl SnapshotName {
     fn as_bytes(&self) -> &[u8] {
         &self.bytes[..usize::from(self.len)]
     }
+
+    fn base64(&self) -> [u8; 24] {
+        let mut encoded = [0; 24];
+        STANDARD
+            .encode_slice(self.as_bytes(), &mut encoded)
+            .expect("16-byte channel names fit in 24 base64 bytes");
+        encoded
+    }
 }
 
 /// One coherent view owns only small names and numeric metadata. It keeps no
 /// registry guard, peer or variable value alive while inspection formats output.
-struct ChannelSnapshot {
+pub(crate) struct ChannelSnapshot {
     name: SnapshotName,
     members: usize,
     variables: usize,
     variable_bytes: usize,
+}
+
+impl Serialize for ChannelSnapshot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+
+        let name = self.name.as_bytes();
+        let base64 = self.name.base64();
+        let encoded_len = name.len().div_ceil(3) * 4;
+        let encoded = std::str::from_utf8(&base64[..encoded_len]).expect("base64 is ASCII");
+        let mut row = serializer.serialize_struct("ChannelInfo", 5)?;
+        row.serialize_field("name", &std::str::from_utf8(name).ok())?;
+        row.serialize_field("name_base64", encoded)?;
+        row.serialize_field("members", &self.members)?;
+        row.serialize_field("variables", &self.variables)?;
+        row.serialize_field("variable_bytes", &self.variable_bytes)?;
+        row.end()
+    }
 }
 
 impl Relay {
@@ -348,6 +374,16 @@ impl Relay {
             })
             .collect();
         channels.sort_unstable_by(|a, b| a.name_base64.cmp(&b.name_base64));
+        channels
+    }
+
+    pub(crate) fn channel_listing(&self) -> Vec<ChannelSnapshot> {
+        let mut channels = self.channel_snapshot();
+        // Base64 contains no zero bytes. Zero padding therefore preserves text
+        // ordering, including empty names and keys that prefix another key.
+        // Cache one bounded key per row while sorting, without another vector
+        // of full metadata rows. Serialization encodes into a stack buffer.
+        channels.sort_by_cached_key(|channel| channel.name.base64());
         channels
     }
 
