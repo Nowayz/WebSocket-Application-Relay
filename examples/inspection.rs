@@ -110,6 +110,12 @@ struct Args {
     /// Add a stable broadcast room with this many fully verifying readers.
     #[arg(long, default_value_t = 0)]
     fanout_readers: usize,
+    /// Join and retire a verifying reader every N broadcast windows; zero disables.
+    #[arg(long, default_value_t = 0)]
+    fanout_churn_every: usize,
+    /// Broadcasts per verified window, independently of private traffic's window.
+    #[arg(long, default_value_t = WINDOW)]
+    fanout_window: usize,
 }
 
 #[derive(Default, Serialize)]
@@ -665,12 +671,23 @@ async fn main() -> Result<()> {
     ensure!(
         args.rooms <= 8192
             && (1..=60).contains(&args.seconds)
-            && (1..=8).contains(&args.pairs)
+            && args.pairs <= 8
+            && (args.pairs > 0 || args.fanout_readers > 0)
             && args.churn_workers <= 64
             && args.fanout_readers <= 1024
+            && args.fanout_churn_every <= 65536
+            && (1..=32).contains(&args.fanout_window)
             && args.inspectors <= 8
             && (1..=1000).contains(&args.inspection_interval_ms),
         "invalid workload bounds"
+    );
+    ensure!(
+        args.fanout_churn_every == 0
+            || (args.fanout_readers > 0
+                && args.mode == Mode::None
+                && args.inspectors == 0
+                && args.wire == Wire::Cbor),
+        "fanout membership churn requires CBOR readers, mode none and no inspectors"
     );
     ensure!(
         args.page_size
@@ -816,7 +833,14 @@ async fn main() -> Result<()> {
     )?;
     let started = Instant::now();
     let until = started + Duration::from_secs(args.seconds);
-    let fanout = fanout.map(|group| tokio::spawn(group.run(until)));
+    let fanout = fanout.map(|group| {
+        tokio::spawn(group.run(
+            until,
+            args.url.clone(),
+            args.fanout_churn_every,
+            args.fanout_window,
+        ))
+    });
     let traffic: Vec<_> = pairs
         .into_iter()
         .map(|pair| tokio::spawn(healthy(pair, until)))
@@ -852,6 +876,7 @@ async fn main() -> Result<()> {
     let mut sockets = Vec::new();
     let mut churn_lifecycles = Vec::new();
     let mut fanout_stats = Histogram::new();
+    let mut fanout_membership_stats = Histogram::new();
     for task in traffic {
         let (pair, n, stats) = task.await??;
         counts.merge(&n);
@@ -871,9 +896,10 @@ async fn main() -> Result<()> {
         sockets.push(s);
     }
     let fanout = if let Some(task) = fanout {
-        let (group, n, stats) = task.await??;
+        let (group, n, stats, membership) = task.await??;
         counts.merge(&n);
         fanout_stats.merge(&stats);
+        fanout_membership_stats.merge(&membership);
         Some(group)
     } else {
         None
@@ -881,7 +907,7 @@ async fn main() -> Result<()> {
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed)}),
+        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed)}),
     )?;
     // For short C++ churn runs, verify its delayed retirement explicitly. The
     // controller bounds the entire case to finish before the first 30-second GC.

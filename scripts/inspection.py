@@ -60,7 +60,7 @@ def metrics(port):
                     (line.split() for line in response.read().decode().splitlines() if line.startswith("war_")))
 
 
-def check(event, stable_sessions, stable_channels, read_storage="worker", workers=4):
+def check(event, stable_sessions, stable_channels, read_storage="worker", workers=4, variable_bytes=6):
     observed, counts = event["metrics"], event["details"]["counts"]
     # Older frozen binaries predate the admission error counters.
     assert observed.get("war_accept_errors_total", 0) == 0
@@ -77,7 +77,7 @@ def check(event, stable_sessions, stable_channels, read_storage="worker", worker
     expected.update(war_connections=0 if done else stable_sessions,
                     war_sessions=0 if done else stable_sessions,
                     war_channels=1 if done else stable_channels,
-                    war_variable_bytes=0 if done else 6)
+                    war_variable_bytes=0 if done else variable_bytes)
     reserved = observed["war_read_buffer_reserved_bytes"]
     if read_storage == "connection":
         expected["war_read_buffer_reserved_bytes"] = 0 if done else stable_sessions * 8192
@@ -121,6 +121,10 @@ def run(args):
         command += ["--page-size", str(args.page_size)]
     if args.fanout_readers:
         command += ["--fanout-readers", str(args.fanout_readers)]
+    if getattr(args, "fanout_churn_every", 0):
+        command += ["--fanout-churn-every", str(args.fanout_churn_every)]
+    if getattr(args, "fanout_window", 16) != 16:
+        command += ["--fanout-window", str(args.fanout_window)]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -175,7 +179,7 @@ def run(args):
                 result["events"].append(event)
                 if event["event"] == "ready":
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     if args.profile:
                         profile = args.output.with_suffix(".perf.data")
                         perf_log = tempfile.TemporaryFile()
@@ -187,7 +191,7 @@ def run(args):
                         result["profile_path"] = str(profile)
                     ready = event
                 elif event["event"] == "measured":
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     if perf is not None:
                         perf.send_signal(signal.SIGINT)
                         result["perf_exit_code"] = perf.wait(timeout=10)
@@ -201,14 +205,15 @@ def run(args):
                     mixed["server_cpu_seconds_per_wall_second"] = mixed["server_cpu_seconds"] / mixed["elapsed_seconds"]
                     mixed["client_cpu_seconds"] = event["client_process"]["cpu_seconds"] - ready["client_process"]["cpu_seconds"]
                     mixed["client_cpu_seconds_per_wall_second"] = mixed["client_cpu_seconds"] / mixed["elapsed_seconds"]
-                    assert mixed["healthy"]["verified"] > 0
+                    assert (mixed["healthy"]["verified"] > 0) == (args.pairs > 0)
                     assert (mixed["churn"]["verified"] > 0) == (args.churn_workers > 0)
                     assert (mixed["inspection"]["verified"] > 0) == (args.mode != "none" and args.inspectors > 0)
                     assert (mixed.get("fanout", {}).get("verified", 0) > 0) == (args.fanout_readers > 0)
+                    assert (mixed.get("fanout_membership", {}).get("verified", 0) > 0) == (getattr(args, "fanout_churn_every", 0) > 0)
                     result["mixed"] = mixed
                     print(json.dumps(mixed), flush=True)
                 elif event["event"] == "done":
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers)
+                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     assert event["details"]["passed"]
                     assert event["details"]["counts"]["joins"] == event["details"]["counts"]["normal_closes"]
                 else:
@@ -271,6 +276,10 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=4, help="Native server worker count")
     parser.add_argument("--fanout-readers", type=int, default=0,
                         help="Add a verified broadcast room; requires the updated client")
+    parser.add_argument("--fanout-churn-every", type=int, default=0,
+                        help="Join/retire a verifying room member every N fanout windows; zero disables")
+    parser.add_argument("--fanout-window", type=int, default=16,
+                        help="Broadcast window size in 1..=32; requires updated client when not16")
     parser.add_argument("--read-storage", choices=["worker", "connection"], default="worker",
                         help="staging accounting contract; use connection for the frozen async control")
     parser.add_argument("--server-cpus", default="0-3")
