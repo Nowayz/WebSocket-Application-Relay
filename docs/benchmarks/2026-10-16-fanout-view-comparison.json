@@ -1,0 +1,2852 @@
+{
+  "scope": "30 sequential fresh timing processes; three repetitions rotate five worker/reader/placement combinations and alternate before/selected order. Source placement is checked from native epoll socket ownership at the independently verified ready gate; shared means private and broadcast sources use one worker, separate means different workers. Setup-only rejects are recorded and excluded before traffic begins; performance is never used for selection. One or four server workers on CPUs0-3, one fixed four-thread verifying client on CPUs4-7. Six measured seconds, one private pair, eight full Close/EOF reconnect workers and0/64/512 broadcast readers,1KiB values/window16. Every complete body/sender/FIFO, reader/message matrix, controlled departure, metric/byte total and resource/exit check retained. Client/server CPU separate. No builds/profiles/other loads overlap timing.",
+  "before_runtime_revision": "a0191a1dc54ad8eb7dc17ada1df4aa39b40227ca",
+  "selected_source_hashes": {
+    "src/relay.rs": "653f4a6bcbc5165ac5e0b75431ab54136cc23d5be51b285defac0da6185df87d",
+    "src/server.rs": "bebf83504f2403c5b859b7b0c935fcaae2cc1012efd873750deebb2f14866eb6",
+    "src/server/fairness_tests.rs": "91fae8dc7ce1d5fdf71aba5fb0975715849a6c012ea8b0631285e81786a8c5b7",
+    "src/relay/broadcast_tests.rs": "da27f72939f6aa6f4e719af6621235d40dfb9ee867f1b593f8f596838108950b",
+    "tests/relay_integration/admission.rs": "6c7eaa36c19a0b185c6d4b134df5c666ab68bfe7187303db017464a9ad3f709e"
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/fd-pressure/war-relay",
+      "sha256": "916cbfb89012aa6602fcc71f8d36e8455fc5d97b5ca3305419ec178105d2e578"
+    },
+    "selected": {
+      "path": "artifacts/baselines/fanout-view/war-relay",
+      "sha256": "67699f047ee0ed27e6ab5b7941929bd467b525a606fa5889e4cbe11ede044da6"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/fanout-probe/inspection",
+    "sha256": "5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744"
+  },
+  "sources": {
+    "examples/inspection.rs": "440e8a3366e654c7f07f53dbb73d9365bb77689a9a5b19d23b78844dc7c20726",
+    "examples/inspection/fanout.rs": "46a1158c75a80ee244b7150b5049bfe277717699b2235375592e816794eca340",
+    "scripts/inspection.py": "9611eeda69e33d147f1ab953973e788f7d92d2c86eb5d9d82a71d5c3a2ae58e9",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "case_wrapper": "import argparse,hashlib,json,os,sys\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'scripts'));import inspection\noriginal=inspection.runtime.snapshot\n\ndef layout(pid):\n cmd=Path(f'/proc/{pid}/cmdline').read_bytes().decode().split('\\0')\n if '--bind' not in cmd:return None\n port=int(cmd[cmd.index('--bind')+1].rsplit(':',1)[1])\n children=Path(f'/proc/{os.getpid()}/task/{os.getpid()}/children').read_text().split()\n clients=[int(p) for p in children if '--churn-workers' in Path(f'/proc/{p}/cmdline').read_bytes().decode().split('\\0')]\n if len(clients)!=1:return None\n client=clients[0]\n tcp={row[9]:(int(row[1].split(':')[1],16),int(row[2].split(':')[1],16),row[3]) for line in Path('/proc/net/tcp').read_text().splitlines()[1:] if (row:=line.split())}\n def fds(process):\n  result={}\n  for p in Path(f'/proc/{process}/fd').iterdir():\n   try:result[int(p.name)]=str(p.readlink())\n   except FileNotFoundError:pass\n  return result\n server_fds=fds(pid);client_fds=fds(client)\n flows=[]\n for fd,link in sorted(client_fds.items()):\n  if link.startswith('socket:[') and (t:=tcp.get(link[8:-1])) and t[1]==port and t[2]=='01':flows.append((fd,t[0]))\n groups=[];seen=set()\n for fd,link in sorted(server_fds.items()):\n  if link!='anon_inode:[eventpoll]':continue\n  targets=tuple(sorted(int(line.split()[1]) for line in Path(f'/proc/{pid}/fdinfo/{fd}').read_text().splitlines() if line.startswith('tfd:')))\n  if targets in seen:continue\n  peers={}\n  for target in targets:\n   inode=server_fds.get(target,'')\n   if inode.startswith('socket:[') and (t:=tcp.get(inode[8:-1])) and t[0]==port:peers[t[1]]=target\n  if peers:\n   seen.add(targets);groups.append({'epoll_fd':fd,'peers':peers})\n owners={}\n for role,index in [('private_source',0),('private_target',1),('broadcast_source',2)]:\n  if index<len(flows):\n   fd,source=flows[index];owners[role]={'client_fd':fd,'source_port':source,'workers':[i for i,g in enumerate(groups) if source in g['peers']]}\n return {'owners':owners,'worker_sizes':[len(g['peers'])-int(0 in g['peers']) for g in groups]}\n\ndef snapshot(pid):\n r=original(pid);extra=layout(pid)\n if extra:r['socket_layout']=extra\n return r\ninspection.runtime.snapshot=snapshot\nclass PlacementRejected(Exception):pass\ncheck_original=inspection.check\nparser=argparse.ArgumentParser()\nparser.add_argument('--server',required=True)\nparser.add_argument('--output',required=True)\nparser.add_argument('--workers',type=int,default=4)\nparser.add_argument('--readers',type=int,default=512)\nparser.add_argument('--placement',choices=['any','shared','separate'],default='any')\nparser.add_argument('--seconds',type=int,default=6)\nparser.add_argument('--profile',action='store_true')\na=parser.parse_args()\ndef check(event,*args,**kwargs):\n check_original(event,*args,**kwargs)\n if event['event']=='ready':\n  placement=event['process'].get('socket_layout');assert placement,'missing socket ownership'\n  assert len(placement['worker_sizes'])==a.workers\n  assert sum(placement['worker_sizes'])==2+(a.readers+1 if a.readers else 0)\n  if a.placement!='any':\n   roles=placement['owners'];left=roles['private_source']['workers'];right=roles['broadcast_source']['workers']\n   assert len(left)==len(right)==1\n   shared=left==right;event['placement_accepted']=shared==(a.placement=='shared')\n   if not event['placement_accepted']:raise PlacementRejected(f'need {a.placement}; captured {placement}')\ninspection.check=check\nargs=argparse.Namespace(server=Path(a.server),client=root/'artifacts/baselines/fanout-probe/inspection',mode='none',page_size=None,rooms=0,seconds=a.seconds,inspectors=0,inspection_interval_ms=10,pairs=1,churn_workers=8,workers=a.workers,fanout_readers=a.readers,read_storage='worker',server_cpus='0-3',client_cpus='4-7',profile=a.profile,heap_profile=None,heap_library=Path('/usr/lib/libtcmalloc.so'),output=Path(a.output))\nr=inspection.run(args)\nrejected=bool(r.get('error','').startswith('PlacementRejected('))\nr['placement_selection']={'requested':a.placement,'rejected_before_timing':rejected,'method':'At the verified ready gate, map client TCP descriptors in constructor order (private source,target,broadcast source,readers) through /proc/net/tcp to native epoll ownership. All stable sockets accounted for; no workload performance is inspected for selection. Rejected setup-only processes are killed before the continue gate; their timings are excluded.'}\nr['case_wrapper_source']=Path(__file__).read_text()\nPath(a.output).write_text(json.dumps(r,indent=2)+'\\n')\nassert rejected or r['passed'],r.get('error')\nprint(json.dumps({'passed':r['passed'],'selection_rejected':rejected,'layout':r['events'][0]['process']['socket_layout']}))\nraise SystemExit(3 if rejected else 0)\n",
+  "driver_source": "import hashlib,json,statistics,subprocess,sys\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[1];sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nmeta=json.loads((root/'artifacts/fanout-probe-candidate.json').read_text());candidate=json.loads((root/'artifacts/fanout-view-candidate.json').read_text());client=root/meta['directory']/'inspection'\nservers={'before':root/'artifacts/baselines/fd-pressure/war-relay','selected':root/candidate['directory']/'war-relay'}\noutput=root/'docs/benchmarks/2026-10-16-fanout-view-comparison.json';excluded=root/'artifacts/fanout-view-excluded';excluded.mkdir(exist_ok=True)\nvariants=[(1,512,'shared'),(4,512,'shared'),(4,512,'separate'),(4,64,'separate'),(4,0,'any')]\nr={'scope':'30 sequential fresh timing processes; three repetitions rotate five worker/reader/placement combinations and alternate before/selected order. Source placement is checked from native epoll socket ownership at the independently verified ready gate; shared means private and broadcast sources use one worker, separate means different workers. Setup-only rejects are recorded and excluded before traffic begins; performance is never used for selection. One or four server workers on CPUs0-3, one fixed four-thread verifying client on CPUs4-7. Six measured seconds, one private pair, eight full Close/EOF reconnect workers and0/64/512 broadcast readers,1KiB values/window16. Every complete body/sender/FIFO, reader/message matrix, controlled departure, metric/byte total and resource/exit check retained. Client/server CPU separate. No builds/profiles/other loads overlap timing.',\n 'before_runtime_revision':'a0191a1dc54ad8eb7dc17ada1df4aa39b40227ca','selected_source_hashes':candidate['sources'],'variants':{k:{'path':str(v.relative_to(root)),'sha256':sha(v)} for k,v in servers.items()},'client':{'path':str(client.relative_to(root)),'sha256':sha(client)},'sources':meta['sources'],'case_wrapper':(root/'artifacts/fanout-placement-case.py').read_text(),'driver_source':Path(__file__).read_text(),'cpu_topology':subprocess.check_output(['lscpu','-p=CPU,CORE,SOCKET'],text=True),'cases':[],'excluded_preparations':[],'passed':False}\nfor rep in range(1,4):\n offset=(rep-1)%len(variants)\n for workers,readers,placement in variants[offset:]+variants[:offset]:\n  for role in (['before','selected'] if rep%2 else ['selected','before']):\n   tag=f'{workers}w-{readers}r-{placement}-{role}-{rep}';trace=output.with_name(f'{output.stem}-{tag}.json')\n   for attempt in range(1,33):\n    cmd=[sys.executable,'artifacts/fanout-placement-case.py','--server',str(servers[role]),'--workers',str(workers),'--readers',str(readers),'--placement',placement,'--seconds','6','--output',str(trace)]\n    done=subprocess.run(cmd,cwd=root,capture_output=True,text=True,timeout=100);d=json.loads(trace.read_text())\n    if done.returncode==3:\n     assert d['placement_selection']['rejected_before_timing'] and not d['passed'] and d['server_exit_code']==0\n     assert len(d['events'])==1 and d['events'][0]['event']=='ready' and 'exact_counter_checks' in d['events'][0]\n     archive=excluded/f'{tag}-attempt-{attempt}.json';trace.replace(archive)\n     r['excluded_preparations'].append({'tag':tag,'attempt':attempt,'trace':str(archive.relative_to(root)),'sha256':sha(archive),'layout':d['events'][0]['process']['socket_layout']})\n     output.write_text(json.dumps(r,indent=2)+'\\n');continue\n    assert done.returncode==0 and d['passed'],done.stdout+done.stderr\n    break\n   else:raise RuntimeError(f'could not obtain requested placement for {tag}')\n   assert d['server_sha256']==r['variants'][role]['sha256'] and d['client_sha256']==r['client']['sha256']\n   m=d['mixed'];row={'kind':role,'workers':workers,'readers':readers,'placement':placement,'repetition':rep,'preparation_attempts':attempt,'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,'source_layout':d['events'][0]['process']['socket_layout'],\n    'healthy':m['healthy']['per_second'],'healthy_p99_ms':m['healthy']['p99_upper_ms'],'churn':m['churn']['per_second'],'churn_p99_ms':m['churn']['p99_upper_ms'],'fanout':m['fanout']['per_second'],'fanout_p99_ms':m['fanout']['p99_upper_ms'],'server_cpu_wall':m['server_cpu_seconds_per_wall_second'],'client_cpu_wall':m['client_cpu_seconds_per_wall_second'],'rss_mib':d['events'][1]['process']['VmRSS']/1024}\n   r['cases'].append(row);output.write_text(json.dumps(r,indent=2)+'\\n');print(json.dumps(row),flush=True)\nr['medians']={}\nfor workers,readers,placement in variants:\n for role in servers:\n  rows=[v for v in r['cases'] if (v['workers'],v['readers'],v['placement'],v['kind'])==(workers,readers,placement,role)]\n  fields=['healthy','healthy_p99_ms','churn','churn_p99_ms','fanout','fanout_p99_ms','server_cpu_wall','client_cpu_wall','rss_mib'];summary={k:statistics.median(v[k] for v in rows) for k in fields};summary['ranges']={k:[min(v[k] for v in rows),max(v[k] for v in rows)] for k in fields};r['medians'][f'{workers}w/{readers}r/{placement}/{role}']=summary\nr['passed']=True;output.write_text(json.dumps(r,indent=2)+'\\n');print(json.dumps(r['medians']),flush=True)\n",
+  "cpu_topology": "# The following is the parsable format, which can be fed to other\n# programs. Each different item in every column has an unique ID\n# starting usually from zero.\n# CPU,Core,Socket\n0,0,0\n1,1,0\n2,2,0\n3,3,0\n4,4,0\n5,5,0\n6,6,0\n7,7,0\n8,8,0\n9,9,0\n10,10,0\n11,11,0\n12,12,0\n13,13,0\n14,14,0\n15,15,0\n16,0,0\n17,1,0\n18,2,0\n19,3,0\n20,4,0\n21,5,0\n22,6,0\n23,7,0\n24,8,0\n25,9,0\n26,10,0\n27,11,0\n28,12,0\n29,13,0\n30,14,0\n31,15,0\n",
+  "cases": [
+    {
+      "kind": "before",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-before-1.json",
+      "trace_sha256": "a3bffd16a2bacfd2d5cb53fd3bebb98de518b25de00fbe82247735e0a957f083",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 52432,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 52448,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 52460,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 1877.3946449556645,
+      "healthy_p99_ms": 16.777216,
+      "churn": 249.98641460313902,
+      "churn_p99_ms": 67.108864,
+      "fanout": 853514.2020482694,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5642170076595482,
+      "client_cpu_wall": 1.5461876109608264,
+      "rss_mib": 5.66796875
+    },
+    {
+      "kind": "selected",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-selected-1.json",
+      "trace_sha256": "895f95a21408acf680e663980cb36efe2759192fa1c4b1fb59bdf0285fdec4c5",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 37920,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 37934,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 37948,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 17417.065012696123,
+      "healthy_p99_ms": 2.097152,
+      "churn": 2172.8041680912015,
+      "churn_p99_ms": 8.388608,
+      "fanout": 842924.1424070444,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5827444128980234,
+      "client_cpu_wall": 1.633349340151317,
+      "rss_mib": 5.4765625
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 1,
+      "preparation_attempts": 4,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-before-1.json",
+      "trace_sha256": "f1ec443f3a302b1f0d0b9bb47613b73e4ffae07af1594a187773e604861774df",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 37552,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 37554,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 37564,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          143,
+          134,
+          116,
+          122
+        ]
+      },
+      "healthy": 2107.517057570477,
+      "healthy_p99_ms": 16.777216,
+      "churn": 984.9844655127506,
+      "churn_p99_ms": 67.108864,
+      "fanout": 893523.2875181228,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.6111399811380887,
+      "client_cpu_wall": 1.7668106811648832,
+      "rss_mib": 5.9140625
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 1,
+      "preparation_attempts": 6,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-selected-1.json",
+      "trace_sha256": "34dc2479ab86f179dca02c9d8a12a5c7d1fd5f09c22980779242f0281ae1021e",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 51756,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 51762,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 51768,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          143,
+          106,
+          134,
+          132
+        ]
+      },
+      "healthy": 17881.08501617458,
+      "healthy_p99_ms": 2.097152,
+      "churn": 7893.061995259842,
+      "churn_p99_ms": 8.388608,
+      "fanout": 857823.2783091003,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.702537788323558,
+      "client_cpu_wall": 1.8062879154764466,
+      "rss_mib": 5.94140625
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-before-1.json",
+      "trace_sha256": "2ad58eb0753f90300e20125cb2defa23ddeafc0df8af39a3452a4d5727dec670",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 37112,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 37118,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 37124,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          131,
+          131,
+          123,
+          130
+        ]
+      },
+      "healthy": 195369.38159989667,
+      "healthy_p99_ms": 2.097152,
+      "churn": 914.5533676208239,
+      "churn_p99_ms": 67.108864,
+      "fanout": 879889.5968626392,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.8642629238805675,
+      "client_cpu_wall": 2.049918418683966,
+      "rss_mib": 6.08203125
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-selected-1.json",
+      "trace_sha256": "cc7735a7a0c9146d888bf38a94d031f6979f2311660d6f41935a8f5c2dac7bcc",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 43162,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 43166,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 43172,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          131,
+          129,
+          133,
+          122
+        ]
+      },
+      "healthy": 419182.1950919012,
+      "healthy_p99_ms": 0.131072,
+      "churn": 8261.192454540951,
+      "churn_p99_ms": 8.388608,
+      "fanout": 856809.7178197381,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 1.2524276204694866,
+      "client_cpu_wall": 2.401596580740691,
+      "rss_mib": 6.078125
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 1,
+      "preparation_attempts": 2,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-before-1.json",
+      "trace_sha256": "69d2043c959e85f9498da8c5e010f02e0d13eb7fe3bbcf911bdfd773a36b7c89",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 57276,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 57290,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 57304,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          16,
+          19,
+          15,
+          17
+        ]
+      },
+      "healthy": 275935.332466845,
+      "healthy_p99_ms": 0.262144,
+      "churn": 6020.155181940713,
+      "churn_p99_ms": 8.388608,
+      "fanout": 838833.1727027966,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.0264657861147806,
+      "client_cpu_wall": 2.1079208107714247,
+      "rss_mib": 5.5
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-selected-1.json",
+      "trace_sha256": "d80c2f1c35484988e2d5c36e5c60387c4dd2e8992ecdcc8d80de01bd3511ae79",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 59896,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 59902,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 59914,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          19,
+          12,
+          18,
+          18
+        ]
+      },
+      "healthy": 427720.758895665,
+      "healthy_p99_ms": 0.262144,
+      "churn": 14315.906988783388,
+      "churn_p99_ms": 4.194304,
+      "fanout": 831215.1623050849,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.3248371541083037,
+      "client_cpu_wall": 2.458031197873897,
+      "rss_mib": 5.546875
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-before-1.json",
+      "trace_sha256": "7395a2778a0bd5501142311edcd02c391d7adeb5fc0b373f14362afdce94f342",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 45258,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 45274,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          1,
+          1,
+          0,
+          0
+        ]
+      },
+      "healthy": 367240.49732684426,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72090.21734663953,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.456647484804263,
+      "client_cpu_wall": 2.084972544039054,
+      "rss_mib": 5.50390625
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 1,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-selected-1.json",
+      "trace_sha256": "0ac2eb7401c4ff496fb8e79955ed0d15e159dc3c3c6753a1cbc8e99367ef1bd8",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 39890,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 39896,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          1,
+          0,
+          1,
+          0
+        ]
+      },
+      "healthy": 370926.7954273451,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72131.24719021683,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.446651568446464,
+      "client_cpu_wall": 2.0849782397771044,
+      "rss_mib": 5.51953125
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 2,
+      "preparation_attempts": 2,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-selected-2.json",
+      "trace_sha256": "73c6fc82637a8c697f311f2cfd4835872be4cd63430639801d5d902804be222e",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 34516,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 34532,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 34540,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          123,
+          139,
+          124,
+          129
+        ]
+      },
+      "healthy": 18294.768136306182,
+      "healthy_p99_ms": 2.097152,
+      "churn": 8242.13257712899,
+      "churn_p99_ms": 8.388608,
+      "fanout": 864429.1259374203,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.7106864987447907,
+      "client_cpu_wall": 1.857438249646807,
+      "rss_mib": 6.20703125
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 2,
+      "preparation_attempts": 2,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-before-2.json",
+      "trace_sha256": "b2b19e6bd24447afea766f796c31eff68731111c885fc2da6535c4291191b5cd",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 50214,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 50226,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 50232,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          123,
+          131,
+          136,
+          125
+        ]
+      },
+      "healthy": 2201.1566596243647,
+      "healthy_p99_ms": 16.777216,
+      "churn": 1023.4645636646279,
+      "churn_p99_ms": 67.108864,
+      "fanout": 904595.4419484847,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.6179094436445516,
+      "client_cpu_wall": 1.8087591800484717,
+      "rss_mib": 5.98046875
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-selected-2.json",
+      "trace_sha256": "5557257e5b47df89f56e75c54aa9425d8fa47ecc7951c9336d5f0ed51ba535e8",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 47434,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 47442,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 47448,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          146,
+          134,
+          105,
+          130
+        ]
+      },
+      "healthy": 410746.0548736443,
+      "healthy_p99_ms": 0.131072,
+      "churn": 7905.072495190521,
+      "churn_p99_ms": 8.388608,
+      "fanout": 836198.9115667486,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 1.247214058285278,
+      "client_cpu_wall": 2.3928526058156803,
+      "rss_mib": 6.05078125
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-before-2.json",
+      "trace_sha256": "9fd73444c6a999dea8a10cdd570dbc81e504989b0f14d9fd736c86b003ff964b",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 44934,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 44938,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 44944,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          141,
+          144,
+          126,
+          104
+        ]
+      },
+      "healthy": 176590.8875613726,
+      "healthy_p99_ms": 2.097152,
+      "churn": 935.0422728080422,
+      "churn_p99_ms": 67.108864,
+      "fanout": 869291.7926889894,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.8429207020147325,
+      "client_cpu_wall": 2.022343344359457,
+      "rss_mib": 6.03515625
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 2,
+      "preparation_attempts": 5,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-selected-2.json",
+      "trace_sha256": "b85823c6511c19043aa57dd23cddb67ca1fe42274f0582c41fce932bc9195452",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 35058,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 35074,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 35076,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          14,
+          14,
+          22,
+          17
+        ]
+      },
+      "healthy": 420397.00361263065,
+      "healthy_p99_ms": 0.262144,
+      "churn": 14357.729183278905,
+      "churn_p99_ms": 4.194304,
+      "fanout": 813505.439126799,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.3348973426121438,
+      "client_cpu_wall": 2.429813140485026,
+      "rss_mib": 5.52734375
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-before-2.json",
+      "trace_sha256": "db484a35adecc719024edfb78cd689a163e5347c43580dd90b463ed13b4322a4",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 38658,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 38664,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 38678,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          12,
+          19,
+          20,
+          16
+        ]
+      },
+      "healthy": 275278.25359507836,
+      "healthy_p99_ms": 0.262144,
+      "churn": 5934.094297694832,
+      "churn_p99_ms": 8.388608,
+      "fanout": 821440.8881492064,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.0381457267315943,
+      "client_cpu_wall": 2.1412797092296927,
+      "rss_mib": 5.40234375
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-selected-2.json",
+      "trace_sha256": "c0d97d65e692bb16e341507a56c593944bd7ea59b8d8a72969d54a9e819b9897",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 46122,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 46136,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          1,
+          0,
+          0,
+          1
+        ]
+      },
+      "healthy": 359367.92488293856,
+      "healthy_p99_ms": 0.131072,
+      "churn": 70287.92060699465,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.4466341603148731,
+      "client_cpu_wall": 2.0566204537195314,
+      "rss_mib": 5.49609375
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-before-2.json",
+      "trace_sha256": "2e3f5abeecfba683846109eced77e0b77b67be64c881c75b31b602d29f037735",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 47332,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 47346,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          2,
+          0,
+          0,
+          0
+        ]
+      },
+      "healthy": 361286.6207382299,
+      "healthy_p99_ms": 0.131072,
+      "churn": 71086.37059409784,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.4549837061224697,
+      "client_cpu_wall": 2.0899765950487708,
+      "rss_mib": 5.49609375
+    },
+    {
+      "kind": "selected",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-selected-2.json",
+      "trace_sha256": "7280526b4f2d93669f819aff83173b4e93b673b46b49df1fc3834596bb8bde08",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 51852,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 51866,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 51870,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 17676.170883523406,
+      "healthy_p99_ms": 2.097152,
+      "churn": 2196.8555267254255,
+      "churn_p99_ms": 8.388608,
+      "fanout": 851911.9751448372,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5999605443947452,
+      "client_cpu_wall": 1.7232200080671294,
+      "rss_mib": 5.67578125
+    },
+    {
+      "kind": "before",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 2,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-before-2.json",
+      "trace_sha256": "8fcf6fa579e5ed5ed971d1ce772e71193b62860331985125a52b4019cff8e236",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 44212,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 44218,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 44228,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 2218.6481785071496,
+      "healthy_p99_ms": 33.554432,
+      "churn": 277.3310223133937,
+      "churn_p99_ms": 67.108864,
+      "fanout": 905485.4549228314,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5942807621001293,
+      "client_cpu_wall": 1.811141370209918,
+      "rss_mib": 5.64453125
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 3,
+      "preparation_attempts": 6,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-before-3.json",
+      "trace_sha256": "d035ca855334f728c4e693bbb0da98c138722b04c1153f391ebf6fe6587cf8c0",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 51718,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 51728,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 51738,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          135,
+          133,
+          131,
+          116
+        ]
+      },
+      "healthy": 182615.3388940865,
+      "healthy_p99_ms": 2.097152,
+      "churn": 939.0978425587703,
+      "churn_p99_ms": 67.108864,
+      "fanout": 883416.9790899268,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.8520611295234634,
+      "client_cpu_wall": 2.041951183447831,
+      "rss_mib": 5.984375
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "separate",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-separate-selected-3.json",
+      "trace_sha256": "6c909159ba24f32a66b03224fe39a6fd9c9fd8924b16f3d59803c4716cc08f56",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 48858,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 48866,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 48880,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          140,
+          140,
+          117,
+          118
+        ]
+      },
+      "healthy": 418389.4900796258,
+      "healthy_p99_ms": 0.131072,
+      "churn": 8064.7257734564055,
+      "churn_p99_ms": 8.388608,
+      "fanout": 839321.8951999679,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 1.2544647704791823,
+      "client_cpu_wall": 2.4139700563404185,
+      "rss_mib": 5.99609375
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 3,
+      "preparation_attempts": 3,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-before-3.json",
+      "trace_sha256": "cdec14af90881eb88195810fb959e0e4a777950d4e36461735fb9e607d566fcf",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 34068,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 34078,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 34090,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          15,
+          16,
+          18,
+          18
+        ]
+      },
+      "healthy": 274843.45071668783,
+      "healthy_p99_ms": 0.262144,
+      "churn": 5979.364140192971,
+      "churn_p99_ms": 8.388608,
+      "fanout": 824015.7688920256,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.0314994712612031,
+      "client_cpu_wall": 2.169648322426634,
+      "rss_mib": 5.5078125
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 64,
+      "placement": "separate",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-64r-separate-selected-3.json",
+      "trace_sha256": "146dedac03b6f319be0eff47500069a6e7e0bb0d069929c7ec8cf5a98ed0093c",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 42926,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 42930,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 42936,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          21,
+          16,
+          11,
+          19
+        ]
+      },
+      "healthy": 422149.615074624,
+      "healthy_p99_ms": 0.131072,
+      "churn": 14266.895977612376,
+      "churn_p99_ms": 4.194304,
+      "fanout": 816832.2434785892,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.3380891026341424,
+      "client_cpu_wall": 2.4762147030066446,
+      "rss_mib": 5.53515625
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-before-3.json",
+      "trace_sha256": "20f7dc0c040738792915c406615e3690a71e2880244fd7f4df60bccb6cfd3e54",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 40848,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 40852,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          0,
+          1,
+          1,
+          0
+        ]
+      },
+      "healthy": 366673.43510582024,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73321.38716255927,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.489984159481739,
+      "client_cpu_wall": 2.1466438449804026,
+      "rss_mib": 5.58984375
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 0,
+      "placement": "any",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-0r-any-selected-3.json",
+      "trace_sha256": "2021ceba95e14347fb2565a62d9382ccc16fe21ac7e6ab255af32bfca6d95dd6",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 57484,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 57498,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          1,
+          0,
+          0,
+          1
+        ]
+      },
+      "healthy": 361180.97535011877,
+      "healthy_p99_ms": 0.131072,
+      "churn": 73267.05310394162,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.503320744024316,
+      "client_cpu_wall": 2.1649818697201626,
+      "rss_mib": 5.51953125
+    },
+    {
+      "kind": "before",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-before-3.json",
+      "trace_sha256": "1244d963ae30b74c231250d2c45deaa4e240b822c996fce30bd0bc38038d469c",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 47446,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 47458,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 47464,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 2194.912611770252,
+      "healthy_p99_ms": 33.554432,
+      "churn": 280.52394954739646,
+      "churn_p99_ms": 67.108864,
+      "fanout": 916493.2194855826,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5926796797559236,
+      "client_cpu_wall": 1.8745992118122752,
+      "rss_mib": 5.60546875
+    },
+    {
+      "kind": "selected",
+      "workers": 1,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-1w-512r-shared-selected-3.json",
+      "trace_sha256": "09215c577687160aae8aa1000f0af6a3160eb45cbe485445885967970804dc0a",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 36118,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 36134,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 36148,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          515
+        ]
+      },
+      "healthy": 17837.705140134643,
+      "healthy_p99_ms": 2.097152,
+      "churn": 2228.380976337582,
+      "churn_p99_ms": 8.388608,
+      "fanout": 860771.1837242091,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5994747806617319,
+      "client_cpu_wall": 1.7601245643318073,
+      "rss_mib": 5.625
+    },
+    {
+      "kind": "before",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 3,
+      "preparation_attempts": 2,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-before-3.json",
+      "trace_sha256": "2f7ebdc99d498e8155d771276b8b938ce6bf0651ff6619b90c4345c1adef3fde",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 47406,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 47422,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 47426,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          143,
+          132,
+          127,
+          113
+        ]
+      },
+      "healthy": 2119.349655305098,
+      "healthy_p99_ms": 33.554432,
+      "churn": 1016.1881719894492,
+      "churn_p99_ms": 67.108864,
+      "fanout": 888559.3362378024,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.6148113386852054,
+      "client_cpu_wall": 1.8244401513829265,
+      "rss_mib": 5.99609375
+    },
+    {
+      "kind": "selected",
+      "workers": 4,
+      "readers": 512,
+      "placement": "shared",
+      "repetition": 3,
+      "preparation_attempts": 1,
+      "trace": "docs/benchmarks/2026-10-16-fanout-view-comparison-4w-512r-shared-selected-3.json",
+      "trace_sha256": "7270efbd5a56fba8ec13ee969b42e3c85f62f48a963ff17ddb82cdf1e344efa3",
+      "passed": true,
+      "source_layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 41816,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 41832,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 41834,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          118,
+          131,
+          135,
+          131
+        ]
+      },
+      "healthy": 18355.454157322758,
+      "healthy_p99_ms": 2.097152,
+      "churn": 8104.772193050096,
+      "churn_p99_ms": 8.388608,
+      "fanout": 866142.9979141909,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.707644050876467,
+      "client_cpu_wall": 1.8515298460579561,
+      "rss_mib": 6.0234375
+    }
+  ],
+  "excluded_preparations": [
+    {
+      "tag": "4w-512r-shared-before-1",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-before-1-attempt-1.json",
+      "sha256": "6c16ed45513f91d0d79f69b2763473c238f7aabf0730e5382b972eb190cbcd70",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 60756,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 60762,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 60766,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          119,
+          135,
+          126,
+          135
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-before-1",
+      "attempt": 2,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-before-1-attempt-2.json",
+      "sha256": "5aea1c095e7916e8166d6314241208ad8a806d3cca9f381d89ec08b2fabf4f1f",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 48470,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 48474,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 48476,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          134,
+          136,
+          127,
+          118
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-before-1",
+      "attempt": 3,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-before-1-attempt-3.json",
+      "sha256": "7d09c973f47386392cfe9a1556f297068ff03cda2d20e76daecbcc9772218284",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 47264,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 47276,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 47292,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          146,
+          119,
+          122,
+          128
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-1",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-1-attempt-1.json",
+      "sha256": "d78612a209a26f909fed8c3db3387a87c67a1f7e7287a69ff938d49d5dcb470f",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 58364,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 58370,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 58380,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          115,
+          130,
+          137,
+          133
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-1",
+      "attempt": 2,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-1-attempt-2.json",
+      "sha256": "6d5add8642092f8b31ef12a02ae405511456a42a7cd45d9ce1ffbe2bec8230bb",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 43726,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 43728,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 43742,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          123,
+          135,
+          125,
+          132
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-1",
+      "attempt": 3,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-1-attempt-3.json",
+      "sha256": "8f3d022d1350ae6b065957ac485de8632986ba008555924a3ac40bf96665dbf8",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 60580,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 60582,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 60594,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          114,
+          148,
+          118,
+          135
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-1",
+      "attempt": 4,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-1-attempt-4.json",
+      "sha256": "43f41e242a7ce8080238295368499b7b5bbc4b28988d4f5cd07a8ae69ff5ab61",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 38524,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 38534,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 38546,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          126,
+          125,
+          119,
+          145
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-1",
+      "attempt": 5,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-1-attempt-5.json",
+      "sha256": "070ac21aa1bb6369b90188f4a0d2e5f978ad3a6d29078500b03ab530ed76c88e",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 59852,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 59862,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 59876,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          127,
+          132,
+          121,
+          135
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-before-1",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-before-1-attempt-1.json",
+      "sha256": "652238af0a90fa474995744f7d1ecddfe395d02ae2bd8ae9b501932e23000c8e",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 54206,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 54218,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 54234,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          16,
+          17,
+          22,
+          12
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-selected-2",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-selected-2-attempt-1.json",
+      "sha256": "c849b0d382c1c58203744f3031080f0b56a69e582e7d31fcefb6502f91f42b0e",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 39674,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 39690,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 39704,
+            "workers": [
+              3
+            ]
+          }
+        },
+        "worker_sizes": [
+          129,
+          119,
+          123,
+          144
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-before-2",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-before-2-attempt-1.json",
+      "sha256": "46dc638d23dd6c78c51c7f0b8f465f919cb5223c6060e8052b6a4f5d1a62e4fc",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 40450,
+            "workers": [
+              3
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 40452,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 40454,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          149,
+          128,
+          116,
+          122
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-selected-2",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-selected-2-attempt-1.json",
+      "sha256": "b335d500f3359ffc43447229b89adddf9de1ad0056e4c66973cdd1e063277197",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 43340,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 43344,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 43346,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          15,
+          12,
+          22,
+          18
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-selected-2",
+      "attempt": 2,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-selected-2-attempt-2.json",
+      "sha256": "54423d600a85f277f0a2c1f583a310674ed4a63fe5f67784401a0121a2798829",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 59996,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 59998,
+            "workers": [
+              3
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 60012,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          16,
+          9,
+          23,
+          19
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-selected-2",
+      "attempt": 3,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-selected-2-attempt-3.json",
+      "sha256": "ca25138f53d1e0b4d0147e608f59d71e734fc57691ae4a9663a97ae01a19d705",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 37366,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 37380,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 37390,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          23,
+          14,
+          19,
+          11
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-selected-2",
+      "attempt": 4,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-selected-2-attempt-4.json",
+      "sha256": "753a22d6b7da186112a8c0e3176c334458fc75077a2ceb786b6260d1d5b549a5",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 36244,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 36260,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 36270,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          12,
+          22,
+          24,
+          9
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-separate-before-3",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-separate-before-3-attempt-1.json",
+      "sha256": "82f7a5c57aaba17dd12ceda077b81c0703a12fe53be1462adb4183a98265a19a",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 33626,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 33634,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 33650,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          109,
+          155,
+          131,
+          120
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-separate-before-3",
+      "attempt": 2,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-separate-before-3-attempt-2.json",
+      "sha256": "73c45eb79cd8b88881ad4723123894e29f32333ede6e291a30058021398fcdde",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 46620,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 46622,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 46634,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          137,
+          133,
+          122,
+          123
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-separate-before-3",
+      "attempt": 3,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-separate-before-3-attempt-3.json",
+      "sha256": "92aba3a062fb13ce8587388a48d0f6db5e249347e914b7357ee5f6d2edb50bd7",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 38652,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 38666,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 38680,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          126,
+          123,
+          139,
+          127
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-separate-before-3",
+      "attempt": 4,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-separate-before-3-attempt-4.json",
+      "sha256": "db6a5a7e09b56113593ded89e33c0091fbd8716acdb8adde9f60ebf3bc53514e",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 52978,
+            "workers": [
+              2
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 52986,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 52990,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          133,
+          130,
+          129,
+          123
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-separate-before-3",
+      "attempt": 5,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-separate-before-3-attempt-5.json",
+      "sha256": "38e955d239980c9a622962f5737802081e3b98decc4744c76299fba7835f990b",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 59620,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 59628,
+            "workers": [
+              2
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 59632,
+            "workers": [
+              1
+            ]
+          }
+        },
+        "worker_sizes": [
+          142,
+          130,
+          114,
+          129
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-before-3",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-before-3-attempt-1.json",
+      "sha256": "751e0895d3a5df41c6ca654a6aa748ff4fc13c45ba98f28571d895c412eb8e52",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 36088,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 36096,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 36112,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          19,
+          22,
+          13,
+          13
+        ]
+      }
+    },
+    {
+      "tag": "4w-64r-separate-before-3",
+      "attempt": 2,
+      "trace": "artifacts/fanout-view-excluded/4w-64r-separate-before-3-attempt-2.json",
+      "sha256": "80c1d759a4c2eef6030f02b978b4e10e2794f106e641722c458fbe61c5d9370d",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 51738,
+            "workers": [
+              0
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 51754,
+            "workers": [
+              0
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 51770,
+            "workers": [
+              0
+            ]
+          }
+        },
+        "worker_sizes": [
+          16,
+          21,
+          13,
+          17
+        ]
+      }
+    },
+    {
+      "tag": "4w-512r-shared-before-3",
+      "attempt": 1,
+      "trace": "artifacts/fanout-view-excluded/4w-512r-shared-before-3-attempt-1.json",
+      "sha256": "df9110aefd9118bcf5fa61ff0e01efc5626e26967e50f18b56758229b5126a51",
+      "layout": {
+        "owners": {
+          "private_source": {
+            "client_fd": 9,
+            "source_port": 59744,
+            "workers": [
+              1
+            ]
+          },
+          "private_target": {
+            "client_fd": 10,
+            "source_port": 59750,
+            "workers": [
+              1
+            ]
+          },
+          "broadcast_source": {
+            "client_fd": 11,
+            "source_port": 59762,
+            "workers": [
+              2
+            ]
+          }
+        },
+        "worker_sizes": [
+          117,
+          144,
+          122,
+          132
+        ]
+      }
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "1w/512r/shared/before": {
+      "healthy": 2194.912611770252,
+      "healthy_p99_ms": 33.554432,
+      "churn": 277.3310223133937,
+      "churn_p99_ms": 67.108864,
+      "fanout": 905485.4549228314,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5926796797559236,
+      "client_cpu_wall": 1.811141370209918,
+      "rss_mib": 5.64453125,
+      "ranges": {
+        "healthy": [
+          1877.3946449556645,
+          2218.6481785071496
+        ],
+        "healthy_p99_ms": [
+          16.777216,
+          33.554432
+        ],
+        "churn": [
+          249.98641460313902,
+          280.52394954739646
+        ],
+        "churn_p99_ms": [
+          67.108864,
+          67.108864
+        ],
+        "fanout": [
+          853514.2020482694,
+          916493.2194855826
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          0.5642170076595482,
+          0.5942807621001293
+        ],
+        "client_cpu_wall": [
+          1.5461876109608264,
+          1.8745992118122752
+        ],
+        "rss_mib": [
+          5.60546875,
+          5.66796875
+        ]
+      }
+    },
+    "1w/512r/shared/selected": {
+      "healthy": 17676.170883523406,
+      "healthy_p99_ms": 2.097152,
+      "churn": 2196.8555267254255,
+      "churn_p99_ms": 8.388608,
+      "fanout": 851911.9751448372,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.5994747806617319,
+      "client_cpu_wall": 1.7232200080671294,
+      "rss_mib": 5.625,
+      "ranges": {
+        "healthy": [
+          17417.065012696123,
+          17837.705140134643
+        ],
+        "healthy_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "churn": [
+          2172.8041680912015,
+          2228.380976337582
+        ],
+        "churn_p99_ms": [
+          8.388608,
+          8.388608
+        ],
+        "fanout": [
+          842924.1424070444,
+          860771.1837242091
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          0.5827444128980234,
+          0.5999605443947452
+        ],
+        "client_cpu_wall": [
+          1.633349340151317,
+          1.7601245643318073
+        ],
+        "rss_mib": [
+          5.4765625,
+          5.67578125
+        ]
+      }
+    },
+    "4w/512r/shared/before": {
+      "healthy": 2119.349655305098,
+      "healthy_p99_ms": 16.777216,
+      "churn": 1016.1881719894492,
+      "churn_p99_ms": 67.108864,
+      "fanout": 893523.2875181228,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.6148113386852054,
+      "client_cpu_wall": 1.8087591800484717,
+      "rss_mib": 5.98046875,
+      "ranges": {
+        "healthy": [
+          2107.517057570477,
+          2201.1566596243647
+        ],
+        "healthy_p99_ms": [
+          16.777216,
+          33.554432
+        ],
+        "churn": [
+          984.9844655127506,
+          1023.4645636646279
+        ],
+        "churn_p99_ms": [
+          67.108864,
+          67.108864
+        ],
+        "fanout": [
+          888559.3362378024,
+          904595.4419484847
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          0.6111399811380887,
+          0.6179094436445516
+        ],
+        "client_cpu_wall": [
+          1.7668106811648832,
+          1.8244401513829265
+        ],
+        "rss_mib": [
+          5.9140625,
+          5.99609375
+        ]
+      }
+    },
+    "4w/512r/shared/selected": {
+      "healthy": 18294.768136306182,
+      "healthy_p99_ms": 2.097152,
+      "churn": 8104.772193050096,
+      "churn_p99_ms": 8.388608,
+      "fanout": 864429.1259374203,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.707644050876467,
+      "client_cpu_wall": 1.8515298460579561,
+      "rss_mib": 6.0234375,
+      "ranges": {
+        "healthy": [
+          17881.08501617458,
+          18355.454157322758
+        ],
+        "healthy_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "churn": [
+          7893.061995259842,
+          8242.13257712899
+        ],
+        "churn_p99_ms": [
+          8.388608,
+          8.388608
+        ],
+        "fanout": [
+          857823.2783091003,
+          866142.9979141909
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          0.702537788323558,
+          0.7106864987447907
+        ],
+        "client_cpu_wall": [
+          1.8062879154764466,
+          1.857438249646807
+        ],
+        "rss_mib": [
+          5.94140625,
+          6.20703125
+        ]
+      }
+    },
+    "4w/512r/separate/before": {
+      "healthy": 182615.3388940865,
+      "healthy_p99_ms": 2.097152,
+      "churn": 935.0422728080422,
+      "churn_p99_ms": 67.108864,
+      "fanout": 879889.5968626392,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 0.8520611295234634,
+      "client_cpu_wall": 2.041951183447831,
+      "rss_mib": 6.03515625,
+      "ranges": {
+        "healthy": [
+          176590.8875613726,
+          195369.38159989667
+        ],
+        "healthy_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "churn": [
+          914.5533676208239,
+          939.0978425587703
+        ],
+        "churn_p99_ms": [
+          67.108864,
+          67.108864
+        ],
+        "fanout": [
+          869291.7926889894,
+          883416.9790899268
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          0.8429207020147325,
+          0.8642629238805675
+        ],
+        "client_cpu_wall": [
+          2.022343344359457,
+          2.049918418683966
+        ],
+        "rss_mib": [
+          5.984375,
+          6.08203125
+        ]
+      }
+    },
+    "4w/512r/separate/selected": {
+      "healthy": 418389.4900796258,
+      "healthy_p99_ms": 0.131072,
+      "churn": 8064.7257734564055,
+      "churn_p99_ms": 8.388608,
+      "fanout": 839321.8951999679,
+      "fanout_p99_ms": 16.777216,
+      "server_cpu_wall": 1.2524276204694866,
+      "client_cpu_wall": 2.401596580740691,
+      "rss_mib": 6.05078125,
+      "ranges": {
+        "healthy": [
+          410746.0548736443,
+          419182.1950919012
+        ],
+        "healthy_p99_ms": [
+          0.131072,
+          0.131072
+        ],
+        "churn": [
+          7905.072495190521,
+          8261.192454540951
+        ],
+        "churn_p99_ms": [
+          8.388608,
+          8.388608
+        ],
+        "fanout": [
+          836198.9115667486,
+          856809.7178197381
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "server_cpu_wall": [
+          1.247214058285278,
+          1.2544647704791823
+        ],
+        "client_cpu_wall": [
+          2.3928526058156803,
+          2.4139700563404185
+        ],
+        "rss_mib": [
+          5.99609375,
+          6.078125
+        ]
+      }
+    },
+    "4w/64r/separate/before": {
+      "healthy": 275278.25359507836,
+      "healthy_p99_ms": 0.262144,
+      "churn": 5979.364140192971,
+      "churn_p99_ms": 8.388608,
+      "fanout": 824015.7688920256,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.0314994712612031,
+      "client_cpu_wall": 2.1412797092296927,
+      "rss_mib": 5.5,
+      "ranges": {
+        "healthy": [
+          274843.45071668783,
+          275935.332466845
+        ],
+        "healthy_p99_ms": [
+          0.262144,
+          0.262144
+        ],
+        "churn": [
+          5934.094297694832,
+          6020.155181940713
+        ],
+        "churn_p99_ms": [
+          8.388608,
+          8.388608
+        ],
+        "fanout": [
+          821440.8881492064,
+          838833.1727027966
+        ],
+        "fanout_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "server_cpu_wall": [
+          1.0264657861147806,
+          1.0381457267315943
+        ],
+        "client_cpu_wall": [
+          2.1079208107714247,
+          2.169648322426634
+        ],
+        "rss_mib": [
+          5.40234375,
+          5.5078125
+        ]
+      }
+    },
+    "4w/64r/separate/selected": {
+      "healthy": 422149.615074624,
+      "healthy_p99_ms": 0.262144,
+      "churn": 14315.906988783388,
+      "churn_p99_ms": 4.194304,
+      "fanout": 816832.2434785892,
+      "fanout_p99_ms": 2.097152,
+      "server_cpu_wall": 1.3348973426121438,
+      "client_cpu_wall": 2.458031197873897,
+      "rss_mib": 5.53515625,
+      "ranges": {
+        "healthy": [
+          420397.00361263065,
+          427720.758895665
+        ],
+        "healthy_p99_ms": [
+          0.131072,
+          0.262144
+        ],
+        "churn": [
+          14266.895977612376,
+          14357.729183278905
+        ],
+        "churn_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "fanout": [
+          813505.439126799,
+          831215.1623050849
+        ],
+        "fanout_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "server_cpu_wall": [
+          1.3248371541083037,
+          1.3380891026341424
+        ],
+        "client_cpu_wall": [
+          2.429813140485026,
+          2.4762147030066446
+        ],
+        "rss_mib": [
+          5.52734375,
+          5.546875
+        ]
+      }
+    },
+    "4w/0r/any/before": {
+      "healthy": 366673.43510582024,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72090.21734663953,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.456647484804263,
+      "client_cpu_wall": 2.0899765950487708,
+      "rss_mib": 5.50390625,
+      "ranges": {
+        "healthy": [
+          361286.6207382299,
+          367240.49732684426
+        ],
+        "healthy_p99_ms": [
+          0.131072,
+          0.131072
+        ],
+        "churn": [
+          71086.37059409784,
+          73321.38716255927
+        ],
+        "churn_p99_ms": [
+          0.524288,
+          0.524288
+        ],
+        "fanout": [
+          0.0,
+          0.0
+        ],
+        "fanout_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "server_cpu_wall": [
+          1.4549837061224697,
+          1.489984159481739
+        ],
+        "client_cpu_wall": [
+          2.084972544039054,
+          2.1466438449804026
+        ],
+        "rss_mib": [
+          5.49609375,
+          5.58984375
+        ]
+      }
+    },
+    "4w/0r/any/selected": {
+      "healthy": 361180.97535011877,
+      "healthy_p99_ms": 0.131072,
+      "churn": 72131.24719021683,
+      "churn_p99_ms": 0.524288,
+      "fanout": 0.0,
+      "fanout_p99_ms": 0.0,
+      "server_cpu_wall": 1.446651568446464,
+      "client_cpu_wall": 2.0849782397771044,
+      "rss_mib": 5.51953125,
+      "ranges": {
+        "healthy": [
+          359367.92488293856,
+          370926.7954273451
+        ],
+        "healthy_p99_ms": [
+          0.131072,
+          0.131072
+        ],
+        "churn": [
+          70287.92060699465,
+          73267.05310394162
+        ],
+        "churn_p99_ms": [
+          0.524288,
+          0.524288
+        ],
+        "fanout": [
+          0.0,
+          0.0
+        ],
+        "fanout_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "server_cpu_wall": [
+          1.4466341603148731,
+          1.503320744024316
+        ],
+        "client_cpu_wall": [
+          2.0566204537195314,
+          2.1649818697201626
+        ],
+        "rss_mib": [
+          5.49609375,
+          5.51953125
+        ]
+      }
+    }
+  }
+}

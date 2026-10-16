@@ -1,0 +1,337 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cycles:u'
+# Event count (approx.): 4430089858
+#
+# Overhead  Symbol                                                                                                                                                     IPC   [IPC Coverage]
+# ........  .........................................................................................................................................................  ....................
+#
+    26.07%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send                                                                              -      -
+            |
+             --9.01%--<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send
+
+    13.01%  [.] war_relay::relay::Peer::enqueue_frame                                                                                                                  -      -
+            |
+             --5.08%--war_relay::relay::Peer::enqueue_frame
+
+     4.25%  [.] bytes::bytes_mut::shared_v_drop                                                                                                                        -      -
+            |
+             --1.68%--bytes::bytes_mut::shared_v_drop
+
+     3.96%  [.] bytes::bytes_mut::shared_v_clone                                                                                                                       -      -
+            |
+             --1.55%--bytes::bytes_mut::shared_v_clone
+
+     3.70%  [.] war_relay::server::Connection::drive                                                                                                                   -      -
+            |
+             --1.05%--war_relay::server::Connection::drive
+
+     3.46%  [k] 0xffffffff8b410b05                                                                                                                                     -      -
+            |
+            ---0xffffffff8b3d9121
+               0xffffffff8c18eafa
+               0xffffffff8ac0012f
+               0x7f809cca08f2
+               internal_syscall_cancel (inlined)
+               syscall_cancel (inlined)
+               writev
+               |
+                --1.24%--war_relay::server::socket::write_frame
+                          0xfff
+
+     2.37%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                                                                                             -      -
+            |
+             --0.76%--<war_relay::server::socket::Stream as std::io::Read>::read
+
+     2.15%  [.] __vdso_clock_gettime                                                                                                                                   -      -
+            |
+            ---clock_gettime
+               |
+                --0.92%--std::sys::pal::unix::time::Timespec::now
+
+     2.13%  [.] war_relay::relay::Relay::receive_with_storage                                                                                                          -      -
+            |
+             --0.51%--war_relay::relay::Relay::receive_with_storage
+
+     1.97%  [k] 0xffffffff8b410af7                                                                                                                                     -      -
+            |
+            ---0xffffffff8b3d9121
+               0xffffffff8c18eafa
+               0xffffffff8ac0012f
+               0x7f809cca08f2
+               internal_syscall_cancel (inlined)
+               syscall_cancel (inlined)
+               writev
+               |
+                --0.63%--war_relay::server::socket::write_frame
+                          0xfff
+
+     1.87%  [.] war_relay::server::socket::Socket::flush                                                                                                               -      -
+     1.59%  [.] war_relay::server::Worker::run                                                                                                                         -      -
+     1.54%  [.] core::hash::BuildHasher::hash_one                                                                                                                      -      -
+            |
+             --0.75%--core::hash::BuildHasher::hash_one
+
+     1.48%  [.] war_relay::relay::Relay::subscribe_with_output                                                                                                         -      -
+     1.31%  [k] 0xffffffff8ac00080                                                                                                                                     -      -
+            |
+             --1.20%--0x7f809cca08f2
+                       |
+                        --1.18%--internal_syscall_cancel (inlined)
+                                  syscall_cancel (inlined)
+                                  |
+                                   --1.09%--writev
+
+     1.16%  [.] tungstenite::protocol::WebSocketContext::read_bounded                                                                                                  -      -
+     1.02%  [.] http::header::map::HeaderMap<T>::try_append2                                                                                                           -      -
+     0.96%  [.] war_relay::server::Worker::accept                                                                                                                      -      -
+     0.79%  [.] realloc                                                                                                                                                -      -
+     0.75%  [.] <war_relay::relay::Registration as core::ops::drop::Drop>::drop                                                                                        -      -
+     0.73%  [.] malloc                                                                                                                                                 -      -
+     0.70%  [.] war_relay::server::Worker::schedule                                                                                                                    -      -
+     0.61%  [.] 0x00000000000a62e8                                                                                                                                     -      -
+     0.59%  [.] sha1::compress::x86_sha::compress                                                                                                                      -      -
+     0.57%  [k] 0xffffffff8ac0008f                                                                                                                                     -      -
+     0.57%  [.] bytes::bytes_mut::BytesMut::split_to                                                                                                                   -      -
+     0.44%  [.] <&str as http::header::map::as_header_name::Sealed>::find                                                                                              -      -
+     0.42%  [k] 0xffffffff8ac000ab                                                                                                                                     -      -
+     0.41%  [.] 0x000000000018f393                                                                                                                                     -      -
+     0.39%  [.] httparse::parse_headers_iter_uninit                                                                                                                    -      -
+     0.38%  [k] 0xffffffff8c18eac1                                                                                                                                     -      -
+     0.37%  [k] 0xffffffff8c18ea79                                                                                                                                     -      -
+     0.32%  [.] http::header::name::parse_hdr                                                                                                                          -      -
+     0.31%  [.] 0x000000000018fc0a                                                                                                                                     -      -
+     0.31%  [.] parking_lot::raw_rwlock::RawRwLock::lock_exclusive_slow                                                                                                -      -
+     0.29%  [.] http::response::Builder::and_then                                                                                                                      -      -
+     0.28%  [.] std::io::impls::<impl std::io::Write for &mut W>::write_fmt                                                                                            -      -
+     0.27%  [k] 0xffffffff8b40edd6                                                                                                                                     -      -
+     0.27%  [.] 0x00000000000a799d                                                                                                                                     -      -
+     0.27%  [.] <http::header::map::HeaderMap as tungstenite::handshake::headers::FromHttparse<&[httparse::Header]>>::from_httparse                                    -      -
+     0.26%  [k] 0xffffffff8b410ad0                                                                                                                                     -      -
+     0.26%  [.] war_relay::server::Connection::deadline                                                                                                                -      -
+     0.26%  [.] tungstenite::handshake::server::create_response                                                                                                        -      -
+     0.26%  [.] 0x000000000018fc9c                                                                                                                                     -      -
+     0.25%  [.] <war_relay::server::socket::Stream as std::io::Write>::write                                                                                           -      -
+     0.25%  [k] 0xffffffff8ac00087                                                                                                                                     -      -
+     0.24%  [.] tungstenite::handshake::server::<impl tungstenite::handshake::headers::FromHttparse<httparse::Request> for http::request::Request<()>>::from_httparse  -      -
+     0.24%  [.] war_relay::server::socket::Socket::end_output                                                                                                          -      -
+     0.22%  [.] <std::io::default_write_fmt::Adapter<T> as core::fmt::Write>::write_str                                                                                -      -
+     0.21%  [.] data_encoding::decode_base_mut                                                                                                                         -      -
+     0.20%  [.] std::io::error::Error::kind                                                                                                                            -      -
+     0.20%  [k] 0xffffffff8c18ea55                                                                                                                                     -      -
+     0.20%  [.] http::header::map::HeaderMap<T>::get                                                                                                                   -      -
+     0.19%  [.] core::ptr::drop_in_place<war_relay::server::socket::Socket>                                                                                            -      -
+     0.19%  [.] war_relay::server::socket::write_frame                                                                                                                 -      -
+     0.19%  [k] 0xffffffff8ac00084                                                                                                                                     -      -
+     0.18%  [k] 0xffffffff8ac000ad                                                                                                                                     -      -
+     0.18%  [.] bytes::bytes::promotable_even_drop                                                                                                                     -      -
+     0.17%  [.] tungstenite::protocol::WebSocketContext::set_read_budget                                                                                               -      -
+     0.17%  [.] http::header::name::HeaderName::from_bytes                                                                                                             -      -
+     0.17%  [.] war_relay::server::timers::Timers::set                                                                                                                 -      -
+     0.17%  [.] alloc::raw_vec::finish_grow                                                                                                                            -      -
+     0.17%  [.] tungstenite::protocol::frame::FrameCodec::reserve_input                                                                                                -      -
+     0.16%  [.] core::ptr::drop_in_place<tungstenite::protocol::WebSocketContext>                                                                                      -      -
+     0.16%  [.] tungstenite::protocol::frame::FrameCodec::swap_read_storage                                                                                            -      -
+     0.15%  [.] war_relay::protocol::parse                                                                                                                             -      -
+     0.15%  [.] 0x000000000018f4bc                                                                                                                                     -      -
+     0.14%  [.] hashbrown::map::HashMap<K,V,S,A>::insert                                                                                                               -      -
+     0.14%  [.] clock_gettime                                                                                                                                          -      -
+     0.14%  [.] core::fmt::num::imp::<impl core::fmt::Display for u16>::fmt                                                                                            -      -
+     0.14%  [k] 0xffffffff8b410a4e                                                                                                                                     -      -
+     0.14%  [.] war_relay::protocol::string_bytes                                                                                                                      -      -
+     0.14%  [k] 0xffffffff8b05d118                                                                                                                                     -      -
+     0.14%  [.] hashbrown::raw::RawTable<T,A>::reserve_rehash                                                                                                          -      -
+     0.13%  [.] data_encoding::Encoding::decode_len                                                                                                                    -      -
+     0.13%  [.] <core::hash::sip::Hasher<S> as core::hash::Hasher>::write                                                                                              -      -
+     0.13%  [.] 0x000000000018f49d                                                                                                                                     -      -
+     0.13%  [.] httparse::simd::avx2::match_header_value_vectored                                                                                                      -      -
+     0.13%  [.] data_encoding::decode_pad_mut                                                                                                                          -      -
+     0.13%  [.] writev                                                                                                                                                 -      -
+     0.13%  [.] 0x00000000000a62ff                                                                                                                                     -      -
+     0.12%  [.] tungstenite::protocol::frame::frame::Frame::format_into_buf                                                                                            -      -
+     0.12%  [.] http::header::map::hash_elem_using                                                                                                                     -      -
+     0.12%  [.] tungstenite::handshake::server::<impl tungstenite::handshake::machine::TryParse for http::request::Request<()>>::try_parse                             -      -
+     0.12%  [.] 0x00000000000a08e6                                                                                                                                     -      -
+     0.12%  [.] cfree                                                                                                                                                  -      -
+     0.12%  [.] <&T as core::fmt::Display>::fmt                                                                                                                        -      -
+     0.11%  [.] <war_relay::server::UpgradePolicy as tungstenite::handshake::server::Callback>::on_request                                                             -      -
+     0.11%  [.] data_encoding::encode_mut                                                                                                                              -      -
+     0.11%  [k] 0xffffffff8b8a4a83                                                                                                                                     -      -
+     0.11%  [.] 0x000000000018f384                                                                                                                                     -      -
+     0.11%  [.] 0x00000000000a7de6                                                                                                                                     -      -
+     0.11%  [.] tungstenite::handshake::derive_accept_key                                                                                                              -      -
+     0.11%  [.] alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle                                                                                         -      -
+     0.10%  [k] 0xffffffff8aeaae20                                                                                                                                     -      -
+     0.10%  [.] core::fmt::Formatter::pad_integral                                                                                                                     -      -
+     0.10%  [.] 0x00000000000a79b9                                                                                                                                     -      -
+     0.10%  [.] 0x000000000018fc87                                                                                                                                     -      -
+     0.10%  [k] 0xffffffff8b410ae6                                                                                                                                     -      -
+     0.10%  [.] bytes::bytes::shallow_clone_vec                                                                                                                        -      -
+     0.10%  [k] 0xffffffff8ac000e1                                                                                                                                     -      -
+     0.10%  [.] std::collections::hash::map::Entry<K,V>::or_default                                                                                                    -      -
+     0.09%  [.] alloc::sync::Arc<T,A>::drop_slow                                                                                                                       -      -
+     0.09%  [.] war_relay::origin::OriginPolicy::allows                                                                                                                -      -
+     0.09%  [.] core::ptr::drop_in_place<alloc::vec::Vec<http::header::map::Bucket<http::header::value::HeaderValue>>>                                                 -      -
+     0.09%  [.] http::header::name::StandardHeader::as_str                                                                                                             -      -
+     0.09%  [k] 0xffffffff8aeaae4a                                                                                                                                     -      -
+     0.09%  [.] 0x000000000018f487                                                                                                                                     -      -
+     0.09%  [k] 0xffffffff8b410a45                                                                                                                                     -      -
+     0.09%  [k] 0xffffffff8b40edc8                                                                                                                                     -      -
+     0.09%  [k] 0xffffffff8ac000be                                                                                                                                     -      -
+     0.08%  [.] core::ptr::drop_in_place<war_relay::relay::Peer>                                                                                                       -      -
+     0.08%  [.] parking_lot::raw_rwlock::RawRwLock::unlock_exclusive_slow                                                                                              -      -
+     0.08%  [.] http::header::name::StandardHeader::from_bytes                                                                                                         -      -
+     0.08%  [.] core::ptr::drop_in_place<alloc::vec::Vec<http::header::map::ExtraValue<http::header::value::HeaderValue>>>                                             -      -
+     0.08%  [.] core::fmt::write                                                                                                                                       -      -
+     0.08%  [k] 0xffffffff8ac000b9                                                                                                                                     -      -
+     0.08%  [k] 0xffffffff8b3d9254                                                                                                                                     -      -
+     0.07%  [.] 0x000000000018fcb6                                                                                                                                     -      -
+     0.07%  [.] bytes::bytes::shared_drop                                                                                                                              -      -
+     0.07%  [.] 0x00000000000a6f3b                                                                                                                                     -      -
+     0.07%  [.] 0x000000000018f3d3                                                                                                                                     -      -
+     0.07%  [.] httparse::simd::runtime::match_uri_vectored                                                                                                            -      -
+     0.07%  [.] core::ptr::drop_in_place<core::option::Option<war_relay::relay::Registration>>                                                                         -      -
+     0.07%  [k] 0xffffffff8b05d111                                                                                                                                     -      -
+     0.07%  [.] war_relay::protocol::validate_value                                                                                                                    -      -
+     0.07%  [k] 0xffffffff8b410ae1                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8b410af4                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8b410abe                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8b05d100                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8b410a4c                                                                                                                                     -      -
+     0.07%  [.] 0x000000000000178b                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8be7223b                                                                                                                                     -      -
+     0.07%  [.] minicbor::decode::decoder::Decoder::unsigned                                                                                                           -      -
+     0.07%  [.] std::sys::pal::unix::time::Timespec::now                                                                                                               -      -
+     0.07%  [k] 0xffffffff8b8a4a76                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8aeab998                                                                                                                                     -      -
+     0.07%  [k] 0xffffffff8b40eda9                                                                                                                                     -      -
+     0.07%  [.] 0x00000000000a4ef7                                                                                                                                     -      -
+     0.07%  [.] httparse::Request::parse_with_config_and_uninit_headers                                                                                                -      -
+     0.06%  [.] core::ptr::drop_in_place<war_relay::server::Stage>                                                                                                     -      -
+     0.06%  [.] syscall                                                                                                                                                -      -
+     0.06%  [.] tungstenite::protocol::frame::frame::Frame::into_close                                                                                                 -      -
+     0.06%  [.] 0x000000000018f387                                                                                                                                     -      -
+     0.06%  [.] 0x000000000018f3ec                                                                                                                                     -      -
+     0.06%  [.] 0x00000000000a7754                                                                                                                                     -      -
+     0.05%  [.] hashbrown::raw::RawTableInner::fallible_with_capacity                                                                                                  -      -
+     0.05%  [k] 0xffffffff8c18ea85                                                                                                                                     -      -
+     0.05%  [k] 0xffffffff8c18ea65                                                                                                                                     -      -
+     0.05%  [.] minicbor::decode::decoder::Decoder::type_of                                                                                                            -      -
+     0.05%  [.] data_encoding::Encoding::encode_mut                                                                                                                    -      -
+     0.05%  [.] hashbrown::map::HashMap<K,V,S,A>::get_inner                                                                                                            -      -
+     0.05%  [.] 0x000000000018f3b9                                                                                                                                     -      -
+     0.05%  [k] 0xffffffff8b410ade                                                                                                                                     -      -
+     0.05%  [.] tungstenite::protocol::WebSocketContext::new                                                                                                           -      -
+     0.05%  [k] 0xffffffff8b410ad8                                                                                                                                     -      -
+     0.05%  [k] 0xffffffff8b464d23                                                                                                                                     -      -
+     0.05%  [.] 0x0000000000185d65                                                                                                                                     -      -
+     0.05%  [.] core::ptr::drop_in_place<tungstenite::error::Error>                                                                                                    -      -
+     0.05%  [k] 0xffffffff8b094e18                                                                                                                                     -      -
+     0.05%  [.] 0x000000000018fc75                                                                                                                                     -      -
+     0.05%  [.] 0x00000000000a71bc                                                                                                                                     -      -
+     0.05%  [.] data_encoding::Encoding::decode_mut                                                                                                                    -      -
+     0.05%  [.] 0x000000000018fc00                                                                                                                                     -      -
+     0.05%  [.] 0x000000000018f38b                                                                                                                                     -      -
+     0.05%  [.] 0x00000000000a798b                                                                                                                                     -      -
+     0.05%  [.] 0x00000000000a5049                                                                                                                                     -      -
+     0.04%  [.] 0x00000000000a77b7                                                                                                                                     -      -
+     0.04%  [.] minicbor::decode::decoder::Decoder::bytes                                                                                                              -      -
+     0.04%  [.] core::ptr::drop_in_place<war_relay::relay::Channel>                                                                                                    -      -
+     0.04%  [.] 0x0000000000001726                                                                                                                                     -      -
+     0.04%  [.] tungstenite::protocol::WebSocketContext::do_close                                                                                                      -      -
+     0.04%  [.] tungstenite::protocol::WebSocketContext::_write                                                                                                        -      -
+     0.04%  [.] alloc::sync::Arc<T,A>::drop_slow                                                                                                                       -      -
+     0.04%  [k] 0xffffffff8b3d911c                                                                                                                                     -      -
+     0.04%  [k] 0xffffffff8b410afc                                                                                                                                     -      -
+     0.04%  [.] 0x000000000018f513                                                                                                                                     -      -
+     0.04%  [k] 0xffffffff8aeab9e1                                                                                                                                     -      -
+     0.04%  [.] 0x00000000000a6fc4                                                                                                                                     -      -
+     0.04%  [.] 0x00000000000a08f0                                                                                                                                     -      -
+     0.04%  [k] 0xffffffff8c1a972b                                                                                                                                     -      -
+     0.04%  [k] 0xffffffff8b8a4ab1                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8b8a4a8c                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8b3d9250                                                                                                                                     -      -
+     0.03%  [.] 0x000000000018f380                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8aeab9de                                                                                                                                     -      -
+     0.03%  [.] __vdso_getrandom                                                                                                                                       -      -
+     0.03%  [k] 0xffffffff8c18eaaa                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8b410af0                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8b3d90f5                                                                                                                                     -      -
+     0.03%  [.] 0x00000000000a7cf1                                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8c18eacd                                                                                                                                     -      -
+     0.03%  [.] bytes::bytes_mut::BytesMut::freeze                                                                                                                     -      -
+     0.03%  [k] 0xffffffff8b3d90fe                                                                                                                                     -      -
+     0.03%  [.] data_encoding::Encoding::decode                                                                                                                        -      -
+     0.02%  [.] core::ptr::drop_in_place<http::response::Parts>                                                                                                        -      -
+     0.02%  [.] http::status::StatusCode::canonical_reason                                                                                                             -      -
+     0.02%  [.] __libc_calloc                                                                                                                                          -      -
+     0.02%  [k] 0xffffffff8b8a4ae4                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8ac0012a                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b3d9103                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a08c4                                                                                                                                     -      -
+     0.02%  [.] alloc::sync::Arc<T,A>::drop_slow                                                                                                                       -      -
+     0.02%  [k] 0xffffffff8b8a4adc                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b8a4acf                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018fc56                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b3d925d                                                                                                                                     -      -
+     0.02%  [.] core::ptr::drop_in_place<alloc::vec::Vec<http::header::map::Bucket<http::header::value::HeaderValue>>>                                                 -      -
+     0.02%  [k] 0xffffffff8c18eaf3                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a08d2                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b8a4ada                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a4ed1                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b40eda5                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f58d                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018fc8e                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b40ed58                                                                                                                                     -      -
+     0.02%  [.] http::response::Builder::and_then                                                                                                                      -      -
+     0.02%  [k] 0xffffffff8ac000c4                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a7584                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8ac000c2                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f4f7                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a70cd                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018fc04                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a7f8f                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b8a4a93                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f468                                                                                                                                     -      -
+     0.02%  [.] war_relay::protocol::uint                                                                                                                              -      -
+     0.02%  [k] 0xffffffff8b3d9119                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a75b3                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8ac000ba                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f5b6                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b8a4aa2                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a77d7                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8b8a4ac2                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a6e65                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a79ae                                                                                                                                     -      -
+     0.02%  [.] core::ptr::drop_in_place<war_relay::server::Connection>                                                                                                -      -
+     0.02%  [.] 0x000000000018f50f                                                                                                                                     -      -
+     0.02%  [.] 0x0000000000001798                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8c18ea54                                                                                                                                     -      -
+     0.02%  [.] war_relay::server::timers::Timers::swap                                                                                                                -      -
+     0.02%  [.] parking_lot::raw_rwlock::RawRwLock::lock_shared_slow                                                                                                   -      -
+     0.02%  [k] 0xffffffff8b8a4ae0                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a6f91                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f526                                                                                                                                     -      -
+     0.02%  [.] 0x00000000000a7594                                                                                                                                     -      -
+     0.02%  [k] 0xffffffff8c18eac5                                                                                                                                     -      -
+     0.02%  [.] 0x000000000018f5e4                                                                                                                                     -      -
+     0.02%  [.] bytes::bytes_mut::BytesMut::reserve_inner                                                                                                              -      -
+     0.02%  [k] 0xffffffff8b410aed                                                                                                                                     -      -
+     0.02%  [.] 0x000000000000174a                                                                                                                                     -      -
+     0.02%  [.] __sched_yield                                                                                                                                          -      -
+     0.01%  [k] 0xffffffff8b8a4aaa                                                                                                                                     -      -
+     0.00%  [.] tokio::runtime::task::raw::schedule                                                                                                                    -      -
+     0.00%  [.] accept4                                                                                                                                                -      -
+     0.00%  [k] 0xffffffff8ac01630                                                                                                                                     -      -
+     0.00%  [.] tokio::runtime::io::scheduled_io::ScheduledIo::wake                                                                                                    -      -
+     0.00%  [.] epoll_wait                                                                                                                                             -      -
+     0.00%  [.] tokio::runtime::io::driver::Driver::turn                                                                                                               -      -
+     0.00%  [k] 0xffffffff8ac000f7                                                                                                                                     -      -
+
+
+#
+# (Tip: To compute metrics for samples use perf record -e '{cycles,instructions}' ... ; perf script -F +metric)
+#

@@ -806,3 +806,40 @@ connections also need descriptor capacity; the probe keeps one HTTP connection
 open before pressure. The [operating contract](operations.md#accepting-under-os-resource-pressure)
 and [ordinary performance comparison](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16)
 state the scope and measured costs.
+
+## Large-room broadcast scheduling and ownership, 2026-10-16
+
+A large-room probe now verifies every reader's full encoded body, sender and
+FIFO, a complete reader/message matrix, and exact controlled departure events.
+It keeps one private pair and eight reconnect workers active concurrently.
+A fake server corrupts a non-primary reader while keeping the primary transport
+open; the probe rejects the corruption. All real phases independently match
+native metric/byte totals, normal Close/EOF and final resource release.
+
+The old read quota counted only input frames, allowing up to 256 complete
+broadcasts in one connection turn. A deterministic regression preloads two
+masked messages for 300 recipients and fails before the scheduling fix. It now
+verifies one complete fanout before yielding, then the next complete fanout in
+FIFO order, with no queued-byte leak.
+
+Ordinary broadcasts without global channel observers now capture a shared
+recipient view and release the registry before output. Stable rooms reuse the
+same view; joining/leaving invalidates it. Tests acquire the write lock inside
+an output callback, verify view reuse/replacement and captured peer ownership,
+and keep the exact original 8 KiB body pointer and byte reservation through
+membership changes and final room destruction. The cache holds peer handles
+and no message values. Global broadcasts and observer paths keep their existing
+submission behavior.
+
+Thirty placement-controlled before/after processes plus six pure-private guards
+pass all checks. Source placement is verified from kernel socket ownership
+before traffic; setup-only rejects are retained separately. At 512 readers,
+reconnect p99 falls from 67.109 to 8.389 ms buckets. Fanout throughput falls
+about 3–6%, with private/admission progress improving substantially. Separate
+heap diagnostics measure 256 KiB extra channel metadata at 8,192 idle rooms
+and 4,144 bytes/two allocations for the warmed 513-member view. The
+[performance record](performance.md#large-room-fanout-fairness-2026-10-16)
+retains exact scopes, ranges, rejected experiments, allocation limits and the
+normal-placement reproduction command. These checks do not establish a hard
+time bound or the same improvement for global/observer traffic or frequent
+membership changes inside the busy room.

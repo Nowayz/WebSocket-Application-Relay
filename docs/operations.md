@@ -239,6 +239,24 @@ the optional migration bridge has its own bounded connections/messages and
 separate process memory. Use connection and message limits alongside these
 reservations and measure actual RSS on the intended deployment.
 
+Ordinary channel broadcasts without global channel observers capture a shared
+view of recipient handles under the registry lock, then release that lock before
+submitting output. Stable membership reuses the view; a join or departure
+invalidates it. The cache owns peer handles, never application values. In-flight
+views keep their captured owners valid across membership changes, and frames
+retain their own body storage and byte reservations.
+
+Those broadcasts also charge a native read turn for recipient slots visited,
+with a quota of 256. A large broadcast still completes against one coherent
+view before yielding; the next buffered message waits for another turn. This
+keeps payloads shared and sender FIFO intact while allowing other connections,
+admission and timers to run. It is a work quota, not a time deadline: a single
+broadcast may visit more than 256 peers. Global broadcasts and routes with
+global observers retain their existing submission path and frame quota; these
+changes do not establish the same fairness improvement for those cases.
+See the [large-room measurements](performance.md#large-room-fanout-fairness-2026-10-16)
+for latency, throughput and metadata costs.
+
 Native workers process at most 256 WebSocket frames per ready connection turn;
 the legacy bridge uses the same frame bound per stream poll. Long sequences of
 empty or small continuations yield and explicitly reschedule the reader,

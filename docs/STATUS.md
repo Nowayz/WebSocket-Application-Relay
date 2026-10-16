@@ -9,57 +9,63 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
-Implementation `a0191a1dc54ad8eb7dc17ada1df4aa39b40227ca` fixes a reproduced
-availability failure: descriptor exhaustion during accept previously ended a
-native worker and shut down the relay, and also terminated the legacy bridge.
-Both public ingresses now retry resource errors after one second while existing
-sessions continue. Native workers suspend listener readiness and explicitly
-drain queued flows after rearming; the bridge preserves tasks and cancellation.
-The singleton `war_accept_errors_total` counter exposes native failures. Message
-forwarding and shared body ownership remain unchanged.
+Runtime `b410571e769d9b0b70fa6f5517fc6576d898ef24` improves large-room
+broadcast fairness while preserving shared payloads. Ordinary channel broadcasts
+without global channel observers capture a reusable peer view, release the
+registry before output, and charge native read turns for recipient work.
+Each message finishes against one coherent view before yielding; membership
+changes invalidate the view. Global/observer routes retain their prior path.
+No application values enter the metadata cache.
 
-The same Linux probe fails all three cases on the preceding release and passes
-on the selected debug/release binaries: one native worker, four native workers
-and the bridge, each with a child-only 64-descriptor limit. Existing clients
-keep exact private replies; an already queued flow recovers after capacity is
-freed; pressure sockets retire; shutdown interrupts a second exhaustion wave.
-Selected queued-flow recovery is 0.398–0.400 seconds after capacity release and
-shutdown is 1.2–3.3 ms. These are finite local observations, with the
-[full scope](stability.md#accept-recovery-under-descriptor-pressure-2026-10-16)
-and [operating guidance](operations.md#accepting-under-os-resource-pressure).
-Linux CI includes the same probe; its debug command was exercised locally.
+Helper commit `c8b55d394c92c0f2bdf4f7bf5a299239397dbc53` adds verified fanout
+alongside private traffic and reconnects, plus independent client CPU sampling
+and server worker selection. A corruption test proves validation reaches a
+non-primary reader. Kernel socket ownership separates shared/separate source
+workers in 30 final before/after processes; 23 setup-only placement rejects are
+excluded before traffic. The initial quota-only candidate is rejected and
+retained as evidence. All accepted runs verify every body/sender/FIFO, the full
+reader/message matrix, exact departures, counters, normal Close/EOF and cleanup.
 
-Twelve sequential ordinary timing cases compare the same frozen client and
-before/selected binaries. Private throughput is +2.39% with −1.96% CPU per
-delivery. Mixed healthy/churn medians are +1.13%/+2.02%; aggregate mixed CPU per
-wall second is +1.03%. Latency buckets are unchanged. The
-[performance record](performance.md#accept-recovery-under-descriptor-pressure-2026-10-16)
-retains ranges and scope and makes no general speed or production capacity claim.
+With 512 readers, reconnect p99 improves from 67.109 to 8.389 ms buckets.
+Four-worker private throughput is 2,119 → 18,295 deliveries/s for shared sources,
+and 182,615 → 418,389 for separate sources. Fanout throughput decreases about
+3–6%. The no-broadcast private median is −1.50% with overlapping ranges;
+a six-process pure-private guard is +0.41%, and a six-process two-peer fanout
+guard is −0.32%, both with overlapping ranges and unchanged latency buckets.
+CPU rises where more independent work completes; no general CPU saving or
+production-capacity claim follows. The
+[performance record](performance.md#large-room-fanout-fairness-2026-10-16)
+retains full methods, ranges, costs and scope limits.
 
-Current verification passes 127 Rust tests, strict Clippy/format checks, release
-builds, seven JavaScript checks, 48 common C++ compatibility cases plus eight
-explicit differences, four release API checks and seven real Chrome checks.
-Separate socket checks verify 9,177,744 ordinary deliveries, 548,131 complete
-churn cycles across 4,096 source IPs, 208,152 healthy deliveries beside an unread
-recipient and 766,368 fanout deliveries. Every workload exits normally and
-resources clear. The stronger churn client requires exact Close acknowledgement
-and TCP EOF; the frozen mixed timing client has its own recorded contract.
-[Earlier stress validation is qualified](stability.md#churn-validation-correction-2026-10-16).
+Separate allocator diagnostics measure 256 KiB extra channel metadata at 8,192
+idle rooms, and 4,144 bytes/two allocations when the 513-member view is warmed.
+An old 8 KiB routed body retains its original pointer and byte reservation
+through view replacement, peer removal and final room destruction. Stable
+membership reuses its cached view. Three profiles have zero lost samples;
+all are separate from ordinary timing.
+
+Current verification passes 131 Rust tests, strict Clippy/format checks, release
+builds, 48 common C++ compatibility cases plus eight documented differences,
+seven JavaScript checks, four API checks and seven real Chrome checks.
+All three descriptor-pressure recovery cases still pass. Separate socket
+workloads verify 9,148,800 ordinary deliveries, 540,686 complete churn cycles
+across 4,096 source IPs, 208,477 healthy deliveries beside an unread recipient,
+and 737,424 mixed-size fanout deliveries, with complete cleanup and normal
+process exit. The probe’s 1,024-reader upper bound passes too. An admission-test
+assumption about parallel global/IP refusals was corrected while keeping exact
+total refusals, serial IP increments and global-first priority checks.
 
 The active branch is `codex/lean-core`. Native sockets use fixed Mio readiness
 workers, shared read storage and direct vectored writes; Tokio handles management,
-signals and the optional legacy bridge. Previous releases make shutdown terminal
-across management races, add optional direct-peer IP admission (disabled by
-default), compact sparse connection arenas and release large drained output
-queues. Their source, measurements and tradeoffs remain in historical reports.
-
-Local native/bridge services run the selected frozen binaries at ports
-1338/1337, management at 1339, and the browser check at 4180. Fresh Chrome
-acceptance verifies all seven checks, clean closes, zero retained resources and
-four native worker listeners. The
-[current manifest](benchmarks/2026-10-16-fd-pressure-build.json) binds source,
-binaries, clients, checks and all timed traces. This is local acceptance; no
-GitHub CI run or hosted deployment is claimed. The ongoing goal remains active.
+signals and the optional legacy bridge. Existing terminal shutdown, descriptor
+retry, optional IP admission and sparse metadata/queue retirement remain intact.
+Local native/bridge services run the selected frozen binaries on 1338/1337,
+management on 1339, and the browser check on 4180. Fresh Chrome acceptance passes
+all seven checks, with a clear console, zero retained resources and four native
+listeners. The [manifest](benchmarks/2026-10-16-fanout-view-build.json) binds the
+source, frozen clients, selected/rejected binaries, raw checks and diagnostics.
+These are local checks; no hosted deployment or GitHub CI execution is claimed.
+The ongoing goal remains active.
 
 ## Earlier implementation checkpoints
 

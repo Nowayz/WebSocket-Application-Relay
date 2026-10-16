@@ -201,6 +201,10 @@ recorded results and local dependency setup.
   registry lock, then releases that lock before output. Global listener indexes
   visit opted-in sessions for channel, private and departure events.
   Fanout shares one immutable application body across recipients.
+  Ordinary room broadcasts without global channel observers capture a reusable
+  view of peer handles and release the registry before output. Their read turns
+  account for recipient work and yield between complete messages. Membership
+  changes invalidate the view; application bodies never enter that cache.
 - SIGINT/SIGTERM stop admission and enforce a shutdown deadline. Responsive peers
   receive `1001`; blocked transports can be dropped. Peer-initiated Close frames
   receive their exact acknowledgement. Dropping the service signals its workers

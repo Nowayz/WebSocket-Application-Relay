@@ -3689,3 +3689,144 @@ source/binary/helper hashes, the counterfactual and selected fault checks,
 127 Rust tests, strict Clippy/format checks, release builds, all 12 timed traces
 and separate socket/C++/API/JavaScript/browser acceptance. Debug CI commands
 were exercised locally; no GitHub CI run or hosted deployment is claimed.
+
+## Large-room fanout fairness, 2026-10-16
+
+A frame-only read quota let one native connection submit up to 256 broadcasts
+before yielding. At 512 recipients this permits over 130,000 recipient visits
+in one turn. Broadcast output also retained the registry read lock, delaying
+admission and unrelated routing. The new
+[probe](../examples/inspection/fanout.rs) combines a fully verifying broadcast
+room, a private pair and eight reconnect workers. Its negative test corrupts
+the non-primary reader and is rejected. Every normal run checks the complete
+reader/message matrix, exact sender/body/FIFO, all controlled departure
+notifications, normal Close/EOF and independent metric/byte/resource totals.
+Client memory is bounded by readers, fixed templates and histograms.
+
+The [exploratory sweep](benchmarks/2026-10-16-fanout-fairness-baseline.json)
+covers 0/64/512 readers with one/four native workers. Separate
+[user-cycle profiles](benchmarks/2026-10-16-fanout-view-profiles.json) place most
+sampled work in submission/output, rather than CBOR parsing. A quota-only
+[candidate](benchmarks/2026-10-16-fanout-quantum-comparison.json) improved
+single-worker fairness but regressed four-worker private progress. It is
+rejected. Subsequent socket-owner diagnostics also show that sharing a native
+worker with the broadcast source matters; those exploratory timings are not
+used for the final before/after estimates.
+
+The selected implementation captures a shared recipient view for ordinary
+room broadcasts when there are no global channel observers, then releases the
+registry before output. Membership changes invalidate the cached peer handles;
+a stable room reuses its view. Native read turns charge recipient slots as
+well as frames, and yield between complete messages. One message still finishes
+against one coherent view, without moving or copying its application body.
+Global broadcasts and routes with global observers keep their existing path
+and frame quota. No equivalent fairness improvement is claimed for those cases.
+
+### Placement-controlled comparison
+
+The [final comparison](benchmarks/2026-10-16-fanout-view-comparison.json)
+runs 30 fresh processes: three alternating pairs for each recorded combination.
+At the verified ready gate, `/proc` TCP descriptors and epoll registrations map
+the frozen client's source sockets to native workers. The private source either
+shares the broadcaster's worker or uses another worker, as declared below.
+All stable sockets are accounted for. Twenty-three setup-only placement rejects
+are recorded locally and excluded before traffic starts; performance is never
+used for selection. Exact case/selection driver sources are embedded in the
+comparison record.
+
+Each case measures six seconds, one private pair, eight reconnect workers,
+1 KiB byte-string values and windows of 16. Server CPUs are 0–3; the same frozen
+four-thread client uses CPUs 4–7. Repetition rotates workload order and reverses
+implementation order. Baseline runtime is `a0191a1`; helper commit is `c8b55d3`.
+No builds, profiles or other load tests overlap ordinary timings. Latencies are
+logarithmic histogram bucket upper bounds, including client verification.
+
+| Workers / readers / source placement | Private deliveries/s, before → selected | Private p99 ms | Reconnect cycles/s, before → selected | Reconnect p99 ms | Fanout throughput change |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 / 512 / shared | 2,195 → 17,676 | 33.554 → 2.097 | 277 → 2,197 | 67.109 → 8.389 | −5.92% |
+| 4 / 512 / shared | 2,119 → 18,295 | 16.777 → 2.097 | 1,016 → 8,105 | 67.109 → 8.389 | −3.26% |
+| 4 / 512 / separate | 182,615 → 418,389 | 2.097 → 0.131 | 935 → 8,065 | 67.109 → 8.389 | −4.61% |
+| 4 / 64 / separate | 275,278 → 422,150 | 0.262 → 0.262 | 5,979 → 14,316 | 8.389 → 4.194 | −0.87% |
+| 4 / 0 / no broadcast | 366,673 → 361,181 | 0.131 → 0.131 | 72,090 → 72,131 | 0.524 → 0.524 | — |
+
+All distributions/ranges and both client/server CPU totals remain in the raw
+record. CPU per wall second rises where more independent work completes; in
+the four-worker/512-reader/separate case it is 0.852 → 1.252. These mixed costs
+are not assigned to individual delivery or reconnect operations. Client CPU in
+that case remains below its four-core allowance. The no-broadcast private
+median is −1.50% with overlapping ranges, and reconnect throughput is +0.06%.
+A separate [pure-private guard](benchmarks/2026-10-16-fanout-view-private-guard.json)
+keeps 8,192 idle rooms without churn: 583,181 → 585,552 deliveries/s (+0.41%),
+with overlapping ranges and unchanged 0.032768 ms p99 bucket.
+
+A separate [two-peer fanout guard](benchmarks/2026-10-16-fanout-view-small-room.json)
+uses one sender/one reader without private traffic or churn: 484,110 → 482,552
+deliveries/s (−0.32%), overlapping ranges, unchanged 0.065536 ms p99 bucket
+and median lifecycle CPU per delivery −0.12%. Its six fresh runs use the same
+frozen stress client; every body/FIFO and normal close is checked. A separate
+[upper-bound check](benchmarks/2026-10-16-fanout-view-upper-bound.json) verifies
+the probe’s 1,024-reader limit with private traffic/churn and controlled
+teardown. Neither guard changes the final controlled-cohort estimates.
+
+The selected result trades about 3–6% fanout throughput at 512 readers for much
+better admission and private progress. It does not establish a general CPU
+saving, hard latency deadline or production capacity. Timed churn uses separate
+one-member rooms, rather than membership churn inside the broadcast room.
+Frequent changes in a large active room rebuild its recipient metadata and
+need their own measurement.
+
+### Ownership and allocation cost
+
+Four separate [allocator diagnostics](benchmarks/2026-10-16-fanout-view-memory.json)
+use one native worker and the same frozen client with gperftools replacing the
+server allocator. At 8,192 idle rooms the extra inline channel field adds
+262,144 requested live bytes, with no extra live allocation objects. After the
+population retires, 4,096 extra bytes remain in the existing warm small channel
+table. This is metadata capacity, not queued or retained application data.
+
+For 512 readers plus their source, the small active channel table adds 64 bytes
+before traffic. Warming its recipient view adds exactly 4,144 bytes in two live
+allocations: 513 peer handles and the shared vector owner. Stable membership
+reuses that view; it is invalidated on join/departure. At measurement the total
+increase is 4,208 bytes; after retirement it returns to the table's 64-byte
+increment. Requested heap sizes are not RSS, and cumulative allocation totals
+have different traffic mixes, so they are retained without a per-message cost
+claim. Pure-private timed-gate RSS medians rise from 17.41 to 17.66 MiB.
+
+Tests acquire the registry write lock during output, reuse the same view,
+invalidate it on join/departure, retain captured peer identity, and retire its
+last owner. An already routed 8 KiB body keeps its original address through
+those changes and final channel destruction; its byte reservation lasts until
+the envelope drops. Another regression places two complete broadcasts in the
+decoder and proves that each reaches all 300 recipients in FIFO order before
+the next buffered message is processed on another turn. All 1 KiB timing
+workloads record zero routed-body compaction bytes. The existing small-view
+compaction policy remains for mixed-size storage reclamation.
+
+### Reproduction and release checks
+
+```sh
+cargo build --locked --release --bins --example inspection
+python3 scripts/inspection.py --workers 4 --rooms 0 --pairs 1 --seconds 6 \
+  --mode none --churn-workers 8 --fanout-readers 512 \
+  --output artifacts/fanout-fairness.json
+```
+
+This published workload uses normal kernel placement. Exact controlled cohorts
+use the case wrapper and driver embedded in the final comparison, with its
+recorded frozen binaries. The
+[checks](benchmarks/2026-10-16-fanout-view-checks.json) pass 131 Rust tests,
+strict Clippy/format checks and release builds. They retain the before-fix
+scheduling failure and an admission-fixture correction: parallel rejects can
+hit the documented global cap before the IP quota. The corrected fixture still
+requires all 32 physical refusals and exact total counters, then verifies a
+serial IP-counter increment and global-first priority at capacity.
+
+Separate socket stress, descriptor-pressure recovery, C++ compatibility,
+JavaScript/API checks and real Chrome acceptance are bound by the
+[manifest](benchmarks/2026-10-16-fanout-view-build.json). The selected release
+profile has 4,449 samples; the two earlier profiles have 3,863/5,199, all with
+zero lost samples. Raw captures remain local and normalized symbol reports are
+tracked. Profiles describe sampled active work, not off-CPU waiting, and are
+excluded from ordinary timings. All results are finite Linux loopback checks,
+without TLS or hosted acceptance.
