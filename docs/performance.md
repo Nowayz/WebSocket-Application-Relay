@@ -2307,3 +2307,118 @@ binds committed source, vendor files, test/helper sources, control and selected
 binaries, raw heaps, browser output and ordinary/experimental reports. The C++
 performance matrix was not repeated for this HTTP-only change. These remain
 finite local and loopback checks, with no TLS or production capacity claim.
+
+## HTTP response-buffer capacity (2026-10-16)
+
+Selected runtime `dced6e1` preserves the prior response schema and ordering.
+
+The before control is `8f7bdd2`, which already removes per-channel string
+allocations. Its pinned Axum 0.8.9 `Json` implementation starts a `BytesMut` at
+128 bytes and serializes through its writer. For the existing 770,198-byte
+channel-listing workload, the server-only allocation diagnostic identifies
+repeated growth as the next source of requested allocation traffic.
+
+The HTTP handler now starts the buffer at `128 * row_count + 2` bytes, using
+saturating arithmetic. This is an estimate for ordinary bounded-name rows,
+with a normal growth fallback for escaped names and large counters. The encoder
+still formats each row once, after the registry snapshot and sorting finish.
+It adds no sizing pass, shared scratch state or retained response cache. The
+completed buffer uses
+[`BytesMut::freeze`](https://docs.rs/bytes/1.12.1/bytes/struct.BytesMut.html#method.freeze)
+to transfer its storage to the HTTP body. Serialization failures keep the same
+HTTP 500/plain-text behavior as the previous handler. `serde_json`, already
+present through Axum and the development dependencies, is now a direct runtime
+dependency; `Cargo.lock` is unchanged.
+
+### Isolated request allocation
+
+The unchanged collector and frozen inspection client repeat the prior paused
+ready-gate diagnostic: 8,194 rows, one warmed request, then 20 authenticated
+requests between server-only heap captures. Every response is compared byte for
+byte, and the client independently checks every expected field, name and order.
+The complete WebSocket payload/FIFO, Close/EOF, counter and final-resource checks
+still pass. Diagnostic timing and RSS are excluded from ordinary comparisons.
+
+| Per request | Before | Selected |
+| --- | ---: | ---: |
+| Allocations | 62 | 50 |
+| Requested allocation bytes | 2,764,686 | 1,716,512 |
+| Live allocation change after the request batch | 0 | 0 |
+| Live requested-byte change after the request batch | 0 | 0 |
+
+This removes 12 allocations per request (19.4%) and 1,048,174 cumulative
+requested bytes (37.9%). Both versions produce the same 770,198-byte response,
+SHA-256 `4e05aa791fcb95e7823ebad8fcfd61fa6ee245c6791fa99bd78ced83aeb179c6`.
+The selected initial body allocation is 1,048,834 bytes. It has spare capacity;
+the requested-byte reduction comes from avoiding repeated growth, not from a
+smaller wire response or an exact-size allocation. Allocators can sometimes
+extend storage in place, so requested allocation bytes do not establish the
+number of bytes copied.
+
+The [allocation summary](benchmarks/2026-10-16-response-buffer-allocations.json)
+binds both full reports, raw captures and symbolized allocation stacks. Header
+totals match the symbolized sums. The collector, analyzer, library/environment,
+unchanged client/runner and server binaries are recorded by hash.
+
+### Ordinary workloads and tradeoffs
+
+The [comparison matrix](benchmarks/2026-10-16-response-buffer-comparison.json)
+contains 18 successful fresh-process cases: three repetitions of three workloads
+and two implementations. Workload order rotates and implementation order
+alternates. Both use four server workers on CPUs 0–3 and the unchanged client
+on CPUs 4–7. No build, profiler or other load test overlaps ordinary timing.
+One private pair sends verified 1 KiB values in windows of 16 for eight seconds.
+Private control holds 8,192 ordinary rooms. Large management adds eight reconnect
+workers and two HTTP inspectors at ten-millisecond intervals (200 requested
+listings/s). Small management uses 64 ordinary rooms with the same mixed work.
+
+| Median of three / large management | Before | Selected |
+| --- | ---: | ---: |
+| Healthy private deliveries/s | 315,691 | 326,882 |
+| Complete reconnect cycles/s | 59,637 | 60,597 |
+| Completed listings/s | 199.97 | 199.97 |
+| Listing p99 upper bucket | 8.388608 ms | 8.388608 ms |
+| Reconnect p99 upper bucket | 0.524288 ms | 0.524288 ms |
+| Delivery p99 upper bucket | 0.131072 ms | 0.131072 ms |
+| Server CPU seconds/wall second | 1.6385 | 1.6698 |
+| Event-gate server RSS | 17.58 MiB | 17.62 MiB |
+
+Large management delivers 3.5% more healthy private messages and completes 1.6%
+more reconnects, while total server CPU rises 1.9%. Both complete the requested
+listing rate; median listing, reconnect and delivery p99 buckets are unchanged.
+The healthy-throughput ranges are 310,203–321,734 before and 323,989–332,119 after.
+Churn ranges overlap. CPU includes all mixed work and is not an isolated
+serialization cost. The event-gate RSS does not establish a decrease or a memory
+cap, despite the reduction in cumulative allocation traffic.
+
+Private control is 562,833 versus 579,746 deliveries/s (+3.0%), with the same
+0.032768 ms p99 bucket. Small management is 348,699 versus 356,276 healthy
+deliveries/s (+2.2%) and 70,805 versus 70,934 reconnect cycles/s (+0.2%). Its
+median listing p99 bucket is 0.524288 versus 0.262144 ms, with overlapping per-run
+buckets; delivery and reconnect buckets are unchanged. The reports retain every
+case and range. These are whole selected-build measurements. The private control
+performs listing checks at quiescent gates outside its timed traffic; isolating
+code-layout or allocation-state effects would require a separate experiment.
+
+### Verification and reproducibility
+
+The [source checks](benchmarks/2026-10-16-response-buffer-checks.json) pass 100
+Linux Rust checks, strict Clippy, formatting and the locked release build. A new
+real HTTP/WebSocket fixture holds 32 distinct 16-byte control-character names.
+Its expected JSON occupies 6,278 bytes versus the initial 4,226-byte hint, so
+normal buffer growth is required. It verifies the entire response against the
+public snapshot API and checks every name, including the final row. The focused
+fixture also passes in a release build. Existing authentication, exact field
+order, binary/UTF-8, snapshot ownership and payload-sharing checks continue to
+pass.
+
+All ordinary comparisons and both allocation diagnostics verify complete
+payloads, sender IDs, FIFO ordering, every listing field, Close/EOF, exact
+counters and empty final resource gauges. The refreshed local runtime passes
+the seven [headed Chrome checks](benchmarks/2026-10-16-response-buffer-browser.json).
+Executable hashes, four native listener sockets, health/readiness, clean
+handoff/Close behavior and empty connection/staging/queue/variable gauges are
+verified. The [build manifest](benchmarks/2026-10-16-response-buffer-build.json)
+binds committed sources, vendor files, test/helper sources, frozen binaries,
+raw heaps and every report. These are finite Linux loopback checks with rates
+and heartbeat disabled, without TLS or a production capacity claim.

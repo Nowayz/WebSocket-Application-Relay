@@ -396,7 +396,10 @@ HTTP channel listings copy bounded names and numeric metadata into an owned
 snapshot under the registry read lock, then release the lock before base64
 encoding, sorting and JSON serialization. Each encoded name occupies at most
 24 inline bytes; the response avoids allocating separate strings for every row.
-The public Rust `Relay::channels()` API still returns owned strings. Listings
+The JSON buffer starts with an estimate based on row count and can grow for
+escaped names or large counters. Its storage transfers to the HTTP body without
+a second body copy. The public Rust `Relay::channels()` API still returns owned
+strings. Listings
 remain complete arrays sorted by `name_base64`; their output size and sorting
 work grow with the number of channels. See the
 [listing measurements](performance.md#http-channel-listing-allocation-2026-10-16)
