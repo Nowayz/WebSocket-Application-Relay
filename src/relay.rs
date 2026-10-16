@@ -164,10 +164,6 @@ impl Peer {
         true
     }
 
-    fn enqueue(&self, bytes: &Bytes) -> Result<(), Disconnect> {
-        self.enqueue_frame(&Frame::encoded(bytes.clone()))
-    }
-
     fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {
         if self.closing.load(Relaxed) {
             return Ok(());
@@ -461,7 +457,7 @@ impl Relay {
             }),
         });
         // Publish only after the welcome packet is first in this session's FIFO.
-        peer.enqueue(&protocol::uint(id))?;
+        peer.enqueue_frame(&Frame::integer(id))?;
         state.users.insert(id, peer.clone());
         state
             .channels
@@ -577,14 +573,7 @@ impl Relay {
                 if protocol::secret_matches(self.config.auth_password.as_deref(), password) {
                     peer.authenticated.store(true, Relaxed);
                 }
-                peer.enqueue(&protocol::reply(
-                    0,
-                    &[if peer.authenticated.load(Relaxed) {
-                        0xf5
-                    } else {
-                        0xf4
-                    }],
-                ))?;
+                peer.enqueue_frame(&Frame::reply_bool(0, peer.authenticated.load(Relaxed)))?;
             }
             Command::Listen(flags) => {
                 if !peer.authenticated.load(Relaxed) {
@@ -599,7 +588,7 @@ impl Relay {
                 } else {
                     peer.listener.store(flags & 7, Relaxed);
                 }
-                peer.enqueue(&protocol::reply(1, &protocol::uint(u64::from(flags & 7))))?;
+                peer.enqueue_frame(&Frame::reply_uint(1, u64::from(flags & 7)))?;
             }
             Command::Channels => {
                 if !peer.authenticated.load(Relaxed) {
@@ -607,7 +596,22 @@ impl Relay {
                 }
                 let mut channels = self.channel_members_snapshot();
                 channels.sort_unstable_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-                let mut e = Encoder::new(Vec::new());
+                // Names fit one-byte CBOR length headers; each entry adds an
+                // array header and its full-width member count. Size detached
+                // metadata after releasing the registry guard, then encode once.
+                let capacity = channels
+                    .iter()
+                    .try_fold(
+                        protocol::uint_len(channels.len() as u64),
+                        |size, (name, members)| {
+                            size.checked_add(
+                                name.as_bytes().len() + 2 + protocol::uint_len(*members as u64),
+                            )
+                        },
+                    )
+                    .filter(|&size| size <= isize::MAX as usize)
+                    .ok_or(Disconnect::OVERLOADED)?;
+                let mut e = Encoder::new(Vec::with_capacity(capacity));
                 e.array(channels.len() as u64).expect("Vec encoding");
                 for (name, members) in channels {
                     e.array(2)
@@ -615,7 +619,7 @@ impl Relay {
                         .and_then(|e| e.u64(members as u64))
                         .expect("Vec encoding");
                 }
-                peer.enqueue(&protocol::reply(2, &e.into_writer()))?;
+                peer.enqueue_frame(&Frame::reply(2, e.into_writer().into()))?;
             }
             Command::Assign(id) => {
                 if !peer.authenticated.load(Relaxed) {
@@ -644,7 +648,7 @@ impl Relay {
                     }
                     peer.id.store(id, Relaxed);
                 }
-                peer.enqueue(&protocol::reply(3, &protocol::uint(id)))?;
+                peer.enqueue_frame(&Frame::reply_uint(3, id))?;
             }
             Command::SetVariable { key, value } => {
                 let mut state = self.state.write();
@@ -675,18 +679,17 @@ impl Relay {
                     .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
                 channel.variable_bytes = next;
                 self.metrics.variable_bytes.store(total, Relaxed);
-                peer.enqueue(&protocol::reply(4, &[0xf5]))?;
+                peer.enqueue_frame(&Frame::reply_bool(4, true))?;
             }
             Command::GetVariable(key) => {
-                let state = self.state.read();
-                let value = state
+                let value = self
+                    .state
+                    .read()
                     .channels
                     .get(&peer.channel)
-                    .and_then(|c| c.variables.get(key));
-                let mut found = Vec::with_capacity(3 + value.map_or(1, Bytes::len));
-                found.extend_from_slice(&[0x82, if value.is_some() { 0xf5 } else { 0xf4 }]);
-                found.extend_from_slice(value.map_or(&[0xf6][..], Bytes::as_ref));
-                peer.enqueue(&protocol::reply(200, &found))?;
+                    .and_then(|c| c.variables.get(key))
+                    .cloned();
+                peer.enqueue_frame(&Frame::variable(value))?;
             }
         }
         Ok(())
@@ -710,10 +713,10 @@ impl Relay {
         peer.closing.store(true, Relaxed);
         let id = peer.id.load(Relaxed);
         let notify = !self.stopping.load(Relaxed);
-        let frame = notify.then(|| protocol::envelope(BROADCAST, &protocol::uint(id)));
+        let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
         if let Some(frame) = &frame {
             for recipient in channel.members.values() {
-                let _ = recipient.enqueue(frame);
+                let _ = recipient.enqueue_frame(frame);
             }
         }
         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
@@ -732,7 +735,7 @@ impl Relay {
         }
         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
             for recipient in state.listeners(DISCONNECT_MESSAGE) {
-                let _ = recipient.enqueue(frame.as_ref().expect("notifications enabled"));
+                let _ = recipient.enqueue_frame(frame.as_ref().expect("notifications enabled"));
             }
         }
         // A displaced session must never erase the new owner of its previous ID.
@@ -769,6 +772,46 @@ mod tests {
             auth_password: Some("test-password".into()),
             ..Config::default()
         }
+    }
+
+    #[test]
+    fn variable_reply_keeps_stored_bytes_after_replacement_and_channel_retirement() {
+        let relay = Relay::new(config()).unwrap();
+        let mut sub = relay.subscribe(b"variables").unwrap();
+        sub.outgoing.try_recv().unwrap();
+        let value = protocol::byte_string(&vec![0xa5; 32768]);
+        let mut input = b"\x82\x44body".to_vec();
+        input.extend_from_slice(&value);
+        relay
+            .receive(&sub.registration.peer, protocol::request(4, &input))
+            .unwrap();
+        sub.outgoing.try_recv().unwrap();
+        let pointer = relay.state.read().channels[b"variables".as_slice()].variables
+            [b"body".as_slice()]
+        .as_ptr();
+        relay
+            .receive(&sub.registration.peer, protocol::request(5, b"\x44body"))
+            .unwrap();
+        let held = sub.outgoing.try_recv().unwrap();
+        assert_eq!(held.frame.payload().as_ptr(), pointer);
+        assert_eq!(held.frame.payload(), value.as_ref());
+        assert_eq!(held.frame.prefix(), b"\x82\x00\x82\x18\xc8\x82\xf5");
+        relay
+            .receive(
+                &sub.registration.peer,
+                protocol::request(4, b"\x82\x44body\xf5"),
+            )
+            .unwrap();
+        sub.outgoing.try_recv().unwrap();
+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 5);
+        drop(sub);
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+        assert_eq!(held.frame.payload().as_ptr(), pointer);
+        assert_eq!(held.frame.payload(), value.as_ref());
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
+        drop(held);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     }
 
     #[test]
@@ -1071,7 +1114,7 @@ mod tests {
                 let expected = protocol::envelope(BROADCAST, &protocol::uint(id));
                 for survivor in [&mut source, &mut target] {
                     let departure = survivor.outgoing.try_recv().unwrap();
-                    assert_eq!(departure.frame.payload(), expected.as_ref());
+                    assert_eq!(departure.frame.to_vec(), expected.as_ref());
                 }
             }
             {
@@ -1199,10 +1242,7 @@ mod tests {
         relay
             .receive(&source.registration.peer, protocol::request(2, &[0xf6]))
             .unwrap();
-        assert_eq!(
-            source.outgoing.try_recv().unwrap().frame.payload(),
-            expected
-        );
+        assert_eq!(source.outgoing.try_recv().unwrap().frame.to_vec(), expected);
         assert_eq!(
             serde_json::to_value(relay.channels()).unwrap(),
             serde_json::json!([
@@ -1226,7 +1266,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            rejoined.outgoing.try_recv().unwrap().frame.payload(),
+            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),
             b"\x82\x00\x82\x18\xc8\x82\xf4\xf6"
         );
         drop(rejoined);
@@ -1239,7 +1279,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            rejoined.outgoing.try_recv().unwrap().frame.payload(),
+            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),
             b"\x82\x00\x82\x18\xc8\x82\xf5\x18\x2a"
         );
         drop(rejoined);

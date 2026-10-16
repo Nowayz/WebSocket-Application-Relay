@@ -125,7 +125,7 @@ fn joined_channel_names_share_canonical_storage_and_own_their_input() {
         let id = first.registration.peer.id.load(Relaxed);
         drop(first);
         assert_eq!(
-            second.outgoing.try_recv().unwrap().frame.payload(),
+            second.outgoing.try_recv().unwrap().frame.to_vec(),
             protocol::envelope(BROADCAST, &protocol::uint(id)).as_ref()
         );
         assert_eq!(second.registration.peer.channel.as_ref(), name);
@@ -171,7 +171,7 @@ fn recreated_channels_have_fresh_variables_while_old_name_views_remain_valid() {
         )
         .unwrap();
     assert_eq!(
-        next.outgoing.try_recv().unwrap().frame.payload(),
+        next.outgoing.try_recv().unwrap().frame.to_vec(),
         protocol::reply(200, &[0x82, 0xf4, 0xf6]).as_ref()
     );
     assert_eq!(retained_name.as_ref(), name);

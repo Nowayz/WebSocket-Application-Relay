@@ -150,6 +150,17 @@ pub fn envelope(sender: u64, value: &[u8]) -> Bytes {
     bytes.into()
 }
 
+/// Definite array headers use the same argument width as unsigned integers.
+pub(crate) fn uint_len(value: u64) -> usize {
+    match value {
+        0..=23 => 1,
+        24..=255 => 2,
+        256..=65_535 => 3,
+        65_536..=4_294_967_295 => 5,
+        _ => 9,
+    }
+}
+
 pub fn uint(value: u64) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(9));
     e.u64(value).expect("Vec encoding");
@@ -240,6 +251,28 @@ pub fn command(bytes: &[u8]) -> Result<Command<'_>, Disconnect> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integer_and_array_header_sizes_match_the_encoder_at_every_width_boundary() {
+        for value in [
+            0,
+            1,
+            23,
+            24,
+            255,
+            256,
+            65_535,
+            65_536,
+            u32::MAX as u64,
+            u32::MAX as u64 + 1,
+            u64::MAX,
+        ] {
+            assert_eq!(uint_len(value), uint(value).len());
+            let mut e = Encoder::new(Vec::new());
+            e.array(value).unwrap();
+            assert_eq!(uint_len(value), e.into_writer().len());
+        }
+    }
 
     #[test]
     fn independent_known_cbor_vectors_and_full_width_ids() {

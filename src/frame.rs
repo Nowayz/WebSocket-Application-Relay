@@ -13,12 +13,80 @@ pub(crate) struct Frame {
 }
 
 impl Frame {
-    pub(crate) fn encoded(payload: Bytes) -> Self {
+    fn encoded(payload: Bytes) -> Self {
         Self {
             prefix: [0; 10],
             prefix_len: 0,
             payload,
         }
+    }
+
+    fn prefixed(payload: Bytes, encode: impl FnOnce(&mut Encoder<Cursor<&mut [u8]>>)) -> Self {
+        let mut frame = Self::encoded(payload);
+        let mut encoder = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));
+        encode(&mut encoder);
+        frame.prefix_len = encoder.writer().position() as u8;
+        frame
+    }
+
+    /// Welcome IDs fit completely in the existing inline prefix.
+    pub(crate) fn integer(value: u64) -> Self {
+        Self::prefixed(Bytes::new(), |e| {
+            e.u64(value).expect("uint64 fits in nine bytes");
+        })
+    }
+
+    /// Wrap an already encoded value without copying its body.
+    pub(crate) fn envelope(sender: u64, value: Bytes) -> Self {
+        Self::prefixed(value, |e| {
+            e.array(2)
+                .and_then(|e| e.u64(sender))
+                .expect("array and uint64 fit in ten bytes");
+        })
+    }
+
+    pub(crate) fn reply(op: u8, value: Bytes) -> Self {
+        Self::prefixed(value, |e| {
+            e.array(2)
+                .and_then(|e| e.u8(0))
+                .and_then(|e| e.array(2))
+                .and_then(|e| e.u8(op))
+                .expect("control prefix fits in five bytes");
+        })
+    }
+
+    pub(crate) fn reply_bool(op: u8, value: bool) -> Self {
+        Self::reply(
+            op,
+            Bytes::from_static(if value { b"\xf5" } else { b"\xf4" }),
+        )
+    }
+
+    pub(crate) fn reply_uint(op: u8, value: u64) -> Self {
+        if value > u64::from(u32::MAX) {
+            return Self::reply(op, crate::protocol::uint(value));
+        }
+        // The longest control prefix plus uint32 is exactly ten bytes.
+        let mut frame = Self::reply(op, Bytes::new());
+        let mut e = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));
+        e.writer_mut().set_position(usize::from(frame.prefix_len));
+        e.u64(value)
+            .expect("control prefix and uint32 fit in ten bytes");
+        frame.prefix_len = e.writer().position() as u8;
+        frame
+    }
+
+    pub(crate) fn variable(value: Option<Bytes>) -> Self {
+        let found = value.is_some();
+        Self::prefixed(value.unwrap_or_else(|| Bytes::from_static(b"\xf6")), |e| {
+            e.array(2)
+                .and_then(|e| e.u8(0))
+                .and_then(|e| e.array(2))
+                .and_then(|e| e.u8(200))
+                .and_then(|e| e.array(2))
+                .and_then(|e| e.bool(found))
+                .expect("variable prefix fits in seven bytes");
+        })
     }
 
     /// `value_start` comes from validation of this complete CBOR envelope.
@@ -32,13 +100,7 @@ impl Frame {
             input.advance(value_start);
             input
         };
-        let mut frame = Self::encoded(payload);
-        let mut e = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));
-        e.array(2)
-            .and_then(|e| e.u64(sender))
-            .expect("ten bytes fit an array and uint64");
-        frame.prefix_len = e.writer().position() as u8;
-        frame
+        Self::envelope(sender, payload)
     }
 
     pub(crate) fn prefix(&self) -> &[u8] {
@@ -52,12 +114,84 @@ impl Frame {
     pub(crate) fn len(&self) -> usize {
         usize::from(self.prefix_len) + self.payload.len()
     }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> Vec<u8> {
+        [self.prefix(), self.payload()].concat()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol;
+
+    #[test]
+    fn scalar_control_frames_match_known_vectors_and_every_integer_width() {
+        for value in [
+            0,
+            23,
+            24,
+            255,
+            256,
+            65535,
+            65536,
+            u32::MAX as u64,
+            u32::MAX as u64 + 1,
+            u64::MAX,
+        ] {
+            let welcome = Frame::integer(value);
+            assert_eq!(welcome.to_vec(), protocol::uint(value));
+            assert!(welcome.payload().is_empty());
+            for op in [0, 1, 3, 23, 24, 200, 255] {
+                let frame = Frame::reply_uint(op, value);
+                assert_eq!(frame.to_vec(), protocol::reply(op, &protocol::uint(value)));
+                assert_eq!(frame.len(), frame.to_vec().len());
+                assert!(frame.prefix().len() <= 10);
+                assert_eq!(frame.payload().is_empty(), value <= u32::MAX as u64);
+                for flag in [false, true] {
+                    assert_eq!(
+                        Frame::reply_bool(op, flag).to_vec(),
+                        protocol::reply(op, &[if flag { 0xf5 } else { 0xf4 }])
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            Frame::integer(u64::MAX).to_vec(),
+            b"\x1b\xff\xff\xff\xff\xff\xff\xff\xff"
+        );
+        assert_eq!(
+            Frame::reply_uint(200, u32::MAX as u64).to_vec(),
+            b"\x82\x00\x82\x18\xc8\x1a\xff\xff\xff\xff"
+        );
+        assert_eq!(Frame::reply_bool(4, true).to_vec(), b"\x82\x00\x82\x04\xf5");
+    }
+
+    #[test]
+    fn variable_replies_preserve_opaque_values_and_missing_is_distinct_from_null() {
+        assert_eq!(
+            Frame::variable(None).to_vec(),
+            b"\x82\x00\x82\x18\xc8\x82\xf4\xf6"
+        );
+        for value in [
+            &b"\xf6"[..],
+            &b"\x40"[..],
+            &b"\x60"[..],
+            &b"\x18\x01"[..],
+            &b"\xd8\x20\xa1\x61k\x43\x00\xff\x01"[..],
+        ] {
+            let bytes = Bytes::copy_from_slice(value);
+            let pointer = bytes.as_ptr();
+            let frame = Frame::variable(Some(bytes));
+            assert_eq!(frame.payload().as_ptr(), pointer);
+            assert_eq!(frame.prefix(), b"\x82\x00\x82\x18\xc8\x82\xf5");
+            assert_eq!(frame.payload(), value);
+            let mut expected = b"\x82\x00\x82\x18\xc8\x82\xf5".to_vec();
+            expected.extend_from_slice(value);
+            assert_eq!(frame.to_vec(), expected);
+        }
+    }
 
     #[test]
     fn routed_owned_views_preserve_aliases_and_survive_original_owner_retirement() {
