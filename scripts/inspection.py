@@ -125,6 +125,12 @@ def run(args):
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
               "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "passed": False,
               "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic 1KiB templates and 16-message windows; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
+    if args.heap_profile:
+        result["heap_profiler"] = {"library": str(args.heap_library.resolve()),
+                                   "library_sha256": digest(args.heap_library),
+                                   "environment": {key: value for key, value in server_environment.items()
+                                                   if key == "LD_PRELOAD" or key.startswith("HEAP")},
+                                   "scope": "Server allocator replaced by gperftools. Requested live allocations only; profile timing and RSS are diagnostic and excluded from ordinary comparisons."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
         server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)

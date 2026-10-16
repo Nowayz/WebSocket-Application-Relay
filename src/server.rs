@@ -372,6 +372,14 @@ impl Worker {
                         }
                         if self.connections.is_empty() {
                             self.scratch = ReadStorage::default();
+                            // Retain small arenas for churn. A large population
+                            // wave must not leave megabytes of empty connection
+                            // records and timer indices on an idle worker.
+                            if self.connections.capacity() > 256 {
+                                self.connections = Slab::new();
+                                self.tokens = HashMap::new();
+                                self.timers = Timers::default();
+                            }
                         }
                     }
                     Drive::Wait | Drive::Again => {
