@@ -1,4 +1,4 @@
-//! Asynchronous HTTP-upgrade and Close helpers for the migration bridge.
+//! Transport admission and asynchronous HTTP-upgrade/Close helpers.
 use std::{
     io::{self, IoSlice},
     pin::Pin,
@@ -20,6 +20,19 @@ use tokio_util::sync::CancellationToken;
 // Bound fragment parsing in the asynchronous migration bridge.
 pub(crate) const READ_FRAMES_PER_POLL: std::num::NonZeroUsize =
     std::num::NonZeroUsize::new(256).unwrap();
+
+/// Retry failed incoming flows immediately. Other accept failures, including
+/// descriptor/socket-buffer pressure, wait without blocking established peers.
+/// This follows the same portable policy as axum's management listener.
+pub(crate) fn accept_retry_delay(error: &io::Error) -> Duration {
+    match error.kind() {
+        io::ErrorKind::Interrupted
+        | io::ErrorKind::ConnectionRefused
+        | io::ErrorKind::ConnectionAborted
+        | io::ErrorKind::ConnectionReset => Duration::ZERO,
+        _ => Duration::from_secs(1),
+    }
+}
 
 /// Bound the raw HTTP upgrade without parsing or copying it a second time.
 /// After upgrade, reads and all vectored writes delegate directly to the socket.

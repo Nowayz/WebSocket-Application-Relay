@@ -11,6 +11,7 @@ use tokio_tungstenite::tungstenite::protocol::ReadBudget;
 pub struct Metrics {
     pub read_budget: Option<Arc<ReadBudget>>,
     pub accepted: AtomicU64,
+    pub accept_errors: AtomicU64,
     pub rejected: AtomicU64,
     pub handshake_errors: AtomicU64,
     pub joined: AtomicU64,
@@ -82,6 +83,11 @@ impl Metrics {
             .expect("String write");
         }
         for (name, value, help) in [
+            (
+                "accept_errors_total",
+                self.accept_errors.load(Relaxed),
+                "Native listener accept failures excluding WouldBlock and Interrupted; admission retries while established connections continue.",
+            ),
             (
                 "ip_rejected_total",
                 self.ip_rejected.load(Relaxed),

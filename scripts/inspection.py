@@ -62,6 +62,8 @@ def metrics(port):
 
 def check(event, stable_sessions, stable_channels, read_storage="worker", workers=4):
     observed, counts = event["metrics"], event["details"]["counts"]
+    # Older frozen binaries predate the listener-retry counter.
+    assert observed.get("war_accept_errors_total", 0) == 0
     expected = {"war_accepted_total": counts["joins"], "war_joined_total": counts["joins"],
                 "war_disconnected_total": counts["normal_closes"],
                 "war_incoming_messages_total": counts["sent_messages"],

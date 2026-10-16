@@ -206,13 +206,33 @@ pub async fn serve_with_limits(
     let origin_policy = Arc::new(origin_policy);
     let ip_limit = crate::admission::IpLimit::new(max_connections_per_ip);
     let mut tasks = JoinSet::new();
+    let mut accept_retry = None;
     loop {
         tokio::select! {
             biased;
             _ = shutdown.cancelled() => break,
             _ = tasks.join_next(), if !tasks.is_empty() => {},
-            incoming = listener.accept() => {
-                let (socket, address) = incoming?;
+            incoming = async {
+                if let Some(deadline) = accept_retry {
+                    tokio::time::sleep_until(deadline).await;
+                }
+                listener.accept().await
+            } => {
+                let (socket, address) = match incoming {
+                    Ok(incoming) => {
+                        accept_retry = None;
+                        incoming
+                    }
+                    Err(error) => {
+                        let delay = transport::accept_retry_delay(&error);
+                        accept_retry = (!delay.is_zero())
+                            .then(|| tokio::time::Instant::now() + delay);
+                        if !delay.is_zero() {
+                            tracing::warn!(%error, "legacy accept failed; retrying in one second");
+                        }
+                        continue;
+                    }
+                };
                 let Ok(permit) = slots.clone().try_acquire_owned() else { continue; };
                 let ip_permit = if let Some(limit) = &ip_limit {
                     let Some(permit) = limit.acquire(address.ip()) else { continue; };

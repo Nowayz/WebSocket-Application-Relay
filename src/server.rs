@@ -206,6 +206,7 @@ struct Worker {
     timers: Timers,
     scratch: ReadStorage,
     compacted: bool,
+    accept_retry: Option<Instant>,
 }
 
 impl Drop for Worker {
@@ -240,6 +241,7 @@ impl Worker {
             timers: Timers::default(),
             scratch: ReadStorage::default(),
             compacted: false,
+            accept_retry: None,
         })
     }
 
@@ -257,11 +259,27 @@ impl Worker {
     }
 
     fn accept(&mut self) -> io::Result<()> {
+        if self.accept_retry.is_some() {
+            return Ok(());
+        }
         for _ in 0..ACCEPT_QUANTUM {
             let (mut stream, address) = match self.listener.accept() {
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                accepted => accepted?,
+                Err(error) => {
+                    self.relay.metrics.accept_errors.fetch_add(1, Relaxed);
+                    let delay = crate::transport::accept_retry_delay(&error);
+                    if delay.is_zero() {
+                        continue;
+                    }
+                    // Stop readiness notifications during resource pressure.
+                    // Existing sockets, timers and shutdown remain serviced.
+                    self.registry.deregister(&mut self.listener)?;
+                    self.accept_retry = Some(Instant::now() + delay);
+                    tracing::warn!(%error, "native accept failed; retrying in one second");
+                    return Ok(());
+                }
+                Ok(accepted) => accepted,
             };
             let metrics = &self.relay.metrics;
             metrics.accepted.fetch_add(1, Relaxed);
@@ -360,7 +378,9 @@ impl Worker {
         let mut shutdown_deadline = None;
         loop {
             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
-                self.registry.deregister(&mut self.listener)?;
+                if self.accept_retry.take().is_none() {
+                    self.registry.deregister(&mut self.listener)?;
+                }
                 shutdown_deadline = Some(
                     Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
                 );
@@ -377,6 +397,13 @@ impl Worker {
                 break;
             }
             let now = Instant::now();
+            if self.accept_retry.is_some_and(|deadline| deadline <= now) {
+                self.accept_retry = None;
+                self.registry
+                    .register(&mut self.listener, LISTENER, Interest::READABLE)?;
+                // Drain an already queued flow even without a fresh edge.
+                self.accept()?;
+            }
             while let Some(slot) = self.timers.pop_due(now) {
                 if let Some(connection) = self.connections.get(slot) {
                     self.schedule(connection.token);
@@ -445,7 +472,7 @@ impl Worker {
             }
             let now = Instant::now();
             let mut timeout = self.timers.next().map(|d| d.saturating_duration_since(now));
-            if let Some(deadline) = shutdown_deadline {
+            for deadline in [shutdown_deadline, self.accept_retry].into_iter().flatten() {
                 timeout = Some(
                     timeout.map_or(deadline.saturating_duration_since(now), |t| {
                         t.min(deadline.saturating_duration_since(now))
