@@ -98,6 +98,15 @@ for every possible scheduling or network condition.
 
 ## Explicit behavioral improvements
 
+The separate [performance comparison](performance.md#direct-c-comparison-2026-10-16)
+records that the preserved executable has one working listener in this
+environment. A rebuilt four-worker source configuration binds all listeners,
+but short concurrent churn checks expose a repeated welcome ID, self-delivery
+mismatch and timeout. Those diagnostics are recorded separately from the
+48-case compatibility suite below; they do not have successful throughput
+results. The [diagnostic record](benchmarks/2026-10-16-cpp-rebuilt-churn-diagnostics.json)
+includes the exact configuration, client logs and source hashes.
+
 The harness separately asserts eight difference cases. These are existing Rust
 behaviors, now checked against an actual C++ process:
 

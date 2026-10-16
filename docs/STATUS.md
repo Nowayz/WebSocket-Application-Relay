@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 85 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 86 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -642,6 +642,84 @@ and application-idle Close disabled for manual use. The
 Large active inspection/lock contention, unpaced departure, long duration,
 TLS/proxies and clusters remain unmeasured. The ongoing goal stays active.
 
+## Latest checkpoint: concurrent inspection, 2026-10-16
+
+Channel inspection now captures coherent bounded names and numeric metadata
+under the registry read lock, then releases it before formatting, sorting,
+encoding and enqueueing. CBOR captures only names/member counts; HTTP also
+captures variable usage. Inline names avoid per-name reference counts. No peers,
+variable values or application bodies enter the snapshot, and normal forwarding
+adds no work or allocation. A regression proves the registry remains writable,
+metadata stays stable through mutation/final destruction and a held routed body
+keeps its original pointer/reservation until drop.
+
+The final eighteen fresh-process cases keep 8,192 single-member rooms alongside
+two private pairs and eight reconnect workers. Optional CBOR/HTTP inspectors
+complete exactly 200 full queries/s. Every name, count, metadata field, ordering,
+application frame, normal Close/EOF and aggregate count/byte total is checked.
+All 71,136,608 healthy deliveries, 6,832,194 reconnect lifecycles, 19,200 timed
+inspections and 6,979,734 normal closes pass, with zero routed-body compaction,
+complete resource release and service/client exit zero.
+
+CBOR-case healthy throughput improves 6.98%, reconnect throughput 6.34%; HTTP
+improves 17.68%/10.66%. Healthy p99 upper buckets improve 0.262144→0.131072 ms
+for CBOR and 1.048576→0.262144 ms for HTTP; reconnect HTTP p99 halves. HTTP-case
+healthy p50 worsens one bucket, and total CPU rises with more completed work.
+No-inspection throughput ranges overlap with matching p99 buckets. The first
+shared-name prototype and diagnostic profiles remain separate from the final
+compact representation. Full methods, tradeoffs and raw evidence are in
+[performance.md](performance.md#concurrent-channel-inspection-2026-10-16).
+
+Twenty-four ordinary guard cases pass. The first 64 KiB guard shows a worse
+p99 bucket, −4.18% throughput and +2.47% CPU per delivery. A separate identical
+six-case follow-up changes direction (+3.99%/−2.88%) and matches p99 buckets;
+both original and follow-up remain recorded. These short runs do not establish
+a consistent ordinary large-message effect. Inspection-specific benefits and
+their latency/CPU tradeoffs remain the supported result.
+
+A direct comparison now uses the original shipped C++ executable and a separate
+four-worker source build. The shipped artifact has 31 failed listener binds
+and one active loop here; one-core matched results are 742,524 versus 583,047
+private deliveries/s for C++/Rust. The rebuilt C++ uses upstream optimization
+flags/current system libraries, with only the worker-count expression changed
+in a temporary source copy. Four listener sockets/six threads are verified in
+every fresh process. Three repetitions yield 1,110,733 versus 615,940 private
+deliveries/s, 1,074 versus 1,449 CPU ns/delivery, and 20.49 versus 101.10 MiB
+ready RSS at roughly 8,200 sockets. C++ retains a clear forwarding/memory
+advantage in this workload. Query-case medians are 686,055 versus 630,576;
+C++ varies from 681,759 to 1,085,770, which remains explicit in the record.
+
+The rebuilt four-worker C++ churn case fails three diagnostic checks: timeout,
+self-delivery mismatch and repeated welcome ID before its first GC. Those
+failures have no valid throughput result. Successful single-listener churn
+results remain distinct from multicore source behavior. The twelve successful
+rebuilt/Rust cases verify 76,130,992 healthy deliveries, 9,600 timed inspections
+and 98,376 normal closes. The preserved-binary one/four-core-allowance matrices
+add 36 passing cases. This compares complete binary/CBOR implementations and
+their recorded build configurations, rather than isolating language overhead.
+See the [rebuilt comparison](performance.md#rebuilt-four-worker-c-source).
+
+All 86 Rust tests, all 29 release library tests, strict Clippy/formatting,
+62-file vendor verification, seven JS socket cases, the 776-case/2,311-exchange
+release corpus and the 48-common/eight-difference original-runtime comparison
+pass. The latest HTTP workload client smoke also passes after adding native
+protocol adapters and diagnostic ID tracking. Audited fault runs are separate
+from normal performance timings.
+
+Quiescent prior manual services exited zero. Updated native/legacy services
+pass the 1,024-room wave with 65 typed deliveries, 1,029 clean closes and no
+extra body copies; default decoder retirement takes 5.022 seconds. Fresh Chrome
+passes all seven browser checks, and the three named live legacy/Close cases
+pass. Health/readiness/browser return 200 and final resources/errors clear.
+Native SHA begins `2c6f670c1215`; bridge begins `d1187db67980`. Endpoints remain
+native `ws://127.0.0.1:1338`, legacy `ws://127.0.0.1:1337`, management
+`http://127.0.0.1:1339` and browser `http://127.0.0.1:4180/`, with unrestricted
+Origin and application idle expiry disabled for manual use. The
+[summary](benchmarks/2026-10-16-inspection-summary.json),
+[manifest](benchmarks/2026-10-16-inspection-build.json) and
+[live record](benchmarks/2026-10-16-inspection-live.json) bind the checkpoint.
+The continuing improvement goal remains active.
+
 ## Next useful iterations
 
 1. Extend the independent original-runtime comparison when routing, listener,
@@ -649,15 +727,20 @@ TLS/proxies and clusters remain unmeasured. The ongoing goal stays active.
    eight explicit difference checks now have real C++ wire evidence; longer
    scheduling windows, adverse networks and its garbage-collection cycle remain
    outside that finite comparison.
-2. Profile the remaining small-message CPU cost before changing counters, queue
-   representation, or read storage. Current profiles still show signal/waker
+2. Profile private-forwarding CPU and idle-connection allocations against the
+   direct C++ result before changing counters, queue representation or read
+   storage. At this workload the Rust body remains shared, but the complete
+   native release has higher CPU per delivery and about five times the ready
+   RSS. Current profiles still show signal/waker
    polling; avoid a broad event-loop rewrite without a measured whole-socket win.
    The ID ownership map now shrinks after substantial retirement, with measured
    global-routing recovery after large population waves. Membership indexes now
    have ordinary-room and global-index private-delivery measurements. Channel-name
-   queries after temporary-room waves are now measured too; large active
-   inspection snapshots, sorting/encoding under the registry lock and their
-   effects on concurrent traffic remain unmeasured.
+   queries after temporary-room waves and full inspection at 8,192 stable rooms
+   with concurrent traffic/churn are now measured too. Inspection captures
+   bounded metadata under the lock and sorts/encodes after release. Larger
+   populations, higher inspection rates and snapshot/output allocation costs
+   remain useful measurements before adding pagination, caching or sharding.
    Concurrent retention, staging pressure and delayed storage reclamation now
    cover up to 64 producers plus independent healthy traffic across repeated
    waves. Process-wide reservations precede decoder allocations and cover

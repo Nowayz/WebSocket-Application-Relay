@@ -191,6 +191,37 @@ pub struct ChannelInfo {
     pub variable_bytes: usize,
 }
 
+/// Registry names are bounded to 16 bytes. Inline inspection names hold small
+/// metadata without per-name allocation or reference-count traffic.
+struct SnapshotName {
+    bytes: [u8; 16],
+    len: u8,
+}
+
+impl SnapshotName {
+    fn new(name: &[u8]) -> Self {
+        let mut bytes = [0; 16];
+        bytes[..name.len()].copy_from_slice(name);
+        Self {
+            bytes,
+            len: name.len() as u8,
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..usize::from(self.len)]
+    }
+}
+
+/// One coherent view owns only small names and numeric metadata. It keeps no
+/// registry guard, peer or variable value alive while inspection formats output.
+struct ChannelSnapshot {
+    name: SnapshotName,
+    members: usize,
+    variables: usize,
+    variable_bytes: usize,
+}
+
 impl Relay {
     pub fn new(config: Config) -> Result<Arc<Self>> {
         config.validate()?;
@@ -230,16 +261,40 @@ impl Relay {
         self.stopping.store(true, Relaxed);
     }
 
-    pub fn channels(&self) -> Vec<ChannelInfo> {
+    fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
         let state = self.state.read();
-        let mut channels: Vec<_> = state
+        state
             .channels
             .iter()
-            .map(|(name, channel)| ChannelInfo {
-                name: std::str::from_utf8(name).ok().map(str::to_owned),
-                name_base64: STANDARD.encode(name),
+            .map(|(name, channel)| ChannelSnapshot {
+                name: SnapshotName::new(name),
                 members: channel.members.len(),
                 variables: channel.variables.len(),
+                variable_bytes: channel.variable_bytes,
+            })
+            .collect()
+    }
+
+    fn channel_members_snapshot(&self) -> Vec<(SnapshotName, usize)> {
+        let state = self.state.read();
+        state
+            .channels
+            .iter()
+            .map(|(name, channel)| (SnapshotName::new(name), channel.members.len()))
+            .collect()
+    }
+
+    pub fn channels(&self) -> Vec<ChannelInfo> {
+        let mut channels: Vec<_> = self
+            .channel_snapshot()
+            .into_iter()
+            .map(|channel| ChannelInfo {
+                name: std::str::from_utf8(channel.name.as_bytes())
+                    .ok()
+                    .map(str::to_owned),
+                name_base64: STANDARD.encode(channel.name.as_bytes()),
+                members: channel.members,
+                variables: channel.variables,
                 variable_bytes: channel.variable_bytes,
             })
             .collect();
@@ -432,15 +487,14 @@ impl Relay {
                 if !peer.authenticated.load(Relaxed) {
                     return self.unauthorized();
                 }
-                let state = self.state.read();
-                let mut channels: Vec<_> = state.channels.iter().collect();
-                channels.sort_unstable_by(|a, b| a.0.cmp(b.0));
+                let mut channels = self.channel_members_snapshot();
+                channels.sort_unstable_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
                 let mut e = Encoder::new(Vec::new());
                 e.array(channels.len() as u64).expect("Vec encoding");
-                for (name, channel) in channels {
+                for (name, members) in channels {
                     e.array(2)
-                        .and_then(|e| e.bytes(name))
-                        .and_then(|e| e.u64(channel.members.len() as u64))
+                        .and_then(|e| e.bytes(name.as_bytes()))
+                        .and_then(|e| e.u64(members as u64))
                         .expect("Vec encoding");
                 }
                 peer.enqueue(&protocol::reply(2, &e.into_writer()))?;
@@ -1074,6 +1128,104 @@ mod tests {
         drop(rejoined);
         assert_eq!(relay.counts(), (0, 1));
         assert_eq!(held.frame.payload().as_ptr(), pointer);
+        assert_eq!(held.frame.payload(), value.as_ref());
+        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
+        drop(held);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn channel_snapshots_own_metadata_and_leave_the_registry_writable() {
+        let relay = Relay::new(config()).unwrap();
+        let name = b"\xff\0".as_slice();
+        let mut source = relay.subscribe(name).unwrap();
+        let mut target = relay.subscribe(name).unwrap();
+        source.outgoing.try_recv().unwrap();
+        target.outgoing.try_recv().unwrap();
+        relay
+            .receive(
+                &source.registration.peer,
+                protocol::request(4, b"\x82\x45ready\xf5"),
+            )
+            .unwrap();
+        source.outgoing.try_recv().unwrap();
+        let name_pointer = relay
+            .state
+            .read()
+            .channels
+            .get_key_value(name)
+            .unwrap()
+            .0
+            .as_ptr();
+        let peer = Arc::downgrade(&source.registration.peer);
+        let value = protocol::byte_string(&[0x5a; 8192]);
+        let input = protocol::envelope(target.registration.peer.id.load(Relaxed), &value);
+        let body_pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        relay.receive(&source.registration.peer, input).unwrap();
+        let held = target.outgoing.try_recv().unwrap();
+
+        let snapshot = relay.channel_snapshot();
+        assert!(
+            relay.state.try_write().is_some(),
+            "snapshot retained the guard"
+        );
+        let captured = snapshot.iter().find(|c| c.name.as_bytes() == name).unwrap();
+        assert_ne!(captured.name.as_bytes().as_ptr(), name_pointer);
+        let members = relay.channel_members_snapshot();
+        assert!(relay.state.try_write().is_some());
+        assert_eq!(
+            members.iter().find(|c| c.0.as_bytes() == name).unwrap().1,
+            2
+        );
+        assert_eq!(
+            (
+                captured.members,
+                captured.variables,
+                captured.variable_bytes
+            ),
+            (2, 1, 6)
+        );
+        let mut joined = relay.subscribe(name).unwrap();
+        joined.outgoing.try_recv().unwrap();
+        relay
+            .receive(
+                &joined.registration.peer,
+                protocol::request(4, b"\x82\x45ready\x18\x2a"),
+            )
+            .unwrap();
+        joined.outgoing.try_recv().unwrap();
+        assert_eq!(
+            relay
+                .channels()
+                .iter()
+                .find(|c| c.name.is_none())
+                .unwrap()
+                .members,
+            3
+        );
+        assert_eq!(
+            (
+                captured.members,
+                captured.variables,
+                captured.variable_bytes
+            ),
+            (2, 1, 6)
+        );
+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 7);
+        drop(source);
+        drop(target);
+        drop(joined);
+        assert!(peer.upgrade().is_none(), "snapshot retained a peer");
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+        assert_eq!(captured.name.as_bytes(), name);
+        assert_eq!(
+            members.iter().find(|c| c.0.as_bytes() == name).unwrap().1,
+            2
+        );
+        assert_eq!(captured.members, 2);
+        assert_eq!(held.frame.payload().as_ptr(), body_pointer);
         assert_eq!(held.frame.payload(), value.as_ref());
         assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());

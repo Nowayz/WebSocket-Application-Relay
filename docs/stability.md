@@ -679,3 +679,32 @@ Ordinary variables survive retirement then disappear on rejoin. Default decoder
 reclamation, fresh browser acceptance and three named legacy/Close cases pass.
 The [channel-name performance record](performance.md#channel-name-capacity-after-room-waves-2026-10-16)
 states measured costs and limits; these remain finite local checks.
+
+## Snapshot lifetime during concurrent inspection, 2026-10-16
+
+Channel inspection now owns bounded names and numeric metadata captured under
+one read lock. Formatting, sorting, CBOR encoding and enqueueing occur after
+release. CBOR and HTTP retain their distinct raw-byte/base64 order and existing
+authentication/schema. A snapshot can reflect an earlier instant than the
+registry state at delivery; it is coherent at capture and has no cache.
+
+The new regression holds both snapshot forms while acquiring the registry write
+lock, joining another peer, replacing a variable and destroying all peers. The
+captured counts/name bytes stay valid and unchanged; no peer or variable value
+is retained. An already routed 8 KiB body keeps its original pointer and byte
+reservation through all those operations, then releases it when its envelope
+drops. Normal forwarding retains shared body storage.
+
+Eighteen final processes keep 8,192 stable rooms, two private pairs and eight
+reconnect workers through eight measured seconds each. The no-inspection,
+authenticated CBOR and authenticated HTTP cases verify every delivered value,
+sender/order, channel name/count, HTTP metadata field and normal Close/EOF.
+Only known one-member churn rooms may appear during the timed concurrent view;
+exact quiescent snapshots bracket the workload. Binary, NUL and Unicode channel
+names are included. All 71,136,608 healthy deliveries, 6,832,194 reconnect
+lifecycles, 19,200 timed inspections and 6,979,734 normal closes pass. Exact
+counter/byte totals, zero routed-body compaction, final resource release and
+client/server exit zero are checked independently at the gates. This is finite
+loopback evidence with default queues, rates/heartbeats disabled, and separately
+recorded latency/CPU tradeoffs in the
+[inspection measurement](performance.md#concurrent-channel-inspection-2026-10-16).

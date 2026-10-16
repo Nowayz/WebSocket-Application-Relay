@@ -1,0 +1,944 @@
+{
+  "timestamp_utc": "2026-10-16T14:07:25.738674+00:00",
+  "base_revision": "a7f98663af48e0d59f2220521a51651c623434b9",
+  "change": "Capture coherent inline inspection metadata under the registry read lock; format/sort/encode after release, preserving shared routed bodies. Add gated verified common-workload C++/CBOR comparisons and record actual source-build churn failures separately.",
+  "candidate": {
+    "native_sha256": "2c6f670c121516b3b546be15470bc4cc68c86f2f1ab5f4507011499363c06489",
+    "bridge_sha256": "d1187db67980564b517bf1c966b41965f7e0b1c9879411d18481c3750b67f6bb"
+  },
+  "validation": {
+    "rust_tests": 86,
+    "release_library_tests": 29,
+    "js_socket_cases": 7,
+    "vendor_files": 62,
+    "strict_clippy": true,
+    "format": true,
+    "release_corpus_cases": 776,
+    "release_corpus_exchanges": 2311,
+    "cpp_common_cases": 48,
+    "cpp_explicit_differences": 8,
+    "snapshot_comparison_processes": 18,
+    "ordinary_guard_processes": 24,
+    "shipped_cpp_comparison_processes": 36,
+    "rebuilt_cpp_comparison_processes": 12,
+    "rebuilt_cpp_churn_failures_recorded_separately": 3,
+    "live_typed_deliveries": 65,
+    "live_normal_closes": 1029,
+    "chrome_checks": 7,
+    "live_legacy_cases": 3,
+    "live_resources_and_errors_zero": true
+  },
+  "limits": "Finite plaintext loopback, no deployed/TLS/cluster or long-GC guarantee. Logarithmic latency upper buckets include client validation. Server CPU is total mixed work. RSS sampled at phase gates, not continuous peak/allocated bytes. Primary C++ rebuild has upstream native optimization flags/system libraries and only worker-count configuration; Rust uses normal release. C++ work placement is uncontrolled and query range is wide. Rebuilt C++ churn fails before GC and has no successful throughput; shipped executable has one listener. Original/prototype profiles/exploration/failures are separate from final timing medians. Ordinary 64KiB guards change direction between cohorts, with initial worse p99 retained. No general Rust speed or memory advantage.",
+  "passed": true,
+  "inspection_medians": {
+    "none/control": {
+      "healthy": {
+        "per_second": 535029.7528588482,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 3.254212,
+        "throughput_range": [
+          528709.308431863,
+          558893.7214589771
+        ]
+      },
+      "churn": {
+        "per_second": 53597.2491851192,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.345302,
+        "throughput_range": [
+          53100.52880582008,
+          58419.05278024383
+        ]
+      },
+      "inspection": {
+        "per_second": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "max_ms": 0.0,
+        "throughput_range": [
+          0.0,
+          0.0
+        ]
+      },
+      "server_cpu_seconds": 16.11,
+      "server_cpu_seconds_per_wall_second": 2.01373213089622
+    },
+    "none/selected": {
+      "healthy": {
+        "per_second": 533003.6351666062,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 2.897612,
+        "throughput_range": [
+          531765.8838282165,
+          549034.2413802128
+        ]
+      },
+      "churn": {
+        "per_second": 52853.44217655534,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.41859,
+        "throughput_range": [
+          52275.023752279936,
+          56179.74040051969
+        ]
+      },
+      "inspection": {
+        "per_second": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "max_ms": 0.0,
+        "throughput_range": [
+          0.0,
+          0.0
+        ]
+      },
+      "server_cpu_seconds": 15.74,
+      "server_cpu_seconds_per_wall_second": 1.9674838880285057
+    },
+    "cbor/control": {
+      "healthy": {
+        "per_second": 495408.51871723944,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "max_ms": 4.514888,
+        "throughput_range": [
+          480643.1256864549,
+          498715.7719378367
+        ]
+      },
+      "churn": {
+        "per_second": 49616.64063038474,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.328013,
+        "throughput_range": [
+          46868.8388499125,
+          51123.4065404772
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97051289808695,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 3.391498,
+        "throughput_range": [
+          199.97033947438632,
+          199.9967003544392
+        ]
+      },
+      "server_cpu_seconds": 15.69,
+      "server_cpu_seconds_per_wall_second": 1.9609591414707008
+    },
+    "cbor/selected": {
+      "healthy": {
+        "per_second": 529973.1536139278,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 3.32431,
+        "throughput_range": [
+          501594.00483310287,
+          532886.7352962825
+        ]
+      },
+      "churn": {
+        "per_second": 52764.1732872902,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.44877,
+        "throughput_range": [
+          48749.502849794844,
+          53367.56179532414
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97129756973877,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 3.230642,
+        "throughput_range": [
+          199.97025524940895,
+          199.9717586384357
+        ]
+      },
+      "server_cpu_seconds": 16.729999999999997,
+      "server_cpu_seconds_per_wall_second": 2.090954701263143
+    },
+    "http/control": {
+      "healthy": {
+        "per_second": 401108.62705431227,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 6.023817,
+        "throughput_range": [
+          392188.38773564267,
+          403003.71463732154
+        ]
+      },
+      "churn": {
+        "per_second": 35259.07555443484,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 4.194304,
+        "max_ms": 7.304562,
+        "throughput_range": [
+          34573.59746820071,
+          36037.400045933005
+        ]
+      },
+      "inspection": {
+        "per_second": 199.9720709756967,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "max_ms": 9.545932,
+        "throughput_range": [
+          199.97164404587076,
+          199.97239386102058
+        ]
+      },
+      "server_cpu_seconds": 15.12,
+      "server_cpu_seconds_per_wall_second": 1.8897320362334786
+    },
+    "http/selected": {
+      "healthy": {
+        "per_second": 472038.9790803781,
+        "p50_upper_ms": 0.065536,
+        "p99_upper_ms": 0.262144,
+        "max_ms": 6.239111,
+        "throughput_range": [
+          464393.3805318366,
+          482967.346158872
+        ]
+      },
+      "churn": {
+        "per_second": 39015.87984141353,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 6.750007,
+        "throughput_range": [
+          38885.71412579011,
+          41270.30641898847
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97217424690137,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "max_ms": 9.60825,
+        "throughput_range": [
+          199.96991340169794,
+          199.99724463796065
+        ]
+      },
+      "server_cpu_seconds": 16.65,
+      "server_cpu_seconds_per_wall_second": 2.080960438256817
+    }
+  },
+  "cpp_medians": {
+    "cpp-one-core": {
+      "private/cpp": {
+        "healthy": {
+          "per_second": 742524.1469381758,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 0.742631,
+          "throughput_range": [
+            731561.5381147339,
+            750494.7955748466
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.6699983279354229,
+        "client_cpu_per_wall_second": 0.918746077183937,
+        "rss_ready_mib": 19.68359375,
+        "rss_measured_mib": 19.69921875
+      },
+      "private/rust": {
+        "healthy": {
+          "per_second": 583047.0627546596,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 1.380603,
+          "throughput_range": [
+            579969.227892083,
+            584251.0134176004
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.71624639172974,
+        "client_cpu_per_wall_second": 0.7437436521479289,
+        "rss_ready_mib": 101.01171875,
+        "rss_measured_mib": 101.01171875
+      },
+      "churn/cpp": {
+        "healthy": {
+          "per_second": 257119.5001594597,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 1.048576,
+          "max_ms": 1.701485,
+          "throughput_range": [
+            255055.98277880097,
+            259431.00982626947
+          ]
+        },
+        "churn": {
+          "per_second": 9223.630983524268,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "max_ms": 3.626352,
+          "throughput_range": [
+            9145.243437745485,
+            9247.456123857808
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.8498853736224748,
+        "client_cpu_per_wall_second": 0.529928527082249,
+        "rss_ready_mib": 19.66796875,
+        "rss_measured_mib": 33.44140625
+      },
+      "churn/rust": {
+        "healthy": {
+          "per_second": 396666.73796780413,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 2.009616,
+          "throughput_range": [
+            394866.3179724009,
+            397212.7727136005
+          ]
+        },
+        "churn": {
+          "per_second": 15779.2906778471,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "max_ms": 7.404951,
+          "throughput_range": [
+            15659.399665153669,
+            15813.712269505257
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.7387393697251545,
+        "client_cpu_per_wall_second": 0.9624824876311374,
+        "rss_ready_mib": 101.00390625,
+        "rss_measured_mib": 101.04296875
+      },
+      "query/cpp": {
+        "healthy": {
+          "per_second": 674044.9241940745,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 3.039988,
+          "throughput_range": [
+            673903.4893930659,
+            677326.7388813234
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.9724657911852,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "max_ms": 4.072421,
+          "throughput_range": [
+            199.9717934536074,
+            199.972548618409
+          ]
+        },
+        "server_cpu_per_wall_second": 0.6686556843604997,
+        "client_cpu_per_wall_second": 0.9648675470838235,
+        "rss_ready_mib": 19.65234375,
+        "rss_measured_mib": 19.66796875
+      },
+      "query/rust": {
+        "healthy": {
+          "per_second": 511033.40323352837,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 3.887826,
+          "throughput_range": [
+            510306.19449643104,
+            514653.744278146
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.97159228556438,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "max_ms": 3.73957,
+          "throughput_range": [
+            199.97114758790897,
+            199.97186183433888
+          ]
+        },
+        "server_cpu_per_wall_second": 0.7223973771316013,
+        "client_cpu_per_wall_second": 0.7436443588119426,
+        "rss_ready_mib": 101.05078125,
+        "rss_measured_mib": 101.10546875
+      }
+    },
+    "cpp-four-core": {
+      "private/cpp": {
+        "healthy": {
+          "per_second": 734304.7975132018,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 2.896208,
+          "throughput_range": [
+            726270.3128164057,
+            738154.9865745367
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.671247072523705,
+        "client_cpu_per_wall_second": 0.916246004022115,
+        "rss_ready_mib": 19.71484375,
+        "rss_measured_mib": 19.73046875
+      },
+      "private/rust": {
+        "healthy": {
+          "per_second": 602004.0953342929,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 1.547361,
+          "throughput_range": [
+            598267.0974185801,
+            604233.8066929107
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.86874725139229,
+        "client_cpu_per_wall_second": 0.8237473937662146,
+        "rss_ready_mib": 100.98828125,
+        "rss_measured_mib": 101.12890625
+      },
+      "churn/cpp": {
+        "healthy": {
+          "per_second": 255089.78541249715,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 1.048576,
+          "max_ms": 1.410855,
+          "throughput_range": [
+            254924.01890867867,
+            257228.3643194645
+          ]
+        },
+        "churn": {
+          "per_second": 9185.215024453903,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "max_ms": 2.930697,
+          "throughput_range": [
+            9163.706594360057,
+            9208.617462066346
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.8498954741177984,
+        "client_cpu_per_wall_second": 0.5274255568494196,
+        "rss_ready_mib": 19.75,
+        "rss_measured_mib": 33.43359375
+      },
+      "churn/rust": {
+        "healthy": {
+          "per_second": 550759.1441761476,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 3.34429,
+          "throughput_range": [
+            544958.4875381885,
+            553158.4198493267
+          ]
+        },
+        "churn": {
+          "per_second": 57782.99925623589,
+          "p50_upper_ms": 0.131072,
+          "p99_upper_ms": 1.048576,
+          "max_ms": 4.270206,
+          "throughput_range": [
+            56209.51270861203,
+            58211.07316103289
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 2.1324630678721275,
+        "client_cpu_per_wall_second": 2.0499644966648822,
+        "rss_ready_mib": 101.109375,
+        "rss_measured_mib": 101.61328125
+      },
+      "query/cpp": {
+        "healthy": {
+          "per_second": 670793.0035219181,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 2.611475,
+          "throughput_range": [
+            662397.5822893189,
+            671792.0193195612
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.97209989262296,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 2.097152,
+          "max_ms": 3.475432,
+          "throughput_range": [
+            199.97202481360267,
+            199.9722765184899
+          ]
+        },
+        "server_cpu_per_wall_second": 0.669906283125569,
+        "client_cpu_per_wall_second": 0.9648662342017138,
+        "rss_ready_mib": 19.6484375,
+        "rss_measured_mib": 19.6640625
+      },
+      "query/rust": {
+        "healthy": {
+          "per_second": 626215.4742370965,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 2.506567,
+          "throughput_range": [
+            620872.7961651147,
+            631759.638234394
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.9713977160383,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "max_ms": 4.194825,
+          "throughput_range": [
+            199.97045359059646,
+            199.97191321989007
+          ]
+        },
+        "server_cpu_per_wall_second": 1.0760910033843971,
+        "client_cpu_per_wall_second": 0.9836093125157633,
+        "rss_ready_mib": 101.140625,
+        "rss_measured_mib": 102.44140625
+      }
+    },
+    "cpp-rebuilt": {
+      "private/cpp": {
+        "healthy": {
+          "per_second": 1110732.7057056364,
+          "p50_upper_ms": 0.016384,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 0.960665,
+          "throughput_range": [
+            1106959.4729498932,
+            1114842.9600736883
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 1.1924946090299962,
+        "client_cpu_per_wall_second": 1.429993535356725,
+        "rss_ready_mib": 20.4921875,
+        "rss_measured_mib": 20.5234375
+      },
+      "private/rust": {
+        "healthy": {
+          "per_second": 615939.7832327201,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 1.269446,
+          "throughput_range": [
+            599497.2863776487,
+            619511.1928399074
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "server_cpu_per_wall_second": 0.8924967879040603,
+        "client_cpu_per_wall_second": 0.8399969768508803,
+        "rss_ready_mib": 101.09765625,
+        "rss_measured_mib": 101.234375
+      },
+      "query/cpp": {
+        "healthy": {
+          "per_second": 686054.7401634082,
+          "p50_upper_ms": 0.032768,
+          "p99_upper_ms": 0.065536,
+          "max_ms": 2.070536,
+          "throughput_range": [
+            681758.8136014236,
+            1085770.041461011
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.9720129919112,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "max_ms": 4.652017,
+          "throughput_range": [
+            199.97165064399962,
+            199.97208012314178
+          ]
+        },
+        "server_cpu_per_wall_second": 0.6711562939132947,
+        "client_cpu_per_wall_second": 1.102343724175048,
+        "rss_ready_mib": 20.80078125,
+        "rss_measured_mib": 20.81640625
+      },
+      "query/rust": {
+        "healthy": {
+          "per_second": 630575.8062277503,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 0.131072,
+          "max_ms": 2.401086,
+          "throughput_range": [
+            627519.6574852711,
+            636578.1129242869
+          ]
+        },
+        "churn": {
+          "per_second": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "max_ms": 0.0,
+          "throughput_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "inspection": {
+          "per_second": 199.9712106197387,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "max_ms": 3.216615,
+          "throughput_range": [
+            199.97050692484885,
+            199.973299789982
+          ]
+        },
+        "server_cpu_per_wall_second": 1.0786059857422154,
+        "client_cpu_per_wall_second": 0.9798554839317594,
+        "rss_ready_mib": 101.01953125,
+        "rss_measured_mib": 102.32421875
+      }
+    }
+  },
+  "live_runtime": {
+    "native": {
+      "pid": 161517,
+      "sha256": "2c6f670c121516b3b546be15470bc4cc68c86f2f1ab5f4507011499363c06489",
+      "command": "./target/release/war-relay --idle-timeout-secs 0 "
+    },
+    "bridge": {
+      "pid": 161544,
+      "sha256": "d1187db67980564b517bf1c966b41965f7e0b1c9879411d18481c3750b67f6bb",
+      "command": "./target/release/war-legacy-bridge "
+    }
+  },
+  "evidence_sha256": {
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-cpp-1.json": "fc59b10e4ad63996ef1814073be031d48aced62599b4dc97509ef1ea81c01023",
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-cpp-2.json": "11ac4be2999b871733f7a6d48d70cdaff150c78572c4607b912a4419ab5d0e36",
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-cpp-3.json": "1201313f7c48837e93ff698eaf79de7191c69008ba8cd221468c1641a81dbcb7",
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-rust-1.json": "add0b94d9ddbbeb09cc209c6add84b30c9d6e98e264079b2b391fd8545676398",
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-rust-2.json": "1cfc9068b4cdeea14a3369a1084148c35678c14cb78b43c0c87e4b291702e96f",
+    "docs/benchmarks/2026-10-16-cpp-four-core-churn-rust-3.json": "8f0b6880a64c44fdeb6e5746214ba13d78fe0293430a57be4cf01e89b36c19ae",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-cpp-1.json": "f4c1e89451f48b51b461ce381bf027d3955c5703d5ea37bbb3488aecb09e6e30",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-cpp-2.json": "f085907439650026e36224ef6017ee0b693f1e1487636f0f343ec92da6834cc7",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-cpp-3.json": "859415305b76e21072bf7cbe0d7b5860c4812ae2974e94467b91cb1ed75fef7c",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-rust-1.json": "65e18d13375aaaf4e9e7f8a6c23bf175b07f882cdcb14cb271becacdab34073a",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-rust-2.json": "c149e0fc7f3679302a3045552b75a6ed77d49852c30c11d32cc91ff09d1816d9",
+    "docs/benchmarks/2026-10-16-cpp-four-core-private-rust-3.json": "808f0c9c3e10a6da503d6203b67d9f1ec26761c5a5811e38dd5c7054a4671c6f",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-cpp-1.json": "1e35ccdff083a6bf0e0c2f4e209ff01168c49a904f2427f39c11e45ba838d42e",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-cpp-2.json": "a419fe8a63047e671e5449e1efffaaeea70ebd6dadca10590c5a51c7b2d99aa8",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-cpp-3.json": "f2431e2f28164efef9cb78f85f9eaaa25595161a3b09855ecef32c8f6c3902ba",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-rust-1.json": "e1d12f78e5705ae498404bb051d7aef4d108466743a6b55f62e807263649abdf",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-rust-2.json": "0570f6c19c525c85852446150b4df89445f1392842ebf24e6064e2e4791b1a8a",
+    "docs/benchmarks/2026-10-16-cpp-four-core-query-rust-3.json": "fd547082a8baabab362ee664b06af7f92f94590e70835d273c0c734c53704d14",
+    "docs/benchmarks/2026-10-16-cpp-four-core.json": "959abfea3c225dd252018aa500892e99ca46a86cf15d60a62f079c4199578a93",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-cpp-1.json": "1e35608485a17c499a4baea67e105f3b34faaa4ef9a14ca350243898dbf2c625",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-cpp-2.json": "e0a841a441277efc8d9a6309cf5e0b21d953393122130032f56e6550ad182cdd",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-cpp-3.json": "9b02ef580193b4f1389cc034d51c07d82d06e08da7a36b12ebebbd91a3bb4a85",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-rust-1.json": "3f50b61223e81e1c50c88b25512cc704546d8ecf3fd7617dd818f1b0c09e20f3",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-rust-2.json": "516254d0360935c3b343ec2ebd062c27b7fd638520b66febe2218712c6e04cbb",
+    "docs/benchmarks/2026-10-16-cpp-one-core-churn-rust-3.json": "d30eceff00e87bdd7c39a46d89bc41ebf54bafe8083404cfd377b2442b4ad433",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-cpp-1.json": "613106471d7c2e5ff19e223c854d15c0b00a154e91d6542d6297b35e692fcac5",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-cpp-2.json": "61688abde95f82667f417b2e82b42270c5fe04e7e0b60e2e387e109f34d6b681",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-cpp-3.json": "c9e5665be30050b71905e43d24d8cc5c91f9dfde6b8c9b613bb9bbb017e9ba06",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-rust-1.json": "4645c6ee488c9850e3979e8da95284a19395947d1872ae3dfbf8f144ffbd2b54",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-rust-2.json": "f851c33e932c3e1139bcf6b89c8d2539044d136c5e26dc225a49ff0709f4e804",
+    "docs/benchmarks/2026-10-16-cpp-one-core-private-rust-3.json": "4c4c17f73fc8a8b84941922eb71c39ceda9939359f61aab195efb153cd762f11",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-cpp-1.json": "42b8149dd225e5f9b198063dfce96586f1823e24fecc4a876157e27c08764685",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-cpp-2.json": "0ee62f05e468a27d608cea04298d2556ba30134bd33eb2b59766f8974e49bbed",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-cpp-3.json": "34d9d52f0e36155f5aa81a140afaa622ff4874f26573bbb11b9826b46e5debc7",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-rust-1.json": "360c23aa5a916b42067ab79e357fc5c45efc20faa2a2292612c153ce261be551",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-rust-2.json": "2faccd555ef2b501ef87d7e600bd7a4e8a85cc7790d6c7129cc8ccd3ea2f58bc",
+    "docs/benchmarks/2026-10-16-cpp-one-core-query-rust-3.json": "7769e33f727ec2a88111ded17a9e5eeee1e37b251a995f9e3f27613169b42324",
+    "docs/benchmarks/2026-10-16-cpp-one-core.json": "17f2ee887ad94f561a501d1e033a909d9d08d18ec1782206f4a0ecca1a48e4e2",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-churn-diagnostics.json": "ef7059852e208ba62c8b12d1b54d732cd96eace831bcb27220f63a4d96572701",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-cpp-1.json": "8ca2aabdd276e66fd9ec0ca091a090b9a322fbedc9c3222e213cf02282a062f3",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-cpp-2.json": "b831d9469044089b6d855a420e762f221ded5f321405e0713d03e48cc818ff73",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-cpp-3.json": "a9d478b41c70b1f3be02a9dd1b44b3bab420fa3b0fec3b48eb71bd4185ce4e4a",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-rust-1.json": "c290e480c3aee41264e46d27224b44f7f92f75ddb9e4e3015702dbcd181c2451",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-rust-2.json": "fafbe2847369a8a8126199adbc94f52cc4649db98e72bd154aec4b58529db898",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-private-rust-3.json": "26f8121f9d9e9eb037b878e92e9cb1f9acd7facdd1f16cd6d6242b6c37caa384",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-cpp-1.json": "6e3fde7a86de9a12308900cf05e2e1355cfabfe6421d03a954071124979c5e04",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-cpp-2.json": "394d8b1cae50cc0bd67b2a129724b25e22e3d0560c6514eab7e9f38fbfda5197",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-cpp-3.json": "cb95a4fc99942cc8938177ec0e5cba4ff859c1682159946ab305e797b85b5af2",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-rust-1.json": "a1d3476c0fe6bc7c3286dabfc27e2b5a3d30b7f46f44609a3894ad66bbf49b9f",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-rust-2.json": "22b2ae892c9b47c825b81265c35c30ff2ca5650db384721dfb334c40eeec35ed",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt-query-rust-3.json": "1471bb84de2324bb866835958e3dc169ee899eceaf20517659f24a56829b5850",
+    "docs/benchmarks/2026-10-16-cpp-rebuilt.json": "a855e1cca0390304f0a46c5e74ddaff04fd914c38b4b5977bd7f66eaa90ef5c4",
+    "docs/benchmarks/2026-10-16-inspection-candidate-cbor.json": "c1633125b4fe280ec74543ff73a9339bcab1d3bb54e31d4795d8535bd967b67e",
+    "docs/benchmarks/2026-10-16-inspection-candidate-http.json": "4462efdca837fc6cbc137f7d090637ec6187395f39842b7687ad7df0622904d9",
+    "docs/benchmarks/2026-10-16-inspection-candidate-none.json": "d0c8bdb356ef90145b93a88d0f70a129a993cd616657bbf51c782f1022c732af",
+    "docs/benchmarks/2026-10-16-inspection-cbor-control-1.json": "dbdd263694ab97c1aaf7bfbca60997cac847baa870eac0ca12b4292688a2fcb6",
+    "docs/benchmarks/2026-10-16-inspection-cbor-control-2.json": "f119fc11b6db7e900bd8b07e5d4da34f05a6f07de612212b96ac75050cb6e7f7",
+    "docs/benchmarks/2026-10-16-inspection-cbor-control-3.json": "7c48802a94d127a413ef53a23974210ec82a9649478b4123287fb5a9289ed151",
+    "docs/benchmarks/2026-10-16-inspection-cbor-profile-control.json": "93f9c664c781134471d53615f13bd1a240db7160b567a3fa888612bc110ff1a5",
+    "docs/benchmarks/2026-10-16-inspection-cbor-profile-selected.json": "1c194d7cb080cfeca369a19b39d6e40ce7077b98ef9cb4ce42abe5d50bfa9de0",
+    "docs/benchmarks/2026-10-16-inspection-cbor-selected-1.json": "0bda9532bf04713215ff9ccff577824c6a17a11ab5d1331f66854b0cf3a38b18",
+    "docs/benchmarks/2026-10-16-inspection-cbor-selected-2.json": "1eef6a9ceedcdf4e00db141c3f98da93dd64f05f51f8d5a627f0ce2312278b2f",
+    "docs/benchmarks/2026-10-16-inspection-cbor-selected-3.json": "654d29ebafb57282a96747c7f535850a85268bbba1318b016e0ef1b506f6406f",
+    "docs/benchmarks/2026-10-16-inspection-comparison.json": "19a36d029db5d7ded8b421b35912e643e27b1d785b308177b3c96bb44c228d6e",
+    "docs/benchmarks/2026-10-16-inspection-control-cbor.json": "aebe0dd04af08dde5b38a56c1c7a167f1594c621441f43166638f11119ebd6e9",
+    "docs/benchmarks/2026-10-16-inspection-control-http.json": "a12bc84841356d3af5a2d261da821040463096f5ecf1af8d576fb2ff903afb16",
+    "docs/benchmarks/2026-10-16-inspection-control-none.json": "e400465e458792dd9c1667fcaf4fd52915abd68487ad7016f0857a68012e1349",
+    "docs/benchmarks/2026-10-16-inspection-corpus.json": "6f09e311c4ce46c0ce149db339610d9ca690bbbaa14baf4aa71bb6c4cb9b2567",
+    "docs/benchmarks/2026-10-16-inspection-cost.json": "019840bc34fc35bb870ccfb93d6c84a28b6412ea69b661f20ff11267cd23e70a",
+    "docs/benchmarks/2026-10-16-inspection-final-comparison.json": "3352445d1cbe536d45da3cba8b0c5e6aa92c60743821cde241f4e250bb098bd5",
+    "docs/benchmarks/2026-10-16-inspection-http-control-1.json": "94440c4df51f4754eebdd3a7362d4c7ddd32cacea5811546ad7adbd8133600e1",
+    "docs/benchmarks/2026-10-16-inspection-http-control-2.json": "c45d897010cd72f03d905d58d042d9cd31b3f65376599058d9c72d65103901a7",
+    "docs/benchmarks/2026-10-16-inspection-http-control-3.json": "e16662e9b16b3b18083816aa7ba6162aec804f2bd4b675f570e879e5bad0ad4c",
+    "docs/benchmarks/2026-10-16-inspection-http-final-smoke.json": "fa59acd866e05f254c882ad33dbe1f4db950e1bc35efb1c2e72b6af27ac9db0f",
+    "docs/benchmarks/2026-10-16-inspection-http-selected-1.json": "19621d72fe6f33c16f23c0d5dae17be053e108644432014a4c1bb109202c505e",
+    "docs/benchmarks/2026-10-16-inspection-http-selected-2.json": "4cc810d869d20a594549672f363a61a4fcd09d313a03650dbe0ca57ce59c4416",
+    "docs/benchmarks/2026-10-16-inspection-http-selected-3.json": "da4aa4dc4e8d381ced0b9a25078c5042d0194535452cbfeba964640e5bb106e1",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-1.json": "5ae2fe0115b42223630092159c3c5b6dc414f437797e4d9d2e8ad78053299faa",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-2.json": "59b97385578ef91cde63d9c52e5bb1ecefa48533cfdb5a8fa97e6fdd4787a51e",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-3.json": "3c244685e12f189d78e4d3a76e8b3ccec6c062343e9fff237baafb34a1d2fe66",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-1.json": "b28bd36d9264ccd28fafdb50a784124950c70858679a4bb71b11a352c2ddd9cb",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-2.json": "b9c7f094a52aadd2b647f169192370ab62eaa013040228295e2f9b48013d1c80",
+    "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-3.json": "a0016fc458672a94d77d03e0cd87516b8c3f7bec391c0c9daf9b58e96487d196",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-control-1.json": "aa1e8e8ebccfa1a8bc9afbd2f65203509da96feb5460d14817bb532a48ae4ebc",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-control-2.json": "20ca1a0aab0aa1a56d85cf950b686f6fa1c3c8530a06950bced62b5ddd6effb6",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-control-3.json": "351957d017a2ad24b35ed0f28cb54b3a8bf109199b9a0cd387988b169e88e43e",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-selected-1.json": "d3fb819dddf33bdbf1160b9ec7a781c35c146a402d802503e7efd1db6ca33e06",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-selected-2.json": "d7eb2b549d64befdb8446ff9ecfe3e46e346c427621eccf1ef4ac67f84385907",
+    "docs/benchmarks/2026-10-16-inspection-inline-http-selected-3.json": "98762cb4f5f0cba7658e958ee5ecfe26f4d1fad7f545f1a48b3c8f81c0c63fa5",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-control-1.json": "0c4c07a7b026a1b810187b8a2f369d92ed9150ba6e8fabf5b532633978ff4b7b",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-control-2.json": "164aed1111497a38cbd8d8a0bce4f742216cce17075bec6014be43865269d2a0",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-control-3.json": "b8aa06359906e2e7667ed14a480429af4dfeabbe4612ea644e16c005b96a69da",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-selected-1.json": "b67868fb3c5e5c8eb7382deb028647ee0e85bd53ebd2ee3ed4ff823567874bd7",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-selected-2.json": "d39bfdbfa7625e2763bc8b08b5fd00f44c1e2ab7fbbeca5e96698edf3bc31b6a",
+    "docs/benchmarks/2026-10-16-inspection-inline-none-selected-3.json": "d687148f30c29527e3116d9db164f73ba0c5dfa30c1c3b6bc9c5c637ba9e6451",
+    "docs/benchmarks/2026-10-16-inspection-large-cost-followup.json": "7c911ca63096f3b9c3a5597038adc85ce99632ad9a7712f50ee6df207a5be755",
+    "docs/benchmarks/2026-10-16-inspection-live.json": "574b2b1a4ae19345d6c06647f26f293627cb31a2b581c1be6ecb614b4215a3c0",
+    "docs/benchmarks/2026-10-16-inspection-none-control-1.json": "3264ed49ebbc11ee92f7b8f0de14fe76ad156d1d16f2f4b8e0cb92e027c8b480",
+    "docs/benchmarks/2026-10-16-inspection-none-control-2.json": "bd71cd03ef1d6339e2d0d26e57f47542afc4ee7489da11a44924c158642587e6",
+    "docs/benchmarks/2026-10-16-inspection-none-control-3.json": "28b5564636d2f5c33b42cfe05c62dbfa9147fa6454b70f946264aaeb51e7feb5",
+    "docs/benchmarks/2026-10-16-inspection-none-selected-1.json": "bb39323c97fb0fb92a07f52a25e199f188d3bda75e3dced5358dd917b05a48c7",
+    "docs/benchmarks/2026-10-16-inspection-none-selected-2.json": "7766b8953b1340de01816bdec3273d310b03f81750d3785f0c74a8e8d35f2054",
+    "docs/benchmarks/2026-10-16-inspection-none-selected-3.json": "1a873a4b7e508c258ee765471e30a8105cefef60a43cb2652339ed404b024373",
+    "docs/benchmarks/2026-10-16-inspection-profile-control.json": "e4247491d20efc40c60853ac84882d740d5a55562fbe23e0af5b2d7a0b215105",
+    "docs/benchmarks/2026-10-16-inspection-reclaim-live.json": "12e265927e9b5c8d976d73bb028853598a52f4803ad10991a8e4d538790d9835",
+    "docs/benchmarks/2026-10-16-inspection-reference.json": "2b41b28c8efaad09694e8044e2dc16394cff189b79d15ba29b8c6ea73e2223a4",
+    "docs/benchmarks/2026-10-16-inspection-build.json": "507afcba326670250b74873a73aef8fe16f029f35c2261cd0b9c0a43b8996f6b"
+  }
+}

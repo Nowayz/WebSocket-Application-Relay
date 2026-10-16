@@ -384,3 +384,13 @@ and routing scheme before applications can treat them as one relay. Measure
 connection churn, active-frame sizes, fanout, queue pressure, p99 latency, CPU,
 and memory on the intended TLS/network path before increasing capacity. The
 initial measurements cover local single-host sockets, not a deployed cluster.
+
+Channel inspection captures a coherent view of bounded channel names and numeric
+metadata under the registry read lock. UTF-8/base64 formatting, sorting, CBOR
+encoding and reply enqueueing run after that lock releases. CBOR queries capture
+only names and member counts; HTTP inspection also captures variable usage.
+Concurrent joins/departures can make a returned snapshot older than the current
+registry by the time the caller receives it. There is no cache or pagination.
+The snapshot owns small metadata, so it keeps no peer, variable value or routed
+application body alive. Each large inspection still allocates snapshot/output
+storage and uses CPU proportional to the list, with sorting costs in addition.

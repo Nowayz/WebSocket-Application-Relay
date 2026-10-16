@@ -1,0 +1,1072 @@
+{
+  "timestamp_utc": "2026-10-16T13:19:02.463392+00:00",
+  "base_revision": "a7f98663af48e0d59f2220521a51651c623434b9",
+  "server_sha256": {
+    "control": "8903af76ff2d3a2430b7a59e8a6c4ed909cac14301571b1eb9de3d126f442cb5",
+    "selected": "2c6f670c121516b3b546be15470bc4cc68c86f2f1ab5f4507011499363c06489"
+  },
+  "client_sha256": "9b0fd69b6f229f66ce2082e3727175259d4f71b25ca2e9b3a63a992956e2a3a5",
+  "client_source_sha256": "3d2f835ee22cd0b4bb98e26397b2654c6406bab7dc4f59e50042ef72bc74f465",
+  "runner_sha256": "33d4f738552b9721df95fd291a23b7c9cce7f7bb21ea40d6981d53309008c369",
+  "comparison_source": "import datetime,hashlib,json,statistics,subprocess\nfrom pathlib import Path\nroot=Path('/home/phil/dev/war_next');sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nservers={'control':root/'artifacts/baselines/a7f9866/war-relay','selected':root/'artifacts/candidates/inspection-inline/war-relay'}\nclient=root/'artifacts/clients/inspection/inspection';output=root/'docs/benchmarks/2026-10-16-inspection-final-comparison.json'\nrecord={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'base_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True,cwd=root).strip(),'server_sha256':{k:sha(p) for k,p in servers.items()},'client_sha256':sha(client),'client_source_sha256':sha(root/'examples/inspection.rs'),'runner_sha256':sha(root/'scripts/inspection.py'),'comparison_source':Path(__file__).read_text(),'scope':'Final compact snapshots: bounded inline names, CBOR members only, HTTP also captures variable usage. Three fresh processes/build/mode, modes rotate each repetition and build order reverses on repetition two. Four-worker native server CPUs0-3; same frozen four-worker client CPUs4-7. 8192 stable single-member rooms, two private pairs, eight churn workers, eight measured seconds. None: no timed inspection. CBOR/HTTP: two inspectors at10ms per worker, missed ticks skipped; every full response, metadata/order, application frame, lifecycle, counts/bytes and Close/EOF checked. Stable clients held until all mixed work finishes. Coherent fixed metadata plus only known transient churn rooms (members1); exact quiescent snapshots before/after. Native CPU is for all concurrent work; no isolated per-operation CPU claim. Latencies include client validation and competing client tasks. Profiles/exploratory cases excluded from timing medians. Default queues, rates/heartbeat disabled; loopback, no TLS/capacity guarantee.','cases':[],'passed':False}\nmodes=['none','cbor','http']\nfor repetition in range(1,4):\n order=modes[repetition-1:]+modes[:repetition-1]\n for mode in order:\n  for label in (['control','selected'] if repetition!=2 else ['selected','control']):\n   path=root/f'docs/benchmarks/2026-10-16-inspection-inline-{mode}-{label}-{repetition}.json'\n   command=['python3','scripts/inspection.py','--server',str(servers[label]),'--client',str(client),'--mode',mode,'--rooms','8192','--seconds','8','--output',str(path)]\n   with open(root/f'artifacts/inspection-{mode}-{label}-{repetition}.log','w') as log:p=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,cwd=root)\n   d=json.loads(path.read_text());assert p.returncode==0 and d['passed'],d.get('error');assert d['server_exit_code']==d['client_exit_code']==0 and not d['server_forced_kill'];assert d['server_sha256']==record['server_sha256'][label] and d['client_sha256']==record['client_sha256'] and d['client_source_sha256']==record['client_source_sha256'] and d['runner_sha256']==record['runner_sha256']\n   mixed=d['mixed'];row={'mode':mode,'label':label,'repetition':repetition,'trace':str(path.relative_to(root)),'trace_sha256':sha(path),'passed':True,'healthy':mixed['healthy'],'churn':mixed['churn'],'inspection':mixed['inspection'],'server_cpu_seconds':mixed['server_cpu_seconds'],'server_cpu_seconds_per_wall_second':mixed['server_cpu_seconds_per_wall_second'],'elapsed_seconds':mixed['elapsed_seconds'],'normal_closes':d['events'][-1]['details']['counts']['normal_closes'],'final_counts':d['events'][-1]['details']['counts'],'sampled_rss_kib':[e['process']['VmRSS'] for e in d['events']]}\n   record['cases'].append(row);output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(row),flush=True)\nrecord['medians']={}\nfor mode in modes:\n for label in servers:\n  rows=[c for c in record['cases'] if c['mode']==mode and c['label']==label];out={}\n  for activity in ['healthy','churn','inspection']:\n   out[activity]={k:statistics.median(r[activity][k] for r in rows) for k in ['per_second','p50_upper_ms','p99_upper_ms','max_ms']}\n   out[activity]['throughput_range']=[min(r[activity]['per_second'] for r in rows),max(r[activity]['per_second'] for r in rows)]\n  out['server_cpu_seconds']=statistics.median(r['server_cpu_seconds'] for r in rows);out['server_cpu_seconds_per_wall_second']=statistics.median(r['server_cpu_seconds_per_wall_second'] for r in rows)\n  record['medians'][f'{mode}/{label}']=out\nrecord['total_healthy_deliveries']=sum(r['healthy']['verified'] for r in record['cases']);record['total_churn_lifecycles']=sum(r['churn']['verified'] for r in record['cases']);record['total_timed_inspections']=sum(r['inspection']['verified'] for r in record['cases']);record['total_normal_closes']=sum(r['normal_closes'] for r in record['cases']);record['passed']=True\noutput.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps({'passed':True,'medians':record['medians'],'totals':{k:v for k,v in record.items() if k.startswith('total_')}}),flush=True)\n",
+  "scope": "Final compact snapshots: bounded inline names, CBOR members only, HTTP also captures variable usage. Three fresh processes/build/mode, modes rotate each repetition and build order reverses on repetition two. Four-worker native server CPUs0-3; same frozen four-worker client CPUs4-7. 8192 stable single-member rooms, two private pairs, eight churn workers, eight measured seconds. None: no timed inspection. CBOR/HTTP: two inspectors at10ms per worker, missed ticks skipped; every full response, metadata/order, application frame, lifecycle, counts/bytes and Close/EOF checked. Stable clients held until all mixed work finishes. Coherent fixed metadata plus only known transient churn rooms (members1); exact quiescent snapshots before/after. Native CPU is for all concurrent work; no isolated per-operation CPU claim. Latencies include client validation and competing client tasks. Profiles/exploratory cases excluded from timing medians. Default queues, rates/heartbeat disabled; loopback, no TLS/capacity guarantee.",
+  "cases": [
+    {
+      "mode": "none",
+      "label": "control",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-control-1.json",
+      "trace_sha256": "0c4c07a7b026a1b810187b8a2f369d92ed9150ba6e8fabf5b532633978ff4b7b",
+      "passed": true,
+      "healthy": {
+        "max_ms": 4.087699,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 558893.7214589771,
+        "verified": 4471184
+      },
+      "churn": {
+        "max_ms": 3.68615,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 58419.05278024383,
+        "verified": 467356
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 17.029999999999998,
+      "server_cpu_seconds_per_wall_second": 2.1287337037452225,
+      "elapsed_seconds": 8.000061243,
+      "normal_closes": 475552,
+      "final_counts": {
+        "delivered_bytes": 4649777583,
+        "deliveries": 5414095,
+        "joins": 475552,
+        "normal_closes": 475552,
+        "sent_bytes": 4645497584,
+        "sent_messages": 4938541,
+        "value_bytes": 4596112172
+      },
+      "sampled_rss_kib": [
+        104896,
+        105392,
+        104888
+      ]
+    },
+    {
+      "mode": "none",
+      "label": "selected",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-selected-1.json",
+      "trace_sha256": "b67868fb3c5e5c8eb7382deb028647ee0e85bd53ebd2ee3ed4ff823567874bd7",
+      "passed": true,
+      "healthy": {
+        "max_ms": 2.897612,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 549034.2413802128,
+        "verified": 4392304
+      },
+      "churn": {
+        "max_ms": 4.242645,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 56179.74040051969,
+        "verified": 449441
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 16.599999999999998,
+      "server_cpu_seconds_per_wall_second": 2.074985794906621,
+      "elapsed_seconds": 8.000054767,
+      "normal_closes": 457637,
+      "final_counts": {
+        "delivered_bytes": 4567477403,
+        "deliveries": 5299385,
+        "joins": 457637,
+        "normal_closes": 457637,
+        "sent_bytes": 4563358639,
+        "sent_messages": 4841746,
+        "value_bytes": 4514941177
+      },
+      "sampled_rss_kib": [
+        105332,
+        105892,
+        104376
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "control",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-1.json",
+      "trace_sha256": "5ae2fe0115b42223630092159c3c5b6dc414f437797e4d9d2e8ad78053299faa",
+      "passed": true,
+      "healthy": {
+        "max_ms": 3.30523,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "per_second": 498715.7719378367,
+        "verified": 3989792
+      },
+      "churn": {
+        "max_ms": 4.278084,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 51123.4065404772,
+        "verified": 408994
+      },
+      "inspection": {
+        "max_ms": 3.391498,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 4.194304,
+        "per_second": 199.9967003544392,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 16.029999999999998,
+      "server_cpu_seconds_per_wall_second": 2.0037169416760374,
+      "elapsed_seconds": 8.000131988,
+      "normal_closes": 417192,
+      "final_counts": {
+        "delivered_bytes": 4293407296,
+        "deliveries": 4817585,
+        "joins": 417192,
+        "normal_closes": 417192,
+        "sent_bytes": 4145193262,
+        "sent_messages": 4400391,
+        "value_bytes": 4101197330
+      },
+      "sampled_rss_kib": [
+        104972,
+        106812,
+        105380
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "selected",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-1.json",
+      "trace_sha256": "b28bd36d9264ccd28fafdb50a784124950c70858679a4bb71b11a352c2ddd9cb",
+      "passed": true,
+      "healthy": {
+        "max_ms": 3.32431,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 529973.1536139278,
+        "verified": 4240384
+      },
+      "churn": {
+        "max_ms": 4.44877,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 52764.1732872902,
+        "verified": 422173
+      },
+      "inspection": {
+        "max_ms": 3.230642,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "per_second": 199.9717586384357,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 16.729999999999997,
+      "server_cpu_seconds_per_wall_second": 2.090954701263143,
+      "elapsed_seconds": 8.001129814,
+      "normal_closes": 430371,
+      "final_counts": {
+        "delivered_bytes": 4553642696,
+        "deliveries": 5094535,
+        "joins": 430371,
+        "normal_closes": 430371,
+        "sent_bytes": 4405307567,
+        "sent_messages": 4664162,
+        "value_bytes": 4358673925
+      },
+      "sampled_rss_kib": [
+        105404,
+        107676,
+        106296
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "control",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-control-1.json",
+      "trace_sha256": "aa1e8e8ebccfa1a8bc9afbd2f65203509da96feb5460d14817bb532a48ae4ebc",
+      "passed": true,
+      "healthy": {
+        "max_ms": 6.023817,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 1.048576,
+        "per_second": 401108.62705431227,
+        "verified": 3209312
+      },
+      "churn": {
+        "max_ms": 6.919642,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 4.194304,
+        "per_second": 36037.400045933005,
+        "verified": 288339
+      },
+      "inspection": {
+        "max_ms": 9.759446,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.97239386102058,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 15.35,
+      "server_cpu_seconds_per_wall_second": 1.918485153604166,
+      "elapsed_seconds": 8.001104398,
+      "normal_closes": 296535,
+      "final_counts": {
+        "delivered_bytes": 3336203843,
+        "deliveries": 3794189,
+        "joins": 296535,
+        "normal_closes": 296535,
+        "sent_bytes": 3333534997,
+        "sent_messages": 3497652,
+        "value_bytes": 3298558475
+      },
+      "sampled_rss_kib": [
+        104964,
+        115476,
+        109296
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "selected",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-selected-1.json",
+      "trace_sha256": "d3fb819dddf33bdbf1160b9ec7a781c35c146a402d802503e7efd1db6ca33e06",
+      "passed": true,
+      "healthy": {
+        "max_ms": 5.334225,
+        "p50_upper_ms": 0.065536,
+        "p99_upper_ms": 0.262144,
+        "per_second": 482967.346158872,
+        "verified": 3863792
+      },
+      "churn": {
+        "max_ms": 5.648987,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "per_second": 41270.30641898847,
+        "verified": 330167
+      },
+      "inspection": {
+        "max_ms": 8.152059,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.99724463796065,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 17.25,
+      "server_cpu_seconds_per_wall_second": 2.1562202937530133,
+      "elapsed_seconds": 8.000110216,
+      "normal_closes": 338363,
+      "final_counts": {
+        "delivered_bytes": 4016070787,
+        "deliveries": 4532325,
+        "joins": 338363,
+        "normal_closes": 338363,
+        "sent_bytes": 4013025489,
+        "sent_messages": 4193960,
+        "value_bytes": 3971085887
+      },
+      "sampled_rss_kib": [
+        105268,
+        120924,
+        108072
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "selected",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-2.json",
+      "trace_sha256": "b9c7f094a52aadd2b647f169192370ab62eaa013040228295e2f9b48013d1c80",
+      "passed": true,
+      "healthy": {
+        "max_ms": 2.465624,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 532886.7352962825,
+        "verified": 4263728
+      },
+      "churn": {
+        "max_ms": 3.247622,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 53367.56179532414,
+        "verified": 427004
+      },
+      "inspection": {
+        "max_ms": 2.427105,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "per_second": 199.97025524940895,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 16.97,
+      "server_cpu_seconds_per_wall_second": 2.1209345197390435,
+      "elapsed_seconds": 8.001189967,
+      "normal_closes": 435202,
+      "final_counts": {
+        "delivered_bytes": 4577985566,
+        "deliveries": 5127541,
+        "joins": 435202,
+        "normal_closes": 435202,
+        "sent_bytes": 4429607084,
+        "sent_messages": 4692337,
+        "value_bytes": 4382691692
+      },
+      "sampled_rss_kib": [
+        105424,
+        106076,
+        104852
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "control",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-2.json",
+      "trace_sha256": "59b97385578ef91cde63d9c52e5bb1ecefa48533cfdb5a8fa97e6fdd4787a51e",
+      "passed": true,
+      "healthy": {
+        "max_ms": 4.514888,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "per_second": 495408.51871723944,
+        "verified": 3963856
+      },
+      "churn": {
+        "max_ms": 4.328013,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 49616.64063038474,
+        "verified": 396992
+      },
+      "inspection": {
+        "max_ms": 3.215422,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 2.097152,
+        "per_second": 199.97033947438632,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 15.69,
+      "server_cpu_seconds_per_wall_second": 1.9609591414707008,
+      "elapsed_seconds": 8.001186597,
+      "normal_closes": 405190,
+      "final_counts": {
+        "delivered_bytes": 4266175824,
+        "deliveries": 4767645,
+        "joins": 405190,
+        "normal_closes": 405190,
+        "sent_bytes": 4118069592,
+        "sent_messages": 4362453,
+        "value_bytes": 4074453040
+      },
+      "sampled_rss_kib": [
+        105148,
+        106960,
+        106080
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "selected",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-selected-2.json",
+      "trace_sha256": "d7eb2b549d64befdb8446ff9ecfe3e46e346c427621eccf1ef4ac67f84385907",
+      "passed": true,
+      "healthy": {
+        "max_ms": 6.239111,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "per_second": 472038.9790803781,
+        "verified": 3776880
+      },
+      "churn": {
+        "max_ms": 6.750007,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "per_second": 39015.87984141353,
+        "verified": 312174
+      },
+      "inspection": {
+        "max_ms": 9.60825,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.96991340169794,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 16.54,
+      "server_cpu_seconds_per_wall_second": 2.0671889797900524,
+      "elapsed_seconds": 8.001203645,
+      "normal_closes": 320370,
+      "final_counts": {
+        "delivered_bytes": 3925439239,
+        "deliveries": 4409427,
+        "joins": 320370,
+        "normal_closes": 320370,
+        "sent_bytes": 3922555878,
+        "sent_messages": 4089055,
+        "value_bytes": 3881665326
+      },
+      "sampled_rss_kib": [
+        105368,
+        118640,
+        103996
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "control",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-control-2.json",
+      "trace_sha256": "20ca1a0aab0aa1a56d85cf950b686f6fa1c3c8530a06950bced62b5ddd6effb6",
+      "passed": true,
+      "healthy": {
+        "max_ms": 5.757604,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 1.048576,
+        "per_second": 403003.71463732154,
+        "verified": 3224480
+      },
+      "churn": {
+        "max_ms": 8.006293,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 4.194304,
+        "per_second": 35259.07555443484,
+        "verified": 282112
+      },
+      "inspection": {
+        "max_ms": 8.664005,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.9720709756967,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 14.91,
+      "server_cpu_seconds_per_wall_second": 1.8634897364047736,
+      "elapsed_seconds": 8.001117317,
+      "normal_closes": 290308,
+      "final_counts": {
+        "delivered_bytes": 3351758703,
+        "deliveries": 3796903,
+        "joins": 290308,
+        "normal_closes": 290308,
+        "sent_bytes": 3349145900,
+        "sent_messages": 3506593,
+        "value_bytes": 3314079968
+      },
+      "sampled_rss_kib": [
+        104940,
+        114476,
+        112280
+      ]
+    },
+    {
+      "mode": "none",
+      "label": "selected",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-selected-2.json",
+      "trace_sha256": "d39bfdbfa7625e2763bc8b08b5fd00f44c1e2ab7fbbeca5e96698edf3bc31b6a",
+      "passed": true,
+      "healthy": {
+        "max_ms": 4.4238,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 533003.6351666062,
+        "verified": 4264064
+      },
+      "churn": {
+        "max_ms": 4.601275,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 52853.44217655534,
+        "verified": 422831
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 15.74,
+      "server_cpu_seconds_per_wall_second": 1.9674838880285057,
+      "elapsed_seconds": 8.000065513,
+      "normal_closes": 431027,
+      "final_counts": {
+        "delivered_bytes": 4433747443,
+        "deliveries": 5117925,
+        "joins": 431027,
+        "normal_closes": 431027,
+        "sent_bytes": 4429868169,
+        "sent_messages": 4686896,
+        "value_bytes": 4382999207
+      },
+      "sampled_rss_kib": [
+        105404,
+        105892,
+        105080
+      ]
+    },
+    {
+      "mode": "none",
+      "label": "control",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-control-2.json",
+      "trace_sha256": "164aed1111497a38cbd8d8a0bce4f742216cce17075bec6014be43865269d2a0",
+      "passed": true,
+      "healthy": {
+        "max_ms": 3.254212,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 535029.7528588482,
+        "verified": 4280288
+      },
+      "churn": {
+        "max_ms": 4.345302,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 53597.2491851192,
+        "verified": 428783
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 15.99,
+      "server_cpu_seconds_per_wall_second": 1.9987266623678086,
+      "elapsed_seconds": 8.00009341,
+      "normal_closes": 436979,
+      "final_counts": {
+        "delivered_bytes": 4450738387,
+        "deliveries": 5146053,
+        "joins": 436979,
+        "normal_closes": 436979,
+        "sent_bytes": 4446805545,
+        "sent_messages": 4709072,
+        "value_bytes": 4399714823
+      },
+      "sampled_rss_kib": [
+        105068,
+        105460,
+        104948
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "control",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-control-3.json",
+      "trace_sha256": "351957d017a2ad24b35ed0f28cb54b3a8bf109199b9a0cd387988b169e88e43e",
+      "passed": true,
+      "healthy": {
+        "max_ms": 6.794236,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 1.048576,
+        "per_second": 392188.38773564267,
+        "verified": 3137952
+      },
+      "churn": {
+        "max_ms": 7.304562,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 4.194304,
+        "per_second": 34573.59746820071,
+        "verified": 276628
+      },
+      "inspection": {
+        "max_ms": 9.545932,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.97164404587076,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 15.12,
+      "server_cpu_seconds_per_wall_second": 1.8897320362334786,
+      "elapsed_seconds": 8.001134399,
+      "normal_closes": 284824,
+      "final_counts": {
+        "delivered_bytes": 3261875615,
+        "deliveries": 3699407,
+        "joins": 284824,
+        "normal_closes": 284824,
+        "sent_bytes": 3259312168,
+        "sent_messages": 3414581,
+        "value_bytes": 3225166356
+      },
+      "sampled_rss_kib": [
+        104908,
+        113784,
+        106876
+      ]
+    },
+    {
+      "mode": "http",
+      "label": "selected",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-http-selected-3.json",
+      "trace_sha256": "98762cb4f5f0cba7658e958ee5ecfe26f4d1fad7f545f1a48b3c8f81c0c63fa5",
+      "passed": true,
+      "healthy": {
+        "max_ms": 6.817076,
+        "p50_upper_ms": 0.065536,
+        "p99_upper_ms": 0.262144,
+        "per_second": 464393.3805318366,
+        "verified": 3715664
+      },
+      "churn": {
+        "max_ms": 7.151836,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "per_second": 38885.71412579011,
+        "verified": 311129
+      },
+      "inspection": {
+        "max_ms": 11.691264,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "per_second": 199.97217424690137,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 16.65,
+      "server_cpu_seconds_per_wall_second": 2.080960438256817,
+      "elapsed_seconds": 8.001113185,
+      "normal_closes": 319325,
+      "final_counts": {
+        "delivered_bytes": 3861928987,
+        "deliveries": 4346121,
+        "joins": 319325,
+        "normal_closes": 319325,
+        "sent_bytes": 3859055031,
+        "sent_messages": 4026794,
+        "value_bytes": 3818787089
+      },
+      "sampled_rss_kib": [
+        105304,
+        120808,
+        106236
+      ]
+    },
+    {
+      "mode": "none",
+      "label": "control",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-control-3.json",
+      "trace_sha256": "b8aa06359906e2e7667ed14a480429af4dfeabbe4612ea644e16c005b96a69da",
+      "passed": true,
+      "healthy": {
+        "max_ms": 3.243612,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 528709.308431863,
+        "verified": 4229712
+      },
+      "churn": {
+        "max_ms": 5.89698,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 53100.52880582008,
+        "verified": 424808
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 16.11,
+      "server_cpu_seconds_per_wall_second": 2.01373213089622,
+      "elapsed_seconds": 8.000070989,
+      "normal_closes": 433004,
+      "final_counts": {
+        "delivered_bytes": 4398179775,
+        "deliveries": 5087527,
+        "joins": 433004,
+        "normal_closes": 433004,
+        "sent_bytes": 4394282708,
+        "sent_messages": 4654521,
+        "value_bytes": 4347737496
+      },
+      "sampled_rss_kib": [
+        104972,
+        105428,
+        105012
+      ]
+    },
+    {
+      "mode": "none",
+      "label": "selected",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-none-selected-3.json",
+      "trace_sha256": "d687148f30c29527e3116d9db164f73ba0c5dfa30c1c3b6bc9c5c637ba9e6451",
+      "passed": true,
+      "healthy": {
+        "max_ms": 2.676448,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "per_second": 531765.8838282165,
+        "verified": 4254176
+      },
+      "churn": {
+        "max_ms": 4.41859,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 52275.023752279936,
+        "verified": 418205
+      },
+      "inspection": {
+        "max_ms": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "per_second": 0.0,
+        "verified": 0
+      },
+      "server_cpu_seconds": 15.57,
+      "server_cpu_seconds_per_wall_second": 1.9462276152198053,
+      "elapsed_seconds": 8.000092013,
+      "normal_closes": 426401,
+      "final_counts": {
+        "delivered_bytes": 4423364059,
+        "deliveries": 5098785,
+        "joins": 426401,
+        "normal_closes": 426401,
+        "sent_bytes": 4419526419,
+        "sent_messages": 4672382,
+        "value_bytes": 4372802597
+      },
+      "sampled_rss_kib": [
+        105332,
+        105848,
+        103688
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "control",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-control-3.json",
+      "trace_sha256": "3c244685e12f189d78e4d3a76e8b3ccec6c062343e9fff237baafb34a1d2fe66",
+      "passed": true,
+      "healthy": {
+        "max_ms": 5.677476,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "per_second": 480643.1256864549,
+        "verified": 3845712
+      },
+      "churn": {
+        "max_ms": 6.029817,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "per_second": 46868.8388499125,
+        "verified": 375006
+      },
+      "inspection": {
+        "max_ms": 5.646597,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 2.097152,
+        "per_second": 199.97051289808695,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 14.85,
+      "server_cpu_seconds_per_wall_second": 1.8559763228353696,
+      "elapsed_seconds": 8.001179658,
+      "normal_closes": 383204,
+      "final_counts": {
+        "delivered_bytes": 4143045131,
+        "deliveries": 4605529,
+        "joins": 383204,
+        "normal_closes": 383204,
+        "sent_bytes": 3995136530,
+        "sent_messages": 4222323,
+        "value_bytes": 3952921278
+      },
+      "sampled_rss_kib": [
+        104916,
+        106772,
+        104892
+      ]
+    },
+    {
+      "mode": "cbor",
+      "label": "selected",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-inspection-inline-cbor-selected-3.json",
+      "trace_sha256": "a0016fc458672a94d77d03e0cd87516b8c3f7bec391c0c9daf9b58e96487d196",
+      "passed": true,
+      "healthy": {
+        "max_ms": 5.028384,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "per_second": 501594.00483310287,
+        "verified": 4013328
+      },
+      "churn": {
+        "max_ms": 11.769771,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "per_second": 48749.502849794844,
+        "verified": 390052
+      },
+      "inspection": {
+        "max_ms": 9.462354,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 4.194304,
+        "per_second": 199.97129756973877,
+        "verified": 1600
+      },
+      "server_cpu_seconds": 15.950000000000001,
+      "server_cpu_seconds_per_wall_second": 1.9934638726483336,
+      "elapsed_seconds": 8.001148262,
+      "normal_closes": 398250,
+      "final_counts": {
+        "delivered_bytes": 4317286623,
+        "deliveries": 4803237,
+        "joins": 398250,
+        "normal_closes": 398250,
+        "sent_bytes": 4169240196,
+        "sent_messages": 4404985,
+        "value_bytes": 4125198324
+      },
+      "sampled_rss_kib": [
+        105356,
+        107488,
+        106276
+      ]
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "none/control": {
+      "healthy": {
+        "per_second": 535029.7528588482,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 3.254212,
+        "throughput_range": [
+          528709.308431863,
+          558893.7214589771
+        ]
+      },
+      "churn": {
+        "per_second": 53597.2491851192,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.345302,
+        "throughput_range": [
+          53100.52880582008,
+          58419.05278024383
+        ]
+      },
+      "inspection": {
+        "per_second": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "max_ms": 0.0,
+        "throughput_range": [
+          0.0,
+          0.0
+        ]
+      },
+      "server_cpu_seconds": 16.11,
+      "server_cpu_seconds_per_wall_second": 2.01373213089622
+    },
+    "none/selected": {
+      "healthy": {
+        "per_second": 533003.6351666062,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 2.897612,
+        "throughput_range": [
+          531765.8838282165,
+          549034.2413802128
+        ]
+      },
+      "churn": {
+        "per_second": 52853.44217655534,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.41859,
+        "throughput_range": [
+          52275.023752279936,
+          56179.74040051969
+        ]
+      },
+      "inspection": {
+        "per_second": 0.0,
+        "p50_upper_ms": 0.0,
+        "p99_upper_ms": 0.0,
+        "max_ms": 0.0,
+        "throughput_range": [
+          0.0,
+          0.0
+        ]
+      },
+      "server_cpu_seconds": 15.74,
+      "server_cpu_seconds_per_wall_second": 1.9674838880285057
+    },
+    "cbor/control": {
+      "healthy": {
+        "per_second": 495408.51871723944,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.262144,
+        "max_ms": 4.514888,
+        "throughput_range": [
+          480643.1256864549,
+          498715.7719378367
+        ]
+      },
+      "churn": {
+        "per_second": 49616.64063038474,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.328013,
+        "throughput_range": [
+          46868.8388499125,
+          51123.4065404772
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97051289808695,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 3.391498,
+        "throughput_range": [
+          199.97033947438632,
+          199.9967003544392
+        ]
+      },
+      "server_cpu_seconds": 15.69,
+      "server_cpu_seconds_per_wall_second": 1.9609591414707008
+    },
+    "cbor/selected": {
+      "healthy": {
+        "per_second": 529973.1536139278,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 0.131072,
+        "max_ms": 3.32431,
+        "throughput_range": [
+          501594.00483310287,
+          532886.7352962825
+        ]
+      },
+      "churn": {
+        "per_second": 52764.1732872902,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 4.44877,
+        "throughput_range": [
+          48749.502849794844,
+          53367.56179532414
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97129756973877,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 3.230642,
+        "throughput_range": [
+          199.97025524940895,
+          199.9717586384357
+        ]
+      },
+      "server_cpu_seconds": 16.729999999999997,
+      "server_cpu_seconds_per_wall_second": 2.090954701263143
+    },
+    "http/control": {
+      "healthy": {
+        "per_second": 401108.62705431227,
+        "p50_upper_ms": 0.032768,
+        "p99_upper_ms": 1.048576,
+        "max_ms": 6.023817,
+        "throughput_range": [
+          392188.38773564267,
+          403003.71463732154
+        ]
+      },
+      "churn": {
+        "per_second": 35259.07555443484,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 4.194304,
+        "max_ms": 7.304562,
+        "throughput_range": [
+          34573.59746820071,
+          36037.400045933005
+        ]
+      },
+      "inspection": {
+        "per_second": 199.9720709756967,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "max_ms": 9.545932,
+        "throughput_range": [
+          199.97164404587076,
+          199.97239386102058
+        ]
+      },
+      "server_cpu_seconds": 15.12,
+      "server_cpu_seconds_per_wall_second": 1.8897320362334786
+    },
+    "http/selected": {
+      "healthy": {
+        "per_second": 472038.9790803781,
+        "p50_upper_ms": 0.065536,
+        "p99_upper_ms": 0.262144,
+        "max_ms": 6.239111,
+        "throughput_range": [
+          464393.3805318366,
+          482967.346158872
+        ]
+      },
+      "churn": {
+        "per_second": 39015.87984141353,
+        "p50_upper_ms": 0.131072,
+        "p99_upper_ms": 2.097152,
+        "max_ms": 6.750007,
+        "throughput_range": [
+          38885.71412579011,
+          41270.30641898847
+        ]
+      },
+      "inspection": {
+        "per_second": 199.97217424690137,
+        "p50_upper_ms": 8.388608,
+        "p99_upper_ms": 8.388608,
+        "max_ms": 9.60825,
+        "throughput_range": [
+          199.96991340169794,
+          199.99724463796065
+        ]
+      },
+      "server_cpu_seconds": 16.65,
+      "server_cpu_seconds_per_wall_second": 2.080960438256817
+    }
+  },
+  "total_healthy_deliveries": 71136608,
+  "total_churn_lifecycles": 6832194,
+  "total_timed_inspections": 19200,
+  "total_normal_closes": 6979734
+}

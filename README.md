@@ -234,6 +234,41 @@ Its pinned libraries are cached locally and all test listeners run in a private
 network namespace. It leaves host services and system libraries in place. This
 optional comparison is separate from the standard CI checks.
 
+For a performance comparison against that preserved C++ executable, using the
+same verified application workload directly on each native protocol:
+
+```sh
+cargo build --locked --release --bins --example inspection
+python3 scripts/compare-cpp.py --workers 1 --server-cpus 0 \
+  --output artifacts/cpp-one-core.json
+python3 scripts/compare-cpp.py --workers 4 --server-cpus 0-3 \
+  --output artifacts/cpp-four-core.json
+python3 scripts/compare-cpp.py --rebuild-cpp --workers 4 --cases private query \
+  --output artifacts/cpp-rebuilt.json
+```
+
+Private delivery, private delivery with reconnect churn, and private delivery
+with authenticated channel queries run as separate cases. C++ uses its original
+binary wire format; Rust uses CBOR. The original shipped binary's build flags
+are unknown. Its delayed retirement semantics, actual thread counts, CPU use,
+sampled RSS and every checked lifecycle are recorded. Run comparisons separately
+from compilation, profiles and other load tests. This is a comparison of those
+complete servers and protocols on loopback, not an isolated language benchmark.
+The optional rebuild needs Clang plus OpenSSL/TBB/libuv/zlib development files.
+It uses upstream optimization flags and a temporary copy with only the worker
+count fixed, then verifies every C++ listener binds. The preserved shipped
+executable starts only one listener here. Rebuilt four-worker churn failed
+verification with a repeated welcome ID; its failed diagnostics are separate
+from successful timings. See the
+[direct comparison](docs/performance.md#direct-c-comparison-2026-10-16) for exact
+scope, performance, memory costs and limits.
+
+To measure concurrent inspection within Rust, including its HTTP management
+endpoint, use `python3 scripts/inspection.py --mode http --output
+artifacts/inspection.json`. Modes `none` and `cbor` provide companion controls;
+the default workload holds 8,192 idle rooms alongside private traffic and churn.
+All inspection responses and application deliveries are checked.
+
 To check receive-slab retention under actual unread-recipient backpressure:
 
 ```sh

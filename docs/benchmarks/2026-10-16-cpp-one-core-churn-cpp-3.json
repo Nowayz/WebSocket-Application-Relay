@@ -1,0 +1,247 @@
+{
+  "kind": "cpp",
+  "case": "churn",
+  "server_command": [
+    "taskset",
+    "-c",
+    "0",
+    "/home/phil/dev/war_next/artifacts/reference/app"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "4-7",
+    "/home/phil/dev/war_next/artifacts/clients/cpp-comparison/inspection",
+    "--url",
+    "ws://127.0.0.1:1338",
+    "--wire",
+    "cpp",
+    "--protocol-only",
+    "--mode",
+    "none",
+    "--rooms",
+    "8192",
+    "--seconds",
+    "8",
+    "--pairs",
+    "2",
+    "--churn-workers",
+    "8",
+    "--inspectors",
+    "2",
+    "--inspection-interval-ms",
+    "10"
+  ],
+  "server_sha256": "ce95e4dea01a4db0e5c32942d5520b5f4a8ab1c87affdcd8120bc8aefa332547",
+  "client_sha256": "e7aa1a88c914617004496e691527d5184ea63fa3e34da94238eeaf82deea1a2b",
+  "runner_sha256": "a1693ebea410b1053be66c28c25551b58434a8d82b99c759ead41179e3b89162",
+  "client_source_sha256": "87cfb061ec087af38adcfaaeb0ecf611d934d476623d010844673097cd7fa4a0",
+  "isolation": {
+    "host_netns": "net:[4026531833]",
+    "test_netns": "net:[4026533048]",
+    "root_mount": "read-only",
+    "writable_path": "/home/phil/dev/war_next/artifacts/reference"
+  },
+  "events": [
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 172122,
+          "deliveries": 8199,
+          "joins": 8197,
+          "normal_closes": 0,
+          "sent_bytes": 57,
+          "sent_messages": 4,
+          "value_bytes": 0
+        },
+        "stable_channels": 8196,
+        "stable_sessions": 8197
+      },
+      "event": "ready",
+      "server": {
+        "VmSize": 428932,
+        "VmRSS": 20140,
+        "RssAnon": 12192,
+        "Threads": 3,
+        "cpu_seconds": 0.2
+      },
+      "client": {
+        "VmSize": 321832,
+        "VmRSS": 48320,
+        "RssAnon": 44432,
+        "Threads": 5,
+        "cpu_seconds": 0.14
+      },
+      "process_seconds": 4.23963993399957
+    },
+    {
+      "details": {
+        "churn": {
+          "max_ms": 3.529075,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "per_second": 9223.630983524268,
+          "verified": 73799
+        },
+        "churn_lifecycles_per_worker": [
+          9227,
+          9206,
+          9221,
+          9233,
+          9250,
+          9202,
+          9218,
+          9242
+        ],
+        "counts": {
+          "delivered_bytes": 2150395577,
+          "deliveries": 2231525,
+          "joins": 81996,
+          "normal_closes": 73799,
+          "sent_bytes": 2149633120,
+          "sent_messages": 2149531,
+          "value_bytes": 2132436847
+        },
+        "elapsed_seconds": 8.001078982,
+        "healthy": {
+          "max_ms": 1.701485,
+          "p50_upper_ms": 0.065536,
+          "p99_upper_ms": 1.048576,
+          "per_second": 259431.00982626947,
+          "verified": 2075728
+        },
+        "inspection": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        }
+      },
+      "event": "measured",
+      "server": {
+        "VmSize": 437124,
+        "VmRSS": 34244,
+        "RssAnon": 26296,
+        "Threads": 3,
+        "cpu_seconds": 7.0
+      },
+      "client": {
+        "VmSize": 321964,
+        "VmRSS": 49140,
+        "RssAnon": 45060,
+        "Threads": 5,
+        "cpu_seconds": 4.38
+      },
+      "process_seconds": 12.241225272999145
+    },
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 2150502233,
+          "deliveries": 2231528,
+          "joins": 81996,
+          "normal_closes": 81996,
+          "sent_bytes": 2149633129,
+          "sent_messages": 2149532,
+          "value_bytes": 2132436847
+        },
+        "inspections_verified": 2,
+        "passed": true,
+        "retired_churn_members_verified": 73799
+      },
+      "event": "done",
+      "server": {
+        "VmSize": 437640,
+        "VmRSS": 35112,
+        "RssAnon": 27164,
+        "Threads": 3,
+        "cpu_seconds": 7.04
+      },
+      "client": {
+        "VmSize": 322868,
+        "VmRSS": 50080,
+        "RssAnon": 46000,
+        "Threads": 5,
+        "cpu_seconds": 4.42
+      },
+      "process_seconds": 12.34930322099899
+    }
+  ],
+  "passed": true,
+  "startup_server": {
+    "VmSize": 416628,
+    "VmRSS": 11708,
+    "RssAnon": 3760,
+    "Threads": 3,
+    "cpu_seconds": 0.01
+  },
+  "loaded_libraries": {
+    "/etc/ld.so.cache": "d42ddfed12a9f892486d1d77eac387786b2392a1b16b82423c857bc74e54eecf",
+    "/home/phil/dev/war_next/artifacts/reference/root/usr/lib/x86_64-linux-gnu/libcrypto.so.1.1": "cde898ee0dcd5e27350f40f4419c7745eb4a3356f4456bdc2b373d6ba97ed20a",
+    "/home/phil/dev/war_next/artifacts/reference/root/usr/lib/x86_64-linux-gnu/libssl.so.1.1": "f39abf7f23a10dbcbfb4b7a9da2746167ea53e99a84f377d11020d3ca106b5be",
+    "/home/phil/dev/war_next/artifacts/reference/root/usr/lib/x86_64-linux-gnu/libtbb.so.2": "9a2870b5cc7ac279e570b98b7bd9ace2603d0f4e19757ba94086272666cc1004",
+    "/home/phil/dev/war_next/artifacts/reference/root/usr/lib/x86_64-linux-gnu/libtbbmalloc.so.2": "8d4a10d96ac4ff328103d71f27eaf45dd94fc7280cfa52344647a4663aabe083",
+    "/usr/lib/ld-linux-x86-64.so.2": "f5e11cc62f8f2c24dff532982559f4303dba3b17e7450551372a88c8e7ea8757",
+    "/usr/lib/libc.so.6": "02c8c3d06180beee9c7d0392aa85736c7d19f274a81e7f8f0b3d9e28e0641524",
+    "/usr/lib/libdl.so.2": "9b3812e7f6b766e2d0a1d9eeca1a58c1272392859e8b04f708b2f86b2256d03c",
+    "/usr/lib/libgcc_s.so.1": "e618cb9c90c2eb3a1dad1cfea5b6c1eebcf2e799ad805976f4ae47bdd61c716a",
+    "/usr/lib/libm.so.6": "965106704753eefe8c31ae7da6daba3ead3d18c52b19b5fcc41178bcc4aa999d",
+    "/usr/lib/libpthread.so.0": "839b91403f89fa4c6888d50deb2b59cd0612f8cfe3d57dd9d6314832b4cb31ab",
+    "/usr/lib/libstdc++.so.6.0.36": "f5fc7380f2ae46fa4053a64be04e7b98109f1066a4bbfff3c37042488aa0be0e",
+    "/usr/lib/libuv.so.1.0.0": "407e3422efb45bb97856fc517c34656ad1292debdb7bc29c5f3e06195aed1c6a",
+    "/usr/lib/libz.so.1.3.2": "6c78c5e58c3bb49a1cd151a95cdf1a17fe07a91a57a59e0279b984c533075ca9"
+  },
+  "mixed": {
+    "churn": {
+      "max_ms": 3.529075,
+      "p50_upper_ms": 1.048576,
+      "p99_upper_ms": 2.097152,
+      "per_second": 9223.630983524268,
+      "verified": 73799
+    },
+    "churn_lifecycles_per_worker": [
+      9227,
+      9206,
+      9221,
+      9233,
+      9250,
+      9202,
+      9218,
+      9242
+    ],
+    "counts": {
+      "delivered_bytes": 2150395577,
+      "deliveries": 2231525,
+      "joins": 81996,
+      "normal_closes": 73799,
+      "sent_bytes": 2149633120,
+      "sent_messages": 2149531,
+      "value_bytes": 2132436847
+    },
+    "elapsed_seconds": 8.001078982,
+    "healthy": {
+      "max_ms": 1.701485,
+      "p50_upper_ms": 0.065536,
+      "p99_upper_ms": 1.048576,
+      "per_second": 259431.00982626947,
+      "verified": 2075728
+    },
+    "inspection": {
+      "max_ms": 0.0,
+      "p50_upper_ms": 0.0,
+      "p99_upper_ms": 0.0,
+      "per_second": 0.0,
+      "verified": 0
+    },
+    "server_cpu_seconds": 6.8,
+    "server_cpu_per_wall_second": 0.8498853736224748,
+    "client_cpu_seconds": 4.24,
+    "client_cpu_per_wall_second": 0.529928527082249
+  },
+  "client_exit_code": 0,
+  "server_forced_kill": false,
+  "server_exit_code": -15,
+  "server_log": "",
+  "client_log": ""
+}

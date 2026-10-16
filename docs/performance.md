@@ -1320,3 +1320,253 @@ Management inspection is functionally verified, not separately benchmarked.
 Large active inspection/lock contention, unpaced departure, multi-hour operation,
 TLS/proxies and clustered routing remain unmeasured. RSS samples are event-boundary
 observations, not continuous peaks or an allocation census.
+
+## Concurrent channel inspection, 2026-10-16
+
+The next measured workload keeps 8,192 single-member rooms connected, plus two
+private pairs and eight reconnect workers in distinct fixed rooms. Two optional
+inspectors each request the full channel list every 10 ms. The first control
+measurements show HTTP inspection reducing healthy throughput from about 569k
+to 395k deliveries/s and increasing the p99 upper bucket from 0.131072 to
+1.048576 ms. This is an exploratory observation, separate from the final matrix.
+
+Both inspection paths held the registry read lock while sorting and encoding;
+HTTP also formatted UTF-8/base64 under it. Waiting membership writers can then
+delay other registry readers. The selected implementation captures coherent
+bounded names and counts, releases the lock, then formats/sorts/encodes the
+response. Inline names avoid per-name reference counts. CBOR captures only the
+member counts it returns; HTTP also captures variable usage. It copies small
+inspection metadata without changing application-body ownership or routing.
+
+An initial shared-`Bytes` snapshot improved HTTP results but added CBOR CPU
+cost. Separate user-cycle diagnostics found sorting and shared-name cloning;
+that motivated the narrower inline representation. The initial prototype,
+exploration and profiles remain recorded, and are excluded from the final
+timing medians. Profiles identify sampled work, not a complete attribution of
+lock-wait time.
+
+Final medians use three fresh processes per build/mode, eight measured seconds
+each, with mode order rotated and build order reversed on repetition two.
+The four-worker server uses CPUs 0–3; the same frozen four-worker client uses
+4–7. Setup, exact quiescent snapshots and cleanup are gated outside timing.
+Each inspector verifies all names, counts and ordering; HTTP also verifies all
+metadata fields. Binary, NUL and Unicode names are included. Every private
+message checks its full 1 KiB value, sender and FIFO order in 16-message windows.
+Every reconnect checks welcome, counter self-delivery, exact normal Close and
+EOF. Queues retain their defaults; inbound rates and heartbeats are disabled.
+
+| Concurrent inspection | Healthy deliveries/s, control → selected | Reconnects/s, control → selected | Healthy p99 upper bucket, ms | Reconnect p99 upper bucket, ms |
+| --- | ---: | ---: | ---: | ---: |
+| None | 535,030 → 533,004 | 53,597 → 52,853 | 0.131072 → 0.131072 | 1.048576 → 1.048576 |
+| Authenticated CBOR, 200 queries/s | 495,409 → 529,973 | 49,617 → 52,764 | 0.262144 → 0.131072 | 1.048576 → 1.048576 |
+| Authenticated HTTP, 200 queries/s | 401,109 → 472,039 | 35,259 → 39,016 | 1.048576 → 0.262144 | 4.194304 → 2.097152 |
+
+CBOR inspection allows **6.98% more healthy deliveries and 6.34% more
+reconnects**; HTTP allows **17.68% and 10.66% more** respectively. With no timed
+inspection, throughput differs by −0.38%/−1.39%, with overlapping ranges and
+unchanged p99 buckets. These are improvements under this concurrent inspection
+workload, not general forwarding gains. All inspection cases complete exactly
+1,600 timed queries per process. CBOR inspection p50 changes from 2.097152 to
+1.048576 ms; its p99 remains 2.097152 ms. HTTP inspection p50/p99 stay in the
+8.388608 ms bucket. Healthy HTTP-case p50 worsens from 0.032768 to 0.065536 ms,
+despite the p99 improvement. Latencies include client validation and competing
+client tasks; the percentile figures are logarithmic bucket upper bounds.
+
+Server CPU for all concurrent work changes from 16.11 to 15.74 seconds without
+inspection, 15.69 to 16.73 with CBOR, and 15.12 to 16.65 with HTTP. The latter
+increases accompany more completed application work and cannot be interpreted
+as isolated CPU per message or per inspection. Snapshot allocation and sorting
+still scale with the full list; the change adds no cache or pagination.
+
+All eighteen processes verify **71,136,608 healthy deliveries, 6,832,194
+reconnect lifecycles, 19,200 timed inspections and 6,979,734 normal closes**.
+Exact input/output counts and bytes pass, routed application-body compaction
+stays zero, all final resource/error gauges clear, and every client/server exits
+zero without forced killing. RSS is sampled at gates rather than continuously.
+
+The [final comparison](benchmarks/2026-10-16-inspection-final-comparison.json)
+contains medians, ranges, hashes and links to every raw trace. The
+[initial shared-name prototype](benchmarks/2026-10-16-inspection-comparison.json)
+is a separate candidate. The frozen timed client predates the later C++ protocol
+adapter; its original source and runner are preserved under
+`artifacts/clients/inspection`. Build `cargo build --locked --release --bins
+--example inspection`, then run `python3 scripts/inspection.py --mode http
+--output artifacts/inspection.json`; use `--mode cbor` or `--mode none` for the
+companion workloads. These finite plaintext loopback results do not establish
+TLS/proxy behavior, multi-hour stability or cluster capacity.
+
+An [ordinary traffic/churn guard](benchmarks/2026-10-16-inspection-cost.json)
+runs eighteen more fresh four-second cases with 64 clients. At 1 KiB, throughput
+is +0.81% and CPU per delivery +0.08%; churn throughput is −3.74% and CPU
+decreases 2.34%. Both retain their p99 upper buckets. The first 64 KiB
+comparison records throughput −4.18%, CPU +2.47% and a worse p99 upper bucket
+(4.194304→8.388608 ms). A separately recorded
+[six-case follow-up](benchmarks/2026-10-16-inspection-large-cost-followup.json)
+uses the identical 64 KiB workload and alternating order: throughput is +3.99%,
+CPU −2.88%, with both p99 buckets at 8.388608 ms. Ranges overlap in both sets;
+the initial adverse observations remain recorded. These short guards do not
+establish a consistent ordinary large-message gain or loss. They support the
+inspection-specific result without a general forwarding-speed claim. All
+twenty-four guards verify every application value, exact joins/departures, zero routed-body
+compaction, cleanup and process exit. Traffic deliberately drops 64 TCP handles
+per case; churn separately verifies normal Close. Guard CPU includes setup and
+final transport cleanup, excluding service shutdown.
+
+## Direct C++ comparison, 2026-10-16
+
+The inspection optimization above compares two Rust builds. A separate direct
+comparison now runs the upstream shipped C++ executable (`app`, SHA-256
+`ce95e4dea01a4db0e5c32942d5520b5f4a8ab1c87affdcd8120bc8aefa332547`)
+from upstream revision `881c8daaf2cf05adea8f522b28cf372e8f82d4e9` against the
+selected native Rust release. C++ uses the original binary protocol; Rust uses
+CBOR. Both receive identical encoded byte-string values (1,024 application
+bytes, 1,027 value bytes). C++ treats them as opaque; Rust validates CBOR. This
+compares complete implementations and protocols, not language overhead alone.
+
+One frozen four-worker load client contains small adapters for join, welcome,
+authentication, routing, queries and departures. Private traffic uses the same
+two pairs, 64 cyclic templates and 16-message windows as the inspection probe.
+Both servers hold 8,192 other single-member rooms. Full values/senders/order,
+every normal Close/EOF, authenticated query names/counts, and variable setup are
+checked. Each process is fresh in a private network namespace; dependencies and
+executable checksums are pinned. C++ build flags are unknown; it uses the shipped
+executable with isolated OpenSSL 1.1/TBB dependencies rather than a fresh tuned
+source build. Original source/history are retained.
+
+Three eight-second repetitions per implementation/case rotate case order and
+reverse implementation order on repetition two. Both servers are pinned to CPU
+0 for the first matrix; Rust uses one worker. The second allows CPUs 0–3 for
+both and gives Rust four workers. The unchanged C++ process settles at three
+total threads in this environment; Rust has two/five respectively. A separate
+line-buffered startup diagnostic records 31 failed listener binds and one
+listening socket. Consequently the four-core allowance does not turn the
+shipped C++ executable into a four-loop baseline. We record
+observed CPU use rather than assuming the C++ source's hardware-concurrency loop
+results in equivalent active parallelism. The client uses separate cores 4–7.
+Setup/cleanup are gated outside timing. No builds, profiles or other load tests
+overlap these measurements; rates/heartbeats are off and Rust queues are default.
+
+| One-core workload | C++ healthy deliveries/s | Rust healthy deliveries/s | C++ reconnects/s | Rust reconnects/s |
+| --- | ---: | ---: | ---: | ---: |
+| Private only | 742,524 | 583,047 | — | — |
+| Private + eight reconnect workers | 257,120 | 396,667 | 9,224 | 15,779 |
+| Private + 200 channel queries/s | 674,045 | 511,033 | — | — |
+
+C++ private throughput is higher: Rust is 21.48% lower in the private-only case
+and 24.18% lower with queries. Private-only native CPU is 902 versus 1,228
+ns/verified delivery (median of per-process ratios). Healthy private p99 is in
+the same 0.065536 ms upper bucket. With churn, Rust completes 54.27% more healthy
+deliveries and 71.07% more lifecycles; healthy p99 is 0.131072 versus 1.048576 ms.
+Both reconnect p99s are 2.097152 ms. Both query cases complete all requested
+inspections with 4.194304 ms query p99.
+
+| Four-core allowance | C++ healthy deliveries/s | Rust healthy deliveries/s | C++ reconnects/s | Rust reconnects/s |
+| --- | ---: | ---: | ---: | ---: |
+| Private only | 734,305 | 602,004 | — | — |
+| Private + eight reconnect workers | 255,090 | 550,759 | 9,185 | 57,783 |
+| Private + 200 channel queries/s | 670,793 | 626,215 | — | — |
+
+Rust is 18.02% lower for private-only throughput and 6.65% lower with queries.
+Private-only per-process CPU medians are 914/1,443 ns per verified delivery for
+C++/Rust. In the churn case Rust completes 2.16× the healthy traffic and 6.29×
+the reconnects, using 2.132 server CPU-seconds per wall-second versus 0.850.
+Healthy churn p99 is 0.131072 versus 1.048576 ms; reconnect p99 is 1.048576 versus
+2.097152 ms. Query p99 is 4.194304 ms for Rust and 2.097152 ms for C++; both
+complete exactly 1,600 timed queries per process. These are separate concurrent
+workloads; the differences across rows do not establish a causal effect of
+enabling queries on private throughput. Client CPU remains below its four-core
+allowance. Raw records contain ranges and both processes' CPU use.
+
+At the ready gate with roughly 8,200 connected sockets, median RSS is about
+**19.7 MiB for C++ and 101 MiB for Rust** in both matrices. This is roughly a
+fivefold Rust memory cost at this population, despite shared application bodies.
+During churn C++ grows to about 33.4 MiB; Rust stays near 101–102 MiB. These are
+event-boundary RSS samples, not continuous peaks or an allocation census, and
+include each server's dependencies and operational features. The results identify
+private-forwarding CPU and idle connection memory as concrete follow-up targets;
+they do not support a general Rust-over-C++ performance claim.
+
+C++ delays retired members/variables until its 30-second GC; the short churn
+case verifies the exact retained member count in each fixed churn room before
+that first collection. Rust removes those members immediately and verifies
+zero final reservations/resources. Queries run without churn so both channel
+lists have the same membership; C++ ordering is normalized only on the client,
+while Rust's documented order is checked. The full mixed HTTP management case
+has no original C++ counterpart. GC pauses, long-duration behavior, TLS, larger
+fanout and a rebuilt/tuned multicore C++ executable remain outside this comparison.
+
+All **36 cases** pass, checking **158,383,904 healthy deliveries, 2,197,118
+reconnect lifecycles, 19,200 timed inspections and 2,492,234 normal closes**.
+Rust exact metrics/bytes and zero body-compaction/resource/error gauges pass.
+All clients and Rust servers exit zero without forced killing; C++ stops with
+its expected SIGTERM status because it has no graceful process signal handler.
+The [one-core matrix](benchmarks/2026-10-16-cpp-one-core.json) and
+[four-core matrix](benchmarks/2026-10-16-cpp-four-core.json) link every raw trace,
+binary/source hash, loaded-library checksum, observed thread count and command.
+Reproduce using the commands in the [README](../README.md#verify-and-measure).
+
+### Rebuilt four-worker C++ source
+
+The shipped artifact's failed listener binds make it unsuitable for judging
+multicore C++ scaling. A second baseline compiles the preserved `relay.cpp` and
+uWS sources with the upstream build script's `-O3 -march=native -mrdrnd
+-fomit-frame-pointer -std=c++1z` flags, using Clang 23.1.1 and current system
+OpenSSL/TBB/libuv/zlib. A temporary source copy changes only the worker-count
+expression to the constant four, matching Rust's four workers and CPU allowance.
+Production/upstream files are unchanged. Every fresh C++ process is checked for
+four listening sockets and six total threads before the client starts. Rust
+uses its normal Cargo release build; these compiler/library configurations are
+recorded, not treated as an isolated language comparison.
+
+Three fresh eight-second repetitions per build/case use the same frozen client
+and application work, rotating private/query order and reversing build order in
+repetition two. Both use CPUs 0–3, the client 4–7. Final medians and ranges:
+
+| Measurement | Rebuilt C++, four workers | Rust CBOR, four workers |
+| --- | ---: | ---: |
+| Private deliveries/s | 1,110,733 | 615,940 |
+| Private throughput range | 1,106,959–1,114,843 | 599,497–619,511 |
+| Private p99 upper bucket, ms | 0.065536 | 0.131072 |
+| Private server CPU, ns/verified delivery | 1,074 | 1,449 |
+| Private ready RSS, MiB | 20.49 | 101.10 |
+| Healthy deliveries/s with 200 channel queries/s | 686,055 | 630,576 |
+| Query-case healthy throughput range | 681,759–1,085,770 | 627,520–636,578 |
+| Query p99 upper bucket, ms | 4.194304 | 2.097152 |
+
+C++ private throughput is **1.80× Rust's**; Rust is 44.55% lower. Private server
+CPU per delivery is 34.93% higher for Rust, while its ready RSS is about 4.93×.
+The query case has substantial C++ run-to-run variation, so the 686k median must
+be read with its 682k–1,086k range. Rust is 8.09% below that median and has a lower
+query p99 bucket in this matrix. Work placement among C++ reuse-port listeners
+was not controlled or measured per thread; the data do not isolate the reason
+for the variation. Both complete every requested query, and latencies include
+client-side response validation. These are separate concurrent workloads, not
+a test of adding queries to an otherwise fixed execution schedule.
+
+The rebuilt multicore **churn case fails verification** and has no valid
+throughput result. Three separate short checks record a timeout, a self-delivery
+mismatch, and—with diagnostic welcome-ID tracking enabled—a repeated ID
+`30936709452072125` during `churn0`'s join at sequence 550. Each had four verified
+listeners and finished before the first C++ GC, while retired IDs should still
+be reserved. This establishes the observed ID/lifecycle failure; it does not
+isolate which source-level race produced it. The single-active-loop shipped
+executable's successful churn results above cannot substitute for a successful
+four-worker source run. Rust's separate four-worker churn cases pass every
+delivery/lifecycle and all final resource checks.
+
+All **twelve successful rebuilt/Rust cases** check **76,130,992 healthy
+deliveries, 9,600 timed inspections and 98,376 normal closes**. Exact native
+Rust counters/bytes, zero body compaction and final resource release pass; all
+clients/Rust servers exit zero, and C++ receives its expected SIGTERM without
+forced killing. The [rebuilt comparison](benchmarks/2026-10-16-cpp-rebuilt.json)
+contains source/configuration/compiler/library hashes and every raw trace. The
+[separate diagnostic record](benchmarks/2026-10-16-cpp-rebuilt-churn-diagnostics.json)
+preserves all three failed checks and the shipped artifact's startup failures.
+Diagnostic runs are excluded from successful timing medians.
+
+Use `python3 scripts/compare-cpp.py --rebuild-cpp --workers 4 --cases private
+query --output artifacts/cpp-rebuilt.json` after building the Rust binaries and
+inspection example. The runner builds C++ once before timing. `--audit-ids` is
+a fault-diagnosis option with extra client storage/work and must not be mixed
+into ordinary performance results. Compiler tuning parity, per-thread work
+placement, long GC cycles, TLS and sustained large populations remain open.
