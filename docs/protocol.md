@@ -111,6 +111,16 @@ Admission refusals before upgrade can end with a TCP close instead of a WebSocke
 close frame. The bridge suppresses modern command acknowledgements to preserve
 original-client expectations. See the README for its supported value conversions.
 
+After a successful HTTP upgrade, native decoder rejections use the same policy
+before and after channel join: protocol errors send `1002`, excessive message
+size sends `1009`, and decoder staging exhaustion sends `1013`. Size/admission
+decisions made from a frame header do not wait for its body. A failed decoder
+can only send a best-effort Close; it does not resume parsing untrusted input to
+wait for an acknowledgement. Complete CBOR-message policy failures use the
+ordinary bounded closing handshake. This follows the distinction in
+[RFC 6455 section 7.1.7](https://www.rfc-editor.org/rfc/rfc6455.html#section-7.1.7)
+between reporting failure and continuing to process input after failure.
+
 Close codes describe the intended policy. If a transport is blocked partway
 through a frame, cancellation drops it instead of queueing another write behind
 the blocked data. Such a peer may observe an abnormal close/reset; `1006` is a

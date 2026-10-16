@@ -316,6 +316,24 @@ ownership. This provides scheduling opportunities, without a fixed latency
 guarantee. Optional `--server-cpus 0 --client-cpus 4-7` separates the client on a
 Linux host with those CPUs; `--read-buffer-bytes 131072` checks larger read chunks.
 
+To exercise valid and rejected CBOR forms alongside independent healthy traffic:
+
+```sh
+python3 scripts/input-corpus.py --output artifacts/input-corpus.json
+```
+
+The independent raw client checks 2,311 exchanges covering 776 input/context
+cases. It combines whole messages, mixed-size fragments with interleaved Ping
+and 257 empty continuations, and pipelined join/data. Rejected values must never
+reach a witness or mutate its channel-variable sentinel; accepted encoded values
+must arrive unchanged. It checks exact byte/message/delivery totals, disconnect
+notifications, rejection counters and resource release. Complete-message policy
+rejections verify the closing handshake; terminal decoder failures verify the
+best-effort Close response. Use `--clients 8 --workers 4` for eight concurrent
+producers or `--clients 1 --workers 1` for the sequential baseline. The server
+remains the executable selected by `--server`; the probe starts a fresh local
+process with bounded test settings and a fixture-only management token.
+
 The load tool verifies every frame and its order. Reports include setup time,
 verified deliveries, throughput, and end-to-end p50/p99/max latency. Comparisons use
 release builds, fresh server processes, sequential candidates, and alternating

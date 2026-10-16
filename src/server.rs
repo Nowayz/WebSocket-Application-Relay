@@ -196,7 +196,7 @@ async fn connection_task(
     let subscription = loop {
         let incoming = tokio::select! {
             _ = stopped.as_mut() => { close(&mut ws, Disconnect::SHUTDOWN, &relay, &shutdown).await; return Ok(()); }
-            _ = &mut deadline => { close(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, &relay, &shutdown).await; return Ok(()); }
+            _ = &mut deadline => { reject_join(&mut ws, Disconnect { code: 1008, reason: "Channel Join Timeout" }, &relay, &shutdown).await; return Ok(()); }
             incoming = ws.next() => incoming,
         };
         match incoming {
@@ -209,7 +209,7 @@ async fn connection_task(
             Some(Ok(message)) if !limiter.allow(message.len()) => {
                 drop(message);
                 relay.metrics.rate_limited.fetch_add(1, Relaxed);
-                close(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
+                reject_join(&mut ws, Disconnect::RATE, &relay, &shutdown).await;
                 return Ok(());
             }
             Some(Ok(Message::Binary(bytes))) => {
@@ -218,7 +218,7 @@ async fn connection_task(
                 match result {
                     Ok(subscription) => break subscription,
                     Err(reason) => {
-                        close(&mut ws, reason, &relay, &shutdown).await;
+                        reject_join(&mut ws, reason, &relay, &shutdown).await;
                         return Ok(());
                     }
                 }
@@ -239,15 +239,21 @@ async fn connection_task(
                 }
             }
             Some(Ok(Message::Pong(_))) => {}
-            Some(Err(tungstenite::Error::Capacity(
-                tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
-            ))) => {
-                close(&mut ws, input_memory_limit(), &relay, &shutdown).await;
+            None
+            | Some(Err(
+                tungstenite::Error::Io(_)
+                | tungstenite::Error::ConnectionClosed
+                | tungstenite::Error::AlreadyClosed
+                | tungstenite::Error::Protocol(
+                    tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+                ),
+            )) => return Ok(()),
+            Some(Err(error)) => {
+                reject_join(&mut ws, input_close_reason(&error), &relay, &shutdown).await;
                 return Ok(());
             }
-            None | Some(Err(_)) => return Ok(()),
             _ => {
-                close(&mut ws, cbor_required(), &relay, &shutdown).await;
+                reject_join(&mut ws, cbor_required(), &relay, &shutdown).await;
                 return Ok(());
             }
         }
@@ -363,9 +369,7 @@ async fn connection_task(
                         relay.metrics.transport_disconnects.fetch_add(1, Relaxed);
                         break SessionEnd::Drop(Disconnect { code: 1001, reason: "Transport Closed" });
                     }
-                    Some(Err(tungstenite::Error::Capacity(tungstenite::error::CapacityError::ReadBufferBudgetExceeded))) => break SessionEnd::Close(input_memory_limit()),
-                    Some(Err(tungstenite::Error::Capacity(_))) => break SessionEnd::Close(Disconnect { code: 1009, reason: "Message Too Large" }),
-                    Some(Err(_)) => break SessionEnd::Close(Disconnect::PROTOCOL),
+                    Some(Err(error)) => break SessionEnd::Close(input_close_reason(&error)),
                     _ => break SessionEnd::Close(cbor_required()),
                 }
             }
@@ -405,10 +409,19 @@ async fn connection_task(
     Ok(())
 }
 
-fn input_memory_limit() -> Disconnect {
-    Disconnect {
-        code: 1013,
-        reason: "Input Memory Limit",
+fn input_close_reason(error: &tungstenite::Error) -> Disconnect {
+    match error {
+        tungstenite::Error::Capacity(
+            tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
+        ) => Disconnect {
+            code: 1013,
+            reason: "Input Memory Limit",
+        },
+        tungstenite::Error::Capacity(_) => Disconnect {
+            code: 1009,
+            reason: "Message Too Large",
+        },
+        _ => Disconnect::PROTOCOL,
     }
 }
 
@@ -467,6 +480,16 @@ fn output_failed(relay: &Relay, failure: WriteFailure) -> SessionEnd {
         }
     };
     SessionEnd::Drop(reason)
+}
+
+async fn reject_join(
+    ws: &mut Socket,
+    reason: Disconnect,
+    relay: &Relay,
+    shutdown: &CancellationToken,
+) {
+    relay.metrics.join_rejected.fetch_add(1, Relaxed);
+    close(ws, reason, relay, shutdown).await;
 }
 
 async fn close(ws: &mut Socket, reason: Disconnect, relay: &Relay, shutdown: &CancellationToken) {

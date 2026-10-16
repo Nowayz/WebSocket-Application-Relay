@@ -932,3 +932,44 @@ Reproduce the finite probe with `python3 scripts/fragment-fairness.py --workers 
 continuations per message; the comparison used `--fragments 2000000 --cycles 8`.
 Affinity is optional and requires an appropriate Linux CPU set. These checks
 do not establish production latency, multi-hour stability or cluster capacity.
+
+## Cost check for pre-join rejection reporting, 2026-10-16
+
+Native pre-join decoder failures now share the joined-session Close mapping and
+increment `war_join_rejected_total` once per rejection. The counter is global,
+with no labels or per-connection storage; successful packet processing has no
+new counter update. Body validation and shared forwarding storage are unchanged.
+The behavioral reproduction and independent corpus are described in
+[stability.md](stability.md#rejections-before-join-and-mixed-input-2026-10-16).
+
+Three alternating fresh-process pairs per payload checked ordinary traffic
+against `9f39159`: four server workers on CPUs 0–3, the same frozen verifying
+client on CPUs 4–7, 64 peers/32 pairs, window 16, ten seconds per run. Every value
+and order were checked. Server CPU includes setup and teardown; latency
+percentiles are fixed-histogram upper bounds.
+
+| Payload / median | Prior release | Rejection reporting |
+| --- | ---: | ---: |
+| 1 KiB deliveries/s | 1,789,088 | 1,777,778 |
+| 1 KiB server ns/delivery | 1,593 | 1,597 |
+| 64 KiB deliveries/s | 199,861 | 199,851 |
+| 64 KiB server ns/delivery | 11,766 | 11,623 |
+
+Throughput medians changed −0.63% and −0.005%; CPU changed +0.21% and −1.21%.
+The 1 KiB p99 bound stayed 1.048576 ms. The 64 KiB bounds ranged from 4.194304
+to 8.388608 ms before and were 4.194304 ms after. These overlapping local runs
+support retaining the diagnostic fix without a general speed or latency claim.
+All twelve cases verified expected resource release and the frozen client's
+64 intentional TCP departures per run, with zero new join rejections, protocol,
+timeout, Close or admission errors and zero routed-body compaction. They do not
+verify graceful Close; the input corpus and compatibility cases do so separately.
+
+The selected release also passed the existing 64-source incomplete-frame check
+under a 24 MiB staging allowance: one source was admitted, 63 received `1013`,
+healthy routing and later admission remained verified, and all final staging/
+queue/session/connection/variable gauges were zero. Its admitted incomplete
+transport intentionally drops TCP. The
+[summary](benchmarks/2026-10-16-input-rejection-summary.json) binds the corpus,
+traffic, pressure and acceptance records; the
+[manifest](benchmarks/2026-10-16-input-rejection-build.json) binds source, package,
+patch and fixed-client hashes. This is finite plaintext loopback evidence.

@@ -246,9 +246,22 @@ loses in-memory variables; clients must reconnect and rebuild application state.
 
 Monitor `war_connections`, `war_sessions`, `war_channels`, `war_queued_bytes`,
 `war_variable_bytes`, `war_slow_consumers_total`, `war_global_pressure_total`,
-`war_handshake_errors_total`, `war_protocol_errors_total`, and
+`war_handshake_errors_total`, `war_join_rejected_total`, `war_protocol_errors_total`, and
 `war_rate_limited_total`. Metric labels deliberately exclude user/channel IDs.
 Debug logging reports connection failures without message bodies or credentials.
+
+`war_join_rejected_total` counts native rejection decisions after HTTP upgrade
+and before channel registration: invalid joins, unsupported transport, decoder
+protocol/size/staging errors, channel admission, rate policy and join timeout.
+It increments once before attempting the policy Close. HTTP admission and failed
+handshakes retain their existing counters; peer-Close paths and service shutdown
+are excluded. This includes peer Close codes normalized by the WebSocket library
+to a protocol-error reply: those still follow the peer-Close path. Abrupt
+pre-join transport loss is a drop, rather than a rejection decision.
+The counter describes a lifecycle stage and can overlap reason counters such
+as `war_rate_limited_total` or staging-admission denials. Joined-session protocol
+and transport counters retain their existing scope. No user/channel labels or
+new per-message accounting are added.
 
 Output diagnostics distinguish `war_write_timeouts_total`, `war_write_errors_total`,
 `war_aborted_writes_total` (policy or shutdown cancellation), and

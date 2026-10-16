@@ -444,3 +444,69 @@ separate fresh-server campaigns and configured-idle JS fixture. See
 [application-idle-live.json](benchmarks/2026-10-15-application-idle-live.json)
 for process/source/binary hashes and exact verification boundaries. No public
 deployment or CI execution is claimed.
+
+## Rejections before join and mixed input, 2026-10-16
+
+A socket regression found that a successful HTTP upgrade followed by an
+unmasked frame, invalid fragmented control frame or oversized data header could
+end with a TCP reset before channel join. The same failures already sent policy
+Close frames after joining. Native input-error mapping is now shared across
+both phases: `1002` for protocol errors, `1009` for excessive size and `1013`
+for staging exhaustion. Header-based rejections do not wait for a refused body.
+The new `war_join_rejected_total` counter records pre-join rejection decisions;
+normal peer Close, HTTP admission and shutdown retain their separate behavior.
+Existing joined-session counters and shared application-body ownership remain
+unchanged.
+
+The [raw-client corpus](../scripts/input-corpus.py) builds CBOR and WebSocket
+input independently of the Rust codecs. Its 776 input/context cases become
+2,311 exchanges across whole, fragmented and pipelined forms:
+
+- Nineteen accepted values cover nonpreferred integer/string lengths, full-width
+  integers, opaque tags, duplicate map keys, floating-point bit patterns, and
+  exact depth/item limits. Each returned encoded value is checked byte for byte.
+- 243 rejected encodings cover truncation, trailing data, reserved simple values
+  and additional information, malformed UTF-8, impossible lengths and exceeded
+  depth/item limits. Each runs as a routed value, a different-target value and
+  an attempted variable update. Indefinite forms excluded by WAR are identified
+  separately from malformed CBOR.
+- Invalid joins and raw WebSocket cases run before and after registration.
+  Fragmented messages mix nonempty chunk sizes with 257 empty continuations and
+  an exact interleaved Ping/Pong. Raw bad frames are also written one byte at a
+  time; this tests split writes without assuming TCP packet boundaries.
+- An ordered witness self-message follows each exchange, after checking the
+  exact expected disconnect notification. This proves invalid data was not
+  queued ahead of the barrier. Variable sentinels must survive rejected updates.
+  Pipelined invalid input may reject before the queued welcome is sent; joined
+  and delivery counters are checked against the observed wire events.
+
+The control and fixed smoke runs reproduce 18 previously silent pre-join drops
+and verify all 18 new Close responses. A passing control record describes that
+expected defect, not correct acceptance. Full runs with one worker/one producer,
+four workers/eight producers, and the default README command all pass. Every full
+run verifies 2,204 complete-message policy Close handshakes, 45 terminal-decoder
+Close receipts, five library-normalized peer-Close replies and all ordinary
+Close handshakes. Terminal failures do not claim peer acknowledgement. The
+normalized Close cases already worked in the control and are excluded from the
+new application rejection counter. Exact rejection/message/byte/delivery totals
+match; final staging/connection/session/queue/variable gauges are zero, with no
+unexpected write, Close, transport, handshake or admission errors. Routed-value
+compaction remains zero. Independent 1 KiB self-routing stays verified throughout.
+
+Focused socket checks additionally hold incomplete binary messages across 513
+empty continuations and an interleaved Pong. The join deadline still fires while
+75 healthy round trips continue; its staging lease retires. Admin cancellation
+removes membership and queued reservations before waiting for Close, while
+healthy routing continues. Shutdown closes both pre-join and joined fragmented
+sessions without incrementing join rejections; all resource guards release.
+Rate and staging rejections count their stage exactly once, while HTTP `503`
+admission does not increment the new counter.
+
+All 73 Rust tests, Clippy, formatting, the 62-file vendor audit, seven JavaScript
+socket cases and 48-common-case/eight-explicit-difference original C++ comparison
+pass. [The build manifest](benchmarks/2026-10-16-input-rejection-build.json) binds
+source, package, patch, verifier and release hashes; the
+[summary](benchmarks/2026-10-16-input-rejection-summary.json) binds every raw
+record and its exact counters. Ordinary traffic cost is recorded separately in
+`performance.md`. This finite corpus does not establish exhaustive fuzz coverage,
+production capacity or arbitrary network/teardown behavior.

@@ -169,6 +169,26 @@ async fn prime_read_storage(source: &mut Socket, source_id: u64, receiver_id: u6
     assert_eq!(data(source).await, protocol::envelope(source_id, &[0]));
 }
 
+async fn hold_fragmented_input(ws: &mut Socket) {
+    // One incomplete binary message, spanning more than two parsing quotas.
+    let mut wire = vec![0x02, 0x81, 0, 0, 0, 0, 0x82];
+    for _ in 0..513 {
+        wire.extend_from_slice(&[0, 0x80, 0, 0, 0, 0]);
+    }
+    ws.get_mut().write_all(&wire).await.unwrap();
+    ws.send(Message::Ping(Bytes::from_static(b"held")))
+        .await
+        .unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(2), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap(),
+        Message::Pong(Bytes::from_static(b"held"))
+    );
+}
+
 #[tokio::test]
 async fn fragmented_final_growth_fits_staging_at_and_below_the_message_limit() {
     use tokio_tungstenite::tungstenite::protocol::frame::{
@@ -285,6 +305,7 @@ async fn input_admission_denies_incomplete_frames_before_and_after_join_and_keep
     let text = server.http("GET", "/metrics", Some("admin-test")).await;
     assert!(text.contains("war_read_buffer_reservations_rejected_total 2\n"));
     assert!(text.contains("war_read_buffer_limit_bytes 100000\n"));
+    assert!(text.contains("war_join_rejected_total 1\n"));
     assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
     server.stop().await;
 }
@@ -318,6 +339,7 @@ async fn handshake_reservations_reject_with_http_503_and_release_after_abandonme
         panic!("exhausted handshake admission must return HTTP 503");
     };
     assert_eq!(response.status(), 503);
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 0);
     assert_eq!(budget.reserved(), 40960);
     drop(half_open);
     timeout(Duration::from_secs(3), async {
@@ -872,6 +894,175 @@ async fn authentication_channel_queries_and_admin_drain_are_enforced() {
             .starts_with("HTTP/1.1 204")
     );
     assert_eq!(close_code(&mut second).await, 4000);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body() {
+    let server = Server::new(Config {
+        max_message_bytes: 128,
+        ..config()
+    })
+    .await;
+    let (mut healthy, healthy_id) = server.join("early-health").await;
+    for (wire, expected) in [
+        // Unmasked data, fragmented Ping, and an oversized masked frame header.
+        (&[0x82, 1, 0xf6][..], 1002),
+        (&[0x09, 0x80, 0, 0, 0, 0][..], 1002),
+        (&[0x82, 0xfe, 0, 129, 0, 0, 0, 0][..], 1009),
+    ] {
+        let (mut pending, _) = connect_async(&server.url).await.unwrap();
+        pending.get_mut().write_all(wire).await.unwrap();
+        let reply = timeout(Duration::from_secs(2), pending.next())
+            .await
+            .unwrap();
+        assert!(
+            matches!(&reply, Some(Ok(Message::Close(Some(frame)))) if u16::from(frame.code) == expected),
+            "before-join decoder rejection should send {expected}: {reply:?}"
+        );
+        // Failed decoders can only send a best-effort Close. Do not assert a
+        // complete acknowledgement exchange on their terminal read path.
+        drop(pending);
+        send(&mut healthy, healthy_id, &[0x18, 42]).await;
+        assert_eq!(
+            data(&mut healthy).await,
+            protocol::envelope(healthy_id, &[0x18, 42])
+        );
+    }
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 3);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.transport_disconnects.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once() {
+    let server = Server::new(Config {
+        messages_per_second: 1,
+        bytes_per_second: 0,
+        ..config()
+    })
+    .await;
+    let (mut source, _) = connect_async(&server.url).await.unwrap();
+    source
+        .send(Message::Ping(Bytes::from_static(b"first")))
+        .await
+        .unwrap();
+    assert_eq!(
+        source.next().await.unwrap().unwrap(),
+        Message::Pong(Bytes::from_static(b"first"))
+    );
+    source
+        .send(Message::Ping(Bytes::from_static(b"second")))
+        .await
+        .unwrap();
+    assert_eq!(close_code(&mut source).await, 1008);
+    assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.joined.load(Relaxed), 0);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown() {
+    let server = Server::new(config()).await;
+    for (message, expected) in [
+        (Message::Binary(vec![0xff].into()), 1002),
+        (Message::Binary(protocol::text("seventeen-bytes!!")), 1002),
+        (Message::Text("wrong transport".into()), 1003),
+    ] {
+        let (mut ws, _) = connect_async(&server.url).await.unwrap();
+        ws.send(message).await.unwrap();
+        assert_eq!(close_code(&mut ws).await, expected);
+    }
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 3);
+    assert_eq!(server.relay.metrics.joined.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    let (mut normal, _) = connect_async(&server.url).await.unwrap();
+    normal.close(None).await.unwrap();
+    assert!(matches!(
+        normal.next().await,
+        Some(Ok(Message::Close(None)))
+    ));
+    normal.flush().await.unwrap();
+    let (mut pending, _) = connect_async(&server.url).await.unwrap();
+    hold_fragmented_input(&mut pending).await;
+    let (mut joined, _) = server.join("shutdown-held").await;
+    hold_fragmented_input(&mut joined).await;
+    server.shutdown.cancel();
+    assert_eq!(close_code(&mut pending).await, 1001);
+    assert_eq!(close_code(&mut joined).await, 1001);
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 3);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues() {
+    let server = Server::new(Config {
+        join_timeout_secs: 1,
+        write_timeout_secs: 1,
+        ..config()
+    })
+    .await;
+    let (mut healthy, healthy_id) = server.join("deadline-health").await;
+    let (mut pending, _) = connect_async(&server.url).await.unwrap();
+    hold_fragmented_input(&mut pending).await;
+    let (closed, ()) = tokio::join!(close_code(&mut pending), async {
+        for _ in 0..75 {
+            send(&mut healthy, healthy_id, &[0x18, 42]).await;
+            assert_eq!(
+                data(&mut healthy).await,
+                protocol::envelope(healthy_id, &[0x18, 42])
+            );
+            tokio::time::sleep(Duration::from_millis(15)).await;
+        }
+    });
+    assert_eq!(closed, 1008);
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.joined.load(Relaxed), 1);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
+    assert_eq!(
+        server
+            .relay
+            .metrics
+            .read_budget
+            .as_ref()
+            .unwrap()
+            .reserved(),
+        8192
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn admin_cancellation_retires_membership_before_closing_incomplete_assembly() {
+    let server = Server::new(config()).await;
+    let (mut healthy, healthy_id) = server.join("cancel-health").await;
+    let (mut source, source_id) = server.join("cancel-held").await;
+    hold_fragmented_input(&mut source).await;
+    assert!(
+        server
+            .http(
+                "POST",
+                &format!("/v1/sessions/{source_id}/disconnect"),
+                Some("admin-test")
+            )
+            .await
+            .starts_with("HTTP/1.1 204")
+    );
+    wait_counter(&server.relay.metrics.disconnected, 1).await;
+    assert_eq!(server.relay.counts(), (1, 2));
+    assert_eq!(server.relay.metrics.queued_bytes.load(Relaxed), 0);
+    send(&mut healthy, healthy_id, &[0x18, 42]).await;
+    assert_eq!(
+        data(&mut healthy).await,
+        protocol::envelope(healthy_id, &[0x18, 42])
+    );
+    assert_eq!(close_code(&mut source).await, 4000);
+    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.protocol_errors.load(Relaxed), 0);
+    assert_eq!(server.relay.metrics.close_failures.load(Relaxed), 0);
     server.stop().await;
 }
 

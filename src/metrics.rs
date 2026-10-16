@@ -38,6 +38,7 @@ pub struct Metrics {
     pub unstarted_writes_cancelled: AtomicU64,
     pub close_failures: AtomicU64,
     pub transport_disconnects: AtomicU64,
+    pub join_rejected: AtomicU64,
 }
 
 impl Metrics {
@@ -161,6 +162,11 @@ impl Metrics {
                 "joined_total",
                 self.joined.load(Relaxed),
                 "Successful channel subscriptions.",
+            ),
+            (
+                "join_rejected_total",
+                self.join_rejected.load(Relaxed),
+                "Upgraded WebSocket connections rejected before channel join; excludes handshake admission, peer Close and service shutdown.",
             ),
             (
                 "disconnected_total",

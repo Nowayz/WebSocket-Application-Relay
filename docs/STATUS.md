@@ -26,7 +26,7 @@ claim that an open-ended improvement effort is complete.
   channel inspection, drain/resume, and administrative disconnection.
 - Release socket workload, independent CBOR and legacy vectors, Rust network
   integration checks, client checks, CI workflow, protocol and operations docs.
-- Current checks: 68 Rust tests and 7 JavaScript socket cases pass, along with
+- Current checks: 73 Rust tests and 7 JavaScript socket cases pass, along with
   strict Clippy and formatting. CI is supplied but has not run on GitHub.
 - Read buffer changed from 128 KiB to 4 KiB after repeated 2,000-socket measurements
   showed about 91% lower idle RSS. Throughput variability is documented separately.
@@ -312,7 +312,7 @@ identities, exact release hashes, browser report and live probe source.
 At that checkpoint the native SHA-256 began `6f801ea16bdb` and bridge began
 `933efb31e760`, using the same local endpoints listed below.
 
-## Fragment scheduling (current checkpoint)
+## Fragment scheduling
 
 Valid messages with many empty continuations exposed a scheduling problem:
 decoder reads could parse many frames before returning to the executor.
@@ -358,13 +358,62 @@ counters were zero. Exact sources, hashes, counters, workload traces and live
 process identities are bound in `benchmarks/2026-10-16-fairness-{build,summary,live}.json`.
 See `performance.md` for cost and measurement limits.
 
+At that checkpoint the native SHA-256 began `8bfeb5be88d2` and bridge began
+`17e21d754a6b`, using the same local endpoints listed below.
+
+## Rejections and interrupted input (current checkpoint)
+
+A failing socket regression exposed silent native drops after HTTP upgrade but
+before channel join for malformed WebSocket frames and excessive message sizes.
+Native input errors now share one Close mapping across both phases: `1002` for
+protocol errors, `1009` for size, and `1013` for staging exhaustion. Header-based
+refusals do not wait for the body. `war_join_rejected_total` records each
+application rejection decision before registration, excluding HTTP admission,
+peer-Close paths and service shutdown. Existing joined-session counters retain
+their scope. Successful forwarding and shared body ownership are unchanged.
+
+The independent raw corpus covers 776 input/context cases over 2,311 exchanges:
+accepted and rejected CBOR, routed/different-target/variable contexts, mixed
+fragments crossing 257 empty continuations, interleaved Ping/Pong, split writes,
+and pipelined join/data. One-worker/one-producer, four-worker/eight-producer and
+the default command all pass. Rejected data never reaches a witness or mutates
+its variable sentinel; encoded valid values stay byte-identical. Exact stage,
+protocol, join, message, byte and delivery counts match. Each full run verifies
+2,204 complete-message policy Close handshakes and 45 terminal-decoder Close
+receipts; the latter do not claim acknowledgement. Five library-normalized
+peer-Close cases are tracked separately. All final resource gauges and
+unexpected errors are zero. The control reproduces 18 silent pre-join drops;
+the final release reports the correct Close in every corresponding case.
+
+New socket checks hold unfinished messages through 513 empty continuations and
+a Pong, then verify join timeout with 75 healthy round trips, admin cancellation
+with immediate membership/queue retirement, and shutdown before/after join.
+All decoder reservations release. Stage/rate/staging counts are exact; HTTP
+`503` admission and normal peer Close do not inflate the new counter.
+
+All 73 Rust tests, strict Clippy, formatting, the 62-file vendor audit, seven JS
+socket cases and the 48-common-case/eight-explicit-difference C++ comparison pass.
+The complete corpus is now a GitHub CI step; its equivalent debug command passes
+locally, with no hosted CI run claimed. Twelve alternating traffic checks show
+throughput medians within 0.7% and CPU medians within 1.3% of the prior release;
+no speed improvement is claimed. The prior incomplete-frame pressure check also
+passes with exact expected departures and zero final reservations.
+
+The new native/bridge binaries replaced the quiescent local services. A deliberate
+live pre-join framing error received `1002` and incremented the new counter from
+zero to one. Fresh Chrome checks (seven), live legacy checks (three), health and
+readiness pass. Default decoder retirement returned two connected sessions to
+16 KiB after 5.033 seconds; subsequent typed routing added no body copies.
+Final resource gauges and unexpected errors are zero; telemetry retains the one
+intentional rejection. Sources, hashes, exact counters and live process identities
+are bound in `benchmarks/2026-10-16-input-rejection-{build,summary,live}.json`.
+
 Current local endpoints are native `ws://127.0.0.1:1338`, optional bridge
 `ws://127.0.0.1:1337`, management `http://127.0.0.1:1339`, and browser check
-`http://127.0.0.1:4180/`. Native SHA-256 begins `8bfeb5be88d2`; bridge begins
-`17e21d754a6b`. Application-idle Close is disabled for manual testing; normal
-five-second retirement and 1 GiB staging admission remain enabled.
-The ongoing goal remains active; no hosted deployment or cluster capacity is
-claimed.
+`http://127.0.0.1:4180/`. Native SHA-256 begins `0bafc0d405fc`; bridge begins
+`16ec70ea7efa`. Application-idle Close is disabled for manual testing; normal
+five-second retirement and 1 GiB staging admission remain enabled. The ongoing
+goal stays active; no hosted deployment or cluster capacity is claimed.
 
 ## Next useful iterations
 
@@ -381,9 +430,9 @@ claimed.
    waves. Process-wide reservations precede decoder allocations and cover
    incomplete frames plus fragment assembly; final-fragment growth uses its
    known complete length. Empty-continuation parsing now yields cooperatively;
-   extend mixed nonempty fragment sizes, malformed CBOR and cancellation/deadline
-   precedence with concurrent healthy traffic. Increase duration and populations
-   when the measurements justify the next change. Preserve shared bodies,
+   mixed-fragment/CBOR rejection and cancellation/deadline cases now run with
+   concurrent healthy traffic. Extend partial-frame and blocked-output schedules,
+   duration and populations when measurements justify the next change. Preserve shared bodies,
    exact peer Close acknowledgements, and immediate dropping of partial output.
 3. Extend duration, fanout, active populations, adverse networks, and connection
    mixes. Thirty-second traffic and twenty-second churn are now verified, while
@@ -392,9 +441,10 @@ claimed.
    keep the current simple ownership model until a measured bottleneck justifies
    a different representation or sharding.
 4. Extend browser acceptance across engines and production bundlers. Broaden the
-   deterministic malformed-CBOR/fragmentation corpus with reproducible generated
-   inputs and concurrent healthy traffic, preserving resource bounds and source
-   fidelity.
+   deterministic CBOR/fragmentation corpus into reproducible stateful operation
+   sequences and paced transport failures, preserving resource bounds, exact
+   counter expectations and source fidelity. The current finite corpus is not
+   exhaustive fuzz coverage.
 5. Revisit connection-admission policy for public multi-application operation
    (per-IP limits, origin policy, tenant boundaries) with an explicit compatibility
    and proxy model. The existing global/private scopes intentionally match WAR.
