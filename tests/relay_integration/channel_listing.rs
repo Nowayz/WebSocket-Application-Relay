@@ -1,6 +1,44 @@
 use super::*;
 
 #[tokio::test]
+async fn large_escaped_channel_names_preserve_the_complete_http_response() {
+    let server = Server::new(config()).await;
+    let mut sockets = Vec::new();
+    for last in 1..=32 {
+        let mut name = [1; 16];
+        name[15] = last;
+        let (socket, _) = server.join(std::str::from_utf8(&name).unwrap()).await;
+        sockets.push(socket);
+    }
+    let response = server.http("GET", "/v1/channels", Some("admin-test")).await;
+    let (headers, body) = response.split_once("\r\n\r\n").unwrap();
+    assert!(headers.starts_with("HTTP/1.1 200"));
+    assert!(headers.contains("content-type: application/json"));
+    assert_eq!(
+        body,
+        serde_json::to_string(&server.relay.channels()).unwrap()
+    );
+    let rows: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 33);
+    // Six-byte JSON escapes make these rows exceed a normal row-size hint.
+    // Check every name, including the final row after the buffer has grown.
+    for last in 1..=32 {
+        let mut name = [1; 16];
+        name[15] = last;
+        assert_eq!(
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .filter(|row| row["name"] == std::str::from_utf8(&name).unwrap())
+                .count(),
+            1
+        );
+    }
+    server.stop().await;
+    drop(sockets);
+}
+
+#[tokio::test]
 async fn http_channel_listing_preserves_exact_json_and_authentication() {
     let server = Server::new(config()).await;
     let names: &[&[u8]] = &[

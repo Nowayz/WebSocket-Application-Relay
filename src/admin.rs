@@ -2,12 +2,13 @@
 use std::sync::{Arc, atomic::Ordering::Relaxed};
 
 use axum::{
-    Json, Router,
+    Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use bytes::{BufMut, BytesMut};
 use tracing::info;
 
 use crate::{Relay, protocol};
@@ -64,7 +65,20 @@ async fn channels(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Respon
     if !authorized(&relay, &headers, false) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    Json(relay.channel_listing()).into_response()
+    let channels = relay.channel_listing();
+    // A normal bounded-name row fits in about 128 bytes. This is a capacity
+    // hint, not a limit: escaped names and large counters may grow the buffer.
+    // Snapshot and sort-key storage do not borrow the registry during encoding.
+    let capacity = channels.len().saturating_mul(128).saturating_add(2);
+    let mut buffer = BytesMut::with_capacity(capacity).writer();
+    match serde_json::to_writer(&mut buffer, &channels) {
+        Ok(()) => (
+            [("content-type", "application/json")],
+            buffer.into_inner().freeze(),
+        )
+            .into_response(),
+        Err(error) => (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response(),
+    }
 }
 
 async fn drain(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> StatusCode {
