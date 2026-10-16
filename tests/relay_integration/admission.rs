@@ -117,12 +117,20 @@ async fn per_ip_admission_spans_workers_and_keeps_other_addresses_usable() {
         denied(connect_from(&server.url, 2).await).await;
     }))
     .await;
-    assert_eq!(server.relay.metrics.ip_rejected.load(Relaxed), 32);
+    // The global cap is checked first. Parallel accepts can temporarily reserve
+    // its other three slots before their IP checks, so either limit may reject
+    // an attempt. Every attempted transport must still have been refused.
+    let ip_rejections = server.relay.metrics.ip_rejected.load(Relaxed);
+    assert!((1..=32).contains(&ip_rejections));
     assert_eq!(server.relay.metrics.rejected.load(Relaxed), 32);
+    connections(&server, 1).await;
     let mut spoof = connect_from(&server.url, 2).await;
     let _ = spoof.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 127.0.0.9\r\nForwarded: for=127.0.0.9\r\n\r\n").await;
     denied(spoof).await;
-    assert_eq!(server.relay.metrics.ip_rejected.load(Relaxed), 33);
+    assert_eq!(
+        server.relay.metrics.ip_rejected.load(Relaxed),
+        ip_rejections + 1
+    );
     let (mut healthy, id) = join_from(&server.url, 3).await;
     let value = protocol::byte_string(&vec![0x7b; 32 * 1024]);
     send(&mut healthy, id, &value).await;
@@ -132,7 +140,10 @@ async fn per_ip_admission_spans_workers_and_keeps_other_addresses_usable() {
     connections(&server, 4).await;
     denied(connect_from(&server.url, 6).await).await;
     assert_eq!(server.relay.metrics.rejected.load(Relaxed), 34);
-    assert_eq!(server.relay.metrics.ip_rejected.load(Relaxed), 33);
+    assert_eq!(
+        server.relay.metrics.ip_rejected.load(Relaxed),
+        ip_rejections + 1
+    );
     clean_close(&mut fourth).await;
     clean_close(&mut fifth).await;
     drop(half);

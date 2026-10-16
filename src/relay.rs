@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     hash::Hash,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed},
     },
 };
@@ -99,6 +99,9 @@ fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
 #[derive(Default)]
 struct Channel {
     members: HashMap<u64, Arc<Peer>>,
+    // Membership metadata only. Stable rooms reuse one view; joins/departures
+    // invalidate it while in-flight broadcasts keep their captured owners.
+    broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
     variables: HashMap<Bytes, Bytes>,
     variable_bytes: usize,
 }
@@ -493,12 +496,9 @@ impl Relay {
         // Publish only after the welcome packet is first in this session's FIFO.
         peer.enqueue_frame(&Frame::integer(id))?;
         state.users.insert(id, peer.clone());
-        state
-            .channels
-            .entry(peer.channel.clone())
-            .or_default()
-            .members
-            .insert(key, peer.clone());
+        let channel = state.channels.entry(peer.channel.clone()).or_default();
+        channel.members.insert(key, peer.clone());
+        channel.broadcast.take();
         state.sessions += 1;
         self.metrics.joined.fetch_add(1, Relaxed);
         Ok(Registration {
@@ -510,7 +510,7 @@ impl Relay {
     #[cfg(test)]
     pub(crate) fn receive(&self, peer: &Peer, bytes: Bytes) -> Result<(), Disconnect> {
         let capacity = self.config.read_buffer_bytes.max(bytes.len());
-        self.receive_with_storage(peer, bytes, capacity)
+        self.receive_with_storage(peer, bytes, capacity).map(|_| ())
     }
 
     pub(crate) fn receive_with_storage(
@@ -518,9 +518,9 @@ impl Relay {
         peer: &Peer,
         bytes: Bytes,
         storage_capacity: usize,
-    ) -> Result<(), Disconnect> {
+    ) -> Result<usize, Disconnect> {
         if peer.closing.load(Relaxed) {
-            return Ok(());
+            return Ok(1);
         }
         self.metrics.incoming_messages.fetch_add(1, Relaxed);
         self.metrics
@@ -528,11 +528,11 @@ impl Relay {
             .fetch_add(bytes.len() as u64, Relaxed);
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
-            return self.control(peer, value);
+            return self.control(peer, value).map(|_| 1);
         }
         let state = self.state.read();
         if peer.closing.load(Relaxed) {
-            return Ok(());
+            return Ok(1);
         }
         let private_recipient = if target == BROADCAST {
             if peer.channel.as_ref() == GLOBAL_CHANNEL
@@ -548,7 +548,7 @@ impl Relay {
         } else {
             match state.users.get(&target) {
                 Some(recipient) => Some(recipient),
-                None => return Ok(()),
+                None => return Ok(1),
             }
         };
         let value_start = bytes.len() - value.len();
@@ -569,7 +569,27 @@ impl Relay {
             // retained target owns its lifetime through the socket write.
             let recipient = recipient.clone();
             drop(state);
-            return recipient.enqueue_frame(&frame);
+            return recipient.enqueue_frame(&frame).map(|_| 1);
+        }
+        if target == BROADCAST
+            && peer.channel.as_ref() != GLOBAL_CHANNEL
+            && state.listeners(CHANNEL_MESSAGE).is_empty()
+        {
+            let Some(channel) = state.channels.get(&peer.channel) else {
+                return Ok(1);
+            };
+            let recipients = channel
+                .broadcast
+                .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
+                .clone();
+            let work = recipients.len().max(1);
+            drop(state);
+            for recipient in recipients.iter() {
+                if recipient.key != peer.key {
+                    recipient.enqueue_frame(&frame)?;
+                }
+            }
+            return Ok(work);
         }
         if target == BROADCAST {
             if peer.channel.as_ref() == GLOBAL_CHANNEL {
@@ -598,7 +618,7 @@ impl Relay {
                 }
             }
         }
-        Ok(())
+        Ok(1)
     }
 
     fn control(&self, peer: &Peer, value: &[u8]) -> Result<(), Disconnect> {
@@ -744,6 +764,7 @@ impl Relay {
         if channel.members.remove(&peer.key).is_none() {
             return;
         }
+        channel.broadcast.take();
         peer.closing.store(true, Relaxed);
         let id = peer.id.load(Relaxed);
         let notify = !self.is_stopping();
@@ -792,6 +813,8 @@ fn random_id() -> Result<u64> {
     Ok(u64::from_ne_bytes(bytes))
 }
 
+#[cfg(test)]
+mod broadcast_tests;
 #[cfg(test)]
 mod channel_tests;
 #[cfg(test)]

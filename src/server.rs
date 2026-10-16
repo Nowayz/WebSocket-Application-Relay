@@ -9,6 +9,8 @@ mod arena_tests;
 #[cfg(all(test, target_os = "linux"))]
 mod close_tests;
 #[cfg(test)]
+mod fairness_tests;
+#[cfg(test)]
 mod ownership_tests;
 
 pub use crate::admin::admin_router;
@@ -924,6 +926,7 @@ impl Connection {
                     Some(now + Duration::from_secs(relay.config.read_buffer_idle_secs));
             }
         }
+        let mut route_budget = READ_QUANTUM;
         for _ in 0..READ_QUANTUM {
             let Stage::WebSocket(ws) = &mut self.stage else {
                 unreachable!()
@@ -955,11 +958,17 @@ impl Connection {
                                 let large = relay.config.read_buffer_idle_secs > 0
                                     && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
                                 let capacity = ws.read_storage_capacity().max(bytes.len());
-                                if let Err(reason) =
-                                    relay.receive_with_storage(&registration.peer, bytes, capacity)
-                                {
-                                    return self.start_close(reason, relay, false, now);
-                                }
+                                let work = match relay.receive_with_storage(
+                                    &registration.peer,
+                                    bytes,
+                                    capacity,
+                                ) {
+                                    Ok(work) => work,
+                                    Err(reason) => {
+                                        return self.start_close(reason, relay, false, now);
+                                    }
+                                };
+                                route_budget = route_budget.saturating_sub(work);
                                 if large {
                                     self.reclaim_deadline = Some(
                                         now + Duration::from_secs(
@@ -1063,6 +1072,9 @@ impl Connection {
                     }
                     return result;
                 }
+            }
+            if route_budget == 0 {
+                break;
             }
         }
         Drive::Again
