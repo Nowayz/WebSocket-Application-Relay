@@ -265,7 +265,7 @@ impl Worker {
             };
             let metrics = &self.relay.metrics;
             metrics.accepted.fetch_add(1, Relaxed);
-            if self.relay.draining.load(Relaxed)
+            if self.relay.is_draining()
                 || metrics
                     .connections
                     .fetch_update(Relaxed, Relaxed, |count| {

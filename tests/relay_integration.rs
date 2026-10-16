@@ -1125,7 +1125,7 @@ async fn cancelling_the_embedding_service_stops_workers_without_disconnect_fanou
     })
     .await
     .unwrap();
-    assert!(server.relay.draining.load(Relaxed));
+    assert!(server.relay.is_draining());
     assert_eq!(server.relay.counts(), (0, 1));
     assert_eq!(server.relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.variable_bytes.load(Relaxed), 0);

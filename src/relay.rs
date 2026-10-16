@@ -30,13 +30,19 @@ mod listing;
 
 pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
 
+#[repr(u8)]
+enum Admission {
+    Open,
+    Draining,
+    Stopping,
+}
+
 /// The registry lock protects membership and ID ownership. Output submission is
 /// nonblocking; the transport writes immediately or retains a shared frame.
 pub struct Relay {
     pub config: Config,
     pub metrics: Arc<Metrics>,
-    pub draining: AtomicBool,
-    stopping: AtomicBool,
+    admission: AtomicU8,
     state: RwLock<Registry>,
     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
@@ -318,8 +324,7 @@ impl Relay {
                 read_budget,
                 ..Metrics::default()
             }),
-            draining: AtomicBool::new(false),
-            stopping: AtomicBool::new(false),
+            admission: AtomicU8::new(Admission::Open as u8),
             state: RwLock::new(Registry {
                 users: HashMap::new(),
                 channels,
@@ -335,9 +340,36 @@ impl Relay {
         (state.sessions, state.channels.len())
     }
 
+    /// Manual drain and terminal shutdown both refuse new admission.
+    pub fn is_draining(&self) -> bool {
+        self.admission.load(Relaxed) != Admission::Open as u8
+    }
+
+    pub fn is_stopping(&self) -> bool {
+        self.admission.load(Relaxed) == Admission::Stopping as u8
+    }
+
+    /// Set a reversible drain. Returns false when resuming a terminal shutdown;
+    /// draining an already stopping relay remains an idempotent success.
+    #[must_use]
+    pub fn set_draining(&self, draining: bool) -> bool {
+        self.admission
+            .fetch_update(Relaxed, Relaxed, |state| {
+                if state == Admission::Stopping as u8 {
+                    draining.then_some(state)
+                } else {
+                    Some(if draining {
+                        Admission::Draining as u8
+                    } else {
+                        Admission::Open as u8
+                    })
+                }
+            })
+            .is_ok()
+    }
+
     pub(crate) fn begin_shutdown(&self) {
-        self.draining.store(true, Relaxed);
-        self.stopping.store(true, Relaxed);
+        self.admission.store(Admission::Stopping as u8, Relaxed);
     }
 
     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
@@ -423,7 +455,7 @@ impl Relay {
         }
         let mut state = self.state.write();
         let existing = state.channels.get_key_value(channel);
-        if self.draining.load(Relaxed)
+        if self.is_draining()
             || state.sessions >= self.config.max_connections
             || (existing.is_none() && state.channels.len() >= self.config.max_channels)
             || existing.is_some_and(|(_, c)| c.members.len() >= self.config.max_channel_members)
@@ -714,7 +746,7 @@ impl Relay {
         }
         peer.closing.store(true, Relaxed);
         let id = peer.id.load(Relaxed);
-        let notify = !self.stopping.load(Relaxed);
+        let notify = !self.is_stopping();
         let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
         if let Some(frame) = &frame {
             for recipient in channel.members.values() {
