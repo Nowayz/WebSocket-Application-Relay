@@ -105,6 +105,9 @@ struct Args {
     inspection_interval_ms: u64,
     #[arg(long, default_value_t = 2)]
     pairs: usize,
+    /// Runtime threads for the verified load client; independent of server workers.
+    #[arg(long, default_value_t = 4)]
+    client_workers: usize,
     #[arg(long, default_value_t = 8)]
     churn_workers: usize,
     /// Add a stable broadcast room with this many fully verifying readers.
@@ -657,9 +660,20 @@ async fn inspect(
     Ok((socket, counts, stats))
 }
 
-#[tokio::main(worker_threads = 4)]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
+    ensure!(
+        (1..=32).contains(&args.client_workers),
+        "client-workers must be in 1..=32"
+    );
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(args.client_workers)
+        .enable_all()
+        .build()?
+        .block_on(run(args))
+}
+
+async fn run(args: Args) -> Result<()> {
     if args.audit_ids {
         ensure!(
             AUDITED_IDS
@@ -671,7 +685,7 @@ async fn main() -> Result<()> {
     ensure!(
         args.rooms <= 8192
             && (1..=60).contains(&args.seconds)
-            && args.pairs <= 8
+            && args.pairs <= 64
             && (args.pairs > 0 || args.fanout_readers > 0)
             && args.churn_workers <= 64
             && args.fanout_readers <= 1024

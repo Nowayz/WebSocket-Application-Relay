@@ -117,6 +117,8 @@ def run(args):
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
+    if getattr(args, "client_workers", None) is not None:
+        command += ["--client-workers", str(args.client_workers)]
     if getattr(args, "page_size", None) is not None:
         command += ["--page-size", str(args.page_size)]
     if args.fanout_readers:
@@ -279,7 +281,9 @@ if __name__ == "__main__":
     parser.add_argument("--seconds", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)
     parser.add_argument("--inspection-interval-ms", type=int, default=10)
-    parser.add_argument("--pairs", type=int, default=2)
+    parser.add_argument("--pairs", type=int, default=2, help="Verified private pairs, up to 64 with the current client")
+    parser.add_argument("--client-workers", type=int, choices=range(1, 33),
+                        help="Client runtime threads; omitted for compatibility with frozen clients")
     parser.add_argument("--churn-workers", type=int, default=8)
     parser.add_argument("--workers", type=int, default=4, help="Native server worker count")
     parser.add_argument("--fanout-readers", type=int, default=0,

@@ -101,6 +101,8 @@ def trial(args):
                       "--protocol-only", "--mode", mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                       "--pairs", str(args.pairs), "--churn-workers", str(churn), "--inspectors", str(args.inspectors),
                       "--inspection-interval-ms", str(args.inspection_interval_ms)]
+    if args.client_workers is not None:
+        client_command += ["--client-workers", str(args.client_workers)]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -239,7 +241,9 @@ def main():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--rooms", type=int, default=8192)
     parser.add_argument("--seconds", type=int, default=8, choices=range(1, 13))
-    parser.add_argument("--pairs", type=int, default=2)
+    parser.add_argument("--pairs", type=int, default=2, help="Verified private pairs, up to 64 with the current client")
+    parser.add_argument("--client-workers", type=int, choices=range(1, 33),
+                        help="Client runtime threads; omitted for compatibility with frozen clients")
     parser.add_argument("--churn-workers", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)
     parser.add_argument("--inspection-interval-ms", type=int, default=10)
@@ -281,7 +285,7 @@ def main():
               "base_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "runner_sha256": sha(__file__), **client_sources(args),
               "client_sha256": sha(args.client), "rust_sha256": sha(args.relay), "cpp_sha256": sha(args.cpp_executable), "cpp_build": cpp_build,
-              "scope": "Common application work, native Rust CBOR versus C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, two private pairs and idle rooms. C++ treats values as opaque; Rust validates CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
+              "scope": f"Common application work, native Rust CBOR versus C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, {args.pairs} private pairs and {args.rooms} idle rooms. C++ treats values as opaque; Rust validates CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
               "cases": [], "passed": False}
     kinds = ["cpp", "rust"] + (["control"] if args.control else [])
     if args.control: record["control_sha256"] = sha(args.control)
@@ -308,6 +312,8 @@ def main():
                     command.append("--audit-ids")
                 if args.client_source_root:
                     command += ["--client-source-root", str(args.client_source_root)]
+                if args.client_workers is not None:
+                    command += ["--client-workers", str(args.client_workers)]
                 if args.control:
                     command += ["--control", str(args.control)]
                 completed = subprocess.run(command, cwd=ROOT)
