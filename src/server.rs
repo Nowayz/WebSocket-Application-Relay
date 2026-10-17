@@ -1083,11 +1083,14 @@ impl Connection {
                                 });
                                 match registration {
                                     Ok(registration) => {
-                                        self.registration = Some(registration);
+                                        // The existing random session ID spreads the first
+                                        // deadline without another entropy read or per-packet work.
                                         self.next_ping = now
-                                            + Duration::from_secs(
-                                                relay.config.ping_interval_secs.max(1),
+                                            + initial_ping_delay(
+                                                relay.config.ping_interval_secs,
+                                                registration.peer.id.load(Relaxed),
                                             );
+                                        self.registration = Some(registration);
                                     }
                                     Err(reason) => {
                                         return self.start_close(reason, relay, false, now);
@@ -1182,6 +1185,19 @@ impl Connection {
     }
 }
 
+/// Spread a join wave within the first heartbeat interval; subsequent Pings
+/// keep the configured cadence. An earlier first Ping never weakens detection.
+fn initial_ping_delay(interval_secs: u64, session_id: u64) -> Duration {
+    let period_ns = Duration::from_secs(interval_secs).as_nanos();
+    let phase = if period_ns == 0 {
+        0
+    } else {
+        u128::from(session_id) % period_ns
+    };
+    // The remainder cannot exceed the u64 session ID, even for huge intervals.
+    Duration::from_nanos(phase as u64)
+}
+
 impl Drop for Connection {
     fn drop(&mut self) {
         // This may be the last strong peer/socket reference. Disable output
@@ -1227,6 +1243,24 @@ impl RateLimiter {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
+    #[test]
+    fn first_heartbeat_phases_stay_within_interval_and_do_not_cluster_join_times() {
+        for interval in [0, 1, 15, 86_400, u64::MAX] {
+            for id in [0, 1, 1_000_000_000, u64::MAX] {
+                let phase = super::initial_ping_delay(interval, id);
+                if interval == 0 {
+                    assert_eq!(phase, std::time::Duration::ZERO);
+                } else {
+                    assert!(phase < std::time::Duration::from_secs(interval));
+                }
+            }
+        }
+        let phases: std::collections::HashSet<_> = (0..15)
+            .map(|second| super::initial_ping_delay(15, second * 1_000_000_000))
+            .collect();
+        assert_eq!(phases.len(), 15);
+    }
+
     use super::*;
 
     #[test]

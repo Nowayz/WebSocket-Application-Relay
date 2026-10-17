@@ -1153,3 +1153,22 @@ See the [observed accounting discrepancy](performance.md#per-thread-counter-diag
 Timeline plots now accept `--title` and `--subtitle`; supply the actual workload
 when comparing cases. Defaults make no user/rate/worker-count claim. Ping-axis
 limits derive from the recorded cohorts instead of assuming 100,000 users.
+
+
+## Initial heartbeat phases
+
+After a successful native join, the first Ping is scheduled within the configured
+heartbeat interval using the existing random session ID as its phase. It may
+arrive immediately after joining. Subsequent scheduled checks retain
+`--ping-interval-secs`, and `--pong-timeout-secs` starts when a Ping is sent as
+before. Interval zero still disables heartbeats. No additional setting or random
+number read is required, and the policy adds no per-connection storage or
+per-packet work.
+
+This spreads maintenance work after a large join wave instead of placing most
+first deadlines together. The measured workload shows smaller Ping cohorts and
+lower median user p99, with a CPU tradeoff and some adverse latency outliers.
+At 100,000 idle users, one exploratory 30-second pair uses 0.91 versus 1.51
+server process CPU seconds; that is not a repeated median or total-host cost.
+Keep the current 400k/s eight-worker operating recommendation and capacity
+headroom. See [full comparisons](performance.md#initial-heartbeat-phase-spreading-2026-10-17).

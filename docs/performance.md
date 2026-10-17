@@ -6174,3 +6174,73 @@ replace them, and the correct 600k/eight-worker figure was regenerated and
 inspected. No relay runtime change is selected from counters alone. The
 [evidence archive](benchmarks/2026-10-17-perf-counters/manifest.json) binds raw
 counts, exact harness versions, source, tests, accounting snapshots and plots.
+
+
+## Initial heartbeat phase spreading (2026-10-17)
+
+The selected native runtime spreads the first Ping deadline within the configured
+interval using the existing random session ID. Previously, a join wave scheduled
+first Pings at nearly the same later time. Initial delay now ranges from zero up
+to, but excluding, the interval; it never extends the configured maximum first-heartbeat
+deadline. Recurring scheduled checks, Pong payload/timeout, disabled-heartbeat mode,
+transport ordering and all application semantics remain unchanged. The policy
+reuses the existing deadline field and adds no per-connection storage, entropy
+read, allocation, lock or per-packet work. Integer arithmetic also handles zero
+and very large intervals without overflow; normal configuration validation stays
+in effect.
+
+Unit coverage verifies first-phase bounds and spread. Existing live heartbeat,
+Pong-timeout and application-idle tests pass as part of all 139 tests, strict
+Clippy/fmt and release build. The independent four-worker corpus passes 776
+cases / 2,311 exchanges. Eight-worker population acceptance is separate below.
+The selected executable is `c9a6c6da…`, based on the prior owner-borrowing runtime.
+
+Both rates use fresh baseline/spread/spread/baseline processes, the same frozen
+verifying client, 100,000 users in rooms of 16, 1 KiB private messages,
+30 seconds, 15s heartbeat, eight pinned server workers on physical CPUs 0–7,
+eight client workers on 8–15 and 16/64 KiB socket send/receive buffers. No
+compilation, profiling or competing benchmark overlaps timing. All 120 million
+application messages, exact counters, postcheck routing, Close/EOF, affinities
+and descriptor/kernel retirement checks pass.
+
+| Rate / pair | Median user p99 ms baseline → spread | 99th percentile of user p99s ms baseline → spread | Worst packet ms baseline → spread | CPU ns/application message baseline → spread |
+| --- | ---: | ---: | ---: | ---: |
+| 600k / first | 4.594 → 2.847 | 9.353 → 9.288 | 14.524 → 27.594 | 4777 → 4825 |
+| 600k / reverse | 38.869 → 1.695 | 56.567 → 3.131 | 70.373 → 13.202 | 4843 → 4808 |
+| 400k / first | 0.926 → 0.823 | 1.572 → 1.566 | 4.488 → 4.656 | 4443 → 4552 |
+| 400k / reverse | 0.937 → 0.859 | 1.600 → 1.750 | 5.848 → 20.127 | 4452 → 4576 |
+
+Median user p99 improves in all four pairs. At 600k, maximum observed Ping
+cohorts fall from 89,408–100,000 to 14,549–15,390 frames. Recorded totals are
+200,000 Pings per baseline case versus 207,812/208,610 with spread phases in
+this startup window; moving the first deadline earlier changes what is observed
+inside the probe window. This is not a comparison with identical recorded
+control-frame counts or reduced heartbeat duty. Ping observations come from
+probe reads, not server send timestamps.
+
+The policy is selected for lower median response latency and substantially less
+concentrated maintenance work, with measured costs. The 400k CPU/message cost
+rises 2.5–2.8%; one 400k user-tail percentile and packet maximum regress. The
+first 600k maximum also regresses. The second 600k baseline has a major delayed
+cohort without Pings, so its entire improvement cannot be assigned to heartbeat
+concentration. Other host/client/server effects remain. These finite repeats
+establish neither uniformly faster packets nor a hard latency bound, and do not
+raise the measured 400k/s responsive operating recommendation or establish a
+peak-throughput change.
+
+An exploratory baseline-then-spread idle pair retains 100,000 users for
+30 seconds with zero application messages. Server process CPU is 0.91 → 1.51 s;
+client CPU is 1.42 → 2.79 s. Both prove routing through all users before/after,
+respond to heartbeats and retire all resources. The 0.60 s additional server
+process cost is about 0.02 CPU-core equivalents over the scheduled window. This
+is one pair, not repeated medians, a total-host measurement or a larger-population
+projection.
+
+A separate 65-second eight-worker mixed acceptance passes 100,000 stable users,
+6.5 million stable messages, 66,560 churn sessions, heartbeat and eight unread
+pressure peers. Pooled stable p99 is in the 0.524288 ms histogram bucket, maximum
+4.282543 ms; final counters, all worker affinities, fresh routing, Close/EOF and
+kernel/descriptor retirement pass. This is acceptance, not a matched mixed-load
+speedup claim. The [archive](benchmarks/2026-10-17-heartbeat-phase/manifest.json)
+contains exact source/build identities, replay patch, all traces and samples,
+control-cohort analysis, inspected plots and validation.

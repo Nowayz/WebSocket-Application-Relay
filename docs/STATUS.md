@@ -11,6 +11,23 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest selected runtime: spread initial heartbeat phases, 2026-10-17
+
+First Ping deadlines now spread within the configured interval using existing
+random session IDs; recurring cadence, Pong timeout and disabled mode remain.
+No new packet-path work, allocation, lock or connection field. All 139 tests,
+strict Clippy/fmt and the 776-case / 2,311-exchange corpus pass. New selected
+binary: `c9a6c6da…`.
+
+Eight matched 100k-user cases at 400k/600k verify 120 million messages. Median
+user p99 improves in all four pairs, and 600k Ping cohorts become roughly sixfold
+smaller. Adverse tail/outlier results and a 2.5–2.8% 400k CPU/message cost remain
+explicit; the 400k operating recommendation stays. A separate idle pair shows
+0.60 additional server process CPU seconds over 30s. Mixed 65s acceptance passes
+6.5 million stable messages plus 66,560 churn sessions and unread pressure;
+pooled p99 upper bucket 0.524ms,max4.283ms. See
+[comparisons and scope](performance.md#initial-heartbeat-phase-spreading-2026-10-17).
+
 ## Latest diagnosis: counters and heartbeat cohorts, 2026-10-17
 
 Three counter repeats plus a CPU-accounting follow-up verify 72 million messages

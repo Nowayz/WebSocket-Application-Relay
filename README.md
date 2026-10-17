@@ -49,6 +49,10 @@ heartbeats, reconnect churn, unread-recipient isolation and complete retirement.
 Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
 buffers independently of application queues; their default `0` retains OS policy.
 
+Initial heartbeat deadlines spread across the configured interval to avoid
+concentrating maintenance work after a join wave. Recurring cadence and Pong
+timeout protection remain configured independently.
+
 The design prioritizes consistently low response latency for individual users,
 including tail latency and fairness across the connected population. Peak
 throughput is a secondary tradeoff: a measured bandwidth or throughput reduction
