@@ -5808,3 +5808,61 @@ user perf tracepoint listing provides no scheduler switch event. Neither global
 setting is changed. A subsequent scheduler diagnostic must use available scoped
 instrumentation and retain its overhead separately from ordinary measurements.
 The selected native executable and local manual services remain unchanged.
+
+
+## Latency-first worker placement (2026-10-17)
+
+Responsiveness and consistent latency across users take priority over peak
+bandwidth, while 100,000 concurrent users remains a core capacity target. The
+new native `--pin-workers` policy binds each I/O thread to one inherited allowed
+CPU at startup. It leaves forwarding, ownership, quotas, FIFO and backpressure
+unchanged. The default remains off so operators can choose placement suitable
+to their host.
+
+A separate scoped scheduling trace found 5,972 native I/O thread migrations in
+30 seconds. Preempted off-CPU intervals had a 4.04 ms p99, but those intervals
+are not direct runqueue latency, and tracing substantially increases CPU cost.
+This suggested a placement experiment; the untraced experiment is the evidence
+for selecting the option.
+
+The same frozen new executable was tested off/on/on/off, with a fresh server
+per case: 100,000 users, 16-member rooms, 1 KiB private messages, 400,000 offered
+messages/s for 30 seconds, four server and eight client workers on disjoint CPU
+sets, 15-second heartbeat, 16/64 KiB socket send/receive buffers. Each user had
+120 verified samples; all 48 million timed messages passed byte/FIFO checks and
+all processes and connection resources retired correctly.
+
+| Run | Median user's p99 (ms) | 99th percentile of user p99s (ms) | Worst packet (ms) | CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| Off 1 | 12.371 | 19.784 | 36.410 | 4097 |
+| On 1 | 1.319 | 3.453 | 7.184 | 4061 |
+| On 2 | 2.045 | 5.376 | 19.350 | 4065 |
+| Off 2 | 6.639 | 12.971 | 18.331 | 4104 |
+
+Both orders improve the per-user p99 distribution substantially. Rare packet
+outliers remain; one pinned maximum exceeds the second control maximum. These
+finite loopback runs establish neither a latency bound nor production capacity.
+Per-user p99 is a nearest-rank statistic over 120 samples; the 99th percentile
+column compares those user-level statistics rather than pooling packets.
+
+A separate six-case overload comparison used the same executable with five
+million verified messages per run (100,000 users, ten offered messages/user/s,
+five seconds plus drain, heartbeat disabled). Unpinned throughput was
+540,328–542,356 deliveries/s; pinned throughput was 538,757–574,903/s. CPU cost
+was 5,052–5,132 versus 4,812–5,126 ns/delivery. There is no consistent throughput
+penalty in these repetitions. Overload pooled p99 remains in the 268.44 ms
+histogram bucket in every case, reinforcing the need for operating headroom.
+This is a secondary cost test, not the low-latency service profile.
+
+[Archived evidence](benchmarks/2026-10-17-worker-affinity/manifest.json) includes
+exact binaries' hashes, source patch, workload traces, per-user data, plot and
+validation records. No new C++ comparison was run; these measurements isolate
+placement within the Rust readiness runtime.
+
+The pinned mixed-load acceptance retained 100,000 stable users for 65 seconds
+alongside 66,560 churn sessions, 15-second heartbeats and eight unread pressure
+peers. All 6.5 million stable-user messages passed; pooled p99 was in the
+1.048576 ms histogram bucket and maximum was 5.182333 ms. Fresh routing,
+Close/EOF, accounting, descriptor/kernel retirement and normal exits passed.
+The eight slow-consumer disconnects were expected. The full 136-test suite,
+strict Clippy/fmt and independent 776-case/2,311-exchange corpus also passed.

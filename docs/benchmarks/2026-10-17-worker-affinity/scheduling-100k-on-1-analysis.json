@@ -1,0 +1,2154 @@
+{
+  "scope": "Diagnostic paired switch-out/in durations. Ordinary off-CPU includes voluntary I/O waits. Preempted off-CPU is not directly measured wakeup/run-queue latency. Origin approximates client Instant start from controller continuation + 250ms; cohort-edge alignment is uncertain. Tracing overhead excluded from ordinary performance claims.",
+  "estimated_origin_monotonic_ns": 131274445317717,
+  "counts": {
+    "switch_records": 7127592,
+    "in": 3563796,
+    "unpaired_in": 14,
+    "out": 3563796,
+    "boundary_off_intervals": 2818
+  },
+  "lost_records": [],
+  "groups": {
+    "client_io": {
+      "off_cpu": {
+        "count": 3237073,
+        "p50_ms": 0.00555,
+        "p95_ms": 0.107627,
+        "p99_ms": 1.133821,
+        "max_ms": 5.163865
+      },
+      "preempted_off_cpu": {
+        "count": 10699,
+        "p50_ms": 0.006169,
+        "p95_ms": 0.01426,
+        "p99_ms": 0.168606,
+        "max_ms": 3.224256
+      },
+      "running_ms": 106185.943587,
+      "migrations": 25659
+    },
+    "server": {
+      "off_cpu": {
+        "count": 130,
+        "p50_ms": 250.883681,
+        "p95_ms": 251.649185,
+        "p99_ms": 252.057016,
+        "max_ms": 252.123317
+      },
+      "preempted_off_cpu": {
+        "count": 11,
+        "p50_ms": 0.00843,
+        "p95_ms": 0.667303,
+        "p99_ms": 0.667303,
+        "max_ms": 0.667303
+      },
+      "running_ms": 15.813706,
+      "migrations": 49
+    },
+    "server_io": {
+      "off_cpu": {
+        "count": 323761,
+        "p50_ms": 0.00368,
+        "p95_ms": 1.123101,
+        "p99_ms": 1.308656,
+        "max_ms": 5.694922
+      },
+      "preempted_off_cpu": {
+        "count": 5676,
+        "p50_ms": 0.01021,
+        "p95_ms": 2.753048,
+        "p99_ms": 4.043765,
+        "max_ms": 5.694922
+      },
+      "running_ms": 80760.284998,
+      "migrations": 5972
+    },
+    "client": {
+      "off_cpu": {
+        "count": 0,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "preempted_off_cpu": {
+        "count": 0,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "running_ms": 0.0,
+      "migrations": 0
+    }
+  },
+  "threads": {
+    "750181": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 402708,
+        "p50_ms": 0.00558,
+        "p95_ms": 0.108627,
+        "p99_ms": 1.13537,
+        "max_ms": 3.930728
+      },
+      "preempted_off_cpu": {
+        "count": 1348,
+        "p50_ms": 0.0061,
+        "p95_ms": 0.0156,
+        "p99_ms": 0.269283,
+        "max_ms": 1.335425
+      },
+      "running_ms": 13245.203328,
+      "migrations": 3224
+    },
+    "750175": {
+      "pid": 750175,
+      "comm": "war-relay",
+      "group": "server",
+      "off_cpu": {
+        "count": 130,
+        "p50_ms": 250.883681,
+        "p95_ms": 251.649185,
+        "p99_ms": 252.057016,
+        "max_ms": 252.123317
+      },
+      "preempted_off_cpu": {
+        "count": 11,
+        "p50_ms": 0.00843,
+        "p95_ms": 0.667303,
+        "p99_ms": 0.667303,
+        "max_ms": 0.667303
+      },
+      "running_ms": 15.813706,
+      "migrations": 49
+    },
+    "750188": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 405392,
+        "p50_ms": 0.00553,
+        "p95_ms": 0.107297,
+        "p99_ms": 1.13405,
+        "max_ms": 4.433985
+      },
+      "preempted_off_cpu": {
+        "count": 1298,
+        "p50_ms": 0.00626,
+        "p95_ms": 0.01398,
+        "p99_ms": 0.095548,
+        "max_ms": 1.871641
+      },
+      "running_ms": 13274.955092,
+      "migrations": 3212
+    },
+    "750187": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 404742,
+        "p50_ms": 0.00555,
+        "p95_ms": 0.107187,
+        "p99_ms": 1.135111,
+        "max_ms": 3.925478
+      },
+      "preempted_off_cpu": {
+        "count": 1328,
+        "p50_ms": 0.00616,
+        "p95_ms": 0.01457,
+        "p99_ms": 0.252824,
+        "max_ms": 2.812767
+      },
+      "running_ms": 13272.479893,
+      "migrations": 3229
+    },
+    "750177": {
+      "pid": 750175,
+      "comm": "war-io-1",
+      "group": "server_io",
+      "off_cpu": {
+        "count": 78113,
+        "p50_ms": 0.003729,
+        "p95_ms": 1.122081,
+        "p99_ms": 1.312016,
+        "max_ms": 5.455538
+      },
+      "preempted_off_cpu": {
+        "count": 1494,
+        "p50_ms": 0.01035,
+        "p95_ms": 2.947043,
+        "p99_ms": 4.130092,
+        "max_ms": 5.455538
+      },
+      "running_ms": 20232.94552,
+      "migrations": 1521
+    },
+    "750176": {
+      "pid": 750175,
+      "comm": "war-io-0",
+      "group": "server_io",
+      "off_cpu": {
+        "count": 81695,
+        "p50_ms": 0.00362,
+        "p95_ms": 1.112201,
+        "p99_ms": 1.293917,
+        "max_ms": 5.682133
+      },
+      "preempted_off_cpu": {
+        "count": 1409,
+        "p50_ms": 0.010789,
+        "p95_ms": 2.558764,
+        "p99_ms": 4.011776,
+        "max_ms": 5.682133
+      },
+      "running_ms": 20319.47784,
+      "migrations": 1506
+    },
+    "750178": {
+      "pid": 750175,
+      "comm": "war-io-2",
+      "group": "server_io",
+      "off_cpu": {
+        "count": 81766,
+        "p50_ms": 0.00365,
+        "p95_ms": 1.12567,
+        "p99_ms": 1.309316,
+        "max_ms": 5.694922
+      },
+      "preempted_off_cpu": {
+        "count": 1361,
+        "p50_ms": 0.00979,
+        "p95_ms": 2.848776,
+        "p99_ms": 4.154242,
+        "max_ms": 5.694922
+      },
+      "running_ms": 20168.469695,
+      "migrations": 1508
+    },
+    "750183": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 404777,
+        "p50_ms": 0.00556,
+        "p95_ms": 0.107847,
+        "p99_ms": 1.13297,
+        "max_ms": 5.163865
+      },
+      "preempted_off_cpu": {
+        "count": 1286,
+        "p50_ms": 0.006279,
+        "p95_ms": 0.01321,
+        "p99_ms": 0.198815,
+        "max_ms": 1.339125
+      },
+      "running_ms": 13277.138781,
+      "migrations": 3095
+    },
+    "750179": {
+      "pid": 750175,
+      "comm": "war-io-3",
+      "group": "server_io",
+      "off_cpu": {
+        "count": 82187,
+        "p50_ms": 0.00373,
+        "p95_ms": 1.133221,
+        "p99_ms": 1.316395,
+        "max_ms": 5.450818
+      },
+      "preempted_off_cpu": {
+        "count": 1412,
+        "p50_ms": 0.010109,
+        "p95_ms": 2.751419,
+        "p99_ms": 4.040505,
+        "max_ms": 5.450818
+      },
+      "running_ms": 20039.391943,
+      "migrations": 1437
+    },
+    "750184": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 404628,
+        "p50_ms": 0.00555,
+        "p95_ms": 0.107437,
+        "p99_ms": 1.135711,
+        "max_ms": 3.907908
+      },
+      "preempted_off_cpu": {
+        "count": 1374,
+        "p50_ms": 0.00608,
+        "p95_ms": 0.014129,
+        "p99_ms": 0.171326,
+        "max_ms": 3.139218
+      },
+      "running_ms": 13311.950426,
+      "migrations": 3241
+    },
+    "750186": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 403100,
+        "p50_ms": 0.00555,
+        "p95_ms": 0.108687,
+        "p99_ms": 1.134531,
+        "max_ms": 4.392496
+      },
+      "preempted_off_cpu": {
+        "count": 1357,
+        "p50_ms": 0.00616,
+        "p95_ms": 0.014349,
+        "p99_ms": 0.159566,
+        "max_ms": 0.452518
+      },
+      "running_ms": 13245.015387,
+      "migrations": 3261
+    },
+    "750182": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 405576,
+        "p50_ms": 0.00554,
+        "p95_ms": 0.107247,
+        "p99_ms": 1.130541,
+        "max_ms": 4.226741
+      },
+      "preempted_off_cpu": {
+        "count": 1389,
+        "p50_ms": 0.00615,
+        "p95_ms": 0.014549,
+        "p99_ms": 0.160066,
+        "max_ms": 3.155338
+      },
+      "running_ms": 13257.172768,
+      "migrations": 3276
+    },
+    "750185": {
+      "pid": 750180,
+      "comm": "tokio-rt-worker",
+      "group": "client_io",
+      "off_cpu": {
+        "count": 406150,
+        "p50_ms": 0.00554,
+        "p95_ms": 0.106557,
+        "p99_ms": 1.132351,
+        "max_ms": 4.413495
+      },
+      "preempted_off_cpu": {
+        "count": 1319,
+        "p50_ms": 0.00617,
+        "p95_ms": 0.01452,
+        "p99_ms": 0.104847,
+        "max_ms": 3.224256
+      },
+      "running_ms": 13302.027912,
+      "migrations": 3121
+    },
+    "750180": {
+      "pid": 750180,
+      "comm": "capacity",
+      "group": "client",
+      "off_cpu": {
+        "count": 0,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "preempted_off_cpu": {
+        "count": 0,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "p99_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "running_ms": 0.0,
+      "migrations": 0
+    }
+  },
+  "windows": [
+    {
+      "second": 0,
+      "groups": {
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.804833,
+            "p95_ms": 251.781938,
+            "p99_ms": 251.781938,
+            "max_ms": 251.781938
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.022669,
+            "p95_ms": 0.022669,
+            "p99_ms": 0.022669,
+            "max_ms": 0.022669
+          },
+          "running_ms": 0.728291,
+          "migrations": 2
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11131,
+            "p50_ms": 0.00362,
+            "p95_ms": 1.131611,
+            "p99_ms": 1.325516,
+            "max_ms": 4.055794
+          },
+          "preempted_off_cpu": {
+            "count": 117,
+            "p50_ms": 0.076478,
+            "p95_ms": 3.731203,
+            "p99_ms": 3.971407,
+            "max_ms": 4.055794
+          },
+          "running_ms": 2619.373722,
+          "migrations": 121
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 105205,
+            "p50_ms": 0.00553,
+            "p95_ms": 0.107647,
+            "p99_ms": 1.159,
+            "max_ms": 4.433985
+          },
+          "preempted_off_cpu": {
+            "count": 339,
+            "p50_ms": 0.00608,
+            "p95_ms": 0.02176,
+            "p99_ms": 0.537006,
+            "max_ms": 1.260808
+          },
+          "running_ms": 3512.864502,
+          "migrations": 839
+        }
+      }
+    },
+    {
+      "second": 1,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 11539,
+            "p50_ms": 0.0039,
+            "p95_ms": 1.106281,
+            "p99_ms": 1.331536,
+            "max_ms": 4.575031
+          },
+          "preempted_off_cpu": {
+            "count": 216,
+            "p50_ms": 0.017109,
+            "p95_ms": 3.021141,
+            "p99_ms": 4.009766,
+            "max_ms": 4.575031
+          },
+          "running_ms": 2647.151502,
+          "migrations": 219
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 113829,
+            "p50_ms": 0.00503,
+            "p95_ms": 0.102297,
+            "p99_ms": 1.110291,
+            "max_ms": 3.706064
+          },
+          "preempted_off_cpu": {
+            "count": 422,
+            "p50_ms": 0.00603,
+            "p95_ms": 0.022489,
+            "p99_ms": 0.38863,
+            "max_ms": 1.878791
+          },
+          "running_ms": 3458.370823,
+          "migrations": 995
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.791284,
+            "p95_ms": 251.035487,
+            "p99_ms": 251.035487,
+            "max_ms": 251.035487
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.510796,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 2,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 116268,
+            "p50_ms": 0.00492,
+            "p95_ms": 0.100017,
+            "p99_ms": 1.111381,
+            "max_ms": 3.791661
+          },
+          "preempted_off_cpu": {
+            "count": 408,
+            "p50_ms": 0.00592,
+            "p95_ms": 0.01804,
+            "p99_ms": 0.473917,
+            "max_ms": 3.155338
+          },
+          "running_ms": 3467.119852,
+          "migrations": 1004
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10721,
+            "p50_ms": 0.003959,
+            "p95_ms": 1.12955,
+            "p99_ms": 1.313906,
+            "max_ms": 4.164141
+          },
+          "preempted_off_cpu": {
+            "count": 309,
+            "p50_ms": 0.00877,
+            "p95_ms": 2.020617,
+            "p99_ms": 3.035941,
+            "max_ms": 4.164141
+          },
+          "running_ms": 2635.054218,
+          "migrations": 244
+        },
+        "server": {
+          "off_cpu": {
+            "count": 6,
+            "p50_ms": 250.608348,
+            "p95_ms": 251.481905,
+            "p99_ms": 251.481905,
+            "max_ms": 251.481905
+          },
+          "preempted_off_cpu": {
+            "count": 2,
+            "p50_ms": 0.011139,
+            "p95_ms": 0.667303,
+            "p99_ms": 0.667303,
+            "max_ms": 0.667303
+          },
+          "running_ms": 0.565866,
+          "migrations": 3
+        }
+      }
+    },
+    {
+      "second": 3,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 112744,
+            "p50_ms": 0.00506,
+            "p95_ms": 0.101097,
+            "p99_ms": 1.12771,
+            "max_ms": 3.529779
+          },
+          "preempted_off_cpu": {
+            "count": 305,
+            "p50_ms": 0.00629,
+            "p95_ms": 0.0171,
+            "p99_ms": 0.168445,
+            "max_ms": 3.139218
+          },
+          "running_ms": 3440.754842,
+          "migrations": 812
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10961,
+            "p50_ms": 0.00385,
+            "p95_ms": 1.125741,
+            "p99_ms": 1.320936,
+            "max_ms": 4.529713
+          },
+          "preempted_off_cpu": {
+            "count": 239,
+            "p50_ms": 0.00846,
+            "p95_ms": 2.780248,
+            "p99_ms": 4.005386,
+            "max_ms": 4.529713
+          },
+          "running_ms": 2625.198182,
+          "migrations": 213
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.928509,
+            "p95_ms": 251.269931,
+            "p99_ms": 251.269931,
+            "max_ms": 251.269931
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.516187,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 4,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 112132,
+            "p50_ms": 0.00517,
+            "p95_ms": 0.099427,
+            "p99_ms": 1.140671,
+            "max_ms": 3.637886
+          },
+          "preempted_off_cpu": {
+            "count": 385,
+            "p50_ms": 0.00606,
+            "p95_ms": 0.018989,
+            "p99_ms": 0.501176,
+            "max_ms": 2.812767
+          },
+          "running_ms": 3441.959079,
+          "migrations": 890
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11343,
+            "p50_ms": 0.00377,
+            "p95_ms": 1.124181,
+            "p99_ms": 1.314326,
+            "max_ms": 4.154242
+          },
+          "preempted_off_cpu": {
+            "count": 190,
+            "p50_ms": 0.01049,
+            "p95_ms": 3.012332,
+            "p99_ms": 4.130092,
+            "max_ms": 4.154242
+          },
+          "running_ms": 2622.351118,
+          "migrations": 229
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.902899,
+            "p95_ms": 251.314509,
+            "p99_ms": 251.314509,
+            "max_ms": 251.314509
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.544616,
+          "migrations": 0
+        }
+      }
+    },
+    {
+      "second": 5,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 11060,
+            "p50_ms": 0.00385,
+            "p95_ms": 1.12604,
+            "p99_ms": 1.302286,
+            "max_ms": 4.043165
+          },
+          "preempted_off_cpu": {
+            "count": 200,
+            "p50_ms": 0.01265,
+            "p95_ms": 2.074916,
+            "p99_ms": 4.011776,
+            "max_ms": 4.043165
+          },
+          "running_ms": 2629.672875,
+          "migrations": 184
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 111444,
+            "p50_ms": 0.00516,
+            "p95_ms": 0.100488,
+            "p99_ms": 1.134081,
+            "max_ms": 3.794122
+          },
+          "preempted_off_cpu": {
+            "count": 376,
+            "p50_ms": 0.00588,
+            "p95_ms": 0.01366,
+            "p99_ms": 0.164446,
+            "max_ms": 0.561135
+          },
+          "running_ms": 3458.50255,
+          "migrations": 907
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.86025,
+            "p95_ms": 251.658089,
+            "p99_ms": 251.658089,
+            "max_ms": 251.658089
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.527538,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 6,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 112474,
+            "p50_ms": 0.00515,
+            "p95_ms": 0.102577,
+            "p99_ms": 1.132891,
+            "max_ms": 3.663235
+          },
+          "preempted_off_cpu": {
+            "count": 486,
+            "p50_ms": 0.00519,
+            "p95_ms": 0.01595,
+            "p99_ms": 0.198815,
+            "max_ms": 0.782489
+          },
+          "running_ms": 3460.680238,
+          "migrations": 1177
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10036,
+            "p50_ms": 0.0038,
+            "p95_ms": 1.14627,
+            "p99_ms": 1.333675,
+            "max_ms": 4.089724
+          },
+          "preempted_off_cpu": {
+            "count": 189,
+            "p50_ms": 0.01138,
+            "p95_ms": 3.149478,
+            "p99_ms": 4.036715,
+            "max_ms": 4.043765
+          },
+          "running_ms": 2628.605468,
+          "migrations": 242
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.956028,
+            "p95_ms": 252.123317,
+            "p99_ms": 252.123317,
+            "max_ms": 252.123317
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.484579,
+          "migrations": 0
+        }
+      }
+    },
+    {
+      "second": 7,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 110792,
+            "p50_ms": 0.00516,
+            "p95_ms": 0.104277,
+            "p99_ms": 1.15079,
+            "max_ms": 3.542758
+          },
+          "preempted_off_cpu": {
+            "count": 332,
+            "p50_ms": 0.00601,
+            "p95_ms": 0.01711,
+            "p99_ms": 0.357501,
+            "max_ms": 1.218188
+          },
+          "running_ms": 3452.250572,
+          "migrations": 852
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11244,
+            "p50_ms": 0.0037,
+            "p95_ms": 1.12498,
+            "p99_ms": 1.326176,
+            "max_ms": 4.371396
+          },
+          "preempted_off_cpu": {
+            "count": 201,
+            "p50_ms": 0.012349,
+            "p95_ms": 3.037451,
+            "p99_ms": 4.143983,
+            "max_ms": 4.371396
+          },
+          "running_ms": 2630.963698,
+          "migrations": 204
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.85118,
+            "p95_ms": 251.013305,
+            "p99_ms": 251.013305,
+            "max_ms": 251.013305
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.00843,
+            "p95_ms": 0.00843,
+            "p99_ms": 0.00843,
+            "max_ms": 0.00843
+          },
+          "running_ms": 0.538987,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 8,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 110039,
+            "p50_ms": 0.005149,
+            "p95_ms": 0.101417,
+            "p99_ms": 1.149521,
+            "max_ms": 3.630876
+          },
+          "preempted_off_cpu": {
+            "count": 337,
+            "p50_ms": 0.00605,
+            "p95_ms": 0.015309,
+            "p99_ms": 0.161496,
+            "max_ms": 1.989479
+          },
+          "running_ms": 3452.606795,
+          "migrations": 794
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11637,
+            "p50_ms": 0.00375,
+            "p95_ms": 1.117881,
+            "p99_ms": 1.289606,
+            "max_ms": 4.005356
+          },
+          "preempted_off_cpu": {
+            "count": 239,
+            "p50_ms": 0.00772,
+            "p95_ms": 1.819283,
+            "p99_ms": 3.685184,
+            "max_ms": 4.005356
+          },
+          "running_ms": 2628.918352,
+          "migrations": 279
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.84992,
+            "p95_ms": 251.092183,
+            "p99_ms": 251.092183,
+            "max_ms": 251.092183
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.0055,
+            "p95_ms": 0.0055,
+            "p99_ms": 0.0055,
+            "max_ms": 0.0055
+          },
+          "running_ms": 0.515036,
+          "migrations": 4
+        }
+      }
+    },
+    {
+      "second": 9,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 109071,
+            "p50_ms": 0.0054,
+            "p95_ms": 0.102788,
+            "p99_ms": 1.147321,
+            "max_ms": 1.976159
+          },
+          "preempted_off_cpu": {
+            "count": 216,
+            "p50_ms": 0.00669,
+            "p95_ms": 0.015669,
+            "p99_ms": 0.173105,
+            "max_ms": 0.256373
+          },
+          "running_ms": 3493.075288,
+          "migrations": 531
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10635,
+            "p50_ms": 0.00356,
+            "p95_ms": 1.13852,
+            "p99_ms": 1.315176,
+            "max_ms": 4.036525
+          },
+          "preempted_off_cpu": {
+            "count": 142,
+            "p50_ms": 0.00934,
+            "p95_ms": 2.831167,
+            "p99_ms": 4.003246,
+            "max_ms": 4.036525
+          },
+          "running_ms": 2627.597052,
+          "migrations": 168
+        },
+        "server": {
+          "off_cpu": {
+            "count": 6,
+            "p50_ms": 250.654704,
+            "p95_ms": 250.85643,
+            "p99_ms": 250.85643,
+            "max_ms": 250.85643
+          },
+          "preempted_off_cpu": {
+            "count": 2,
+            "p50_ms": 0.00593,
+            "p95_ms": 0.00667,
+            "p99_ms": 0.00667,
+            "max_ms": 0.00667
+          },
+          "running_ms": 0.537686,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 10,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 11705,
+            "p50_ms": 0.00382,
+            "p95_ms": 1.119091,
+            "p99_ms": 1.308876,
+            "max_ms": 4.082104
+          },
+          "preempted_off_cpu": {
+            "count": 232,
+            "p50_ms": 0.0085,
+            "p95_ms": 2.341529,
+            "p99_ms": 3.85256,
+            "max_ms": 4.082104
+          },
+          "running_ms": 2625.839019,
+          "migrations": 267
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 104964,
+            "p50_ms": 0.00565,
+            "p95_ms": 0.110087,
+            "p99_ms": 1.14165,
+            "max_ms": 3.933898
+          },
+          "preempted_off_cpu": {
+            "count": 431,
+            "p50_ms": 0.005949,
+            "p95_ms": 0.01869,
+            "p99_ms": 0.415159,
+            "max_ms": 0.976555
+          },
+          "running_ms": 3514.641667,
+          "migrations": 1049
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.779021,
+            "p95_ms": 250.878988,
+            "p99_ms": 250.878988,
+            "max_ms": 250.878988
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.00498,
+            "p95_ms": 0.00498,
+            "p99_ms": 0.00498,
+            "max_ms": 0.00498
+          },
+          "running_ms": 0.520877,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 11,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 108044,
+            "p50_ms": 0.00564,
+            "p95_ms": 0.103327,
+            "p99_ms": 1.14979,
+            "max_ms": 1.875541
+          },
+          "preempted_off_cpu": {
+            "count": 250,
+            "p50_ms": 0.0067,
+            "p95_ms": 0.014459,
+            "p99_ms": 0.03424,
+            "max_ms": 0.119337
+          },
+          "running_ms": 3512.941766,
+          "migrations": 621
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10319,
+            "p50_ms": 0.00358,
+            "p95_ms": 1.125001,
+            "p99_ms": 1.298526,
+            "max_ms": 3.718894
+          },
+          "preempted_off_cpu": {
+            "count": 118,
+            "p50_ms": 0.00897,
+            "p95_ms": 2.464865,
+            "p99_ms": 3.09051,
+            "max_ms": 3.718894
+          },
+          "running_ms": 2706.222075,
+          "migrations": 156
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.884859,
+            "p95_ms": 251.741486,
+            "p99_ms": 251.741486,
+            "max_ms": 251.741486
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.520915,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 12,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10339,
+            "p50_ms": 0.00315,
+            "p95_ms": 0.890037,
+            "p99_ms": 1.215109,
+            "max_ms": 4.765446
+          },
+          "preempted_off_cpu": {
+            "count": 207,
+            "p50_ms": 0.010909,
+            "p95_ms": 2.474596,
+            "p99_ms": 3.8366,
+            "max_ms": 4.765446
+          },
+          "running_ms": 3219.393641,
+          "migrations": 205
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 103629,
+            "p50_ms": 0.00722,
+            "p95_ms": 0.129606,
+            "p99_ms": 0.914956,
+            "max_ms": 3.687404
+          },
+          "preempted_off_cpu": {
+            "count": 496,
+            "p50_ms": 0.00632,
+            "p95_ms": 0.015489,
+            "p99_ms": 0.098588,
+            "max_ms": 3.224256
+          },
+          "running_ms": 3938.784652,
+          "migrations": 1229
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.81228,
+            "p95_ms": 250.912287,
+            "p99_ms": 250.912287,
+            "max_ms": 250.912287
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.514477,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 13,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 11703,
+            "p50_ms": 0.00355,
+            "p95_ms": 1.127201,
+            "p99_ms": 1.300397,
+            "max_ms": 4.082174
+          },
+          "preempted_off_cpu": {
+            "count": 147,
+            "p50_ms": 0.01227,
+            "p95_ms": 2.552453,
+            "p99_ms": 3.925418,
+            "max_ms": 4.082174
+          },
+          "running_ms": 2634.618658,
+          "migrations": 149
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 104054,
+            "p50_ms": 0.00565,
+            "p95_ms": 0.109917,
+            "p99_ms": 1.173739,
+            "max_ms": 3.601906
+          },
+          "preempted_off_cpu": {
+            "count": 315,
+            "p50_ms": 0.00649,
+            "p95_ms": 0.01112,
+            "p99_ms": 0.038449,
+            "max_ms": 1.787994
+          },
+          "running_ms": 3504.529836,
+          "migrations": 738
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.80925,
+            "p95_ms": 251.407394,
+            "p99_ms": 251.407394,
+            "max_ms": 251.407394
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.497127,
+          "migrations": 0
+        }
+      }
+    },
+    {
+      "second": 14,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10264,
+            "p50_ms": 0.00359,
+            "p95_ms": 1.15137,
+            "p99_ms": 1.310446,
+            "max_ms": 3.960828
+          },
+          "preempted_off_cpu": {
+            "count": 136,
+            "p50_ms": 0.009889,
+            "p95_ms": 2.218652,
+            "p99_ms": 3.695144,
+            "max_ms": 3.960828
+          },
+          "running_ms": 2639.052744,
+          "migrations": 143
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 104513,
+            "p50_ms": 0.00563,
+            "p95_ms": 0.105007,
+            "p99_ms": 1.176289,
+            "max_ms": 1.942159
+          },
+          "preempted_off_cpu": {
+            "count": 259,
+            "p50_ms": 0.00615,
+            "p95_ms": 0.01145,
+            "p99_ms": 0.020329,
+            "max_ms": 0.128467
+          },
+          "running_ms": 3511.291628,
+          "migrations": 623
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.871387,
+            "p95_ms": 250.975205,
+            "p99_ms": 250.975205,
+            "max_ms": 250.975205
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.523107,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 15,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10425,
+            "p50_ms": 0.00359,
+            "p95_ms": 1.14497,
+            "p99_ms": 1.305886,
+            "max_ms": 4.016935
+          },
+          "preempted_off_cpu": {
+            "count": 138,
+            "p50_ms": 0.01005,
+            "p95_ms": 2.400068,
+            "p99_ms": 3.187127,
+            "max_ms": 4.016935
+          },
+          "running_ms": 2638.638623,
+          "migrations": 145
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 107400,
+            "p50_ms": 0.00542,
+            "p95_ms": 0.101907,
+            "p99_ms": 1.17005,
+            "max_ms": 2.140564
+          },
+          "preempted_off_cpu": {
+            "count": 287,
+            "p50_ms": 0.0064,
+            "p95_ms": 0.01145,
+            "p99_ms": 0.030609,
+            "max_ms": 0.169916
+          },
+          "running_ms": 3475.406449,
+          "migrations": 714
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.798679,
+            "p95_ms": 251.426542,
+            "p99_ms": 251.426542,
+            "max_ms": 251.426542
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.510898,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 16,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 9661,
+            "p50_ms": 0.003929,
+            "p95_ms": 1.119941,
+            "p99_ms": 1.302536,
+            "max_ms": 4.568881
+          },
+          "preempted_off_cpu": {
+            "count": 218,
+            "p50_ms": 0.00925,
+            "p95_ms": 3.402791,
+            "p99_ms": 4.179851,
+            "max_ms": 4.568881
+          },
+          "running_ms": 2851.396907,
+          "migrations": 225
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 99513,
+            "p50_ms": 0.00635,
+            "p95_ms": 0.115577,
+            "p99_ms": 1.118671,
+            "max_ms": 5.163865
+          },
+          "preempted_off_cpu": {
+            "count": 767,
+            "p50_ms": 0.00596,
+            "p95_ms": 0.011869,
+            "p99_ms": 0.207205,
+            "max_ms": 1.211668
+          },
+          "running_ms": 3718.537387,
+          "migrations": 1747
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.924575,
+            "p95_ms": 252.057016,
+            "p99_ms": 252.057016,
+            "max_ms": 252.057016
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.508668,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 17,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 99249,
+            "p50_ms": 0.00596,
+            "p95_ms": 0.113067,
+            "p99_ms": 1.182049,
+            "max_ms": 3.734092
+          },
+          "preempted_off_cpu": {
+            "count": 229,
+            "p50_ms": 0.00708,
+            "p95_ms": 0.013949,
+            "p99_ms": 0.040149,
+            "max_ms": 0.249713
+          },
+          "running_ms": 3533.400289,
+          "migrations": 541
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11237,
+            "p50_ms": 0.00377,
+            "p95_ms": 1.133841,
+            "p99_ms": 1.299956,
+            "max_ms": 3.977226
+          },
+          "preempted_off_cpu": {
+            "count": 204,
+            "p50_ms": 0.00778,
+            "p95_ms": 1.654777,
+            "p99_ms": 3.610776,
+            "max_ms": 3.977226
+          },
+          "running_ms": 2637.251264,
+          "migrations": 293
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.856487,
+            "p95_ms": 250.886707,
+            "p99_ms": 250.886707,
+            "max_ms": 250.886707
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.538687,
+          "migrations": 3
+        }
+      }
+    },
+    {
+      "second": 18,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10883,
+            "p50_ms": 0.00371,
+            "p95_ms": 1.12594,
+            "p99_ms": 1.303627,
+            "max_ms": 4.634179
+          },
+          "preempted_off_cpu": {
+            "count": 216,
+            "p50_ms": 0.00815,
+            "p95_ms": 3.07678,
+            "p99_ms": 3.892619,
+            "max_ms": 4.634179
+          },
+          "running_ms": 2649.340015,
+          "migrations": 262
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 106374,
+            "p50_ms": 0.005529,
+            "p95_ms": 0.107387,
+            "p99_ms": 1.14106,
+            "max_ms": 3.589167
+          },
+          "preempted_off_cpu": {
+            "count": 265,
+            "p50_ms": 0.00641,
+            "p95_ms": 0.02003,
+            "p99_ms": 0.194585,
+            "max_ms": 0.306222
+          },
+          "running_ms": 3534.169647,
+          "migrations": 687
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.928535,
+            "p95_ms": 251.634277,
+            "p99_ms": 251.634277,
+            "max_ms": 251.634277
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.534626,
+          "migrations": 0
+        }
+      }
+    },
+    {
+      "second": 19,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 106535,
+            "p50_ms": 0.0055,
+            "p95_ms": 0.105328,
+            "p99_ms": 1.16218,
+            "max_ms": 3.536918
+          },
+          "preempted_off_cpu": {
+            "count": 228,
+            "p50_ms": 0.00674,
+            "p95_ms": 0.01485,
+            "p99_ms": 0.094618,
+            "max_ms": 0.952245
+          },
+          "running_ms": 3480.621311,
+          "migrations": 581
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11095,
+            "p50_ms": 0.00376,
+            "p95_ms": 1.127411,
+            "p99_ms": 1.288337,
+            "max_ms": 5.682133
+          },
+          "preempted_off_cpu": {
+            "count": 180,
+            "p50_ms": 0.008329,
+            "p95_ms": 2.074006,
+            "p99_ms": 3.907499,
+            "max_ms": 5.682133
+          },
+          "running_ms": 2640.924458,
+          "migrations": 254
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.894525,
+            "p95_ms": 250.989174,
+            "p99_ms": 250.989174,
+            "max_ms": 250.989174
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.00955,
+            "p95_ms": 0.00955,
+            "p99_ms": 0.00955,
+            "max_ms": 0.00955
+          },
+          "running_ms": 0.513765,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 20,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 103417,
+            "p50_ms": 0.00567,
+            "p95_ms": 0.106977,
+            "p99_ms": 1.17966,
+            "max_ms": 3.652305
+          },
+          "preempted_off_cpu": {
+            "count": 265,
+            "p50_ms": 0.00643,
+            "p95_ms": 0.017259,
+            "p99_ms": 0.088018,
+            "max_ms": 0.411019
+          },
+          "running_ms": 3491.836761,
+          "migrations": 614
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11201,
+            "p50_ms": 0.003629,
+            "p95_ms": 1.133141,
+            "p99_ms": 1.306267,
+            "max_ms": 3.709104
+          },
+          "preempted_off_cpu": {
+            "count": 139,
+            "p50_ms": 0.01208,
+            "p95_ms": 2.448206,
+            "p99_ms": 3.310354,
+            "max_ms": 3.709104
+          },
+          "running_ms": 2642.872419,
+          "migrations": 142
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.814647,
+            "p95_ms": 251.028912,
+            "p99_ms": 251.028912,
+            "max_ms": 251.028912
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.507618,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 21,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 9969,
+            "p50_ms": 0.003869,
+            "p95_ms": 1.128371,
+            "p99_ms": 1.346175,
+            "max_ms": 5.40571
+          },
+          "preempted_off_cpu": {
+            "count": 234,
+            "p50_ms": 0.01551,
+            "p95_ms": 3.635115,
+            "p99_ms": 4.253779,
+            "max_ms": 5.40571
+          },
+          "running_ms": 2657.952222,
+          "migrations": 214
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 111072,
+            "p50_ms": 0.00545,
+            "p95_ms": 0.107197,
+            "p99_ms": 1.103161,
+            "max_ms": 3.435321
+          },
+          "preempted_off_cpu": {
+            "count": 505,
+            "p50_ms": 0.005749,
+            "p95_ms": 0.01076,
+            "p99_ms": 0.03003,
+            "max_ms": 0.111777
+          },
+          "running_ms": 3567.300464,
+          "migrations": 1159
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.870586,
+            "p95_ms": 251.82548,
+            "p99_ms": 251.82548,
+            "max_ms": 251.82548
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.515967,
+          "migrations": 3
+        }
+      }
+    },
+    {
+      "second": 22,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 108851,
+            "p50_ms": 0.005539,
+            "p95_ms": 0.108067,
+            "p99_ms": 1.123081,
+            "max_ms": 3.282344
+          },
+          "preempted_off_cpu": {
+            "count": 356,
+            "p50_ms": 0.006419,
+            "p95_ms": 0.01569,
+            "p99_ms": 0.269283,
+            "max_ms": 1.335425
+          },
+          "running_ms": 3538.214374,
+          "migrations": 848
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 10265,
+            "p50_ms": 0.00375,
+            "p95_ms": 1.13038,
+            "p99_ms": 1.309306,
+            "max_ms": 5.694922
+          },
+          "preempted_off_cpu": {
+            "count": 200,
+            "p50_ms": 0.015319,
+            "p95_ms": 2.902164,
+            "p99_ms": 4.317158,
+            "max_ms": 5.694922
+          },
+          "running_ms": 2658.26483,
+          "migrations": 165
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.891355,
+            "p95_ms": 250.921824,
+            "p99_ms": 250.921824,
+            "max_ms": 250.921824
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.514256,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 23,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 107478,
+            "p50_ms": 0.00551,
+            "p95_ms": 0.104647,
+            "p99_ms": 1.145111,
+            "max_ms": 3.607837
+          },
+          "preempted_off_cpu": {
+            "count": 382,
+            "p50_ms": 0.00575,
+            "p95_ms": 0.01115,
+            "p99_ms": 0.025679,
+            "max_ms": 0.186865
+          },
+          "running_ms": 3511.47961,
+          "migrations": 897
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11126,
+            "p50_ms": 0.0037,
+            "p95_ms": 1.13442,
+            "p99_ms": 1.317466,
+            "max_ms": 5.0107
+          },
+          "preempted_off_cpu": {
+            "count": 158,
+            "p50_ms": 0.013809,
+            "p95_ms": 2.762619,
+            "p99_ms": 3.971527,
+            "max_ms": 5.0107
+          },
+          "running_ms": 2643.301037,
+          "migrations": 161
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.874795,
+            "p95_ms": 251.103989,
+            "p99_ms": 251.103989,
+            "max_ms": 251.103989
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.00721,
+            "p95_ms": 0.00721,
+            "p99_ms": 0.00721,
+            "max_ms": 0.00721
+          },
+          "running_ms": 0.513056,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 24,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 111695,
+            "p50_ms": 0.00558,
+            "p95_ms": 0.106957,
+            "p99_ms": 1.112141,
+            "max_ms": 3.570407
+          },
+          "preempted_off_cpu": {
+            "count": 380,
+            "p50_ms": 0.005989,
+            "p95_ms": 0.01203,
+            "p99_ms": 0.029459,
+            "max_ms": 0.537586
+          },
+          "running_ms": 3544.975943,
+          "migrations": 883
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 9275,
+            "p50_ms": 0.00388,
+            "p95_ms": 1.15312,
+            "p99_ms": 1.372805,
+            "max_ms": 5.340461
+          },
+          "preempted_off_cpu": {
+            "count": 196,
+            "p50_ms": 0.020979,
+            "p95_ms": 4.150022,
+            "p99_ms": 4.722777,
+            "max_ms": 5.340461
+          },
+          "running_ms": 2668.33684,
+          "migrations": 166
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.795737,
+            "p95_ms": 251.649185,
+            "p99_ms": 251.649185,
+            "max_ms": 251.649185
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.494197,
+          "migrations": 1
+        }
+      }
+    },
+    {
+      "second": 25,
+      "groups": {
+        "client_io": {
+          "off_cpu": {
+            "count": 104051,
+            "p50_ms": 0.005739,
+            "p95_ms": 0.108647,
+            "p99_ms": 1.16556,
+            "max_ms": 3.735343
+          },
+          "preempted_off_cpu": {
+            "count": 306,
+            "p50_ms": 0.0063,
+            "p95_ms": 0.01097,
+            "p99_ms": 0.138216,
+            "max_ms": 1.871641
+          },
+          "running_ms": 3516.40461,
+          "migrations": 717
+        },
+        "server_io": {
+          "off_cpu": {
+            "count": 11529,
+            "p50_ms": 0.00361,
+            "p95_ms": 1.12191,
+            "p99_ms": 1.295046,
+            "max_ms": 4.144472
+          },
+          "preempted_off_cpu": {
+            "count": 167,
+            "p50_ms": 0.0079,
+            "p95_ms": 1.680816,
+            "p99_ms": 3.792612,
+            "max_ms": 4.144472
+          },
+          "running_ms": 2668.346866,
+          "migrations": 188
+        },
+        "server": {
+          "off_cpu": {
+            "count": 5,
+            "p50_ms": 250.788126,
+            "p95_ms": 251.197846,
+            "p99_ms": 251.197846,
+            "max_ms": 251.197846
+          },
+          "preempted_off_cpu": {
+            "count": 1,
+            "p50_ms": 0.067119,
+            "p95_ms": 0.067119,
+            "p99_ms": 0.067119,
+            "max_ms": 0.067119
+          },
+          "running_ms": 0.502877,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 26,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10375,
+            "p50_ms": 0.00394,
+            "p95_ms": 1.099662,
+            "p99_ms": 1.312916,
+            "max_ms": 4.502203
+          },
+          "preempted_off_cpu": {
+            "count": 202,
+            "p50_ms": 0.010439,
+            "p95_ms": 3.209757,
+            "p99_ms": 4.145992,
+            "max_ms": 4.502203
+          },
+          "running_ms": 2751.317588,
+          "migrations": 198
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 109033,
+            "p50_ms": 0.00586,
+            "p95_ms": 0.110327,
+            "p99_ms": 1.103452,
+            "max_ms": 3.648295
+          },
+          "preempted_off_cpu": {
+            "count": 392,
+            "p50_ms": 0.006149,
+            "p95_ms": 0.011,
+            "p99_ms": 0.085888,
+            "max_ms": 0.340041
+          },
+          "running_ms": 3593.089711,
+          "migrations": 886
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.874494,
+            "p95_ms": 250.999431,
+            "p99_ms": 250.999431,
+            "max_ms": 250.999431
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.524497,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 27,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10571,
+            "p50_ms": 0.00294,
+            "p95_ms": 0.38118,
+            "p99_ms": 1.212288,
+            "max_ms": 5.455538
+          },
+          "preempted_off_cpu": {
+            "count": 221,
+            "p50_ms": 0.01442,
+            "p95_ms": 3.147798,
+            "p99_ms": 4.680088,
+            "max_ms": 5.455538
+          },
+          "running_ms": 3212.947858,
+          "migrations": 196
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 107790,
+            "p50_ms": 0.00697,
+            "p95_ms": 0.130446,
+            "p99_ms": 0.645743,
+            "max_ms": 3.643235
+          },
+          "preempted_off_cpu": {
+            "count": 424,
+            "p50_ms": 0.00643,
+            "p95_ms": 0.013789,
+            "p99_ms": 0.02356,
+            "max_ms": 1.339125
+          },
+          "running_ms": 3972.906313,
+          "migrations": 1026
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.886373,
+            "p95_ms": 251.056519,
+            "p99_ms": 251.056519,
+            "max_ms": 251.056519
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.534827,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 28,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10861,
+            "p50_ms": 0.00358,
+            "p95_ms": 1.13396,
+            "p99_ms": 1.293396,
+            "max_ms": 4.029475
+          },
+          "preempted_off_cpu": {
+            "count": 119,
+            "p50_ms": 0.00866,
+            "p95_ms": 1.604119,
+            "p99_ms": 2.987252,
+            "max_ms": 4.029475
+          },
+          "running_ms": 2659.050741,
+          "migrations": 128
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 107407,
+            "p50_ms": 0.00556,
+            "p95_ms": 0.103448,
+            "p99_ms": 1.164549,
+            "max_ms": 3.348673
+          },
+          "preempted_off_cpu": {
+            "count": 193,
+            "p50_ms": 0.00671,
+            "p95_ms": 0.014429,
+            "p99_ms": 0.030639,
+            "max_ms": 0.294493
+          },
+          "running_ms": 3487.223093,
+          "migrations": 473
+        },
+        "server": {
+          "off_cpu": {
+            "count": 4,
+            "p50_ms": 250.991111,
+            "p95_ms": 251.062529,
+            "p99_ms": 251.062529,
+            "max_ms": 251.062529
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.517286,
+          "migrations": 2
+        }
+      }
+    },
+    {
+      "second": 29,
+      "groups": {
+        "server_io": {
+          "off_cpu": {
+            "count": 10651,
+            "p50_ms": 0.00379,
+            "p95_ms": 1.136801,
+            "p99_ms": 1.323356,
+            "max_ms": 3.86253
+          },
+          "preempted_off_cpu": {
+            "count": 202,
+            "p50_ms": 0.010109,
+            "p95_ms": 2.328829,
+            "p99_ms": 3.302634,
+            "max_ms": 3.86253
+          },
+          "running_ms": 2660.331006,
+          "migrations": 212
+        },
+        "client_io": {
+          "off_cpu": {
+            "count": 108006,
+            "p50_ms": 0.00545,
+            "p95_ms": 0.104257,
+            "p99_ms": 1.137901,
+            "max_ms": 3.82482
+          },
+          "preempted_off_cpu": {
+            "count": 363,
+            "p50_ms": 0.00646,
+            "p95_ms": 0.01102,
+            "p99_ms": 0.078058,
+            "max_ms": 0.572955
+          },
+          "running_ms": 3600.003535,
+          "migrations": 825
+        },
+        "server": {
+          "off_cpu": {
+            "count": 3,
+            "p50_ms": 250.924972,
+            "p95_ms": 251.041259,
+            "p99_ms": 251.041259,
+            "max_ms": 251.041259
+          },
+          "preempted_off_cpu": {
+            "count": 0,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0
+          },
+          "running_ms": 0.536396,
+          "migrations": 2
+        }
+      }
+    }
+  ]
+}

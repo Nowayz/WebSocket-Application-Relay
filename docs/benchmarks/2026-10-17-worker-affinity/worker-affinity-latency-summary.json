@@ -1,0 +1,150 @@
+{
+  "scope": "Latency-first 100000-user placement ablation. Same frozen selected Mio and diagnostic client, 1KiB/private/16-member rooms, 400000 offered packets/s,30s/120 samples each,15s heartbeat,server0-3/client8-15. Same new executable with native --pin-workers disabled/enabled, then reverse order. No harness affinity intervention. No tracing/build/load overlap. Affinity applied by native server threads at startup; independently verified at the ready gate and after measurement. CPU and throughput are secondary tradeoffs.",
+  "runs": [
+    {
+      "kind": "none",
+      "repetition": 1,
+      "trace": "artifacts/worker-affinity-latency-none-1.json",
+      "trace_sha256": "c73171c92c69373b6add02e963d5d39db23aa7c3cebff28a91bd6c5b21f47461",
+      "users": 100000,
+      "samples_each": 120,
+      "median_user_p99_ms": 12.370543,
+      "p95_user_p99_ms": 18.365814,
+      "p99_user_p99_ms": 19.783988,
+      "worst_user_p99_ms": 21.992369,
+      "worst_packet_ms": 36.410308,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.123817770014284,
+        "server_cpu_seconds": 49.169999999999995,
+        "client_cpu_seconds": 87.41999999999999,
+        "application_deliveries": 12000000,
+        "planned_deliveries_per_second": 400000,
+        "stable_deliveries_per_second": 399886.3341356695,
+        "server_user_cpu_seconds": 10.7,
+        "server_system_cpu_seconds": 38.47,
+        "round_trip": {
+          "max_ms": 36.410308,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 16.777216,
+          "samples": 12000000
+        },
+        "schedule_lag": {
+          "max_ms": 4.579507,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 750000
+        }
+      }
+    },
+    {
+      "kind": "native",
+      "repetition": 1,
+      "trace": "artifacts/worker-affinity-latency-native-1.json",
+      "trace_sha256": "3e3d2daedf23d907bdf74bd441dd1e3ce19e7876ac7957d6364bef1c0ca691ca",
+      "users": 100000,
+      "samples_each": 120,
+      "median_user_p99_ms": 1.318666,
+      "p95_user_p99_ms": 2.831885,
+      "p99_user_p99_ms": 3.453099,
+      "worst_user_p99_ms": 4.303917,
+      "worst_packet_ms": 7.18355,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.20576909999363,
+        "server_cpu_seconds": 48.730000000000004,
+        "client_cpu_seconds": 85.12,
+        "application_deliveries": 12000000,
+        "planned_deliveries_per_second": 400000,
+        "stable_deliveries_per_second": 399878.82973004156,
+        "server_user_cpu_seconds": 10.17,
+        "server_system_cpu_seconds": 38.56,
+        "round_trip": {
+          "max_ms": 7.18355,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 12000000
+        },
+        "schedule_lag": {
+          "max_ms": 4.504022,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 750000
+        }
+      }
+    },
+    {
+      "kind": "native",
+      "repetition": 2,
+      "trace": "artifacts/worker-affinity-latency-native-2.json",
+      "trace_sha256": "27c47b91be119d70d70a807212f2182ca985895aa403848f17ae90e954dc44de",
+      "users": 100000,
+      "samples_each": 120,
+      "median_user_p99_ms": 2.044626,
+      "p95_user_p99_ms": 4.185819,
+      "p99_user_p99_ms": 5.376408,
+      "worst_user_p99_ms": 6.839959,
+      "worst_packet_ms": 19.349798,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.30938623799011,
+        "server_cpu_seconds": 48.78,
+        "client_cpu_seconds": 84.88,
+        "application_deliveries": 12000000,
+        "planned_deliveries_per_second": 400000,
+        "stable_deliveries_per_second": 399897.7532226912,
+        "server_user_cpu_seconds": 10.91,
+        "server_system_cpu_seconds": 37.87,
+        "round_trip": {
+          "max_ms": 19.349798,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 4.194304,
+          "samples": 12000000
+        },
+        "schedule_lag": {
+          "max_ms": 21.84874,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 750000
+        }
+      }
+    },
+    {
+      "kind": "none",
+      "repetition": 2,
+      "trace": "artifacts/worker-affinity-latency-none-2.json",
+      "trace_sha256": "ff2214b091cd84e2273c6534e917d9e2d8d99fe09a07b9af2c339cd4604d2bd4",
+      "users": 100000,
+      "samples_each": 120,
+      "median_user_p99_ms": 6.638804,
+      "p95_user_p99_ms": 11.623193,
+      "p99_user_p99_ms": 12.970957,
+      "worst_user_p99_ms": 14.321321,
+      "worst_packet_ms": 18.331045,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.295761409011902,
+        "server_cpu_seconds": 49.25,
+        "client_cpu_seconds": 86.26,
+        "application_deliveries": 12000000,
+        "planned_deliveries_per_second": 400000,
+        "stable_deliveries_per_second": 399891.3383530714,
+        "server_user_cpu_seconds": 10.290000000000001,
+        "server_system_cpu_seconds": 38.96,
+        "round_trip": {
+          "max_ms": 18.331045,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 8.388608,
+          "samples": 12000000
+        },
+        "schedule_lag": {
+          "max_ms": 16.941189,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 750000
+        }
+      }
+    }
+  ],
+  "passed": true
+}

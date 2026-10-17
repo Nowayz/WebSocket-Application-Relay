@@ -1022,3 +1022,35 @@ Repeat `--case LABEL=PATH` for each recorded run. The plotter writes PNG, PDF an
 a JSON summary. Use matched workloads and both orders; the
 [timeline study](performance.md#latency-timeline-and-observed-heartbeat-cohorts-2026-10-17)
 records the current four-case on/off/off/on comparison and its limitations.
+
+
+## Native worker CPU placement
+
+For latency-sensitive Linux service, select a suitable allowed CPU set and pin
+one native I/O worker to each CPU:
+
+```sh
+taskset -c 0-3 target/release/war-relay --workers 4 --pin-workers
+```
+
+`--pin-workers` (or `WAR_PIN_WORKERS=true`) is opt-in. Workers use the first
+`--workers` CPUs in the inherited allowed mask, in CPU-ID order. Startup fails
+if there are too few allowed CPUs or a worker cannot set its affinity. Choose
+physical cores and NUMA placement appropriate to the host; CPU IDs need not
+represent separate physical cores. Keep competing workloads off these CPUs.
+Management threads retain their inherited mask. This policy adds no work to
+the packet path and preserves the existing borrowed payload ownership.
+
+The measured 100,000-user low-latency profile uses four server workers on CPUs
+0–3, clients on 8–15, 16 KiB send / 64 KiB receive socket buffers and 15-second
+heartbeats. It offers 400,000 1 KiB private messages/s. These are measured host
+settings, not a portable capacity guarantee. Maintain load headroom: the overload
+profile has much worse latency even when every packet is delivered correctly.
+
+The capacity harness `--pin-workers` requests and independently checks the
+native startup option. `--pin-server-workers` and `--pin-client-workers` are
+harness-only experimental interventions. `--profile --profile-scheduling` records
+scoped CPU-clock/switch sideband for the fresh server and client processes;
+profiling changes timing and must run separately from ordinary comparisons.
+`scripts/analyze-scheduling.py` analyzes exported switch events. Its off-CPU
+intervals include socket waits and are not direct wakeup latency measurements.

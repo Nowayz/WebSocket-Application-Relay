@@ -37,6 +37,31 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def pin_child_workers(pid, count, native, apply=True):
+    """Pin or verify this fresh child's known I/O threads within its allowed mask."""
+    allowed = sorted(os.sched_getaffinity(pid))
+    if len(allowed) < count:
+        raise ValueError("one CPU per worker requires at least as many allowed CPUs as workers")
+    workers = []
+    for task in Path(f"/proc/{pid}/task").iterdir():
+        name = (task / "comm").read_text().strip()
+        if (native and name.startswith("war-io-")) or (not native and name == "tokio-rt-worker"):
+            workers.append((int(task.name), name))
+    workers.sort(key=lambda item: int(item[1].removeprefix("war-io-")) if native else item[0])
+    if len(workers) != count:
+        raise ValueError(f"expected {count} child I/O threads, found {len(workers)}")
+    if native and [name for _,name in workers] != [f"war-io-{i}" for i in range(count)]:
+        raise ValueError("native worker names do not match the configured worker set")
+    records = []
+    for (tid,name),cpu in zip(workers,allowed):
+        before = sorted(os.sched_getaffinity(tid))
+        if apply:
+            os.sched_setaffinity(tid, {cpu})
+        assert os.sched_getaffinity(tid) == {cpu}, "thread affinity was not applied"
+        records.append({"pid":pid,"tid":tid,"name":name,"before":before,"cpu":cpu,"method":"harness" if apply else "server_startup"})
+    return records
+
+
 def metrics(port):
     request = urllib.request.Request(f"http://127.0.0.1:{port}/metrics",
                                      headers={"Authorization": f"Bearer {TOKEN}"})
@@ -127,6 +152,8 @@ def run(args):
                       "--total-read-buffer-bytes", "268435456",
                       "--messages-per-second", "0", "--bytes-per-second", "0",
                       "--ping-interval-secs", str(args.ping_interval_secs), "--disable-global-broadcast"]
+    if args.pin_workers:
+        server_command.append("--pin-workers")
     if args.tcp_send_buffer_bytes:
         server_command += ["--tcp-send-buffer-bytes", str(args.tcp_send_buffer_bytes)]
     if args.tcp_receive_buffer_bytes:
@@ -152,7 +179,7 @@ def run(args):
               "ephemeral_ports": Path("/proc/sys/net/ipv4/ip_local_port_range").read_text().strip(),
               "profile_diagnostic": args.profile,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-              "events": [], "management_samples": [], "passed": False,
+              "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
               "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
@@ -215,6 +242,10 @@ def run(args):
                 if not row:
                     raise RuntimeError("capacity client ended before done")
                 event = json.loads(row)
+                if event["event"] == "measured":
+                    for pinned in result["thread_affinity"]:
+                        assert os.sched_getaffinity(pinned["tid"]) == {pinned["cpu"]}, "thread affinity changed during measurement"
+                        pinned["verified_after_measurement"] = True
                 if event["event"] == "measured" and args.pressure_client:
                     assert pressure is not None, "pressure sidecar never started"
                     pressure_result = capacity_pressure.finish(pressure)
@@ -255,18 +286,36 @@ def run(args):
                 print(json.dumps({"event":event["event"],"sessions":observed["war_sessions"],
                                   "rss_mib":event["server"]["VmRSS"]/1024,
                                   "details":event["details"]}), flush=True)
+                if event["event"] == "ready":
+                    if args.pin_workers:
+                        result["thread_affinity"].extend(pin_child_workers(server.pid, args.workers, True, apply=False))
+                    if args.pin_server_workers:
+                        result["thread_affinity"].extend(pin_child_workers(server.pid, args.workers, True))
+                    if args.pin_client_workers:
+                        result["thread_affinity"].extend(pin_child_workers(client.pid, args.client_workers, False))
                 if event["event"] == "ready" and args.profile:
                     path = args.output.with_suffix(".perf.data")
                     assert not path.exists(), "use a fresh profile path"
                     perf_log = tempfile.TemporaryFile()
-                    event_name = "cycles" if args.profile_kernel else "cycles:u"
-                    command = ["perf", "record", "-e", event_name, "-F", "499",
-                        "--call-graph", "dwarf,8192", "-p", str(server.pid), "-o", str(path)]
+                    if args.profile_scheduling:
+                        # Sideband context-switch records cover both processes;
+                        # low-rate clock samples identify threads without DWARF.
+                        command = ["perf", "record", "-e", "cpu-clock", "-F", "49",
+                            "--switch-events", "--sample-cpu", "--clockid", "mono", "-p",
+                            f"{server.pid},{client.pid}", "-o", str(path)]
+                        result["profile_scope"] = "Diagnostic context-switch sideband for server and client. Off-CPU includes voluntary I/O waits; not run-queue latency."
+                        result["profile_pids"] = {"server": server.pid, "client": client.pid}
+                    else:
+                        event_name = "cycles" if args.profile_kernel else "cycles:u"
+                        command = ["perf", "record", "-e", event_name, "-F", "499",
+                            "--call-graph", "dwarf,8192", "-p", str(server.pid), "-o", str(path)]
                     result["profile_command"] = command
                     perf = subprocess.Popen(command, stdout=perf_log, stderr=perf_log)
                     time.sleep(.2)
                     assert perf.poll() is None, "perf could not attach"
                     result["profile_path"] = str(path)
+                if event["event"] == "ready":
+                    result["measurement_continue_monotonic_seconds"] = time.monotonic()
                 client.stdin.write("continue\n")
                 client.stdin.flush()
                 monitoring = event["event"] == "ready"
@@ -340,7 +389,12 @@ if __name__ == "__main__":
     parser.add_argument("--tcp-send-buffer-bytes", type=int, default=0)
     parser.add_argument("--tcp-receive-buffer-bytes", type=int, default=0)
     parser.add_argument("--connection-headroom", type=int, default=0)
+    parser.add_argument("--pin-workers", action="store_true", help="Request and verify native --pin-workers startup policy")
+    parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
+    parser.add_argument("--pin-client-workers", action="store_true", help="Benchmark intervention: one allowed CPU per client I/O worker")
     parser.add_argument("--profile", action="store_true", help="Separate diagnostic perf capture; not an ordinary timing trial")
+    parser.add_argument("--profile-scheduling", action="store_true",
+                        help="With --profile, capture server/client context-switch sideband; diagnostic only")
     parser.add_argument("--profile-kernel", action="store_true",
                         help="Include kernel cycles in --profile; requires suitable perf permissions")
     parser.add_argument("--pressure-client", type=Path, help="Verified stress client: eight unread recipients beside the stable population")
@@ -358,8 +412,12 @@ if __name__ == "__main__":
         parser.error("waves must be in 1..=16 and seconds in 1..=3600")
     if not 16 <= args.payload_bytes <= 65520:
         parser.error("payload-bytes must be in 16..=65520, allowing envelope headroom")
+    if args.pin_workers and args.pin_server_workers:
+        parser.error("choose native --pin-workers or the harness-only --pin-server-workers intervention")
     if args.profile and args.waves != 1:
         parser.error("use a single wave for an isolated diagnostic profile")
+    if args.profile_scheduling and (not args.profile or args.profile_kernel):
+        parser.error("--profile-scheduling requires --profile and excludes --profile-kernel")
     if args.profile_kernel and not args.profile:
         parser.error("--profile-kernel requires --profile")
     if args.pressure_client and (args.waves != 1 or args.seconds < 25 or args.profile):

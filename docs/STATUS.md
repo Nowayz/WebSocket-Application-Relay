@@ -5,11 +5,30 @@ improving simplicity, code, documentation, stability, performance, concurrency,
 and adjacent platform management. A later instruction makes CBOR the primary
 protocol and preserves the upstream's zero-copy routing intent. A capacity
 instruction makes 100,000 simultaneous users an explicit operating target;
-the latest requested experiment evaluates Monoio.
+consistently low per-user response latency takes priority over peak throughput.
+Measured throughput or bandwidth costs are acceptable when responsiveness improves;
+100,000-user capacity, correctness and bounded resource ownership remain core.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: temporal latency diagnosis, 2026-10-17
+## Latest verified checkpoint: latency-first worker placement, 2026-10-17
+
+Native `--pin-workers` binds one I/O worker per inherited allowed CPU at startup.
+In 100,000-user off/on/on/off runs, the median user's p99 fell from
+12.37 to 1.32 ms and from 6.64 to 2.04 ms in reverse order. Each run verified
+12 million packets. The 99th percentile of user p99s improved in both orders;
+rare individual packet outliers remain. Six overload runs show no consistent
+throughput penalty. The 65-second mixed acceptance passed 6.5 million stable
+messages alongside 66,560 churn sessions and slow-consumer pressure; pooled p99
+was at most 1.05 ms by histogram and maximum 5.18 ms. All 136 tests, strict
+Clippy/fmt and the independent 776-case corpus pass. The option preserves the existing borrowed forwarding path,
+FIFO, accounting and quotas and remains opt-in for operator-selected placement.
+
+See [performance evidence](performance.md#latency-first-worker-placement-2026-10-17)
+and [operating policy](operations.md#native-worker-cpu-placement). Earlier
+checkpoint records below remain historical evidence.
+
+## Previous checkpoint: temporal latency diagnosis, 2026-10-17
 
 The optional per-user client now writes an exact one-second latency/Ping timeline,
 aggregated after timing. Small real-socket checks verify sample and Ping counts;

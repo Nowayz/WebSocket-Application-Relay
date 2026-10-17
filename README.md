@@ -46,6 +46,14 @@ heartbeats, reconnect churn, unread-recipient isolation and complete retirement.
 Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
 buffers independently of application queues; their default `0` retains OS policy.
 
+The design prioritizes consistently low response latency for individual users,
+including tail latency and fairness across the connected population. Peak
+throughput is a secondary tradeoff: a measured bandwidth or throughput reduction
+can be worthwhile when it improves responsiveness while preserving mass-scale
+capacity, correctness and bounded memory. The [per-user latency measurements](docs/performance.md#per-user-latency-fairness-at-100000-connections-2026-10-17)
+and [temporal diagnostics](docs/performance.md#latency-timeline-and-observed-heartbeat-cohorts-2026-10-17)
+record those criteria alongside CPU, memory and completed work.
+
 After large connection populations retire, sparse worker arenas compact while
 surviving clients stay connected. Socket tokens and shared payload storage stay
 stable; small arenas remain allocated for ordinary reconnect traffic. See the
@@ -521,3 +529,7 @@ Its traffic templates and latency histogram remain bounded as duration increases
 The finite load tool refuses more than 512 MiB of prepared work or 10 million
 latency samples; use the stress tool for longer runs. See the measured
 [close and backpressure investigation](docs/stability.md).
+
+For a measured low-latency deployment profile, see
+[native worker CPU placement](docs/operations.md#native-worker-cpu-placement)
+and the [100,000-user latency comparison](docs/performance.md#latency-first-worker-placement-2026-10-17).

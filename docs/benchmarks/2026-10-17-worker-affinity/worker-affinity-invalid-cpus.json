@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "command": [
+    "taskset",
+    "-c",
+    "0-1",
+    "artifacts/candidates/worker-affinity/war-relay",
+    "--workers",
+    "4",
+    "--pin-workers",
+    "--bind",
+    "127.0.0.1:0",
+    "--no-admin"
+  ],
+  "exit_code": 1,
+  "stderr": "Error: pin-workers needs one allowed CPU per native worker: 2 CPUs for 4 workers\n"
+}

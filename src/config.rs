@@ -83,6 +83,9 @@ pub struct Config {
     pub disable_global_broadcast: bool,
     #[arg(long, env = "WAR_WORKERS")]
     pub workers: Option<usize>,
+    /// Pin native data workers one per CPU from the process's allowed mask.
+    #[arg(long, env = "WAR_PIN_WORKERS")]
+    pub pin_workers: bool,
     #[arg(skip)]
     pub auth_password: Option<String>,
     #[arg(skip)]

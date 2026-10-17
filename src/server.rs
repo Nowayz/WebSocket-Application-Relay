@@ -74,6 +74,19 @@ pub async fn serve(
             .map_or(2, usize::from)
             .min(16)
     });
+    let worker_cores = if relay.config.pin_workers {
+        let mut cores = core_affinity::get_core_ids()
+            .context("cannot discover allowed CPUs for native worker affinity")?;
+        anyhow::ensure!(
+            cores.len() >= workers,
+            "pin-workers needs one allowed CPU per native worker: {} CPUs for {workers} workers",
+            cores.len()
+        );
+        cores.truncate(workers);
+        Some(cores)
+    } else {
+        None
+    };
     let mut prepared = Vec::with_capacity(workers);
     for listener in worker_listeners(listener, workers, relay.config.listen_backlog)? {
         prepared.push(Worker::new(listener, relay.clone())?);
@@ -88,12 +101,23 @@ pub async fn serve(
     let mut tasks = JoinSet::new();
     for (index, worker) in prepared.into_iter().enumerate() {
         let (finished, result) = tokio::sync::oneshot::channel();
+        let core = worker_cores.as_ref().map(|cores| cores[index]);
         // These loops own dedicated OS threads. An embedder's Tokio blocking
         // pool may be small or busy and must not limit native I/O concurrency.
         let thread = std::thread::Builder::new()
             .name(format!("war-io-{index}"))
             .spawn(move || {
-                let outcome = worker.run();
+                let outcome = (|| {
+                    if let Some(core) = core {
+                        anyhow::ensure!(
+                            core_affinity::set_for_current(core),
+                            "cannot pin native I/O worker {index} to allowed CPU {}",
+                            core.id
+                        );
+                        tracing::info!(worker = index, cpu = core.id, "pinned native I/O worker");
+                    }
+                    worker.run()
+                })();
                 let _ = finished.send(outcome);
             })
             .context("cannot start native I/O worker")?;
