@@ -1103,3 +1103,25 @@ Compare offered rate with completed rate and inspect intended-send latency and
 scheduling lag before selecting operating headroom. The test includes the load
 generator, loopback stack and relay; its delay does not isolate a server-only
 capacity limit or predict WAN/TLS behavior.
+
+## Joint client/server CPU diagnosis
+
+`--profile --profile-client` records cycle samples for both fresh processes;
+`--profile-kernel` includes kernel cycles, and `--profile-frequency 99` can reduce
+sampling overhead from the ordinary 499 Hz diagnostic default. Scheduling
+sideband already records both processes and excludes `--profile-client`.
+Profiles remain separate diagnostic runs, never ordinary performance repeats.
+The result records the exact command and `profile_pids` mapping.
+
+Filter and normalize the report for each process explicitly:
+
+```sh
+sudo perf report --stdio --no-children --call-graph none --sort symbol \
+  --pid CLIENT_PID --percentage relative -i artifacts/joint-600k-profile.perf.data
+```
+
+Repeat with the recorded server PID. `--pid` alone retains an absolute combined
+percentage denominator; `--percentage relative` is necessary for fractions of
+that process's own samples. Per-process user/system CPU deltas are available
+from the existing ready/measured event snapshots. Sample fractions and call
+chains are diagnostic evidence, not syscall counts or predicted speedups.

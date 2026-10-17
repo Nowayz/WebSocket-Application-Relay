@@ -11,6 +11,20 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest diagnosis: joint client/server profile, 2026-10-17
+
+A separate 600k/s, 100,000-user, 20-second joint profile passes 12 million verified
+messages and all retirement checks, with 21,942 samples and zero loss. Server
+CPU is 13.50 user + 42.46 system seconds; client is 15.16 + 54.80. Both spend
+most CPU in kernel work. Process-relative reports identify TCP/descriptor/socket
+paths; they do not isolate a cause for the ordinary latency variability.
+
+The harness now supports `--profile-client` and cycle sampling frequency, with
+exact PID attribution. Default server-only profiling is preserved. No server
+runtime or selected operating profile changes; 400k/s remains the measured
+responsive eight-worker workload. See
+[joint evidence](performance.md#joint-600k-clientserver-diagnosis-2026-10-17).
+
 ## Latest investigation: eight-worker latency headroom, 2026-10-17
 
 Four fresh higher-rate cases verify 84 million messages at 100,000 users.

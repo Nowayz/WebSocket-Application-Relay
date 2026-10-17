@@ -307,8 +307,14 @@ def run(args):
                         result["profile_pids"] = {"server": server.pid, "client": client.pid}
                     else:
                         event_name = "cycles" if args.profile_kernel else "cycles:u"
-                        command = ["perf", "record", "-e", event_name, "-F", "499",
-                            "--call-graph", "dwarf,8192", "-p", str(server.pid), "-o", str(path)]
+                        command = ["perf", "record", "-e", event_name, "-F", str(args.profile_frequency),
+                            "--call-graph", "dwarf,8192", "-p",
+                            f"{server.pid},{client.pid}" if args.profile_client else str(server.pid),
+                            "-o", str(path)]
+                        result["profile_pids"] = {"server": server.pid}
+                        if args.profile_client:
+                            result["profile_pids"]["client"] = client.pid
+                        result["profile_scope"] = "Diagnostic cycle samples; per-process reports required; timings excluded from ordinary comparisons."
                     result["profile_command"] = command
                     perf = subprocess.Popen(command, stdout=perf_log, stderr=perf_log)
                     time.sleep(.2)
@@ -393,6 +399,10 @@ if __name__ == "__main__":
     parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
     parser.add_argument("--pin-client-workers", action="store_true", help="Benchmark intervention: one allowed CPU per client I/O worker")
     parser.add_argument("--profile", action="store_true", help="Separate diagnostic perf capture; not an ordinary timing trial")
+    parser.add_argument("--profile-client", action="store_true",
+                        help="Include client cycle samples in --profile; report processes separately")
+    parser.add_argument("--profile-frequency", type=int, default=499,
+                        help="Cycle sample frequency for --profile (default 499 Hz)")
     parser.add_argument("--profile-scheduling", action="store_true",
                         help="With --profile, capture server/client context-switch sideband; diagnostic only")
     parser.add_argument("--profile-kernel", action="store_true",
@@ -418,6 +428,10 @@ if __name__ == "__main__":
         parser.error("use a single wave for an isolated diagnostic profile")
     if args.profile_scheduling and (not args.profile or args.profile_kernel):
         parser.error("--profile-scheduling requires --profile and excludes --profile-kernel")
+    if args.profile_client and (not args.profile or args.profile_scheduling):
+        parser.error("--profile-client requires --profile and excludes scheduling sideband")
+    if args.profile_frequency <= 0:
+        parser.error("profile-frequency must be positive")
     if args.profile_kernel and not args.profile:
         parser.error("--profile-kernel requires --profile")
     if args.pressure_client and (args.waves != 1 or args.seconds < 25 or args.profile):

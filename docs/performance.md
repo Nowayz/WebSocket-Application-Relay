@@ -6008,3 +6008,45 @@ separate backlog statistics, threshold arithmetic and malformed-input rejection.
 The actual comparison PNG was visually inspected. See the
 [evidence archive](benchmarks/2026-10-17-latency-headroom/manifest.json) and
 [plotting recipe](operations.md#comparing-latency-headroom-without-hiding-backlog).
+
+## Joint 600k client/server diagnosis (2026-10-17)
+
+The [joint diagnostic](benchmarks/2026-10-17-joint-profile/manifest.json) records
+both fresh server/client processes at 99 Hz, including kernel cycles and 8 KiB
+DWARF stacks. It uses the unchanged eight-worker pinned server and frozen
+latency client, 100,000 users, 600,000 messages/s for 20 seconds, 1 KiB private
+messages, heartbeat 15s and the existing disjoint physical-core/socket-buffer
+profile. All 12 million messages, resource accounting, fresh routing, Close/EOF,
+worker affinities and retirement pass. There are 21,942 samples and zero lost
+samples. These diagnostic timings do not replace the ordinary repeated results.
+
+| CPU seconds across the measurement boundary | Server | Client |
+| --- | ---: | ---: |
+| User | 13.50 | 15.16 |
+| System | 42.46 | 54.80 |
+| Total | 55.96 | 69.96 |
+
+For each process, user and system deltas sum to the controller's total. Filtering
+reports by PID with `--percentage relative` gives process-relative self-sample
+fractions. The server shows established-socket lookup 5.90%, IRQ-safe spinlocks
+5.43%, receive/routing 5.38%, socket-buffer release 4.46% and connection driving
+3.90%. The client shows descriptor lookup `fdget` 8.01%, established-socket lookup
+6.39%, IRQ-safe spinlocks 4.87%, socket-buffer release 4.08%, TCP receive 3.27%
+and socket locking 3.16%. Sampled descriptor-lookup call chains include the
+client's `recvfrom` and `sendto` paths. These do not count syscalls, isolate cache
+or scheduler causes, or prove generator saturation. Server/client kernel work
+and cross-process delivery remain coupled.
+
+This corrects the temptation to assign the higher-rate latency variability to
+client allocations without evidence. Both processes spend most measured CPU in
+kernel paths; neither is proven to be the isolated limiting stage. No speculative
+runtime change is selected. The reusable harness now supports joint profiling
+and explicit cycle sample frequency, preserving the default server-only 499 Hz
+mode. The large raw perf input stays local with its hash in the archive; reports,
+exact harness source and workload/build identities are preserved for follow-up.
+
+A separate 32-user real-socket smoke verifies the unchanged default server-only
+PID capture at 499 Hz, along with normal routing, affinity and retirement gates.
+The joint mode has the larger 100,000-user acceptance above. Python compilation
+and repository whitespace checks pass; the relay source/binary is unchanged, so
+this checkpoint does not rerun or supersede the prior Rust implementation suite.
