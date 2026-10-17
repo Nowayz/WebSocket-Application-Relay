@@ -9,6 +9,52 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Runtime `d47f0fd` reduces native accept turns from 64 sockets to 16. This single
+constant changes scheduling balance during bursts; the 1,024 backlog, bounded
+continuation token, resource-error recovery and shared CBOR routing retain their
+behavior. Helper `4e7deb8` adds gated perf diagnostics and user/system CPU
+accounting to the admission workload. Separate profiles record 4,605/4,735
+samples with zero lost samples; their timing is excluded from ordinary medians.
+
+A 32-case pilot compares 8/16/32/64 before retaining 16. The main 42-process,
+three-round comparison gives one-worker established echo gains of 39.64% under
+global admission and 50.05% under direct-IP admission, with p99 halved from
+1.048576 to 0.524288 ms. Refusal throughput falls 3.12%/3.98% and server CPU per
+wall second rises about 3–4% with the changed work mix. At 64 refused clients,
+echoes rise 12.45%, p99 halves and refusals fall 5.48%. All runs have zero kernel
+listen drops; SYN retransmissions total zero before and three after. Ordinary
+controls and four-worker echo ranges overlap. No general CPU-saving or
+production-capacity claim follows.
+
+Eighteen additional routing guards pass. Standard four-worker private, mixed
+private and reconnect medians change −0.19%/−0.34%/−0.22%, with overlapping
+ranges and unchanged p99. With 64 admitted reconnect workers on one native
+worker, private throughput rises 7.49% and its p99 halves, while full reconnect
+throughput falls 0.85% with overlapping ranges. The
+[performance record](performance.md#accept-turn-fairness-2026-10-16) retains
+rates, ranges, costs and workload limits. All 60 retained timing processes run
+sequentially, separately from builds, profiling, stress and injected faults.
+
+Verification passes 138 Rust tests, strict Clippy/formatting, locked release
+builds, the small unpinned CI command, 48 common C++ wire cases plus eight
+documented differences, seven JavaScript checks, four management checks and
+seven real Chrome checks. Three descriptor-pressure cases, four socket-setup
+fault cases and four shutdown-during-flood cases pass. Both builds complete
+the separate 1,024-client refusal check with no kernel drops/retransmissions;
+selected verifies 276,624 echoes and 494,166 refusals. The selected 1,024-reader
+changing-room check verifies 347 membership cycles and 709,632 fanout deliveries.
+Separate stress verifies 8,744,080 ordinary deliveries, 548,418 full reconnects
+across 4,096 source IPs, 205,260 healthy deliveries beside an unread peer and
+719,280 mixed-size fanout deliveries, with final cleanup and normal server exit.
+
+Native/bridge services on 1338/1337 run the selected frozen binaries, with
+management on 1339 and browser acceptance on 4180. Chrome has a clear console,
+four native listeners and zero retained resources. The
+[manifest](benchmarks/2026-10-16-accept-fairness-build.json) binds source,
+binaries, clients and evidence. All acceptance is local; the goal remains active.
+
+## Previous checkpoint: bounded admission and backlog, 2026-10-16
+
 Runtime `8676e7e` bounds each native worker to one queued accept continuation
 and applies a configurable TCP backlog to every data listener. Previously,
 repeated listener events could enqueue duplicate admission turns; the initial

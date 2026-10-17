@@ -79,6 +79,11 @@ waiting for userspace `accept`; the OS may cap the request. It applies to every
 native data listener and the bridge CLI's public listener. The separate native
 management listener retains its HTTP runtime's backlog.
 
+Native workers process at most 16 sockets per accept turn before returning to
+queued work. This scheduling budget is separate from the kernel backlog and
+established-connection limits. The [fairness measurements](performance.md#accept-turn-fairness-2026-10-16)
+record the established-traffic benefit and refusal-throughput tradeoff.
+
 ```sh
 ./target/release/war-relay --workers 4 --listen-backlog 2048
 ./target/release/war-legacy-bridge --listen-backlog 2048

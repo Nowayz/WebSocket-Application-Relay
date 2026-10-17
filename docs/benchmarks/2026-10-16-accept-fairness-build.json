@@ -1,0 +1,1421 @@
+{
+  "passed": true,
+  "source_revision": "d47f0fd4c7fc49b011956cc9a2c8f23b78d3d62c",
+  "runtime_implementation_revision": "d47f0fd4c7fc49b011956cc9a2c8f23b78d3d62c",
+  "driver_source_revision": "4e7deb8be640b2e2d6637a4bf1fe68841a8f6ce7",
+  "candidate": {
+    "directory": "artifacts/baselines/accept-fairness",
+    "binaries": {
+      "war-relay": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+      "war-legacy-bridge": "b715ef362bcc7a6ba035d825136ca1fd49a796d6f0ffb31130596d3a4ef1f54c"
+    },
+    "sources": {
+      "src/server.rs": "6d28dc777b15d976670e49cf52cbc52bb7c9244974c3c1ee676e2ce2bc0be9eb"
+    },
+    "baseline": {
+      "path": "artifacts/baselines/accept-backlog/war-relay",
+      "revision": "8676e7e184fcb68415ad1b5d6fd81dd06a3d0954",
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be"
+    },
+    "baseline_bridge": {
+      "path": "artifacts/baselines/accept-backlog/war-legacy-bridge",
+      "sha256": "bc71b284226c8092681dd5c03380f39ee97236718150fd5c103b6fae3bc0b7e5"
+    },
+    "helper": {
+      "directory": "artifacts/baselines/admission-flood-client",
+      "source_revision": "a6949d58226c3901625244091cb76318053b76f2",
+      "client_sha256": "626b41b88dda3ae00399c0f22b328a572ca24a8fdecea2664ebee4dd52da9360",
+      "sources": {
+        "examples/admission.rs": "34285a5b2533e77beead0cbb1e28ff7f0bf8fd4b12a411ad537a4041600a6654",
+        "scripts/admission-flood.py": "f1c3fcc47767347d2fc348590074a53488e447a4b7f4b2a3d06cd76fb91ee824",
+        "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+      },
+      "baseline_revision": "0f70200984db89d9fd11ce0cefdb00f9bdc22ae5",
+      "baseline_directory": "artifacts/baselines/room-churn-reuse",
+      "baseline_binaries": {
+        "war-relay": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e",
+        "war-legacy-bridge": "07ce8dcc7bdcd13a039d611c985610b7a1f5e0f80e618a7591e6cf161db02ffe"
+      },
+      "pending_test_only_changes": " M src/server.rs\n?? docs/benchmarks/2026-10-16-accept-flood-smoke.json\n?? src/server/accept_tests.rs\n"
+    },
+    "experimental_variants": {
+      "source_revision": "4e7deb8be640b2e2d6637a4bf1fe68841a8f6ce7",
+      "scope": "Three constant-only experiments relative to runtime8676e7e, with the same configured1024 backlog, routing and clients. These candidates are not selected until ordinary comparisons and regressions pass.",
+      "variants": {
+        "8": {
+          "directory": "artifacts/baselines/accept-q8",
+          "binaries": {
+            "war-relay": "d1314db6a071ca38e1ed70b09cf1d2c494a9f0b8feff127f6d8ba05509d46142",
+            "war-legacy-bridge": "13184c5ed136f38548f973a5ae04d56e10fe1cf18c83f1ad018119deef191aec"
+          },
+          "sources": {
+            "src/server.rs": "0d0f539a67909ef2bafc93487ebd5698fe82b1707250626e65e464a22e53cb00"
+          }
+        },
+        "16": {
+          "directory": "artifacts/baselines/accept-q16",
+          "binaries": {
+            "war-relay": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+            "war-legacy-bridge": "b715ef362bcc7a6ba035d825136ca1fd49a796d6f0ffb31130596d3a4ef1f54c"
+          },
+          "sources": {
+            "src/server.rs": "6d28dc777b15d976670e49cf52cbc52bb7c9244974c3c1ee676e2ce2bc0be9eb"
+          }
+        },
+        "32": {
+          "directory": "artifacts/baselines/accept-q32",
+          "binaries": {
+            "war-relay": "3dca0cb8da720e4d537b7011577964661997fc0de06eedc0efbb3a209f0b59a2",
+            "war-legacy-bridge": "0a3e14f8cb04a713f16f9989c9385b6eeca5938e0256380d5179db2bfdfea376"
+          },
+          "sources": {
+            "src/server.rs": "e3ca77abeb45b4d8ee413e2ca2fcfcaf010599955d09caf815f96142fa846216"
+          }
+        }
+      }
+    },
+    "source_revision": "d47f0fd4c7fc49b011956cc9a2c8f23b78d3d62c",
+    "runtime_change": "Only ACCEPT_QUANTUM64->16 relative to runtime8676e7e; full Rust/strict/release checks pass and frozen source/binaries match the checkout. Longer comparisons still validate retention."
+  },
+  "driver": {
+    "directory": "artifacts/baselines/accept-fairness-driver",
+    "source_revision": "4e7deb8be640b2e2d6637a4bf1fe68841a8f6ce7",
+    "sources": {
+      "scripts/admission-flood.py": "e0f4f40cb6620687255a0e453f5f344c99d26175bc4893b8a4153c7503ae9b79",
+      "scripts/admission-stop.py": "5153415f030982581ad1f6faab8c936eedf765291f2cc9fe363a08ba0c68e77a",
+      "scripts/accept-pressure.py": "1d19a9b999d1bd3f84f1d69e123dd11d942b87a1b691d0092792714d974f8dfc",
+      "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+    }
+  },
+  "platform": "Linux-7.2.9-arch1-1-x86_64-with-glibc2.44",
+  "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+  "scope": "Local Linux checkpoint. Only native runtime change is accept quantum64->16 at the same1024 backlog.32 exploratory tuning cases;42 retained three-round admission comparisons and18 private/admitted-reconnect guards run sequentially without builds, profiles, injected faults or competing loads. Full body/FIFO/Close/EOF, exact counters and retirement verify. CPU figures span a changing work mix and are not a per-operation efficiency or general speedup claim. Profiles and stress run separately; perf user cycles do not resolve kernel costs, and gated CPU accounting provides user/system totals. Hosted CI/deployment and production capacity unverified. Goal remains active.",
+  "runtime_sources": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4"
+    },
+    {
+      "path": "src/admin.rs",
+      "sha256": "835c1362f83dbb39c57c83ab067d9f6fa5d0f92eb19799389e9a0b491151249d"
+    },
+    {
+      "path": "src/admission.rs",
+      "sha256": "cef4441d064bfe1aff33a6fcee33b475cd609ccd89e4068732e3c5ddbfded75d"
+    },
+    {
+      "path": "src/bin/war-legacy-bridge.rs",
+      "sha256": "0b595f2a1b9b8695227fc52d15f7a9298e952b8b4a9aad507fed2b525479f80f"
+    },
+    {
+      "path": "src/common.rs",
+      "sha256": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529"
+    },
+    {
+      "path": "src/config.rs",
+      "sha256": "386f84979103d15bc01ef48f1191856152c96bde6596736eee205f62f1d1de5e"
+    },
+    {
+      "path": "src/frame.rs",
+      "sha256": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563"
+    },
+    {
+      "path": "src/legacy.rs",
+      "sha256": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde"
+    },
+    {
+      "path": "src/legacy_bridge.rs",
+      "sha256": "cbfe9f40f7629f78777bfe3b67ec82b21540300bfca87d33592034eab4126e12"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "7cb9923b3c87e649a19cea41f74833ca0ad2d1a03fcb72ba7da3fe5cfcedce83"
+    },
+    {
+      "path": "src/main.rs",
+      "sha256": "d58e81259758ebce6e327beb0374055a6930ba8cbeeeba70b2857eb366a021ae"
+    },
+    {
+      "path": "src/metrics.rs",
+      "sha256": "84cb61384398b86e9d31e5f2c884132f402932fa7e4a6cb09768361c8525e506"
+    },
+    {
+      "path": "src/origin.rs",
+      "sha256": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf"
+    },
+    {
+      "path": "src/protocol.rs",
+      "sha256": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54"
+    },
+    {
+      "path": "src/relay.rs",
+      "sha256": "f8bf9a0df11df5442cf84d3ba587db02fda3b8f3df2ae99cc5f2104c639d71d9"
+    },
+    {
+      "path": "src/relay/broadcast_tests.rs",
+      "sha256": "d1e6a721ce1fefb6490abfbf932c2549e61e9d545452d1135895a3e9d9edca33"
+    },
+    {
+      "path": "src/relay/channel_tests.rs",
+      "sha256": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4"
+    },
+    {
+      "path": "src/relay/listener_tests.rs",
+      "sha256": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765"
+    },
+    {
+      "path": "src/relay/listing.rs",
+      "sha256": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4"
+    },
+    {
+      "path": "src/server.rs",
+      "sha256": "6d28dc777b15d976670e49cf52cbc52bb7c9244974c3c1ee676e2ce2bc0be9eb"
+    },
+    {
+      "path": "src/server/accept_tests.rs",
+      "sha256": "620c95dd05d625ebf03e6d22426ab1cf5e967998269f001cb1b773d9187ad1ef"
+    },
+    {
+      "path": "src/server/arena_tests.rs",
+      "sha256": "5cb2480ab7813ffaa34c635baf2c49eb242ef03b3cfb4a1cf946c0baca1c2883"
+    },
+    {
+      "path": "src/server/close_tests.rs",
+      "sha256": "157d9ca4d4d444a0c1a7785b79cc3d82a971f8c7e3379cfb774c5f780c1fcb10"
+    },
+    {
+      "path": "src/server/fairness_tests.rs",
+      "sha256": "91fae8dc7ce1d5fdf71aba5fb0975715849a6c012ea8b0631285e81786a8c5b7"
+    },
+    {
+      "path": "src/server/ownership_tests.rs",
+      "sha256": "16fbc340ffb4412efb96ae9d19f924484bf2692ec1c2a636e1586c1dadf85574"
+    },
+    {
+      "path": "src/server/socket.rs",
+      "sha256": "b0c2748c7d22ec7b51be5bdb0b900fa2d2d5bb1e1994cdf8ac8692187956d06d"
+    },
+    {
+      "path": "src/server/timers.rs",
+      "sha256": "9402ecec9e77b18a8c91bc6b9ade140a1564c445e1919f61b943357e7c2b16d1"
+    },
+    {
+      "path": "src/transport.rs",
+      "sha256": "236c0793c8a529699f1b700a5271b85a6fc452e60f9fae3807733b5cff9bddd1"
+    },
+    {
+      "path": "vendor/README.md",
+      "sha256": "0d40a604d86a164dee23a21a4559a9879d8c553caecf4b3db66342aadf8e0012"
+    },
+    {
+      "path": "vendor/provenance.json",
+      "sha256": "48cd086e057e3f0ae9bfbb557a8ccd0ae5a417fc8ded78afe6113ba21c38cc07"
+    },
+    {
+      "path": "vendor/read-buffer-reclaim.patch",
+      "sha256": "84e86124bfef4207204412f93c25e8527ea640c034baba8bc2b6890393a2afab"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/.cargo_vcs_info.json",
+      "sha256": "7904b96b5c1d841e95481db9b63de2859427e72998c46e04b7a10b32ec2de516"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/CHANGELOG.md",
+      "sha256": "e374356eacf72059d3a65ee08a6a41a171c0424d2a67735bae7ee59da50fcb43"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.lock",
+      "sha256": "d2c691100eab31ebcd1e24bab5e6ad1368340ee8a4f9f16ede4702f492c7be20"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.toml",
+      "sha256": "d35883d4f3476aa6792059750d5fb0d66051b84e5ccbed911914ea0b2b2992f1"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.toml.orig",
+      "sha256": "38f845507abfdb2e904396563ee08779d1b3dc4ff609e4f2344f0ee1d2597cbd"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/LICENSE",
+      "sha256": "fdd55e2b2da854b0fbdc1e607df7c2ba1e1ebf91ecb77c515511ebeef972bc8f"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/README.md",
+      "sha256": "ff6376adb37c3f09445aaa97cfc356e35ba0e4fcfee3452fdd1fa791cdbd97da"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/README.md",
+      "sha256": "067ceaf7b70949f087fd582d71bb114e88ef0313560dbd33b345158ffa33eff3"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/autobahn-client.rs",
+      "sha256": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/autobahn-server.rs",
+      "sha256": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/client.rs",
+      "sha256": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/echo-server.rs",
+      "sha256": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/interval-server.rs",
+      "sha256": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server-custom-accept.rs",
+      "sha256": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server-headers.rs",
+      "sha256": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server.rs",
+      "sha256": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/compat.rs",
+      "sha256": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/connect.rs",
+      "sha256": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/handshake.rs",
+      "sha256": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/lib.rs",
+      "sha256": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/stream.rs",
+      "sha256": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/tls.rs",
+      "sha256": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211"
+    },
+    {
+      "path": "vendor/tungstenite/.cargo_vcs_info.json",
+      "sha256": "05db1b097178b9822b792a31c0909ad819609ac829e66892ab29d0ec046ae35c"
+    },
+    {
+      "path": "vendor/tungstenite/CHANGELOG.md",
+      "sha256": "7e416d40b723071c0b44f9647de19e18a1180fdddabbb6bea8aca11e3c60427e"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.lock",
+      "sha256": "62974d50013c278220b6cc72e1064015b3c2d0339eaca013ea882c212c9b4356"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.toml",
+      "sha256": "84e09d25e81a69d487b38e57839339f69794c0b642c76c9545f5de53d94eb887"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.toml.orig",
+      "sha256": "bc5bdace1ae1157ffa559d8699d78d39023e5f861b1404552e42792e05f24d8b"
+    },
+    {
+      "path": "vendor/tungstenite/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "path": "vendor/tungstenite/LICENSE-MIT",
+      "sha256": "7fea0ee51a4ca5d5cea7464135fd55e8b09caf3a61da3d451ac8a22af95c033f"
+    },
+    {
+      "path": "vendor/tungstenite/README.md",
+      "sha256": "39e59dbbfd67127ad101be692fb5f04babdd80eeffeb2ea97b6327fec5ace9b4"
+    },
+    {
+      "path": "vendor/tungstenite/benches/buffer.rs",
+      "sha256": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e"
+    },
+    {
+      "path": "vendor/tungstenite/benches/e2e.rs",
+      "sha256": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce"
+    },
+    {
+      "path": "vendor/tungstenite/benches/read.rs",
+      "sha256": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42"
+    },
+    {
+      "path": "vendor/tungstenite/benches/write.rs",
+      "sha256": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8"
+    },
+    {
+      "path": "vendor/tungstenite/examples/autobahn-client.rs",
+      "sha256": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4"
+    },
+    {
+      "path": "vendor/tungstenite/examples/autobahn-server.rs",
+      "sha256": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776"
+    },
+    {
+      "path": "vendor/tungstenite/examples/callback-error.rs",
+      "sha256": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0"
+    },
+    {
+      "path": "vendor/tungstenite/examples/client.rs",
+      "sha256": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040"
+    },
+    {
+      "path": "vendor/tungstenite/examples/server.rs",
+      "sha256": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157"
+    },
+    {
+      "path": "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs",
+      "sha256": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c"
+    },
+    {
+      "path": "vendor/tungstenite/src/buffer.rs",
+      "sha256": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30"
+    },
+    {
+      "path": "vendor/tungstenite/src/client.rs",
+      "sha256": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637"
+    },
+    {
+      "path": "vendor/tungstenite/src/error.rs",
+      "sha256": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/client.rs",
+      "sha256": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/headers.rs",
+      "sha256": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/machine.rs",
+      "sha256": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/mod.rs",
+      "sha256": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/server.rs",
+      "sha256": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f"
+    },
+    {
+      "path": "vendor/tungstenite/src/lib.rs",
+      "sha256": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/coding.rs",
+      "sha256": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/frame.rs",
+      "sha256": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/mask.rs",
+      "sha256": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/mod.rs",
+      "sha256": "a678afc526347b3d5b685b273619dcbbb050f15b1c5f267f97cd6df241ed6a6b"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/utf8.rs",
+      "sha256": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/message.rs",
+      "sha256": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/mod.rs",
+      "sha256": "a1214f11d0927de8a622f0c074a27f6739697a8e157883f1f6ec5f2843741453"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/read_budget.rs",
+      "sha256": "4f112c7459d575424671d2f95a36a681ef903ed33bf643aba6abc53a27530883"
+    },
+    {
+      "path": "vendor/tungstenite/src/server.rs",
+      "sha256": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49"
+    },
+    {
+      "path": "vendor/tungstenite/src/stream.rs",
+      "sha256": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d"
+    },
+    {
+      "path": "vendor/tungstenite/src/tls.rs",
+      "sha256": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9"
+    },
+    {
+      "path": "vendor/tungstenite/src/utf8.rs",
+      "sha256": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35"
+    },
+    {
+      "path": "vendor/tungstenite/src/util.rs",
+      "sha256": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a"
+    }
+  ],
+  "documentation": [
+    {
+      "path": "README.md",
+      "sha256": "63c6045d20e4087d2bf40376c85589e84dbaa8cc2e2e4a3b2d861e5ba7246481"
+    },
+    {
+      "path": "docs/STATUS.md",
+      "sha256": "1f6af6abb85e4f74dedb529b1407168657aab3ecdbe2130b3e2ff8370e4126c6"
+    },
+    {
+      "path": "docs/operations.md",
+      "sha256": "9c4396c843e75efcc397972349909564b4c1c71f711c1f10503d3442467fbf33"
+    },
+    {
+      "path": "docs/performance.md",
+      "sha256": "c5826adfa1f796c0e169858f10a4e583a2141b7d09a7aeed1ba3193879594f1a"
+    },
+    {
+      "path": "docs/stability.md",
+      "sha256": "c931932899ca079ed51ee040e0990fd6ac3e5ec96def98813ce6a3995c70c1ae"
+    }
+  ],
+  "helpers_and_tests": [
+    {
+      "path": ".github/workflows/rust.yml",
+      "sha256": "7d36eae8f9538661d32aa3030f84b12a921979f8c000928f82cb2a5047de6559"
+    },
+    {
+      "path": "clients/js/browser/check.mjs",
+      "sha256": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa"
+    },
+    {
+      "path": "clients/js/browser/index.html",
+      "sha256": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2"
+    },
+    {
+      "path": "clients/js/build-browser.mjs",
+      "sha256": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d"
+    },
+    {
+      "path": "clients/js/package-lock.json",
+      "sha256": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36"
+    },
+    {
+      "path": "clients/js/package.json",
+      "sha256": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07"
+    },
+    {
+      "path": "clients/js/relay.mjs",
+      "sha256": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8"
+    },
+    {
+      "path": "clients/js/relay.test.mjs",
+      "sha256": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1"
+    },
+    {
+      "path": "examples/admission.rs",
+      "sha256": "34285a5b2533e77beead0cbb1e28ff7f0bf8fd4b12a411ad537a4041600a6654"
+    },
+    {
+      "path": "examples/fragment_waves.rs",
+      "sha256": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054"
+    },
+    {
+      "path": "examples/input_budget.rs",
+      "sha256": "8feaa3b292668f84ba155447e0db9e9bd997c2aa9f2482ee98717354b48c70b1"
+    },
+    {
+      "path": "examples/inspection.rs",
+      "sha256": "85dc79e69bc4a2c793cc8475baf9dced384b9381aec1ebadc806796aa83b0cfd"
+    },
+    {
+      "path": "examples/inspection/fanout.rs",
+      "sha256": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72"
+    },
+    {
+      "path": "examples/load.rs",
+      "sha256": "b2d2cb93456b4a91e5ff889e739f9b8a647a0c3564b4ef10ecbcd78b8c204c6c"
+    },
+    {
+      "path": "examples/queue_waves.rs",
+      "sha256": "413bc55d2ea14673ee7cbda6b30a7af611e400b57e8b8b00779e1a1cf5dcf63e"
+    },
+    {
+      "path": "examples/registry_peak.rs",
+      "sha256": "1c568805f9b3459b0109caf082bb6a93234bda7dbc4fdb98678da5c28ea11c39"
+    },
+    {
+      "path": "examples/retention.rs",
+      "sha256": "143546d2e7e9a419f5c7c53d347864de3bd066b55f93cfa58987e61c26c21c14"
+    },
+    {
+      "path": "examples/stress.rs",
+      "sha256": "0357bb650d0a41ec6aaf2fcf6cb3eb422eea97deaaa5d23bd33cb5f46281520d"
+    },
+    {
+      "path": "scripts/accept-pressure.py",
+      "sha256": "1d19a9b999d1bd3f84f1d69e123dd11d942b87a1b691d0092792714d974f8dfc"
+    },
+    {
+      "path": "scripts/admission-flood.py",
+      "sha256": "e0f4f40cb6620687255a0e453f5f344c99d26175bc4893b8a4153c7503ae9b79"
+    },
+    {
+      "path": "scripts/admission-stop.py",
+      "sha256": "5153415f030982581ad1f6faab8c936eedf765291f2cc9fe363a08ba0c68e77a"
+    },
+    {
+      "path": "scripts/benchmark.py",
+      "sha256": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+    },
+    {
+      "path": "scripts/check-js.sh",
+      "sha256": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b"
+    },
+    {
+      "path": "scripts/check-vendor.py",
+      "sha256": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f"
+    },
+    {
+      "path": "scripts/compare-cpp.py",
+      "sha256": "33028dea75e856343da3b1266e729e12155e6684de24aed550ce809d6aaa5221"
+    },
+    {
+      "path": "scripts/compare.py",
+      "sha256": "4c858bc0be5dbea2b26b1e3418de7000d405deb9580c99e6c70da62633c03943"
+    },
+    {
+      "path": "scripts/fragment-fairness.py",
+      "sha256": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340"
+    },
+    {
+      "path": "scripts/fragment-waves.py",
+      "sha256": "ae7a92c15649a7f9347503bbd987c4711dcf3ac228da37cafd16441123b3e7ff"
+    },
+    {
+      "path": "scripts/input-budget.py",
+      "sha256": "9c259d5c6362a54d522294f5b875c3b8c4f04410e7eca5124b56aead6c53e579"
+    },
+    {
+      "path": "scripts/input-corpus.py",
+      "sha256": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292"
+    },
+    {
+      "path": "scripts/inspection.py",
+      "sha256": "ef1340431a03e39b30561a39fa8215e25187b2d8fcd9539dab1cb74160b0e0f4"
+    },
+    {
+      "path": "scripts/queue-waves.py",
+      "sha256": "aab226bcf1412f1e7e467132e8658303b1de4e165e02535a9336a605dfcac5be"
+    },
+    {
+      "path": "scripts/reference.py",
+      "sha256": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7"
+    },
+    {
+      "path": "scripts/registry-peak.py",
+      "sha256": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc"
+    },
+    {
+      "path": "scripts/retention.py",
+      "sha256": "55e78d9dd8c092bb06170baee3b7920e932b4acbc18ee1d0da237e4acedc6701"
+    },
+    {
+      "path": "scripts/setup-pressure.c",
+      "sha256": "46274344e593ede9bf9d3d9c54053ae7e20faf8ece370761fcf931e54d91704a"
+    },
+    {
+      "path": "scripts/setup-pressure.py",
+      "sha256": "248fbf98b3badd03257089f28788f0a3ac61bd6f33304b2c3f1415c322bc192f"
+    },
+    {
+      "path": "scripts/stability.py",
+      "sha256": "2ed8e6f67c44c879e7d16ddca65513f55186e608f611cf1500f07ed3ab1bb64d"
+    },
+    {
+      "path": "tests/read_budget.rs",
+      "sha256": "af91ad4ee136b6412c7fb63067bdf56beab1dbd8d4769c99eba1ac4ea2552823"
+    },
+    {
+      "path": "tests/read_buffer_reclaim.rs",
+      "sha256": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156"
+    },
+    {
+      "path": "tests/read_fairness.rs",
+      "sha256": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4"
+    },
+    {
+      "path": "tests/relay_integration.rs",
+      "sha256": "1e8ae87dc89b97b2faf6cbdeaa7a64b7286276d93a4c2ef2fbf6c449340beacb"
+    },
+    {
+      "path": "tests/relay_integration/admission.rs",
+      "sha256": "6c7eaa36c19a0b185c6d4b134df5c666ab68bfe7187303db017464a9ad3f709e"
+    },
+    {
+      "path": "tests/relay_integration/channel_listing.rs",
+      "sha256": "3bce596425ea23391d3a7616324e9aabe7b0b5041693fa933b12b02dab485717"
+    },
+    {
+      "path": "tests/relay_integration/listeners.rs",
+      "sha256": "0b6ecfd78ccd71766dca8d95eeeb840ed503934903b556cce7dedca645c0cecb"
+    },
+    {
+      "path": "tests/relay_integration/origin_policy.rs",
+      "sha256": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+    },
+    {
+      "path": "artifacts/build-accept-fairness-candidates.py",
+      "sha256": "f19a9bfbda53f085eaa3da532ee6a7161e46dd1577cc78435a4c29a97eaff44c"
+    },
+    {
+      "path": "artifacts/accept-fairness-pilot.py",
+      "sha256": "32e3c7646184788d78e30203bb39023ac3d2195a1d6113c4235281da97777965"
+    },
+    {
+      "path": "artifacts/accept-fairness-study.py",
+      "sha256": "6516473d667df294f2d14d928c488abda47e4ea3619757a1ffb4ea4551d56e8f"
+    },
+    {
+      "path": "artifacts/accept-fairness-routing-guard.py",
+      "sha256": "53b7ea277cbfd585551f29795ea3d69403d937fb54e6822b195b593570897578"
+    },
+    {
+      "path": "artifacts/accept-fairness-burst-guard.py",
+      "sha256": "08d1da498f88d478f48c71bcc91dca3bfb9cc8028144f8d0503109b03343e47a"
+    },
+    {
+      "path": "artifacts/accept-fairness-verify.py",
+      "sha256": "136be7e93e6ecffdc4199b0ed7a7be27a934f548abf662a5b0d4d19f1abbb536"
+    },
+    {
+      "path": "artifacts/accept-fairness-stability.py",
+      "sha256": "161defbc0f98a07c8faf1b0c77a11dd1ed56a73c5590d0286f63d6d3c8ab7e4e"
+    },
+    {
+      "path": "artifacts/accept-fairness-api.py",
+      "sha256": "abc6402c08f57a504e0c2e47811bc7597f5d65ff6d45f8a20566569a56c0a3af"
+    },
+    {
+      "path": "artifacts/refresh-accept-fairness-runtime.py",
+      "sha256": "cf1d9301d89eb983597cfcf6dde89340a4fd5a7f9e063bc7ed8090fe9c592206"
+    },
+    {
+      "path": "artifacts/record-accept-fairness-browser.py",
+      "sha256": "62b1f13a948d650f27383f07486d0e1c3353f08fd9b0975f073e295e5b1f63e9"
+    },
+    {
+      "path": "artifacts/record-accept-fairness-profiles.py",
+      "sha256": "3537384a6981464f7401cbd282dea12a6d2c457a7a7287b63f12ac27e3c4555c"
+    },
+    {
+      "path": "artifacts/record-accept-fairness-checkpoint.py",
+      "sha256": "f1b8c9d28aff9af441074bbcf3b23e07d8335cb7321015d6fedc2f9720889423"
+    },
+    {
+      "path": "artifacts/paging-accept.mjs",
+      "sha256": "fa831d7c10a072ba811e727d9cb076f77a87cd4a09027ff9b52131d8ccba51b5"
+    }
+  ],
+  "frozen_runtime": [
+    {
+      "path": "artifacts/baselines/accept-fairness/war-relay",
+      "sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a"
+    },
+    {
+      "path": "artifacts/baselines/accept-fairness/war-legacy-bridge",
+      "sha256": "b715ef362bcc7a6ba035d825136ca1fd49a796d6f0ffb31130596d3a4ef1f54c"
+    }
+  ],
+  "clients": [
+    {
+      "path": "artifacts/baselines/admission-flood-client/admission",
+      "sha256": "626b41b88dda3ae00399c0f22b328a572ca24a8fdecea2664ebee4dd52da9360"
+    },
+    {
+      "path": "artifacts/baselines/fanout-probe/inspection",
+      "sha256": "5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744"
+    },
+    {
+      "path": "artifacts/baselines/room-churn-client/inspection",
+      "sha256": "850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198"
+    },
+    {
+      "path": "artifacts/baselines/address-churn-client/stress",
+      "sha256": "1296af910bbfad5dc04829da121dfd6e791aaffc7aa439d8d352839ef9c12a66"
+    }
+  ],
+  "controller_snapshots": [
+    {
+      "path": "artifacts/baselines/accept-fairness-driver/scripts/admission-flood.py",
+      "sha256": "e0f4f40cb6620687255a0e453f5f344c99d26175bc4893b8a4153c7503ae9b79"
+    },
+    {
+      "path": "artifacts/baselines/accept-fairness-driver/scripts/admission-stop.py",
+      "sha256": "5153415f030982581ad1f6faab8c936eedf765291f2cc9fe363a08ba0c68e77a"
+    },
+    {
+      "path": "artifacts/baselines/accept-fairness-driver/scripts/accept-pressure.py",
+      "sha256": "1d19a9b999d1bd3f84f1d69e123dd11d942b87a1b691d0092792714d974f8dfc"
+    },
+    {
+      "path": "artifacts/baselines/accept-fairness-driver/scripts/benchmark.py",
+      "sha256": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+    }
+  ],
+  "client_source_snapshot": {
+    "examples/admission.rs": "34285a5b2533e77beead0cbb1e28ff7f0bf8fd4b12a411ad537a4041600a6654",
+    "scripts/admission-flood.py": "f1c3fcc47767347d2fc348590074a53488e447a4b7f4b2a3d06cd76fb91ee824",
+    "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "evidence": [
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-accept.json",
+      "sha256": "3cfa9fac224e3754a1248d9fe33e312e1157a949a56b8f1a2e35c95729d60334"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-api.json",
+      "sha256": "3f15032831d8ba7f214d544c07792afb6ca1d6b0db8d9c93c09c1bbcb42de26d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-browser.json",
+      "sha256": "ec6ee048a4fa7922a967159d4dc013c8c988f93bab1728d22f7eda774477c4a0"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-1.json",
+      "sha256": "5db4680cc494b11bb1b3ba23536dac80010f343c151fb012ff2e052cf4c10ebe"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-2.json",
+      "sha256": "412908a0fbd2072e17a913162cbc420646fb475663d2144f73e1813c30fa4705"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-3.json",
+      "sha256": "23f2ab2f54ea20dc77769c9e9390a6b1b8a5e3dabf344798c7a54259293abd98"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-1.json",
+      "sha256": "924b2418bc5141ed47b856c7eb6e39eb4ddd81105bdbccc9f3ea18624b903a81"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-2.json",
+      "sha256": "99a3872be79657b08c473437a04ba81a9b138e462740aa1c10632513041c334d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-3.json",
+      "sha256": "04ec8f9f966d4ed6737c4bc6e80ebf000049c05cf3ca2ab013cc3bb580f9049c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard.json",
+      "sha256": "78147357396fc72b402ff626060ebf5b813924fb9b17861e103f3c92deb07632"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-checks.json",
+      "sha256": "c55a252a9fb5bf7d915fbf73dbddfaeb40433596b8f079237bd4eb919d034961"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-ci.json",
+      "sha256": "9e3d1d19e5d25ef22be07e69d30155ab9eff32dad68251047333968bbbb57d27"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-comparison.json",
+      "sha256": "3391834c1bac24d8bbd741bc844018887ecadf8e02b846890f5731f1f643074c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-fanout-upper.json",
+      "sha256": "9b63c2077c93f336d2bcd527785944806c4423c6d3eabcd1be3190eccd5dc92c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-helper-check.json",
+      "sha256": "6788bf470ed4ac124410187adce5474fef4365ecfe74ceb6a340c952fb1500f9"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q16-1.json",
+      "sha256": "1206e4df958f3c57c3a33c4fbb4b5fc1ca36f89fd0c9c170e92e5169030e667b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q16-2.json",
+      "sha256": "df7f226a309f615a8e81dcbf3acad02e04ae7e619fcd4554954ea2a87a847b5c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q32-1.json",
+      "sha256": "e96a2f925fbf1adc06120941cd2ca08994075bfc80c47008eb89a9c072c7f8b5"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q32-2.json",
+      "sha256": "3271546ce44aa652a3902615d24e9c9a64fa83f92dd2c7d836ea8d6fe21f75cf"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q64-1.json",
+      "sha256": "92173d75ad4302b2ff07fefe85170073d8306291ae5c366b51b21ca58f9f8ecf"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q64-2.json",
+      "sha256": "65a8c3f39510fe20e431f5b2b39a1fbfc076b5270406a11c406b9e26ed1b919d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q8-1.json",
+      "sha256": "52e542caf312b462568a04e2c6475b563a173be714223afa2945059d6b4d52d7"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n0-q8-2.json",
+      "sha256": "79ca0ce396cd133729b53f7f28a705ac0bc6238a91cf8d65f9f70179af021a30"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q16-1.json",
+      "sha256": "57b2013566076c0889d500028d25fc8adc0f7df42a3e148d928879300fdd653d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q16-2.json",
+      "sha256": "9e2b8b9f9dbac8737aa2d6814c0293f863eaab772340d84154608634ca0196f0"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q32-1.json",
+      "sha256": "57196b391ffef204f66c821b3efdb72bee8c60aefaf07a1ec0156481c7c21908"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q32-2.json",
+      "sha256": "7bb0727e4d9677143853f8549ba2c8c569704fbe105d5f3ae40e4d5f5c99d29e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q64-1.json",
+      "sha256": "4bae4fb198d380aec5b0deb6c38e4676751fc3f8e8b59d9c7ab3661e956f75ae"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q64-2.json",
+      "sha256": "d3b6570329a55cb8b29199cf8e53cd49a6c44a8d7d39165b4b74b4ace6203b5c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q8-1.json",
+      "sha256": "3207b926dcf2fe61a6a1f96e813c6ca81a4f7143680afc784bc2c155147da333"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w1-n256-q8-2.json",
+      "sha256": "7a7ebc1e6fbfe4918d1e3c65fd98580629015e53a975087fad866c2968f3f78c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q16-1.json",
+      "sha256": "e8d9f108fb369077e9d63d3e7da3b1458d6a5ed69a30d0c64c0cf311fd550799"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q16-2.json",
+      "sha256": "a9f87d593b4fc29d944d5f0de71107498474cc62da507f478e954a89197b3d97"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q32-1.json",
+      "sha256": "704cf27de1d5cdd109d3aa336146a688bbe382e12c926c76294b4bfd578cd1d3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q32-2.json",
+      "sha256": "f3f90cc7d62c34806ad7094bf5014b431d42ce0d24bf948bef32fcc1badb233f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q64-1.json",
+      "sha256": "d5fb55c305409f27a9c8f190961a092a5485104c48533fa7524c30933f8724e0"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q64-2.json",
+      "sha256": "e0650ce0ff4c61bd924843b5ad8145949886f507bb99a702647589e80a53c0ef"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q8-1.json",
+      "sha256": "b55e3427344b80f0c46ea711d32f7a4c1991382209cbe0704b15e7cee1f1fecd"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n0-q8-2.json",
+      "sha256": "1361f690cfffc6077ef520a520607865ad9bfe8adfc911c42c3f7002104ab60d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q16-1.json",
+      "sha256": "ab8b6ed075e3ede64c618eeb8ee3af6a04a8ca702ce795b4505bee527b4ea501"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q16-2.json",
+      "sha256": "f7d33c4e6fef6cac9cb08076d60afa89a3ae4d03de6777f7ac5ec5e403c30cab"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q32-1.json",
+      "sha256": "9e50c2eb5032586e6f94e4717e10112f016af3b27dba7dcaa3735e8724e2aafc"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q32-2.json",
+      "sha256": "e6157410fc9716a52a3c1ad478fe64157c7ef055266dd41e9158b8c0f9ef3275"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q64-1.json",
+      "sha256": "4c3cf1648a980ed158ad57917575d0883483aa83c449b5314f0de2d8670c2f78"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q64-2.json",
+      "sha256": "fc3f581d7207d58d649e3da65555707c2c4f4d9c10be66b2ed29c923b2a987b0"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q8-1.json",
+      "sha256": "a4f20517b1ea00287be552ab2f8b8ba3ddef8a7fefa8cf4aed2650091f196a02"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot-w4-n256-q8-2.json",
+      "sha256": "48d5cb3063c2e7e1bd777c00f242a23d7ff45c295c59cd6395e9aad551599fc2"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-pilot.json",
+      "sha256": "6a972a1579b2780131e10b84717d9924ee17df324e20eaaae7d77cc096991634"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.json",
+      "sha256": "e6d74f5feb9b21973c72448761bc5ed73ed95ee26dc8f9a5eabfa71b356a7fde"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.json",
+      "sha256": "436b924269def363939d55055ff6e3e05b17897eb276d40dab8fc35b9018ae32"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-profiles.json",
+      "sha256": "e7bdb75b9fdbda02070ddae1c25a22b996d75f7eb142f073c0ea794b39a93b8e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-reference.json",
+      "sha256": "b4ba8edb116a539962f84d33057ff2045978d7b6cc2667b112cd77ee8586d068"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-before-1.json",
+      "sha256": "b3d2fb91d9e3c6cbd5f397eafc9851c3a3ef8305bac3c67c833a443aa3300216"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-before-2.json",
+      "sha256": "d77e2287b50d0b6bd84c1568c10e030d059cc0984759f6f0eb290ca421d85103"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-before-3.json",
+      "sha256": "2d6892901f1da7b7edf977d6ca45ba3fc33b8032c4b12a7021f8f488ad4b94a7"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-selected-1.json",
+      "sha256": "1250f1714db54d0c5b2eba163f5b8b134de9b16b36c34898afd43dc6735acea2"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-selected-2.json",
+      "sha256": "e64a91c0c0e83fa4e7eba2c3533a9eb0803a539b18a07f18decb8a97c9577565"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-mixed-selected-3.json",
+      "sha256": "9560da7ea2d6276b6e97d0e3f9a69199ae6aa636917868f7f9927b147226880f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-before-1.json",
+      "sha256": "bbde44489a7f1c1b2fc42c180be0f6259f4c60f6cf40fdb4a500330ad0d011a3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-before-2.json",
+      "sha256": "cdef28484201d4304c9f706a929146ff777c8fd8b4053a599b3c105d4d9185ba"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-before-3.json",
+      "sha256": "bb675ba22a8355f27c62f1bb349728cde5f99b9e805e69372e41c303995aca17"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-selected-1.json",
+      "sha256": "089bb2329befd738b4a1447d993b2375dab3432859cfc1f04b8a933ff1b83020"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-selected-2.json",
+      "sha256": "718eb24b99a462e1bb39554c5c1d3ac34ff08de02829802df4d213e1a4e3ce55"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard-private-selected-3.json",
+      "sha256": "ba47e02e06ee294c6a2fe395c668acbce8ffcff42ad0c31355b945dbd2b8ff65"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-routing-guard.json",
+      "sha256": "95987cf88a9846db04d7367d5368b0a7d5ebc3578728fe655b660e47e0aede84"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-setup.json",
+      "sha256": "19a6e93317ba20034d7b3b16d5d7d22ecaedd52815549f54da553ac28dfacb3c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-stability.json",
+      "sha256": "91801e7ddcb1762283dad25084f3bd76ac94984cc944f02101a1c056485e977d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-stop-before-w1.json",
+      "sha256": "c2a917f6c4429f4b74a5fa08141c71b52ce9b6de8a253a40129c39885ce08497"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-stop-before-w4.json",
+      "sha256": "92bdbfa6e0941ad951b9cd960d6d2ad34626cbdb6fcb030c7e972a90845d125e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-stop-selected-w1.json",
+      "sha256": "b98f0813e38d3e8b4e0dac84a0cec006f2939f50509037d083cc5a9a21b6f2da"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-stop-selected-w4.json",
+      "sha256": "53e6db74aecc26d344e5ffa7414a15ed2f775259fd75a9c5dae61e9fc604ead1"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-upper-before.json",
+      "sha256": "e72008aba61249c7f6f27abbb420e60d81cebf5292b40ce8f1879fc158c302b8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-upper-selected.json",
+      "sha256": "7de481e5e20555a1e08e398667545965d258703869681ba5d45fbb2bc7e1f8fc"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-before-1.json",
+      "sha256": "e14ff507b712077de5377433d19b66810f39eebb8325ee9f87aa2467d16af7fb"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-before-2.json",
+      "sha256": "e95b20ba84f5bb05bf868bd722f841aa5fde82d18105d29aea611bfc6c753608"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-before-3.json",
+      "sha256": "dc30700fbedab5ba66a277044756e1159eafe282c9bbb01044e9be30a2b4bc52"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-selected-1.json",
+      "sha256": "472a27d55df709991b28c50c48b2395f3ffc30db20d3813474e266ead6cfbf48"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-selected-2.json",
+      "sha256": "1e0a392b653b190b000ec3ec5c23965c608231b2368ae90d168d3a2e3002019b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n0-selected-3.json",
+      "sha256": "011010998a5d41423f0cb4b19f5d6ee41d22682975850861abb7dbf4bdb93693"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-before-1.json",
+      "sha256": "f4592745324c32ddaea2ac7de6802484c09e21ce3c56429766d2df86dd858ed3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-before-2.json",
+      "sha256": "227cbbc151398962767344eac416293873c6dd5dd358879b83acd77fc2bba9f6"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-before-3.json",
+      "sha256": "16a66af8190ded109efb39755aeafc0d6fc01a0b2e8cc373123e00d48ee7d01a"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-selected-1.json",
+      "sha256": "e28fb732efbb3fea9bb26b9e836f31501766f2722742bc89bad3eb3cf425bbf3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-selected-2.json",
+      "sha256": "c263de8e79743b450973cb35d97f93d14b7d83d31e281f88a8574bab63028e14"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n256-selected-3.json",
+      "sha256": "3d369874f83db8874a6e6e156fb294c4ab44ba14e3db2bf0a14b5cc9d67bc382"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-before-1.json",
+      "sha256": "c8a9b9d4b241fb0409099dc8163cb72c70cd45057cb1e20c503e69bec5f4a86f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-before-2.json",
+      "sha256": "3f7e03ec32ababc45f421dd58346d20131419f841f1be42c51ad1e0eb9de4dae"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-before-3.json",
+      "sha256": "9dd6bc46113d74c6538674b8d43c5e08d77ce06ee684b72b1f510b5da9742a9c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-selected-1.json",
+      "sha256": "8c3fd6e331148033fbba0b4a5a363993cfd4a83548936157bbe5ddb716b1bfc9"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-selected-2.json",
+      "sha256": "71566f4fe7f112b67eb336d18a6a3a8ab64bd7eb7f12d1862865d746d5443560"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-global-n64-selected-3.json",
+      "sha256": "e9d566698d65e0dfaab389078d05faef51b399dc32806abcebc32a44222cd061"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-before-1.json",
+      "sha256": "faf15fc26bdccbf71d28fd0a76af165eb7d6f88b45fa5b1ce7ae2048f1429d78"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-before-2.json",
+      "sha256": "7d31218687a23d4bd0bcb74b51d00c44df1d60599a8ab05eb2e0bbbf21269590"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-before-3.json",
+      "sha256": "7262519e802e7d80b6ecc643f311bb487caedb0c0aa5608169a5c66436d46d74"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-selected-1.json",
+      "sha256": "22dfdea4f6d9d46ef22ff8549486df6d64309b7062cb4c8837f629ffcae9eb64"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-selected-2.json",
+      "sha256": "7fccf2d3dba0dd1a981f7492138d259702af928e04fa7bcedfd11118cbd14213"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w1-ip-n256-selected-3.json",
+      "sha256": "2161752ed4b5344c40ebf3143e51b38009bc3d4d872fa425cc6f59f17cb6e32d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-before-1.json",
+      "sha256": "dfa21568c0d231124f4f239dfba17ce2bdd38015d84bfbe82112f290dcff99f8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-before-2.json",
+      "sha256": "260475fc6b232b23f2784616b42844e9f1eb68e8868acc068b87091762ef525f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-before-3.json",
+      "sha256": "814afc0b52f87016071287491a4d5573c99199d5a9b365ed52824bfc24f8e729"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-selected-1.json",
+      "sha256": "474fe534f1f0be0332b1829d83fbc82c5120212b2a890d524bd63c59abd83103"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-selected-2.json",
+      "sha256": "8412f3571370f869b71fe31598d25b9f686eb0debf69ec00e5c333d5931fb1a8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n0-selected-3.json",
+      "sha256": "cae7e8161cfb6199f92615a852b48a90b37db8203d9a95bc32f39bc5f7d384d4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-before-1.json",
+      "sha256": "12e17d6f21b4448ba408ba2fc7ee5f42d758f723b56b87b58441d42748138383"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-before-2.json",
+      "sha256": "17e53ab20613cee6aaee743b77f48d16f256d017e78c37fc7a369c3735a825f7"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-before-3.json",
+      "sha256": "fd8adf0801951bceca589fd44747504e569deb2e0cece42ef669daf611df29e8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-selected-1.json",
+      "sha256": "7575a24871c5ce5a0b9ac505b0605075873572b601279ce8e21d3997e7372e5b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-selected-2.json",
+      "sha256": "bc1d2ab0c7e9c5b6f2469daa82ae35a42029993302d85cb7de3ae4499019832e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-global-n256-selected-3.json",
+      "sha256": "908fc59b7e863fe755cb3c01ad4035c828ff22871e3ebad4b7a8c9a9e16858a2"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-before-1.json",
+      "sha256": "a0a4df0f6a1aeeae1a4b0fba5db046a2edaaef79cbd2b01eede9cc2af5a0208b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-before-2.json",
+      "sha256": "a6c93cd4553f4206237d5308a49ab08e5db197f75d289bb21ff233a57ab5afa7"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-before-3.json",
+      "sha256": "6efdf330eacfb2ade99e2808d10ba0bd143ed527e4b255393fa2bc844e8836d8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-selected-1.json",
+      "sha256": "78fce26a5f957ce5b1ebb3a93f8502f9461f356a88b166db45d036192f8186e1"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-selected-2.json",
+      "sha256": "4c0bee7b8826f646782a3e1b529453befd459a79a30221ce20e068c1ad0eeb61"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-accept-fairness-w4-ip-n256-selected-3.json",
+      "sha256": "97d354427e0290b81633d94443f8a4d04d7859aaf38ce117c93c008d8b03b6d8"
+    }
+  ],
+  "kernel_counter_totals": {
+    "before": {
+      "ListenDrops": 0,
+      "TCPSynRetrans": 0
+    },
+    "selected": {
+      "ListenDrops": 0,
+      "TCPSynRetrans": 3
+    }
+  },
+  "profiles": {
+    "scope": "Separate diagnostic10-second one-worker global-admission cases at1024 backlog with256 raw refused clients. Perf samples user cycles at499Hz between verified ready/measured gates; native process accounting records user/systemCPU. Perf restrictions leave kernel symbols unresolved: symbol percentages do not attribute complete kernel cost or establish wall-time speedups. No profile timings enter ordinary medians. Raw captures stay local/ignored; published text strips trailing whitespace only.",
+    "collector_source": "import hashlib,json,re,subprocess\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[1];bench=root/'docs/benchmarks';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\ndesc=lambda p:{'path':str(p.relative_to(root)),'sha256':sha(p)}\nrecord={'scope':'Separate diagnostic10-second one-worker global-admission cases at1024 backlog with256 raw refused clients. Perf samples user cycles at499Hz between verified ready/measured gates; native process accounting records user/systemCPU. Perf restrictions leave kernel symbols unresolved: symbol percentages do not attribute complete kernel cost or establish wall-time speedups. No profile timings enter ordinary medians. Raw captures stay local/ignored; published text strips trailing whitespace only.', 'collector_source':Path(__file__).read_text(),'cases':[],'passed':False}\nfor role in ['before','selected']:\n trace=bench/f'2026-10-16-accept-fairness-profile-{role}.json';data=json.loads(trace.read_text());assert data['passed'] and data['profile_diagnostic']\n raw=Path(data['profile_path']);assert sha(raw)==data['profile_sha256']\n done=subprocess.run(['perf','report','--stdio','-i',str(raw),'--no-children','--sort','symbol','--call-graph','none','--percent-limit','0.5'],cwd=root,capture_output=True,text=True,check=True)\n rawreport=root/f'artifacts/accept-fairness-profile-{role}-flat-final.txt';rawreport.write_text(done.stdout)\n published=bench/f'2026-10-16-accept-fairness-profile-{role}.txt';published.write_text('\\n'.join(line.rstrip() for line in done.stdout.splitlines())+'\\n')\n lost=int(re.search(r'Total Lost Samples: (\\d+)',done.stdout).group(1));samples=int(re.search(r'\\((\\d+) samples\\)',data['perf_log']).group(1))\n assert lost==0 and data['perf_exit_code'] in [0,-2]\n record['cases'].append({'kind':role,'server_sha256':data['server_sha256'],'samples':samples,'lost':lost,'trace':desc(trace),'raw_data':desc(raw),'raw_report':desc(rawreport),'published_report':desc(published),'server_cpu_times':data['mixed']['server_cpu_times'],'server_cpu_seconds':data['mixed']['server_cpu_seconds'],'user_seconds_fraction':data['mixed']['server_cpu_times']['user']/data['mixed']['server_cpu_seconds']})\nrecord['passed']=True\n(bench/'2026-10-16-accept-fairness-profiles.json').write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps([{'kind':c['kind'],'samples':c['samples'],'lost':c['lost'],'cpu_times':c['server_cpu_times']} for c in record['cases']]))\n",
+    "cases": [
+      {
+        "kind": "before",
+        "server_sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+        "samples": 4605,
+        "lost": 0,
+        "trace": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.json",
+          "sha256": "e6d74f5feb9b21973c72448761bc5ed73ed95ee26dc8f9a5eabfa71b356a7fde"
+        },
+        "raw_data": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.perf.data",
+          "sha256": "09b34c2389153fddd396a0f500dafc85a05bce48fe9ebe87eebca439f1105e79"
+        },
+        "raw_report": {
+          "path": "artifacts/accept-fairness-profile-before-flat-final.txt",
+          "sha256": "f1865c30782c5bdf9d5464388fae5bad0de8c86600a9f4d87f8002ce93e2f04f"
+        },
+        "published_report": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.txt",
+          "sha256": "1e16ac7d9dbf638f6bd42d1ddcc9365ea546035e8b7137996e75c1e0481bbb45"
+        },
+        "server_cpu_times": {
+          "user": 0.42,
+          "system": 5.26
+        },
+        "server_cpu_seconds": 5.68,
+        "user_seconds_fraction": 0.07394366197183098
+      },
+      {
+        "kind": "selected",
+        "server_sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+        "samples": 4735,
+        "lost": 0,
+        "trace": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.json",
+          "sha256": "436b924269def363939d55055ff6e3e05b17897eb276d40dab8fc35b9018ae32"
+        },
+        "raw_data": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.perf.data",
+          "sha256": "74ec9987dca923082ac86b2e82efb92f59d1d6927cf24cf4f22499ad3ed3672f"
+        },
+        "raw_report": {
+          "path": "artifacts/accept-fairness-profile-selected-flat-final.txt",
+          "sha256": "27bf792c42a46369bc36080a1b34ded0088bdaadeaa4be2652a0534a72178230"
+        },
+        "published_report": {
+          "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.txt",
+          "sha256": "cb0e49a9d61ae6b6e4196d6d8ecd635dbd5fe56fccdb8054d1fe19bbc0646d1f"
+        },
+        "server_cpu_times": {
+          "user": 0.41,
+          "system": 5.41
+        },
+        "server_cpu_seconds": 5.82,
+        "user_seconds_fraction": 0.07044673539518899
+      }
+    ],
+    "passed": true
+  },
+  "browser_screenshot": {
+    "path": "output/playwright/accept-fairness-browser-check.png",
+    "sha256": "ddbd6c9301f9c7cad0a07b549e507b61bb953e9b4c1a1bef3982c3d91cf6f351"
+  },
+  "browser_assets": {
+    "target/browser/check.js": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "target/browser/check.js.map": "82235f3e33f9469ac4577231e2bc79b8a675283f614b1165550fd3c25ed93e90",
+    "target/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "target/browser/relay.js": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "target/browser/relay.js.map": "d08ddb5e70267d2ad9618031a93e11cf7b61405b01d868d3e0a77595514c216b"
+  },
+  "live_listener_rows": [
+    "LISTEN 0      1024   127.0.0.1:1338 0.0.0.0:*",
+    "LISTEN 0      1024   127.0.0.1:1338 0.0.0.0:*",
+    "LISTEN 0      1024   127.0.0.1:1338 0.0.0.0:*",
+    "LISTEN 0      1024   127.0.0.1:1338 0.0.0.0:*"
+  ],
+  "live_metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 801802,
+    "war_read_buffer_limit_bytes": 1073741824,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 131173,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 3,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 3,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 3,
+    "war_incoming_messages_total": 8,
+    "war_incoming_bytes_total": 131323,
+    "war_deliveries_total": 12,
+    "war_delivered_bytes_total": 131301,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 0
+  },
+  "manual_services": {
+    "pids": [
+      476739,
+      476740,
+      219427
+    ],
+    "commands": [
+      [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-fairness/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:1338",
+        "--admin-bind",
+        "127.0.0.1:1339"
+      ],
+      [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-fairness/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:1337",
+        "--upstream",
+        "ws://127.0.0.1:1338"
+      ],
+      [
+        "python3",
+        "-m",
+        "http.server",
+        "4180",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "target/browser"
+      ]
+    ],
+    "native_sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+    "bridge_sha256": "b715ef362bcc7a6ba035d825136ca1fd49a796d6f0ffb31130596d3a4ef1f54c",
+    "source_revision": "d47f0fd4c7fc49b011956cc9a2c8f23b78d3d62c",
+    "previous_pids": [
+      465813,
+      465814
+    ]
+  },
+  "collector_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport platform\nimport re\nimport subprocess\nimport urllib.request\n\nroot = Path(__file__).resolve().parents[1]\nbench = root / 'docs/benchmarks'\nsha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()\ndesc = lambda path: {'path': str(Path(path).relative_to(root)), 'sha256': sha(path)}\nread = lambda name: json.loads((bench / f'2026-10-16-accept-fairness-{name}.json').read_text())\nmeta = json.loads((root / 'artifacts/accept-fairness-candidate.json').read_text())\ndriver = json.loads((root / 'artifacts/accept-fairness-driver.json').read_text())\nrevision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()\nassert subprocess.run(['git', 'diff', '--quiet', meta['source_revision'], 'HEAD', '--', 'src', 'vendor', 'Cargo.toml', 'Cargo.lock'], cwd=root).returncode == 0\nchanged = subprocess.check_output(['git', 'diff', '--numstat', meta['baseline']['revision'], meta['source_revision'], '--', 'src', 'vendor', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).strip()\nassert changed == '1\\t1\\tsrc/server.rs'\nfor name, digest in meta['sources'].items():\n    assert sha(root / name) == sha(root / meta['directory'] / name) == digest\nfor name, digest in meta['binaries'].items():\n    assert sha(root / meta['directory'] / name) == sha(root / 'target/release' / name) == digest\nfor snapshot in [meta['helper'], driver]:\n    for name, digest in snapshot['sources'].items():\n        assert sha(root / snapshot['directory'] / name) == digest\nfor name, digest in driver['sources'].items():\n    assert sha(root / name) == digest\n\ndef empty(metrics):\n    for name in ['war_connections', 'war_sessions', 'war_queued_bytes', 'war_variable_bytes',\n                 'war_output_queue_capacity_bytes', 'war_read_buffer_reserved_bytes']:\n        assert int(metrics[name]) == 0, (name, metrics[name])\n    assert int(metrics['war_channels']) == 1\n\ndef admission(data, binary, profile=False):\n    assert data['passed'] and data['server_sha256'] == binary and data['profile_diagnostic'] == profile\n    assert data['server_exit_code'] == data['client_exit_code'] == 0\n    assert all(code == 0 for code in data['client_exit_codes'].values())\n    assert [e['event'] for e in data['events']] == ['ready', 'measured', 'done']\n    for event in data['events']:\n        assert all(event['metrics'][name] == value for name, value in event['exact_counter_checks'].items())\n        assert event['metrics']['war_routing_copied_bytes_total'] == 0\n    empty(data['events'][-1]['metrics'])\n\ncomparison = read('comparison')\nassert comparison['passed'] and len(comparison['cases']) == 42\nassert comparison['candidate']['sources'] == meta['sources'] and comparison['driver'] == driver\nassert comparison['variants']['before']['sha256'] == meta['baseline']['sha256']\nassert comparison['variants']['selected']['sha256'] == meta['binaries']['war-relay']\nassert comparison['client']['sha256'] == meta['helper']['client_sha256']\nfor item in [*comparison['variants'].values(), comparison['client']]:\n    assert sha(root / item['path']) == item['sha256']\nfor row in comparison['cases']:\n    path = root / row['trace']; assert sha(path) == row['sha256'] and row['exit_code'] == 0\n    data = json.loads(path.read_text()); admission(data, comparison['variants'][row['kind']]['sha256'])\n    assert data['client_sha256'] == comparison['client']['sha256'] and data['isolated_namespace']\n    assert data['args']['workers'] == row['workers'] and data['args']['flood_workers'] == row['flood_workers']\n    assert len(data['listener_queues_before']) == row['workers']\n    assert all(queue['backlog'] == 1024 for queue in data['listener_queues_before'])\ntotals = {role: {name: sum(row['tcp_counter_delta'][name] for row in comparison['cases'] if row['kind'] == role)\n                  for name in ['ListenDrops', 'TCPSynRetrans']} for role in comparison['variants']}\npilot = read('pilot'); assert pilot['passed'] and len(pilot['cases']) == 32\nfor role, candidate in pilot['candidates']['variants'].items():\n    for name, digest in candidate['sources'].items():\n        assert sha(root / candidate['directory'] / name) == digest\n    for name, digest in candidate['binaries'].items():\n        assert sha(root / candidate['directory'] / name) == digest\nfor row in pilot['cases']:\n    path = root / row['trace']; assert sha(path) == row['sha256'] and row['exit_code'] == 0\n    data = json.loads(path.read_text()); admission(data, pilot['variants'][row['quantum']]['binaries']['war-relay'])\nguard = read('routing-guard'); assert guard['passed'] and len(guard['cases']) == 12\nfor row in guard['cases']:\n    path = root / row['trace']; assert sha(path) == row['trace_sha256']\n    data = json.loads(path.read_text())\n    assert data['passed'] and not data['profile_diagnostic'] and not data['server_forced_kill']\n    assert data['server_exit_code'] == data['client_exit_code'] == 0\n    assert data['server_sha256'] == guard['variants'][row['kind']]['sha256']\n    assert data['client_sha256'] == guard['client']['sha256']\n    assert data['client_source_root'] == str(root / 'artifacts/baselines/fanout-probe')\n    for event in data['events']:\n        assert event['metrics']['war_routing_copied_bytes_total'] == 0\n        assert event['metrics']['war_accept_errors_total'] == event['metrics']['war_setup_errors_total'] == 0\n    empty(data['events'][-1]['metrics'])\nfor name, digest in guard['client']['source_hashes'].items():\n    assert sha(root / 'artifacts/baselines/fanout-probe' / name) == digest\nburst = read('burst-guard'); assert burst['passed'] and len(burst['cases']) == 6\nfor row in burst['cases']:\n    path = root / row['trace']; assert sha(path) == row['trace_sha256']\n    data = json.loads(path.read_text())\n    assert data['passed'] and not data['profile_diagnostic'] and not data['server_forced_kill']\n    assert data['server_exit_code'] == data['client_exit_code'] == 0\n    assert data['server_sha256'] == comparison['variants'][row['kind']]['sha256']\n    assert data['client_sha256'] == guard['client']['sha256']\n    assert data['args']['workers'] == 1 and data['args']['churn_workers'] == 64\n    empty(data['events'][-1]['metrics'])\nfor role in comparison['variants']:\n    upper = read('upper-' + role); admission(upper, comparison['variants'][role]['sha256'])\n    assert upper['args']['flood_workers'] == 1024 and upper['isolated_namespace']\n    for workers in [1, 4]:\n        data = read(f'stop-{role}-w{workers}')\n        assert data['passed'] and data['native_exit_code'] == 0 and data['flood_exit_code'] == 1\n        assert not data.get('native_forced_kill') and not data.get('flood_forced_kill')\n        assert data['shutdown_close'] == 1001 and data['verified_echoes_during_flood'] == 8\n        assert data['server_sha256'] == comparison['variants'][role]['sha256']\nprofiles = read('profiles'); assert profiles['passed'] and len(profiles['cases']) == 2\nfor case in profiles['cases']:\n    for name in ['trace', 'raw_data', 'published_report']:\n        assert sha(root / case[name]['path']) == case[name]['sha256']\n    assert case['lost'] == 0 and case['samples'] > 0\n    data = json.loads((root / case['trace']['path']).read_text())\n    admission(data, comparison['variants'][case['kind']]['sha256'], True)\n    assert data['profile_sha256'] == case['raw_data']['sha256']\n    assert data['perf_exit_code'] in [0, -2]\nhelper_check = read('helper-check'); admission(helper_check, meta['baseline']['sha256'])\n\nstress = read('stability'); assert stress['passed'] and len(stress['cases']) == 4\nassert stress['server_sha256'] == meta['binaries']['war-relay']\nfor case in stress['cases']:\n    assert case['passed'] and case['server_exit_code'] == case['exit_code'] == 0 and not case['server_forced_kill']\n    assert case['cleaned_up'] and case['counts_match'] and case['pressure_valid']; empty(case['final']['metrics'])\nupper = read('fanout-upper')\nassert upper['passed'] and upper['server_sha256'] == meta['binaries']['war-relay']\nassert upper['server_exit_code'] == upper['client_exit_code'] == 0 and not upper['server_forced_kill']\nassert upper['args']['fanout_readers'] == 1024 and upper['mixed']['fanout_membership']['verified'] > 0\nempty(upper['events'][-1]['metrics'])\naccept, setup = read('accept'), read('setup')\nassert accept['passed'] and len(accept['cases']) == 3 and accept['server_sha256'] == meta['binaries']['war-relay']\nassert accept['bridge_sha256'] == meta['binaries']['war-legacy-bridge']\nfor case in accept['cases']:\n    assert case['passed'] and case['pressure']['fd_count'] == 64 and all(code == 0 for code in case['process_exit_codes'])\nassert setup['passed'] and setup['server_sha256'] == meta['binaries']['war-relay'] and len(setup['cases']) == 4\nfor case in setup['cases']:\n    assert case['passed'] and case['process_exit_code'] == 0 and len(case['injected_calls']) == 3\n    assert all(wave['slot_held_until_descriptor_close'] for wave in case['waves'])\nreference, api, browser = read('reference'), read('api'), read('browser')\nassert reference['passed'] and reference['common_cases'] == 48\nassert reference['upstream_commit'] == '881c8daaf2cf05adea8f522b28cf372e8f82d4e9'\nassert len(reference['results']['cpp']['intentional_differences']) == len(reference['results']['rust']['intentional_differences']) == 8\nfor role, name in [('native', 'war-relay'), ('bridge', 'war-legacy-bridge')]:\n    assert reference[role]['sha256'] == meta['binaries'][name] and reference[role]['exit_code'] == 0\n    live = browser['runtime'][role]\n    assert sha(f'/proc/{live[\"pid\"]}/exe') == live['sha256'] == meta['binaries'][name]\nassert api['passed'] and len(api['checks']) == 4 and api['server_exit_code'] == 0; empty(api['final_metrics'])\nassert api['server_sha256'] == meta['binaries']['war-relay']\nassert [row['status'] for row in api['manual_admission_transitions']] == [401, 204, 200, 503, 200, 401, 204, 200]\nassert browser['passed'] and len(browser['browser']['checks']) == 7 and not browser['browser']['errors']\nassert browser['worker_listener_sockets'] == 4 and all(status == 200 for status in browser['health'].values()); empty(browser['metrics'])\nassert browser['source_revision'] == meta['source_revision']\nassert 'Total messages: 0 (Errors: 0, Warnings: 0)' in (root / 'artifacts/accept-fairness-browser-console.txt').read_text()\nci = read('ci'); admission(ci, sha(root / 'target/debug/war-relay'))\nassert ci['client_sha256'] == sha(root / 'target/debug/examples/admission')\nassert not any(ci['args'][name] for name in ['server_cpus', 'client_cpus', 'flood_cpus'])\nverification = json.loads((root / 'artifacts/accept-fairness-verification.json').read_text())\nassert verification['passed'] and len(verification['steps']) == 16\nfor step in verification['steps']:\n    assert step['exit_code'] == 0 and sha(root / step['log']) == step['sha256']\ntests = (root / 'artifacts/accept-fairness-tests.log').read_text()\nsuites = [int(value) for value in re.findall(r'test result: ok\\. (\\d+) passed;', tests) if int(value)]\nassert sum(suites) == 138 and 'test result: FAILED' not in tests\nclippy = (root / 'artifacts/accept-fairness-clippy.log').read_text()\nrelease = (root / 'artifacts/accept-fairness-release.log').read_text()\njs = (root / 'artifacts/accept-fairness-js.log').read_text()\nassert 'Finished' in clippy and 'warning:' not in clippy and 'Finished' in release\nassert 'pass 6' in js and 'pass 1' in js and 'fail 0' in js\nchecks = {'source_revision': revision, 'runtime_implementation_revision': meta['source_revision'],\n          'rust': {'command': ['cargo', 'test', '--locked', '--all-targets'], 'passed': 138, 'suites': suites, 'exit_code': 0, 'output': tests},\n          'clippy': {'exit_code': 0, 'output': clippy}, 'release': {'exit_code': 0, 'output': release},\n          'javascript': {'passed': 7, 'exit_code': 0, 'output': js}, 'verification': verification, 'small_checks': []}\nfor command in [['cargo', 'fmt', '--check'], ['python3', '-m', 'py_compile', 'scripts/admission-flood.py'], ['python3', 'scripts/check-vendor.py']]:\n    done = subprocess.run(command, cwd=root, capture_output=True, text=True); assert done.returncode == 0, done.stdout + done.stderr\n    checks['small_checks'].append({'command': command, 'exit_code': 0, 'output': done.stdout + done.stderr})\n(bench / '2026-10-16-accept-fairness-checks.json').write_text(json.dumps(checks, indent=2) + '\\n')\n\ntracked = lambda *paths: subprocess.check_output(['git', 'ls-files', *paths], cwd=root, text=True).splitlines()\nruntime = tracked('src', 'vendor', 'Cargo.toml', 'Cargo.lock')\nhelpers = tracked('scripts', 'examples', 'tests', 'clients/js', '.github/workflows/rust.yml')\nextra = [root / 'artifacts' / name for name in ['build-accept-fairness-candidates.py', 'accept-fairness-pilot.py', 'accept-fairness-study.py',\n    'accept-fairness-routing-guard.py', 'accept-fairness-burst-guard.py', 'accept-fairness-verify.py', 'accept-fairness-stability.py', 'accept-fairness-api.py',\n    'refresh-accept-fairness-runtime.py', 'record-accept-fairness-browser.py', 'record-accept-fairness-profiles.py', 'record-accept-fairness-checkpoint.py', 'paging-accept.mjs']]\nevidence = [desc(path) for path in sorted(bench.glob('2026-10-16-accept-fairness-*.json'))\n            if path.name != '2026-10-16-accept-fairness-build.json']\nwith urllib.request.urlopen('http://127.0.0.1:1339/metrics', timeout=3) as response:\n    live_metrics = {key: int(value) for key, value in (line.split() for line in response.read().decode().splitlines() if line.startswith('war_'))}\nempty(live_metrics)\nqueues = subprocess.check_output(['ss', '-H', '-ltn', 'sport = :1338'], text=True).splitlines()\nassert len(queues) == 4 and all(int(row.split()[2]) == 1024 for row in queues)\nrecord = {'passed': True, 'source_revision': revision, 'runtime_implementation_revision': meta['source_revision'],\n          'driver_source_revision': driver['source_revision'], 'candidate': meta, 'driver': driver,\n          'platform': platform.platform(), 'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),\n          'scope': 'Local Linux checkpoint. Only native runtime change is accept quantum64->16 at the same1024 backlog.32 exploratory tuning cases;42 retained three-round admission comparisons and18 private/admitted-reconnect guards run sequentially without builds, profiles, injected faults or competing loads. Full body/FIFO/Close/EOF, exact counters and retirement verify. CPU figures span a changing work mix and are not a per-operation efficiency or general speedup claim. Profiles and stress run separately; perf user cycles do not resolve kernel costs, and gated CPU accounting provides user/system totals. Hosted CI/deployment and production capacity unverified. Goal remains active.',\n          'runtime_sources': [desc(root / name) for name in runtime],\n          'documentation': [desc(root / name) for name in ['README.md', 'docs/STATUS.md', 'docs/operations.md', 'docs/performance.md', 'docs/stability.md']],\n          'helpers_and_tests': [desc(root / name) for name in helpers] + [desc(path) for path in extra],\n          'frozen_runtime': [desc(root / meta['directory'] / name) for name in meta['binaries']],\n          'clients': [desc(root / meta['helper']['directory'] / 'admission'), desc(root / 'artifacts/baselines/fanout-probe/inspection'),\n                      desc(root / 'artifacts/baselines/room-churn-client/inspection'), desc(root / 'artifacts/baselines/address-churn-client/stress')],\n          'controller_snapshots': [desc(root / driver['directory'] / name) for name in driver['sources']],\n          'client_source_snapshot': {name: sha(root / meta['helper']['directory'] / name) for name in meta['helper']['sources']},\n          'evidence': evidence, 'kernel_counter_totals': totals, 'profiles': profiles,\n          'browser_screenshot': browser['screenshot'], 'browser_assets': browser['browser_assets'],\n          'live_listener_rows': queues, 'live_metrics': live_metrics,\n          'manual_services': json.loads((root / 'artifacts/reactor-manual-services.json').read_text()),\n          'collector_source': Path(__file__).read_text()}\n(bench / '2026-10-16-accept-fairness-build.json').write_text(json.dumps(record, indent=2) + '\\n')\nprint(json.dumps({'passed': True, 'source': revision, 'runtime': meta['source_revision'], 'rust': 138,\n                  'ordinary_cases': 60, 'pilot_cases': 32, 'runtime_sources': len(runtime), 'helpers_and_tests': len(record['helpers_and_tests']), 'evidence': len(evidence)}))\n"
+}

@@ -1,0 +1,205 @@
+{
+  "scope": "Six sequential ordinary fresh one-worker processes; three alternating six-second pairs with one private pair and64 admitted reconnect workers, no idle rooms, IP quota disabled. Each reconnect verifies welcome, complete1KiB self-echo, exact Close/EOF. Healthy pair checks full cyclic bodies/sender/FIFO. Exact independent counters and final resource retirement. Same frozen client and1024 backlog; server CPUs0-3, client4-7. These timing runs do not overlap the42 refused-TCP cases,12 standard private/reconnect guards, builds, profiles or injected faults.",
+  "source_revision": "d47f0fd4c7fc49b011956cc9a2c8f23b78d3d62c",
+  "selected_source_hashes": {
+    "src/server.rs": "6d28dc777b15d976670e49cf52cbc52bb7c9244974c3c1ee676e2ce2bc0be9eb"
+  },
+  "before_source_revision": "8676e7e184fcb68415ad1b5d6fd81dd06a3d0954",
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/accept-backlog/war-relay",
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be"
+    },
+    "selected": {
+      "path": "artifacts/baselines/accept-fairness/war-relay",
+      "sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/fanout-probe/inspection",
+    "sha256": "5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744",
+    "source_revision": "c8b55d394c92c0f2bdf4f7bf5a299239397dbc53",
+    "source_hashes": {
+      "examples/inspection.rs": "440e8a3366e654c7f07f53dbb73d9365bb77689a9a5b19d23b78844dc7c20726",
+      "examples/inspection/fanout.rs": "46a1158c75a80ee244b7150b5049bfe277717699b2235375592e816794eca340"
+    }
+  },
+  "helpers": {
+    "inspection.py": "ef1340431a03e39b30561a39fa8215e25187b2d8fcd9539dab1cb74160b0e0f4",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nsha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()\nmeta = json.loads((root/'artifacts/accept-fairness-candidate.json').read_text())\nservers = {'before':root/meta['baseline']['path'], 'selected':root/meta['directory']/'war-relay'}\nclient = root/'artifacts/baselines/fanout-probe/inspection'\noutput = root/'docs/benchmarks/2026-10-16-accept-fairness-burst-guard.json'\nrecord = {'scope':'Six sequential ordinary fresh one-worker processes; three alternating six-second pairs with one private pair and64 admitted reconnect workers, no idle rooms, IP quota disabled. Each reconnect verifies welcome, complete1KiB self-echo, exact Close/EOF. Healthy pair checks full cyclic bodies/sender/FIFO. Exact independent counters and final resource retirement. Same frozen client and1024 backlog; server CPUs0-3, client4-7. These timing runs do not overlap the42 refused-TCP cases,12 standard private/reconnect guards, builds, profiles or injected faults.',\n 'source_revision':meta['source_revision'], 'selected_source_hashes':meta['sources'],\n 'before_source_revision':meta['baseline']['revision'],\n 'variants':{key:{'path':str(path.relative_to(root)), 'sha256':sha(path)} for key,path in servers.items()},\n 'client':{'path':str(client.relative_to(root)),'sha256':sha(client),'source_revision':'c8b55d394c92c0f2bdf4f7bf5a299239397dbc53','source_hashes':{name:sha(client.parent/name) for name in ['examples/inspection.rs','examples/inspection/fanout.rs']}},\n 'helpers':{name:sha(root/'scripts'/name) for name in ['inspection.py','benchmark.py']},\n 'driver_source':Path(__file__).read_text(),'cases':[],'passed':False}\nfor repetition in range(1,4):\n for workload in ['burst']:\n  for role in (['before','selected'] if repetition % 2 else ['selected','before']):\n   trace=output.with_name(f'{output.stem}-{workload}-{role}-{repetition}.json')\n   command=[sys.executable,str(root/'scripts/inspection.py'),'--server',str(servers[role]),'--client',str(client),\n    '--workers','1','--rooms','0','--pairs','1','--seconds','6',\n    '--mode','none','--inspectors','0','--churn-workers','64','--output',str(trace)]\n   done=subprocess.run(command,cwd=root,capture_output=True,text=True,timeout=90)\n   data=json.loads(trace.read_text()); assert done.returncode==0 and data['passed'],done.stdout+done.stderr\n   assert not data['profile_diagnostic'] and data['server_sha256']==record['variants'][role]['sha256']\n   assert data['client_sha256']==record['client']['sha256']\n   assert data['events'][-1]['event']=='done' and data['server_exit_code']==0\n   for e in data['events']: assert e['metrics'].get('war_setup_errors_total',0)==0 and e['metrics']['war_accept_errors_total']==0\n   m=data['mixed']\n   row={'kind':role,'workload':workload,'repetition':repetition,'trace':str(trace.relative_to(root)),'trace_sha256':sha(trace),'passed':True,\n    'healthy':m['healthy']['per_second'],'healthy_p99_ms':m['healthy']['p99_upper_ms'],\n    'churn':m['churn']['per_second'],'churn_p99_ms':m['churn']['p99_upper_ms'],\n    'cpu_wall':m['server_cpu_seconds_per_wall_second'],'client_cpu_wall':m['client_cpu_seconds_per_wall_second'],\n    'rss_mib':data['events'][1]['process']['VmRSS']/1024}\n   record['cases'].append(row); output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(row),flush=True)\nrecord['medians']={}\nfor workload in ['burst']:\n for role in servers:\n  rows=[r for r in record['cases'] if r['kind']==role and r['workload']==workload]\n  fields=['healthy','healthy_p99_ms','churn','churn_p99_ms','cpu_wall','client_cpu_wall','rss_mib']\n  summary={key:statistics.median(r[key] for r in rows) for key in fields}\n  summary['ranges']={key:[min(r[key] for r in rows),max(r[key] for r in rows)] for key in fields}\n  record['medians'][workload+'/'+role]=summary\nrecord['passed']=True;output.write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(record['medians']),flush=True)\n",
+  "cases": [
+    {
+      "kind": "before",
+      "workload": "burst",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-1.json",
+      "trace_sha256": "5db4680cc494b11bb1b3ba23536dac80010f343c151fb012ff2e052cf4c10ebe",
+      "passed": true,
+      "healthy": 56382.1504940002,
+      "healthy_p99_ms": 1.048576,
+      "churn": 70768.66481046112,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.7316080653483709,
+      "client_cpu_wall": 1.5065459933369643,
+      "rss_mib": 5.71875
+    },
+    {
+      "kind": "selected",
+      "workload": "burst",
+      "repetition": 1,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-1.json",
+      "trace_sha256": "924b2418bc5141ed47b856c7eb6e39eb4ddd81105bdbccc9f3ea18624b903a81",
+      "passed": true,
+      "healthy": 60438.860724202365,
+      "healthy_p99_ms": 0.524288,
+      "churn": 69627.54334268703,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.7199229009368086,
+      "client_cpu_wall": 1.4748420540024896,
+      "rss_mib": 5.6015625
+    },
+    {
+      "kind": "selected",
+      "workload": "burst",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-2.json",
+      "trace_sha256": "99a3872be79657b08c473437a04ba81a9b138e462740aa1c10632513041c334d",
+      "passed": true,
+      "healthy": 61221.06328640725,
+      "healthy_p99_ms": 0.524288,
+      "churn": 70813.68530249198,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.724933648997908,
+      "client_cpu_wall": 1.49819620792901,
+      "rss_mib": 5.671875
+    },
+    {
+      "kind": "before",
+      "workload": "burst",
+      "repetition": 2,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-2.json",
+      "trace_sha256": "412908a0fbd2072e17a913162cbc420646fb475663d2144f73e1813c30fa4705",
+      "passed": true,
+      "healthy": 57301.76620052061,
+      "healthy_p99_ms": 1.048576,
+      "churn": 71554.54729793023,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.7282710513502648,
+      "client_cpu_wall": 1.4965386821797204,
+      "rss_mib": 5.734375
+    },
+    {
+      "kind": "before",
+      "workload": "burst",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-before-3.json",
+      "trace_sha256": "23f2ab2f54ea20dc77769c9e9390a6b1b8a5e3dabf344798c7a54259293abd98",
+      "passed": true,
+      "healthy": 56935.559820846735,
+      "healthy_p99_ms": 1.048576,
+      "churn": 71112.95550482233,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.7265929869892164,
+      "client_cpu_wall": 1.5065138996290173,
+      "rss_mib": 5.72265625
+    },
+    {
+      "kind": "selected",
+      "workload": "burst",
+      "repetition": 3,
+      "trace": "docs/benchmarks/2026-10-16-accept-fairness-burst-guard-burst-selected-3.json",
+      "trace_sha256": "04ec8f9f966d4ed6737c4bc6e80ebf000049c05cf3ca2ab013cc3bb580f9049c",
+      "passed": true,
+      "healthy": 61200.72860071354,
+      "healthy_p99_ms": 0.524288,
+      "churn": 70509.3615540549,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.724945455224773,
+      "client_cpu_wall": 1.4948875249117737,
+      "rss_mib": 5.58984375
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "burst/before": {
+      "healthy": 56935.559820846735,
+      "healthy_p99_ms": 1.048576,
+      "churn": 71112.95550482233,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.7282710513502648,
+      "client_cpu_wall": 1.5065138996290173,
+      "rss_mib": 5.72265625,
+      "ranges": {
+        "healthy": [
+          56382.1504940002,
+          57301.76620052061
+        ],
+        "healthy_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "churn": [
+          70768.66481046112,
+          71554.54729793023
+        ],
+        "churn_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "cpu_wall": [
+          0.7265929869892164,
+          0.7316080653483709
+        ],
+        "client_cpu_wall": [
+          1.4965386821797204,
+          1.5065459933369643
+        ],
+        "rss_mib": [
+          5.71875,
+          5.734375
+        ]
+      }
+    },
+    "burst/selected": {
+      "healthy": 61200.72860071354,
+      "healthy_p99_ms": 0.524288,
+      "churn": 70509.3615540549,
+      "churn_p99_ms": 2.097152,
+      "cpu_wall": 0.724933648997908,
+      "client_cpu_wall": 1.4948875249117737,
+      "rss_mib": 5.6015625,
+      "ranges": {
+        "healthy": [
+          60438.860724202365,
+          61221.06328640725
+        ],
+        "healthy_p99_ms": [
+          0.524288,
+          0.524288
+        ],
+        "churn": [
+          69627.54334268703,
+          70813.68530249198
+        ],
+        "churn_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "cpu_wall": [
+          0.7199229009368086,
+          0.724945455224773
+        ],
+        "client_cpu_wall": [
+          1.4748420540024896,
+          1.49819620792901
+        ],
+        "rss_mib": [
+          5.58984375,
+          5.671875
+        ]
+      }
+    }
+  }
+}

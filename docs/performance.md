@@ -4143,3 +4143,98 @@ frozen binaries/clients/controller, all ordinary and diagnostic traces, 138 Rust
 tests, strict checks, C++ compatibility, socket stress, management and real
 Chrome acceptance. GitHub-hosted CI execution and hosted deployment are not
 claimed. The goal remains active.
+
+## Accept-turn fairness, 2026-10-16
+
+Runtime `d47f0fd` changes one native scheduling constant: at most 16 sockets per
+accept turn, previously 64. The one-token continuation bound, 1,024 backlog,
+resource-error retries, read/write budgets and shared CBOR payload path retain
+their previous behavior. Yielding sooner lets established socket work run more
+often during connection floods. No runtime option, allocation, per-message
+branch or additional queue is introduced.
+
+The previous checkpoint exposed established one-worker throughput lost while
+the larger backlog sustained more refusal work. A separate ten-second diagnostic
+records 0.42 user and 5.26 system CPU seconds: about 93% of measured native CPU
+is kernel work. Perf samples are restricted to user cycles, with unresolved
+kernel addresses; symbol percentages do not attribute that complete kernel cost.
+This supports measuring scheduling balance rather than inferring a parsing or
+copying optimization. Both [profiles](benchmarks/2026-10-16-accept-fairness-profiles.json)
+are separate from ordinary timing comparisons.
+
+The [32-case pilot](benchmarks/2026-10-16-accept-fairness-pilot.json) compares
+batches of 8/16/32/64 in two alternating three-second rounds, one/four workers
+and zero/256 refused TCP clients, at the same backlog. One-worker flood medians
+in thousands of operations/s are:
+
+| Accept batch | Established echoes | Completed refusals |
+| --- | ---: | ---: |
+| 64 | 110.8 | 286.3 |
+| 32 | 113.6 | 288.6 |
+| 16 | 155.3 | 276.1 |
+| 8 | 247.9 | 227.6 |
+
+Eight gives more established traffic but costs about 20.5% of refusal throughput;
+32 gives little echo benefit. Sixteen is retained after the longer comparisons
+and admitted-traffic guards below. This is a workload-specific scheduling choice.
+
+The [main comparison](benchmarks/2026-10-16-accept-fairness-comparison.json)
+contains 42 sequential fresh-process trials: three alternating six-second
+rounds, one/four workers, global/direct-IP limits and zero/64/256 refused clients.
+Baseline native `b369bf27…` is runtime `8676e7e`, selected `cc494c8d…` is
+`d47f0fd`. Both use the same frozen client `626b41b8…` and controller `4e7deb8`.
+Each case has a fresh network namespace. Server CPUs are 0–3, the independent
+echo generator uses CPU 4 and the independent refusal generator CPUs 5–7.
+All full 1-KiB cyclic encoded bodies, sender/FIFO, negotiated CBOR, exact
+Close/EOF, refused TCP EOF/reset without bytes, independent counters and final
+resource retirement verify. Healthy rates use their own actual phase duration;
+total server CPU includes final TCP tails. No builds, profiles, fault injection
+or competing benchmark loads overlap these runs or the 18 routing guards.
+
+Rates below are three-run medians in thousands of verified operations/s. Echo
+p99 is the fixed histogram upper bound in milliseconds, measured from the start
+of each 16-message window, rather than an unpipelined request latency.
+
+| Workers / policy / refused clients | Echoes before → selected (k/s) | Echo change | Echo p99 before → selected | Refusals before → selected (k/s) |
+| --- | ---: | ---: | ---: | ---: |
+| 1 / global / 0 | 563.6 → 562.0 | −0.27% | 0.065536 → 0.065536 | — |
+| 4 / global / 0 | 554.6 → 553.3 | −0.24% | 0.065536 → 0.065536 | — |
+| 1 / global / 64 | 194.5 → 218.7 | +12.45% | 0.524288 → 0.262144 | 263.0 → 248.6 |
+| 1 / global / 256 | 109.2 → 152.5 | +39.64% | 1.048576 → 0.524288 | 286.2 → 277.2 |
+| 1 / direct-IP / 256 | 99.4 → 149.1 | +50.05% | 1.048576 → 0.524288 | 287.6 → 276.2 |
+| 4 / global / 256 | 399.7 → 398.0 | −0.40% | 0.131072 → 0.131072 | 289.0 → 289.2 |
+| 4 / direct-IP / 256 | 401.0 → 399.5 | −0.38% | 0.131072 → 0.131072 | 288.7 → 290.7 |
+
+The one-worker 256/global echo ranges are 102,338–109,854 → 148,849–153,400/s;
+direct-IP ranges are 95,666–101,061 → 143,040–153,414/s. Both separate clearly.
+Ordinary controls and four-worker echo ranges overlap. Refusal rates fall
+5.48%, 3.12% and 3.98% in the one-worker 64/global, 256/global and 256/direct-IP
+cohorts; their median refusal p99 buckets stay 1.048576/4.194304/4.194304 ms.
+The one-worker 256-client server CPU per wall second rises from 0.558 to 0.577
+and 0.560 to 0.583, while the mix of completed work changes. These are not
+per-operation CPU comparisons or a general CPU-saving claim. All 42 runs have
+zero kernel listen drops; SYN retransmissions total zero before and three after.
+Full ranges, TCP extrema, RSS, actual phase durations and CPU details remain in
+the comparison. Neither version establishes a production capacity guarantee.
+
+The [12 standard routing guards](benchmarks/2026-10-16-accept-fairness-routing-guard.json)
+use the same frozen inspection client in three alternating six-second pairs:
+four workers, 8,192 idle rooms and one private pair, or no idle rooms with one
+pair and eight admitted reconnect workers. Pure-private throughput is −0.19%,
+mixed private −0.34% and reconnects −0.22%; all ranges overlap and p99 buckets
+are unchanged. The [six burst guards](benchmarks/2026-10-16-accept-fairness-burst-guard.json)
+instead use one worker, one private pair and 64 admitted reconnect workers.
+Private throughput rises 56,936 → 61,201/s (+7.49%), with separate ranges
+56,382–57,302 → 60,439–61,221, and p99 halves from 1.048576 to 0.524288 ms.
+Complete reconnects fall 71,113 → 70,509/s (−0.85%, overlapping ranges) with
+unchanged 2.097152-ms p99. Every reconnect verifies welcome, full self-echo,
+exact Close/EOF and retirement; independent service counters agree. CPU spans
+the changing mix, so even its lower burst median is not an efficiency claim.
+
+The same selected binaries pass the 1,024-client refusal check, a 1,024-reader
+changing-room fanout check, shutdown during a refusal flood, descriptor pressure,
+socket-setup faults, C++ compatibility, JavaScript, management and real Chrome
+acceptance. The [manifest](benchmarks/2026-10-16-accept-fairness-build.json)
+binds 138 passing Rust tests, strict checks, exact source/binaries, clients and
+all ordinary/diagnostic evidence. The small unpinned CI command passes locally;
+GitHub-hosted CI and deployment are unverified. The goal remains active.

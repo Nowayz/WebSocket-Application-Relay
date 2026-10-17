@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cycles:u'
+# Event count (approx.): 2229146833
+#
+# Overhead  Symbol                                                                                                                                                                  IPC   [IPC Coverage]
+# ........  ......................................................................................................................................................................  ....................
+#
+    15.96%  [.] war_relay::relay::Relay::receive_with_storage                                                                                                                       -      -
+    12.56%  [.] tungstenite::protocol::WebSocketContext::read_bounded                                                                                                               -      -
+    12.01%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send                                                                                           -      -
+     7.01%  [.] war_relay::server::Worker::accept                                                                                                                                   -      -
+     3.93%  [.] war_relay::relay::Peer::enqueue_frame                                                                                                                               -      -
+     3.46%  [k] 0xffffffff8ac00080                                                                                                                                                  -      -
+     2.75%  [.] war_relay::server::Connection::drive                                                                                                                                -      -
+     2.70%  [.] bytes::bytes_mut::shared_v_drop                                                                                                                                     -      -
+     2.05%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                                                                                                          -      -
+     1.89%  [.] minicbor::decode::decoder::Decoder::unsigned                                                                                                                        -      -
+     1.85%  [.] bytes::bytes_mut::BytesMut::split_to                                                                                                                                -      -
+     1.68%  [k] 0xffffffff8ac00087                                                                                                                                                  -      -
+     1.48%  [.] war_relay::server::Worker::run                                                                                                                                      -      -
+     1.48%  [k] 0xffffffff8ac00084                                                                                                                                                  -      -
+     1.41%  [.] bytes::bytes_mut::shared_v_clone                                                                                                                                    -      -
+     1.28%  [.] <core::hash::sip::Hasher<S> as core::hash::Hasher>::write                                                                                                           -      -
+     1.27%  [k] 0xffffffff8c1a972b                                                                                                                                                  -      -
+     1.16%  [k] 0xffffffff8b40edd6                                                                                                                                                  -      -
+     1.16%  [.] __vdso_clock_gettime                                                                                                                                                -      -
+     1.07%  [.] war_relay::server::socket::write_frame                                                                                                                              -      -
+     1.06%  [k] 0xffffffff8ac000ab                                                                                                                                                  -      -
+     1.00%  [k] 0xffffffff8ac0008f                                                                                                                                                  -      -
+     0.94%  [.] core::hash::BuildHasher::hash_one                                                                                                                                   -      -
+     0.82%  [.] tungstenite::protocol::frame::FrameCodec::reserve_input                                                                                                             -      -
+     0.70%  [.] war_relay::protocol::validate_value                                                                                                                                 -      -
+     0.65%  [.] 0x000000000018f380                                                                                                                                                  -      -
+     0.62%  [k] 0xffffffff8c18ea79                                                                                                                                                  -      -
+     0.54%  [k] 0xffffffff8ac000ad                                                                                                                                                  -      -
+     0.53%  [k] 0xffffffff8ac0012a                                                                                                                                                  -      -
+
+
+#
+# (Tip: Treat branches as callchains: perf record -b ... ; perf report --branch-history)
+#

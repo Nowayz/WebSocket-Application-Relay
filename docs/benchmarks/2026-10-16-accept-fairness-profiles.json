@@ -1,0 +1,63 @@
+{
+  "scope": "Separate diagnostic10-second one-worker global-admission cases at1024 backlog with256 raw refused clients. Perf samples user cycles at499Hz between verified ready/measured gates; native process accounting records user/systemCPU. Perf restrictions leave kernel symbols unresolved: symbol percentages do not attribute complete kernel cost or establish wall-time speedups. No profile timings enter ordinary medians. Raw captures stay local/ignored; published text strips trailing whitespace only.",
+  "collector_source": "import hashlib,json,re,subprocess\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[1];bench=root/'docs/benchmarks';sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\ndesc=lambda p:{'path':str(p.relative_to(root)),'sha256':sha(p)}\nrecord={'scope':'Separate diagnostic10-second one-worker global-admission cases at1024 backlog with256 raw refused clients. Perf samples user cycles at499Hz between verified ready/measured gates; native process accounting records user/systemCPU. Perf restrictions leave kernel symbols unresolved: symbol percentages do not attribute complete kernel cost or establish wall-time speedups. No profile timings enter ordinary medians. Raw captures stay local/ignored; published text strips trailing whitespace only.', 'collector_source':Path(__file__).read_text(),'cases':[],'passed':False}\nfor role in ['before','selected']:\n trace=bench/f'2026-10-16-accept-fairness-profile-{role}.json';data=json.loads(trace.read_text());assert data['passed'] and data['profile_diagnostic']\n raw=Path(data['profile_path']);assert sha(raw)==data['profile_sha256']\n done=subprocess.run(['perf','report','--stdio','-i',str(raw),'--no-children','--sort','symbol','--call-graph','none','--percent-limit','0.5'],cwd=root,capture_output=True,text=True,check=True)\n rawreport=root/f'artifacts/accept-fairness-profile-{role}-flat-final.txt';rawreport.write_text(done.stdout)\n published=bench/f'2026-10-16-accept-fairness-profile-{role}.txt';published.write_text('\\n'.join(line.rstrip() for line in done.stdout.splitlines())+'\\n')\n lost=int(re.search(r'Total Lost Samples: (\\d+)',done.stdout).group(1));samples=int(re.search(r'\\((\\d+) samples\\)',data['perf_log']).group(1))\n assert lost==0 and data['perf_exit_code'] in [0,-2]\n record['cases'].append({'kind':role,'server_sha256':data['server_sha256'],'samples':samples,'lost':lost,'trace':desc(trace),'raw_data':desc(raw),'raw_report':desc(rawreport),'published_report':desc(published),'server_cpu_times':data['mixed']['server_cpu_times'],'server_cpu_seconds':data['mixed']['server_cpu_seconds'],'user_seconds_fraction':data['mixed']['server_cpu_times']['user']/data['mixed']['server_cpu_seconds']})\nrecord['passed']=True\n(bench/'2026-10-16-accept-fairness-profiles.json').write_text(json.dumps(record,indent=2)+'\\n')\nprint(json.dumps([{'kind':c['kind'],'samples':c['samples'],'lost':c['lost'],'cpu_times':c['server_cpu_times']} for c in record['cases']]))\n",
+  "cases": [
+    {
+      "kind": "before",
+      "server_sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "samples": 4605,
+      "lost": 0,
+      "trace": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.json",
+        "sha256": "e6d74f5feb9b21973c72448761bc5ed73ed95ee26dc8f9a5eabfa71b356a7fde"
+      },
+      "raw_data": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.perf.data",
+        "sha256": "09b34c2389153fddd396a0f500dafc85a05bce48fe9ebe87eebca439f1105e79"
+      },
+      "raw_report": {
+        "path": "artifacts/accept-fairness-profile-before-flat-final.txt",
+        "sha256": "f1865c30782c5bdf9d5464388fae5bad0de8c86600a9f4d87f8002ce93e2f04f"
+      },
+      "published_report": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-before.txt",
+        "sha256": "1e16ac7d9dbf638f6bd42d1ddcc9365ea546035e8b7137996e75c1e0481bbb45"
+      },
+      "server_cpu_times": {
+        "user": 0.42,
+        "system": 5.26
+      },
+      "server_cpu_seconds": 5.68,
+      "user_seconds_fraction": 0.07394366197183098
+    },
+    {
+      "kind": "selected",
+      "server_sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+      "samples": 4735,
+      "lost": 0,
+      "trace": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.json",
+        "sha256": "436b924269def363939d55055ff6e3e05b17897eb276d40dab8fc35b9018ae32"
+      },
+      "raw_data": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.perf.data",
+        "sha256": "74ec9987dca923082ac86b2e82efb92f59d1d6927cf24cf4f22499ad3ed3672f"
+      },
+      "raw_report": {
+        "path": "artifacts/accept-fairness-profile-selected-flat-final.txt",
+        "sha256": "27bf792c42a46369bc36080a1b34ded0088bdaadeaa4be2652a0534a72178230"
+      },
+      "published_report": {
+        "path": "docs/benchmarks/2026-10-16-accept-fairness-profile-selected.txt",
+        "sha256": "cb0e49a9d61ae6b6e4196d6d8ecd635dbd5fe56fccdb8054d1fe19bbc0646d1f"
+      },
+      "server_cpu_times": {
+        "user": 0.41,
+        "system": 5.41
+      },
+      "server_cpu_seconds": 5.82,
+      "user_seconds_fraction": 0.07044673539518899
+    }
+  ],
+  "passed": true
+}

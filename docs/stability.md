@@ -982,3 +982,35 @@ The same selected binaries pass [C++ compatibility](benchmarks/2026-10-16-accept
 the small unpinned [CI command](benchmarks/2026-10-16-accept-backlog-ci.json).
 The manifest retains 138 passing Rust tests and strict checks. Hosted CI and
 deployment are unverified; these finite loopback cases are local acceptance.
+
+## Established traffic during accept bursts, 2026-10-16
+
+Runtime `d47f0fd` keeps the one-token listener continuation and reduces each
+native accept turn to at most 16 sockets. Error retries, physical-slot ownership,
+shutdown and shared body lifetimes retain their prior paths. The
+[42-case admission comparison](benchmarks/2026-10-16-accept-fairness-comparison.json)
+and [12 standard routing guards](benchmarks/2026-10-16-accept-fairness-routing-guard.json)
+plus [six admitted-burst guards](benchmarks/2026-10-16-accept-fairness-burst-guard.json)
+verify complete CBOR bodies/sender/FIFO, exact counters and final resource
+retirement. The [performance section](performance.md#accept-turn-fairness-2026-10-16)
+records the established-traffic benefit, modest refusal/reconnect throughput
+costs, larger mixed-work CPU and unchanged ordinary-control p99 buckets.
+
+Both native builds pass separate 1,024-client refusal cases without kernel
+drops/retransmissions. Four shutdown cases cover before/selected, one/four
+workers and an active 256-client flood. Each native process exits zero and the
+held peer verifies eight echoes, Close 1001 and EOF; each flood client has the
+expected cancellation exit one. Three [descriptor-pressure cases](benchmarks/2026-10-16-accept-fairness-accept.json)
+and four [setup-fault cases](benchmarks/2026-10-16-accept-fairness-setup.json)
+also preserve recovery and physical slots through TCP close.
+
+The selected [1,024-reader changing-room check](benchmarks/2026-10-16-accept-fairness-fanout-upper.json)
+verifies 347 complete membership cycles and 709,632 fanout deliveries, every
+controlled departure and final retirement. Separate [socket stress](benchmarks/2026-10-16-accept-fairness-stability.json)
+passes ordinary traffic, 4,096-source-IP reconnects, an unread peer and mixed-size
+fanout. The same binaries pass [C++ compatibility](benchmarks/2026-10-16-accept-fairness-reference.json),
+[management checks](benchmarks/2026-10-16-accept-fairness-api.json),
+[real Chrome acceptance](benchmarks/2026-10-16-accept-fairness-browser.json),
+138 Rust tests and strict checks. Two separate perf captures have zero lost
+samples; no profile timings enter ordinary results. The small CI command passes
+locally; hosted CI, deployment and production capacity remain unverified.

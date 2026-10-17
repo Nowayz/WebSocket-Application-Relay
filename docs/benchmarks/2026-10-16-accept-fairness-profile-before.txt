@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cycles:u'
+# Event count (approx.): 1854732169
+#
+# Overhead  Symbol                                                                         IPC   [IPC Coverage]
+# ........  .............................................................................  ....................
+#
+    13.91%  [.] war_relay::relay::Relay::receive_with_storage                              -      -
+    11.25%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send  -      -
+    10.20%  [.] tungstenite::protocol::WebSocketContext::read_bounded                      -      -
+     9.52%  [.] war_relay::server::Worker::accept                                          -      -
+     4.11%  [k] 0xffffffff8ac00080                                                         -      -
+     3.37%  [.] war_relay::relay::Peer::enqueue_frame                                      -      -
+     2.82%  [.] bytes::bytes_mut::shared_v_drop                                            -      -
+     2.54%  [.] war_relay::server::Connection::drive                                       -      -
+     2.22%  [.] bytes::bytes_mut::BytesMut::split_to                                       -      -
+     2.06%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                 -      -
+     1.73%  [.] minicbor::decode::decoder::Decoder::unsigned                               -      -
+     1.71%  [k] 0xffffffff8c1a972b                                                         -      -
+     1.71%  [k] 0xffffffff8b40edd6                                                         -      -
+     1.59%  [.] war_relay::server::Worker::run                                             -      -
+     1.54%  [k] 0xffffffff8ac00084                                                         -      -
+     1.48%  [.] bytes::bytes_mut::shared_v_clone                                           -      -
+     1.45%  [k] 0xffffffff8ac0008f                                                         -      -
+     1.37%  [k] 0xffffffff8ac00087                                                         -      -
+     1.23%  [.] core::hash::BuildHasher::hash_one                                          -      -
+     1.15%  [k] 0xffffffff8c18ea79                                                         -      -
+     1.08%  [k] 0xffffffff8ac000ad                                                         -      -
+     1.06%  [k] 0xffffffff8ac000ab                                                         -      -
+     1.01%  [.] 0x000000000018f380                                                         -      -
+     0.87%  [.] war_relay::protocol::validate_value                                        -      -
+     0.84%  [.] __vdso_clock_gettime                                                       -      -
+     0.71%  [.] war_relay::server::socket::write_frame                                     -      -
+     0.67%  [.] tungstenite::protocol::frame::FrameCodec::reserve_input                    -      -
+     0.62%  [k] 0xffffffff8ac0012a                                                         -      -
+     0.53%  [k] 0xffffffff8b410b05                                                         -      -
+
+
+#
+# (Tip: Treat branches as callchains: perf record -b ... ; perf report --branch-history)
+#
