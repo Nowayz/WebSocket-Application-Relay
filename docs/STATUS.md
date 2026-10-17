@@ -9,7 +9,27 @@ the latest requested experiment evaluates Monoio.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: per-user latency and measured ablations, 2026-10-17
+## Latest verified checkpoint: ready-slot CPU and tail-latency evaluation, 2026-10-17
+
+A ready-queue slot cache reduces median 100,000-user offered-overload CPU from
+4,966 to 4,822 ns/delivery (2.90%) in three matched pairs, with nonoverlapping
+CPU ranges. Median throughput improves 0.47%; private results remain mixed.
+All twelve ordinary trials, all 136 tests, strict checks, independent wire corpus
+and a 65-second mixed 100,000-user acceptance case pass.
+
+The candidate remains deferred because per-user tails at 400,000 packets/s are
+not repeatable across two orders: median user p99 is 8.35/9.44 ms for control
+and 14.73/7.25 ms for the candidate. Every user receives all 120 samples in
+each run. One heartbeat-disabled control records 5.15 ms but still has tails;
+this is diagnostic, not a selected policy or causal attribution. The next target
+is time-resolved latency and scheduling evidence, including the hypothesis of
+cohort-aligned heartbeat work. See the [full study and plot](performance.md#ready-slot-caching-and-higher-rate-latency-repeatability-2026-10-17).
+
+The ready-slot patch and all evidence remain archived. Runtime source is restored,
+the rebuilt binary exactly matches selected Mio `35d46da1…`, and protocol smoke
+passes. Manual services remain unchanged. The continuing goal remains active.
+
+## Previous checkpoint: per-user latency and measured ablations, 2026-10-17
 
 The selected native Mio runtime remains unchanged. Per-user instrumentation now
 measures all 100,000 users separately: at two 1 KiB packets/user/s for 60 seconds,

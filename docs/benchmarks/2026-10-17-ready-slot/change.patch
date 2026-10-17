@@ -1,0 +1,161 @@
+diff --git a/src/server.rs b/src/server.rs
+index 184a89c..e5ae38f 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -209,7 +209,7 @@ struct Worker {
+     connections: Slab<Connection>,
+     tokens: HashMap<Token, usize>,
+     next_token: usize,
+-    ready: VecDeque<Token>,
++    ready: VecDeque<(Token, usize)>,
+     timers: Timers,
+     scratch: ReadStorage,
+     compacted: bool,
+@@ -255,15 +255,32 @@ impl Worker {
+     }
+ 
+     fn schedule(&mut self, token: Token) {
+-        let Some(&slot) = self.tokens.get(&token) else {
+-            return;
+-        };
++        if let Some(&slot) = self.tokens.get(&token) {
++            self.schedule_slot(token, slot);
++        }
++    }
++
++    fn schedule_slot(&mut self, token: Token, slot: usize) {
+         if let Some(connection) = self.connections.get_mut(slot)
+             && connection.token == token
+             && !connection.scheduled
+         {
+             connection.scheduled = true;
+-            self.ready.push_back(token);
++            self.ready.push_back((token, slot));
++        }
++    }
++
++    fn ready_slot(&self, token: Token, cached: usize) -> Option<usize> {
++        if self
++            .connections
++            .get(cached)
++            .is_some_and(|c| c.token == token)
++        {
++            Some(cached)
++        } else {
++            // Compaction can move a queued connection. The stable token is
++            // authoritative; a reused slot must never redirect an old event.
++            self.tokens.get(&token).copied()
+         }
+     }
+ 
+@@ -272,7 +289,7 @@ impl Worker {
+         // Keep one queued turn, as data sockets do with their scheduled flag.
+         if !self.accept_queued {
+             self.accept_queued = true;
+-            self.ready.push_back(LISTENER);
++            self.ready.push_back((LISTENER, 0));
+         }
+     }
+ 
+@@ -374,7 +391,7 @@ impl Worker {
+             self.connections.insert(connection);
+             self.tokens.insert(token, slot);
+             self.timers.set(slot, deadline);
+-            self.schedule(token);
++            self.schedule_slot(token, slot);
+         }
+         // EPOLLET requires an explicit continuation when we yield before
+         // WouldBlock. The listener uses the same bounded ready queue.
+@@ -441,10 +458,10 @@ impl Worker {
+                 shutdown_deadline = Some(
+                     Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
+                 );
+-                for (_, connection) in self.connections.iter_mut() {
++                for (slot, connection) in self.connections.iter_mut() {
+                     if !connection.scheduled {
+                         connection.scheduled = true;
+-                        self.ready.push_back(connection.token);
++                        self.ready.push_back((connection.token, slot));
+                     }
+                 }
+             }
+@@ -463,14 +480,14 @@ impl Worker {
+             }
+             while let Some(slot) = self.timers.pop_due(now) {
+                 if let Some(connection) = self.connections.get(slot) {
+-                    self.schedule(connection.token);
++                    self.schedule_slot(connection.token, slot);
+                 }
+             }
+             // A bounded ready batch makes progress on buffered continuations
+             // without starving new socket events, timers, or shutdown signals.
+             let batch = self.ready.len().min(1024);
+             for _ in 0..batch {
+-                let token = self.ready.pop_front().expect("ready batch");
++                let (token, cached) = self.ready.pop_front().expect("ready batch");
+                 if token == LISTENER {
+                     self.accept_queued = false;
+                     if shutdown_deadline.is_none() {
+@@ -478,7 +495,7 @@ impl Worker {
+                     }
+                     continue;
+                 }
+-                let Some(&slot) = self.tokens.get(&token) else {
++                let Some(slot) = self.ready_slot(token, cached) else {
+                     continue;
+                 };
+                 let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
+@@ -509,7 +526,7 @@ impl Worker {
+                         let deadline = self.connections[slot].deadline(&self.relay);
+                         self.timers.set(slot, deadline);
+                         if keep == Drive::Again {
+-                            self.schedule(token);
++                            self.schedule_slot(token, slot);
+                         }
+                     }
+                 }
+@@ -527,7 +544,7 @@ impl Worker {
+                         && !connection.scheduled
+                     {
+                         connection.scheduled = true;
+-                        self.ready.push_back(token);
++                        self.ready.push_back((token, slot));
+                     }
+                 }
+             }
+diff --git a/src/server/accept_tests.rs b/src/server/accept_tests.rs
+index f7215ce..a19c6b5 100644
+--- a/src/server/accept_tests.rs
++++ b/src/server/accept_tests.rs
+@@ -60,7 +60,7 @@ fn repeated_listener_readiness_keeps_one_bounded_accept_continuation() {
+         worker
+             .ready
+             .iter()
+-            .filter(|&&token| token == LISTENER)
++            .filter(|&&(token, _)| token == LISTENER)
+             .count(),
+         1,
+         "listener readiness must not accumulate duplicate accept continuations"
+diff --git a/src/server/arena_tests.rs b/src/server/arena_tests.rs
+index 919e422..c9c451b 100644
+--- a/src/server/arena_tests.rs
++++ b/src/server/arena_tests.rs
+@@ -193,6 +193,7 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
+     let mut deadlines = Vec::new();
+     for (token, old_slot, pointer, deadline) in expected {
+         let slot = worker.tokens[&token];
++        assert_eq!(worker.ready_slot(token, old_slot), Some(slot));
+         moved += usize::from(slot != old_slot);
+         let connection = &worker.connections[slot];
+         assert_eq!(connection.token, token);
+@@ -314,8 +315,8 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
+     assert!(
+         ready
+             .iter()
+-            .filter_map(|token| worker.tokens.get(token))
+-            .all(|&slot| worker.connections[slot].token != Token(514))
++            .filter_map(|&(token, slot)| worker.ready_slot(token, slot))
++            .all(|slot| worker.connections[slot].token != Token(514))
+     );
+     drop(new_client);
+     worker.connections.clear();

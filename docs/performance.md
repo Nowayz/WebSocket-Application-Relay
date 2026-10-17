@@ -5671,3 +5671,77 @@ quiescent counters, routing, Close/EOF and resource retirement, with normal
 client/server exits. Capacity verifies 15 million timed messages per backend.
 This rules out this specific stack-initialization refactor as the next selected
 optimization; it does not establish that parsing has no remaining cost.
+
+
+## Ready-slot caching and higher-rate latency repeatability, 2026-10-17
+
+The scheduling profile motivates a worker-local ready-entry cache. The candidate
+stores `(stable token, slab slot)` instead of only the token, reusing slots already
+known at acceptance, timer scheduling and buffered continuation. On consumption
+it verifies the connection's full token before using the cached slot; moved slots
+fall back to the authoritative token map. Monotonic tokens, stale-event protection,
+connection compaction, ordinary randomized hashing and all output ownership remain
+unchanged. Entries grow from 8 to 16 bytes on this 64-bit host. Source is restored;
+the candidate remains an experiment pending reliable tail-latency attribution.
+
+[The archive](benchmarks/2026-10-17-ready-slot.json) preserves source/build hashes,
+a replayable patch, validation, ordinary trials, five per-user latency runs,
+compressed CSVs, mixed acceptance and the diagnostic plot. Patch replay verifies
+every recorded source hash. The first unit compile finds a fixture expecting the
+old entry type; updated fixture assertions and explicit moved-slot fallback checks
+pass in the full suite. All 136 tests, strict all-target Clippy, formatting and
+the independent 776-case/2,311-exchange corpus pass.
+
+| Median of three rotating matched pairs | Selected Mio | Slot cache |
+| --- | ---: | ---: |
+| Dense private deliveries/s | 2,095,011 | 2,082,477 |
+| Dense private CPU ns/delivery | 1,064.98 | 1,062.41 |
+| 100,000-user offered-overload deliveries/s | 563,817 | 566,485 |
+| Offered-overload CPU ns/delivery | 4,966 | 4,822 |
+
+The fixed clients, portable release compiler configuration, CPU placement and
+TCP profiles match the preceding native comparisons. No build, profile or load
+trial overlaps ordinary timing. All twelve trials pass complete bodies/FIFO,
+counters, fresh routing, exact Close/EOF and resource retirement. Capacity verifies
+15 million timed messages per backend. Its CPU ranges are 4,916–4,972 versus
+4,786–4,834 ns/delivery, with no overlap in this cohort; median improvement is
+2.90%. Median throughput improves 0.47%. Private throughput changes -0.60% and
+CPU -0.24%, with overlapping ranges. P99 upper buckets remain 2.097152 ms for
+private and 268.435456 ms under offered overload.
+
+A higher-rate latency check offers four 1 KiB packets/user/s to 100,000 users,
+with 15-second heartbeat, four server workers and eight client cores, the same
+16 KiB/64 KiB TCP profile, and 30 seconds/120 exact samples per user. Every run
+verifies all 12 million timed deliveries and complete final retirement. The
+same frozen diagnostic client from the fairness study polls room receives
+concurrently and includes client/loopback work. These diagnostic cases do not
+replace ordinary timing medians.
+
+| Run order | Implementation | Median user's p99 ms | 99th-percentile user's p99 ms | Worst packet ms |
+| --- | --- | ---: | ---: | ---: |
+| First pair, first | Control | 8.354 | 15.600 | 25.369 |
+| First pair, second | Slot cache | 14.733 | 41.583 | 80.098 |
+| Reverse pair, first | Slot cache | 7.250 | 11.595 | 22.628 |
+| Reverse pair, second | Control | 9.442 | 18.240 | 26.100 |
+| Separate diagnostic | Control, heartbeat disabled | 5.153 | 10.112 | 20.404 |
+
+The ranking reverses with order. These measurements establish neither a causal
+slot-cache latency regression nor a reliable latency improvement. They expose
+substantial repeatability uncertainty at this rate, which is itself relevant to
+the user's realtime requirement. The candidate is deferred despite lower CPU.
+Disabling heartbeat reduces tails in one control diagnostic but does not remove
+them or isolate their cause. Connection cohorts currently set their first Ping
+one full interval after join, making synchronized heartbeat work a hypothesis.
+Time-resolved latency and scheduling evidence is needed before changing heartbeat
+phasing or diagnosing the remaining spikes. Production heartbeat remains enabled.
+
+![Repeated higher-rate per-user latency](benchmarks/2026-10-17-ready-slot/ready-slot-fairness.png)
+
+The candidate also passes one 65-second mixed 100,000-user case with 6.5 million
+stable deliveries at one message/user/s, 66,560 churn sessions, 15-second heartbeat
+and eight unread pressure peers. Stable p99 upper RTT is 1.048576 ms and maximum
+2.427485 ms. Final Close/EOF, exact counters, descriptors, established sockets and
+resource retirement pass. This does not resolve the higher-rate tail uncertainty.
+After deferring the candidate, rebuilding the original source produces the exact
+selected SHA-256 `35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e`
+and its independent protocol smoke passes. Local manual services are unchanged.
