@@ -3,6 +3,8 @@
 
 Raw sockets either stay silent or send an incomplete header plus paced bytes.
 Linux TCP receive queues establish a drained boundary between drip rounds.
+Setup admits at most 128 outstanding connects before continuing, outside the
+healthy traffic phase, so large populations do not depend on a SYN retry wave.
 Every pending socket must expire without application bytes at its absolute
 handshake deadline. Admission, read reservations, management responsiveness,
 subsequent slot reuse and final resource retirement are checked independently.
@@ -151,6 +153,11 @@ def run(args):
                 if args.kind == 'drip': stream.sendall(PREFIX)
                 stream.setblocking(False); raw.append(stream); raw_peers.add(stream.getsockname()[1])
                 selector.register(stream, selectors.EVENT_READ)
+                if len(raw) % 128 == 0:
+                    admitted = time.monotonic() + 3
+                    while observe()['war_connections'] != len(raw) + 1:
+                        assert time.monotonic() < admitted, 'setup admission batch did not settle'
+                        time.sleep(.01)
             deadline = time.monotonic() + 3
             while observe()['war_connections'] != args.connections + 1:
                 assert time.monotonic() < deadline
