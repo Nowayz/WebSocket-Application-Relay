@@ -11,6 +11,26 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest verified profile: eight pinned workers, 2026-10-17
+
+The unchanged pinned-capable binary improves per-user latency when provisioned
+with eight physical server cores instead of four. In fresh four/eight/eight/four
+100,000-user runs at 400,000 messages/s, median user p99 becomes 0.919–0.922 ms
+versus 1.662–2.225 ms; the 99th percentile of user p99s becomes 1.570–1.584 ms
+versus 3.669–4.428 ms. CPU/message rises about 11%, and four more server cores
+are provisioned. All 48 million messages and retirement checks pass.
+
+An additional 65-second eight-worker mixed run passes 6.5 million stable
+messages alongside 66,560 churn sessions, heartbeats and unread consumers.
+Pooled stable p99 upper bound is 1.049 ms, maximum 5.982 ms. Exact resource
+retirement and all eight singleton affinities are verified. No runtime code or
+binary changes; the four-worker manual development service remains unchanged.
+
+See [measurements and limits](performance.md#eight-worker-latency-operating-profile-2026-10-17)
+and [operating recipe](operations.md#eight-worker-low-latency-profile). A separate
+kernel profile has 30,027 samples and zero loss, and guides further investigation;
+its timings are excluded from the ordinary comparison.
+
 ## Latest investigation: ready-batch tail latency, 2026-10-17
 
 Measured timer-dispatch maxima below 0.18 ms and ready-socket pass maxima up to

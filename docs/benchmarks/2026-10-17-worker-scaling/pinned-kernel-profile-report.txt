@@ -1,0 +1,164 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 30K of event 'cycles'
+# Event count (approx.): 288098947599
+#
+# Overhead  Command    Shared Object      Symbol                                                                       
+# ........  .........  .................  .............................................................................
+#
+     2.07%  war-io-2   [kernel.kallsyms]  [k] __inet_lookup_established
+            |
+            ---__inet_lookup_established
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               __netif_receive_skb_one_core
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               |          
+                --2.05%--do_softirq.part.0
+                          __local_bh_enable_ip
+                          __dev_queue_xmit
+                          ip_finish_output2
+                          ip_output
+                          __ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          |          
+                           --2.01%--____sys_sendmsg
+                                     ___sys_sendmsg
+                                     __sys_sendmsg
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     0x7feab1aa08f2
+                                     sendmsg
+
+     2.00%  war-io-0   [kernel.kallsyms]  [k] __inet_lookup_established
+            |
+            ---__inet_lookup_established
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               __netif_receive_skb_one_core
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               |          
+                --1.98%--do_softirq.part.0
+                          __local_bh_enable_ip
+                          __dev_queue_xmit
+                          ip_finish_output2
+                          ip_output
+                          __ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          |          
+                           --1.95%--____sys_sendmsg
+                                     ___sys_sendmsg
+                                     __sys_sendmsg
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     0x7feab1aa08f2
+                                     sendmsg
+
+     1.84%  war-io-3   [kernel.kallsyms]  [k] __inet_lookup_established
+            |
+            ---__inet_lookup_established
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               __netif_receive_skb_one_core
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               |          
+                --1.83%--do_softirq.part.0
+                          __local_bh_enable_ip
+                          __dev_queue_xmit
+                          ip_finish_output2
+                          ip_output
+                          __ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          |          
+                           --1.80%--____sys_sendmsg
+                                     ___sys_sendmsg
+                                     __sys_sendmsg
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     0x7feab1aa08f2
+                                     sendmsg
+
+     1.78%  war-io-1   [kernel.kallsyms]  [k] __inet_lookup_established
+            |
+            ---__inet_lookup_established
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               __netif_receive_skb_one_core
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               |          
+                --1.76%--do_softirq.part.0
+                          __local_bh_enable_ip
+                          __dev_queue_xmit
+                          ip_finish_output2
+                          ip_output
+                          __ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          |          
+                           --1.74%--____sys_sendmsg
+                                     ___sys_sendmsg
+                                     __sys_sendmsg
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     0x7feab1aa08f2
+                                     sendmsg
+
+     1.58%  war-io-3   [kernel.kallsyms]  [k] skb_release_data
+            |
+            ---skb_release_data
+
+     1.48%  war-io-2   [kernel.kallsyms]  [k] skb_release_data
+            |
+            ---skb_release_data
+
+     1.45%  war-io-0   [kernel.kallsyms]  [k] skb_release_data
+            |
+            ---skb_release_data
+
+     1.43%  war-io-1   [kernel.kallsyms]  [k] skb_release_data
+            |
+            ---skb_release_data
+
+     1.23%  war-io-1   war-relay          [.] war_relay::relay::ReceiveBatch::receive
+     1.21%  war-io-0   war-relay          [.] war_relay::relay::ReceiveBatch::receive
+     1.20%  war-io-3   war-relay          [.] war_relay::relay::ReceiveBatch::receive
+     1.17%  war-io-2   war-relay          [.] war_relay::relay::ReceiveBatch::receive
+
+
+#
+# (Tip: To show IPC for sampling periods use perf record -e '{cycles,instructions}:S' and then browse context)
+#

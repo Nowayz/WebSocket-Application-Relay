@@ -1054,3 +1054,26 @@ scoped CPU-clock/switch sideband for the fresh server and client processes;
 profiling changes timing and must run separately from ordinary comparisons.
 `scripts/analyze-scheduling.py` analyzes exported switch events. Its off-CPU
 intervals include socket waits and are not direct wakeup latency measurements.
+
+
+### Eight-worker low-latency profile
+
+On the measured host, use eight separate physical server cores when latency
+at 100,000 users / 400,000 1 KiB messages/s takes priority over CPU efficiency:
+
+```sh
+taskset -c 0-7 target/release/war-relay --workers 8 --pin-workers \
+  --max-connections 110000 --ping-interval-secs 15 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536
+```
+
+Compared with four workers on cores 0–3, this lowers the 99th percentile of
+user-level p99s from 3.67–4.43 ms to 1.57–1.58 ms in two rotating matched pairs,
+while increasing CPU/message about 11% and requiring four more server cores.
+This example selects placement, connection headroom and socket buffers; exact
+benchmark commands and their other quota/rate settings are in the raw records.
+Keep normal service protections appropriate to your deployment. Keep load clients and other CPU-heavy work off
+the selected physical cores and their SMT siblings. These CPU IDs describe the
+measured machine; inspect topology before applying them elsewhere. The binary
+and four-worker development service are unchanged. See the
+[measurement and limits](performance.md#eight-worker-latency-operating-profile-2026-10-17).

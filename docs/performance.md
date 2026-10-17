@@ -5908,3 +5908,59 @@ The [evidence manifest](benchmarks/2026-10-17-ready-quantum/manifest.json) binds
 both diagnostic/candidate source patches and binary hashes, raw run records,
 compressed per-user samples and the distribution plot. No new production
 runtime change was retained from this experiment.
+
+
+## Eight-worker latency operating profile (2026-10-17)
+
+A new scoped kernel/user profile of the pinned four-worker relay at 100,000
+users and 400,000 messages/s completes eight million verified messages, with
+30,027 cycle samples and zero lost samples. Self-sample fractions include
+established-socket lookup 7.69%, socket-buffer release 5.94%, receive/routing
+4.81%, IRQ-safe spinlocks 3.63%, connection drive 3.35% and TCP receive 2.97%.
+Kernel CPU is 25.98 of 33.32 measured seconds. Instrumented timing is excluded
+from ordinary comparisons; symbols are not exclusive causal categories or
+predicted speedups. This supports testing additional service capacity for burst
+responsiveness rather than assuming application copies dominate.
+
+The same unchanged executable is tested with four pinned native workers on
+physical CPUs 0–3, versus eight on 0–7. The eight client workers stay on physical
+CPUs 8–15; none share SMT siblings with the server. Fresh processes rotate
+four/eight/eight/four, serially without compilation, profiling or other load.
+Every case has 100,000 users, 16-member rooms, 1 KiB private messages,
+400,000 messages/s for 30 seconds, 15-second heartbeat, 16/64 KiB send/receive
+buffers and 120 exact samples per user.
+
+| Workers / run | Median user p99 ms | 99th percentile of user p99s ms | Worst packet ms | CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| Four / 1 | 1.662 | 3.669 | 6.564 | 4079 |
+| Eight / 1 | 0.919 | 1.570 | 5.944 | 4539 |
+| Eight / 2 | 0.922 | 1.584 | 7.371 | 4558 |
+| Four / 2 | 2.225 | 4.428 | 17.181 | 4103 |
+
+The eight-worker configuration reduces median user p99 by 45–59% and the
+99th percentile of user p99s by 57–64% in the two pairs. Total CPU per verified
+message rises about 11% (4.08–4.10 to 4.54–4.56 microseconds), and it provisions
+four additional server cores. This is a useful trade for the user's latency-first
+priority on this host. Peak-throughput efficiency is not established by the
+fixed-rate test. No code, payload copy, queue, lock or quota change is involved.
+All 48 million timed messages, exact counters, fresh routing, Close/EOF,
+descriptor/kernel retirement and normal exits pass. Rare outliers remain; this
+finite same-host loopback result does not establish a production latency bound,
+WAN/TLS performance or a universal worker count.
+
+The [evidence manifest](benchmarks/2026-10-17-worker-scaling/manifest.json)
+records raw comparisons, per-user samples, topology, CPU costs, plot and the
+separate kernel profile. The four-worker profile remains useful when CPU cost
+or provisioned cores take priority; the eight-worker profile is the measured
+lower-latency choice for this workload.
+
+
+The eight-worker profile also passes a separate 65-second mixed acceptance at
+100,000 stable users and 100,000 stable messages/s, with 66,560 churn joins and
+normal closes, 15-second heartbeats and eight unread pressure peers. All 6.5
+million stable messages pass. Pooled stable p99 remains in the 1.048576 ms
+histogram bucket, maximum is 5.981503 ms, and client scheduling-lag maximum is
+11.792453 ms. Final routing, Close/EOF, exact counters, kernel/descriptor
+retirement and normal exits pass; eight worker affinities remain intact. This
+single mixed run is acceptance evidence, not a matched mixed-load speedup claim.
+The default four-worker local development service is left unchanged.
