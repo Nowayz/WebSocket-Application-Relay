@@ -27,6 +27,12 @@ slow-consumer pressure; pooled p99 upper bound 1.049 ms,max3.937 ms. Binary
 `0067fde4…` is selected. See
 [results and limitations](performance.md#borrowed-synchronous-submissions-2026-10-17).
 
+The idle local development service now runs the selected `0067fde4…` executable
+from runtime source commit `9abbaf6`, preserving its four-worker development
+arguments/environment. Native/legacy routing, Close/EOF, readiness, static page
+availability, singleton affinities and zero final resource gauges pass. This is
+local acceptance, not production deployment or a fresh 100k manual-service test.
+
 The additional 600k client-affinity ablation does not produce a consistent
 latency improvement. It remains a diagnostic intervention,not a selected policy.
 
