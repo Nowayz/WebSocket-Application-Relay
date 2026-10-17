@@ -8,7 +8,46 @@ instruction makes 100,000 simultaneous users an explicit operating target.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: 100,000 users, 2026-10-16
+## Latest verified checkpoint: C10M guidance, 2026-10-17
+
+The [C10M-guided study](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
+adds full kernel/user profiling and a small native socket-interface optimization.
+Application writes use socket `sendmsg` through safe `socket2` wrappers and
+Mio's readiness bookkeeping, with the existing shared bodies, FIFO, partial-write
+offsets and exact budgets. Three 100,000-user overload pairs measure +2.31%
+median completions/s and −3.49% CPU per completion. Dense private throughput is
+0.96% lower with overlapping ranges and 2.71% lower CPU; ordinary fanout medians
+are +1.72% throughput and −1.70% CPU. This is workload-specific evidence, not a
+universal throughput improvement. One million offered messages/s still overloads
+four workers.
+
+The selected native SHA-256 starts `c27ff051`. It passes all 141 Rust tests,
+strict Clippy, formatting, mixed-size fanout through near-1 MiB and near-64 KiB
+packets with the operating profile. Two 65-second 100,000-user mixed runs each
+check 6.5 million stable messages, 66,560 churn sessions, heartbeats, unread-peer
+pressure, final fresh routing through every stable user and complete retirement.
+Both selected runs and a new control repeat have a 1.048576 ms p99 upper bucket.
+Selected stable RTT maxima are 20.906 and 3.174 ms; the first outlier remains
+recorded with the client scheduling-lag observation, without a causal claim.
+
+Per-worker cumulative batches, fixed worker affinity and three queued-write
+batching variants are archived after measurement. The first queued-write variant
+improves throughput but introduces 42 ms tails with tight send buffers; smaller
+variants remove those spikes without a consistent benefit. They are removed.
+The retained implementation adds no connection fields, payload allocation or
+new lock. Linux still owns TCP. Remote/TLS, multi-hour and ten-million-user
+capacity are not established. The [manifest](benchmarks/2026-10-17-c10m.json)
+binds the executable hashes, source snapshots, timings, diagnostics and logs.
+
+The local native test service on port 1338 now runs that frozen executable,
+with the existing legacy bridge on 1337 and static test page on 4180. A real
+32-user native CBOR pulse and an independent raw legacy 4 KiB private-message,
+exact Close acknowledgement and EOF probe pass. Readiness returns HTTP 200;
+sessions, native connections, queued bytes and receive reservations return to
+zero. Its general development arguments/environment and normal CPU set are
+preserved; the separate 100,000-user operating profile remains available.
+
+## Prior verified checkpoint: 100,000 users, 2026-10-16
 
 The [capacity evidence](performance.md#100000-connected-users-2026-10-16)
 now covers real 100,000-user populations, with every welcome ID and full routed

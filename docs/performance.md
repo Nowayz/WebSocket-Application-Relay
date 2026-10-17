@@ -4730,3 +4730,124 @@ allocation or new routing lock, and retains the shared-body/vectored-output
 design. This evidence establishes a usable finite 100,000-user workload on this
 host. It does not establish all-to-all delivery, 100,000 members in one room,
 mass unread clients, WAN/TLS capacity or multi-hour stability.
+
+## C10M guidance and the socket send path, 2026-10-17
+
+The [C10M article](https://highscalability.com/the-secret-to-10-million-concurrent-connections-the-kernel-i/)
+motivates local ownership, compact connection state and amortizing expensive
+boundaries. The relay already has fixed native readiness workers, worker-owned
+receive scratch, lazy bounded queues and shared immutable routing bodies. This
+checkpoint measures additional changes against the actual relay workloads. It
+does not adopt the article's historical packet-rate or connection-count claims
+as WebSocket capacity results. The [current DPDK efficiency guide](https://doc.dpdk.org/guides/prog_guide/writing_efficient_code.html)
+also explains local state and burst processing, including the latency tradeoff.
+
+The [evidence manifest](benchmarks/2026-10-17-c10m.json) records frozen binaries,
+source snapshots, ordinary comparisons, rejected prototypes, full kernel/user
+diagnostics and verification logs. The control is the previous native executable
+`5c22e737…`; the selected executable is `c27ff051…`. Both use the same verifying
+clients. No build, profiler or other benchmark overlaps an ordinary timing trial.
+All measurements use this host's four server cores 0–3. Capacity clients use
+physical cores 4–11, and stress clients use 4–7. These are plaintext loopback
+results on the same Ryzen AI MAX+ 395 host described above.
+
+### Retained implementation
+
+Native application writes now use `socket2::SockRef::send_vectored` through
+`TcpStream::try_io`. The header, CBOR prefix and shared body still use the same
+two borrowed slices. On Linux, this selects the socket `sendmsg` interface in
+place of the general `writev`/VFS path. `try_io` preserves Mio's readiness
+bookkeeping. The existing mutex, immediate-write fast path, partial-write offset,
+FIFO, control/Close handling and exact byte reservations remain in effect.
+The change adds no connection fields, heap buffers, queue or message-path lock.
+It also keeps the Rust crate's `unsafe_code = "forbid"` policy.
+
+Three fresh ordinary repetitions per binary rotate order. CPU cost includes
+the server work within each harness's recorded boundary; the different workload
+rows have different boundaries and must not be compared as one universal cost.
+
+| Workload | Control median | Selected median | Observation |
+| --- | ---: | ---: | --- |
+| 100,000 users, 1 KiB, one million/s offered for 5 s: actual completions/s | 518,029 | 530,016 | +2.31%; all five million planned messages eventually checked in every trial |
+| Same overload: server CPU ns/completion | 5,446 | 5,256 | −3.49%; system CPU median 20.38 → 19.66 s |
+| Dense 64-client private workload: completions/s | 2,446,057 | 2,422,456 | −0.96%; overlapping ranges, 2.440–2.463 versus 2.374–2.462 million/s |
+| Same dense workload: CPU ns/delivery | 1,100.27 | 1,070.47 | −2.71%; both p99 upper buckets 0.524288 ms |
+| 16-member room, 15 healthy readers, 32-message windows: deliveries/s | 797,279 | 810,996 | +1.72%; overlapping ranges |
+| Same fanout workload: CPU ns/delivery | 662.67 | 651.43 | −1.70%; both p99 upper buckets 1.048576 ms |
+
+The overload p99 bucket remains 268.435456 ms, with seconds of scheduling
+backlog. The change does **not** make the offered million/s sustainable. Dense
+and ordinary fanout cases use OS TCP buffer policy; the population overload uses
+the 16 KiB send / 64 KiB receive profile. All compared cases verify complete
+messages, expected counters and retirement. Routing-body copy counters remain
+zero. Kernel TCP copies are a separate boundary from application-body reuse.
+
+An additional single matched pair at 100,000 users and 400,000 offered private
+messages/s checks four million messages per binary over ten seconds. Both
+complete approximately 399,500–399,600/s without accumulating seconds of backlog;
+both p99 upper buckets are 16.777216 ms. Their total server CPU is 15.47 versus
+13.69 s. This one pair is exploratory, with different user/system splits and
+client CPU consumption; it is not a repeated CPU-gain or sub-millisecond claim.
+The selected runtime also passes mixed 32-byte through near-1 MiB fanout bodies
+and the 65,533-byte CBOR packet check with the bounded TCP profile.
+
+Two selected-runtime 65-second population runs each retain 100,000 stable users,
+check 6.5 million stable messages, complete 66,560 additional churn sessions,
+answer heartbeats and run the eight-unread-recipient sidecar. Both repeat a
+fresh routing proof through every stable user and verify normal stable/churn
+Close/EOF and complete resource retirement. Their p99 upper bucket is
+1.048576 ms; the matched control repeat has the same bucket. Stable RTT maxima
+are 20.906 then 3.174 ms, versus 2.963 ms in the control repeat. The first
+selected run also has a 17.893 ms client scheduling-lag maximum. The outlier is
+retained in the evidence; these trials do not isolate its cause or prove a
+long-term tail bound. Sidecar throughput varies substantially with flow/worker
+placement, so it is not used as a paired CPU/throughput result. Intentional
+unread peers may receive capacity Close or a TCP cancellation of a partly
+written frame; all full received frames remain checked.
+
+### Kernel-inclusive diagnostics
+
+`scripts/capacity.py --profile --profile-kernel` records `cycles` and its exact
+command. The existing `--profile` continues to record user-only `cycles:u`.
+Kernel capture requires suitable perf permissions and runs separately from
+ordinary timing. No host sysctl changes are part of the harness.
+
+The control's five-million-message diagnostic loses zero samples. Inclusive
+call chains include `writev` at 53.51%, socket receive at 16.23% and `epoll_wait`
+at 7.48%. These are cycle samples of this loopback workload, including network
+processing in the sampled server context. They are not a general kernel profile
+of a remote deployment. Self samples include established-connection lookup
+5.62%, `fput` 5.24% and `vfs_writev` 3.35%. This evidence motivates removing
+the file-write layer; it does not establish that the application registry lock
+is the dominant bottleneck.
+
+The selected diagnostic also loses zero samples. Its inclusive send call chain
+uses `sendmsg` (51.12%), and the previous prominent VFS write path is absent
+from the displayed report at the 0.5% threshold. These diagnostic percentages
+are not ordinary benchmark throughput. Both full reports and raw-profile hashes
+are retained. TCP, descriptor lookup and readiness processing remain substantial
+costs after the socket-interface change.
+
+### Prototypes removed after measurement
+
+- **Pinning each worker to one CPU:** one exploratory population case does not
+  show an improvement over the existing fixed worker pool and process CPU set.
+  No affinity dependency or production setting is added.
+- **Worker-local cumulative traffic batches:** three population pairs reduce
+  median CPU from 5,452 to 5,402 ns/message, but completion rate falls from
+  524,569 to 517,179/s. The prototype and its lifetime/isolation/unwinding checks
+  are archived; the immediate cumulative counters are retained.
+- **Eight queued frames in one write:** three 4 KiB-send-request fanout pairs
+  improve median throughput 18.65% and CPU about 4.97%, but introduce roughly
+  42 ms maximum latency in all three candidate runs, versus under 3 ms in the
+  controls. This fails the responsiveness requirement.
+- **Smaller queued batches:** a 4 KiB cap removes those spikes. A further
+  variant includes only complete subsequent frames. Each passes functional,
+  partial-write and reservation checks, but their speed/CPU gains are small
+  and inconsistent. Neither justifies the added implementation. All three
+  queued-write variants are removed.
+
+The selected source therefore retains the small socket-interface change and
+the profiling option. Kernel bypass, a user-space TCP stack, huge-page pools
+and a new cross-worker transport model require separate measured work and
+operational acceptance. They are not implemented by this checkpoint.

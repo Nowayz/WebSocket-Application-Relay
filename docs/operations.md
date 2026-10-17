@@ -813,3 +813,32 @@ and bounded pages when browsing a limited part of a large population. The
 [paging measurements](performance.md#bounded-http-channel-pages-2026-10-16)
 record both costs. CBOR channel-query command 2 keeps its existing full-list
 behavior and raw-byte ordering.
+
+## Measuring the native message path
+
+Size a relay for delivered messages and bytes per second, room fanout, churn and
+unread peers alongside its connected population. Use separate client/server
+physical cores when measuring CPU scaling, and record the actual workload and
+TCP buffer requests. A million offered messages/s is not a million completed
+messages/s. Inspect scheduling backlog together with RTT quantiles and CPU.
+
+The capacity harness supports a separate kernel-inclusive diagnostic:
+
+```sh
+python3 scripts/capacity.py \
+  --users 100000 --seconds 5 --messages-per-second 10 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
+  --profile --profile-kernel --output artifacts/kernel-diagnostic.json
+perf report --stdio --no-children -g none \
+  --sort dso,symbol -i artifacts/kernel-diagnostic.perf.data
+```
+
+This starts a disposable local server and requires built native/client binaries,
+sufficient descriptor limits and perf permissions covering kernel events.
+Without `--profile-kernel`, `--profile` captures user cycles only. Run ordinary
+comparisons separately from diagnostics; keep message checks and cleanup enabled.
+For a real NIC, inspect receive/transmit queue placement and CPU topology before
+changing interrupt or flow steering; the [kernel scaling guide](https://docs.kernel.org/networking/scaling.html)
+describes RSS, RPS, RFS and XPS. The [C10M-guided measurements](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
+record the current socket-call improvement and the prototypes removed after
+measurement. They cover loopback without a TLS edge or remote NIC.

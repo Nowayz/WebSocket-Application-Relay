@@ -1,0 +1,80 @@
+diff --git a/src/metrics.rs b/src/metrics.rs
+index 344eaf3..276c5d4 100644
+--- a/src/metrics.rs
++++ b/src/metrics.rs
+@@ -7,6 +7,8 @@ use std::{
+ };
+ use tokio_tungstenite::tungstenite::protocol::ReadBudget;
+ 
++mod traffic;
++
+ #[derive(Default)]
+ pub struct Metrics {
+     pub read_budget: Option<Arc<ReadBudget>>,
+diff --git a/src/relay.rs b/src/relay.rs
+index c1d6403..eb956f2 100644
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -556,10 +556,7 @@ impl Relay {
+         if peer.closing.load(Relaxed) {
+             return Ok(1);
+         }
+-        self.metrics.incoming_messages.fetch_add(1, Relaxed);
+-        self.metrics
+-            .incoming_bytes
+-            .fetch_add(bytes.len() as u64, Relaxed);
++        self.metrics.record_incoming(bytes.len());
+         let (target, value) = protocol::parse(&bytes)?;
+         if target == 0 {
+             return self.control(peer, value).map(|_| 1);
+@@ -590,12 +587,7 @@ impl Relay {
+             && bytes.len().saturating_mul(8) < storage_capacity
+             && !bytes.is_unique();
+         let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+-        let counter = if compact {
+-            &self.metrics.routing_copied_bytes
+-        } else {
+-            &self.metrics.routing_reused_bytes
+-        };
+-        counter.fetch_add(frame.payload().len() as u64, Relaxed);
++        self.metrics.record_routed(frame.payload().len(), compact);
+         if let Some(recipient) = private_recipient
+             && state.listeners(PRIVATE_MESSAGE).is_empty()
+         {
+diff --git a/src/server.rs b/src/server.rs
+index 8237951..9f65dba 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -431,6 +431,8 @@ impl Worker {
+     fn run(mut self) -> Result<()> {
+         let mut events = Events::with_capacity(1024);
+         let mut shutdown_deadline = None;
++        let metrics = self.relay.metrics.clone();
++        let traffic = metrics.batch_traffic();
+         loop {
+             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
+                 if self.accept_retry.take().is_none() {
+@@ -523,6 +525,7 @@ impl Worker {
+                     }
+                 }
+             }
++            traffic.publish();
+             if shutdown_deadline.is_some() && self.connections.is_empty() {
+                 break;
+             }
+diff --git a/src/server/socket.rs b/src/server/socket.rs
+index 40d8f4d..39c7c3b 100644
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -151,10 +151,7 @@ impl Socket {
+     }
+ 
+     fn delivered(&self, packet: &Envelope, state: &mut State) {
+-        self.metrics.deliveries.fetch_add(1, Relaxed);
+-        self.metrics
+-            .delivered_bytes
+-            .fetch_add(packet.frame.len() as u64, Relaxed);
++        self.metrics.record_delivery(packet.frame.len());
+         if self.track_activity {
+             state.activity = Instant::now();
+         }

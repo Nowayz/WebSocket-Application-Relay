@@ -249,9 +249,11 @@ def run(args):
                     path = args.output.with_suffix(".perf.data")
                     assert not path.exists(), "use a fresh profile path"
                     perf_log = tempfile.TemporaryFile()
-                    perf = subprocess.Popen(["perf", "record", "-e", "cycles:u", "-F", "499",
-                        "--call-graph", "dwarf,8192", "-p", str(server.pid), "-o", str(path)],
-                        stdout=perf_log, stderr=perf_log)
+                    event_name = "cycles" if args.profile_kernel else "cycles:u"
+                    command = ["perf", "record", "-e", event_name, "-F", "499",
+                        "--call-graph", "dwarf,8192", "-p", str(server.pid), "-o", str(path)]
+                    result["profile_command"] = command
+                    perf = subprocess.Popen(command, stdout=perf_log, stderr=perf_log)
                     time.sleep(.2)
                     assert perf.poll() is None, "perf could not attach"
                     result["profile_path"] = str(path)
@@ -326,6 +328,8 @@ if __name__ == "__main__":
     parser.add_argument("--tcp-receive-buffer-bytes", type=int, default=0)
     parser.add_argument("--connection-headroom", type=int, default=0)
     parser.add_argument("--profile", action="store_true", help="Separate diagnostic perf capture; not an ordinary timing trial")
+    parser.add_argument("--profile-kernel", action="store_true",
+                        help="Include kernel cycles in --profile; requires suitable perf permissions")
     parser.add_argument("--pressure-client", type=Path, help="Verified stress client: eight unread recipients beside the stable population")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--server-cpus", default="0-3")
@@ -341,6 +345,8 @@ if __name__ == "__main__":
         parser.error("payload-bytes must be in 16..=65520, allowing envelope headroom")
     if args.profile and args.waves != 1:
         parser.error("use a single wave for an isolated diagnostic profile")
+    if args.profile_kernel and not args.profile:
+        parser.error("--profile-kernel requires --profile")
     if args.pressure_client and (args.waves != 1 or args.seconds < 25 or args.profile):
         parser.error("pressure requires one ordinary wave lasting at least 25 seconds")
     if args.connection_headroom < 0:

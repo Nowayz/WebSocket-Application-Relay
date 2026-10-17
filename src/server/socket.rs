@@ -181,7 +181,7 @@ impl Socket {
         let mut remaining = WRITE_QUANTUM;
         while let Some(mut pending) = state.queue.pop_front() {
             match write_frame(
-                &mut state.stream,
+                &mut SocketWriter(&state.stream),
                 &pending.packet.frame,
                 &mut pending.offset,
                 remaining,
@@ -250,7 +250,12 @@ impl PeerOutput for Socket {
         }
         let mut offset = 0;
         if state.queue.is_empty() && !state.control_pending {
-            match write_frame(&mut state.stream, &packet.frame, &mut offset, WRITE_QUANTUM) {
+            match write_frame(
+                &mut SocketWriter(&state.stream),
+                &packet.frame,
+                &mut offset,
+                WRITE_QUANTUM,
+            ) {
                 Ok(_) if offset == wire_len(&packet.frame) => {
                     self.delivered(&packet, &mut state);
                     return true;
@@ -395,6 +400,25 @@ fn wire_len(frame: &Frame) -> usize {
             126..=65535 => 4,
             _ => 10,
         }
+}
+
+/// Use the socket send interface rather than the general file write path.
+/// `try_io` retains Mio's platform-specific WouldBlock/readiness bookkeeping.
+struct SocketWriter<'a>(&'a TcpStream);
+
+impl Write for SocketWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.try_io(|| socket2::SockRef::from(self.0).send(bytes))
+    }
+
+    fn write_vectored(&mut self, slices: &[IoSlice<'_>]) -> io::Result<usize> {
+        self.0
+            .try_io(|| socket2::SockRef::from(self.0).send_vectored(slices))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// The body is never assembled into a new contiguous message. Short writes
