@@ -6050,3 +6050,70 @@ PID capture at 499 Hz, along with normal routing, affinity and retirement gates.
 The joint mode has the larger 100,000-user acceptance above. Python compilation
 and repository whitespace checks pass; the relay source/binary is unchanged, so
 this checkpoint does not rerun or supersede the prior Rust implementation suite.
+
+
+## Borrowed synchronous submissions (2026-10-17)
+
+Previously every output submission cloned the frame's shared body owner and its
+budget owner before attempting an immediate write. The selected change uses a
+charged `Submission` borrowing both owners during the synchronous transport call.
+Backpressure promotes it to an owned `Envelope`, retaining the original body
+without copying it. The same per-peer/global reservations are acquired before
+any write, then released by either form on completion, failure or cancellation.
+The native queue still owns its frame, byte reservation and partial-write offset.
+This removes ordinary owner-clone/drop operations without changing protocol,
+FIFO, hard quotas, readiness, admission or queue layout. No unsafe code is added.
+
+Two focused tests establish that the immediate path leaves the body uniquely
+owned and does not increase the budget's strong-owner count while its bytes are
+charged. The deferred path retains the exact body pointer and keeps its charge
+after peer retirement until the held output drops. All 138 tests, strict all-target
+Clippy, formatting and release build pass. The independent corpus passes 776
+cases / 2,311 scheduled exchanges in its supported four-worker mode. Eight-worker
+capacity tests provide the separate large-population coverage.
+
+The same frozen client compares old/new/new/old fresh processes, first at 400k
+and then 600k messages/s. Each run has 100,000 users, 1 KiB private messages,
+16-member rooms, 30 seconds, heartbeat 15s, eight pinned server workers on
+physical cores 0–7 and eight client workers allowed on physical cores 8–15,
+16/64 KiB TCP send/receive buffers. No builds, profiling or competing load
+interrupt ordinary timing. All 120 million matched messages and retirement
+checks pass; per-user statistics use 120 or 180 exact samples.
+
+| Rate/pair | CPU ns/message old → borrowed | 99th percentile of user p99s ms old → borrowed | Worst packet ms old → borrowed |
+| --- | ---: | ---: | ---: |
+| 400k / 1 | 4573 → 4465 | 1.424 → 1.842 | 4.702 → 13.549 |
+| 400k / reverse | 4548 → 4448 | 2.265 → 1.479 | 18.395 → 14.753 |
+| 600k / 1 | 4930 → 4761 | 7.567 → 6.589 | 20.083 → 15.699 |
+| 600k / reverse | 4880 → 4856 | 31.846 → 28.697 | 47.320 → 59.256 |
+
+CPU/message is lower in all four matched pairs, by 0.5–3.4%. This is the selected
+benefit; the result does not establish universal CPU savings. User-tail ranking
+reverses at 400k, and median/max latency remains variable at 600k. Although the
+99th percentile of user p99s improves in both 600k pairs, the change does not
+remove the latency knee or establish uniformly lower latency. The measured
+400k eight-worker operating recommendation remains unchanged. The new version
+is selected for less ownership work and the repeated CPU saving, not a hard
+latency claim or permission to increase offered load.
+
+A separate 65-second eight-worker mixed run passes 100,000 stable users,
+6.5 million stable messages, 66,560 churn sessions, heartbeats and eight unread
+pressure peers. Pooled stable p99 is in the 1.048576 ms histogram bucket, max
+3.937426 ms; final routing, Close/EOF, exact counters, all worker affinities and
+kernel/descriptor retirement pass. This single acceptance run is not a matched
+mixed-load speedup claim.
+
+A separate client-placement ablation at 600k/s verifies 72 million messages in
+unbound/pinned/pinned/unbound order. Median user p99 is 6.195/22.399/2.935/14.722
+ms; the 99th percentile of user p99s is 13.185/34.793/6.645/23.275 ms. Singleton
+client affinity does not consistently remove the variability, so it is not
+selected as a new load-generation policy. This is a client intervention, not a
+relay performance change.
+
+The [evidence archive](benchmarks/2026-10-17-borrowed-submission/manifest.json)
+contains exact source/build hashes, replayable patch, all matched traces,
+per-user CSVs, inspected actual/intended-send plots and verification logs. A
+failed initial candidate launch lacked executable permission; a fresh complete
+v2 comparison replaces that incomplete set. Initial test-helper compilation and
+unsupported corpus CLI attempts are retained with their corrected successful
+checks, separately from runtime acceptance. Selected binary: `0067fde4…`.

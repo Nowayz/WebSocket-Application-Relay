@@ -1,5 +1,5 @@
 use super::*;
-use crate::relay::{Envelope, PeerOutput};
+use crate::relay::{PeerOutput, Submission};
 use std::sync::atomic::AtomicUsize;
 use tungstenite::protocol::Role;
 
@@ -9,7 +9,7 @@ struct Sequence {
 }
 
 impl PeerOutput for Sequence {
-    fn send(&self, packet: Envelope) -> bool {
+    fn send(&self, packet: Submission<'_>) -> bool {
         if !packet.frame.payload().is_empty() {
             let bytes = packet.frame.to_vec();
             let (sender, value) = protocol::parse(&bytes).unwrap();

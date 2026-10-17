@@ -214,10 +214,42 @@ pub(crate) struct Envelope {
     budget: Arc<Budget>,
 }
 
+/// A charged synchronous submission borrows its owners. Only deferred output
+/// promotes it to an owned envelope; either form releases the same reservation.
+pub(crate) struct Submission<'a> {
+    pub frame: &'a Frame,
+    budget: Option<&'a Arc<Budget>>,
+}
+
+impl Submission<'_> {
+    pub(crate) fn into_owned(mut self) -> Envelope {
+        let budget = self.budget.take().expect("live submission").clone();
+        Envelope {
+            frame: self.frame.clone(),
+            budget,
+        }
+    }
+}
+
+impl Drop for Submission<'_> {
+    fn drop(&mut self) {
+        if let Some(budget) = self.budget {
+            budget.release(self.frame.len());
+        }
+    }
+}
+
+impl Budget {
+    fn release(&self, bytes: usize) {
+        self.used.fetch_sub(bytes, Relaxed);
+        self.metrics.queued_bytes.fetch_sub(bytes, Relaxed);
+    }
+}
+
 /// A transport owns ordering and backpressure. Sending never waits for socket
 /// readiness, and close only signals the owning I/O loop.
 pub(crate) trait PeerOutput: Send + Sync {
-    fn send(&self, packet: Envelope) -> bool;
+    fn send(&self, packet: Submission<'_>) -> bool;
     fn close(&self, reason: Disconnect);
 }
 
@@ -229,8 +261,8 @@ struct AsyncOutput {
 
 #[cfg(test)]
 impl PeerOutput for AsyncOutput {
-    fn send(&self, packet: Envelope) -> bool {
-        self.outgoing.try_send(packet).is_ok()
+    fn send(&self, packet: Submission<'_>) -> bool {
+        self.outgoing.try_send(packet.into_owned()).is_ok()
     }
 
     fn close(&self, reason: Disconnect) {
@@ -240,11 +272,7 @@ impl PeerOutput for AsyncOutput {
 
 impl Drop for Envelope {
     fn drop(&mut self) {
-        self.budget.used.fetch_sub(self.frame.len(), Relaxed);
-        self.budget
-            .metrics
-            .queued_bytes
-            .fetch_sub(self.frame.len(), Relaxed);
+        self.budget.release(self.frame.len());
     }
 }
 
@@ -288,9 +316,9 @@ impl Peer {
             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
             return Err(Disconnect::OVERLOADED);
         }
-        let packet = Envelope {
-            frame: frame.clone(),
-            budget: self.budget.clone(),
+        let packet = Submission {
+            frame,
+            budget: Some(&self.budget),
         };
         if !self.output.send(packet) {
             self.overloaded();
@@ -1703,5 +1731,64 @@ mod tests {
         relay.receive(&second.registration.peer, request).unwrap();
         drop(second);
         assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn synchronous_submission_borrows_owners_and_releases_charged_bytes() {
+        struct BorrowProbe;
+        impl PeerOutput for BorrowProbe {
+            fn send(&self, packet: Submission<'_>) -> bool {
+                let budget = packet.budget.expect("charged submission");
+                assert_eq!(
+                    Arc::strong_count(budget),
+                    1,
+                    "synchronous budget was cloned"
+                );
+                assert_eq!(budget.used.load(Relaxed), packet.frame.len());
+                assert_eq!(
+                    budget.metrics.queued_bytes.load(Relaxed),
+                    packet.frame.len()
+                );
+                if !packet.frame.payload().is_empty() {
+                    assert!(
+                        packet.frame.has_unique_payload(),
+                        "synchronous body was cloned"
+                    );
+                }
+                true
+            }
+            fn close(&self, _: Disconnect) {}
+        }
+        let relay = Relay::new(config()).unwrap();
+        let registration = relay
+            .subscribe_with_output(b"borrow", Arc::new(BorrowProbe))
+            .unwrap();
+        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
+        registration.peer.enqueue_frame(&frame).unwrap();
+        assert!(frame.has_unique_payload());
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn deferred_submission_promotes_same_body_and_holds_reservation_through_retirement() {
+        let relay = Relay::new(config()).unwrap();
+        let mut subscription = relay.subscribe(b"defer").unwrap();
+        drop(subscription.outgoing.try_recv().unwrap());
+        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
+        let pointer = frame.payload().as_ptr();
+        subscription
+            .registration
+            .peer
+            .enqueue_frame(&frame)
+            .unwrap();
+        let held = subscription.outgoing.try_recv().unwrap();
+        assert_eq!(held.frame.payload().as_ptr(), pointer);
+        assert_eq!(Arc::strong_count(&held.budget), 2);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
+        drop(subscription);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
+        drop(held);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        assert!(frame.has_unique_payload());
     }
 }

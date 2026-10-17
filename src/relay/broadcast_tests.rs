@@ -7,14 +7,14 @@ struct Probe {
 }
 
 impl PeerOutput for Probe {
-    fn send(&self, packet: Envelope) -> bool {
+    fn send(&self, packet: Submission<'_>) -> bool {
         if packet.frame.payload().len() > 100 {
             let relay = self.relay.upgrade().unwrap();
             assert!(
                 relay.state.try_write().is_some(),
                 "broadcast output must run after releasing the registry"
             );
-            self.received.lock().replace(packet);
+            self.received.lock().replace(packet.into_owned());
         }
         true
     }
@@ -187,7 +187,7 @@ fn uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners() {
 fn a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave() {
     struct Discard;
     impl PeerOutput for Discard {
-        fn send(&self, _: Envelope) -> bool {
+        fn send(&self, _: Submission<'_>) -> bool {
             true
         }
         fn close(&self, _: Disconnect) {}

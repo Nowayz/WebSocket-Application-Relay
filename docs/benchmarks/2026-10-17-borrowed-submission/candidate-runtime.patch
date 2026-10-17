@@ -1,0 +1,285 @@
+diff --git a/src/frame.rs b/src/frame.rs
+index 021be2c..7a804d2 100644
+--- a/src/frame.rs
++++ b/src/frame.rs
+@@ -107,6 +107,11 @@ impl Frame {
+         &self.prefix[..usize::from(self.prefix_len)]
+     }
+ 
++    #[cfg(test)]
++    pub(crate) fn has_unique_payload(&self) -> bool {
++        self.payload.is_unique()
++    }
++
+     pub(crate) fn payload(&self) -> &[u8] {
+         &self.payload
+     }
+diff --git a/src/relay.rs b/src/relay.rs
+index 6e3b439..3c29dce 100644
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -214,10 +214,42 @@ pub(crate) struct Envelope {
+     budget: Arc<Budget>,
+ }
+ 
++/// A charged synchronous submission borrows its owners. Only deferred output
++/// promotes it to an owned envelope; either form releases the same reservation.
++pub(crate) struct Submission<'a> {
++    pub frame: &'a Frame,
++    budget: Option<&'a Arc<Budget>>,
++}
++
++impl Submission<'_> {
++    pub(crate) fn into_owned(mut self) -> Envelope {
++        let budget = self.budget.take().expect("live submission").clone();
++        Envelope {
++            frame: self.frame.clone(),
++            budget,
++        }
++    }
++}
++
++impl Drop for Submission<'_> {
++    fn drop(&mut self) {
++        if let Some(budget) = self.budget {
++            budget.release(self.frame.len());
++        }
++    }
++}
++
++impl Budget {
++    fn release(&self, bytes: usize) {
++        self.used.fetch_sub(bytes, Relaxed);
++        self.metrics.queued_bytes.fetch_sub(bytes, Relaxed);
++    }
++}
++
+ /// A transport owns ordering and backpressure. Sending never waits for socket
+ /// readiness, and close only signals the owning I/O loop.
+ pub(crate) trait PeerOutput: Send + Sync {
+-    fn send(&self, packet: Envelope) -> bool;
++    fn send(&self, packet: Submission<'_>) -> bool;
+     fn close(&self, reason: Disconnect);
+ }
+ 
+@@ -229,8 +261,8 @@ struct AsyncOutput {
+ 
+ #[cfg(test)]
+ impl PeerOutput for AsyncOutput {
+-    fn send(&self, packet: Envelope) -> bool {
+-        self.outgoing.try_send(packet).is_ok()
++    fn send(&self, packet: Submission<'_>) -> bool {
++        self.outgoing.try_send(packet.into_owned()).is_ok()
+     }
+ 
+     fn close(&self, reason: Disconnect) {
+@@ -240,11 +272,7 @@ impl PeerOutput for AsyncOutput {
+ 
+ impl Drop for Envelope {
+     fn drop(&mut self) {
+-        self.budget.used.fetch_sub(self.frame.len(), Relaxed);
+-        self.budget
+-            .metrics
+-            .queued_bytes
+-            .fetch_sub(self.frame.len(), Relaxed);
++        self.budget.release(self.frame.len());
+     }
+ }
+ 
+@@ -288,9 +316,9 @@ impl Peer {
+             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+             return Err(Disconnect::OVERLOADED);
+         }
+-        let packet = Envelope {
+-            frame: frame.clone(),
+-            budget: self.budget.clone(),
++        let packet = Submission {
++            frame,
++            budget: Some(&self.budget),
+         };
+         if !self.output.send(packet) {
+             self.overloaded();
+@@ -1704,4 +1732,63 @@ mod tests {
+         drop(second);
+         assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
+     }
++
++    #[test]
++    fn synchronous_submission_borrows_owners_and_releases_charged_bytes() {
++        struct BorrowProbe;
++        impl PeerOutput for BorrowProbe {
++            fn send(&self, packet: Submission<'_>) -> bool {
++                let budget = packet.budget.expect("charged submission");
++                assert_eq!(
++                    Arc::strong_count(budget),
++                    1,
++                    "synchronous budget was cloned"
++                );
++                assert_eq!(budget.used.load(Relaxed), packet.frame.len());
++                assert_eq!(
++                    budget.metrics.queued_bytes.load(Relaxed),
++                    packet.frame.len()
++                );
++                if !packet.frame.payload().is_empty() {
++                    assert!(
++                        packet.frame.has_unique_payload(),
++                        "synchronous body was cloned"
++                    );
++                }
++                true
++            }
++            fn close(&self, _: Disconnect) {}
++        }
++        let relay = Relay::new(config()).unwrap();
++        let registration = relay
++            .subscribe_with_output(b"borrow", Arc::new(BorrowProbe))
++            .unwrap();
++        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
++        registration.peer.enqueue_frame(&frame).unwrap();
++        assert!(frame.has_unique_payload());
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    }
++
++    #[test]
++    fn deferred_submission_promotes_same_body_and_holds_reservation_through_retirement() {
++        let relay = Relay::new(config()).unwrap();
++        let mut subscription = relay.subscribe(b"defer").unwrap();
++        drop(subscription.outgoing.try_recv().unwrap());
++        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
++        let pointer = frame.payload().as_ptr();
++        subscription
++            .registration
++            .peer
++            .enqueue_frame(&frame)
++            .unwrap();
++        let held = subscription.outgoing.try_recv().unwrap();
++        assert_eq!(held.frame.payload().as_ptr(), pointer);
++        assert_eq!(Arc::strong_count(&held.budget), 2);
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
++        drop(subscription);
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
++        drop(held);
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++        assert!(frame.has_unique_payload());
++    }
+ }
+diff --git a/src/relay/broadcast_tests.rs b/src/relay/broadcast_tests.rs
+index 61e56b3..5b27b9e 100644
+--- a/src/relay/broadcast_tests.rs
++++ b/src/relay/broadcast_tests.rs
+@@ -7,14 +7,14 @@ struct Probe {
+ }
+ 
+ impl PeerOutput for Probe {
+-    fn send(&self, packet: Envelope) -> bool {
++    fn send(&self, packet: Submission<'_>) -> bool {
+         if packet.frame.payload().len() > 100 {
+             let relay = self.relay.upgrade().unwrap();
+             assert!(
+                 relay.state.try_write().is_some(),
+                 "broadcast output must run after releasing the registry"
+             );
+-            self.received.lock().replace(packet);
++            self.received.lock().replace(packet.into_owned());
+         }
+         true
+     }
+@@ -187,7 +187,7 @@ fn uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners() {
+ fn a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave() {
+     struct Discard;
+     impl PeerOutput for Discard {
+-        fn send(&self, _: Envelope) -> bool {
++        fn send(&self, _: Submission<'_>) -> bool {
+             true
+         }
+         fn close(&self, _: Disconnect) {}
+diff --git a/src/server/fairness_tests.rs b/src/server/fairness_tests.rs
+index c37eff5..82b9550 100644
+--- a/src/server/fairness_tests.rs
++++ b/src/server/fairness_tests.rs
+@@ -1,5 +1,5 @@
+ use super::*;
+-use crate::relay::{Envelope, PeerOutput};
++use crate::relay::{PeerOutput, Submission};
+ use std::sync::atomic::AtomicUsize;
+ use tungstenite::protocol::Role;
+ 
+@@ -9,7 +9,7 @@ struct Sequence {
+ }
+ 
+ impl PeerOutput for Sequence {
+-    fn send(&self, packet: Envelope) -> bool {
++    fn send(&self, packet: Submission<'_>) -> bool {
+         if !packet.frame.payload().is_empty() {
+             let bytes = packet.frame.to_vec();
+             let (sender, value) = protocol::parse(&bytes).unwrap();
+diff --git a/src/server/socket.rs b/src/server/socket.rs
+index f68c851..f4e13b8 100644
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -22,7 +22,7 @@ use crate::{
+     frame::Frame,
+     metrics::Metrics,
+     protocol::Disconnect,
+-    relay::{Envelope, PeerOutput},
++    relay::{Envelope, PeerOutput, Submission},
+ };
+ 
+ pub(super) const WRITE_QUANTUM: usize = 256 * 1024;
+@@ -150,11 +150,11 @@ impl Socket {
+         }
+     }
+ 
+-    fn delivered(&self, packet: &Envelope, state: &mut State) {
++    fn delivered(&self, frame: &Frame, state: &mut State) {
+         self.metrics.deliveries.fetch_add(1, Relaxed);
+         self.metrics
+             .delivered_bytes
+-            .fetch_add(packet.frame.len() as u64, Relaxed);
++            .fetch_add(frame.len() as u64, Relaxed);
+         if self.track_activity {
+             state.activity = Instant::now();
+         }
+@@ -189,7 +189,7 @@ impl Socket {
+                 Ok(written) => {
+                     remaining -= written;
+                     if pending.offset == wire_len(&pending.packet.frame) {
+-                        self.delivered(&pending.packet, &mut state);
++                        self.delivered(&pending.packet.frame, &mut state);
+                     } else {
+                         state.queue.push_front(pending);
+                     }
+@@ -240,7 +240,7 @@ impl Socket {
+ }
+ 
+ impl PeerOutput for Socket {
+-    fn send(&self, packet: Envelope) -> bool {
++    fn send(&self, packet: Submission<'_>) -> bool {
+         let mut state = self.state.lock();
+         if state.closed || state.fatal || state.requested.is_some() {
+             return true;
+@@ -252,12 +252,12 @@ impl PeerOutput for Socket {
+         if state.queue.is_empty() && !state.control_pending {
+             match write_frame(
+                 &mut SocketWriter(&state.stream),
+-                &packet.frame,
++                packet.frame,
+                 &mut offset,
+                 WRITE_QUANTUM,
+             ) {
+-                Ok(_) if offset == wire_len(&packet.frame) => {
+-                    self.delivered(&packet, &mut state);
++                Ok(_) if offset == wire_len(packet.frame) => {
++                    self.delivered(packet.frame, &mut state);
+                     return true;
+                 }
+                 Ok(_) => {}
+@@ -273,7 +273,7 @@ impl PeerOutput for Socket {
+         let first = state.queue.is_empty();
+         let old_capacity = state.queue.capacity();
+         state.queue.push_back(Pending {
+-            packet,
++            packet: packet.into_owned(),
+             offset,
+             deadline: Instant::now() + self.write_timeout,
+         });

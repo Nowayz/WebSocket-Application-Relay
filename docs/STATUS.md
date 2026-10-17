@@ -11,6 +11,25 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest selected runtime: borrowed synchronous submissions, 2026-10-17
+
+Synchronous sends now borrow frame/budget owners while keeping byte reservations
+charged before writing. Deferred writes promote to the existing owned envelope
+and retain the same body and charge through completion/retirement. Focused owner,
+pointer and quota-lifetime checks, all 138 tests, strict Clippy/fmt and independent
+776-case / 2,311-exchange corpus pass. No unsafe code or new packet buffer.
+
+Eight matched 100,000-user runs at 400k/600k verify 120 million messages. CPU per
+message is lower in every pair by 0.5–3.4%; latency remains variable and the
+400k eight-worker operating recommendation is retained. A separate 65-second
+mixed run passes 6.5 million stable messages,66,560 churn sessions, heartbeat and
+slow-consumer pressure; pooled p99 upper bound 1.049 ms,max3.937 ms. Binary
+`0067fde4…` is selected. See
+[results and limitations](performance.md#borrowed-synchronous-submissions-2026-10-17).
+
+The additional 600k client-affinity ablation does not produce a consistent
+latency improvement. It remains a diagnostic intervention,not a selected policy.
+
 ## Latest diagnosis: joint client/server profile, 2026-10-17
 
 A separate 600k/s, 100,000-user, 20-second joint profile passes 12 million verified

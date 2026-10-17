@@ -1,0 +1,40 @@
+    Checking war-relay v0.1.0 (/home/phil/dev/war_next)
+error[E0599]: no method named `is_unique` found for reference `&[u8]` in the current scope
+    --> src/relay.rs:1768:33
+     |
+1768 |         assert!(frame.payload().is_unique());
+     |                                 ^^^^^^^^^
+     |
+help: there is a method `is_nil` with a similar name
+     |
+1768 -         assert!(frame.payload().is_unique());
+1768 +         assert!(frame.payload().is_nil());
+     |
+
+error[E0599]: no method named `is_unique` found for reference `&[u8]` in the current scope
+    --> src/relay.rs:1754:48
+     |
+1754 |                         packet.frame.payload().is_unique(),
+     |                                                ^^^^^^^^^
+     |
+help: there is a method `is_nil` with a similar name
+     |
+1754 -                         packet.frame.payload().is_unique(),
+1754 +                         packet.frame.payload().is_nil(),
+     |
+
+error[E0599]: no method named `is_unique` found for reference `&[u8]` in the current scope
+    --> src/relay.rs:1792:33
+     |
+1792 |         assert!(frame.payload().is_unique());
+     |                                 ^^^^^^^^^
+     |
+help: there is a method `is_nil` with a similar name
+     |
+1792 -         assert!(frame.payload().is_unique());
+1792 +         assert!(frame.payload().is_nil());
+     |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `war-relay` (lib test) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -34,7 +34,10 @@ Native sockets run on readiness workers with shared receive storage and direct
 vectored output. Idle sockets own no receive slab or message channel. A worker
 keeps one base-size slab; partial frames retain their own storage, and oversized
 completed slabs retire before reuse by another connection. Published payloads
-keep their immutable owner. `--read-buffer-idle-secs` additionally controls quiet
+keep their immutable owner. Synchronous output borrows the frame and reservation
+owners; deferred output retains owned handles to the same body. Byte reservations
+are charged before writing and held until completion or cancellation.
+`--read-buffer-idle-secs` additionally controls quiet
 decoder/fragment high-water reclamation. The storage hooks and source provenance
 are documented in [vendor/README.md](vendor/README.md).
 

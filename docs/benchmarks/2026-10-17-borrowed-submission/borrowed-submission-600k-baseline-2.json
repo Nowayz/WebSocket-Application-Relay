@@ -1,0 +1,2174 @@
+{
+  "timestamp_utc": "2026-10-17T21:15:44.170025+00:00",
+  "host": "Linux-7.2.9-arch1-1-x86_64-with-glibc2.44",
+  "server_command": [
+    "taskset",
+    "-c",
+    "0-7",
+    "/home/phil/dev/war_next/artifacts/candidates/worker-affinity/war-relay",
+    "--bind",
+    "127.0.0.1:47651",
+    "--admin-bind",
+    "127.0.0.1:49719",
+    "--workers",
+    "8",
+    "--max-connections",
+    "100000",
+    "--max-channels",
+    "6251",
+    "--max-message-bytes",
+    "65536",
+    "--queue-bytes",
+    "262144",
+    "--total-read-buffer-bytes",
+    "268435456",
+    "--messages-per-second",
+    "0",
+    "--bytes-per-second",
+    "0",
+    "--ping-interval-secs",
+    "15",
+    "--disable-global-broadcast",
+    "--pin-workers",
+    "--tcp-send-buffer-bytes",
+    "16384",
+    "--tcp-receive-buffer-bytes",
+    "65536"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "8-15",
+    "/home/phil/dev/war_next/artifacts/candidates/latency-timeline-client/capacity",
+    "--url",
+    "ws://127.0.0.1:47651",
+    "--users",
+    "100000",
+    "--room-size",
+    "16",
+    "--concurrency",
+    "64",
+    "--source-addresses",
+    "64",
+    "--seconds",
+    "30",
+    "--payload-bytes",
+    "1024",
+    "--active-percent",
+    "100",
+    "--client-workers",
+    "8",
+    "--messages-per-second",
+    "6",
+    "--churn-workers",
+    "0",
+    "--waves",
+    "1",
+    "--user-latency-output",
+    "/home/phil/dev/war_next/artifacts/borrowed-submission-600k-baseline-2.csv"
+  ],
+  "server_sha256": "d505a4b7b477e229f8950d96d546dc608fe46f2d40a11b7c7220549dda3c355f",
+  "client_sha256": "888485f3b416a452ceae006d96eaa38f01696bb49af2e6187d4da3f65c528a82",
+  "client_source_sha256": "f1e3d676873aa2e8256acc1902c91739a3b69d4c2813799204ba95e915d0e99e",
+  "runner_sha256": "50c66b608b88c7871cfc1cf682ecc396089216b40acc35449d4fa707a39b9123",
+  "runner_sources_sha256": {
+    "scripts/capacity.py": "50c66b608b88c7871cfc1cf682ecc396089216b40acc35449d4fa707a39b9123",
+    "scripts/capacity_pressure.py": "0eb55b9d8439764acd8f517b0c34803fef69553c2107b6c538c531c3fec6c42d",
+    "scripts/benchmark.py": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce"
+  },
+  "source_attribution": "Source snapshot; binary association requires the accompanying build record.",
+  "fd_limit": [
+    524288,
+    524288
+  ],
+  "ephemeral_ports": "32768\t60999",
+  "profile_diagnostic": false,
+  "args": {
+    "server": "artifacts/candidates/worker-affinity/war-relay",
+    "client": "artifacts/candidates/latency-timeline-client/capacity",
+    "server_preload": null,
+    "users": 100000,
+    "room_size": 16,
+    "concurrency": 64,
+    "source_addresses": 64,
+    "seconds": 30,
+    "waves": 1,
+    "payload_bytes": 1024,
+    "active_percent": 100,
+    "client_workers": 8,
+    "messages_per_second": 6,
+    "user_latency_output": "artifacts/borrowed-submission-600k-baseline-2.csv",
+    "churn_workers": 0,
+    "ping_interval_secs": 15,
+    "tcp_send_buffer_bytes": 16384,
+    "tcp_receive_buffer_bytes": 65536,
+    "connection_headroom": 0,
+    "pin_workers": true,
+    "pin_server_workers": false,
+    "pin_client_workers": false,
+    "profile": false,
+    "profile_client": false,
+    "profile_frequency": 499,
+    "profile_scheduling": false,
+    "profile_kernel": false,
+    "pressure_client": null,
+    "workers": 8,
+    "read_storage": "worker",
+    "server_cpus": "0-7",
+    "client_cpus": "8-15",
+    "timeout": 240,
+    "output": "artifacts/borrowed-submission-600k-baseline-2.json"
+  },
+  "events": [
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 900000,
+        "deliveries": 100000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 0,
+        "sent_bytes": 0,
+        "sent_messages": 0,
+        "value_bytes": 0
+      },
+      "details": {
+        "rooms": 6250,
+        "setup_seconds": 0.912068399,
+        "users": 100000
+      },
+      "event": "connected",
+      "wave": 1,
+      "read_allowance_bound": 65536,
+      "exact_counter_checks": {
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_accepted_total": 100000,
+        "war_joined_total": 100000,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 0,
+        "war_incoming_bytes_total": 0,
+        "war_deliveries_total": 100000,
+        "war_delivered_bytes_total": 900000,
+        "war_routing_reused_bytes_total": 0,
+        "war_routing_copied_bytes_total": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_join_rejected_total": 0,
+        "war_rejected_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_close_failures_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_global_pressure_total": 0,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_idle_timeouts_total": 0
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 0,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 0,
+        "war_incoming_bytes_total": 0,
+        "war_deliveries_total": 100000,
+        "war_delivered_bytes_total": 900000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "server": {
+        "VmSize": 617408,
+        "VmRSS": 113112,
+        "RssAnon": 108320,
+        "Threads": 9,
+        "cpu_seconds": 1.34,
+        "thread_cpu_seconds": {
+          "773963": 0.0,
+          "773964": 0.16,
+          "773965": 0.16,
+          "773966": 0.16,
+          "773967": 0.15,
+          "773968": 0.16,
+          "773969": 0.15,
+          "773970": 0.16,
+          "773971": 0.16
+        },
+        "user_cpu_seconds": 0.28,
+        "system_cpu_seconds": 1.06,
+        "fd_count": 100042,
+        "socket_fd_count": 100012
+      },
+      "client": {
+        "VmSize": 563932,
+        "VmRSS": 512176,
+        "RssAnon": 508068,
+        "Threads": 9,
+        "cpu_seconds": 1.94,
+        "thread_cpu_seconds": {
+          "773972": 0.02,
+          "773973": 0.22,
+          "773974": 0.23,
+          "773975": 0.23,
+          "773976": 0.23,
+          "773977": 0.23,
+          "773978": 0.23,
+          "773979": 0.24,
+          "773980": 0.23
+        },
+        "user_cpu_seconds": 0.47,
+        "system_cpu_seconds": 1.47,
+        "fd_count": 100009,
+        "socket_fd_count": 100003
+      },
+      "machine": {
+        "socket_memory_global": "sockets: used 201403\nTCP: inuse 200027 orphan 0 tw 200188 alloc 200060 mem 708\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+        "memory_kib": {
+          "MemFree": 76199232,
+          "MemAvailable": 114544028,
+          "Slab": 3590388,
+          "SReclaimable": 2485060,
+          "SUnreclaim": 1105328
+        }
+      },
+      "seconds": 1.5562352710112464,
+      "established_server_sockets": 100000
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 104600000,
+        "deliveries": 200000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 100000,
+        "sent_bytes": 103700000,
+        "sent_messages": 100000,
+        "value_bytes": 102700000
+      },
+      "details": {
+        "all_connections_routed": true,
+        "proof_round_trip": {
+          "max_ms": 2.589612,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 100000
+        },
+        "rooms": 6250,
+        "users": 100000
+      },
+      "event": "ready",
+      "wave": 1,
+      "read_allowance_bound": 65536,
+      "exact_counter_checks": {
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_accepted_total": 100000,
+        "war_joined_total": 100000,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 100000,
+        "war_incoming_bytes_total": 103700000,
+        "war_deliveries_total": 200000,
+        "war_delivered_bytes_total": 104600000,
+        "war_routing_reused_bytes_total": 102700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_join_rejected_total": 0,
+        "war_rejected_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_close_failures_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_global_pressure_total": 0,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_idle_timeouts_total": 0
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 102700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 100000,
+        "war_incoming_bytes_total": 103700000,
+        "war_deliveries_total": 200000,
+        "war_delivered_bytes_total": 104600000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "server": {
+        "VmSize": 617408,
+        "VmRSS": 113116,
+        "RssAnon": 108324,
+        "Threads": 9,
+        "cpu_seconds": 1.81,
+        "thread_cpu_seconds": {
+          "773963": 0.0,
+          "773964": 0.22,
+          "773965": 0.21,
+          "773966": 0.22,
+          "773967": 0.21,
+          "773968": 0.21,
+          "773969": 0.21,
+          "773970": 0.22,
+          "773971": 0.22
+        },
+        "user_cpu_seconds": 0.39,
+        "system_cpu_seconds": 1.42,
+        "fd_count": 100042,
+        "socket_fd_count": 100012
+      },
+      "client": {
+        "VmSize": 1088352,
+        "VmRSS": 616608,
+        "RssAnon": 612500,
+        "Threads": 9,
+        "cpu_seconds": 2.58,
+        "thread_cpu_seconds": {
+          "773972": 0.02,
+          "773973": 0.31,
+          "773974": 0.31,
+          "773975": 0.31,
+          "773976": 0.31,
+          "773977": 0.31,
+          "773978": 0.31,
+          "773979": 0.32,
+          "773980": 0.31
+        },
+        "user_cpu_seconds": 0.63,
+        "system_cpu_seconds": 1.95,
+        "fd_count": 100009,
+        "socket_fd_count": 100003
+      },
+      "machine": {
+        "socket_memory_global": "sockets: used 201403\nTCP: inuse 200027 orphan 0 tw 200189 alloc 200060 mem 1476\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+        "memory_kib": {
+          "MemFree": 76084348,
+          "MemAvailable": 114429360,
+          "Slab": 3588676,
+          "SReclaimable": 2485268,
+          "SUnreclaim": 1103408
+        }
+      },
+      "seconds": 2.748197737004375,
+      "established_server_sockets": 100000
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 18770600000,
+        "deliveries": 18200000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 18100000,
+        "sent_bytes": 18769700000,
+        "sent_messages": 18100000,
+        "value_bytes": 18588700000
+      },
+      "details": {
+        "active_users": 100000,
+        "churn_lifecycle": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "churn_round_trip": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "counts": {
+          "churn_cycles": 0,
+          "delivered_bytes": 18666000000,
+          "deliveries": 18000000,
+          "departure_checks": 0,
+          "joins": 0,
+          "normal_closes": 0,
+          "routing_checks": 18000000,
+          "sent_bytes": 18666000000,
+          "sent_messages": 18000000,
+          "value_bytes": 18486000000
+        },
+        "elapsed_seconds": 30.008767859,
+        "round_trip": {
+          "max_ms": 47.319907,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 16.777216,
+          "samples": 18000000
+        },
+        "schedule_lag": {
+          "max_ms": 47.556285,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 16.777216,
+          "samples": 1125000
+        },
+        "scheduled_seconds": 30
+      },
+      "event": "measured",
+      "wave": 1,
+      "read_allowance_bound": 65536,
+      "exact_counter_checks": {
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_accepted_total": 100000,
+        "war_joined_total": 100000,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 18100000,
+        "war_incoming_bytes_total": 18769700000,
+        "war_deliveries_total": 18200000,
+        "war_delivered_bytes_total": 18770600000,
+        "war_routing_reused_bytes_total": 18588700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_join_rejected_total": 0,
+        "war_rejected_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_close_failures_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_global_pressure_total": 0,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_idle_timeouts_total": 0
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 18588700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 18100000,
+        "war_incoming_bytes_total": 18769700000,
+        "war_deliveries_total": 18200000,
+        "war_delivered_bytes_total": 18770600000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "server": {
+        "VmSize": 617408,
+        "VmRSS": 115856,
+        "RssAnon": 111064,
+        "Threads": 9,
+        "cpu_seconds": 89.65,
+        "thread_cpu_seconds": {
+          "773963": 0.01,
+          "773964": 11.21,
+          "773965": 11.14,
+          "773966": 11.21,
+          "773967": 11.02,
+          "773968": 11.21,
+          "773969": 11.17,
+          "773970": 11.32,
+          "773971": 11.26
+        },
+        "user_cpu_seconds": 22.03,
+        "system_cpu_seconds": 67.62,
+        "fd_count": 100042,
+        "socket_fd_count": 100012
+      },
+      "client": {
+        "VmSize": 1497004,
+        "VmRSS": 1098340,
+        "RssAnon": 1094232,
+        "Threads": 9,
+        "cpu_seconds": 123.28,
+        "thread_cpu_seconds": {
+          "773972": 0.03,
+          "773973": 15.41,
+          "773974": 15.41,
+          "773975": 15.4,
+          "773976": 15.38,
+          "773977": 15.38,
+          "773978": 15.4,
+          "773979": 15.4,
+          "773980": 15.38
+        },
+        "user_cpu_seconds": 34.56,
+        "system_cpu_seconds": 88.72,
+        "fd_count": 100009,
+        "socket_fd_count": 100003
+      },
+      "machine": {
+        "socket_memory_global": "sockets: used 201403\nTCP: inuse 200027 orphan 0 tw 100213 alloc 200060 mem 1474\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+        "memory_kib": {
+          "MemFree": 76015096,
+          "MemAvailable": 114360192,
+          "Slab": 3560864,
+          "SReclaimable": 2485352,
+          "SUnreclaim": 1075512
+        }
+      },
+      "seconds": 34.06581951599219,
+      "established_server_sockets": 100000
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 18874300000,
+        "deliveries": 18300000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 18200000,
+        "sent_bytes": 18873400000,
+        "sent_messages": 18200000,
+        "value_bytes": 18691400000
+      },
+      "details": {
+        "all_connections_routed_again": true,
+        "proof_round_trip": {
+          "max_ms": 3.851798,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 100000
+        },
+        "users": 100000
+      },
+      "event": "postcheck",
+      "wave": 1,
+      "read_allowance_bound": 65536,
+      "exact_counter_checks": {
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_accepted_total": 100000,
+        "war_joined_total": 100000,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 18200000,
+        "war_incoming_bytes_total": 18873400000,
+        "war_deliveries_total": 18300000,
+        "war_delivered_bytes_total": 18874300000,
+        "war_routing_reused_bytes_total": 18691400000,
+        "war_routing_copied_bytes_total": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_join_rejected_total": 0,
+        "war_rejected_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_close_failures_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_global_pressure_total": 0,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_idle_timeouts_total": 0
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 18691400000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 18200000,
+        "war_incoming_bytes_total": 18873400000,
+        "war_deliveries_total": 18300000,
+        "war_delivered_bytes_total": 18874300000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "server": {
+        "VmSize": 617408,
+        "VmRSS": 115856,
+        "RssAnon": 111064,
+        "Threads": 9,
+        "cpu_seconds": 90.11,
+        "thread_cpu_seconds": {
+          "773963": 0.01,
+          "773964": 11.27,
+          "773965": 11.21,
+          "773966": 11.27,
+          "773967": 11.08,
+          "773968": 11.27,
+          "773969": 11.22,
+          "773970": 11.38,
+          "773971": 11.32
+        },
+        "user_cpu_seconds": 22.13,
+        "system_cpu_seconds": 67.98,
+        "fd_count": 100042,
+        "socket_fd_count": 100012
+      },
+      "client": {
+        "VmSize": 1497004,
+        "VmRSS": 1098340,
+        "RssAnon": 1094232,
+        "Threads": 9,
+        "cpu_seconds": 124.84,
+        "thread_cpu_seconds": {
+          "773972": 1.0,
+          "773973": 15.49,
+          "773974": 15.48,
+          "773975": 15.48,
+          "773976": 15.46,
+          "773977": 15.45,
+          "773978": 15.47,
+          "773979": 15.47,
+          "773980": 15.46
+        },
+        "user_cpu_seconds": 35.52,
+        "system_cpu_seconds": 89.32,
+        "fd_count": 100009,
+        "socket_fd_count": 100003
+      },
+      "machine": {
+        "socket_memory_global": "sockets: used 201403\nTCP: inuse 200027 orphan 0 tw 100214 alloc 200060 mem 2498\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+        "memory_kib": {
+          "MemFree": 75616864,
+          "MemAvailable": 113970844,
+          "Slab": 3561004,
+          "SReclaimable": 2485508,
+          "SUnreclaim": 1075496
+        }
+      },
+      "seconds": 36.12300166601199,
+      "established_server_sockets": 100000
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 18888550000,
+        "deliveries": 19050000,
+        "departure_checks": 750000,
+        "joins": 100000,
+        "normal_closes": 100000,
+        "routing_checks": 18200000,
+        "sent_bytes": 18873400000,
+        "sent_messages": 18200000,
+        "value_bytes": 18691400000
+      },
+      "details": {
+        "retirement_seconds": 2.442192004
+      },
+      "event": "done",
+      "wave": 1,
+      "read_allowance_bound": 0,
+      "exact_counter_checks": {
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_accepted_total": 100000,
+        "war_joined_total": 100000,
+        "war_disconnected_total": 100000,
+        "war_incoming_messages_total": 18200000,
+        "war_incoming_bytes_total": 18873400000,
+        "war_deliveries_total": 19050000,
+        "war_delivered_bytes_total": 18888550000,
+        "war_routing_reused_bytes_total": 18691400000,
+        "war_routing_copied_bytes_total": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_join_rejected_total": 0,
+        "war_rejected_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_close_failures_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_global_pressure_total": 0,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_idle_timeouts_total": 0
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 18691400000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 100000,
+        "war_incoming_messages_total": 18200000,
+        "war_incoming_bytes_total": 18873400000,
+        "war_deliveries_total": 19050000,
+        "war_delivered_bytes_total": 18888550000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "server": {
+        "VmSize": 548432,
+        "VmRSS": 56224,
+        "RssAnon": 51432,
+        "Threads": 9,
+        "cpu_seconds": 91.78,
+        "thread_cpu_seconds": {
+          "773963": 0.01,
+          "773964": 11.49,
+          "773965": 11.41,
+          "773966": 11.48,
+          "773967": 11.28,
+          "773968": 11.47,
+          "773969": 11.43,
+          "773970": 11.6,
+          "773971": 11.53
+        },
+        "user_cpu_seconds": 22.31,
+        "system_cpu_seconds": 69.47,
+        "fd_count": 42,
+        "socket_fd_count": 12
+      },
+      "client": {
+        "VmSize": 1497004,
+        "VmRSS": 1098340,
+        "RssAnon": 1094232,
+        "Threads": 9,
+        "cpu_seconds": 127.13,
+        "thread_cpu_seconds": {
+          "773972": 1.01,
+          "773973": 15.82,
+          "773974": 15.79,
+          "773975": 15.83,
+          "773976": 15.76,
+          "773977": 15.77,
+          "773978": 15.81,
+          "773979": 15.8,
+          "773980": 15.47
+        },
+        "user_cpu_seconds": 36.01,
+        "system_cpu_seconds": 91.12,
+        "fd_count": 9,
+        "socket_fd_count": 3
+      },
+      "machine": {
+        "socket_memory_global": "sockets: used 1403\nTCP: inuse 27 orphan 0 tw 200198 alloc 60 mem 450\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+        "memory_kib": {
+          "MemFree": 75992464,
+          "MemAvailable": 114215516,
+          "Slab": 2935276,
+          "SReclaimable": 2354572,
+          "SUnreclaim": 580704
+        }
+      },
+      "seconds": 38.89342631600448,
+      "established_server_sockets": 0
+    }
+  ],
+  "management_samples": [
+    {
+      "seconds": 3.4099262740055565,
+      "response_ms": 1.2056989944539964,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 3.6614421739941463,
+      "response_ms": 0.5780840001534671,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 3.912338960013585,
+      "response_ms": 0.7305709877982736,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 6222,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 4.163378911995096,
+      "response_ms": 0.6772520137019455,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 4.414371385995764,
+      "response_ms": 0.9123060153797269,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 7259,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 4.665602502995171,
+      "response_ms": 0.7545400003436953,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 4.916670915001305,
+      "response_ms": 0.7702689908910543,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 5.167754255991895,
+      "response_ms": 0.6626020185649395,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 5.4187294600124005,
+      "response_ms": 0.6370029877871275,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 5.669679384009214,
+      "response_ms": 0.6501030002254993,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 5.920634789014002,
+      "response_ms": 0.5763249937444925,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 6.171516155998688,
+      "response_ms": 0.6837809924036264,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 6.422513569006696,
+      "response_ms": 0.729030987713486,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 6.673558501002844,
+      "response_ms": 0.784108997322619,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 6.924651762004942,
+      "response_ms": 0.6534029962494969,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 7.175606375996722,
+      "response_ms": 0.6332939956337214,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 7.42654577101348,
+      "response_ms": 0.7847200031392276,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 7.677643572009401,
+      "response_ms": 0.7736599945928901,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 7.928724533005152,
+      "response_ms": 0.744321005186066,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 6222,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 8.179782195016742,
+      "response_ms": 0.8201779855880886,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 8.430919035017723,
+      "response_ms": 0.6995609728619456,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 8.681721002998529,
+      "response_ms": 0.6934019911568612,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 8.93272485601483,
+      "response_ms": 0.7108419958967716,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 9.183749759016791,
+      "response_ms": 0.8031789911910892,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 6222,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 9.434751541994046,
+      "response_ms": 1.036593021126464,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 9.686107096000342,
+      "response_ms": 0.8082790009211749,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 9.937002502003452,
+      "response_ms": 0.7157810032367706,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 10.188005405012518,
+      "response_ms": 0.6970620015636086,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 10.439016798016382,
+      "response_ms": 0.653852999676019,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 10.689993122010492,
+      "response_ms": 0.7826799992471933,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 10.941001485014567,
+      "response_ms": 0.7503499800805002,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 11.19200894801179,
+      "response_ms": 0.6716520001646131,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 11.443008881004062,
+      "response_ms": 0.7943900127429515,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 11.69400810499792,
+      "response_ms": 0.6481230084318668,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 11.944975729013095,
+      "response_ms": 0.6370829942170531,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 12.195925063017057,
+      "response_ms": 0.6853719823993742,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 12.446927306998987,
+      "response_ms": 0.7479499909095466,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 12.698004138015676,
+      "response_ms": 0.6721519748680294,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 12.948990450997371,
+      "response_ms": 0.6588630203623325,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 13.19996642501792,
+      "response_ms": 0.7755599799565971,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 13.451008417003322,
+      "response_ms": 0.6497330032289028,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 13.701980120997177,
+      "response_ms": 0.8872869948390871,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 13.95300588401733,
+      "response_ms": 0.7453099824488163,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 14.204000547004398,
+      "response_ms": 0.7972389867063612,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 14.455006250005681,
+      "response_ms": 0.7583500118926167,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 14.706075511989184,
+      "response_ms": 0.8021480171009898,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 14.95719426200958,
+      "response_ms": 0.7171210017986596,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 15.208226343995193,
+      "response_ms": 0.7660500123165548,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 15.45930923501146,
+      "response_ms": 0.7659700058866292,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 15.710396626003785,
+      "response_ms": 0.7867589883971959,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 15.96150385600049,
+      "response_ms": 0.9240460058208555,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 6222,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 16.21274829300819,
+      "response_ms": 0.7580299861729145,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 16.463824703998398,
+      "response_ms": 0.7622599950991571,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 16.714906934997998,
+      "response_ms": 0.7235110097099096,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 16.965968656004407,
+      "response_ms": 0.7046019891276956,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 17.216998909018002,
+      "response_ms": 0.7846789958421141,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 17.46809870901052,
+      "response_ms": 0.7176609942689538,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 17.71900293501676,
+      "response_ms": 0.6099639867898077,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 17.96992661000695,
+      "response_ms": 0.6904919864609838,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 18.220935623015976,
+      "response_ms": 0.7366399804595858,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 18.47199201400508,
+      "response_ms": 0.68457200541161,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 18.722992908005835,
+      "response_ms": 0.716031005140394,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 18.97402844001772,
+      "response_ms": 0.7523599779233336,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 19.225004683015868,
+      "response_ms": 0.7203009736258537,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 19.476043164992006,
+      "response_ms": 0.6904320034664124,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 19.72700529001304,
+      "response_ms": 0.7314200047403574,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 19.97804894100409,
+      "response_ms": 0.7108919962774962,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 20.229072084010113,
+      "response_ms": 0.6352929922286421,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 20.480020007991698,
+      "response_ms": 0.7834300049580634,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 20.731115219008643,
+      "response_ms": 0.6542729970533401,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 20.982090403005714,
+      "response_ms": 0.7586499850731343,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 21.233005557995057,
+      "response_ms": 0.7260410056915134,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 21.484009061008692,
+      "response_ms": 0.7642399868927896,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 21.73501246399246,
+      "response_ms": 1.0662720014806837,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 21.986396897002123,
+      "response_ms": 0.8937359962146729,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 22.237602673994843,
+      "response_ms": 0.691862020175904,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 22.488609316991642,
+      "response_ms": 0.7720700232312083,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 22.739703788014594,
+      "response_ms": 0.8242879994213581,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 22.990846266999142,
+      "response_ms": 0.7838690071366727,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 23.24194996699225,
+      "response_ms": 0.6792420172132552,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 23.492942790995585,
+      "response_ms": 0.8229580125771463,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 23.744084209989524,
+      "response_ms": 0.7527000270783901,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 23.995007345016347,
+      "response_ms": 0.8195179980248213,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 24.246147703990573,
+      "response_ms": 0.7789299997966737,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 24.497007931000553,
+      "response_ms": 0.7895790040493011,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 24.748017414007336,
+      "response_ms": 0.800887995865196,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 3111,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 24.999010547006037,
+      "response_ms": 0.9105060016736388,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 25.250014429999283,
+      "response_ms": 0.7845690124668181,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 25.501011503016343,
+      "response_ms": 0.8648569928482175,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 25.752193401014665,
+      "response_ms": 0.7970290025696158,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 6222,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 26.003316971007735,
+      "response_ms": 0.7561100064776838,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 26.254394841002068,
+      "response_ms": 0.7942990050651133,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 26.50551015100791,
+      "response_ms": 0.8540179987903684,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 26.756684940017294,
+      "response_ms": 0.7899289776105434,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 27.00779586000135,
+      "response_ms": 0.761389994295314,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 27.258879569999408,
+      "response_ms": 0.7547900022473186,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 27.509959381015506,
+      "response_ms": 0.6789319741073996,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 27.76096191399847,
+      "response_ms": 0.7530500006396323,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 28.012033475009957,
+      "response_ms": 0.7646599842701107,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 28.26311463600723,
+      "response_ms": 0.7572599861305207,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 28.514190946996678,
+      "response_ms": 0.7836790173314512,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 28.76528881699778,
+      "response_ms": 0.6930920062586665,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 29.01629990999936,
+      "response_ms": 0.8611069933976978,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 29.267478468012996,
+      "response_ms": 0.8054589852690697,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 4148,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 29.51860231801402,
+      "response_ms": 0.7495199970435351,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 29.769664888997795,
+      "response_ms": 0.7800890016369522,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 30.020748700015247,
+      "response_ms": 0.6910410011187196,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 30.27174288299284,
+      "response_ms": 0.8402870153076947,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 30.522895561996847,
+      "response_ms": 0.7688990153837949,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 30.773990451998543,
+      "response_ms": 0.7881890051066875,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 31.025005574017996,
+      "response_ms": 0.7843599887564778,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 31.27610849501798,
+      "response_ms": 0.7764089968986809,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 31.52719772499404,
+      "response_ms": 0.6574930157512426,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 31.778016163007123,
+      "response_ms": 0.6718919903505594,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 32.02900684601627,
+      "response_ms": 0.7630699838045985,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 32.280083507008385,
+      "response_ms": 0.653141993097961,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 0,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 32.53105459001381,
+      "response_ms": 0.8051990007515997,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 32.782011283998145,
+      "response_ms": 0.7648899918422103,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 1037,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 33.03300598700298,
+      "response_ms": 0.8742270001675934,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 5185,
+      "read_reserved_bytes": 65536
+    },
+    {
+      "seconds": 33.28402802001801,
+      "response_ms": 0.8384469838347286,
+      "sessions": 100000,
+      "connections": 100000,
+      "queued_bytes": 2074,
+      "read_reserved_bytes": 65536
+    }
+  ],
+  "thread_affinity": [
+    {
+      "pid": 773963,
+      "tid": 773964,
+      "name": "war-io-0",
+      "before": [
+        0
+      ],
+      "cpu": 0,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773965,
+      "name": "war-io-1",
+      "before": [
+        1
+      ],
+      "cpu": 1,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773966,
+      "name": "war-io-2",
+      "before": [
+        2
+      ],
+      "cpu": 2,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773967,
+      "name": "war-io-3",
+      "before": [
+        3
+      ],
+      "cpu": 3,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773968,
+      "name": "war-io-4",
+      "before": [
+        4
+      ],
+      "cpu": 4,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773969,
+      "name": "war-io-5",
+      "before": [
+        5
+      ],
+      "cpu": 5,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773970,
+      "name": "war-io-6",
+      "before": [
+        6
+      ],
+      "cpu": 6,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    },
+    {
+      "pid": 773963,
+      "tid": 773971,
+      "name": "war-io-7",
+      "before": [
+        7
+      ],
+      "cpu": 7,
+      "method": "server_startup",
+      "verified_after_measurement": true
+    }
+  ],
+  "passed": true,
+  "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command.",
+  "baseline": {
+    "server": {
+      "VmSize": 548432,
+      "VmRSS": 5356,
+      "RssAnon": 564,
+      "Threads": 9,
+      "cpu_seconds": 0.0,
+      "thread_cpu_seconds": {
+        "773963": 0.0,
+        "773964": 0.0,
+        "773965": 0.0,
+        "773966": 0.0,
+        "773967": 0.0,
+        "773968": 0.0,
+        "773969": 0.0,
+        "773970": 0.0,
+        "773971": 0.0
+      },
+      "user_cpu_seconds": 0.0,
+      "system_cpu_seconds": 0.0,
+      "fd_count": 42,
+      "socket_fd_count": 12
+    },
+    "machine": {
+      "socket_memory_global": "sockets: used 1401\nTCP: inuse 27 orphan 0 tw 200203 alloc 60 mem 964\nUDP: inuse 10 mem 3793\nRAW: inuse 0\nFRAG: inuse 0 memory 0\n",
+      "memory_kib": {
+        "MemFree": 77144132,
+        "MemAvailable": 115213416,
+        "Slab": 2764232,
+        "SReclaimable": 2209552,
+        "SUnreclaim": 554680
+      }
+    },
+    "metrics": {
+      "war_read_buffer_reserved_bytes": 0,
+      "war_read_buffer_peak_reserved_bytes": 0,
+      "war_read_buffer_limit_bytes": 268435456,
+      "war_read_buffer_reservations_rejected_total": 0,
+      "war_accept_errors_total": 0,
+      "war_setup_errors_total": 0,
+      "war_ip_rejected_total": 0,
+      "war_read_buffer_reclaims_total": 0,
+      "war_read_buffer_reclaim_header_bytes_total": 0,
+      "war_read_buffer_reclaims_deferred_total": 0,
+      "war_idle_timeouts_total": 0,
+      "war_unstarted_writes_cancelled_total": 0,
+      "war_routing_reused_bytes_total": 0,
+      "war_routing_copied_bytes_total": 0,
+      "war_write_timeouts_total": 0,
+      "war_write_errors_total": 0,
+      "war_aborted_writes_total": 0,
+      "war_close_failures_total": 0,
+      "war_transport_disconnects_total": 0,
+      "war_global_pressure_total": 0,
+      "war_accepted_total": 0,
+      "war_rejected_total": 0,
+      "war_origin_rejected_total": 0,
+      "war_handshake_errors_total": 0,
+      "war_joined_total": 0,
+      "war_join_rejected_total": 0,
+      "war_disconnected_total": 0,
+      "war_incoming_messages_total": 0,
+      "war_incoming_bytes_total": 0,
+      "war_deliveries_total": 0,
+      "war_delivered_bytes_total": 0,
+      "war_slow_consumers_total": 0,
+      "war_protocol_errors_total": 0,
+      "war_rate_limited_total": 0,
+      "war_variable_bytes": 0,
+      "war_connections": 0,
+      "war_sessions": 0,
+      "war_channels": 1,
+      "war_queued_bytes": 0,
+      "war_draining": 0,
+      "war_output_queue_capacity_bytes": 0,
+      "war_output_queue_peak_capacity_bytes": 0
+    }
+  },
+  "server_preload": null,
+  "measurement_continue_monotonic_seconds": 134396.972184218,
+  "last_monitoring_metrics": {
+    "war_read_buffer_reserved_bytes": 65536,
+    "war_read_buffer_peak_reserved_bytes": 2621440,
+    "war_read_buffer_limit_bytes": 268435456,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 18510997180,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 100000,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 100000,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 0,
+    "war_incoming_messages_total": 18024340,
+    "war_incoming_bytes_total": 18691240580,
+    "war_deliveries_total": 18124344,
+    "war_delivered_bytes_total": 18692144728,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 100000,
+    "war_sessions": 100000,
+    "war_channels": 6251,
+    "war_queued_bytes": 2074,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 0
+  },
+  "client_exit_code": 0,
+  "server_exit_code": 0,
+  "measurements": [
+    {
+      "wave": 1,
+      "gate_wall_seconds": 31.317621778987814,
+      "server_cpu_seconds": 87.84,
+      "client_cpu_seconds": 120.7,
+      "application_deliveries": 18000000,
+      "planned_deliveries_per_second": 600000,
+      "stable_deliveries_per_second": 599824.6940552602,
+      "server_user_cpu_seconds": 21.64,
+      "server_system_cpu_seconds": 66.2,
+      "round_trip": {
+        "max_ms": 47.319907,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 16.777216,
+        "samples": 18000000
+      },
+      "schedule_lag": {
+        "max_ms": 47.556285,
+        "p50_upper_ms": 2.097152,
+        "p99_upper_ms": 16.777216,
+        "samples": 1125000
+      }
+    }
+  ],
+  "measurement": {
+    "wave": 1,
+    "gate_wall_seconds": 31.317621778987814,
+    "server_cpu_seconds": 87.84,
+    "client_cpu_seconds": 120.7,
+    "application_deliveries": 18000000,
+    "planned_deliveries_per_second": 600000,
+    "stable_deliveries_per_second": 599824.6940552602,
+    "server_user_cpu_seconds": 21.64,
+    "server_system_cpu_seconds": 66.2,
+    "round_trip": {
+      "max_ms": 47.319907,
+      "p50_upper_ms": 1.048576,
+      "p99_upper_ms": 16.777216,
+      "samples": 18000000
+    },
+    "schedule_lag": {
+      "max_ms": 47.556285,
+      "p50_upper_ms": 2.097152,
+      "p99_upper_ms": 16.777216,
+      "samples": 1125000
+    }
+  },
+  "server_log": "",
+  "client_log": ""
+}

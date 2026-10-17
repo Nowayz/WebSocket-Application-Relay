@@ -22,7 +22,7 @@ use crate::{
     frame::Frame,
     metrics::Metrics,
     protocol::Disconnect,
-    relay::{Envelope, PeerOutput},
+    relay::{Envelope, PeerOutput, Submission},
 };
 
 pub(super) const WRITE_QUANTUM: usize = 256 * 1024;
@@ -150,11 +150,11 @@ impl Socket {
         }
     }
 
-    fn delivered(&self, packet: &Envelope, state: &mut State) {
+    fn delivered(&self, frame: &Frame, state: &mut State) {
         self.metrics.deliveries.fetch_add(1, Relaxed);
         self.metrics
             .delivered_bytes
-            .fetch_add(packet.frame.len() as u64, Relaxed);
+            .fetch_add(frame.len() as u64, Relaxed);
         if self.track_activity {
             state.activity = Instant::now();
         }
@@ -189,7 +189,7 @@ impl Socket {
                 Ok(written) => {
                     remaining -= written;
                     if pending.offset == wire_len(&pending.packet.frame) {
-                        self.delivered(&pending.packet, &mut state);
+                        self.delivered(&pending.packet.frame, &mut state);
                     } else {
                         state.queue.push_front(pending);
                     }
@@ -240,7 +240,7 @@ impl Socket {
 }
 
 impl PeerOutput for Socket {
-    fn send(&self, packet: Envelope) -> bool {
+    fn send(&self, packet: Submission<'_>) -> bool {
         let mut state = self.state.lock();
         if state.closed || state.fatal || state.requested.is_some() {
             return true;
@@ -252,12 +252,12 @@ impl PeerOutput for Socket {
         if state.queue.is_empty() && !state.control_pending {
             match write_frame(
                 &mut SocketWriter(&state.stream),
-                &packet.frame,
+                packet.frame,
                 &mut offset,
                 WRITE_QUANTUM,
             ) {
-                Ok(_) if offset == wire_len(&packet.frame) => {
-                    self.delivered(&packet, &mut state);
+                Ok(_) if offset == wire_len(packet.frame) => {
+                    self.delivered(packet.frame, &mut state);
                     return true;
                 }
                 Ok(_) => {}
@@ -273,7 +273,7 @@ impl PeerOutput for Socket {
         let first = state.queue.is_empty();
         let old_capacity = state.queue.capacity();
         state.queue.push_back(Pending {
-            packet,
+            packet: packet.into_owned(),
             offset,
             deadline: Instant::now() + self.write_timeout,
         });

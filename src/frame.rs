@@ -107,6 +107,11 @@ impl Frame {
         &self.prefix[..usize::from(self.prefix_len)]
     }
 
+    #[cfg(test)]
+    pub(crate) fn has_unique_payload(&self) -> bool {
+        self.payload.is_unique()
+    }
+
     pub(crate) fn payload(&self) -> &[u8] {
         &self.payload
     }
