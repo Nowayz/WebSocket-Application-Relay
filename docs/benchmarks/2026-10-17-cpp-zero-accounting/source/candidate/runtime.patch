@@ -1,0 +1,26 @@
+diff --git a/cpp/relay.cpp b/cpp/relay.cpp
+index 575181d..0505dbe 100644
+--- a/cpp/relay.cpp
++++ b/cpp/relay.cpp
+@@ -141,6 +141,9 @@ struct Worker {
+         request_close(p, 1013);
+     } else {
+       auto released = p->buffered_bytes - now;
++      if (!released)
++        return; // No quota change: avoid taking exclusive ownership of shared
++                // counters.
+       runtime.buffered.fetch_sub(released, std::memory_order_relaxed);
+       runtime.retained_bytes.fetch_sub(released, std::memory_order_relaxed);
+     }
+@@ -169,9 +172,9 @@ struct Worker {
+     require(after <= before + credit);
+     runtime.retained_bytes.fetch_sub(before + credit - after,
+                                      std::memory_order_relaxed);
+-    if (after >= before)
++    if (after > before)
+       runtime.buffered.fetch_add(after - before, std::memory_order_relaxed);
+-    else
++    else if (after < before)
+       runtime.buffered.fetch_sub(before - after, std::memory_order_relaxed);
+     p->buffered_bytes = after;
+     if (status == Socket::DROPPED) {

@@ -87,3 +87,17 @@ C++ does not yet offer the complete Rust origin/per-IP admission policy, aggrega
 Keep the selected Rust service for the present low-latency operating recommendation. Preserve C++ as the concrete lower-populated-memory and parallel-fanout alternative, and use the measured cross-thread output, metadata/fanout scheduling and retained-memory costs to guide subsequent work.
 
 Raw traces, compressed per-user CSVs, plots, source snapshots, build records, sanitizer logs, experiment controls and a SHA-256 manifest are in [the benchmark archive](../docs/benchmarks/2026-10-17-modern-cpp/README.md). No manual relay service was replaced, and no production deployment or push was performed.
+
+
+## Follow-up: no-op output-accounting guard rejected
+
+A separate [accounting experiment](../docs/benchmarks/2026-10-17-cpp-zero-accounting/README.md)
+isolated skipping zero-byte atomic updates. Eight private trials, single-worker
+and fanout guards, and eight 100,000-user trials verified 96 million timed
+population probes. Aggregate population CPU changed by only -0.75%, with one
+matched pair reversing the result; small-population CPU/delivery was essentially
+unchanged and latency results were mixed. The prototype was not adopted. The
+accepted executable/library hashes and the comparisons above remain unchanged.
+Future `cpp/compare.py` traces include a qualified C++ retained-copy proxy, so
+copy-path/connection-placement variation is visible instead of silently treated
+as an implementation effect.

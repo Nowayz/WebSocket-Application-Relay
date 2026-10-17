@@ -6678,3 +6678,16 @@ The main tradeoff is lower populated C++ RSS and greater parallel fanout through
 against Rust's stronger private forwarding efficiency and observer-case latency.
 Keep selected Rust as the current low-latency operating recommendation. Neither
 this comparison nor the 30-second 100,000-user trials establish production parity.
+
+
+### C++ accounting trial and copy-path visibility
+
+The [follow-up accounting study](benchmarks/2026-10-17-cpp-zero-accounting/README.md)
+rejected the isolated zero-byte atomic-update guard. Four 100,000-user pairs
+verified 96 million timed probes, but the aggregate -0.75% CPU difference was not
+consistent across pairs; private CPU/delivery was effectively unchanged. The
+accepted runtime remains the original modern-C++ comparison build. Future C++
+private traces report retained-copy bytes per verified operation and a qualified
+1KiB-frame estimate. This diagnostic is not a worker-affinity census or a Rust
+copy metric; its observed variation makes ownership/workload placement a
+necessary consideration in subsequent optimization comparisons.

@@ -147,3 +147,7 @@ successful benchmark does not establish production parity or 100,000-user
 operational reliability.
 
 Detailed measured results and their limits are in [BENCHMARKS.md](BENCHMARKS.md).
+
+The comparison JSON also records a C++ retained-copy proxy after traffic. It
+helps expose workload/connection-placement differences without instrumenting the
+routing hot path; its scope and exclusions are carried in each JSON record.

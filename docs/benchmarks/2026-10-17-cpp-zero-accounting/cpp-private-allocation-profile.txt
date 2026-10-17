@@ -1,0 +1,103 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 4K of event 'cycles:u'
+# Event count (approx.): 16403559333
+#
+# Overhead  Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 IPC   [IPC Coverage]
+# ........  .....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................  ....................
+#
+    12.85%  [.] war::Worker::submit(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >, std::shared_ptr<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const>&)                                                                                                                                                                                                                                                                                                                                                                                                                                                             -      -            
+            |          
+             --7.86%--internal_syscall_cancel (inlined)
+                       syscall_cancel (inlined)
+                       send
+
+    12.26%  [.] war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       -      -            
+     9.34%  [.] war::Worker::message(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     -      -            
+            |          
+            |--6.64%--0x40c
+            |          
+             --1.21%--ofats::any_detail::handler_traits<void, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode>::small_handler<war::Worker::run(std::barrier<std::__empty_completion>&)::{lambda(uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)#1}>::call(ofats::any_detail::storage&, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)
+                       uWS::WebSocketContext<false, true, war::SocketData>::handleFragment(char*, unsigned long, unsigned int, int, bool, uWS::WebSocketState<true>*, void*)
+
+     6.58%  [.] war::Worker::drain()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               -      -            
+     5.90%  [.] 0x00000000000a79b9                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --3.07%--0x7fa0368a79b9
+                       operator new(unsigned long)
+                       |          
+                        --2.31%--std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::allocator<void>, std::basic_string_view<char, std::char_traits<char> >&>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const*&, std::_Sp_alloc_shared_tag<std::allocator<void> >, std::basic_string_view<char, std::char_traits<char> >&)
+
+     5.60%  [.] ofats::any_detail::handler_traits<void, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode>::small_handler<war::Worker::run(std::barrier<std::__empty_completion>&)::{lambda(uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)#1}>::call(ofats::any_detail::storage&, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)                                                                                                                                                           -      -            
+     5.47%  [k] 0xffffffff8ac00080                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --2.98%--0x7fa0368a08f2
+                       |          
+                        --2.87%--internal_syscall_cancel (inlined)
+                                  |          
+                                   --2.87%--syscall_cancel (inlined)
+                                             |          
+                                              --2.82%--send
+                                                        bsd_send
+
+     5.25%  [.] war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   -      -            
+            |          
+             --1.29%--0x40c
+
+     5.15%  [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --2.90%--0x7fa0368a62ff
+                       |          
+                        --2.30%--war::Worker::drain()
+
+     4.37%  [.] 0x00000000000a62e8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --2.59%--0x7fa0368a62e8
+                       |          
+                        --1.74%--war::Worker::drain()
+
+     4.35%  [.] 0x00000000000a799d                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --2.65%--0x7fa0368a799d
+                       |          
+                        --2.65%--operator new(unsigned long)
+                                  |          
+                                   --2.19%--std::__shared_count<(__gnu_cxx::_Lock_policy)2>::__shared_count<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, std::allocator<void>, std::basic_string_view<char, std::char_traits<char> >&>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const*&, std::_Sp_alloc_shared_tag<std::allocator<void> >, std::basic_string_view<char, std::char_traits<char> >&)
+
+     2.63%  [k] 0xffffffff8b40edd6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --2.30%--0xffffffff8be71f3e
+                       0xffffffff8be720e4
+                       0xffffffff8c18eafa
+                       0xffffffff8ac0012f
+                       |          
+                        --1.28%--0x7fa0368a08f2
+                                  internal_syscall_cancel (inlined)
+                                  syscall_cancel (inlined)
+                                  send
+                                  bsd_send
+
+     2.09%  [.] pthread_rwlock_unlock                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              -      -            
+            |          
+             --1.20%--__pthread_rwlock_rdunlock (inlined)
+                       pthread_rwlock_unlock
+                       war::Worker::message(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)
+                       ofats::any_detail::handler_traits<void, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode>::small_handler<war::Worker::run(std::barrier<std::__empty_completion>&)::{lambda(uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)#1}>::call(ofats::any_detail::storage&, uWS::WebSocket<false, true, war::SocketData>*, std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode)
+                       uWS::WebSocketContext<false, true, war::SocketData>::handleFragment(char*, unsigned long, unsigned int, int, bool, uWS::WebSocketState<true>*, void*)
+
+     1.81%  [.] 0x000000000018f437                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+            |          
+             --1.14%--0x7fa03698f437
+                       war::Worker::message(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)
+
+     1.54%  [.] pthread_rwlock_rdlock                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              -      -            
+     1.49%  [.] pthread_mutex_lock                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+     1.34%  [.] 0x000000000009d35c                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 -      -            
+
+
+#
+# (Tip: Customize output of perf script with: perf script -F event,ip,sym)
+#

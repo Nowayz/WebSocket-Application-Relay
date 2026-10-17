@@ -87,6 +87,14 @@ for workers in a.workers:
                         assert final['war_connections'] == final['war_queued_bytes'] == final['war_variable_bytes'] == 0, final
                         assert final.get('war_users', final.get('war_sessions')) == 0 and final['war_channels'] == 1, final
                         row['final_metrics'] = final
+                        if 'war_copied_bytes_total' in final:
+                            verified = row['result']['verified_deliveries']
+                            copied = final['war_copied_bytes_total']
+                            row['cpp_retained_copy_proxy'] = {
+                                'bytes_per_verified_delivery': copied / verified,
+                                'estimated_owned_1k_frames_per_delivery': copied / (1037 * verified) if mode == 'traffic' else None,
+                                'scope': 'C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters.'
+                            }
                         row['passed'] = True
                     except Exception as e:
                         row['error'] = str(e)

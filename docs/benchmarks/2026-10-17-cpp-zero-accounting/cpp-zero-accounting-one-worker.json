@@ -1,0 +1,361 @@
+{
+  "cpp_study": "No-op output accounting RMW only; all implementations C++; counter layout and admission semantics unchanged. Other scope text below describes the reused workload, not a Rust comparison.",
+  "scope": "Same checked native CBOR client, plaintext loopback, no bridge. Fresh sequential processes, rotated order. 1KiB, window16. Traffic64clients/32pairs, fanout64clients/63readers, churn16workers. Server workers pinned individually inside allowed0..N-1, client allowed8..15. CPU includes setup, checked workload and client cleanup; not isolated forwarding CPU. C++ lacks some Rust operational protections: this is a workload comparison, not feature-equivalent production certification.",
+  "server_sha256": {
+    "control": "b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1",
+    "candidate": "2c28dcf0a92713febb8d8db235d30cff67901d0dda027c2e3ffabec717294a55"
+  },
+  "client_sha256": "8aa8270a97d98fde8f4878bb8798161c92539f7111fae86e50a54adaf0c8b1aa",
+  "runs": [
+    {
+      "kind": "control",
+      "workers": 1,
+      "mode": "traffic",
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-zero-accounting-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:59513",
+        "--admin-bind",
+        "127.0.0.1:48291",
+        "--workers",
+        "1",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 851008,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:59513",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 482495.75990634755,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.001395744,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 3.486137,
+        "latency_p50_upper_ms": 1.048576,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.029195426,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 2895648,
+        "window": 16
+      },
+      "server_cpu_seconds": 3.75,
+      "rss_kib": 5028,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 2895648,
+        "war_deliveries_total": 2895744,
+        "war_value_bytes_total": 2973830496,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2973830496,
+        "war_copied_bytes_total": 0
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 1,
+      "mode": "traffic",
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-zero-accounting-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:52637",
+        "--admin-bind",
+        "127.0.0.1:36299",
+        "--workers",
+        "1",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 851020,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:52637",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 475837.9403651467,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.001169217,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 8.816633,
+        "latency_p50_upper_ms": 1.048576,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.022670651,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 2855584,
+        "window": 16
+      },
+      "server_cpu_seconds": 3.74,
+      "rss_kib": 4908,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 2855584,
+        "war_deliveries_total": 2855680,
+        "war_value_bytes_total": 2932684768,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2932684768,
+        "war_copied_bytes_total": 0
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 1,
+      "mode": "traffic",
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-zero-accounting-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:43939",
+        "--admin-bind",
+        "127.0.0.1:42409",
+        "--workers",
+        "1",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 851047,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:43939",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 480320.46831388294,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.001426527,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 2.783145,
+        "latency_p50_upper_ms": 1.048576,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.025270831,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 2882608,
+        "window": 16
+      },
+      "server_cpu_seconds": 3.75,
+      "rss_kib": 5024,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 2882608,
+        "war_deliveries_total": 2882704,
+        "war_value_bytes_total": 2960438416,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2960438416,
+        "war_copied_bytes_total": 0
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "control",
+      "workers": 1,
+      "mode": "traffic",
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-zero-accounting-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:36647",
+        "--admin-bind",
+        "127.0.0.1:41581",
+        "--workers",
+        "1",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 851059,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:36647",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 477020.5530979215,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.001217309,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 2.779345,
+        "latency_p50_upper_ms": 1.048576,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.018354457,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 2862704,
+        "window": 16
+      },
+      "server_cpu_seconds": 3.75,
+      "rss_kib": 5024,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 2862704,
+        "war_deliveries_total": 2862800,
+        "war_value_bytes_total": 2939997008,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2939997008,
+        "war_copied_bytes_total": 0
+      },
+      "server_exit_code": 0
+    }
+  ],
+  "passed": true,
+  "runner_sha256": "c85a5cc481dcf43bb5aab2d0a6bbe75a0e3204a8a36fb2d9ec0202f4b73baeb3"
+}

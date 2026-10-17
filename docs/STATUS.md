@@ -1,5 +1,19 @@
 # Continuing goal status
 
+## 2026-10-17: C++ output-accounting follow-up
+
+The isolated no-op atomic-accounting prototype did not earn adoption: four
+matched 100,000-user pairs yielded only -0.75% aggregate CPU, one pair reversed,
+and small-population CPU per delivery was unchanged. All 96 million population
+probes, resource gauges, descriptor retirement and the native corpus passed.
+Accepted C++ source/binaries were restored exactly; Rust and existing services
+remain unchanged. The [study archive](benchmarks/2026-10-17-cpp-zero-accounting/README.md)
+preserves both frozen source sets, rejected patch and complete census evidence.
+The comparison runner now records a qualified retained-copy-path proxy after
+client cleanup, with no hot-path instrumentation. Connection placement/copy-path
+variation must be characterized before judging small private-path changes.
+
+
 ## 2026-10-17: separate modern C++ candidate
 
 Implemented an embeddable C++20 CBOR relay on pinned uWebSockets/uSockets with
