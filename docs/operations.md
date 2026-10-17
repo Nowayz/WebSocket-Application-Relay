@@ -944,3 +944,30 @@ To include a frozen native Rust baseline in the same C++ matrix, pass
 `--control PATH --control-read-storage worker`. The default `connection` storage
 contract remains available for the older asynchronous control. This option
 selects the verifier's receive-staging checks; it does not alter either server.
+
+## Rebuilding the Monoio experiment
+
+The [Monoio study](performance.md#monoio-readiness-evaluation-2026-10-17) rejects
+the measured readiness adapters as the default. They remain reproducible from
+the archived patches without changing the main Cargo project. From this Linux
+checkout, use a new output directory:
+
+```sh
+python3 scripts/try-monoio.py persistent --output artifacts/monoio-trial
+artifacts/monoio-trial/target/release/war-relay --workers 4 \
+  --bind 127.0.0.1:1438 --admin-bind 127.0.0.1:1439
+```
+
+The script extracts the recorded base commit, applies the checksum-verified
+patch, checks all 115 final source hashes, builds with the locked dependencies
+and records the compiler and new executable hash. `--prepare-only` skips the
+build. `readiness` and `persistent-unfixed` reproduce the historical variants,
+including their known retirement gap, for diagnosis. `persistent` includes the
+retirement fix. The main native relay continues to use Mio; the experimental
+binary selects Monoio's io_uring data workers and retains Tokio management.
+
+This adapter needs two descriptors per admitted user, additional watcher memory
+and an available io_uring driver. Large parallel test suites may need a larger
+process locked-memory allowance. The study records its original `ENOMEM`
+failure and the scoped limit change used for testing. Its results cover
+readiness integration; completion-based socket I/O remains a separate experiment.

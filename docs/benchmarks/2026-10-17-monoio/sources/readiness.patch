@@ -1,0 +1,1229 @@
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -47,7 +47,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
+ dependencies = [
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -58,7 +58,7 @@
+ dependencies = [
+  "anstyle",
+  "once_cell_polyfill",
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -72,6 +72,17 @@
+ version = "1.1.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
++
++[[package]]
++name = "auto-const-array"
++version = "0.2.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "fd73835ad7deb4bd2b389e6f10333b143f025d607c55ca04c66a0bcc6bb2fc6d"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
+ 
+ [[package]]
+ name = "axum"
+@@ -131,6 +142,12 @@
+ 
+ [[package]]
+ name = "bitflags"
++version = "1.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
++
++[[package]]
++name = "bitflags"
+ version = "2.13.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+@@ -143,6 +160,18 @@
+ dependencies = [
+  "hybrid-array",
+ ]
++
++[[package]]
++name = "bumpalo"
++version = "3.20.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
++
++[[package]]
++name = "byteorder"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+ 
+ [[package]]
+ name = "bytes"
+@@ -267,7 +296,19 @@
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "flume"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
++dependencies = [
++ "futures-core",
++ "futures-sink",
++ "nanorand",
++ "spin",
+ ]
+ 
+ [[package]]
+@@ -323,6 +364,28 @@
+ ]
+ 
+ [[package]]
++name = "fxhash"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
++dependencies = [
++ "byteorder",
++]
++
++[[package]]
++name = "getrandom"
++version = "0.2.17"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
++dependencies = [
++ "cfg-if",
++ "js-sys",
++ "libc",
++ "wasi",
++ "wasm-bindgen",
++]
++
++[[package]]
+ name = "getrandom"
+ version = "0.3.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -362,6 +425,12 @@
+ version = "0.5.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
++
++[[package]]
++name = "hermit-abi"
++version = "0.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
+ 
+ [[package]]
+ name = "http"
+@@ -452,6 +521,16 @@
+ ]
+ 
+ [[package]]
++name = "io-uring"
++version = "0.6.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "595a0399f411a508feb2ec1e970a4a30c249351e30208960d58298de8660b0e5"
++dependencies = [
++ "bitflags 1.3.2",
++ "libc",
++]
++
++[[package]]
+ name = "is_terminal_polyfill"
+ version = "1.70.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -462,6 +541,17 @@
+ version = "1.0.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
++
++[[package]]
++name = "js-sys"
++version = "0.3.106"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
++dependencies = [
++ "cfg-if",
++ "futures-util",
++ "wasm-bindgen",
++]
+ 
+ [[package]]
+ name = "lazy_static"
+@@ -535,7 +625,35 @@
+  "libc",
+  "log",
+  "wasi",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "monoio"
++version = "0.2.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3bd0f8bcde87b1949f95338b547543fcab187bc7e7a5024247e359a5e828ba6a"
++dependencies = [
++ "auto-const-array",
++ "flume",
++ "fxhash",
++ "io-uring",
++ "libc",
++ "memchr",
++ "once_cell",
++ "pin-project-lite",
++ "socket2 0.5.10",
++ "threadpool",
++ "windows-sys 0.48.0",
++]
++
++[[package]]
++name = "nanorand"
++version = "0.7.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
++dependencies = [
++ "getrandom 0.2.17",
+ ]
+ 
+ [[package]]
+@@ -544,7 +662,17 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+ dependencies = [
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "num_cpus"
++version = "1.17.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
++dependencies = [
++ "hermit-abi",
++ "libc",
+ ]
+ 
+ [[package]]
+@@ -647,7 +775,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
+ dependencies = [
+- "bitflags",
++ "bitflags 2.13.2",
+ ]
+ 
+ [[package]]
+@@ -666,6 +794,12 @@
+ version = "0.8.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
++
++[[package]]
++name = "rustversion"
++version = "1.0.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+ 
+ [[package]]
+ name = "ryu"
+@@ -789,12 +923,31 @@
+ 
+ [[package]]
+ name = "socket2"
++version = "0.5.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
++dependencies = [
++ "libc",
++ "windows-sys 0.52.0",
++]
++
++[[package]]
++name = "socket2"
+ version = "0.6.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+ dependencies = [
+  "libc",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "spin"
++version = "0.9.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
++dependencies = [
++ "lock_api",
+ ]
+ 
+ [[package]]
+@@ -864,6 +1017,15 @@
+ checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
+ dependencies = [
+  "cfg-if",
++]
++
++[[package]]
++name = "threadpool"
++version = "1.8.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
++dependencies = [
++ "num_cpus",
+ ]
+ 
+ [[package]]
+@@ -877,9 +1039,9 @@
+  "mio",
+  "pin-project-lite",
+  "signal-hook-registry",
+- "socket2",
++ "socket2 0.6.5",
+  "tokio-macros",
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -1056,11 +1218,12 @@
+  "getrandom 0.3.4",
+  "minicbor",
+  "mio",
++ "monoio",
+  "parking_lot",
+  "serde",
+  "serde_json",
+  "slab",
+- "socket2",
++ "socket2 0.6.5",
+  "subtle",
+  "tokio",
+  "tokio-tungstenite",
+@@ -1085,6 +1248,51 @@
+ ]
+ 
+ [[package]]
++name = "wasm-bindgen"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
++dependencies = [
++ "cfg-if",
++ "once_cell",
++ "rustversion",
++ "wasm-bindgen-macro",
++ "wasm-bindgen-shared",
++]
++
++[[package]]
++name = "wasm-bindgen-macro"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
++dependencies = [
++ "quote",
++ "wasm-bindgen-macro-support",
++]
++
++[[package]]
++name = "wasm-bindgen-macro-support"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
++dependencies = [
++ "bumpalo",
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++ "wasm-bindgen-shared",
++]
++
++[[package]]
++name = "wasm-bindgen-shared"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
++dependencies = [
++ "unicode-ident",
++]
++
++[[package]]
+ name = "windows-link"
+ version = "0.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -1092,12 +1300,151 @@
+ 
+ [[package]]
+ name = "windows-sys"
++version = "0.48.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
++dependencies = [
++ "windows-targets 0.48.5",
++]
++
++[[package]]
++name = "windows-sys"
++version = "0.52.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
++dependencies = [
++ "windows-targets 0.52.6",
++]
++
++[[package]]
++name = "windows-sys"
+ version = "0.61.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+ dependencies = [
+  "windows-link",
+ ]
++
++[[package]]
++name = "windows-targets"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9a2fa6e2155d7247be68c096456083145c183cbbbc2764150dda45a87197940c"
++dependencies = [
++ "windows_aarch64_gnullvm 0.48.5",
++ "windows_aarch64_msvc 0.48.5",
++ "windows_i686_gnu 0.48.5",
++ "windows_i686_msvc 0.48.5",
++ "windows_x86_64_gnu 0.48.5",
++ "windows_x86_64_gnullvm 0.48.5",
++ "windows_x86_64_msvc 0.48.5",
++]
++
++[[package]]
++name = "windows-targets"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
++dependencies = [
++ "windows_aarch64_gnullvm 0.52.6",
++ "windows_aarch64_msvc 0.52.6",
++ "windows_i686_gnu 0.52.6",
++ "windows_i686_gnullvm",
++ "windows_i686_msvc 0.52.6",
++ "windows_x86_64_gnu 0.52.6",
++ "windows_x86_64_gnullvm 0.52.6",
++ "windows_x86_64_msvc 0.52.6",
++]
++
++[[package]]
++name = "windows_aarch64_gnullvm"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2b38e32f0abccf9987a4e3079dfb67dcd799fb61361e53e2882c3cbaf0d905d8"
++
++[[package]]
++name = "windows_aarch64_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
++
++[[package]]
++name = "windows_aarch64_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "dc35310971f3b2dbbf3f0690a219f40e2d9afcf64f9ab7cc1be722937c26b4bc"
++
++[[package]]
++name = "windows_aarch64_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
++
++[[package]]
++name = "windows_i686_gnu"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a75915e7def60c94dcef72200b9a8e58e5091744960da64ec734a6c6e9b3743e"
++
++[[package]]
++name = "windows_i686_gnu"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
++
++[[package]]
++name = "windows_i686_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
++
++[[package]]
++name = "windows_i686_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f55c233f70c4b27f66c523580f78f1004e8b5a8b659e05a4eb49d4166cca406"
++
++[[package]]
++name = "windows_i686_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
++
++[[package]]
++name = "windows_x86_64_gnu"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "53d40abd2583d23e4718fddf1ebec84dbff8381c07cae67ff7768bbf19c6718e"
++
++[[package]]
++name = "windows_x86_64_gnu"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
++
++[[package]]
++name = "windows_x86_64_gnullvm"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0b7b52767868a23d5bab768e390dc5f5c55825b6d30b86c844ff2dc7414044cc"
++
++[[package]]
++name = "windows_x86_64_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
++
++[[package]]
++name = "windows_x86_64_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
++
++[[package]]
++name = "windows_x86_64_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+ 
+ [[package]]
+ name = "wit-bindgen"
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -17,6 +17,7 @@
+ futures-util = { version = "0.3", features = ["sink"] }
+ getrandom = { version = "0.3", features = ["std"] }
+ minicbor = { version = "2", features = ["std", "half"] }
++monoio = { version = "=0.2.4", default-features = false, features = ["async-cancel", "iouring", "sync"] }
+ mio = { version = "1.2.4", features = ["net", "os-poll"] }
+ parking_lot = "0.12"
+ serde = { version = "1", features = ["derive"] }
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -9,6 +9,8 @@
+ #[derive(Clone, Parser)]
+ #[command(version, about = "WebSocket Application Relay (Rust)")]
+ pub struct Config {
++    #[arg(skip)]
++    pub monoio: bool,
+     #[arg(long, env = "WAR_BIND", default_value = "127.0.0.1:1338")]
+     pub bind: SocketAddr,
+     #[arg(long, env = "WAR_ADMIN_BIND", default_value = "127.0.0.1:1339")]
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -7,6 +7,7 @@
+ 
+ fn main() -> Result<()> {
+     let mut config = Config::parse();
++    config.monoio = true;
+     config.load_secrets();
+     config.validate()?;
+     tracing_subscriber::fmt()
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -1,6 +1,7 @@
+ //! Native readiness-driven relay. One event loop owns each decoder; socket
+ //! output is serialized and can be submitted directly by any routing worker.
+ //! Idle connections need no task, message channel, or receive allocation.
++mod monoio_driver;
+ mod socket;
+ mod timers;
+ 
+@@ -94,6 +95,9 @@
+             .name(format!("war-io-{index}"))
+             .spawn(move || {
+                 let outcome = worker.run();
++                if let Err(error) = &outcome {
++                    eprintln!("Monoio worker failure: {error:#}");
++                }
+                 let _ = finished.send(outcome);
+             })
+             .context("cannot start native I/O worker")?;
+@@ -215,6 +219,9 @@
+     compacted: bool,
+     accept_queued: bool,
+     accept_retry: Option<Instant>,
++    monoio_listener: Option<std::net::TcpListener>,
++    monoio_new: Vec<(Token, std::net::TcpStream)>,
++    monoio_dirty: Vec<Token>,
+ }
+ 
+ impl Drop for Worker {
+@@ -229,10 +236,21 @@
+     fn new(listener: std::net::TcpListener, relay: Arc<Relay>) -> io::Result<Self> {
+         let poll = Poll::new()?;
+         let registry = Arc::new(poll.registry().try_clone()?);
++        let monoio_listener = relay
++            .config
++            .monoio
++            .then(|| listener.try_clone())
++            .transpose()?;
+         let mut listener = TcpListener::from_std(listener);
+-        registry.register(&mut listener, LISTENER, Interest::READABLE)?;
++        if !relay.config.monoio {
++            registry.register(&mut listener, LISTENER, Interest::READABLE)?;
++        }
+         let signal = Arc::new(Signal {
+             waker: mio::Waker::new(&registry, WAKE)?,
++            monoio: relay
++                .config
++                .monoio
++                .then(futures_util::task::AtomicWaker::new),
+             stopping: AtomicBool::new(false),
+             pending: parking_lot::Mutex::new(VecDeque::new()),
+         });
+@@ -251,6 +269,9 @@
+             compacted: false,
+             accept_queued: false,
+             accept_retry: None,
++            monoio_listener,
++            monoio_new: Vec::new(),
++            monoio_dirty: Vec::new(),
+         })
+     }
+ 
+@@ -358,6 +379,14 @@
+                 .checked_add(1)
+                 .ok_or_else(|| io::Error::other("connection token space exhausted"))?;
+             let slot = self.connections.vacant_key();
++            let observation = if self.relay.config.monoio {
++                match socket2::SockRef::from(&stream).try_clone() {
++                    Ok(socket) => Some(std::net::TcpStream::from(socket)),
++                    Err(error) => return self.setup_failed(error, "clone readiness descriptor"),
++                }
++            } else {
++                None
++            };
+             let socket = match Socket::new(
+                 stream,
+                 token,
+@@ -372,6 +401,9 @@
+             let connection = Connection::new(socket, token, lease, &self.relay);
+             let deadline = connection.deadline(&self.relay);
+             self.connections.insert(connection);
++            if let Some(stream) = observation {
++                self.monoio_new.push((token, stream));
++            }
+             self.tokens.insert(token, slot);
+             self.timers.set(slot, deadline);
+             self.schedule(token);
+@@ -396,7 +428,9 @@
+     ) -> io::Result<()> {
+         // Stop readiness notifications during resource pressure. Existing
+         // sockets, timers and shutdown remain serviced; retry drains queued TCP.
+-        self.registry.deregister(&mut self.listener)?;
++        if !self.relay.config.monoio {
++            self.registry.deregister(&mut self.listener)?;
++        }
+         self.accept_retry = Some(Instant::now() + delay);
+         tracing::warn!(%error, operation, "native admission failed; retrying in one second");
+         Ok(())
+@@ -428,7 +462,63 @@
+         }
+     }
+ 
+-    fn run(mut self) -> Result<()> {
++    fn drive_ready(&mut self, stopping: bool, incoming: &mut ReceiveBatch<'_>) -> Result<()> {
++        let batch = self.ready.len().min(1024);
++        for _ in 0..batch {
++            let token = self.ready.pop_front().expect("ready batch");
++            if token == LISTENER {
++                self.accept_queued = false;
++                if !stopping {
++                    self.accept()?;
++                }
++                continue;
++            }
++            let Some(&slot) = self.tokens.get(&token) else {
++                continue;
++            };
++            let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
++            else {
++                continue;
++            };
++            if self.relay.config.monoio {
++                self.monoio_dirty.push(token);
++            }
++            connection.scheduled = false;
++            connection.socket.notified();
++            let keep = connection.drive_batched(&self.relay, &mut self.scratch, stopping, incoming);
++            match keep {
++                Drive::Drop => {
++                    self.timers.remove(slot);
++                    self.connections.remove(slot);
++                    self.tokens.remove(&token);
++                    if self.tokens.capacity() > 256
++                        && self.tokens.len() <= self.tokens.capacity() / 8
++                    {
++                        self.tokens.shrink_to(self.tokens.len() * 2);
++                    }
++                    self.reclaim_connections();
++                }
++                Drive::Wait | Drive::Again => {
++                    let deadline = self.connections[slot].deadline(&self.relay);
++                    self.timers.set(slot, deadline);
++                    if keep == Drive::Again {
++                        self.schedule(token);
++                    }
++                }
++            }
++        }
++        Ok(())
++    }
++
++    fn run(self) -> Result<()> {
++        if self.relay.config.monoio {
++            monoio_driver::run(self)
++        } else {
++            self.run_mio()
++        }
++    }
++
++    fn run_mio(mut self) -> Result<()> {
+         let mut events = Events::with_capacity(1024);
+         let mut shutdown_deadline = None;
+         let relay = self.relay.clone();
+@@ -468,52 +558,7 @@
+             }
+             // A bounded ready batch makes progress on buffered continuations
+             // without starving new socket events, timers, or shutdown signals.
+-            let batch = self.ready.len().min(1024);
+-            for _ in 0..batch {
+-                let token = self.ready.pop_front().expect("ready batch");
+-                if token == LISTENER {
+-                    self.accept_queued = false;
+-                    if shutdown_deadline.is_none() {
+-                        self.accept()?;
+-                    }
+-                    continue;
+-                }
+-                let Some(&slot) = self.tokens.get(&token) else {
+-                    continue;
+-                };
+-                let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
+-                else {
+-                    continue;
+-                };
+-                connection.scheduled = false;
+-                connection.socket.notified();
+-                let keep = connection.drive_batched(
+-                    &self.relay,
+-                    &mut self.scratch,
+-                    shutdown_deadline.is_some(),
+-                    &mut incoming,
+-                );
+-                match keep {
+-                    Drive::Drop => {
+-                        self.timers.remove(slot);
+-                        self.connections.remove(slot);
+-                        self.tokens.remove(&token);
+-                        if self.tokens.capacity() > 256
+-                            && self.tokens.len() <= self.tokens.capacity() / 8
+-                        {
+-                            self.tokens.shrink_to(self.tokens.len() * 2);
+-                        }
+-                        self.reclaim_connections();
+-                    }
+-                    Drive::Wait | Drive::Again => {
+-                        let deadline = self.connections[slot].deadline(&self.relay);
+-                        self.timers.set(slot, deadline);
+-                        if keep == Drive::Again {
+-                            self.schedule(token);
+-                        }
+-                    }
+-                }
+-            }
++            self.drive_ready(shutdown_deadline.is_some(), &mut incoming)?;
+             // Publish before polling, even when no more input will arrive.
+             incoming.publish();
+             {
+--- /dev/null
++++ b/src/server/monoio_driver.rs
+@@ -0,0 +1,335 @@
++//! Experimental Monoio io_uring readiness driver. The existing WebSocket
++//! decoder, worker scratch storage and borrowed vectored socket output remain
++//! unchanged. This deliberately tests readiness, not owned-buffer completion I/O.
++use std::{future::poll_fn, rc::Rc, task::Poll as TaskPoll};
++
++use futures_util::{
++    FutureExt, StreamExt,
++    future::{AbortHandle, Abortable, LocalBoxFuture},
++    stream::FuturesUnordered,
++};
++
++use super::*;
++
++pub(super) fn run(worker: Worker) -> Result<()> {
++    // Require io_uring explicitly: an unavailable ring must fail startup rather
++    // than silently measuring epoll under a different name.
++    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
++        .enable_timer()
++        .build()
++        .context("cannot create Monoio io_uring worker")?
++        .block_on(run_worker(worker))
++}
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum Direction {
++    Read,
++    Write,
++}
++
++type Completion = Option<(Token, Direction, u64, io::Result<()>)>;
++
++struct Watch {
++    stream: Rc<monoio::net::TcpStream>,
++    read: Option<AbortHandle>,
++    write: Option<AbortHandle>,
++    read_generation: u64,
++    write_generation: u64,
++}
++
++impl Drop for Watch {
++    fn drop(&mut self) {
++        if let Some(handle) = self.read.take() {
++            handle.abort();
++        }
++        if let Some(handle) = self.write.take() {
++            handle.abort();
++        }
++    }
++}
++
++struct Driver {
++    listener: Rc<monoio::net::TcpListener>,
++    listener_wait: Option<AbortHandle>,
++    listener_generation: u64,
++    watches: HashMap<Token, Watch>,
++    waits: FuturesUnordered<LocalBoxFuture<'static, Completion>>,
++}
++
++impl Driver {
++    fn new(listener: std::net::TcpListener) -> io::Result<Self> {
++        Ok(Self {
++            listener: Rc::new(monoio::net::TcpListener::from_std(listener)?),
++            listener_wait: None,
++            listener_generation: 0,
++            watches: HashMap::new(),
++            waits: FuturesUnordered::new(),
++        })
++    }
++
++    fn sync(&mut self, worker: &mut Worker, stopping: bool) -> Result<()> {
++        if !stopping && worker.accept_retry.is_none() {
++            if self.listener_wait.is_none() {
++                self.listener_generation += 1;
++                let generation = self.listener_generation;
++                let listener = self.listener.clone();
++                let (abort, registration) = AbortHandle::new_pair();
++                self.waits.push(
++                    Abortable::new(
++                        async move {
++                            (
++                                LISTENER,
++                                Direction::Read,
++                                generation,
++                                listener.readable(false).await,
++                            )
++                        },
++                        registration,
++                    )
++                    .map(Result::ok)
++                    .boxed_local(),
++                );
++                self.listener_wait = Some(abort);
++            }
++        } else if let Some(wait) = self.listener_wait.take() {
++            self.listener_generation += 1;
++            wait.abort();
++        }
++
++        for (token, stream) in worker.monoio_new.drain(..) {
++            // A newly accepted connection can already have failed its first
++            // synchronous handshake turn. Do not install a stale watcher.
++            if worker.tokens.contains_key(&token) {
++                self.watches.insert(
++                    token,
++                    Watch {
++                        stream: Rc::new(monoio::net::TcpStream::from_std(stream)?),
++                        read: None,
++                        write: None,
++                        read_generation: 0,
++                        write_generation: 0,
++                    },
++                );
++            }
++        }
++        for token in worker.monoio_dirty.drain(..) {
++            let Some(&slot) = worker.tokens.get(&token) else {
++                self.watches.remove(&token);
++                continue;
++            };
++            let Some(watch) = self.watches.get_mut(&token) else {
++                continue;
++            };
++            if watch.read.is_none() {
++                watch.read_generation += 1;
++                watch.read = Some(Self::arm(
++                    &self.waits,
++                    watch.stream.clone(),
++                    token,
++                    Direction::Read,
++                    watch.read_generation,
++                ));
++            }
++            if worker.connections[slot].socket.state.lock().writable {
++                if watch.write.is_none() {
++                    watch.write_generation += 1;
++                    watch.write = Some(Self::arm(
++                        &self.waits,
++                        watch.stream.clone(),
++                        token,
++                        Direction::Write,
++                        watch.write_generation,
++                    ));
++                }
++            } else if let Some(wait) = watch.write.take() {
++                watch.write_generation += 1;
++                wait.abort();
++            }
++        }
++        if self.watches.capacity() > 256 && self.watches.len() <= self.watches.capacity() / 8 {
++            self.watches.shrink_to(self.watches.len() * 2);
++        }
++        Ok(())
++    }
++
++    fn arm(
++        waits: &FuturesUnordered<LocalBoxFuture<'static, Completion>>,
++        stream: Rc<monoio::net::TcpStream>,
++        token: Token,
++        direction: Direction,
++        generation: u64,
++    ) -> AbortHandle {
++        let (abort, registration) = AbortHandle::new_pair();
++        waits.push(
++            Abortable::new(
++                async move {
++                    let result = match direction {
++                        Direction::Read => stream.readable(false).await,
++                        Direction::Write => stream.writable(false).await,
++                    };
++                    (token, direction, generation, result)
++                },
++                registration,
++            )
++            .map(Result::ok)
++            .boxed_local(),
++        );
++        abort
++    }
++
++    fn complete(&mut self, worker: &mut Worker, result: Completion, stopping: bool) -> Result<()> {
++        let Some((token, direction, generation, result)) = result else {
++            return Ok(());
++        };
++        if token == LISTENER {
++            if generation != self.listener_generation {
++                return Ok(());
++            }
++            self.listener_wait.take();
++            result.context("Monoio listener readiness failed")?;
++            if !stopping && worker.accept_retry.is_none() {
++                worker.schedule_accept();
++            }
++        } else if let Some(watch) = self.watches.get_mut(&token) {
++            let (current, handle) = match direction {
++                Direction::Read => (watch.read_generation, &mut watch.read),
++                Direction::Write => (watch.write_generation, &mut watch.write),
++            };
++            if generation != current {
++                return Ok(());
++            }
++            handle.take();
++            if result.is_err()
++                && let Some(&slot) = worker.tokens.get(&token)
++            {
++                worker.connections[slot].socket.state.lock().fatal = true;
++            }
++            worker.schedule(token);
++        }
++        Ok(())
++    }
++}
++
++async fn yield_once() {
++    let mut yielded = false;
++    poll_fn(|cx| {
++        if yielded {
++            TaskPoll::Ready(())
++        } else {
++            yielded = true;
++            cx.waker().wake_by_ref();
++            TaskPoll::Pending
++        }
++    })
++    .await
++}
++
++async fn run_worker(mut worker: Worker) -> Result<()> {
++    let mut driver = Driver::new(worker.monoio_listener.take().expect("Monoio listener"))?;
++    let relay = worker.relay.clone();
++    let mut incoming = relay.receive_batch();
++    let mut shutdown_deadline = None;
++    loop {
++        if worker.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
++            shutdown_deadline =
++                Some(Instant::now() + Duration::from_secs(relay.config.shutdown_timeout_secs));
++            for (_, connection) in worker.connections.iter_mut() {
++                if !connection.scheduled {
++                    connection.scheduled = true;
++                    worker.ready.push_back(connection.token);
++                }
++            }
++        }
++        let stopping = shutdown_deadline.is_some();
++        if shutdown_deadline.is_some_and(|d| d <= Instant::now())
++            || (stopping && worker.connections.is_empty())
++        {
++            break;
++        }
++        let now = Instant::now();
++        if !stopping && worker.accept_retry.is_some_and(|d| d <= now) {
++            worker.accept_retry = None;
++            worker.accept()?;
++        }
++        while let Some(slot) = worker.timers.pop_due(now) {
++            if let Some(connection) = worker.connections.get(slot) {
++                worker.schedule(connection.token);
++            }
++        }
++        worker.drive_ready(stopping, &mut incoming)?;
++        incoming.publish();
++        {
++            let mut pending = worker.signal.pending.lock();
++            while let Some(token) = pending.pop_front() {
++                let Some(&slot) = worker.tokens.get(&token) else {
++                    continue;
++                };
++                if let Some(connection) = worker.connections.get_mut(slot)
++                    && connection.token == token
++                    && !connection.scheduled
++                {
++                    connection.scheduled = true;
++                    worker.ready.push_back(token);
++                }
++            }
++        }
++        driver.sync(&mut worker, stopping)?;
++        if stopping && worker.connections.is_empty() {
++            break;
++        }
++        // Consume a bounded completion batch before an existing ready
++        // continuation. No full-population scans occur in the active path.
++        for _ in 0..1024 {
++            let Some(Some(result)) = driver.waits.next().now_or_never() else {
++                break;
++            };
++            driver.complete(&mut worker, result, stopping)?;
++        }
++        if !worker.ready.is_empty() {
++            yield_once().await;
++            continue;
++        }
++        let mut deadline = worker.timers.next();
++        for next in [shutdown_deadline, worker.accept_retry]
++            .into_iter()
++            .flatten()
++        {
++            deadline = Some(deadline.map_or(next, |previous| previous.min(next)));
++        }
++        let timer = async {
++            if let Some(deadline) = deadline {
++                monoio::time::sleep(deadline.saturating_duration_since(Instant::now())).await;
++            } else {
++                std::future::pending::<()>().await;
++            }
++        };
++        let signal = worker.signal.clone();
++        let notified = poll_fn(|cx| {
++            signal
++                .monoio
++                .as_ref()
++                .expect("Monoio waker")
++                .register(cx.waker());
++            if (!stopping && signal.stopping.load(Acquire)) || !signal.pending.lock().is_empty() {
++                TaskPoll::Ready(())
++            } else {
++                TaskPoll::Pending
++            }
++        });
++        tokio::select! {
++            result = driver.waits.next(), if !driver.waits.is_empty() => {
++                if let Some(result) = result { driver.complete(&mut worker, result, stopping)?; }
++            }
++            _ = notified => {}
++            _ = timer => {}
++        }
++    }
++    // Cancel outstanding readiness operations. Monoio owns their FD references
++    // until CQE retirement; runtime destruction drains that cancellation work.
++    driver.watches.clear();
++    if let Some(wait) = driver.listener_wait.take() {
++        wait.abort();
++    }
++    while driver.waits.next().await.is_some() {}
++    Ok(())
++}
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -30,20 +30,28 @@
+ 
+ pub(super) struct Signal {
+     pub waker: Waker,
++    pub monoio: Option<futures_util::task::AtomicWaker>,
+     pub stopping: AtomicBool,
+     pub pending: Mutex<VecDeque<Token>>,
+ }
+ 
+ impl Signal {
++    pub fn wake(&self) {
++        if let Some(waker) = &self.monoio {
++            waker.wake();
++        } else {
++            let _ = self.waker.wake();
++        }
++    }
+     pub fn stop(&self) {
+         self.stopping.store(true, Release);
+-        let _ = self.waker.wake();
++        self.wake();
+     }
+ }
+ 
+ pub(super) struct Socket {
+     pub state: Mutex<State>,
+-    registry: Arc<Registry>,
++    registry: Option<Arc<Registry>>,
+     signal: Arc<Signal>,
+     pub token: Token,
+     notified: AtomicBool,
+@@ -62,7 +70,7 @@
+     pub requested: Option<Disconnect>,
+     pub fatal: bool,
+     pub closed: bool,
+-    writable: bool,
++    pub writable: bool,
+     pub control_pending: bool,
+     pub control_deadline: Option<Instant>,
+     pub activity: Instant,
+@@ -95,7 +103,7 @@
+                 control_deadline: None,
+                 activity: Instant::now(),
+             }),
+-            registry,
++            registry: (!relay.config.monoio).then_some(registry),
+             signal,
+             token,
+             notified: AtomicBool::new(false),
+@@ -105,16 +113,16 @@
+             track_activity: relay.config.idle_timeout_secs > 0,
+             _guard: guard,
+         });
+-        socket
+-            .registry
+-            .register(&mut socket.state.lock().stream, token, Interest::READABLE)?;
++        if let Some(registry) = &socket.registry {
++            registry.register(&mut socket.state.lock().stream, token, Interest::READABLE)?;
++        }
+         Ok(socket)
+     }
+ 
+     fn notify(&self) {
+         if !self.notified.swap(true, Relaxed) {
+             self.signal.pending.lock().push_back(self.token);
+-            let _ = self.signal.waker.wake();
++            self.signal.wake();
+         }
+     }
+ 
+@@ -134,8 +142,11 @@
+             } else {
+                 Interest::READABLE
+             };
+-            self.registry
+-                .reregister(&mut state.stream, self.token, interest)?;
++            if let Some(registry) = &self.registry {
++                registry.reregister(&mut state.stream, self.token, interest)?;
++            } else if enabled {
++                self.notify();
++            }
+             state.writable = enabled;
+         }
+         Ok(())
+@@ -316,7 +327,9 @@
+                 .output_queue_capacity_bytes
+                 .fetch_sub(capacity, Relaxed);
+         }
+-        let _ = self.registry.deregister(&mut state.stream);
++        if let Some(registry) = &self.registry {
++            let _ = registry.deregister(&mut state.stream);
++        }
+     }
+ }
+ 
+@@ -540,6 +553,7 @@
+         let registry = Arc::new(poll.registry().try_clone().unwrap());
+         let signal = Arc::new(Signal {
+             waker: Waker::new(&registry, Token(1)).unwrap(),
++            monoio: None,
+             stopping: AtomicBool::new(false),
+             pending: Mutex::new(VecDeque::new()),
+         });
+--- a/tests/relay_integration.rs
++++ b/tests/relay_integration.rs
+@@ -45,7 +45,8 @@
+ }
+ 
+ impl Server {
+-    async fn new(config: Config) -> Self {
++    async fn new(mut config: Config) -> Self {
++        config.monoio = true;
+         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+         let admin = TcpListener::bind("127.0.0.1:0").await.unwrap();
+         let url = format!("ws://{}/any-path", listener.local_addr().unwrap());

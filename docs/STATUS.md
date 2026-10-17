@@ -3,12 +3,47 @@
 The user's ongoing goal is to port the upstream relay faithfully to Rust and keep
 improving simplicity, code, documentation, stability, performance, concurrency,
 and adjacent platform management. A later instruction makes CBOR the primary
-protocol and preserves the upstream's zero-copy routing intent. The latest
-instruction makes 100,000 simultaneous users an explicit operating target.
+protocol and preserves the upstream's zero-copy routing intent. A capacity
+instruction makes 100,000 simultaneous users an explicit operating target;
+the latest requested experiment evaluates Monoio.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: worker-local input statistics, 2026-10-17
+## Latest verified checkpoint: Monoio evaluation, 2026-10-17
+
+Monoio 0.2.4 was implemented and measured in the native socket workers. The
+default data path already uses Mio; Tokio handles management and lifecycle.
+The experiment uses Monoio's io_uring readiness API while preserving CBOR,
+worker-shared decoder storage, borrowed vectored output, quotas and FIFO.
+Kernel descriptor inspection confirms real io_uring use without fallback.
+
+The final prototype is rejected as the default: three matched 100,000-user
+overload pairs measure 442,291 versus Mio's 556,530 verified deliveries/s,
+6,760 versus 4,992 CPU ns/delivery, and 168.24 versus 107.33 MiB ready RSS.
+Its adapter duplicates descriptors for independent readiness ownership, using
+200,038 versus 100,026 at the ready gate. Dense private and mixed fanout also
+use more CPU. These are results for this readiness adapter; Monoio's owned-buffer
+completion API and a different ownership architecture remain unmeasured.
+
+A retained-readiness-descriptor retirement gap was reproduced and fixed in the
+prototype. All 144 tests, strict Clippy, independent corpus and large-fragment
+checks pass. Two final 65-second 100,000-user mixed cases each verify 6.5 million
+stable messages and 66,560 churn sessions, with heartbeats, unread-peer pressure,
+exact counters, zero final established sockets and complete descriptor retirement.
+Both have a 1.048576 ms p99 upper bucket. Original failures and all earlier
+variants remain archived. All source patches replay, and a fresh reconstruction
+build passes its protocol smoke corpus.
+
+See the [study](performance.md#monoio-readiness-evaluation-2026-10-17),
+[manifest](benchmarks/2026-10-17-monoio.json) and
+[rebuild command](operations.md#rebuilding-the-monoio-experiment).
+The final experimental hash is `b83d3c30…`. The default remains Mio, with no
+Monoio dependency added to the main Cargo project. The idle local native service
+now runs the selected input-batch executable `35d46da1…`; native and legacy
+smoke checks, readiness and the existing test page pass with zero remaining
+resources. The legacy bridge and static service retain their existing processes.
+
+## Prior verified checkpoint: worker-local input statistics, 2026-10-17
 
 Four cumulative input/routing counters now publish at the existing worker ready
 batch boundary, using an explicit accumulator and a drop guard. Quotas, live
@@ -30,9 +65,9 @@ regression and remains archived. There is no universal throughput claim.
 The private borrowed-submission experiment was rejected after measurement.
 See the [study](performance.md#worker-local-input-statistics-2026-10-17) and
 [manifest](benchmarks/2026-10-17-input-batch.json). The selected native hash is
-`35d46da1…`. Local services have not yet been replaced at this checkpoint.
+`35d46da1…`. The following Monoio checkpoint records its later local activation.
 
-The user's next requested experiment is Monoio for native socket I/O.
+The user's requested Monoio experiment follows in the latest checkpoint.
 
 ## Prior verified checkpoint: C++ with AOCL, 2026-10-17
 

@@ -1,0 +1,183 @@
+{
+  "passed": true,
+  "diagnostic_only": false,
+  "scope": "Sequential fresh native servers, 64 private pairs/8192 idle rooms, same frozen verifier, four workers on CPUs 0-3 and client CPUs 4-7. Six-second gated traffic; query adds 200 CBOR channel queries/s, churn adds eight verified reconnect workers. Full payload, FIFO, Close/EOF, counter and cleanup checks. No builds/profiles/other load tests overlap ordinary timing.",
+  "variants": {
+    "control": {
+      "path": "artifacts/candidates/input-batch/war-relay",
+      "sha256": "35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e"
+    },
+    "candidate": {
+      "path": "artifacts/candidates/monoio-readiness/war-relay",
+      "sha256": "4f37d86e04351646a5d0a9d0fad7cffa36269ff26bd2d19f124b22a9f29b1724"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/active-pairs-client/inspection",
+    "sha256": "c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569"
+  },
+  "helpers": {
+    "inspection.py": "cf644d4636d7641ed7fb2a7d1b6d5811d7fe287cfb58c510be4beba847be019d",
+    "benchmark.py": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce"
+  },
+  "runs": [
+    {
+      "kind": "control",
+      "case": "private",
+      "repetition": 1,
+      "trace": "artifacts/monoio-readiness-private-private-control-1.json",
+      "trace_sha256": "4b81658a8b39ef895f663941b807f8266088bca20326ede30900459f9d97ab52",
+      "passed": true,
+      "deliveries_per_second": 2108177.4696779246,
+      "cpu_ns_per_delivery": 1027.7004806476093,
+      "p99_ms": 2.097152,
+      "rss_mib": 17.78515625,
+      "verified": 12649600,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    },
+    {
+      "kind": "candidate",
+      "case": "private",
+      "repetition": 1,
+      "trace": "artifacts/monoio-readiness-private-private-candidate-1.json",
+      "trace_sha256": "a2464d7c478feeee2a2264036953fd346f2f371cf46eb1f2ceccc4b00c4224b2",
+      "passed": true,
+      "deliveries_per_second": 2113341.157958921,
+      "cpu_ns_per_delivery": 1067.7411580938249,
+      "p99_ms": 2.097152,
+      "rss_mib": 23.3515625,
+      "verified": 12680976,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    },
+    {
+      "kind": "candidate",
+      "case": "private",
+      "repetition": 2,
+      "trace": "artifacts/monoio-readiness-private-private-candidate-2.json",
+      "trace_sha256": "7d517fdc22772f27d70cb73608b76d5b7bbe488d3f5d13aad49903e5c0f1b7b6",
+      "passed": true,
+      "deliveries_per_second": 2144006.9536369597,
+      "cpu_ns_per_delivery": 1088.2272467228813,
+      "p99_ms": 2.097152,
+      "rss_mib": 23.40234375,
+      "verified": 12864960,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    },
+    {
+      "kind": "control",
+      "case": "private",
+      "repetition": 2,
+      "trace": "artifacts/monoio-readiness-private-private-control-2.json",
+      "trace_sha256": "32dca7ee889fbad1a1e59d0929b70a798a21172fb9667d7fcf80a214452acc28",
+      "passed": true,
+      "deliveries_per_second": 2126050.7521652016,
+      "cpu_ns_per_delivery": 1045.686628881896,
+      "p99_ms": 2.097152,
+      "rss_mib": 17.8125,
+      "verified": 12757168,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    },
+    {
+      "kind": "control",
+      "case": "private",
+      "repetition": 3,
+      "trace": "artifacts/monoio-readiness-private-private-control-3.json",
+      "trace_sha256": "c7636a8e96586c341414ad8c94a06ec8fd19cc0ff43d53bc6435d3f845b84dfb",
+      "passed": true,
+      "deliveries_per_second": 2114972.16614522,
+      "cpu_ns_per_delivery": 1045.6855031898529,
+      "p99_ms": 2.097152,
+      "rss_mib": 17.83203125,
+      "verified": 12690240,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    },
+    {
+      "kind": "candidate",
+      "case": "private",
+      "repetition": 3,
+      "trace": "artifacts/monoio-readiness-private-private-candidate-3.json",
+      "trace_sha256": "4b2a301047e11712079098b6de2d089c445d1d1b2d896d2f1cb7fc5c2f6303fe",
+      "passed": true,
+      "deliveries_per_second": 2094268.3360031156,
+      "cpu_ns_per_delivery": 1083.0551290180472,
+      "p99_ms": 2.097152,
+      "rss_mib": 23.3828125,
+      "verified": 12566304,
+      "churn_per_second": 0.0,
+      "churn_verified": 0,
+      "queries_verified": 0,
+      "normal_closes": 8320
+    }
+  ],
+  "summary": {
+    "private/control": {
+      "deliveries_per_second": {
+        "median": 2114972.16614522,
+        "min": 2108177.4696779246,
+        "max": 2126050.7521652016
+      },
+      "cpu_ns_per_delivery": {
+        "median": 1045.6855031898529,
+        "min": 1027.7004806476093,
+        "max": 1045.686628881896
+      },
+      "p99_ms": {
+        "median": 2.097152,
+        "min": 2.097152,
+        "max": 2.097152
+      },
+      "rss_mib": {
+        "median": 17.8125,
+        "min": 17.78515625,
+        "max": 17.83203125
+      },
+      "churn_per_second": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "private/candidate": {
+      "deliveries_per_second": {
+        "median": 2113341.157958921,
+        "min": 2094268.3360031156,
+        "max": 2144006.9536369597
+      },
+      "cpu_ns_per_delivery": {
+        "median": 1083.0551290180472,
+        "min": 1067.7411580938249,
+        "max": 1088.2272467228813
+      },
+      "p99_ms": {
+        "median": 2.097152,
+        "min": 2.097152,
+        "max": 2.097152
+      },
+      "rss_mib": {
+        "median": 23.3828125,
+        "min": 23.3515625,
+        "max": 23.40234375
+      },
+      "churn_per_second": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  }
+}

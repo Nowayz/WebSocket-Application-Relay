@@ -1,0 +1,22 @@
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/experiments/monoio)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.55s
+     Running unittests src/lib.rs (artifacts/experiments/monoio/target/debug/deps/war_relay-75c52edca5e80937)
+
+running 1 test
+test server::monoio_tests::retiring_a_decoder_stops_tcp_even_while_its_readiness_descriptor_is_retained ... FAILED
+
+failures:
+
+---- server::monoio_tests::retiring_a_decoder_stops_tcp_even_while_its_readiness_descriptor_is_retained stdout ----
+
+thread 'server::monoio_tests::retiring_a_decoder_stops_tcp_even_while_its_readiness_descriptor_is_retained' (670551) panicked at src/server/monoio_tests.rs:31:31:
+called `Result::unwrap()` on an `Err` value: Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    server::monoio_tests::retiring_a_decoder_stops_tcp_even_while_its_readiness_descriptor_is_retained
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 64 filtered out; finished in 1.06s
+
+error: test failed, to rerun pass `--lib`

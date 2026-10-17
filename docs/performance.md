@@ -5335,3 +5335,117 @@ CPU, and three 100,000-user overload trials show +2.32% throughput but +0.91%
 CPU. Its source and all measurements are retained. Only the explicit input
 accumulator is selected. The requested Monoio experiment follows from this
 frozen baseline.
+
+## Monoio readiness evaluation, 2026-10-17
+
+The requested Monoio experiment is implemented and measured, then rejected as
+the default after comparison. The [manifest](benchmarks/2026-10-17-monoio.json)
+retains source patches, build hashes, every trial, original failures and the
+reconstruction checks. The final experimental executable has SHA-256
+`b83d3c309dc5c8f036a76d1d31c8bb1abf7984366a91f1da15972064208eb6e3`;
+the frozen Mio control remains `35d46da1…` from the preceding checkpoint.
+
+The current data plane uses Mio, with Tokio serving management and lifecycle.
+The experiment replaces the data worker's driver with pinned Monoio 0.2.4 and
+its io_uring readiness API. It explicitly requires `IoUringDriver`, with
+`async-cancel` and `sync`, and has no legacy fallback. A separate live kernel-FD
+inspection finds one io_uring descriptor for a one-worker Monoio instance and
+none for Mio, and verifies WebSocket upgrade, exact Close and EOF for both.
+The same CBOR decoder, shared receive storage, routing, vectored `sendmsg`,
+pressure budgets, ordered output and management handlers are retained.
+
+This isolates a readiness adaptation, including its integration costs. It does
+not exercise Monoio's `AsyncReadRent`/`AsyncWriteRent` completion APIs, provided
+buffers, registered files or kernel zero-copy sends. Published payloads still
+share their original `Bytes` owner; ordinary socket/kernel copies remain.
+Monoio sockets stay on their owning thread. To preserve the existing direct
+cross-worker writer through safe ownership, this adapter monitors a duplicate
+descriptor. The additional descriptor and watcher state belong to this design,
+and are not requirements for every Monoio server. A completion backend with
+output on the owning thread and bounded live receive buffers would need its
+own design, correctness checks and measurements.
+
+The first version uses cancellable readiness futures. A user-cycle diagnostic
+shows repeated unordered-future/cancellation bookkeeping. Persistent per-peer
+watcher tasks remove the adapter's per-rearm erased future, stream-node and
+cancellation-handle allocation. They still fail to improve whole-relay CPU:
+the five-repetition private cohort measures 1,050/1,085/1,095 ns per delivery
+for Mio, initial Monoio and persistent Monoio, respectively, with essentially
+flat throughput. All historical cohorts remain recorded. Diagnostic timings
+are excluded from ordinary medians; the profile is not a complete causal
+allocation of the later 100,000-user CPU gap.
+
+Final comparisons use three sequential fresh repetitions per backend and
+workload, rotating order, the same frozen verifying clients and portable Rust
+1.91.1 release configuration with thin LTO and one codegen unit:
+
+| Final workload | Mio deliveries/s | Monoio deliveries/s | Mio CPU ns/delivery | Monoio CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| 64 active private pairs and 8,192 idle rooms, six seconds | 2,160,710 | 2,115,759 | 1,054 | 1,112 |
+| 100,000 users, five seconds of offered overload | 556,530 | 442,291 | 4,992 | 6,760 |
+| Mixed-size fanout with unread peers, four seconds | 118,654 | 115,730 | 5,708 | 6,047 |
+
+These are medians of per-trial measurements. The private workload uses server
+CPUs 0–3 and eight client workers confined to CPUs 4–7 in the same L3 domain.
+Capacity and fanout use server CPUs 0–3 and client CPUs 8–15 in the other L3
+domain, allowing eight physical client cores. Comparisons are within each
+workload. Capacity requests 16 KiB send and 64 KiB receive socket buffers;
+fanout retains OS defaults. Its 32 peers include 27 healthy receivers and four
+unread receivers, with 256/1,024/65,536/262,144-byte values, a 16-message window
+and 1 ms reader delay. Fanout CPU includes lifecycle work and is comparable
+within its row, rather than with the other timed-message CPU windows.
+
+The final Monoio changes are -2.08% private throughput/+5.51% CPU, -20.53%
+overload throughput/+35.42% CPU, and -2.46% fanout throughput/+5.94% CPU.
+Private and fanout throughput ranges overlap; the three overload throughput
+and CPU ranges do not. Small cohorts establish no universal significance
+claim. Private p99 upper buckets remain 2.097152 ms and fanout 4.194304 ms.
+The offered million messages/s exceeds both four-worker servers' capacity:
+five million verified messages per run include backlog drainage. Their overload
+p99 upper bucket is 268.435456 ms. Those figures are not a sustainable offered
+rate or a low-latency operating recommendation.
+
+At the 100,000-user ready gate, median server RSS is **107.33 MiB for Mio and
+168.24 MiB for Monoio**, a 56.75% increase. Descriptor counts are 100,026 and
+200,038. They include process/listener overhead; duplicate descriptors share
+the underlying TCP socket and do not double its socket buffers. RSS excludes
+client processes and kernel socket/polling memory. Quiescent decoder admission
+remains bounded by one scratch allowance per worker in both implementations.
+
+The first parallel integration attempt exhausted the test process's 8 MiB
+locked-memory limit while many multi-worker test servers created rings, returning
+`ENOMEM`. Raising that process's limit makes the suite pass; no global limit is
+changed. Manual Mio poller unit fixtures retain their native driver, while the
+52 network integration tests explicitly select Monoio. The final suite has
+144 passing tests, including a new deterministic retirement regression test,
+and strict Clippy and formatting pass.
+
+An earlier 65-second mixed trial failed the strict quiescent kernel check:
+100,001 established sockets versus 100,000 reported live connections. A focused
+TCP test then proves that a retained readiness duplicate can keep the transport
+open after its decoder and admission guard retire. The final prototype explicitly
+shuts down TCP at decoder retirement, before asynchronous readiness ownership
+finishes dropping. The regression test fails without that change and passes
+with it. The kernel assertion remains unchanged; no failure is hidden or
+included in successful timings, and this does not establish a Monoio library bug.
+
+Two final 65-second mixed runs each pass with 100,000 stable users, 6.5 million
+verified stable messages at one 1 KiB message/user/s, 66,560 churn sessions,
+15-second heartbeat, eight deliberately unread pressure recipients, fresh
+postcheck routing through every stable user and exact Close/EOF, counter,
+descriptor and kernel connection retirement. Both have a 1.048576 ms p99 upper
+bucket; RTT maxima are 10.632 and 7.145 ms. The independent corpus passes all
+776 cases/2,311 exchanges and large-fragment waves pass all 24 reclamation cycles.
+These are finite loopback checks; multi-hour, remote and TLS capacity remain
+unmeasured. Eighteen final ordinary comparisons pass; thirty historical
+ordinary comparisons, the initial mixed failure and all prototype sources remain
+in the archive.
+
+All three archived source patches replay against `67e4609`, with every source
+hash checked. The final reconstruction is built through
+`scripts/try-monoio.py`, and that newly built executable passes the protocol smoke
+corpus. Its binary hash differs with the new local build path and is recorded
+separately; it is not substituted into the measured cohort. The default Cargo
+project gains no Monoio dependency. Local development uses the selected Mio
+input-batch build, whose native/legacy routing, exact Close/EOF, readiness,
+test-page availability and zero resource retirement are verified separately.
