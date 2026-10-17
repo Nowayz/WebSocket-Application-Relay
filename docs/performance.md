@@ -6662,3 +6662,19 @@ page return 200, all four I/O workers have the expected singleton CPU masks,
 the running executable matches the selected hash, and final gauges clear.
 Bridge/static processes stay in place. This is local acceptance, not production
 deployment, a new 100k manual-service case or fresh browser-render acceptance.
+
+
+## 2026-10-17: modern C++ CBOR library comparison
+
+The separate [modern C++ implementation](../cpp/README.md) now has a checked
+comparison against both selected native Rust and the newer observer-index Rust
+candidate. This uses native CBOR in every arm, rather than the original legacy
+C++ protocol or a bridge. The [report](../cpp/BENCHMARKS.md) records all workloads,
+CPU/memory/latency results, rejected experiments, AOCL checks and operational
+limits. The [archive](benchmarks/2026-10-17-modern-cpp/README.md) contains raw
+traces, per-user CSVs, build/source provenance, plots and a hash manifest.
+
+The main tradeoff is lower populated C++ RSS and greater parallel fanout throughput
+against Rust's stronger private forwarding efficiency and observer-case latency.
+Keep selected Rust as the current low-latency operating recommendation. Neither
+this comparison nor the 30-second 100,000-user trials establish production parity.

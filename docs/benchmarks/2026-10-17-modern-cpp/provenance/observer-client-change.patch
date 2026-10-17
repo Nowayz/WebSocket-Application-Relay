@@ -1,0 +1,216 @@
+diff --git a/examples/inspection.rs b/examples/inspection.rs
+index afa8419..fd7c8ce 100644
+--- a/examples/inspection.rs
++++ b/examples/inspection.rs
+@@ -113,6 +113,9 @@ struct Args {
+     /// Add a stable broadcast room with this many fully verifying readers.
+     #[arg(long, default_value_t = 0)]
+     fanout_readers: usize,
++    /// Subscribe fanout readers as authenticated global channel-message observers.
++    #[arg(long)]
++    fanout_global_observers: bool,
+     /// Join and retire a verifying reader every N broadcast windows; zero disables.
+     #[arg(long, default_value_t = 0)]
+     fanout_churn_every: usize,
+@@ -703,6 +706,11 @@ async fn run(args: Args) -> Result<()> {
+                 && args.wire == Wire::Cbor),
+         "fanout membership churn requires CBOR readers, mode none and no inspectors"
+     );
++    ensure!(
++        !args.fanout_global_observers
++            || (args.fanout_readers > 0 && args.wire == Wire::Cbor && args.fanout_churn_every == 0),
++        "global observers require CBOR fanout readers without fanout membership churn"
++    );
+     ensure!(
+         args.page_size
+             .is_none_or(|limit| (1..=1000).contains(&limit)
+@@ -814,12 +822,25 @@ async fn run(args: Args) -> Result<()> {
+         None
+     };
+     let fanout = if args.fanout_readers > 0 {
+-        let group =
+-            fanout::Fanout::new(&args.url, args.fanout_readers, args.wire, &mut counts).await?;
++        let group = fanout::Fanout::new(
++            &args.url,
++            args.fanout_readers,
++            args.wire,
++            args.fanout_global_observers,
++            &mut counts,
++        )
++        .await?;
+         stable.push((
+             Bytes::from_static(b"fanout"),
+-            args.fanout_readers as u64 + 1,
++            if args.fanout_global_observers {
++                1
++            } else {
++                args.fanout_readers as u64 + 1
++            },
+         ));
++        if args.fanout_global_observers {
++            stable[0].1 += args.fanout_readers as u64;
++        }
+         Some(group)
+     } else {
+         None
+diff --git a/examples/inspection/fanout.rs b/examples/inspection/fanout.rs
+index b64f87e..edf8671 100644
+--- a/examples/inspection/fanout.rs
++++ b/examples/inspection/fanout.rs
+@@ -10,6 +10,7 @@ pub(super) struct Fanout {
+     readers: Vec<(Socket, u64)>,
+     packets: Arc<Vec<(Bytes, Bytes)>>,
+     wire: Wire,
++    global_observers: bool,
+ }
+ 
+ #[derive(Clone)]
+@@ -61,15 +62,20 @@ mod tests {
+ 
+     #[tokio::test]
+     async fn corruption_at_a_non_primary_reader_is_rejected() {
+-        check_corruption(false).await;
++        check_corruption(false, false).await;
+     }
+ 
+     #[tokio::test]
+     async fn a_changed_departure_at_a_non_primary_reader_is_rejected() {
+-        check_corruption(true).await;
++        check_corruption(true, false).await;
+     }
+ 
+-    async fn check_corruption(bad_departure: bool) {
++    #[tokio::test]
++    async fn corruption_at_a_non_primary_global_observer_is_rejected() {
++        check_corruption(false, true).await;
++    }
++
++    async fn check_corruption(bad_departure: bool, global_observers: bool) {
+         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+         let url = format!("ws://{}/", listener.local_addr().unwrap());
+         let fake = tokio::spawn(async move {
+@@ -79,6 +85,16 @@ mod tests {
+                 let mut socket = tokio_tungstenite::accept_async(stream).await?;
+                 ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
+                 socket.send(Message::Binary(protocol::uint(id))).await?;
++                if global_observers && id != 1 {
++                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
++                    socket
++                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\0\xf5")))
++                        .await?;
++                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
++                    socket
++                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\x01\x01")))
++                        .await?;
++                }
+                 peers.push(socket);
+             }
+             let mut transient = if bad_departure {
+@@ -130,7 +146,9 @@ mod tests {
+             std::future::pending::<Result<()>>().await
+         });
+         let mut counts = Counts::default();
+-        let group = Fanout::new(&url, 2, Wire::Cbor, &mut counts).await.unwrap();
++        let group = Fanout::new(&url, 2, Wire::Cbor, global_observers, &mut counts)
++            .await
++            .unwrap();
+         let error = timeout(
+             Duration::from_secs(2),
+             group.run(
+@@ -160,13 +178,34 @@ impl Fanout {
+         url: &str,
+         readers: usize,
+         wire: Wire,
++        global_observers: bool,
+         counts: &mut Counts,
+     ) -> Result<Self> {
+         let name = Bytes::from_static(b"fanout");
+         let (sender, id) = join(url, &name, wire, counts).await?;
+         let mut peers = Vec::with_capacity(readers);
+         for _ in 0..readers {
+-            peers.push(join(url, &name, wire, counts).await?);
++            let reader_name = if global_observers {
++                Bytes::from_static(protocol::GLOBAL_CHANNEL)
++            } else {
++                name.clone()
++            };
++            let (mut socket, id) = join(url, &reader_name, wire, counts).await?;
++            if global_observers {
++                authenticate(&mut socket, wire, counts).await?;
++                ensure!(
++                    exchange(
++                        &mut socket,
++                        protocol::request(1, &protocol::uint(u64::from(protocol::CHANNEL_MESSAGE))),
++                        counts
++                    )
++                    .await?
++                    .as_ref()
++                        == b"\x82\0\x82\x01\x01",
++                    "channel observer opt-in"
++                );
++            }
++            peers.push((socket, id));
+         }
+         let mut payload = [0x5a; 1024];
+         let packets = (0u64..64)
+@@ -184,6 +223,7 @@ impl Fanout {
+             readers: peers,
+             packets: Arc::new(packets),
+             wire,
++            global_observers,
+         })
+     }
+ 
+@@ -199,6 +239,7 @@ impl Fanout {
+             readers,
+             packets,
+             wire,
++            global_observers,
+         } = self;
+         let readers_len = readers.len();
+         let (windows, initial) = watch::channel(None::<Step>);
+@@ -310,6 +351,7 @@ impl Fanout {
+                 readers,
+                 packets,
+                 wire,
++                global_observers,
+             },
+             counts,
+             stats,
+@@ -328,9 +370,11 @@ impl Fanout {
+                 ensure!(actual == expected, "fanout departure changed");
+                 counts.received(&actual);
+             }
+-            let actual = data(&mut self.sender).await?;
+-            ensure!(actual == expected, "fanout sender departure changed");
+-            counts.received(&actual);
++            if !self.global_observers {
++                let actual = data(&mut self.sender).await?;
++                ensure!(actual == expected, "fanout sender departure changed");
++                counts.received(&actual);
++            }
+         }
+         close(&mut self.sender, counts).await
+     }
+diff --git a/scripts/inspection.py b/scripts/inspection.py
+index ec3e27f..9292868 100644
+--- a/scripts/inspection.py
++++ b/scripts/inspection.py
+@@ -132,6 +132,8 @@ def run(args):
+         command += ["--page-size", str(args.page_size)]
+     if args.fanout_readers:
+         command += ["--fanout-readers", str(args.fanout_readers)]
++    if getattr(args, "fanout_global_observers", False):
++        command += ["--fanout-global-observers"]
+     if getattr(args, "fanout_churn_every", 0):
+         command += ["--fanout-churn-every", str(args.fanout_churn_every)]
+     if getattr(args, "fanout_window", 16) != 16:
+@@ -297,6 +299,8 @@ if __name__ == "__main__":
+     parser.add_argument("--workers", type=int, default=4, help="Native server worker count")
+     parser.add_argument("--fanout-readers", type=int, default=0,
+                         help="Add a verified broadcast room; requires the updated client")
++    parser.add_argument("--fanout-global-observers", action="store_true",
++                        help="Use authenticated global channel-message observers as fanout readers")
+     parser.add_argument("--fanout-churn-every", type=int, default=0,
+                         help="Join/retire a verifying room member every N fanout windows; zero disables")
+     parser.add_argument("--fanout-window", type=int, default=16,

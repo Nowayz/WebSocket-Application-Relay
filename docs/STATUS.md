@@ -1,5 +1,24 @@
 # Continuing goal status
 
+## 2026-10-17: separate modern C++ candidate
+
+Implemented an embeddable C++20 CBOR relay on pinned uWebSockets/uSockets with
+thread-confined sockets, reusable bounded delivery batches and borrowed local
+payloads. Full shared corpus, ASan/UBSan, TSan, active/partial-HTTP shutdown,
+identity/observer controls and slow-reader checks pass. The transport patch
+preserves Close receipts and keeps admission/output charges until physical close.
+
+Thirty-six matched saturation trials, six competing-observer trials, eight
+AOCL trials and four 100,000-user trials are archived. C++ uses about 56 MiB RSS
+while populated, versus Rust's 105–107 MiB, and reaches about 2.8x the four-worker
+fanout throughput. Selected Rust retains a private-throughput/CPU advantage; the
+newer Rust observer candidate has better private p99 under observer competition.
+AOCL did not earn adoption. C++ retains more empty-process RSS after retirement.
+The selected Rust runtime/manual services remain unchanged, and the Rust observer
+experiment remains unselected. See [the full comparison](../cpp/BENCHMARKS.md)
+for exact workloads, ranges, source hashes and remaining C++ operational gaps.
+
+
 The user's ongoing goal is to port the upstream relay faithfully to Rust and keep
 improving simplicity, code, documentation, stability, performance, concurrency,
 and adjacent platform management. A later instruction makes CBOR the primary

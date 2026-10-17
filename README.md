@@ -9,6 +9,15 @@ at commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`, with the requested CBOR re
 The original C++ source, JavaScript clients, dependencies, history, and MIT license
 remain available. The original README is in [docs/upstream-README.md](docs/upstream-README.md).
 
+## Modern C++ comparison candidate
+
+A separate [C++20 static library and relay](cpp/README.md) now implements the
+native CBOR protocol on pinned modern uWebSockets/uSockets. It uses per-worker
+socket ownership, reusable bounded delivery batches and borrowed local payloads.
+See the [measured comparisons](cpp/BENCHMARKS.md) for throughput, CPU, memory,
+per-user latency, validation and remaining operational differences. The selected
+Rust runtime and the original C++ implementation remain independently available.
+
 ## Run
 
 Requires Rust 1.91 or newer; no C++ libraries, OpenSSL, TBB, or libuv are needed.

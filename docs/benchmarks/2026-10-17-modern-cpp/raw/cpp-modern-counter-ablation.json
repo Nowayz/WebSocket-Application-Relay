@@ -1,0 +1,371 @@
+{
+  "scope": "Same checked native CBOR client, plaintext loopback, no bridge. Fresh sequential processes, rotated order. 1KiB, window16. Traffic64clients/32pairs, fanout64clients/63readers, churn16workers. Server workers pinned individually inside allowed0..N-1, client allowed8..15. CPU includes setup, checked workload and client cleanup; not isolated forwarding CPU. C++ lacks some Rust operational protections: this is a workload comparison, not feature-equivalent production certification.",
+  "server_sha256": {
+    "rust": "95242ed7ad3d8a160163f1515b30a8362592863baf24bd4c8390d9681dd4bec5",
+    "cpp": "adfa7df265b613d03fed8ff7d44acc2ed6a6e06dade060725fdc403d7cdc081d"
+  },
+  "client_sha256": "8aa8270a97d98fde8f4878bb8798161c92539f7111fae86e50a54adaf0c8b1aa",
+  "runs": [
+    {
+      "kind": "rust",
+      "workers": 4,
+      "mode": "traffic",
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-modern-v0/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:50509",
+        "--admin-bind",
+        "127.0.0.1:49661",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 837584,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 837585,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 837586,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 837587,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:50509",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "5",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1705060.0629364678,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 5.000476045,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 4.840693,
+        "latency_p50_upper_ms": 0.262144,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.027343776,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 8526112,
+        "window": 16
+      },
+      "server_cpu_seconds": 12.62,
+      "rss_kib": 5664,
+      "server_exit_code": 0
+    },
+    {
+      "kind": "cpp",
+      "workers": 4,
+      "mode": "traffic",
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-modern/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:41655",
+        "--admin-bind",
+        "127.0.0.1:39449",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 837594,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 837595,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 837596,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 837597,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:41655",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "5",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1442923.9284112216,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 5.00055745,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 11.511679,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.028512155,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 7215424,
+        "window": 16
+      },
+      "server_cpu_seconds": 12.14,
+      "rss_kib": 5708,
+      "server_exit_code": 0
+    },
+    {
+      "kind": "cpp",
+      "workers": 4,
+      "mode": "traffic",
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-modern/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:46081",
+        "--admin-bind",
+        "127.0.0.1:57355",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 837604,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 837605,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 837606,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 837607,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:46081",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "5",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1341023.2752927819,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 5.000635055,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 4.748896,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.019983228,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 6705968,
+        "window": 16
+      },
+      "server_cpu_seconds": 11.87,
+      "rss_kib": 5720,
+      "server_exit_code": 0
+    },
+    {
+      "kind": "rust",
+      "workers": 4,
+      "mode": "traffic",
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-modern-v0/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:38371",
+        "--admin-bind",
+        "127.0.0.1:53017",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 837628,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 837629,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 837630,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 837631,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:38371",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "5",
+        "--payload-bytes",
+        "1024",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1554491.9061973598,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 5.000455756,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 5.128936,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "traffic",
+        "payload_bytes": 1024,
+        "setup_seconds": 0.040347257,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 7773168,
+        "window": 16
+      },
+      "server_cpu_seconds": 12.45,
+      "rss_kib": 5664,
+      "server_exit_code": 0
+    }
+  ],
+  "passed": true
+}
