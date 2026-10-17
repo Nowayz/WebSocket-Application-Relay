@@ -6,6 +6,8 @@ Each raw TCP lifecycle must finish with EOF/reset and no application bytes.
 The retained session verifies complete 1KiB cyclic self messages and exact Close/EOF.
 Echo and flood use independent processes and CPU sets; phase gates keep the
 admitted socket alive until every refused lifecycle has retired.
+--profile attaches perf only between ready/measured gates; those timings are
+diagnostic and must be kept separate from ordinary comparisons.
 """
 import argparse
 import datetime
@@ -43,6 +45,12 @@ def listeners(port):
         return []
 
 
+def cpu_times(pid):
+    fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+    ticks = os.sysconf('SC_CLK_TCK')
+    return {'user': int(fields[11]) / ticks, 'system': int(fields[12]) / ticks}
+
+
 def run(args):
     port, admin = runtime.free_port(), runtime.free_port()
     assert port != admin
@@ -65,15 +73,15 @@ def run(args):
               'server_sha256': hashlib.sha256(args.server.read_bytes()).hexdigest(),
               'client_sha256': hashlib.sha256(args.client.read_bytes()).hexdigest(),
               'runner_source': Path(__file__).read_text(), 'args': {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
-              'events': [], 'passed': False}
+              'profile_diagnostic': args.profile, 'events': [], 'passed': False}
     result['network_namespace'] = os.readlink('/proc/self/ns/net')
     result['isolated_namespace'] = bool(args.inside)
     if args.inside:
         assert result['network_namespace'] != args.host_netns
     result['tcp_counters_before'] = tcp_counters()
-    server = None
+    server = perf = None
     clients = {}
-    with tempfile.TemporaryFile() as server_log, tempfile.TemporaryFile() as client_log:
+    with tempfile.TemporaryFile() as server_log, tempfile.TemporaryFile() as client_log, tempfile.TemporaryFile() as perf_log:
         try:
             server = subprocess.Popen(command, env=env, stdout=server_log, stderr=server_log)
             deadline = time.monotonic() + 5
@@ -147,11 +155,29 @@ def run(args):
                 allowance = observed['war_read_buffer_reserved_bytes']
                 assert 0 <= allowance <= (0 if ended else args.workers * 8192)
                 event.update(metrics=observed, exact_counter_checks=check, process=runtime.snapshot(server.pid),
+                             server_cpu_times=cpu_times(server.pid),
                              client_processes={label: runtime.snapshot(client.pid) for label, client in clients.items()})
                 result['events'].append(event)
+                if expected == 'ready' and args.profile:
+                    profile = args.output.with_suffix('.perf.data').resolve()
+                    assert not profile.exists(), 'use a fresh profile output path'
+                    perf_command = ['perf', 'record', '-e', 'cycles:u', '-F', '499', '--call-graph', 'dwarf,8192',
+                                    '-p', str(server.pid), '-o', str(profile)]
+                    perf = subprocess.Popen(perf_command, stdout=perf_log, stderr=perf_log)
+                    time.sleep(.2)
+                    assert perf.poll() is None, 'perf could not attach'
+                    result.update(profile_path=str(profile), perf_command=perf_command)
                 if expected == 'measured':
+                    if perf is not None:
+                        perf.send_signal(signal.SIGINT)
+                        result['perf_exit_code'] = perf.wait(timeout=10)
+                        perf = None
+                        assert result['perf_exit_code'] in (0, -signal.SIGINT), 'perf failed'
+                        result['profile_sha256'] = hashlib.sha256(profile.read_bytes()).hexdigest()
                     first = result['events'][0]
                     measured['server_cpu_seconds'] = event['process']['cpu_seconds'] - first['process']['cpu_seconds']
+                    measured['server_cpu_times'] = {key: value - first['server_cpu_times'][key]
+                                                    for key, value in event['server_cpu_times'].items()}
                     measured['client_cpu_by_role'] = {label: event['client_processes'][label]['cpu_seconds'] - first['client_processes'][label]['cpu_seconds'] for label in clients}
                     measured['client_cpu_seconds'] = sum(measured['client_cpu_by_role'].values())
                     measured['server_cpu_per_wall'] = measured['server_cpu_seconds'] / measured['elapsed_seconds']
@@ -168,6 +194,14 @@ def run(args):
                 result['failure_metrics'] = metrics(admin)
                 result['listener_queues_at_failure'] = listeners(port)
         finally:
+            if perf is not None:
+                if perf.poll() is None:
+                    perf.send_signal(signal.SIGINT)
+                try:
+                    result['perf_exit_code'] = perf.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    perf.kill(); result['perf_exit_code'] = perf.wait(timeout=5)
+                    result['perf_forced_kill'] = True
             result['client_exit_codes'] = {}
             for label, client in clients.items():
                 if client.poll() is None:
@@ -186,8 +220,9 @@ def run(args):
         result['tcp_counters_after'] = tcp_counters()
         result['tcp_counter_delta'] = {key: value - result['tcp_counters_before'][key]
                                        for key, value in result['tcp_counters_after'].items()}
-        server_log.seek(0); client_log.seek(0)
-        result.update(server_log=server_log.read().decode(errors='replace'), client_log=client_log.read().decode(errors='replace'))
+        server_log.seek(0); client_log.seek(0); perf_log.seek(0)
+        result.update(server_log=server_log.read().decode(errors='replace'), client_log=client_log.read().decode(errors='replace'),
+                      perf_log=perf_log.read().decode(errors='replace'))
     return result
 
 
@@ -203,6 +238,7 @@ def main():
     parser.add_argument('--client-cpus', default='4', help='Established echo client CPU set')
     parser.add_argument('--flood-cpus', default='5-7', help='Independent flood client CPU set')
     parser.add_argument('--isolate', action='store_true', help='Fresh private network namespace using bubblewrap')
+    parser.add_argument('--profile', action='store_true', help='Diagnostic only: sample server user cycles with perf between phase gates')
     parser.add_argument('--inside', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--host-netns', help=argparse.SUPPRESS)
     parser.add_argument('--output', type=Path, required=True)
