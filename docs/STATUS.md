@@ -28,6 +28,12 @@ explicit; the 400k operating recommendation stays. A separate idle pair shows
 pooled p99 upper bucket 0.524ms,max4.283ms. See
 [comparisons and scope](performance.md#initial-heartbeat-phase-spreading-2026-10-17).
 
+The idle local development service now runs frozen binary `c9a6c6da…` from
+runtime source commit `09e0722`, preserving its four-worker development profile.
+Native/legacy routing, Close/EOF, readiness, static-page availability, four
+singleton CPU bindings and zero final gauges pass. This is local acceptance,
+not production deployment or a new 100k manual-service test.
+
 ## Latest diagnosis: counters and heartbeat cohorts, 2026-10-17
 
 Three counter repeats plus a CPU-accounting follow-up verify 72 million messages
