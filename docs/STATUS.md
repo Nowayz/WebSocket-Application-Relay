@@ -9,7 +9,26 @@ the latest requested experiment evaluates Monoio.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: ready-slot CPU and tail-latency evaluation, 2026-10-17
+## Latest verified checkpoint: temporal latency diagnosis, 2026-10-17
+
+The optional per-user client now writes an exact one-second latency/Ping timeline,
+aggregated after timing. Small real-socket checks verify sample and Ping counts;
+example tests, strict Clippy and formatting pass. Four unchanged-Mio cases in
+heartbeat on/off/off/on order each verify 12 million packets through 100,000
+users at 400,000 offered packets/s, with complete final retirement.
+
+The temporal evidence contradicts a heartbeat-only explanation. One enabled
+case's worst cohort p99 is 26.3 ms away from its Ping cohorts; another reaches
+43.5 ms alongside concentrated Pings. A disabled case still reaches 21.0 ms.
+Pre-send p99 is only about 2.1–2.2 ms at these spikes. This motivates scoped
+post-send scheduling/socket diagnostics, not a causal server-time claim or a
+heartbeat policy change. See the [timeline study and plot](performance.md#latency-timeline-and-observed-heartbeat-cohorts-2026-10-17).
+
+Selected Mio `35d46da1…` and manual services remain unchanged. The continuing
+optimization goal remains active; the deferred slot-cache candidate remains
+available for re-evaluation after tail latency is understood.
+
+## Previous checkpoint: ready-slot CPU and tail-latency evaluation, 2026-10-17
 
 A ready-queue slot cache reduces median 100,000-user offered-overload CPU from
 4,966 to 4,822 ns/delivery (2.90%) in three matched pairs, with nonoverlapping

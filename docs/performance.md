@@ -5745,3 +5745,66 @@ resource retirement pass. This does not resolve the higher-rate tail uncertainty
 After deferring the candidate, rebuilding the original source produces the exact
 selected SHA-256 `35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e`
 and its independent protocol smoke passes. Local manual services are unchanged.
+
+
+## Latency timeline and observed heartbeat cohorts, 2026-10-17
+
+The [timeline archive](benchmarks/2026-10-17-latency-timeline.json) adds temporal
+context to the per-user diagnostic. The optional `--user-latency-output` capacity
+client mode now records Pings encountered before each probe's data receipt and
+writes a companion `.windows.json`. Existing exact send-to-receive and
+intended-send-to-receive samples also yield intended-to-actual-send delay by
+subtracting those durations for each individual probe, before computing quantiles.
+Quantiles are not subtracted from one another. Samples are assigned by their exact
+intended phase/sequence time to one-second cohorts. Aggregation, sorting and file
+output occur only after the measured gate. The server remains unchanged.
+
+A small real-socket comparison verifies every one of 384 samples, 128 per cohort,
+with 96 Pings in the heartbeat-enabled case and zero when disabled. Both example
+tests pass, including exact nearest-rank/empty-cohort behavior and the independent
+sender/body/sequence oracle. Strict example Clippy and formatting pass. The frozen
+client source replays byte exactly from its base patch; compiler and binary hashes
+are recorded. Diagnostic sample storage adds one Ping counter per sample and
+post-measurement window buffers; it is not a server allocation change.
+
+Four sequential cases run in on/off/off/on order on the same selected Mio binary:
+100,000 users in 16-member private rings, four 1 KiB packets/user/s for 30 seconds,
+four server cores 0–3, eight client cores 8–15 and the same 16 KiB/64 KiB TCP
+profile. Heartbeat is 15 seconds when enabled. Each user has 120 samples and each
+case verifies all 12 million timed packets, exact per-window counts, payload/FIFO,
+fresh routing, counters, Close/EOF and complete retirement. Client/server exit
+zero in every case. No builds, profiles or other test loads overlap the runs.
+
+| Run | Median user's p99 ms | 99th-percentile user's p99 ms | Worst packet ms | Encountered Pings |
+| --- | ---: | ---: | ---: | ---: |
+| Heartbeat on, first | 5.687 | 11.648 | 30.215 | 200,000 |
+| Heartbeat off, first | 4.140 | 8.749 | 14.003 | 0 |
+| Heartbeat off, second | 8.985 | 16.588 | 27.881 | 0 |
+| Heartbeat on, second | 7.527 | 42.203 | 46.003 | 200,000 |
+
+The first enabled case encounters 100,000 Pings in each of intended-send cohorts
+12 and 27. Its highest cohort send-to-receive p99 is instead 26.316 ms at second
+17, with no Pings there and pre-send p99 only 2.239 ms. The second enabled case
+has its highest cohort p99, 43.505 ms, in cohort 27 with 87,882 encountered Pings;
+pre-send p99 there is 2.046 ms. The second disabled run still reaches 21.037 ms
+cohort p99 at second 8, with pre-send p99 2.117 ms. These cohort quantiles pool
+packets scheduled in that second; they are distinct from per-user quantiles in
+the table, computed over each user's full run.
+
+![Latency timeline and Ping cohorts](benchmarks/2026-10-17-latency-timeline/latency-timeline-plot.png)
+
+The timing supports concentrated heartbeat work as a possible contributor to
+some spikes, while contradicting a heartbeat-only explanation. Heartbeat
+selection and tail rank are not stable across these four finite runs. Flat
+pre-send delay at several major spikes narrows the next diagnostic toward the
+post-send path, including server, kernel and client receive scheduling; it does
+not isolate any one layer or prove pure server processing delay. Ping counts
+are control frames encountered while reading probes in an intended-send cohort,
+not kernel arrival timestamps, and may be shifted by probe cadence and scheduling.
+No heartbeat policy or runtime optimization is adopted from this evidence.
+
+Kernel scheduler statistics are currently disabled on the host, and the ordinary
+user perf tracepoint listing provides no scheduler switch event. Neither global
+setting is changed. A subsequent scheduler diagnostic must use available scoped
+instrumentation and retain its overhead separately from ordinary measurements.
+The selected native executable and local manual services remain unchanged.

@@ -999,3 +999,26 @@ cancellation. Large parallel suites may require a scoped locked-memory allowance
 for their rings. Tokio remains in management/lifecycle. The main project's native
 Mio runtime remains selected. These experiments require Linux with available
 io_uring and do not imply kernel zero-copy sends or provided-buffer rings.
+
+
+## Plotting latency over time
+
+Build the instrumented capacity example, then use `scripts/capacity.py` with
+`--client target/release/examples/capacity --user-latency-output artifacts/run.csv`.
+In addition to per-user CSV, this writes `artifacts/run.windows.json` with exact
+one-second intended-send cohorts, pre-send delay and Pings encountered while
+reading their probes. This diagnostic requires one wave. Window aggregation and
+output happen after timing; keep the resulting client hash distinct from older
+frozen benchmark clients.
+
+```sh
+python3 scripts/plot-latency-timeline.py \
+  --case 'Heartbeat on=artifacts/on.windows.json' \
+  --case 'Heartbeat off=artifacts/off.windows.json' \
+  --output artifacts/latency-over-time
+```
+
+Repeat `--case LABEL=PATH` for each recorded run. The plotter writes PNG, PDF and
+a JSON summary. Use matched workloads and both orders; the
+[timeline study](performance.md#latency-timeline-and-observed-heartbeat-cohorts-2026-10-17)
+records the current four-case on/off/off/on comparison and its limitations.
