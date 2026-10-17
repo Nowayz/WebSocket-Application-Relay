@@ -1014,3 +1014,31 @@ fanout. The same binaries pass [C++ compatibility](benchmarks/2026-10-16-accept-
 138 Rust tests and strict checks. Two separate perf captures have zero lost
 samples; no profile timings enter ordinary results. The small CI command passes
 locally; hosted CI, deployment and production capacity remain unverified.
+
+## Pending HTTP state and lifetime checks, 2026-10-16
+
+Runtime `ceda58f` keeps resumable HTTP metadata inline, removing a state box
+while preserving measured stage/connection sizes and input-buffer ownership.
+The compaction guard now partially parses an HTTP request, moves its live slot,
+finishes the negotiated upgrade and verifies a full CBOR body. The embedding
+cancellation guard holds a pending HTTP descriptor beside 64 joined sockets,
+then checks TCP closure, zero connections/read reservations and no handshake
+error or disconnect fanout from cancellation.
+
+The [48 pending-peer cases](benchmarks/2026-10-16-handshake-inline-comparison.json)
+and 18 routing guards pass whole-body/FIFO, absolute five-second timeout,
+no-response EOF/reset, physical admission, read-allowance reuse and final cleanup
+checks. Four separate [allocator diagnostics](benchmarks/2026-10-16-handshake-inline-memory.json)
+measure fewer requests and less live metadata; their timing is excluded from
+ordinary results. The [performance record](performance.md#inline-http-upgrade-state-2026-10-16)
+retains overlapping throughput ranges, moved p99 buckets and the measured limits.
+
+The selected [8,192-idle-peer case](benchmarks/2026-10-16-handshake-inline-idle-upper.json)
+and [1,024-client refusal case](benchmarks/2026-10-16-handshake-inline-admission-upper.json)
+also complete. The [1,024-reader changing room](benchmarks/2026-10-16-handshake-inline-fanout-upper.json)
+verifies 445 complete membership cycles, 910,336 fanout deliveries and every
+controlled departure before cleanup. Descriptor exhaustion, accepted-socket
+setup faults, active-flood shutdown, four mixed socket cases, C++ compatibility,
+JavaScript, management and real Chrome checks pass. The small pending-header
+CI command passes locally without CPU affinity. Hosted execution/deployment
+and production capacity are outside these finite checks.

@@ -1,0 +1,727 @@
+{
+  "scope": "Verify pending HTTP waves beside independently checked CBOR traffic.\n\nRaw sockets either stay silent or send an incomplete header plus paced bytes.\nLinux TCP receive queues establish a drained boundary between drip rounds.\nSetup admits at most 128 outstanding connects before continuing, outside the\nhealthy traffic phase, so large populations do not depend on a SYN retry wave.\nEvery pending socket must expire without application bytes at its absolute\nhandshake deadline. Admission, read reservations, management responsiveness,\nsubsequent slot reuse and final resource retirement are checked independently.\nOptional gperftools captures replace the server allocator; those are diagnostics,\nnever ordinary timing results. --quiet holds the verified CBOR client at its\nready gate through the raw wave, then verifies its traffic and exact Close/EOF.\n",
+  "args": {
+    "server": "/home/phil/dev/war_next/artifacts/baselines/handshake-inline/war-relay",
+    "client": "/home/phil/dev/war_next/artifacts/baselines/admission-flood-client/admission",
+    "workers": 1,
+    "connections": 1024,
+    "kind": "idle",
+    "rounds": 32,
+    "period_ms": 50,
+    "seconds": 6,
+    "quiet": false,
+    "isolate": true,
+    "inside": true,
+    "host_netns": "net:[4026531833]",
+    "heap_prefix": null,
+    "heap_library": "/usr/lib/libtcmalloc.so",
+    "server_cpus": "0-3",
+    "client_cpus": "4",
+    "controller_cpus": "5-7",
+    "output": "/home/phil/dev/war_next/docs/benchmarks/2026-10-16-handshake-inline-w1-n1024-idle-selected-1.json"
+  },
+  "server_command": [
+    "taskset",
+    "-c",
+    "0-3",
+    "/home/phil/dev/war_next/artifacts/baselines/handshake-inline/war-relay",
+    "--bind",
+    "127.0.0.1:58075",
+    "--admin-bind",
+    "127.0.0.1:60743",
+    "--workers",
+    "1",
+    "--max-connections",
+    "1025",
+    "--handshake-timeout-secs",
+    "5",
+    "--ping-interval-secs",
+    "0",
+    "--messages-per-second",
+    "0",
+    "--bytes-per-second",
+    "0"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "4",
+    "/home/phil/dev/war_next/artifacts/baselines/admission-flood-client/admission",
+    "--url",
+    "ws://127.0.0.1:58075",
+    "--tcp",
+    "127.0.0.1:58075",
+    "--flood-workers",
+    "0",
+    "--seconds",
+    "6"
+  ],
+  "server_sha256": "6c78289b5adda4d7f67ac8862ed5583a7b0e5223aa82b4b24d3e5000e8dc31e3",
+  "client_sha256": "626b41b88dda3ae00399c0f22b328a572ca24a8fdecea2664ebee4dd52da9360",
+  "source": "#!/usr/bin/env python3\n\"\"\"Verify pending HTTP waves beside independently checked CBOR traffic.\n\nRaw sockets either stay silent or send an incomplete header plus paced bytes.\nLinux TCP receive queues establish a drained boundary between drip rounds.\nSetup admits at most 128 outstanding connects before continuing, outside the\nhealthy traffic phase, so large populations do not depend on a SYN retry wave.\nEvery pending socket must expire without application bytes at its absolute\nhandshake deadline. Admission, read reservations, management responsiveness,\nsubsequent slot reuse and final resource retirement are checked independently.\nOptional gperftools captures replace the server allocator; those are diagnostics,\nnever ordinary timing results. --quiet holds the verified CBOR client at its\nready gate through the raw wave, then verifies its traffic and exact Close/EOF.\n\"\"\"\nimport argparse\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport select\nimport selectors\nimport signal\nimport socket\nimport subprocess\nimport sys\nimport tempfile\nimport time\n\nimport benchmark as runtime\nfrom inspection import dump_heap\n\nPREFIX = (b'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nUpgrade: websocket\\r\\n'\n          b'Connection: Upgrade\\r\\nSec-WebSocket-Version: 13\\r\\n'\n          b'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\n'\n          b'Sec-WebSocket-Protocol: war.cbor.v1\\r\\nX-Padding: ')\nHANDSHAKE_RESERVATION = 40960\n\n\ndef metrics(port):\n    return {key: int(value) for key, value in runtime.metrics(port).items()}\n\n\ndef receive_queues(pid, port, peers=None):\n    rows = Path(f'/proc/{pid}/net/tcp').read_text().splitlines()[1:]\n    return [int(row[4].split(':')[1], 16) for row in (line.split() for line in rows)\n            if row[3] == '01' and int(row[1].split(':')[1], 16) == port\n            and (peers is None or int(row[2].split(':')[1], 16) in peers)]\n\n\ndef gate(client, name):\n    assert select.select([client.stdout], [], [], 15)[0], f'missing {name} gate'\n    line = client.stdout.readline()\n    assert line, f'client stopped before {name}'\n    event = json.loads(line)\n    assert event['event'] == name, event\n    return event['details']\n\n\ndef advance(client):\n    client.stdin.write('continue\\n'); client.stdin.flush()\n\n\ndef empty(observed):\n    for key in ['war_connections', 'war_sessions', 'war_queued_bytes', 'war_variable_bytes',\n                'war_output_queue_capacity_bytes', 'war_read_buffer_reserved_bytes']:\n        assert observed[key] == 0, (key, observed[key])\n    assert observed['war_channels'] == 1\n\n\ndef cpu_set(value):\n    cpus = set()\n    for part in value.split(','):\n        bounds = part.split('-')\n        cpus.update(range(int(bounds[0]), int(bounds[-1]) + 1))\n    return cpus\n\n\ndef run(args):\n    port, admin = runtime.free_port(), runtime.free_port()\n    assert port != admin\n    env = {key: value for key, value in os.environ.items() if not key.startswith('WAR_') and key != 'LD_PRELOAD'}\n    server_command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}', '--admin-bind', f'127.0.0.1:{admin}',\n                      '--workers', str(args.workers), '--max-connections', str(args.connections + 1),\n                      '--handshake-timeout-secs', '5', '--ping-interval-secs', '0',\n                      '--messages-per-second', '0', '--bytes-per-second', '0']\n    client_command = [str(args.client.resolve()), '--url', f'ws://127.0.0.1:{port}', '--tcp', f'127.0.0.1:{port}',\n                      '--flood-workers', '0', '--seconds', str(args.seconds)]\n    if args.server_cpus: server_command = ['taskset', '-c', args.server_cpus] + server_command\n    if args.client_cpus: client_command = ['taskset', '-c', args.client_cpus] + client_command\n    if args.controller_cpus: os.sched_setaffinity(0, cpu_set(args.controller_cpus))\n    server_env = dict(env)\n    if args.heap_prefix:\n        assert args.quiet and args.heap_library.is_file()\n        args.heap_prefix.parent.mkdir(parents=True, exist_ok=True)\n        assert not list(args.heap_prefix.parent.glob(args.heap_prefix.name + '*.heap')), 'use a fresh heap prefix'\n        server_env.update(LD_PRELOAD=str(args.heap_library.resolve()), HEAPPROFILE=str(args.heap_prefix.resolve()),\n                          HEAPPROFILESIGNAL=str(signal.SIGUSR2), HEAP_PROFILE_ALLOCATION_INTERVAL='0',\n                          HEAP_PROFILE_INUSE_INTERVAL='0', HEAP_PROFILE_TIME_INTERVAL='0')\n    record = {'scope': __doc__, 'args': {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},\n              'server_command': server_command, 'client_command': client_command,\n              'server_sha256': hashlib.sha256(args.server.read_bytes()).hexdigest(),\n              'client_sha256': hashlib.sha256(args.client.read_bytes()).hexdigest(), 'source': Path(__file__).read_text(),\n              'profile_diagnostic': bool(args.heap_prefix), 'events': [], 'samples': [], 'management': [], 'passed': False,\n              'isolated_namespace': args.inside, 'network_namespace': os.readlink('/proc/self/ns/net')}\n    if args.inside: assert record['network_namespace'] != args.host_netns\n    if args.heap_prefix:\n        record['heap_library'] = {'path': str(args.heap_library.resolve()), 'sha256': hashlib.sha256(args.heap_library.read_bytes()).hexdigest()}\n    server = client = None\n    raw = []; raw_peers = set()\n    started = run_started = time.monotonic()\n\n    def observe():\n        stamp = time.monotonic(); observed = metrics(admin)\n        record['management'].append({'seconds': time.monotonic() - run_started, 'latency_ms': (time.monotonic() - stamp) * 1000})\n        return observed\n\n    with tempfile.TemporaryFile() as log, tempfile.TemporaryFile() as client_log, selectors.DefaultSelector() as selector:\n        try:\n            server = subprocess.Popen(server_command, env=server_env, stdout=log, stderr=log)\n            deadline = time.monotonic() + 5\n            while True:\n                assert server.poll() is None\n                try: observe(); break\n                except OSError:\n                    assert time.monotonic() < deadline\n                    time.sleep(.01)\n            client = subprocess.Popen(client_command, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,\n                                      stderr=client_log, text=True, bufsize=1)\n            welcome = gate(client, 'ready'); assert welcome['joins'] == 1\n\n            def snapshot(name):\n                item = {'event': name, 'seconds': time.monotonic() - started,\n                        'metrics': observe(), 'process': runtime.snapshot(server.pid)}\n                if args.heap_prefix: item['heap'] = dump_heap(server.pid, args.heap_prefix.resolve())\n                record['events'].append(item)\n                return item\n\n            def drain(count):\n                limit = time.monotonic() + 3\n                previous = False\n                while True:\n                    queues = receive_queues(server.pid, port, raw_peers)\n                    settled = len(queues) == count and not any(queues)\n                    if settled and previous: return\n                    assert time.monotonic() < limit, ('receive queues did not drain', len(queues), count)\n                    previous = settled\n                    time.sleep(.01)\n\n            started = opened = time.monotonic()\n            for _ in range(args.connections):\n                stream = socket.create_connection(('127.0.0.1', port), timeout=3)\n                stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)\n                if args.kind == 'drip': stream.sendall(PREFIX)\n                stream.setblocking(False); raw.append(stream); raw_peers.add(stream.getsockname()[1])\n                selector.register(stream, selectors.EVENT_READ)\n                if len(raw) % 128 == 0:\n                    admitted = time.monotonic() + 3\n                    while observe()['war_connections'] != len(raw) + 1:\n                        assert time.monotonic() < admitted, 'setup admission batch did not settle'\n                        time.sleep(.01)\n            deadline = time.monotonic() + 3\n            while observe()['war_connections'] != args.connections + 1:\n                assert time.monotonic() < deadline\n                time.sleep(.01)\n            drain(args.connections)\n            with socket.create_connection(('127.0.0.1', port), timeout=3) as refused:\n                assert refused.recv(1) == b'', 'a full admission must refuse without application bytes'\n            base = snapshot('ready')\n            assert base['metrics']['war_sessions'] == 1\n            assert base['metrics']['war_rejected_total'] == 1\n            allowance = base['metrics']['war_read_buffer_reserved_bytes']\n            assert args.connections * HANDSHAKE_RESERVATION <= allowance <= args.connections * HANDSHAKE_RESERVATION + args.workers * 8192\n            if not args.quiet: advance(client)\n            round_start = time.monotonic()\n            for number in range(args.rounds if args.kind == 'drip' else 0):\n                stamp = round_start + number * args.period_ms / 1000\n                if stamp > time.monotonic(): time.sleep(stamp - time.monotonic())\n                for stream in raw: assert stream.send(b'x') == 1\n                drain(args.connections)\n                record['samples'].append({'round': number + 1, 'seconds': time.monotonic() - started,\n                                          'metrics': observe()})\n            dripped = snapshot('dripped')\n            assert dripped['metrics']['war_connections'] == args.connections + 1\n            assert dripped['metrics']['war_handshake_errors_total'] == 0\n            record['sent_drip_bytes'] = args.connections * (args.rounds if args.kind == 'drip' else 0)\n            closed = []\n            expiry_limit = started + 10\n            next_sample = time.monotonic()\n            while selector.get_map():\n                for key, _ in selector.select(.05):\n                    try: data = key.fileobj.recv(1)\n                    except (ConnectionResetError, ConnectionAbortedError): data = b''\n                    assert data == b'', 'pending HTTP must expire without application bytes'\n                    closed.append(time.monotonic() - opened); selector.unregister(key.fileobj); key.fileobj.close()\n                assert server.poll() is None and client.poll() is None\n                assert time.monotonic() < expiry_limit, 'pending HTTP failed to expire'\n                if time.monotonic() >= next_sample:\n                    observe(); next_sample = time.monotonic() + .2\n            record['expiry_seconds'] = {'first': min(closed) if closed else None, 'last': max(closed) if closed else None}\n            if closed: assert min(closed) >= 4.85, 'partial input ended before the five-second handshake deadline'\n            deadline = time.monotonic() + 3\n            while True:\n                observed = observe()\n                if observed['war_connections'] == 1 and observed['war_handshake_errors_total'] == args.connections: break\n                assert time.monotonic() < deadline\n                time.sleep(.01)\n            expired = snapshot('expired')\n            assert expired['metrics']['war_read_buffer_reserved_bytes'] <= args.workers * 8192\n\n            recovery = min(args.connections, 16)\n            renewed = [socket.create_connection(('127.0.0.1', port), timeout=3) for _ in range(recovery)]\n            raw.extend(renewed)\n            deadline = time.monotonic() + 3\n            while observe()['war_connections'] != recovery + 1:\n                assert time.monotonic() < deadline\n                time.sleep(.01)\n            reused = snapshot('reused')\n            assert recovery * HANDSHAKE_RESERVATION <= reused['metrics']['war_read_buffer_reserved_bytes'] <= recovery * HANDSHAKE_RESERVATION + args.workers * 8192\n            for stream in renewed: stream.close()\n            if args.quiet: advance(client)\n            measured = gate(client, 'measured')\n            assert measured['healthy']['verified'] == measured['messages'] > 0\n            record['healthy'] = measured\n            measured_state = snapshot('measured')\n            record['server_cpu_seconds'] = measured_state['process']['cpu_seconds'] - base['process']['cpu_seconds']\n            advance(client); done = gate(client, 'done'); assert done['normal_closes'] == 1\n            advance(client); stdout, _ = client.communicate(timeout=5)\n            assert not stdout.strip() and client.returncode == 0\n            expected = {'war_connections': 0, 'war_sessions': 0, 'war_channels': 1,\n                        'war_accepted_total': args.connections + recovery + 2, 'war_rejected_total': 1,\n                        'war_handshake_errors_total': args.connections + recovery, 'war_joined_total': 1,\n                        'war_disconnected_total': 1, 'war_incoming_messages_total': measured['messages'],\n                        'war_incoming_bytes_total': measured['message_bytes'], 'war_deliveries_total': measured['messages'] + 1,\n                        'war_delivered_bytes_total': measured['message_bytes'] + welcome['welcome_bytes'],\n                        'war_routing_reused_bytes_total': measured['messages'] * 1027, 'war_routing_copied_bytes_total': 0}\n            deadline = time.monotonic() + 3\n            while True:\n                observed = observe()\n                if all(observed[key] == value for key, value in expected.items()): break\n                assert time.monotonic() < deadline, {key: (observed[key], value) for key, value in expected.items() if observed[key] != value}\n                time.sleep(.01)\n            empty(observed); record['final'] = snapshot('done'); record['exact_checks'] = expected\n            for key in ['war_accept_errors_total', 'war_setup_errors_total', 'war_protocol_errors_total', 'war_close_failures_total',\n                        'war_write_errors_total', 'war_write_timeouts_total', 'war_rate_limited_total', 'war_slow_consumers_total',\n                        'war_transport_disconnects_total', 'war_global_pressure_total']:\n                assert observed[key] == 0, (key, observed[key])\n            record['passed'] = True\n        except Exception as error:\n            record['error'] = repr(error)\n            if server is not None and server.poll() is None:\n                record['failure_metrics'] = observe()\n                record['failure_seconds'] = time.monotonic() - started\n        finally:\n            for stream in raw: stream.close()\n            for process, label in [(client, 'client'), (server, 'server')]:\n                if process is None: continue\n                if process.poll() is None:\n                    if label == 'client': process.kill(); record['client_forced_kill'] = True\n                    else: process.send_signal(signal.SIGTERM)\n                try: record[label + '_exit_code'] = process.wait(timeout=8)\n                except subprocess.TimeoutExpired:\n                    process.kill(); record[label + '_exit_code'] = process.wait(timeout=5); record[label + '_forced_kill'] = True\n            record['passed'] &= record.get('client_exit_code') == record.get('server_exit_code') == 0\n        log.seek(0); client_log.seek(0)\n        record.update(server_log=log.read().decode(errors='replace'), client_log=client_log.read().decode(errors='replace'))\n    return record\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument('--server', type=Path, default=runtime.SERVER)\n    parser.add_argument('--client', type=Path, default=runtime.ROOT / 'target/release/examples/admission')\n    parser.add_argument('--workers', type=int, choices=[1, 4], default=1)\n    parser.add_argument('--connections', type=int, default=1024, help='Pending raw TCP sockets in 0..=8192')\n    parser.add_argument('--kind', choices=['idle', 'drip'], default='drip')\n    parser.add_argument('--rounds', type=int, default=32, help='Paced byte rounds in 0..=32')\n    parser.add_argument('--period-ms', type=int, default=50, help='Round spacing in 20..=100 milliseconds')\n    parser.add_argument('--seconds', type=int, default=6, help='Healthy client phase in 1..=15 seconds')\n    parser.add_argument('--quiet', action='store_true')\n    parser.add_argument('--isolate', action='store_true', help='Fresh network/PID namespace using bubblewrap')\n    parser.add_argument('--inside', action='store_true', help=argparse.SUPPRESS)\n    parser.add_argument('--host-netns', help=argparse.SUPPRESS)\n    parser.add_argument('--heap-prefix', type=Path)\n    parser.add_argument('--heap-library', type=Path, default=Path('/usr/lib/libtcmalloc.so'))\n    parser.add_argument('--server-cpus', default='0-3')\n    parser.add_argument('--client-cpus', default='4')\n    parser.add_argument('--controller-cpus', default='5-7')\n    parser.add_argument('--output', type=Path, required=True)\n    args = parser.parse_args()\n    for name, low, high in [('connections', 0, 8192), ('rounds', 0, 32), ('period_ms', 20, 100), ('seconds', 1, 15)]:\n        if not low <= getattr(args, name) <= high: parser.error(f'{name.replace(\"_\", \"-\")} must be in {low}..={high}')\n    if not args.quiet and args.seconds < 6: parser.error('ordinary healthy traffic must span the five-second pending timeout')\n    if args.isolate and not args.inside:\n        args.output.parent.mkdir(parents=True, exist_ok=True)\n        writable = {args.output.parent.resolve()}\n        if args.heap_prefix:\n            args.heap_prefix.parent.mkdir(parents=True, exist_ok=True); writable.add(args.heap_prefix.parent.resolve())\n        command = ['bwrap', '--unshare-net', '--unshare-pid', '--die-with-parent', '--ro-bind', '/', '/']\n        for path in sorted(writable): command += ['--bind', str(path), str(path)]\n        command += ['--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--', sys.executable,\n                    str(Path(__file__).resolve()), *sys.argv[1:], '--inside', '--host-netns', os.readlink('/proc/self/ns/net')]\n        raise SystemExit(subprocess.run(command).returncode)\n    result = run(args)\n    args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text(json.dumps(result, indent=2) + '\\n')\n    print(json.dumps({key: result.get(key) for key in ['passed', 'error', 'expiry_seconds', 'server_cpu_seconds']}), flush=True)\n    raise SystemExit(0 if result['passed'] else 1)\n\n\nif __name__ == '__main__': main()\n",
+  "profile_diagnostic": false,
+  "events": [
+    {
+      "event": "ready",
+      "seconds": 0.12037330100429244,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 41951232,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 0,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1026,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 0,
+        "war_incoming_bytes_total": 0,
+        "war_deliveries_total": 1,
+        "war_delivered_bytes_total": 9,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 1025,
+        "war_sessions": 1,
+        "war_channels": 2,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 76248,
+        "VmRSS": 14312,
+        "RssAnon": 9468,
+        "Threads": 2,
+        "cpu_seconds": 0.0,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 0.0
+        }
+      }
+    },
+    {
+      "event": "dripped",
+      "seconds": 0.12074672100425232,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 41951232,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 0,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1026,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 0,
+        "war_incoming_bytes_total": 0,
+        "war_deliveries_total": 1,
+        "war_delivered_bytes_total": 9,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 1025,
+        "war_sessions": 1,
+        "war_channels": 2,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 76248,
+        "VmRSS": 14312,
+        "RssAnon": 9468,
+        "Threads": 2,
+        "cpu_seconds": 0.0,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 0.0
+        }
+      }
+    },
+    {
+      "event": "expired",
+      "seconds": 5.094375940003374,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 8192,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 2999420255,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1026,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 1024,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 2920565,
+        "war_incoming_bytes_total": 3028625905,
+        "war_deliveries_total": 2920565,
+        "war_delivered_bytes_total": 3028624877,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 1,
+        "war_sessions": 1,
+        "war_channels": 2,
+        "war_queued_bytes": 1037,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 75352,
+        "VmRSS": 13928,
+        "RssAnon": 9084,
+        "Threads": 2,
+        "cpu_seconds": 3.46,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 3.46
+        }
+      }
+    },
+    {
+      "event": "reused",
+      "seconds": 5.094965355005115,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 663552,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 2999756084,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1042,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 1024,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 2920892,
+        "war_incoming_bytes_total": 3028965004,
+        "war_deliveries_total": 2920892,
+        "war_delivered_bytes_total": 3028963976,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 17,
+        "war_sessions": 1,
+        "war_channels": 2,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 75352,
+        "VmRSS": 13928,
+        "RssAnon": 9084,
+        "Threads": 2,
+        "cpu_seconds": 3.47,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 3.46
+        }
+      }
+    },
+    {
+      "event": "measured",
+      "seconds": 6.120933108002646,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 8192,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 3618392128,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1042,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 1040,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 3523264,
+        "war_incoming_bytes_total": 3653624768,
+        "war_deliveries_total": 3523265,
+        "war_delivered_bytes_total": 3653624777,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 1,
+        "war_sessions": 1,
+        "war_channels": 2,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 75352,
+        "VmRSS": 13928,
+        "RssAnon": 9084,
+        "Threads": 2,
+        "cpu_seconds": 4.18,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 4.17
+        }
+      }
+    },
+    {
+      "event": "done",
+      "seconds": 6.122217545998865,
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 41951232,
+        "war_read_buffer_limit_bytes": 1073741824,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 3618392128,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 1042,
+        "war_rejected_total": 1,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 1040,
+        "war_joined_total": 1,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 1,
+        "war_incoming_messages_total": 3523264,
+        "war_incoming_bytes_total": 3653624768,
+        "war_deliveries_total": 3523265,
+        "war_delivered_bytes_total": 3653624777,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "process": {
+        "VmSize": 75220,
+        "VmRSS": 5560,
+        "RssAnon": 716,
+        "Threads": 2,
+        "cpu_seconds": 4.18,
+        "thread_cpu_seconds": {
+          "3": 0.0,
+          "4": 4.18
+        }
+      }
+    }
+  ],
+  "samples": [],
+  "management": [
+    {
+      "seconds": 0.0046277639994514175,
+      "latency_ms": 4.257373002474196
+    },
+    {
+      "seconds": 0.01504968099470716,
+      "latency_ms": 7.2515470019425265
+    },
+    {
+      "seconds": 0.029911576995800715,
+      "latency_ms": 4.794849002792034
+    },
+    {
+      "seconds": 0.04032164499949431,
+      "latency_ms": 0.33875100052682683
+    },
+    {
+      "seconds": 0.04990918399562361,
+      "latency_ms": 7.878871998400427
+    },
+    {
+      "seconds": 0.06019210499653127,
+      "latency_ms": 0.22620400704909116
+    },
+    {
+      "seconds": 0.06154541099385824,
+      "latency_ms": 0.12376700033200905
+    },
+    {
+      "seconds": 0.06890281599771697,
+      "latency_ms": 6.1573350030812435
+    },
+    {
+      "seconds": 0.07915615799720399,
+      "latency_ms": 0.19709500338649377
+    },
+    {
+      "seconds": 0.08095042299828492,
+      "latency_ms": 0.15700599760748446
+    },
+    {
+      "seconds": 0.08228694900026312,
+      "latency_ms": 0.1154569981736131
+    },
+    {
+      "seconds": 0.0836841540003661,
+      "latency_ms": 0.11156700202263892
+    },
+    {
+      "seconds": 0.10001219299738295,
+      "latency_ms": 15.173857995250728
+    },
+    {
+      "seconds": 0.11034058299992466,
+      "latency_ms": 0.2601629967102781
+    },
+    {
+      "seconds": 0.1105117289989721,
+      "latency_ms": 0.16691599739715457
+    },
+    {
+      "seconds": 0.12676231999648735,
+      "latency_ms": 0.18509500660002232
+    },
+    {
+      "seconds": 0.12708953199762618,
+      "latency_ms": 0.14003700198372826
+    },
+    {
+      "seconds": 0.1776291299975128,
+      "latency_ms": 0.36584099871106446
+    },
+    {
+      "seconds": 0.37838800799363526,
+      "latency_ms": 0.4663479994633235
+    },
+    {
+      "seconds": 0.5791220959945349,
+      "latency_ms": 0.4679080011555925
+    },
+    {
+      "seconds": 0.7798838739981875,
+      "latency_ms": 0.47514800098724663
+    },
+    {
+      "seconds": 0.9805958819997613,
+      "latency_ms": 0.4293289966881275
+    },
+    {
+      "seconds": 1.1813337999992655,
+      "latency_ms": 0.4794179985765368
+    },
+    {
+      "seconds": 1.3821002169934218,
+      "latency_ms": 0.46454800030915067
+    },
+    {
+      "seconds": 1.582851243998448,
+      "latency_ms": 0.4680779966292903
+    },
+    {
+      "seconds": 1.7836016709989053,
+      "latency_ms": 0.45188800140749663
+    },
+    {
+      "seconds": 1.9841614429969923,
+      "latency_ms": 0.2637430006871
+    },
+    {
+      "seconds": 2.184942998996121,
+      "latency_ms": 0.47235800593625754
+    },
+    {
+      "seconds": 2.3859390299985535,
+      "latency_ms": 0.7030630004010163
+    },
+    {
+      "seconds": 2.586818002993823,
+      "latency_ms": 0.5683959971065633
+    },
+    {
+      "seconds": 2.7877326749949134,
+      "latency_ms": 0.5916349982726388
+    },
+    {
+      "seconds": 2.988706365998951,
+      "latency_ms": 0.65217399969697
+    },
+    {
+      "seconds": 3.189619707998645,
+      "latency_ms": 0.5902449993300252
+    },
+    {
+      "seconds": 3.3904659420004464,
+      "latency_ms": 0.5418260043370537
+    },
+    {
+      "seconds": 3.591210507998767,
+      "latency_ms": 0.4266190007911064
+    },
+    {
+      "seconds": 3.7918327070001396,
+      "latency_ms": 0.340612001309637
+    },
+    {
+      "seconds": 3.9924119469942525,
+      "latency_ms": 0.2961830032290891
+    },
+    {
+      "seconds": 4.193210850993637,
+      "latency_ms": 0.5129769997438416
+    },
+    {
+      "seconds": 4.393946377000248,
+      "latency_ms": 0.43518900201888755
+    },
+    {
+      "seconds": 4.594695962994592,
+      "latency_ms": 0.4641289997380227
+    },
+    {
+      "seconds": 4.795462786998542,
+      "latency_ms": 0.4694780000136234
+    },
+    {
+      "seconds": 4.996371907996945,
+      "latency_ms": 0.578735998715274
+    },
+    {
+      "seconds": 5.100574533993495,
+      "latency_ms": 0.49201799993170425
+    },
+    {
+      "seconds": 5.100704721000511,
+      "latency_ms": 0.12609700206667185
+    },
+    {
+      "seconds": 5.10116596899752,
+      "latency_ms": 0.13122700329404324
+    },
+    {
+      "seconds": 5.10128227599489,
+      "latency_ms": 0.11425700358813629
+    },
+    {
+      "seconds": 6.127677078999113,
+      "latency_ms": 0.5397770000854507
+    },
+    {
+      "seconds": 6.128409559998545,
+      "latency_ms": 0.15702599921496585
+    },
+    {
+      "seconds": 6.128543617000105,
+      "latency_ms": 0.1233669972862117
+    }
+  ],
+  "passed": true,
+  "isolated_namespace": true,
+  "network_namespace": "net:[4026532991]",
+  "sent_drip_bytes": 0,
+  "expiry_seconds": {
+    "first": 5.000122883000586,
+    "last": 5.093838423003035
+  },
+  "healthy": {
+    "elapsed_seconds": 6.000021561,
+    "healthy": {
+      "max_ms": 0.153316,
+      "p50_upper_ms": 0.032768,
+      "p99_upper_ms": 0.032768,
+      "per_second": 587208.5565327188,
+      "verified": 3523264
+    },
+    "message_bytes": 3653624768,
+    "messages": 3523264,
+    "normal_closes": 0,
+    "refusals": {
+      "max_ms": 0.0,
+      "p50_upper_ms": 0.0,
+      "p99_upper_ms": 0.0,
+      "per_second": 0.0,
+      "verified": 0
+    },
+    "value_bytes": 3618392128
+  },
+  "server_cpu_seconds": 4.18,
+  "final": {
+    "event": "done",
+    "seconds": 6.122217545998865,
+    "metrics": {
+      "war_read_buffer_reserved_bytes": 0,
+      "war_read_buffer_peak_reserved_bytes": 41951232,
+      "war_read_buffer_limit_bytes": 1073741824,
+      "war_read_buffer_reservations_rejected_total": 0,
+      "war_accept_errors_total": 0,
+      "war_setup_errors_total": 0,
+      "war_ip_rejected_total": 0,
+      "war_read_buffer_reclaims_total": 0,
+      "war_read_buffer_reclaim_header_bytes_total": 0,
+      "war_read_buffer_reclaims_deferred_total": 0,
+      "war_idle_timeouts_total": 0,
+      "war_unstarted_writes_cancelled_total": 0,
+      "war_routing_reused_bytes_total": 3618392128,
+      "war_routing_copied_bytes_total": 0,
+      "war_write_timeouts_total": 0,
+      "war_write_errors_total": 0,
+      "war_aborted_writes_total": 0,
+      "war_close_failures_total": 0,
+      "war_transport_disconnects_total": 0,
+      "war_global_pressure_total": 0,
+      "war_accepted_total": 1042,
+      "war_rejected_total": 1,
+      "war_origin_rejected_total": 0,
+      "war_handshake_errors_total": 1040,
+      "war_joined_total": 1,
+      "war_join_rejected_total": 0,
+      "war_disconnected_total": 1,
+      "war_incoming_messages_total": 3523264,
+      "war_incoming_bytes_total": 3653624768,
+      "war_deliveries_total": 3523265,
+      "war_delivered_bytes_total": 3653624777,
+      "war_slow_consumers_total": 0,
+      "war_protocol_errors_total": 0,
+      "war_rate_limited_total": 0,
+      "war_variable_bytes": 0,
+      "war_connections": 0,
+      "war_sessions": 0,
+      "war_channels": 1,
+      "war_queued_bytes": 0,
+      "war_draining": 0,
+      "war_output_queue_capacity_bytes": 0,
+      "war_output_queue_peak_capacity_bytes": 0
+    },
+    "process": {
+      "VmSize": 75220,
+      "VmRSS": 5560,
+      "RssAnon": 716,
+      "Threads": 2,
+      "cpu_seconds": 4.18,
+      "thread_cpu_seconds": {
+        "3": 0.0,
+        "4": 4.18
+      }
+    }
+  },
+  "exact_checks": {
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_accepted_total": 1042,
+    "war_rejected_total": 1,
+    "war_handshake_errors_total": 1040,
+    "war_joined_total": 1,
+    "war_disconnected_total": 1,
+    "war_incoming_messages_total": 3523264,
+    "war_incoming_bytes_total": 3653624768,
+    "war_deliveries_total": 3523265,
+    "war_delivered_bytes_total": 3653624777,
+    "war_routing_reused_bytes_total": 3618392128,
+    "war_routing_copied_bytes_total": 0
+  },
+  "client_exit_code": 0,
+  "server_exit_code": 0,
+  "server_log": "",
+  "client_log": ""
+}

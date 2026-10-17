@@ -1,0 +1,202 @@
+{
+  "scope": "Cumulative allocator stack deltas between ready/dripped gates for the256-peer quiet diagnostic. Native PIE load base comes from the zero-offset executable mapping in the heap capture; GNU addr2line resolves retained function symbols from each exact frozen binary. Debug lines are stripped, so function names are attribution context, not source line evidence. Every profile row is summed against its header. Whole requested counts include fixed management overhead; only the Connection::drive stack isolates upgrade-box allocations. No CPU or timing claim.",
+  "source": "import hashlib,json,re,subprocess\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[1];bench=root/'docs/benchmarks';meta=json.loads((root/'artifacts/handshake-inline-candidate.json').read_text());memory=json.loads((bench/'2026-10-16-handshake-inline-memory.json').read_text())\nsha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()\nrecord={'scope':'Cumulative allocator stack deltas between ready/dripped gates for the256-peer quiet diagnostic. Native PIE load base comes from the zero-offset executable mapping in the heap capture; GNU addr2line resolves retained function symbols from each exact frozen binary. Debug lines are stripped, so function names are attribution context, not source line evidence. Every profile row is summed against its header. Whole requested counts include fixed management overhead; only the Connection::drive stack isolates upgrade-box allocations. No CPU or timing claim.', 'source':Path(__file__).read_text(),'cases':[],'passed':False}\nfor role in ['before','selected']:\n case=next(c for c in memory['cases'] if c['connections']==256 and c['kind']==role);data=json.loads((root/case['trace']).read_text());events={e['event']:e for e in data['events']}\n binary=root/(meta['baseline']['path'] if role=='before' else str(Path(meta['directory'])/'war-relay'))\n def parse(path):\n  text=path.read_text();header=re.match(r'heap profile:\\s+(\\d+):\\s+(\\d+)\\s+\\[\\s*(\\d+):\\s*(\\d+)\\]',text);assert header\n  rows={}\n  for line in text.splitlines():\n   m=re.match(r'\\s*(\\d+):\\s*(\\d+)\\s*\\[\\s*(\\d+):\\s*(\\d+)\\]\\s*@ (.*)',line)\n   if m:rows[m[5]]=tuple(map(int,m.groups()[:4]))\n  assert tuple(sum(v[i] for v in rows.values()) for i in range(4))==tuple(map(int,header.groups()))\n  return text,rows\n first=Path(events['ready']['heap']['path']);last=Path(events['dripped']['heap']['path']);_,a=parse(first);text,b=parse(last)\n maps=[line.split() for line in text.splitlines() if str(binary) in line];zero=next(row for row in maps if row[2]=='00000000');base=int(zero[0].split('-')[0],16);end=max(int(row[0].split('-')[1],16) for row in maps)\n addresses=sorted({int(pc,16) for stack in b for pc in stack.split() if base<=int(pc,16)<end})\n output=subprocess.check_output(['addr2line','-f','-C','-e',str(binary),*[hex(pc-base) for pc in addresses]],text=True).splitlines();assert len(output)==2*len(addresses)\n symbols={address:output[2*i] for i,address in enumerate(addresses)};rows=[]\n for stack,values in b.items():\n  old=a.get(stack,(0,0,0,0));objects,bytes_=values[2]-old[2],values[3]-old[3]\n  if objects or bytes_:rows.append({'allocated_objects':objects,'allocated_bytes':bytes_,'native_symbols':[symbols[int(pc,16)] for pc in stack.split() if int(pc,16) in symbols]})\n drive=[row for row in rows if any('war_relay::server::Connection::drive' in name for name in row['native_symbols'])]\n totals={key:sum(row[key] for row in drive) for key in ['allocated_objects','allocated_bytes']}\n assert totals==({'allocated_objects':8192,'allocated_bytes':2359296} if role=='before' else {'allocated_objects':0,'allocated_bytes':0}),totals\n row={'kind':role,'binary_sha256':sha(binary),'trace':case['trace'],'trace_sha256':sha(root/case['trace']),'drive_allocations':totals,'top_stacks':sorted(rows,key=lambda r:r['allocated_objects'],reverse=True)[:12]}\n record['cases'].append(row)\nrecord['passed']=True;(bench/'2026-10-16-handshake-inline-alloc-symbols.json').write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps([{'kind':c['kind'],'drive_allocations':c['drive_allocations']} for c in record['cases']]))\n",
+  "cases": [
+    {
+      "kind": "before",
+      "binary_sha256": "cc494c8dccf367a6fe8dfacfc85419211697de700ed61d43bf8b266aa37da02a",
+      "trace": "docs/benchmarks/2026-10-16-handshake-inline-heap-n256-before.json",
+      "trace_sha256": "19e2c6b3e95cdcc8ddcd3f12fc4b586248b9f4b30360047afaa9f01068a0e895",
+      "drive_allocations": {
+        "allocated_objects": 8192,
+        "allocated_bytes": 2359296
+      },
+      "top_stacks": [
+        {
+          "allocated_objects": 8192,
+          "allocated_bytes": 2359296,
+          "native_symbols": [
+            "war_relay::server::Connection::drive"
+          ]
+        },
+        {
+          "allocated_objects": 231,
+          "allocated_bytes": 1452,
+          "native_symbols": [
+            "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 115500,
+          "native_symbols": [
+            "hashbrown::raw::RawTable<T,A>::reserve_rehash"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 495000,
+          "native_symbols": [
+            "alloc::raw_vec::finish_grow",
+            "war_relay::metrics::Metrics::render"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 115500,
+          "native_symbols": [
+            "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 20592,
+          "native_symbols": [
+            "http::header::map::HeaderMap<T>::try_reserve"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 270336,
+          "native_symbols": [
+            "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 82500,
+          "native_symbols": [
+            "war_relay::metrics::Metrics::render"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 132,
+          "native_symbols": [
+            "axum::routing::route::set_content_length"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 1056,
+          "native_symbols": [
+            "alloc::raw_vec::finish_grow"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "selected",
+      "binary_sha256": "6c78289b5adda4d7f67ac8862ed5583a7b0e5223aa82b4b24d3e5000e8dc31e3",
+      "trace": "docs/benchmarks/2026-10-16-handshake-inline-heap-n256-selected.json",
+      "trace_sha256": "1e09081d95a1163e97c573753e90378593e05ac15852a637945444135125019c",
+      "drive_allocations": {
+        "allocated_objects": 0,
+        "allocated_bytes": 0
+      },
+      "top_stacks": [
+        {
+          "allocated_objects": 231,
+          "allocated_bytes": 1452,
+          "native_symbols": [
+            "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 115500,
+          "native_symbols": [
+            "hashbrown::raw::RawTable<T,A>::reserve_rehash"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 495000,
+          "native_symbols": [
+            "alloc::raw_vec::finish_grow",
+            "war_relay::metrics::Metrics::render"
+          ]
+        },
+        {
+          "allocated_objects": 66,
+          "allocated_bytes": 115500,
+          "native_symbols": [
+            "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 1056,
+          "native_symbols": [
+            "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 38016,
+          "native_symbols": [
+            "axum::serve::WithGracefulShutdown<L,M,S,F>::run::{{closure}}",
+            "<axum::serve::WithGracefulShutdown<L,M,S,F> as core::future::into_future::IntoFuture>::into_future::{{closure}}"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 13728,
+          "native_symbols": [
+            "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 10560,
+          "native_symbols": [
+            "<hyper_util::server::conn::auto::UpgradeableConnection<I,S,E> as core::future::future::Future>::poll"
+          ]
+        },
+        {
+          "allocated_objects": 33,
+          "allocated_bytes": 264,
+          "native_symbols": [
+            "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box"
+          ]
+        }
+      ]
+    }
+  ],
+  "passed": true
+}

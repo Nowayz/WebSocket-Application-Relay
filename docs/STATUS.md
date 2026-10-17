@@ -9,6 +9,50 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Runtime `ceda58f` stores resumable HTTP upgrade metadata inline with the live
+decoder. Its 288-byte state fits the existing 320-byte stage and 512-byte
+connection on the measured Linux build. Removing the temporary box avoids an
+allocation at acceptance and at each `WouldBlock` resumption; input/frame
+buffers retain their ownership. The fixed handshake deadline, quotas and shared
+CBOR routing preserve their behavior. A fragmented HTTP upgrade now completes
+after slab compaction and verifies a full CBOR body. Embedding cancellation also
+checks a pending HTTP descriptor and its read reservation beside 64 joined peers.
+
+Four separate allocator diagnostics keep the healthy client quiescent while
+256 incomplete HTTP peers receive 32 paced bytes each. The old drive stack
+allocates exactly 8,192 objects/2,359,296 bytes; the selected stack allocates zero.
+Whole drip-phase requests fall 9,843 → 1,652 objects (−83.2%) and 4,417,424 →
+2,059,152 bytes (−53.4%), including fixed HTTP metric/dump overhead. Zero-peer
+controls match exactly. Pending live storage falls 256 objects/73,728 bytes
+without growing the connection slab. These are requested allocations under a
+replacement allocator, not RSS or a general zero-allocation claim.
+
+All 66 ordinary comparison processes pass: 48 pending-header cases with
+zero/1,024/4,096 peers and 18 private/reconnect guards. Throughput ranges overlap
+in every cohort. Pending-case medians range −2.39% to +1.26%; private/mixed/
+reconnect guards also overlap. Two of eight pending-case median p99 buckets
+move in opposite directions within the observed bucket ranges. Allocation
+reduction and simpler ownership are retained, without a general speedup claim.
+The [performance record](performance.md#inline-http-upgrade-state-2026-10-16)
+records full rates, ranges, costs and fixture limits.
+
+Verification passes 138 Rust tests, strict Clippy/formatting, release builds,
+the new unpinned pending-header CI command, 48 common C++ wire cases plus eight
+documented differences, seven JavaScript checks, four management checks and
+seven Chrome checks. Three descriptor-pressure cases, four setup-fault cases,
+two active-flood shutdown cases and separate 8,192-idle/1,024-refusal checks pass.
+The 1,024-reader changing-room case verifies 445 membership cycles and 910,336
+fanout deliveries. Four socket cases verify 9,049,584 ordinary deliveries,
+561,273 reconnects across 4,096 source IPs, 212,643 healthy deliveries beside an
+unread peer and 787,536 mixed-size fanout deliveries, with final cleanup and
+normal process exits. Native/bridge services on 1338/1337 run the selected frozen
+binaries, management is on 1339 and browser acceptance on 4180. Chrome is clear,
+with four native listeners and zero retained resources. The
+[manifest](benchmarks/2026-10-16-handshake-inline-build.json) binds source,
+binaries, clients and evidence. Acceptance is local; the goal remains active.
+
+## Previous checkpoint: accept-turn fairness, 2026-10-16
+
 Runtime `d47f0fd` reduces native accept turns from 64 sockets to 16. This single
 constant changes scheduling balance during bursts; the 1,024 backlog, bounded
 continuation token, resource-error recovery and shared CBOR routing retain their

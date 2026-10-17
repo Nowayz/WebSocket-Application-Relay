@@ -194,6 +194,8 @@ recorded results and local dependency setup.
 - OS entropy supplies IDs. Fixed-ID takeover closes the old owner with `4001`;
   old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
 - Mio workers drive native sockets; Tokio handles management and process signals.
+  HTTP upgrade and live decoder metadata share inline connection storage;
+  resuming a partial upgrade reuses that storage without a state-box allocation.
   Native accept work yields after at most 16 sockets per turn. Each worker
   keeps at most one pending accept continuation, so repeated
   listener events cannot multiply queued admission batches. Both public CLIs

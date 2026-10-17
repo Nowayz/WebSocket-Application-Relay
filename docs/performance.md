@@ -4238,3 +4238,110 @@ acceptance. The [manifest](benchmarks/2026-10-16-accept-fairness-build.json)
 binds 138 passing Rust tests, strict checks, exact source/binaries, clients and
 all ordinary/diagnostic evidence. The small unpinned CI command passes locally;
 GitHub-hosted CI and deployment are unverified. The goal remains active.
+
+## Inline HTTP upgrade state, 2026-10-16
+
+Runtime `ceda58f` removes `Box<Upgrade>` from native connection state. The
+concrete upgrade metadata is 288 bytes and already fits the 320-byte decoder
+variant; the measured stage/connection remain 320/512 bytes. Acceptance stores
+that state inline, and `WouldBlock` resumes into the same slot. The input buffer,
+socket, relay and eventual frame buffers retain their own owners. This removes
+allocator work without growing each long-lived connection or changing shared
+CBOR payload forwarding. Sizes are observations of the recorded Linux/compiler
+build, rather than a public ABI or cross-platform guarantee.
+
+The independent helper `995d8c3` sends incomplete HTTP headers and paced bytes,
+checks drained Linux TCP receive queues for those exact peers, then verifies
+EOF/reset without application bytes at the absolute five-second deadline.
+It checks the physical connection cap, conservative read allowance, 16 subsequent
+admissions and full retirement. An independent frozen Rust client negotiates
+CBOR, verifies every complete cyclic 1-KiB body/sender/FIFO, then exact Close/EOF.
+Ordinary traffic spans timeout cleanup; diagnostic `--quiet` instead keeps that
+client at its ready gate through the pending wave before verifying later traffic.
+An initial exploratory drain check incorrectly included the active healthy
+socket; its failed fixture is a controller error, not relay-failure evidence.
+The corrected check identifies pending peers by their TCP source ports.
+
+The [four allocator cases](benchmarks/2026-10-16-handshake-inline-memory.json)
+replace only the server allocator with gperftools. Zero/256 pending peers receive
+32 one-byte rounds, with drained receive queues between rounds; the healthy
+client stays quiet through the measured drip phase. Every case runs in its own
+network/PID namespace. Requested cumulative and live allocation counts come
+from hashed quiescent heap captures, with every stack row summed against its
+header. The [symbolized deltas](benchmarks/2026-10-16-handshake-inline-alloc-symbols.json)
+resolve the exact frozen executable's retained function symbols; source debug
+lines are stripped.
+
+| Allocation measurement | Before | Selected |
+| --- | ---: | ---: |
+| `Connection::drive` drip allocations | 8,192 objects / 2,359,296 bytes | 0 / 0 |
+| Whole drip-phase allocated objects | 9,843 | 1,652 (−83.2%) |
+| Whole drip-phase requested bytes | 4,417,424 | 2,059,152 (−53.4%) |
+| Live objects with 256 pending peers | 1,241 | 985 |
+| Live requested bytes at that gate | 2,616,551 | 2,542,823 |
+| Zero-peer control phase requests | 1,650 objects / 2,057,616 bytes | Identical |
+| Stage / connection metadata | 320 / 512 bytes | Identical |
+
+The 8,192 removed state boxes are exactly 256 peers × 32 rounds × 288 bytes.
+Fixed management/dump allocations remain; small differences outside that stack
+mean the whole-phase object reduction is 8,191 rather than exactly 8,192.
+Live pending state saves 73,728 requested bytes. These figures are not RSS,
+allocator size-class costs, kernel socket memory or per-application-message
+allocations. Profile timings and RSS are excluded from ordinary comparisons.
+
+The [48 ordinary cases](benchmarks/2026-10-16-handshake-inline-comparison.json)
+use the same frozen client `626b41b8…`, before native `cc494c8d…` (`d47f0fd`) and
+selected `6c78289b…` (`ceda58f`). Paced driver `30e747f` admits setup in blocks
+of at most 128 outstanding connects before starting the healthy window. This
+keeps population setup outside the comparison of retained-header work; the
+1,024 backlog and five-second timeout stay fixed. Three alternating six-second
+rounds cover one/four workers and zero/1,024/4,096 pending peers. Idle peers send
+no header; drip peers send 32 paced bytes after their incomplete header, with
+drained receive queues after every round. Server CPUs are 0–3, independent
+healthy client CPU 4 and controller CPUs 5–7. Every case has a fresh namespace.
+The allocator cases use their separately frozen pre-pacing driver, identically
+for before/selected; their snapshots remain distinct from the ordinary driver.
+
+All bodies, ordering, exact counters, no-byte timeout closures, admission/read
+allowance reuse and final resource retirement verify. Management metric requests
+complete throughout the wave; the largest observed response is 18.623 ms. This is
+an observation, not a control-plane deadline guarantee. No builds, profiles,
+injected faults or other benchmark loads overlap the 48 cases or 18 routing
+guards. Three-run echo medians and fixed-histogram p99 upper bounds are:
+
+| Workers / pending peers / input | Echoes before → selected (/s) | Change | p99 before → selected (ms) |
+| --- | ---: | ---: | ---: |
+| 1 / 0 / control | 576,707 → 581,777 | +0.88% | 0.065536 → 0.032768 |
+| 4 / 0 / control | 576,769 → 570,161 | −1.15% | 0.065536 → 0.065536 |
+| 1 / 1,024 / idle | 573,555 → 569,929 | −0.63% | 0.065536 → 0.065536 |
+| 4 / 1,024 / idle | 580,022 → 568,078 | −2.06% | 0.032768 → 0.065536 |
+| 1 / 1,024 / drip | 567,348 → 553,809 | −2.39% | 0.065536 → 0.065536 |
+| 4 / 1,024 / drip | 564,072 → 569,725 | +1.00% | 0.065536 → 0.065536 |
+| 1 / 4,096 / drip | 541,499 → 537,386 | −0.76% | 0.065536 → 0.065536 |
+| 4 / 4,096 / drip | 550,015 → 556,968 | +1.26% | 0.065536 → 0.065536 |
+
+All eight throughput ranges overlap. The one-worker 1,024-drip ranges are
+552,606–568,999 → 542,694–561,143/s; four-worker 4,096-drip ranges are
+549,801–559,569 → 555,031–563,467/s. Median p99 buckets move in two cohorts,
+one each direction, within the observed bucket ranges; six are unchanged.
+Latency is measured from the start of a 16-message window. Server CPU spans
+all raw/recovery work inside that window, not population setup. Complete
+ranges, process RSS, phase durations, timeout observations and CPU stay in the
+record. This establishes no general throughput, latency or CPU improvement.
+
+The [12 standard routing guards](benchmarks/2026-10-16-handshake-inline-routing-guard.json)
+and [six admitted-burst guards](benchmarks/2026-10-16-handshake-inline-burst-guard.json)
+also have overlapping ranges. Pure-private median is −0.13%; mixed private
+−0.56% and reconnects +0.29%. The one-worker 64-reconnect burst is −1.13% for
+private traffic and −0.94% for full reconnects, with unchanged median p99.
+Allocation reduction, unchanged slab footprint and simpler state ownership are
+the retained benefits. No per-operation CPU-saving claim follows.
+
+The [manifest](benchmarks/2026-10-16-handshake-inline-build.json) binds exact
+source, layout diagnostics, allocator captures, all ordinary cases, 138 Rust
+tests, strict checks, C++ wire comparison, socket stress and real Chrome
+acceptance. The new CI command passes locally. The fragmented-upgrade compaction
+guard and embedding-cancellation guard check parser state, complete CBOR output,
+physical TCP closure and reservation release. Separate 8,192-idle-peer,
+1,024-refusal and 1,024-reader changing-room checks pass. These are finite local
+Linux loopback checks; hosted CI, deployment and production capacity are unverified.

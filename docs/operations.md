@@ -84,6 +84,15 @@ queued work. This scheduling budget is separate from the kernel backlog and
 established-connection limits. The [fairness measurements](performance.md#accept-turn-fairness-2026-10-16)
 record the established-traffic benefit and refusal-throughput tradeoff.
 
+The native HTTP upgrade has an absolute five-second deadline by default;
+partial headers do not extend it. Its read allowance is held until upgrade,
+failure or timeout, and unfinished EOF/timeouts increment
+`war_handshake_errors_total`. The reserved allowance is conservative staging
+headroom, rather than measured heap usage. The
+[pending-header checks](performance.md#inline-http-upgrade-state-2026-10-16)
+verify timeout release and subsequent admission while established CBOR traffic
+and management metric requests remain usable.
+
 ```sh
 ./target/release/war-relay --workers 4 --listen-backlog 2048
 ./target/release/war-legacy-bridge --listen-backlog 2048
