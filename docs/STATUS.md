@@ -9,6 +9,20 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+The [forwarding study and larger active-pair comparison](performance.md#forwarding-counter-experiments-and-64-active-pairs-2026-10-16)
+adds a verified 64-pair client with configurable runtime threads and a 16-pair
+CI case (`cd25cdb`). At 64 active pairs plus 8,192 idle rooms, three fresh
+repetitions measure Rust 2,062,414 / rebuilt C++ 2,213,321 private deliveries/s:
+Rust −6.82% throughput, +16.62% CPU per delivery and −17.78% measured RSS, with
+the same p99 bucket. All twelve private/query cases verify 141,970,336 healthy
+deliveries, 7,200 queries and 99,864 normal Close/EOF exchanges. Query ranges
+overlap and neither process exhausts its CPU allowance; this is not a saturated
+capacity claim. Separate two/64-pair profiles and 48 ordinary counter-layout/
+striped-counter comparisons do not justify either prototype. Both are removed;
+the selected native executable remains byte-identical. The current client and
+restored runtime pass 138 Rust tests, strict Clippy, formatting, the local CI
+commands and an older frozen-client replay.
+
 The refreshed [direct C++ comparison](performance.md#current-direct-c-comparison-2026-10-16)
 measures this exact selected runtime in 24 fresh passing trials. Four-worker
 private throughput medians are C++ 1,094,299 / Rust 1,021,578 verified deliveries/s
@@ -1031,6 +1045,10 @@ The continuing improvement goal remains active.
    remains higher than rebuilt C++, while its one-core private and churn
    workloads improve on the shipped executable. Measure more active flows and
    worker placement before treating two-pair throughput as a scaling ceiling.
+   The 64-pair extension now supplies a stronger verified workload and separate
+   profile, but does not saturate the four-core allowance. Padded-global and
+   striped-cumulative counter experiments do not establish a consistent benefit;
+   preserve the existing global atomic metrics and reservation checks.
    The ID ownership map now shrinks after substantial retirement, with measured
    global-routing recovery after large population waves. Membership indexes now
    have ordinary-room and global-index private-delivery measurements. Channel-name

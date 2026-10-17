@@ -10,6 +10,11 @@ refreshes both the shipped one-core and rebuilt four-worker baselines against
 the selected `ceda58f` runtime. It supersedes the earlier port's performance
 figures when describing the current implementation.
 
+The [64-pair extension](#forwarding-counter-experiments-and-64-active-pairs-2026-10-16)
+adds more active flows, a configurable verified client and a fresh direct
+comparison. Its counter experiments are rejected; the selected relay executable
+is unchanged.
+
 ## Scope
 
 Measurements on 2026-10-15 used a Linux x86-64 host with an AMD Ryzen AI MAX+ 395,
@@ -4451,3 +4456,137 @@ the relay binary is unchanged. RSS is sampled at gates, and latency values are
 histogram upper bounds including client validation and windowing. Multi-hour
 traffic, TLS, much larger populations, many active flows and adverse networks
 remain outside this loopback comparison.
+
+## Forwarding counter experiments and 64 active pairs, 2026-10-16
+
+The [study manifest](benchmarks/2026-10-16-forwarding-study.json) binds two
+rejected counter prototypes, 48 ordinary comparison cases, two diagnostic CPU
+profiles, the retained client extension and its verification, and twelve new
+native C++/Rust cases. The selected relay remains `ceda58f`, SHA-256
+`6c78289b5adda4d7f67ac8862ed5583a7b0e5223aa82b4b24d3e5000e8dc31e3`.
+Rebuilding after restoring the original source produces that exact executable.
+Shared CBOR body ownership, global queue/admission gauges and the public atomic
+counter API retain their implementation.
+
+### Counter experiments
+
+Separate diagnostics sample `cycles:u` at 499 Hz with 8 KiB DWARF stacks during
+verified traffic. The earlier frozen client uses two private pairs/four client
+threads; the extended client uses 64 pairs/eight threads. Both hold 8,192 idle
+rooms and use the same 1 KiB value cycle and window 16. User-cycle self samples in
+`receive_with_storage` are 27.88%/29.33%; socket output submission is
+18.47%/19.51%; WebSocket reading is 9.17%/9.51%. The first annotated capture
+locates samples following the global counter atomics, registry read lock and
+reference-count operations. Both profiles lose zero samples and pass complete
+socket/counter/cleanup verification. These relative sample fractions do not
+establish a particular contention mechanism or wall-time saving.
+
+The first prototype keeps global atomic counters but separates input and output
+groups onto 64-byte boundaries. The second replaces six cumulative traffic
+counters with 32 cache-separated atomic lanes each, using a bounded thread-local
+lane index and summing lanes for management reads. Concurrent lane reuse and
+wrapping totals pass preliminary library tests. The striped prototype leaves
+admission and byte reservations as global atomics; its cumulative loads are
+exact at quiescence rather than point-in-time totals across writers. It also
+changes the Rust counter type/update API. A release layout probe measures
+`Metrics` at 288 bytes with alignment 8 before, 384 bytes with alignment 64 with
+padding and 12,544 bytes with alignment 64 with stripes.
+
+Each prototype gets a separate [24-case layout study](benchmarks/2026-10-16-counter-layout-study.json)
+or [24-case striped study](benchmarks/2026-10-16-counter-stripes-study.json):
+three alternating fresh-process pairs for one-core/two-pair, four-worker/two-pair,
+four-worker/eight-pair and one-private-pair plus 64 broadcast readers. Every
+case holds 8,192 idle rooms for a four-second traffic interval. Compilation,
+profiling and other load tests finish before ordinary timing starts. All body,
+sender, FIFO, Close/EOF, exact-counter and resource-release checks pass.
+
+| Prototype / median change relative to its paired baseline | Padded globals | Striped cumulative counters |
+| --- | ---: | ---: |
+| One-core private throughput | −0.27% | +0.05% |
+| One-core CPU per verified output | −0.45% | +0.32% |
+| Four-worker/two-pair throughput | −0.89% | −26.52% |
+| Four-worker/two-pair CPU per output | +2.10% | −22.16% |
+| Four-worker/eight-pair throughput | −22.55% | +28.89% |
+| Four-worker/eight-pair CPU per output | −3.91% | +2.48% |
+| Fanout workload broadcast throughput | +1.85% | +2.08% |
+| Fanout workload CPU per verified output | −1.85% | −1.63% |
+
+The large private-throughput swings occur alongside different active-worker
+placements and overlapping ranges. The two-pair cases use one or two busy
+workers, and eight-pair cases use three or four; the manifest derives each
+thread's CPU from the quiescent gates. These swings are not attributed to the
+counter changes. The one-core control shows no useful gain, the two-pair padding control
+costs CPU, and the modest fanout gains do not establish a consistent forwarding
+benefit. Both prototypes are rejected. The striped counter's larger storage and
+API/observation changes are additional costs without an established whole-relay
+benefit. Their exact source, patches, binary hashes, helper versions and raw
+results remain in the manifest; the current source contains neither prototype.
+
+### Verified client concurrency
+
+The retained client change `cd25cdb` raises the private-pair limit from eight
+to 64 and adds `--client-workers 1..32`, default 4. Runtime construction preserves
+the existing I/O/timer setup and four-thread default. Pair templates are still
+prepared before timing; all received values, senders, sequence positions,
+inspection responses and Close/EOF exchanges remain verified. Both Python
+harnesses forward the worker option only when supplied, preserving older frozen
+client replay. Direct-comparison scope text now records the requested pair and
+room counts instead of always saying two pairs.
+
+The new unpinned CI case uses 16 private pairs/two client threads/two server
+workers, with no idle rooms and a one-second verified interval. Its exact debug
+command passes locally; a release companion, the existing changing-room/fanout/
+reconnect CI case, and an older frozen-client replay also pass. The restored
+runtime plus new client pass 138 Rust tests, strict Clippy and formatting. Four
+CLI boundary checks reject zero/33 client workers and 65 private pairs, and reject
+zero pairs when no fanout is requested, before contacting a socket. Hosted CI
+has not been run for this local commit.
+
+### Direct comparison with 64 active pairs
+
+The [expanded matrix](benchmarks/2026-10-16-active-pairs-cpp.json) runs three
+fresh six-second repetitions per implementation for private-only and private
+plus 200 authenticated channel queries/s. Both use 64 private pairs, 8,192 idle
+single-member rooms, cyclic 1 KiB values, windows of 16 and one frozen verified client
+(`c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569`).
+The client has eight runtime workers plus main, observed in every run, pinned
+to physical CPUs 4–11. Both servers use CPUs 0–3. C++ is rebuilt from the same
+preserved source with only worker count changed to four and upstream native
+optimization flags, yielding the same `3b8c7cd…` executable as before; four
+listeners/six threads are checked each time. Rust remains the portable native
+CBOR executable. C++ forwards identical encoded values as opaque binary.
+
+All trials run sequentially without overlapping builds, profilers or other load
+tests, in fresh network/PID namespaces. Setup and teardown are gated outside
+timing. Rates and heartbeats are disabled for controlled Rust measurements;
+TLS/proxies are absent. Workload and implementation order rotate as before.
+
+| Median of three | Rebuilt four-worker C++ | Current four-worker Rust |
+| --- | ---: | ---: |
+| Private verified deliveries/s | 2,213,321 | 2,062,414 |
+| Private observed throughput range | 2,202,569–2,253,912 | 2,059,896–2,086,203 |
+| Private server CPU ns/verified delivery | 921 | 1,074 |
+| Private delivery p99 upper bucket | 2.097152 ms | 2.097152 ms |
+| Private RSS at measured gate | 20.65 MiB | 16.98 MiB |
+| Healthy deliveries/s with 200 channel queries/s | 1,758,931 | 1,974,538 |
+| Query-workload observed throughput range | 1,503,891–2,090,096 | 1,416,296–2,037,124 |
+| Query-workload healthy p99 upper bucket | 4.194304 ms | 2.097152 ms |
+| Channel-query p99 upper bucket | 8.388608 ms | 8.388608 ms |
+| Query-workload RSS at measured gate | 20.90 MiB | 17.32 MiB |
+
+Rust private throughput is 6.82% lower, CPU per verified delivery is 16.62%
+higher, and measured RSS is 17.78% lower. Private ranges do not overlap in these three
+repetitions; query ranges do, so the query medians do not establish a general
+management advantage. Both server and client observed CPU use remain below
+their allowances; more active flows do not prove saturation. CPU ratios are
+medians of per-run CPU/delivery ratios, RSS is sampled at gates and latency is
+a client-observed histogram upper bound including windowing and verification.
+The added concurrency explains a different workload and latency distribution;
+it is not a before/after relay speedup or an isolated language comparison.
+
+All twelve cases pass **141,970,336 healthy deliveries, 7,200 paced queries and
+99,864 exact normal Close/EOF exchanges**. Native metrics match the independent
+client's byte/message totals, routing-copy bytes stay zero and all final native
+resources retire. Clients and Rust processes exit zero; C++ receives its expected
+SIGTERM without forced killing. Multi-hour operation, adverse networks, TLS
+and a successful rebuilt multicore C++ churn workload remain outside this check.

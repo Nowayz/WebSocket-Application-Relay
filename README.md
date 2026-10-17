@@ -335,6 +335,23 @@ artifacts/inspection.json`. Modes `none` and `cbor` provide companion controls;
 the default workload holds 8,192 idle rooms alongside private traffic and churn.
 All inspection responses and application deliveries are checked.
 
+The verified client supports up to 64 private pairs. `--client-workers 8`
+selects eight client runtime threads; the default remains four. Give the client
+separate CPU cores when measuring a larger active population. For example, on
+a host with physical cores 0–11 available:
+
+```sh
+python3 scripts/compare-cpp.py --rebuild-cpp --workers 4 --pairs 64 \
+  --client-workers 8 --server-cpus 0-3 --client-cpus 4-11 \
+  --cases private query --output artifacts/cpp-64-pairs.json
+```
+
+The inspection harness accepts the same `--pairs` and `--client-workers`
+options. Omit `--client-workers` when replaying an older frozen client that
+predates the option. The [64-pair comparison](docs/performance.md#forwarding-counter-experiments-and-64-active-pairs-2026-10-16)
+records full verification and CPU/latency/memory results; a larger active
+population does not by itself establish a saturated server capacity.
+
 To check receive-slab retention under actual unread-recipient backpressure:
 
 ```sh
