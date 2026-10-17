@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "diagnostic_only": true,
+  "scope": "One fresh one-worker server and one upgraded TCP/WebSocket peer at a time. Kernel descriptor inspection proves an io_uring ring only for the Monoio completion variant. No benchmark timings taken.",
+  "runs": [
+    {
+      "kind": "mio",
+      "binary_sha256": "35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/input-batch/war-relay",
+        "--bind",
+        "127.0.0.1:36215",
+        "--no-admin",
+        "--workers",
+        "1"
+      ],
+      "io_uring_descriptors": 0,
+      "socket_descriptors": 5,
+      "fd_count": 14,
+      "ring_fdinfo": [],
+      "websocket_upgrade_verified": true,
+      "exact_close_ack_and_eof": true,
+      "server_exit_code": 0
+    },
+    {
+      "kind": "monoio",
+      "binary_sha256": "20ed518b9d94b09cc90ca6227ba68f7f427f88b9f5603967b89800f996602c61",
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/monoio-completion-bounded/war-relay",
+        "--bind",
+        "127.0.0.1:53195",
+        "--no-admin",
+        "--workers",
+        "1"
+      ],
+      "io_uring_descriptors": 1,
+      "socket_descriptors": 6,
+      "fd_count": 17,
+      "ring_fdinfo": [
+        "pos:\t0\nflags:\t02000002\nmnt_id:\t19\nino:\t1102775988\nSqMask:\t0x3ff\nSqHead:\t6\nSqTail:\t6\nCachedSqHead:\t6\nCqMask:\t0x7ff\nCqHead:\t3\nCqTail:\t3\nCachedCqTail:\t3\nSQEs:\t0\nCQEs:\t0\nSqThread:\t-1\nSqThreadCpu:\t-1\nSqTotalTime:\t0\nSqWorkTime:\t0\nUserFiles:\t0\nUserBufs:\t0\nPollList:\n  op=6, task_works=0\n  op=27, task_works=0\n  op=22, task_works=0\nCqOverflowList:\nNAPI:\tdisabled\n"
+      ],
+      "websocket_upgrade_verified": true,
+      "exact_close_ack_and_eof": true,
+      "server_exit_code": 0
+    }
+  ]
+}

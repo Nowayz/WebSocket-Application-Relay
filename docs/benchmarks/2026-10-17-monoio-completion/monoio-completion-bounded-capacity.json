@@ -1,0 +1,173 @@
+{
+  "passed": true,
+  "diagnostic_only": false,
+  "runs": [
+    {
+      "variant": "mio",
+      "repetition": 1,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-mio-1.json",
+      "trace_sha256": "db05624d68c4cae5f30f01cdaa2ad307236b2d931abe07809157a17d1f0e196b",
+      "verified": 5000000,
+      "deliveries_per_second": 559692.725577289,
+      "cpu_ns_per_delivery": 4956.000000000001,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 108.39453125,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "bounded",
+      "repetition": 1,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-bounded-1.json",
+      "trace_sha256": "383614e727bf4e29d6915da91fb0c28fd9d3ae10be800b938dc6a7115f7e8fdd",
+      "verified": 5000000,
+      "deliveries_per_second": 202982.42498420813,
+      "cpu_ns_per_delivery": 15159.999999999998,
+      "p99_ms": 536.870912,
+      "ready_rss_mib": 420.5078125,
+      "ready_fd_count": 100038,
+      "ready_staging_bytes": 2800000
+    },
+    {
+      "variant": "bounded",
+      "repetition": 2,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-bounded-2.json",
+      "trace_sha256": "44488a4b0e1c9e79e8eee54ed80c124ab170bbf0c0d3f16aefcc5bc2e85fdf69",
+      "verified": 5000000,
+      "deliveries_per_second": 208592.1729532497,
+      "cpu_ns_per_delivery": 13273.999999999998,
+      "p99_ms": 1073.741824,
+      "ready_rss_mib": 417.32421875,
+      "ready_fd_count": 100038,
+      "ready_staging_bytes": 2800000
+    },
+    {
+      "variant": "mio",
+      "repetition": 2,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-mio-2.json",
+      "trace_sha256": "8ab087c90cb14ce3d51226217397d0b968716347157ef9afdfa8655b4ebc6818",
+      "verified": 5000000,
+      "deliveries_per_second": 560373.9407853379,
+      "cpu_ns_per_delivery": 4956.000000000001,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 106.4375,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "mio",
+      "repetition": 3,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-mio-3.json",
+      "trace_sha256": "5d7d8950695aacd8529cd67719fa1d12129836f887d1b2fcb227f3f6f1866a31",
+      "verified": 5000000,
+      "deliveries_per_second": 568201.9542259815,
+      "cpu_ns_per_delivery": 4870.0,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 108.44921875,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "bounded",
+      "repetition": 3,
+      "passed": true,
+      "trace": "artifacts/monoio-completion-bounded-capacity-bounded-3.json",
+      "trace_sha256": "468e4592f0b78146d13239d0eac35493728c09454ef6c5b9f44e1efee295408c",
+      "verified": 5000000,
+      "deliveries_per_second": 201547.87964570188,
+      "cpu_ns_per_delivery": 15607.999999999996,
+      "p99_ms": 536.870912,
+      "ready_rss_mib": 420.88671875,
+      "ready_fd_count": 100038,
+      "ready_staging_bytes": 2800000
+    }
+  ],
+  "scope": "Fresh sequential four-worker servers on cores0-3, identical frozen clients and bodies. Private:64 pairs/8192 idle rooms, client cores4-7, six seconds. Capacity:100000 users/16-member rooms, 1KiB bodies, ten offered messages/user/s for five seconds plus drain, client cores8-15,16KiB/64KiB TCP. Three rotating backend orders. No build/profile/load overlap. Exact payload/FIFO/counters/Close/EOF/resource checks. Completion changes quiescent receive ownership: at most 28 admitted bytes per idle user; original worker bounds stay enforced for Mio/readiness. Normal hard staging quota unchanged.",
+  "variants": {
+    "mio": {
+      "path": "artifacts/candidates/input-batch/war-relay",
+      "sha256": "35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e"
+    },
+    "bounded": {
+      "path": "artifacts/candidates/monoio-completion-bounded/war-relay",
+      "sha256": "20ed518b9d94b09cc90ca6227ba68f7f427f88b9f5603967b89800f996602c61"
+    }
+  },
+  "clients": {
+    "private": {
+      "path": "artifacts/baselines/active-pairs-client/inspection",
+      "sha256": "c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569"
+    },
+    "capacity": {
+      "path": "artifacts/baselines/capacity-final/capacity",
+      "sha256": "fd81cb4b6183b7aa942f83d3ec90ed4faeb6376a5103efcd7aff4aaf16b3fc39"
+    }
+  },
+  "helpers": {
+    "scripts/inspection.py": "b9529d0fda708462911dae1da011bcdd455668112df66610762824a16ee17d3d",
+    "scripts/capacity.py": "9895ed05dadc6de4aa89abe1273bd96c38e6fda9128cfe23813680527a9efcff",
+    "scripts/capacity_pressure.py": "0eb55b9d8439764acd8f517b0c34803fef69553c2107b6c538c531c3fec6c42d",
+    "scripts/benchmark.py": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce"
+  },
+  "summary": {
+    "mio": {
+      "deliveries_per_second": {
+        "median": 560373.9407853379,
+        "min": 559692.725577289,
+        "max": 568201.9542259815
+      },
+      "cpu_ns_per_delivery": {
+        "median": 4956.000000000001,
+        "min": 4870.0,
+        "max": 4956.000000000001
+      },
+      "p99_ms": {
+        "median": 268.435456,
+        "min": 268.435456,
+        "max": 268.435456
+      },
+      "ready_rss_mib": {
+        "median": 108.39453125,
+        "min": 106.4375,
+        "max": 108.44921875
+      },
+      "ready_staging_bytes": {
+        "median": 32768,
+        "min": 32768,
+        "max": 32768
+      }
+    },
+    "bounded": {
+      "deliveries_per_second": {
+        "median": 202982.42498420813,
+        "min": 201547.87964570188,
+        "max": 208592.1729532497
+      },
+      "cpu_ns_per_delivery": {
+        "median": 15159.999999999998,
+        "min": 13273.999999999998,
+        "max": 15607.999999999996
+      },
+      "p99_ms": {
+        "median": 536.870912,
+        "min": 536.870912,
+        "max": 1073.741824
+      },
+      "ready_rss_mib": {
+        "median": 420.5078125,
+        "min": 417.32421875,
+        "max": 420.88671875
+      },
+      "ready_staging_bytes": {
+        "median": 2800000,
+        "min": 2800000,
+        "max": 2800000
+      }
+    }
+  }
+}

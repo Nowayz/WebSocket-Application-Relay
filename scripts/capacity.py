@@ -104,8 +104,9 @@ def check(observed, event, args, pressure=None):
         capacity_pressure.adapt_checks(expected, observed, counts, pressure, event)
     for key, value in expected.items():
         assert observed[key] == value, (event["event"], key, observed[key], value)
-    allowance = 0 if done else args.workers * 8192
+    allowance = 0 if done else (args.users * 28 if args.read_storage == "completion" else args.workers * 8192)
     assert 0 <= observed["war_read_buffer_reserved_bytes"] <= allowance
+    event["read_allowance_bound"] = allowance
     event["exact_counter_checks"] = expected
 
 
@@ -186,7 +187,12 @@ def run(args):
                     if monitoring and time.monotonic() >= next_sample:
                         began = time.monotonic()
                         current = metrics(admin)
-                        assert args.users <= current["war_sessions"] <= args.users + args.churn_workers * args.room_size + extra
+                        # Preserve the full numeric snapshot before a live
+                        # assertion so a failed trial can identify its cause.
+                        result["last_monitoring_metrics"] = current
+                        assert args.users <= current["war_sessions"] <= args.users + args.churn_workers * args.room_size + extra, (
+                            "live sessions", current["war_sessions"], args.users,
+                            args.users + args.churn_workers * args.room_size + extra)
                         assert current["war_queued_bytes"] <= 256 * 1024**2
                         assert current["war_read_buffer_reserved_bytes"] <= 256 * 1024**2
                         allowed = capacity_pressure.EXPECTED_ERRORS if args.pressure_client else set()
@@ -336,6 +342,8 @@ if __name__ == "__main__":
                         help="Include kernel cycles in --profile; requires suitable perf permissions")
     parser.add_argument("--pressure-client", type=Path, help="Verified stress client: eight unread recipients beside the stable population")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--read-storage", choices=["worker", "completion"], default="worker",
+                        help="quiescent staging contract; completion rents one 14-byte header with 2x allowance per live user")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-11")
     parser.add_argument("--timeout", type=int, default=240)

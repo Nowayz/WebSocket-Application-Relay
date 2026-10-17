@@ -5449,3 +5449,89 @@ separately; it is not substituted into the measured cohort. The default Cargo
 project gains no Monoio dependency. Local development uses the selected Mio
 input-batch build, whose native/legacy routing, exact Close/EOF, readiness,
 test-page availability and zero resource retirement are verified separately.
+
+
+## Monoio owned completion I/O evaluation, 2026-10-17
+
+The subsequent experiment replaces readiness adaptation with Monoio 0.2.4
+`cancelable_read` and `cancelable_writev` operations. Each connection owns read
+and write tasks on its worker; a single accepted descriptor replaces the earlier
+readiness duplicate. Decoder storage and its reservation guard travel together
+through pending reads. Vectored output retains the original envelope and points
+at its header and shared body. Small reusable boxed I/O metadata keeps those
+addresses stable. A separate audited helper crate implements the necessary unsafe
+buffer traits; the main crate continues to forbid unsafe code. The default
+Cargo project gains no Monoio dependency.
+
+[The archive](benchmarks/2026-10-17-monoio-completion.json) binds both prototypes,
+118-file source manifests, replayable patches, validation logs, raw trial traces
+and profile reports. The selected Mio executable remains SHA-256
+`35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e`.
+The measured bounded completion binary is
+`20ed518b9d94b09cc90ca6227ba68f7f427f88b9f5603967b89800f996602c61`.
+
+Three rotating fresh repetitions per backend use identical frozen clients,
+portable Rust 1.91.1 release builds, four server workers on CPUs 0–3 and no AOCL
+preload. Private traffic uses eight client workers on CPUs 4–7; capacity uses
+CPUs 8–15, 16 KiB server send and 64 KiB receive buffers. Builds and profiles
+are separate from ordinary timings. The following medians belong to the bounded
+completion cohort, rather than the earlier readiness or initial completion study.
+
+| Workload | Mio deliveries/s | Completion deliveries/s | Mio CPU ns/delivery | Completion CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| 64 private pairs, 8,192 idle rooms, six seconds | 2,131,130 | 1,071,219 | 1,063 | 2,508 |
+| 100,000 users, five seconds offered overload plus drain | 560,374 | 202,982 | 4,956 | 15,160 |
+
+All six trials pass exact bodies, FIFO, counters, fresh routing, Close/EOF and
+resource retirement. Capacity offers one million 1 KiB messages/s and verifies
+five million per trial including backlog drainage; this exceeds both servers'
+sustainable rate. Ready RSS medians are 108.39 versus 420.51 MiB, and descriptors
+100,026 versus 100,038. RSS excludes kernel socket/ring memory and clients.
+Overload p99 upper RTT buckets are 268.435456 versus 536.870912 ms (completion's
+maximum trial bucket is 1,073.741824 ms). Private p99 upper buckets are
+2.097152 versus 4.194304 ms. Completion has 2.76 times less overload throughput,
+3.06 times the CPU cost and 3.88 times the ready RSS in this cohort.
+
+The initial completion design reserves a 4 KiB body quantum per active reader.
+It fails overload: a diagnostic reaches 268,432,068 reserved bytes of the unchanged
+268,435,456-byte budget, 14,955 rejected reservations and only 85,047 live sessions.
+This is a failed acceptance run, not a throughput result. The replacement bounds
+body allocation by the declared frame length plus 14 bytes of read-ahead, and
+returns to a 14-byte idle header buffer. Quiescent reservations are bounded by
+28 bytes per user, including growth allowance; final reservations must be zero.
+This fixes acceptance but reduces coalescing. Initial private traffic measured
+1,303,607/s and 2,002 CPU ns/delivery versus its contemporaneous Mio control's
+2,097,355/s and 1,066 ns. Neither completion version beats its matched control.
+
+The final prototype passes 150 tests, a separate helper test, strict Clippy,
+formatting and the 62-file vendor audit. The independent corpus passes 776 cases
+and 2,311 scheduled exchanges; fragmented waves pass 24 reclamation cycles.
+Focused tests exercise kernel-owned buffer cancellation, original payload
+pointers, quota retention, exact bounded growth, and descriptor-before-admission
+retirement. Fixes also preserve frame ordering when Close meets an in-flight
+write, and distinguish deliberate cancellation from write errors. Policy rejection
+performs one bounded nonblocking discard of already-arrived input after Close;
+it does not wait for an advertised rejected body.
+
+One 65-second bounded-completion mixed run passes with 100,000 stable users,
+6.5 million verified messages at one 1 KiB message/user/s, 66,560 churn joins and
+normal closes, 15-second heartbeats and eight unread pressure peers. Stable p99
+upper RTT is 2.097152 ms and maximum 15.248089 ms. Final connections, sessions,
+queued bytes, receive reservations and variable bytes are zero; descriptor count
+returns to 38 and established sockets to zero. Exactly eight slow-consumer
+retirements occur, with no write, accept, setup, handshake or protocol errors.
+This is finite plaintext loopback acceptance, not multi-hour, TLS or WAN proof.
+
+A separate bounded-completion overload profile records 44,500 samples and zero
+lost samples. Resolved reports show task polling, wakeups, connection driving,
+ring bookkeeping and kernel socket/receive work. Normal kernel copies remain;
+no extra application payload copy was found. The profile does not assign the
+entire CPU gap to individual causes. Coordination between decoder, reader and
+writer tasks, and read coalescing, are hypotheses for a measured ablation rather
+than grounds to adopt this implementation.
+
+Both archived source patches replay with all source hashes checked. Rebuilding
+the bounded variant through `scripts/try-monoio.py completion` succeeds, and the
+new binary passes 40 independent smoke cases/103 exchanges. Its hash differs
+with the build path and is recorded separately, never substituted into measured
+trials. The selected native Mio runtime remains unchanged.

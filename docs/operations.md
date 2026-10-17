@@ -971,3 +971,31 @@ and an available io_uring driver. Large parallel test suites may need a larger
 process locked-memory allowance. The study records its original `ENOMEM`
 failure and the scoped limit change used for testing. Its results cover
 readiness integration; completion-based socket I/O remains a separate experiment.
+
+
+## Rebuilding owned completion I/O
+
+The [completion study](performance.md#monoio-owned-completion-io-evaluation-2026-10-17)
+measures actual owned reads and vectored writes. Rebuild it into a fresh directory:
+
+```sh
+python3 scripts/try-monoio.py completion --output artifacts/monoio-completion-trial
+artifacts/monoio-completion-trial/target/release/war-relay --workers 4 \
+  --bind 127.0.0.1:1438 --admin-bind 127.0.0.1:1439
+```
+
+The script verifies the archived patch and all 118 source hashes, builds with
+locked dependencies and records the new binary hash. `--prepare-only` validates
+sources without building. `completion-initial` reconstructs the historical variant
+that fails overload through receive-budget exhaustion; use it only for diagnosis.
+The bounded `completion` variant passes the recorded acceptance checks but costs
+more CPU and memory and delivers less throughput than selected Mio.
+
+This implementation uses one accepted descriptor per user, worker-local read
+and write tasks, a 14-byte idle receive header and frame-sized body reservations.
+Its helper crate contains audited unsafe owned-buffer trait implementations;
+payload owners and reservation guards remain alive until completion or completed
+cancellation. Large parallel suites may require a scoped locked-memory allowance
+for their rings. Tokio remains in management/lifecycle. The main project's native
+Mio runtime remains selected. These experiments require Linux with available
+io_uring and do not imply kernel zero-copy sends or provided-buffer rings.

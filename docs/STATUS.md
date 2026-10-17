@@ -9,7 +9,37 @@ the latest requested experiment evaluates Monoio.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: Monoio evaluation, 2026-10-17
+## Latest verified checkpoint: owned Monoio completion I/O, 2026-10-17
+
+A second isolated prototype now uses actual Monoio 0.2.4 owned-buffer receive
+and vectored-write completions, with one accepted descriptor per user. It
+preserves the original payload owner through output and lends decoder storage
+to pending reads. The default remains the faster fixed-worker Mio runtime.
+
+Three fresh matched 100,000-user overload pairs measure Mio at 560,374 verified
+deliveries/s, 4,956 CPU ns/delivery and 108.39 MiB ready RSS, versus completion
+I/O at 202,982/s, 15,160 ns and 420.51 MiB. Dense private traffic measures
+2,131,130 versus 1,071,219/s and 1,063 versus 2,508 ns. These are integration
+results, not an intrinsic ranking of runtime libraries.
+
+The initial completion prototype exhausted its unchanged 256 MiB receive budget
+under overload and lost sessions. The bounded replacement passes all six matched
+trials, 150 tests plus one helper test, the 776-case independent corpus, 24 large
+fragment cycles and one 65-second mixed 100,000-user run. That mixed run verifies
+6.5 million stable messages, 66,560 churn sessions, heartbeat and unread-peer
+pressure, then exact Close/EOF and zero final live resources. Its p99 upper RTT
+bucket is 2.097152 ms. Finite loopback acceptance does not establish production,
+TLS/WAN or multi-hour capacity.
+
+Both source variants, failures, raw results and profile reports are archived.
+The public rebuild command reconstructs all 118 source files and its rebuilt
+binary passes the independent protocol smoke. Completion scheduling and kernel
+receive work are measured next targets; no additional application payload copy
+was found. See the [completion study](performance.md#monoio-owned-completion-io-evaluation-2026-10-17)
+and [rebuild instructions](operations.md#rebuilding-owned-completion-io).
+The continuing optimization goal remains active.
+
+## Previous checkpoint: Monoio readiness evaluation, 2026-10-17
 
 Monoio 0.2.4 was implemented and measured in the native socket workers. The
 default data path already uses Mio; Tokio handles management and lifecycle.
@@ -23,7 +53,7 @@ overload pairs measure 442,291 versus Mio's 556,530 verified deliveries/s,
 Its adapter duplicates descriptors for independent readiness ownership, using
 200,038 versus 100,026 at the ready gate. Dense private and mixed fanout also
 use more CPU. These are results for this readiness adapter; Monoio's owned-buffer
-completion API and a different ownership architecture remain unmeasured.
+completion API is evaluated in the subsequent completion study above.
 
 A retained-readiness-descriptor retirement gap was reproduced and fixed in the
 prototype. All 144 tests, strict Clippy, independent corpus and large-fragment

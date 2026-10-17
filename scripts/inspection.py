@@ -81,6 +81,15 @@ def check(event, stable_sessions, stable_channels, read_storage="worker", worker
     reserved = observed["war_read_buffer_reserved_bytes"]
     if read_storage == "connection":
         expected["war_read_buffer_reserved_bytes"] = 0 if done else stable_sessions * 8192
+    elif read_storage == "completion":
+        # This experimental backend rents one maximum WebSocket header (14
+        # bytes) per idle receive, with the decoder's 2x growth allowance. All
+        # application input is complete at these gates. Large body/fragment
+        # leases must have retired; final cleanup still requires exactly zero.
+        bound = 0 if done else stable_sessions * 28
+        assert 0 <= reserved <= bound, (event["event"], "completion receive allowance", reserved, bound)
+        expected["war_read_buffer_reserved_bytes"] = reserved
+        event["completion_read_allowance_bound"] = bound
     else:
         # At these quiescent gates all application input is complete. Empty
         # decoders own no receive allocation; each worker may keep one 4KiB
@@ -292,8 +301,8 @@ if __name__ == "__main__":
                         help="Join/retire a verifying room member every N fanout windows; zero disables")
     parser.add_argument("--fanout-window", type=int, default=16,
                         help="Broadcast window size in 1..=32; requires updated client when not16")
-    parser.add_argument("--read-storage", choices=["worker", "connection"], default="worker",
-                        help="staging accounting contract; use connection for the frozen async control")
+    parser.add_argument("--read-storage", choices=["worker", "connection", "completion"], default="worker",
+                        help="staging contract: worker scratch, frozen async connection, or experimental completion header receives")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-7")
     profiles = parser.add_mutually_exclusive_group()

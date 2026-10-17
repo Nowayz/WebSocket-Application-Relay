@@ -1,0 +1,503 @@
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/experiments/monoio-completion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.68s
+     Running unittests src/lib.rs (artifacts/experiments/monoio-completion/target/debug/deps/war_relay-f5e65c9d1aa0f94f)
+
+running 65 tests
+test admission::tests::addresses_are_canonical_bounded_and_retire_with_their_last_lease ... ok
+test frame::tests::compaction_detaches_a_small_value_from_shared_receive_storage ... ok
+test frame::tests::routed_owned_views_preserve_aliases_and_survive_original_owner_retirement ... ok
+test frame::tests::routing_reuses_the_body_for_every_integer_width_and_nonminimal_input ... ok
+test admin::tests::reversible_drain_and_terminal_shutdown_have_distinct_transitions ... ok
+test admin::tests::shutdown_cannot_be_resumed_by_an_authorized_management_request ... ok
+test legacy::tests::known_little_endian_and_base64_vectors ... ok
+test legacy::tests::truncated_variable_packets_are_rejected_without_reading_outside_payload ... ok
+test origin::tests::configuration_rejects_non_origin_urls_and_unbounded_lists ... ok
+test protocol::tests::rejects_trailing_indefinite_deep_and_truncated_cbor ... ok
+test protocol::tests::integer_and_array_header_sizes_match_the_encoder_at_every_width_boundary ... ok
+test admission::tests::an_expired_entry_destructor_cannot_remove_its_live_replacement ... ok
+test frame::tests::scalar_control_frames_match_known_vectors_and_every_integer_width ... ok
+test frame::tests::variable_replies_preserve_opaque_values_and_missing_is_distinct_from_null ... ok
+test protocol::tests::independent_known_cbor_vectors_and_full_width_ids ... ok
+test origin::tests::exact_origins_preserve_native_clients_and_reject_ambiguous_values ... ok
+test relay::listener_tests::listener_identity_survives_assignment_takeover_and_delayed_cleanup ... ok
+test relay::channel_tests::recreated_channels_have_fresh_variables_while_old_name_views_remain_valid ... ok
+test relay::tests::global_queue_pressure_refuses_producer_without_closing_unrelated_recipient ... ok
+test relay::tests::channel_snapshots_own_metadata_and_leave_the_registry_writable ... ok
+test relay::broadcast_tests::broadcast_output_releases_the_registry_and_retains_the_original_body ... ok
+test relay::tests::fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns ... ok
+test relay::tests::slow_consumer_is_closed_and_every_byte_reservation_is_released ... ok
+test relay::tests::global_variable_budget_is_released_by_channel_cleanup ... ok
+test origin::tests::native_cli_accepts_repeated_and_comma_separated_origins ... ok
+test protocol::tests::simple_values_reject_reserved_expansions_and_preserve_valid_forms ... ok
+test relay::tests::input_batch_defers_only_cumulative_statistics_and_publishes_once ... ok
+test relay::listener_tests::listener_mask_changes_preserve_all_three_scopes_and_shared_payloads ... ok
+test relay::broadcast_tests::membership_changes_invalidate_views_without_changing_captured_owners ... ok
+test relay::tests::tiny_views_of_a_large_current_allocation_are_compacted ... ok
+test relay::broadcast_tests::uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners ... ok
+test server::arena_tests::accepted_tcp_sockets_apply_both_kernel_buffer_requests ... ok
+test relay::tests::takeover_cleanup_cannot_remove_new_id_owner ... ok
+test relay::tests::variable_reply_keeps_stored_bytes_after_replacement_and_channel_retirement ... ok
+test config::backlog_tests::listen_backlog_is_bounded_for_cli_and_embedding ... ok
+test server::timers::tests::rekeying_sparse_slots_keeps_exact_deadlines_and_equal_deadline_order ... ok
+test relay::tests::input_batches_keep_instance_identity_and_publish_during_unwind ... ok
+test config::backlog_tests::kernel_buffer_requests_are_optional_and_bounded_for_cli_and_embedding ... ok
+test server::fairness_tests::a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_fanout ... ok
+test relay::channel_tests::joined_channel_names_share_canonical_storage_and_own_their_input ... ok
+test admission::tests::concurrent_workers_share_one_admission_count ... ok
+test protocol::tests::cbor_header_truncation_utf8_and_resource_boundaries ... ok
+test server::timers::tests::retiming_and_slot_reuse_preserve_order_without_stale_entries ... ok
+test relay::channel_tests::detached_http_listing_preserves_json_and_base64_order_for_bounded_names ... ok
+test admission::tests::distinct_address_waves_do_not_retain_an_unbounded_index ... ok
+test relay::tests::sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads ... ok
+test relay::tests::sparse_channel_registry_preserves_names_variables_and_published_storage ... ok
+test server::tests::worker_listeners_keep_an_embedders_ipv6_only_boundary ... ok
+test server::monoio_tests::admitted_handoff_keeps_quota_until_its_single_tcp_descriptor_retires ... ok
+test server::ownership_tests::a_retained_routing_target_keeps_transport_capacity_until_the_descriptor_closes ... ok
+test server::accept_tests::repeated_listener_readiness_keeps_one_bounded_accept_continuation ... ok
+test server::socket::tests::ordinary_output_has_no_queue_allocation_and_control_never_splits_a_partial_data_frame ... ok
+test server::socket::tests::queued_output_keeps_payload_and_charge_after_membership_retires ... ok
+test server::socket::tests::an_exact_write_quantum_retires_empty_queue_storage_before_returning ... ok
+test relay::tests::takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish ... ok
+test admin::tests::concurrent_resume_and_drain_cannot_overwrite_shutdown ... ok
+test relay::channel_tests::bounded_channel_pages_match_the_independent_full_listing_and_own_metadata ... ok
+test server::socket::tests::direct_vectored_writes_keep_bodies_borrowed_across_short_writes_and_backpressure ... ok
+test server::socket::tests::recovered_queues_keep_small_capacity_but_release_large_empty_storage ... ok
+test relay::tests::sparse_membership_keeps_peers_variables_and_published_payloads_alive ... ok
+test admin::tests::management_readiness_metrics_and_real_admission_stay_stopped ... ok
+test relay::broadcast_tests::a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave ... ok
+test server::close_tests::a_blocked_close_acknowledgement_waits_for_output_without_reading_a_closed_decoder ... ok
+test server::arena_tests::compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadlines ... ok
+test server::close_tests::a_blocked_server_close_survives_the_peers_acknowledgement_before_output_finishes ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src/bin/war-legacy-bridge.rs (artifacts/experiments/monoio-completion/target/debug/deps/war_legacy_bridge-ebf3a9f0c6603001)
+
+running 1 test
+test backlog_tests::listen_backlog_is_positive_and_bounded ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (artifacts/experiments/monoio-completion/target/debug/deps/war_relay-c87e069392da83e8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/read_budget.rs (artifacts/experiments/monoio-completion/target/debug/deps/read_budget-2e24cfb1edc4827a)
+
+running 13 tests
+test a_decoder_still_reserves_before_growth_after_lending_away_its_allocation ... ok
+test final_growth_uses_the_known_length_with_a_larger_configured_limit ... ok
+test fragment_growth_fits_the_message_limit_and_rejects_only_actual_excess ... ok
+test an_oversized_worker_slab_retires_even_when_a_published_body_keeps_its_allocation_alive ... ok
+test a_header_is_denied_before_body_allocation_and_cannot_resume_unreserved ... ok
+test intermediate_growth_stays_within_the_configured_message_ceiling ... ok
+test fragmented_utf8_carries_partial_codepoints_and_control_frames ... ok
+test text_assembly_caps_capacity_across_every_utf8_split ... ok
+test fragment_assembly_is_admitted_separately_and_held_until_safe_reclaim ... ok
+test worker_storage_moves_between_decoders_without_moving_published_payloads ... ok
+test growth_reclaim_and_drop_preserve_the_published_payload_pointer ... ok
+test storage_lending_keeps_every_partial_masked_header_and_payload_with_its_decoder ... ok
+test concurrent_leases_never_exceed_the_limit_and_release_on_drop ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/read_buffer_reclaim.rs (artifacts/experiments/monoio-completion/target/debug/deps/read_buffer_reclaim-f8f451825d97b1fe)
+
+running 3 tests
+test a_coalesced_small_message_is_left_in_its_original_storage ... ok
+test partially_received_payload_is_preserved_across_a_deferred_reclaim ... ok
+test decoder_releases_ownership_without_copying_published_data_or_losing_partial_headers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/read_fairness.rs (artifacts/experiments/monoio-completion/target/debug/deps/read_fairness-052f10d1cbf187bb)
+
+running 3 tests
+test bounded_sync_reads_preserve_utf8_control_and_unlimited_resume ... ok
+test buffered_fragments_yield_and_wake_without_needing_an_io_event ... ok
+test yielding_does_not_hide_protocol_errors_or_unfuse_a_failed_stream ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/relay_integration.rs (artifacts/experiments/monoio-completion/target/debug/deps/relay_integration-61f27dad2e3f8c17)
+
+running 52 tests
+test admission::handshake_timeout_releases_the_address_lease ... FAILED
+test idle_half_handshakes_are_bounded_and_release_capacity ... FAILED
+test admission::legacy_ingress_enforces_its_own_direct_peer_limit_before_upgrade ... FAILED
+test cancelling_the_embedding_service_stops_workers_without_disconnect_fanout ... FAILED
+test channel_admission_variable_and_message_size_limits_are_real_network_limits ... FAILED
+test an_abrupt_transport_drop_is_counted_separately_from_protocol_violations ... FAILED
+test close_before_join_preserves_the_peers_code_and_reason ... FAILED
+test channel_listing::a_cursor_survives_channel_retirement_and_observes_later_membership ... FAILED
+test decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body ... FAILED
+test channel_listing::bounded_http_pages_preserve_order_binary_names_variables_and_validation ... FAILED
+test incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues ... FAILED
+test join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown ... FAILED
+test channel_listing::large_escaped_channel_names_preserve_the_complete_http_response ... FAILED
+test handshake_reservations_reject_with_http_503_and_release_after_abandonment ... FAILED
+test application_input_and_receive_only_output_extend_idle_policy ... FAILED
+test exhausted_input_quota_still_acknowledges_close_before_and_after_join ... FAILED
+test authentication_channel_queries_and_admin_drain_are_enforced ... FAILED
+test admin_cancellation_retires_membership_before_closing_incomplete_assembly ... FAILED
+test channel_listing::http_channel_listing_preserves_exact_json_and_authentication ... FAILED
+test malformed_packets_text_and_unauthorized_commands_close_cleanly ... FAILED
+test enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values ... FAILED
+test fragmented_final_growth_fits_staging_at_and_below_the_message_limit ... FAILED
+test input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing ... FAILED
+test heartbeat_and_control_traffic_do_not_extend_application_idle_policy ... FAILED
+test heartbeat_disconnects_a_client_that_never_reads_or_pongs ... FAILED
+test fixed_id_takeover_disconnects_old_session_and_keeps_new_routing ... FAILED
+test channel_list_output_uses_output_budget_instead_of_incoming_message_limit ... FAILED
+test native_workers_do_not_depend_on_the_embedders_blocking_pool ... FAILED
+test fragmented_input_and_interleaved_control_leave_direct_output_ordered ... FAILED
+test global_listeners_and_global_broadcast_preserve_legacy_scope ... FAILED
+test listeners::acknowledged_listener_changes_and_new_id_owners_preserve_wire_fifo ... FAILED
+test origin_policy::legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames ... FAILED
+test origin_policy::denied_origins_release_admission_before_join_and_leave_routing_usable ... FAILED
+test origin_policy::exact_origins_originless_native_clients_and_explicit_null_can_join ... FAILED
+test upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff ... FAILED
+test origin_policy::no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_stay_separate ... FAILED
+test peer_initiated_close_is_acknowledged_before_the_transport_is_dropped ... FAILED
+test read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes ... FAILED
+test private_routing_keeps_progress_through_registry_growth_and_retirement ... FAILED
+test reserved_simple_encodings_never_reach_recipients_or_channel_variables ... FAILED
+test small_application_limits_bound_complete_and_fragmented_data ... FAILED
+test small_application_limits_allow_full_sized_controls_before_and_after_join ... FAILED
+test reclaiming_between_fragments_preserves_message_assembly_and_ping_replies ... FAILED
+test variables_are_typed_scoped_and_deleted_when_last_member_leaves ... FAILED
+test token_bucket_limits_apply_immediately_after_join ... FAILED
+test shared_network_payloads_are_reused_without_copying_later_base_slab_values ... FAILED
+test simultaneous_peer_closes_finish_handshakes_during_notification_pressure ... FAILED
+test routes_typed_cbor_private_and_channel_messages_without_changing_payload ... FAILED
+test shutdown_of_a_large_channel_does_not_generate_disconnect_fanout ... FAILED
+test unfinished_fragmented_application_input_still_expires_cleanly ... FAILED
+test prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once ... FAILED
+test admission::per_ip_admission_spans_workers_and_keeps_other_addresses_usable ... FAILED
+
+failures:
+
+---- admission::handshake_timeout_releases_the_address_lease stdout ----
+
+thread 'admission::handshake_timeout_releases_the_address_lease' (687391) panicked at tests/relay_integration/admission.rs:42:61:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- idle_half_handshakes_are_bounded_and_release_capacity stdout ----
+
+thread 'idle_half_handshakes_are_bounded_and_release_capacity' (687423) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- admission::legacy_ingress_enforces_its_own_direct_peer_limit_before_upgrade stdout ----
+
+thread 'admission::legacy_ingress_enforces_its_own_direct_peer_limit_before_upgrade' (687392) panicked at tests/relay_integration.rs:149:6:
+called `Result::unwrap()` on an `Err` value: Elapsed(())
+
+---- cancelling_the_embedding_service_stops_workers_without_disconnect_fanout stdout ----
+
+thread 'cancelling_the_embedding_service_stops_workers_without_disconnect_fanout' (687397) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_admission_variable_and_message_size_limits_are_real_network_limits stdout ----
+
+thread 'channel_admission_variable_and_message_size_limits_are_real_network_limits' (687398) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- an_abrupt_transport_drop_is_counted_separately_from_protocol_violations stdout ----
+
+thread 'an_abrupt_transport_drop_is_counted_separately_from_protocol_violations' (687394) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- close_before_join_preserves_the_peers_code_and_reason stdout ----
+
+thread 'close_before_join_preserves_the_peers_code_and_reason' (687404) panicked at tests/relay_integration.rs:1701:56:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_listing::a_cursor_survives_channel_retirement_and_observes_later_membership stdout ----
+
+thread 'channel_listing::a_cursor_survives_channel_retirement_and_observes_later_membership' (687400) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body stdout ----
+
+thread 'decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body' (687405) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_listing::bounded_http_pages_preserve_order_binary_names_variables_and_validation stdout ----
+
+thread 'channel_listing::bounded_http_pages_preserve_order_binary_names_variables_and_validation' (687401) panicked at tests/relay_integration/channel_listing.rs:43:60:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues stdout ----
+
+thread 'incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues' (687424) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown stdout ----
+
+thread 'join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown' (687426) panicked at tests/relay_integration.rs:988:60:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_listing::large_escaped_channel_names_preserve_the_complete_http_response stdout ----
+
+thread 'channel_listing::large_escaped_channel_names_preserve_the_complete_http_response' (687403) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- handshake_reservations_reject_with_http_503_and_release_after_abandonment stdout ----
+
+thread 'handshake_reservations_reject_with_http_503_and_release_after_abandonment' (687420) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- application_input_and_receive_only_output_extend_idle_policy stdout ----
+
+thread 'application_input_and_receive_only_output_extend_idle_policy' (687395) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- exhausted_input_quota_still_acknowledges_close_before_and_after_join stdout ----
+
+thread 'exhausted_input_quota_still_acknowledges_close_before_and_after_join' (687412) panicked at tests/relay_integration.rs:1820:64:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- authentication_channel_queries_and_admin_drain_are_enforced stdout ----
+
+thread 'authentication_channel_queries_and_admin_drain_are_enforced' (687396) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- admin_cancellation_retires_membership_before_closing_incomplete_assembly stdout ----
+
+thread 'admin_cancellation_retires_membership_before_closing_incomplete_assembly' (687390) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_listing::http_channel_listing_preserves_exact_json_and_authentication stdout ----
+
+thread 'channel_listing::http_channel_listing_preserves_exact_json_and_authentication' (687402) panicked at tests/relay_integration/channel_listing.rs:213:60:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- malformed_packets_text_and_unauthorized_commands_close_cleanly stdout ----
+
+thread 'malformed_packets_text_and_unauthorized_commands_close_cleanly' (687428) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values stdout ----
+
+thread 'enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values' (687408) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- fragmented_final_growth_fits_staging_at_and_below_the_message_limit stdout ----
+
+thread 'fragmented_final_growth_fits_staging_at_and_below_the_message_limit' (687415) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing stdout ----
+
+thread 'input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing' (687425) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- heartbeat_and_control_traffic_do_not_extend_application_idle_policy stdout ----
+
+thread 'heartbeat_and_control_traffic_do_not_extend_application_idle_policy' (687421) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- heartbeat_disconnects_a_client_that_never_reads_or_pongs stdout ----
+
+thread 'heartbeat_disconnects_a_client_that_never_reads_or_pongs' (687422) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- fixed_id_takeover_disconnects_old_session_and_keeps_new_routing stdout ----
+
+thread 'fixed_id_takeover_disconnects_old_session_and_keeps_new_routing' (687414) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- channel_list_output_uses_output_budget_instead_of_incoming_message_limit stdout ----
+
+thread 'channel_list_output_uses_output_budget_instead_of_incoming_message_limit' (687399) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- native_workers_do_not_depend_on_the_embedders_blocking_pool stdout ----
+
+thread 'tokio-rt-worker' (687430) panicked at tests/relay_integration.rs:1200:59:
+called `Result::unwrap()` on an `Err` value: Timeout
+
+thread 'native_workers_do_not_depend_on_the_embedders_blocking_pool' (687429) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- fragmented_input_and_interleaved_control_leave_direct_output_ordered stdout ----
+
+thread 'fragmented_input_and_interleaved_control_leave_direct_output_ordered' (687416) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- global_listeners_and_global_broadcast_preserve_legacy_scope stdout ----
+
+thread 'global_listeners_and_global_broadcast_preserve_legacy_scope' (687419) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- listeners::acknowledged_listener_changes_and_new_id_owners_preserve_wire_fifo stdout ----
+
+thread 'listeners::acknowledged_listener_changes_and_new_id_owners_preserve_wire_fifo' (687427) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- origin_policy::legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames stdout ----
+
+thread 'origin_policy::legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames' (687940) panicked at tests/relay_integration.rs:149:6:
+called `Result::unwrap()` on an `Err` value: Elapsed(())
+
+---- origin_policy::denied_origins_release_admission_before_join_and_leave_routing_usable stdout ----
+
+thread 'origin_policy::denied_origins_release_admission_before_join_and_leave_routing_usable' (687896) panicked at tests/relay_integration/origin_policy.rs:57:56:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- origin_policy::exact_origins_originless_native_clients_and_explicit_null_can_join stdout ----
+
+thread 'origin_policy::exact_origins_originless_native_clients_and_explicit_null_can_join' (687913) panicked at tests/relay_integration/origin_policy.rs:153:67:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff stdout ----
+
+thread 'upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff' (688065) panicked at tests/relay_integration.rs:400:6:
+called `Result::unwrap()` on an `Err` value: Elapsed(())
+
+---- origin_policy::no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_stay_separate stdout ----
+
+thread 'origin_policy::no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_stay_separate' (687962) panicked at tests/relay_integration/origin_policy.rs:57:56:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- peer_initiated_close_is_acknowledged_before_the_transport_is_dropped stdout ----
+
+thread 'peer_initiated_close_is_acknowledged_before_the_transport_is_dropped' (688029) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes stdout ----
+
+thread 'read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes' (688040) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- private_routing_keeps_progress_through_registry_growth_and_retirement stdout ----
+
+thread 'private_routing_keeps_progress_through_registry_growth_and_retirement' (688039) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- reserved_simple_encodings_never_reach_recipients_or_channel_variables stdout ----
+
+thread 'reserved_simple_encodings_never_reach_recipients_or_channel_variables' (688044) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- small_application_limits_bound_complete_and_fragmented_data stdout ----
+
+thread 'small_application_limits_bound_complete_and_fragmented_data' (688060) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- small_application_limits_allow_full_sized_controls_before_and_after_join stdout ----
+
+thread 'small_application_limits_allow_full_sized_controls_before_and_after_join' (688057) panicked at tests/relay_integration.rs:1729:46:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- reclaiming_between_fragments_preserves_message_assembly_and_ping_replies stdout ----
+
+thread 'reclaiming_between_fragments_preserves_message_assembly_and_ping_replies' (688042) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- variables_are_typed_scoped_and_deleted_when_last_member_leaves stdout ----
+
+thread 'variables_are_typed_scoped_and_deleted_when_last_member_leaves' (688066) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- token_bucket_limits_apply_immediately_after_join stdout ----
+
+thread 'token_bucket_limits_apply_immediately_after_join' (688063) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- shared_network_payloads_are_reused_without_copying_later_base_slab_values stdout ----
+
+thread 'shared_network_payloads_are_reused_without_copying_later_base_slab_values' (688049) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- simultaneous_peer_closes_finish_handshakes_during_notification_pressure stdout ----
+
+thread 'simultaneous_peer_closes_finish_handshakes_during_notification_pressure' (688053) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- routes_typed_cbor_private_and_channel_messages_without_changing_payload stdout ----
+
+thread 'routes_typed_cbor_private_and_channel_messages_without_changing_payload' (688046) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- shutdown_of_a_large_channel_does_not_generate_disconnect_fanout stdout ----
+
+thread 'shutdown_of_a_large_channel_does_not_generate_disconnect_fanout' (688051) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- unfinished_fragmented_application_input_still_expires_cleanly stdout ----
+
+thread 'unfinished_fragmented_application_input_still_expires_cleanly' (688064) panicked at tests/relay_integration.rs:77:63:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once stdout ----
+
+thread 'prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once' (688035) panicked at tests/relay_integration.rs:960:60:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+---- admission::per_ip_admission_spans_workers_and_keeps_other_addresses_usable stdout ----
+
+thread 'admission::per_ip_admission_spans_workers_and_keeps_other_addresses_usable' (687393) panicked at tests/relay_integration/admission.rs:42:61:
+called `Result::unwrap()` on an `Err` value: Protocol(HandshakeIncomplete)
+
+
+failures:
+    admin_cancellation_retires_membership_before_closing_incomplete_assembly
+    admission::handshake_timeout_releases_the_address_lease
+    admission::legacy_ingress_enforces_its_own_direct_peer_limit_before_upgrade
+    admission::per_ip_admission_spans_workers_and_keeps_other_addresses_usable
+    an_abrupt_transport_drop_is_counted_separately_from_protocol_violations
+    application_input_and_receive_only_output_extend_idle_policy
+    authentication_channel_queries_and_admin_drain_are_enforced
+    cancelling_the_embedding_service_stops_workers_without_disconnect_fanout
+    channel_admission_variable_and_message_size_limits_are_real_network_limits
+    channel_list_output_uses_output_budget_instead_of_incoming_message_limit
+    channel_listing::a_cursor_survives_channel_retirement_and_observes_later_membership
+    channel_listing::bounded_http_pages_preserve_order_binary_names_variables_and_validation
+    channel_listing::http_channel_listing_preserves_exact_json_and_authentication
+    channel_listing::large_escaped_channel_names_preserve_the_complete_http_response
+    close_before_join_preserves_the_peers_code_and_reason
+    decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body
+    enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values
+    exhausted_input_quota_still_acknowledges_close_before_and_after_join
+    fixed_id_takeover_disconnects_old_session_and_keeps_new_routing
+    fragmented_final_growth_fits_staging_at_and_below_the_message_limit
+    fragmented_input_and_interleaved_control_leave_direct_output_ordered
+    global_listeners_and_global_broadcast_preserve_legacy_scope
+    handshake_reservations_reject_with_http_503_and_release_after_abandonment
+    heartbeat_and_control_traffic_do_not_extend_application_idle_policy
+    heartbeat_disconnects_a_client_that_never_reads_or_pongs
+    idle_half_handshakes_are_bounded_and_release_capacity
+    incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues
+    input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing
+    join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown
+    listeners::acknowledged_listener_changes_and_new_id_owners_preserve_wire_fifo
+    malformed_packets_text_and_unauthorized_commands_close_cleanly
+    native_workers_do_not_depend_on_the_embedders_blocking_pool
+    origin_policy::denied_origins_release_admission_before_join_and_leave_routing_usable
+    origin_policy::exact_origins_originless_native_clients_and_explicit_null_can_join
+    origin_policy::legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames
+    origin_policy::no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_stay_separate
+    peer_initiated_close_is_acknowledged_before_the_transport_is_dropped
+    prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once
+    private_routing_keeps_progress_through_registry_growth_and_retirement
+    read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes
+    reclaiming_between_fragments_preserves_message_assembly_and_ping_replies
+    reserved_simple_encodings_never_reach_recipients_or_channel_variables
+    routes_typed_cbor_private_and_channel_messages_without_changing_payload
+    shared_network_payloads_are_reused_without_copying_later_base_slab_values
+    shutdown_of_a_large_channel_does_not_generate_disconnect_fanout
+    simultaneous_peer_closes_finish_handshakes_during_notification_pressure
+    small_application_limits_allow_full_sized_controls_before_and_after_join
+    small_application_limits_bound_complete_and_fragmented_data
+    token_bucket_limits_apply_immediately_after_join
+    unfinished_fragmented_application_input_still_expires_cleanly
+    upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff
+    variables_are_typed_scoped_and_deleted_when_last_member_leaves
+
+test result: FAILED. 0 passed; 52 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.09s
+
+error: test failed, to rerun pass `--test relay_integration`

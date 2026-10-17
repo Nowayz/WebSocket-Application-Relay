@@ -1,0 +1,3266 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 20f43c3..542472f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -47,7 +47,7 @@ version = "1.1.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
+ dependencies = [
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -58,7 +58,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
+ dependencies = [
+  "anstyle",
+  "once_cell_polyfill",
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -73,6 +73,17 @@ version = "1.1.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+ 
++[[package]]
++name = "auto-const-array"
++version = "0.2.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "fd73835ad7deb4bd2b389e6f10333b143f025d607c55ca04c66a0bcc6bb2fc6d"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
+ [[package]]
+ name = "axum"
+ version = "0.8.9"
+@@ -129,6 +140,12 @@ version = "0.22.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+ 
++[[package]]
++name = "bitflags"
++version = "1.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
++
+ [[package]]
+ name = "bitflags"
+ version = "2.13.2"
+@@ -144,6 +161,18 @@ dependencies = [
+  "hybrid-array",
+ ]
+ 
++[[package]]
++name = "bumpalo"
++version = "3.20.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
++
++[[package]]
++name = "byteorder"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
++
+ [[package]]
+ name = "bytes"
+ version = "1.12.1"
+@@ -267,7 +296,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "flume"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
++dependencies = [
++ "futures-core",
++ "futures-sink",
++ "nanorand",
++ "spin",
+ ]
+ 
+ [[package]]
+@@ -322,6 +363,28 @@ dependencies = [
+  "slab",
+ ]
+ 
++[[package]]
++name = "fxhash"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
++dependencies = [
++ "byteorder",
++]
++
++[[package]]
++name = "getrandom"
++version = "0.2.17"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
++dependencies = [
++ "cfg-if",
++ "js-sys",
++ "libc",
++ "wasi",
++ "wasm-bindgen",
++]
++
+ [[package]]
+ name = "getrandom"
+ version = "0.3.4"
+@@ -363,6 +426,12 @@ version = "0.5.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+ 
++[[package]]
++name = "hermit-abi"
++version = "0.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
++
+ [[package]]
+ name = "http"
+ version = "1.5.0"
+@@ -451,6 +520,16 @@ dependencies = [
+  "tower-service",
+ ]
+ 
++[[package]]
++name = "io-uring"
++version = "0.6.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "595a0399f411a508feb2ec1e970a4a30c249351e30208960d58298de8660b0e5"
++dependencies = [
++ "bitflags 1.3.2",
++ "libc",
++]
++
+ [[package]]
+ name = "is_terminal_polyfill"
+ version = "1.70.2"
+@@ -463,6 +542,17 @@ version = "1.0.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+ 
++[[package]]
++name = "js-sys"
++version = "0.3.106"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
++dependencies = [
++ "cfg-if",
++ "futures-util",
++ "wasm-bindgen",
++]
++
+ [[package]]
+ name = "lazy_static"
+ version = "1.5.1"
+@@ -535,7 +625,36 @@ dependencies = [
+  "libc",
+  "log",
+  "wasi",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "monoio"
++version = "0.2.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3bd0f8bcde87b1949f95338b547543fcab187bc7e7a5024247e359a5e828ba6a"
++dependencies = [
++ "auto-const-array",
++ "bytes",
++ "flume",
++ "fxhash",
++ "io-uring",
++ "libc",
++ "memchr",
++ "once_cell",
++ "pin-project-lite",
++ "socket2 0.5.10",
++ "threadpool",
++ "windows-sys 0.48.0",
++]
++
++[[package]]
++name = "nanorand"
++version = "0.7.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
++dependencies = [
++ "getrandom 0.2.17",
+ ]
+ 
+ [[package]]
+@@ -544,7 +663,17 @@ version = "0.50.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+ dependencies = [
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "num_cpus"
++version = "1.17.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
++dependencies = [
++ "hermit-abi",
++ "libc",
+ ]
+ 
+ [[package]]
+@@ -647,7 +776,7 @@ version = "0.5.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
+ dependencies = [
+- "bitflags",
++ "bitflags 2.13.2",
+ ]
+ 
+ [[package]]
+@@ -667,6 +796,12 @@ version = "0.8.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+ 
++[[package]]
++name = "rustversion"
++version = "1.0.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
++
+ [[package]]
+ name = "ryu"
+ version = "1.0.23"
+@@ -787,6 +922,16 @@ version = "1.16.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+ 
++[[package]]
++name = "socket2"
++version = "0.5.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
++dependencies = [
++ "libc",
++ "windows-sys 0.52.0",
++]
++
+ [[package]]
+ name = "socket2"
+ version = "0.6.5"
+@@ -794,7 +939,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+ dependencies = [
+  "libc",
+- "windows-sys",
++ "windows-sys 0.61.2",
++]
++
++[[package]]
++name = "spin"
++version = "0.9.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
++dependencies = [
++ "lock_api",
+ ]
+ 
+ [[package]]
+@@ -866,6 +1020,15 @@ dependencies = [
+  "cfg-if",
+ ]
+ 
++[[package]]
++name = "threadpool"
++version = "1.8.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
++dependencies = [
++ "num_cpus",
++]
++
+ [[package]]
+ name = "tokio"
+ version = "1.53.3"
+@@ -877,9 +1040,9 @@ dependencies = [
+  "mio",
+  "pin-project-lite",
+  "signal-hook-registry",
+- "socket2",
++ "socket2 0.6.5",
+  "tokio-macros",
+- "windows-sys",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -1043,6 +1206,15 @@ version = "0.1.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+ 
++[[package]]
++name = "war-completion-buf"
++version = "0.1.0"
++dependencies = [
++ "bytes",
++ "libc",
++ "monoio",
++]
++
+ [[package]]
+ name = "war-relay"
+ version = "0.1.0"
+@@ -1056,17 +1228,19 @@ dependencies = [
+  "getrandom 0.3.4",
+  "minicbor",
+  "mio",
++ "monoio",
+  "parking_lot",
+  "serde",
+  "serde_json",
+  "slab",
+- "socket2",
++ "socket2 0.6.5",
+  "subtle",
+  "tokio",
+  "tokio-tungstenite",
+  "tokio-util",
+  "tracing",
+  "tracing-subscriber",
++ "war-completion-buf",
+ ]
+ 
+ [[package]]
+@@ -1084,12 +1258,75 @@ dependencies = [
+  "wit-bindgen",
+ ]
+ 
++[[package]]
++name = "wasm-bindgen"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
++dependencies = [
++ "cfg-if",
++ "once_cell",
++ "rustversion",
++ "wasm-bindgen-macro",
++ "wasm-bindgen-shared",
++]
++
++[[package]]
++name = "wasm-bindgen-macro"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
++dependencies = [
++ "quote",
++ "wasm-bindgen-macro-support",
++]
++
++[[package]]
++name = "wasm-bindgen-macro-support"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
++dependencies = [
++ "bumpalo",
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++ "wasm-bindgen-shared",
++]
++
++[[package]]
++name = "wasm-bindgen-shared"
++version = "0.2.129"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
++dependencies = [
++ "unicode-ident",
++]
++
+ [[package]]
+ name = "windows-link"
+ version = "0.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+ 
++[[package]]
++name = "windows-sys"
++version = "0.48.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
++dependencies = [
++ "windows-targets 0.48.5",
++]
++
++[[package]]
++name = "windows-sys"
++version = "0.52.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
++dependencies = [
++ "windows-targets 0.52.6",
++]
++
+ [[package]]
+ name = "windows-sys"
+ version = "0.61.2"
+@@ -1099,6 +1336,127 @@ dependencies = [
+  "windows-link",
+ ]
+ 
++[[package]]
++name = "windows-targets"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9a2fa6e2155d7247be68c096456083145c183cbbbc2764150dda45a87197940c"
++dependencies = [
++ "windows_aarch64_gnullvm 0.48.5",
++ "windows_aarch64_msvc 0.48.5",
++ "windows_i686_gnu 0.48.5",
++ "windows_i686_msvc 0.48.5",
++ "windows_x86_64_gnu 0.48.5",
++ "windows_x86_64_gnullvm 0.48.5",
++ "windows_x86_64_msvc 0.48.5",
++]
++
++[[package]]
++name = "windows-targets"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
++dependencies = [
++ "windows_aarch64_gnullvm 0.52.6",
++ "windows_aarch64_msvc 0.52.6",
++ "windows_i686_gnu 0.52.6",
++ "windows_i686_gnullvm",
++ "windows_i686_msvc 0.52.6",
++ "windows_x86_64_gnu 0.52.6",
++ "windows_x86_64_gnullvm 0.52.6",
++ "windows_x86_64_msvc 0.52.6",
++]
++
++[[package]]
++name = "windows_aarch64_gnullvm"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2b38e32f0abccf9987a4e3079dfb67dcd799fb61361e53e2882c3cbaf0d905d8"
++
++[[package]]
++name = "windows_aarch64_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
++
++[[package]]
++name = "windows_aarch64_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "dc35310971f3b2dbbf3f0690a219f40e2d9afcf64f9ab7cc1be722937c26b4bc"
++
++[[package]]
++name = "windows_aarch64_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
++
++[[package]]
++name = "windows_i686_gnu"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a75915e7def60c94dcef72200b9a8e58e5091744960da64ec734a6c6e9b3743e"
++
++[[package]]
++name = "windows_i686_gnu"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
++
++[[package]]
++name = "windows_i686_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
++
++[[package]]
++name = "windows_i686_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f55c233f70c4b27f66c523580f78f1004e8b5a8b659e05a4eb49d4166cca406"
++
++[[package]]
++name = "windows_i686_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
++
++[[package]]
++name = "windows_x86_64_gnu"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "53d40abd2583d23e4718fddf1ebec84dbff8381c07cae67ff7768bbf19c6718e"
++
++[[package]]
++name = "windows_x86_64_gnu"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
++
++[[package]]
++name = "windows_x86_64_gnullvm"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0b7b52767868a23d5bab768e390dc5f5c55825b6d30b86c844ff2dc7414044cc"
++
++[[package]]
++name = "windows_x86_64_gnullvm"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
++
++[[package]]
++name = "windows_x86_64_msvc"
++version = "0.48.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
++
++[[package]]
++name = "windows_x86_64_msvc"
++version = "0.52.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
++
+ [[package]]
+ name = "wit-bindgen"
+ version = "0.57.1"
+diff --git a/Cargo.toml b/Cargo.toml
+index 436bc8c..107fc7f 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -17,6 +17,8 @@ clap = { version = "4", features = ["derive", "env"] }
+ futures-util = { version = "0.3", features = ["sink"] }
+ getrandom = { version = "0.3", features = ["std"] }
+ minicbor = { version = "2", features = ["std", "half"] }
++monoio = { version = "=0.2.4", default-features = false, features = ["async-cancel", "bytes", "iouring", "sync"] }
++war-completion-buf = { path = "crates/completion-buf" }
+ mio = { version = "1.2.4", features = ["net", "os-poll"] }
+ parking_lot = "0.12"
+ serde = { version = "1", features = ["derive"] }
+diff --git a/crates/completion-buf/Cargo.toml b/crates/completion-buf/Cargo.toml
+new file mode 100644
+index 0000000..4e49fca
+--- /dev/null
++++ b/crates/completion-buf/Cargo.toml
+@@ -0,0 +1,15 @@
++[package]
++name = "war-completion-buf"
++version = "0.1.0"
++edition = "2024"
++rust-version = "1.91"
++publish = false
++
++[dependencies]
++bytes = "1"
++libc = "0.2"
++monoio = { version = "=0.2.4", default-features = false, features = ["bytes", "iouring"] }
++
++[lints.rust]
++unsafe_op_in_unsafe_fn = "deny"
++
+diff --git a/crates/completion-buf/src/lib.rs b/crates/completion-buf/src/lib.rs
+new file mode 100644
+index 0000000..a81dcee
+--- /dev/null
++++ b/crates/completion-buf/src/lib.rs
+@@ -0,0 +1,239 @@
++//! The small audited boundary between owned relay buffers and Monoio's unsafe
++//! buffer traits. No constructor accepts raw pointers. Storage and its quota
++//! owner travel together, including when an in-flight future is cancelled.
++use bytes::BytesMut;
++use monoio::buf::{IoBuf, IoBufMut, IoVecBuf};
++use std::{
++    io,
++    os::fd::{FromRawFd, IntoRawFd, OwnedFd},
++};
++
++/// A receive allocation retains its admission owner until the kernel returns it.
++pub struct ReadBuffer<G> {
++    bytes: BytesMut,
++    guard: G,
++}
++
++impl<G> ReadBuffer<G> {
++    pub fn new(bytes: BytesMut, guard: G) -> Self {
++        Self { bytes, guard }
++    }
++    pub fn bytes(&self) -> &BytesMut {
++        &self.bytes
++    }
++    pub fn into_parts(self) -> (BytesMut, G) {
++        (self.bytes, self.guard)
++    }
++}
++
++// SAFETY: BytesMut supplies stable allocated storage. Neither storage nor guard
++// can be mutated or taken while Monoio owns this buffer. All initialized-length
++// and pointer operations delegate to Monoio's own BytesMut implementations.
++unsafe impl<G: Unpin + 'static> IoBuf for ReadBuffer<G> {
++    fn read_ptr(&self) -> *const u8 {
++        self.bytes.read_ptr()
++    }
++    fn bytes_init(&self) -> usize {
++        self.bytes.bytes_init()
++    }
++}
++unsafe impl<G: Unpin + 'static> IoBufMut for ReadBuffer<G> {
++    fn write_ptr(&mut self) -> *mut u8 {
++        self.bytes.write_ptr()
++    }
++    fn bytes_total(&mut self) -> usize {
++        self.bytes.bytes_total()
++    }
++    unsafe fn set_init(&mut self, initialized: usize) {
++        // SAFETY: the caller guarantees initialized bytes from a completed read.
++        unsafe { self.bytes.set_init(initialized) };
++    }
++}
++
++struct WriteStorage<G> {
++    header: [u8; 20],
++    iovecs: [libc::iovec; 2],
++    owner: Option<G>,
++    count: usize,
++}
++
++/// One reusable metadata allocation per active writer. The payload's owner is
++/// stored inside that stable allocation before its body pointer is captured.
++/// Published message bodies never need to be copied or reference-cloned here.
++pub struct WriteBuffer<G> {
++    storage: Box<WriteStorage<G>>,
++}
++
++impl<G> Default for WriteBuffer<G> {
++    fn default() -> Self {
++        Self {
++            storage: Box::new(WriteStorage {
++                header: [0; 20],
++                iovecs: [libc::iovec {
++                    iov_base: std::ptr::null_mut(),
++                    iov_len: 0,
++                }; 2],
++                owner: None,
++                count: 0,
++            }),
++        }
++    }
++}
++
++impl<G> WriteBuffer<G> {
++    /// Call only after a previous operation returned this buffer. `body` borrows
++    /// from the retained owner, which is never moved or exposed mutably while an
++    /// operation can read its slices. At most 20 routing/header bytes are copied.
++    pub fn prepare(
++        &mut self,
++        header: &[u8],
++        owner: G,
++        body: for<'a> fn(&'a G) -> &'a [u8],
++        offset: usize,
++        maximum: usize,
++    ) {
++        assert!(self.storage.owner.is_none());
++        assert!(header.len() <= self.storage.header.len());
++        self.storage.header[..header.len()].copy_from_slice(header);
++        self.storage.owner = Some(owner);
++        let payload = body(self.storage.owner.as_ref().unwrap());
++        assert!(offset <= header.len() + payload.len());
++        let head_start = offset.min(header.len());
++        let head_end = header.len().min(offset.saturating_add(maximum));
++        let head = &self.storage.header[head_start..head_end];
++        let body_start = offset.saturating_sub(header.len());
++        let body_end = payload.len().min(body_start + maximum - head.len());
++        let body = &payload[body_start..body_end];
++        self.storage.iovecs = [
++            libc::iovec {
++                iov_base: head.as_ptr().cast_mut().cast(),
++                iov_len: head.len(),
++            },
++            libc::iovec {
++                iov_base: body.as_ptr().cast_mut().cast(),
++                iov_len: body.len(),
++            },
++        ];
++        if head.is_empty() {
++            self.storage.iovecs.swap(0, 1);
++            self.storage.count = 1;
++        } else {
++            self.storage.count = if body.is_empty() { 1 } else { 2 };
++        }
++    }
++
++    pub fn take_owner(&mut self) -> G {
++        self.storage.count = 0;
++        self.storage.owner.take().expect("prepared write owner")
++    }
++}
++
++// SAFETY: the iovecs, header and owner reside in one private Box, whose address
++// remains stable when WriteBuffer moves. body() borrows initialized bytes from
++// that owner. No method exposes a mutable owner, and the runtime exclusively
++// owns this value while the kernel can use those pointers. Dropping an in-flight
++// Monoio future retains the complete buffer, including owner, until its CQE.
++unsafe impl<G: Unpin + 'static> IoVecBuf for WriteBuffer<G> {
++    fn read_iovec_ptr(&self) -> *const libc::iovec {
++        self.storage.iovecs.as_ptr()
++    }
++    fn read_iovec_len(&self) -> usize {
++        self.storage.count
++    }
++}
++
++/// All operations and split halves must have returned before this call. Taking
++/// Monoio's descriptor ownership avoids leaving its asynchronous close queued
++/// after the relay releases the connection's admission guard.
++pub fn close_tcp(stream: monoio::net::TcpStream) {
++    let raw = stream.into_raw_fd();
++    // SAFETY: IntoRawFd transfers the one descriptor's ownership to us.
++    let owned = unsafe { OwnedFd::from_raw_fd(raw) };
++    drop(owned);
++}
++
++/// Transfer a uniquely owned accepted descriptor without dup() or a new socket.
++pub fn into_std_tcp(stream: impl IntoRawFd) -> std::net::TcpStream {
++    let raw = stream.into_raw_fd();
++    // SAFETY: IntoRawFd transfers sole ownership and callers supply TCP streams.
++    unsafe { std::net::TcpStream::from_raw_fd(raw) }
++}
++
++/// Stop TCP before retiring the descriptor; called after both I/O halves return.
++pub fn shutdown_tcp(stream: &monoio::net::TcpStream) -> io::Result<()> {
++    use std::os::fd::AsRawFd;
++    // SAFETY: the borrowed stream keeps this descriptor valid for the syscall.
++    if unsafe { libc::shutdown(stream.as_raw_fd(), libc::SHUT_RDWR) } == -1 {
++        Err(io::Error::last_os_error())
++    } else {
++        Ok(())
++    }
++}
++
++/// A short header receive can reject a frame before the rest of an already
++/// queued TCP packet is consumed. After its policy Close has actually been
++/// sent, discard at most one ordinary read chunk without waiting for a body.
++/// This avoids turning that small complete rejection into an immediate reset
++/// solely because those already arrived bytes remained unread at close().
++/// Larger/unfinished rejected bodies still receive a best-effort Close only.
++#[inline(never)]
++pub fn discard_rejected_input(stream: &monoio::net::TcpStream) {
++    use std::os::fd::AsRawFd;
++    let mut discard = [0u8; 4096];
++    // SAFETY: the borrowed stream owns the live descriptor. The destination is
++    // initialized valid stack storage; MSG_DONTWAIT bounds this single syscall.
++    unsafe {
++        libc::recv(
++            stream.as_raw_fd(),
++            discard.as_mut_ptr().cast(),
++            discard.len(),
++            libc::MSG_DONTWAIT,
++        );
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn vectored_metadata_and_inline_owners_remain_stable_across_moves_and_short_writes() {
++        struct Owner {
++            bytes: [u8; 129],
++        }
++        let mut write = WriteBuffer::default();
++        let metadata = write.read_iovec_ptr();
++        for offset in 0..149 {
++            write.prepare(
++                &[0x82; 20],
++                Owner { bytes: [0x5a; 129] },
++                |owner| &owner.bytes,
++                offset,
++                7,
++            );
++            let stable_owner = write.storage.owner.as_ref().unwrap().bytes.as_ptr();
++            let mut moved = vec![write].pop().unwrap();
++            assert_eq!(metadata, moved.read_iovec_ptr());
++            // SAFETY: this test reads the private valid iovec array only while
++            // no runtime owns it. It never dereferences a stale payload pointer.
++            let iovecs = unsafe {
++                std::slice::from_raw_parts(moved.read_iovec_ptr(), moved.read_iovec_len())
++            };
++            let body = if offset < 20 && 20 - offset >= 7 {
++                None
++            } else {
++                iovecs.last()
++            };
++            if let Some(body) = body {
++                assert_eq!(
++                    body.iov_base.cast_const().cast::<u8>(),
++                    stable_owner.wrapping_add(offset.saturating_sub(20))
++                );
++            }
++            let total = iovecs.iter().map(|iov| iov.iov_len).sum::<usize>();
++            assert_eq!(total, 7.min(149 - offset));
++            let owner = moved.take_owner();
++            assert_eq!(owner.bytes, [0x5a; 129]);
++            write = moved;
++        }
++    }
++}
+diff --git a/src/config.rs b/src/config.rs
+index b838672..5663356 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -9,6 +9,8 @@ pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
+ #[derive(Clone, Parser)]
+ #[command(version, about = "WebSocket Application Relay (Rust)")]
+ pub struct Config {
++    #[arg(skip)]
++    pub monoio: bool,
+     #[arg(long, env = "WAR_BIND", default_value = "127.0.0.1:1338")]
+     pub bind: SocketAddr,
+     #[arg(long, env = "WAR_ADMIN_BIND", default_value = "127.0.0.1:1339")]
+diff --git a/src/main.rs b/src/main.rs
+index 638a768..3ccd01a 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -7,6 +7,7 @@ use war_relay::{Config, Relay, serve};
+ 
+ fn main() -> Result<()> {
+     let mut config = Config::parse();
++    config.monoio = true;
+     config.load_secrets();
+     config.validate()?;
+     tracing_subscriber::fmt()
+diff --git a/src/server/arena_tests.rs b/src/server/arena_tests.rs
+index 919e422..3e8b190 100644
+--- a/src/server/arena_tests.rs
++++ b/src/server/arena_tests.rs
+@@ -19,7 +19,7 @@ fn accepted_tcp_sockets_apply_both_kernel_buffer_requests() {
+     worker.accept().unwrap();
+     assert_eq!(worker.connections.len(), 1);
+     let state = worker.connections[0].socket.state.lock();
+-    let socket = socket2::SockRef::from(&state.stream);
++    let socket = socket2::SockRef::from(state.stream.as_ref().unwrap());
+     // Linux reports twice the requested values for protocol bookkeeping.
+     assert_eq!(socket.send_buffer_size().unwrap(), 32768);
+     assert_eq!(socket.recv_buffer_size().unwrap(), 49152);
+diff --git a/src/server/monoio_driver.rs b/src/server/monoio_driver.rs
+new file mode 100644
+index 0000000..b208148
+--- /dev/null
++++ b/src/server/monoio_driver.rs
+@@ -0,0 +1,640 @@
++//! Experimental completion I/O: one descriptor per accepted TCP connection.
++//! Local read/write tasks own the halves; routing retains shared envelopes in
++//! bounded queues. The existing decoder, protocol and retirement paths remain.
++use super::*;
++use bytes::BytesMut;
++use futures_util::{FutureExt, Stream, StreamExt};
++use monoio::{
++    buf::IoBufMut,
++    io::{CancelableAsyncReadRent, CancelableAsyncWriteRent, Canceller, Splitable},
++    net::tcp::{TcpOwnedReadHalf, TcpOwnedWriteHalf},
++    task::JoinHandle,
++};
++use std::{
++    cell::{Cell, RefCell},
++    future::poll_fn,
++    pin::Pin,
++    rc::Rc,
++    task::{Context as TaskContext, Poll as TaskPoll, Waker},
++};
++use war_completion_buf::{ReadBuffer, WriteBuffer};
++
++pub(super) fn run(worker: Worker) -> Result<()> {
++    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
++        .enable_timer()
++        .build()
++        .context("cannot create Monoio io_uring completion worker")?
++        .block_on(run_worker(worker))
++}
++
++#[derive(Default)]
++struct Gate {
++    stopped: Cell<bool>,
++    waker: RefCell<Option<Waker>>,
++}
++impl Gate {
++    fn stop(&self) {
++        self.stopped.set(true);
++        if let Some(waker) = self.waker.borrow().as_ref() {
++            waker.wake_by_ref();
++        }
++    }
++    fn register(&self, cx: &TaskContext<'_>) {
++        let mut waker = self.waker.borrow_mut();
++        if let Some(waker) = waker.as_mut() {
++            waker.clone_from(cx.waker());
++        } else {
++            *waker = Some(cx.waker().clone());
++        }
++    }
++    async fn stopped(&self) {
++        poll_fn(|cx| {
++            self.register(cx);
++            if self.stopped.get() {
++                TaskPoll::Ready(())
++            } else {
++                TaskPoll::Pending
++            }
++        })
++        .await
++    }
++}
++
++enum ReadGuard {
++    Upgrade(Option<ReadLease>),
++    WebSocket(ReadStorage),
++}
++struct ReadJob {
++    buffer: ReadBuffer<ReadGuard>,
++    range: std::ops::Range<usize>,
++}
++#[derive(Default)]
++struct ReadControl {
++    gate: Gate,
++    job: RefCell<Option<ReadJob>>,
++    reclaim: Cell<bool>,
++}
++impl ReadControl {
++    fn reclaim(&self) {
++        self.reclaim.set(true);
++        if let Some(waker) = self.gate.waker.borrow().as_ref() {
++            waker.wake_by_ref();
++        }
++    }
++    async fn interrupted(&self) {
++        poll_fn(|cx| {
++            self.gate.register(cx);
++            if self.gate.stopped.get() || self.reclaim.get() {
++                TaskPoll::Ready(())
++            } else {
++                TaskPoll::Pending
++            }
++        })
++        .await
++    }
++    fn submit(&self, job: ReadJob) {
++        assert!(self.job.borrow_mut().replace(job).is_none());
++        if let Some(waker) = self.gate.waker.borrow().as_ref() {
++            waker.wake_by_ref();
++        }
++    }
++    async fn next(&self) -> Option<ReadJob> {
++        poll_fn(|cx| {
++            self.gate.register(cx);
++            if self.gate.stopped.get() {
++                TaskPoll::Ready(None)
++            } else if let Some(job) = self.job.borrow_mut().take() {
++                TaskPoll::Ready(Some(job))
++            } else {
++                TaskPoll::Pending
++            }
++        })
++        .await
++    }
++}
++
++enum Completion {
++    Accept(io::Result<()>),
++    Read(Token, io::Result<usize>, ReadBuffer<ReadGuard>, bool),
++}
++#[derive(Default)]
++struct Queue {
++    pending: RefCell<VecDeque<Completion>>,
++    waker: RefCell<Option<Waker>>,
++}
++impl Queue {
++    fn push(&self, item: Completion) {
++        self.pending.borrow_mut().push_back(item);
++        if let Some(waker) = self.waker.borrow().as_ref() {
++            waker.wake_by_ref();
++        }
++    }
++}
++struct Events(Rc<Queue>);
++impl Stream for Events {
++    type Item = Completion;
++    fn poll_next(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> TaskPoll<Option<Completion>> {
++        if let Some(item) = self.0.pending.borrow_mut().pop_front() {
++            return TaskPoll::Ready(Some(item));
++        }
++        let mut waker = self.0.waker.borrow_mut();
++        if let Some(waker) = waker.as_mut() {
++            waker.clone_from(cx.waker());
++        } else {
++            *waker = Some(cx.waker().clone());
++        }
++        TaskPoll::Pending
++    }
++}
++
++async fn read_socket(
++    mut read: TcpOwnedReadHalf,
++    control: Rc<ReadControl>,
++    queue: Rc<Queue>,
++    token: Token,
++    _socket: Arc<Socket>,
++) -> TcpOwnedReadHalf {
++    let mut cancel = Canceller::new();
++    while let Some(job) = control.next().await {
++        let operation = read.cancelable_read(job.buffer.slice_mut(job.range), cancel.handle());
++        let (result, buffer) = {
++            tokio::pin!(operation);
++            tokio::select! {
++                biased;
++                result = &mut operation => result,
++                _ = control.interrupted() => {
++                    cancel = cancel.cancel();
++                    operation.await
++                }
++            }
++        };
++        let buffer = buffer.into_inner();
++        if control.gate.stopped.get() {
++            break;
++        }
++        queue.push(Completion::Read(
++            token,
++            result,
++            buffer,
++            control.reclaim.replace(false),
++        ));
++    }
++    read
++}
++
++async fn write_socket(
++    mut write: TcpOwnedWriteHalf,
++    control: Rc<Gate>,
++    socket: Arc<Socket>,
++) -> TcpOwnedWriteHalf {
++    let mut cancel = Canceller::new();
++    // Allocate only on first output, then reuse the header/iovec metadata.
++    let mut buffer: Option<WriteBuffer<socket::CompletionWrite>> = None;
++    loop {
++        let outgoing = poll_fn(|cx| {
++            control.register(cx);
++            socket.io_waker.register(cx.waker());
++            if control.stopped.get() {
++                TaskPoll::Ready(None)
++            } else if let Some(outgoing) = socket.take_completion_write() {
++                TaskPoll::Ready(Some(outgoing))
++            } else {
++                TaskPoll::Pending
++            }
++        })
++        .await;
++        let Some(mut outgoing) = outgoing else {
++            break;
++        };
++        let mut quantum = socket::WRITE_QUANTUM;
++        let result = loop {
++            let mut header = [0; 20];
++            let length = outgoing.header(&mut header);
++            let offset = outgoing.offset();
++            let mut owned = buffer.take().unwrap_or_default();
++            owned.prepare(
++                &header[..length],
++                outgoing,
++                socket::CompletionWrite::body,
++                offset,
++                quantum,
++            );
++            let operation = write.cancelable_writev(owned, cancel.handle());
++            let (result, mut owned) = {
++                tokio::pin!(operation);
++                tokio::select! {
++                    biased;
++                    result = &mut operation => result,
++                    _ = control.stopped() => {
++                        cancel = cancel.cancel();
++                        operation.await
++                    }
++                }
++            };
++            outgoing = owned.take_owner();
++            buffer = Some(owned);
++            match result {
++                Ok(0) => break Err(io::ErrorKind::WriteZero.into()),
++                Ok(written) => {
++                    outgoing.advance(written);
++                    quantum -= written;
++                    if outgoing.complete() {
++                        break Ok(());
++                    }
++                    if control.stopped.get() {
++                        break Err(io::ErrorKind::ConnectionAborted.into());
++                    }
++                    if quantum == 0 {
++                        yield_once().await;
++                        quantum = socket::WRITE_QUANTUM;
++                    }
++                }
++                Err(error) => break Err(error),
++            }
++        };
++        socket.complete_write(&outgoing, &result, control.stopped.get());
++        drop(outgoing); // Release admission only after completion/cancellation.
++        if control.stopped.get() {
++            break;
++        }
++    }
++    write
++}
++
++struct Watch {
++    read: Rc<ReadControl>,
++    write: Rc<Gate>,
++    reader: JoinHandle<TcpOwnedReadHalf>,
++    writer: JoinHandle<TcpOwnedWriteHalf>,
++    socket: Arc<Socket>,
++    read_busy: bool,
++}
++impl Watch {
++    fn new(stream: std::net::TcpStream, socket: Arc<Socket>, queue: Rc<Queue>) -> io::Result<Self> {
++        let (reader, writer) = monoio::net::TcpStream::from_std(stream)?.into_split();
++        let read = Rc::new(ReadControl::default());
++        let write = Rc::new(Gate::default());
++        Ok(Self {
++            reader: monoio::spawn(read_socket(
++                reader,
++                read.clone(),
++                queue,
++                socket.token,
++                socket.clone(),
++            )),
++            writer: monoio::spawn(write_socket(writer, write.clone(), socket.clone())),
++            read,
++            write,
++            socket,
++            read_busy: false,
++        })
++    }
++    fn retire(self) -> JoinHandle<()> {
++        self.read.gate.stop();
++        self.write.stop();
++        monoio::spawn(async move {
++            let reader = self.reader.await;
++            let writer = self.writer.await;
++            let stream = reader.reunite(writer).expect("same owned socket halves");
++            if self.socket.state.lock().discard_rejected_input {
++                war_completion_buf::discard_rejected_input(&stream);
++            }
++            let _ = war_completion_buf::shutdown_tcp(&stream);
++            war_completion_buf::close_tcp(stream);
++            drop(self.socket); // TCP descriptor retires before connection quota.
++        })
++    }
++}
++
++struct Driver {
++    listener: Rc<Gate>,
++    listener_task: Option<JoinHandle<()>>,
++    listener_enabled: Rc<Cell<bool>>,
++    watches: HashMap<Token, Watch>,
++    waits: Events,
++    retired: Vec<JoinHandle<()>>,
++}
++impl Driver {
++    fn prepare_reclaims(&self, worker: &mut Worker, now: Instant) {
++        // Only visit scheduled tokens, never the idle population.
++        for token in worker.ready.iter().take(1024) {
++            let Some(&slot) = worker.tokens.get(token) else {
++                continue;
++            };
++            let connection = &mut worker.connections[slot];
++            if connection
++                .reclaim_deadline
++                .is_some_and(|deadline| deadline <= now)
++                && let Some(watch) = self.watches.get(token)
++                && watch.read_busy
++            {
++                connection.reclaim_deadline = None;
++                watch.read.reclaim();
++            }
++        }
++    }
++    fn new(listener: std::net::TcpListener) -> io::Result<Self> {
++        let queue = Rc::new(Queue::default());
++        let listener = monoio::net::TcpListener::from_std(listener)?;
++        let gate = Rc::new(Gate::default());
++        let enabled = Rc::new(Cell::new(true));
++        let (control, accept_enabled, completed) = (gate.clone(), enabled.clone(), queue.clone());
++        let task = monoio::spawn(async move {
++            loop {
++                poll_fn(|cx| {
++                    control.register(cx);
++                    if control.stopped.get() || accept_enabled.get() {
++                        TaskPoll::Ready(())
++                    } else {
++                        TaskPoll::Pending
++                    }
++                })
++                .await;
++                if control.stopped.get() {
++                    return;
++                }
++                tokio::select! {
++                    biased;
++                    _ = control.stopped() => return,
++                    result = listener.readable(false) => {
++                        accept_enabled.set(false);
++                        completed.push(Completion::Accept(result));
++                    }
++                }
++            }
++        });
++        Ok(Self {
++            listener: gate,
++            listener_enabled: enabled,
++            listener_task: Some(task),
++            watches: HashMap::new(),
++            waits: Events(queue),
++            retired: Vec::new(),
++        })
++    }
++
++    fn sync(&mut self, worker: &mut Worker, stopping: bool) -> Result<()> {
++        if !stopping
++            && worker.accept_retry.is_none()
++            && !worker.accept_queued
++            && !self.listener_enabled.replace(true)
++            && let Some(waker) = self.listener.waker.borrow().as_ref()
++        {
++            waker.wake_by_ref();
++        }
++        for (token, stream, socket) in worker.monoio_new.drain(..) {
++            if worker.tokens.contains_key(&token) {
++                self.watches
++                    .insert(token, Watch::new(stream, socket, self.waits.0.clone())?);
++            }
++        }
++        for token in worker.monoio_dirty.drain(..) {
++            let Some(&slot) = worker.tokens.get(&token) else {
++                if let Some(watch) = self.watches.remove(&token) {
++                    self.retired.push(watch.retire());
++                }
++                continue;
++            };
++            let Some(watch) = self.watches.get_mut(&token) else {
++                continue;
++            };
++            if watch.read_busy {
++                continue;
++            }
++            let connection = &mut worker.connections[slot];
++            let job = match &mut connection.stage {
++                Stage::Upgrade(_) => {
++                    let mut state = connection.socket.state.lock();
++                    if !std::mem::take(&mut state.read_wanted) || state.read_eof {
++                        None
++                    } else {
++                        let capacity = worker
++                            .relay
++                            .config
++                            .read_buffer_bytes
++                            .clamp(14, crate::config::MAX_HTTP_UPGRADE_BYTES);
++                        Some(ReadJob {
++                            buffer: ReadBuffer::new(
++                                BytesMut::with_capacity(capacity),
++                                ReadGuard::Upgrade(connection.handshake_lease.take()),
++                            ),
++                            range: 0..capacity,
++                        })
++                    }
++                }
++                Stage::WebSocket(ws) => {
++                    ws.take_external_read().map(|(mut storage, range)| ReadJob {
++                        buffer: ReadBuffer::new(
++                            storage.take_io_buffer(),
++                            ReadGuard::WebSocket(storage),
++                        ),
++                        range,
++                    })
++                }
++            };
++            if let Some(job) = job {
++                watch.read_busy = true;
++                watch.read.submit(job);
++            }
++        }
++        self.retired.retain(|task| !task.is_finished());
++        if self.retired.capacity() > 256 && self.retired.len() <= self.retired.capacity() / 8 {
++            self.retired.shrink_to(self.retired.len() * 2);
++        }
++        if self.watches.capacity() > 256 && self.watches.len() <= self.watches.capacity() / 8 {
++            self.watches.shrink_to(self.watches.len() * 2);
++        }
++        Ok(())
++    }
++
++    fn complete(&mut self, worker: &mut Worker, result: Completion, stopping: bool) -> Result<()> {
++        match result {
++            Completion::Accept(result) => {
++                result.context("Monoio listener readiness failed")?;
++                if !stopping && worker.accept_retry.is_none() {
++                    worker.schedule_accept();
++                }
++            }
++            Completion::Read(token, result, buffer, reclaim) => {
++                let Some(watch) = self.watches.get_mut(&token) else {
++                    return Ok(());
++                };
++                watch.read_busy = false;
++                let Some(&slot) = worker.tokens.get(&token) else {
++                    return Ok(());
++                };
++                let connection = &mut worker.connections[slot];
++                if reclaim {
++                    connection.reclaim_deadline = Some(Instant::now());
++                }
++                let eof = matches!(result, Ok(0));
++                let (buffer, guard) = buffer.into_parts();
++                match guard {
++                    ReadGuard::WebSocket(mut storage) => {
++                        storage.restore_io_buffer(buffer);
++                        if let Stage::WebSocket(ws) = &mut connection.stage {
++                            ws.restore_external_read(storage, eof);
++                        }
++                    }
++                    ReadGuard::Upgrade(lease) => {
++                        connection.handshake_lease = lease;
++                        let mut state = connection.socket.state.lock();
++                        assert!(state.ingress.is_empty());
++                        state.ingress = buffer.freeze();
++                        state.read_eof = eof;
++                    }
++                }
++                if result.is_err()
++                    && !(reclaim && result.as_ref().unwrap_err().raw_os_error() == Some(125))
++                {
++                    if connection.registration.is_some() {
++                        worker
++                            .relay
++                            .metrics
++                            .transport_disconnects
++                            .fetch_add(1, Relaxed);
++                    }
++                    connection.socket.completion_failed();
++                }
++                worker.schedule(token);
++            }
++        }
++        Ok(())
++    }
++
++    async fn shutdown(&mut self) {
++        self.listener.stop();
++        for (_, watch) in self.watches.drain() {
++            self.retired.push(watch.retire());
++        }
++        if let Some(task) = self.listener_task.take() {
++            task.await;
++        }
++        for task in self.retired.drain(..) {
++            task.await;
++        }
++        self.waits.0.pending.borrow_mut().clear();
++    }
++}
++
++async fn yield_once() {
++    let mut yielded = false;
++    poll_fn(|cx| {
++        if yielded {
++            TaskPoll::Ready(())
++        } else {
++            yielded = true;
++            cx.waker().wake_by_ref();
++            TaskPoll::Pending
++        }
++    })
++    .await
++}
++
++async fn run_worker(mut worker: Worker) -> Result<()> {
++    let mut driver = Driver::new(worker.monoio_listener.take().expect("Monoio listener"))?;
++    let outcome = run_loop(&mut worker, &mut driver).await;
++    worker.connections.clear();
++    worker.monoio_new.clear();
++    driver.shutdown().await;
++    outcome
++}
++
++async fn run_loop(worker: &mut Worker, driver: &mut Driver) -> Result<()> {
++    let relay = worker.relay.clone();
++    let mut incoming = relay.receive_batch();
++    let mut shutdown_deadline = None;
++    loop {
++        if worker.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
++            shutdown_deadline =
++                Some(Instant::now() + Duration::from_secs(relay.config.shutdown_timeout_secs));
++            for (_, connection) in worker.connections.iter_mut() {
++                if !connection.scheduled {
++                    connection.scheduled = true;
++                    worker.ready.push_back(connection.token);
++                }
++            }
++        }
++        let stopping = shutdown_deadline.is_some();
++        if shutdown_deadline.is_some_and(|d| d <= Instant::now())
++            || (stopping && worker.connections.is_empty())
++        {
++            break;
++        }
++        let now = Instant::now();
++        if !stopping && worker.accept_retry.is_some_and(|d| d <= now) {
++            worker.accept_retry = None;
++            worker.accept()?;
++        }
++        while let Some(slot) = worker.timers.pop_due(now) {
++            if let Some(connection) = worker.connections.get(slot) {
++                worker.schedule(connection.token);
++            }
++        }
++        driver.prepare_reclaims(worker, now);
++        worker.drive_ready(stopping, &mut incoming)?;
++        incoming.publish();
++        {
++            let mut pending = worker.signal.pending.lock();
++            while let Some(token) = pending.pop_front() {
++                let Some(&slot) = worker.tokens.get(&token) else {
++                    continue;
++                };
++                if let Some(connection) = worker.connections.get_mut(slot)
++                    && connection.token == token
++                    && !connection.scheduled
++                {
++                    connection.scheduled = true;
++                    worker.ready.push_back(token);
++                }
++            }
++        }
++        driver.sync(worker, stopping)?;
++        if stopping && worker.connections.is_empty() {
++            break;
++        }
++        for _ in 0..1024 {
++            let Some(Some(result)) = driver.waits.next().now_or_never() else {
++                break;
++            };
++            driver.complete(worker, result, stopping)?;
++        }
++        if !worker.ready.is_empty() {
++            yield_once().await;
++            continue;
++        }
++        let mut deadline = worker.timers.next();
++        for next in [shutdown_deadline, worker.accept_retry]
++            .into_iter()
++            .flatten()
++        {
++            deadline = Some(deadline.map_or(next, |previous| previous.min(next)));
++        }
++        let timer = async {
++            if let Some(deadline) = deadline {
++                monoio::time::sleep(deadline.saturating_duration_since(Instant::now())).await;
++            } else {
++                std::future::pending::<()>().await;
++            }
++        };
++        let signal = worker.signal.clone();
++        let notified = poll_fn(|cx| {
++            signal
++                .monoio
++                .as_ref()
++                .expect("Monoio waker")
++                .register(cx.waker());
++            if (!stopping && signal.stopping.load(Acquire)) || !signal.pending.lock().is_empty() {
++                TaskPoll::Ready(())
++            } else {
++                TaskPoll::Pending
++            }
++        });
++        tokio::select! {
++            result = driver.waits.next() => { if let Some(result) = result { driver.complete(worker, result, stopping)?; } }
++            _ = notified => {}
++            _ = timer => {}
++        }
++    }
++    Ok(())
++}
+diff --git a/src/server/monoio_tests.rs b/src/server/monoio_tests.rs
+new file mode 100644
+index 0000000..c44db9b
+--- /dev/null
++++ b/src/server/monoio_tests.rs
+@@ -0,0 +1,36 @@
++use super::*;
++use std::io::Read;
++
++#[test]
++fn admitted_handoff_keeps_quota_until_its_single_tcp_descriptor_retires() {
++    let relay = Relay::new(crate::Config {
++        monoio: true,
++        workers: Some(1),
++        ping_interval_secs: 0,
++        ..crate::Config::default()
++    })
++    .unwrap();
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let mut client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
++    client
++        .set_read_timeout(Some(Duration::from_secs(1)))
++        .unwrap();
++    let mut worker = Worker::new(listener, relay.clone()).unwrap();
++    worker.accept().unwrap();
++    assert_eq!(worker.connections.len(), 1);
++    assert!(worker.connections[0].socket.state.lock().stream.is_none());
++    let handoff = worker
++        .monoio_new
++        .pop()
++        .expect("single descriptor and its quota owner");
++    worker.connections.clear();
++    assert_eq!(relay.metrics.connections.load(Relaxed), 1);
++    drop(handoff);
++    assert_eq!(relay.metrics.connections.load(Relaxed), 0);
++    assert_eq!(
++        client.read(&mut [0]).unwrap(),
++        0,
++        "retired admission must not leave an established transport behind"
++    );
++}
+diff --git a/src/server/socket.rs b/src/server/socket.rs
+index f68c851..935a1f9 100644
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -14,6 +14,7 @@ use std::{
+     time::{Duration, Instant},
+ };
+ 
++use bytes::{Buf, Bytes};
+ use mio::{Interest, Registry, Token, Waker, net::TcpStream};
+ use parking_lot::Mutex;
+ 
+@@ -30,20 +31,28 @@ const RETAIN_QUEUE_SLOTS: usize = 32;
+ 
+ pub(super) struct Signal {
+     pub waker: Waker,
++    pub monoio: Option<futures_util::task::AtomicWaker>,
+     pub stopping: AtomicBool,
+     pub pending: Mutex<VecDeque<Token>>,
+ }
+ 
+ impl Signal {
++    pub fn wake(&self) {
++        if let Some(waker) = &self.monoio {
++            waker.wake();
++        } else {
++            let _ = self.waker.wake();
++        }
++    }
+     pub fn stop(&self) {
+         self.stopping.store(true, Release);
+-        let _ = self.waker.wake();
++        self.wake();
+     }
+ }
+ 
+ pub(super) struct Socket {
+     pub state: Mutex<State>,
+-    registry: Arc<Registry>,
++    registry: Option<Arc<Registry>>,
+     signal: Arc<Signal>,
+     pub token: Token,
+     notified: AtomicBool,
+@@ -51,30 +60,143 @@ pub(super) struct Socket {
+     queue_limit: usize,
+     write_timeout: Duration,
+     track_activity: bool,
++    pub io_waker: futures_util::task::AtomicWaker,
+     // Drop after State (and its TCP descriptor), including when a route keeps
+     // this socket alive beyond the decoder's retirement.
+     _guard: ConnectionGuard,
+ }
+ 
+ pub(super) struct State {
+-    pub stream: TcpStream,
++    pub stream: Option<TcpStream>,
+     queue: VecDeque<Pending>,
+     pub requested: Option<Disconnect>,
+     pub fatal: bool,
+     pub closed: bool,
+-    writable: bool,
++    pub writable: bool,
+     pub control_pending: bool,
+     pub control_deadline: Option<Instant>,
+     pub activity: Instant,
++    pub ingress: Bytes,
++    pub read_wanted: bool,
++    pub read_eof: bool,
++    controls: VecDeque<Bytes>,
++    control_ack: Option<usize>,
++    io_flight: Option<(Instant, bool)>,
++    output_aborted: bool,
++    pub discard_rejected_input: bool,
+ }
+ 
+-struct Pending {
++pub(super) struct Pending {
+     packet: Envelope,
+     offset: usize,
+     deadline: Instant,
+ }
+ 
++pub(super) enum CompletionWrite {
++    Data(Pending),
++    Control { bytes: Bytes, offset: usize },
++}
++
++impl CompletionWrite {
++    pub fn header(&self, output: &mut [u8; 20]) -> usize {
++        match self {
++            Self::Data(p) => header(&p.packet.frame, output),
++            Self::Control { .. } => 0,
++        }
++    }
++    pub fn body(&self) -> &[u8] {
++        match self {
++            Self::Data(p) => p.packet.frame.payload(),
++            Self::Control { bytes, .. } => bytes,
++        }
++    }
++    pub fn offset(&self) -> usize {
++        match self {
++            Self::Data(p) => p.offset,
++            Self::Control { offset, .. } => *offset,
++        }
++    }
++    pub fn advance(&mut self, written: usize) {
++        match self {
++            Self::Data(p) => p.offset += written,
++            Self::Control { offset, .. } => *offset += written,
++        }
++    }
++    pub fn complete(&self) -> bool {
++        self.offset()
++            == match self {
++                Self::Data(p) => wire_len(&p.packet.frame),
++                Self::Control { bytes, .. } => bytes.len(),
++            }
++    }
++}
++
+ impl Socket {
++    pub fn take_native_stream(&self) -> TcpStream {
++        self.state
++            .lock()
++            .stream
++            .take()
++            .expect("accepted descriptor")
++    }
++
++    pub fn take_completion_write(&self) -> Option<CompletionWrite> {
++        let mut state = self.state.lock();
++        assert!(state.io_flight.is_none());
++        if state.fatal {
++            return None;
++        }
++        if let Some(bytes) = state.controls.pop_front() {
++            state.io_flight = Some((state.control_deadline.unwrap(), false));
++            return Some(CompletionWrite::Control { bytes, offset: 0 });
++        }
++        if state.control_pending || state.closed {
++            return None;
++        }
++        let pending = state.queue.pop_front()?;
++        state.io_flight = Some((pending.deadline, true));
++        Some(CompletionWrite::Data(pending))
++    }
++
++    pub fn complete_write(
++        &self,
++        write: &CompletionWrite,
++        result: &io::Result<()>,
++        cancelled: bool,
++    ) {
++        let mut state = self.state.lock();
++        state.io_flight = None;
++        if result.is_ok() {
++            match write {
++                CompletionWrite::Data(p) => self.delivered(&p.packet, &mut state),
++                CompletionWrite::Control { bytes, .. } => state.control_ack = Some(bytes.len()),
++            }
++        } else {
++            state.fatal = true;
++            if cancelled {
++                if matches!(write, CompletionWrite::Data(_)) && !state.output_aborted {
++                    self.metrics.aborted_writes.fetch_add(1, Relaxed);
++                    state.output_aborted = true;
++                }
++            } else {
++                self.metrics.write_errors.fetch_add(1, Relaxed);
++            }
++        }
++        if state.queue.is_empty() && state.queue.capacity() > RETAIN_QUEUE_SLOTS {
++            self.release_queue(&mut state);
++        }
++        self.notify();
++    }
++
++    pub fn completion_failed(&self) {
++        self.state.lock().fatal = true;
++        self.notify();
++    }
++
++    pub fn registry_is_monoio(&self) -> bool {
++        self.registry.is_none()
++    }
++
+     pub fn new(
+         stream: TcpStream,
+         token: Token,
+@@ -85,7 +207,7 @@ impl Socket {
+     ) -> io::Result<Arc<Self>> {
+         let socket = Arc::new(Self {
+             state: Mutex::new(State {
+-                stream,
++                stream: Some(stream),
+                 queue: VecDeque::new(),
+                 requested: None,
+                 fatal: false,
+@@ -94,8 +216,16 @@ impl Socket {
+                 control_pending: false,
+                 control_deadline: None,
+                 activity: Instant::now(),
++                ingress: Bytes::new(),
++                read_wanted: false,
++                read_eof: false,
++                controls: VecDeque::new(),
++                control_ack: None,
++                io_flight: None,
++                output_aborted: false,
++                discard_rejected_input: false,
+             }),
+-            registry,
++            registry: (!relay.config.monoio).then_some(registry),
+             signal,
+             token,
+             notified: AtomicBool::new(false),
+@@ -103,18 +233,23 @@ impl Socket {
+             queue_limit: relay.config.queue_messages,
+             write_timeout: relay.config.write_timeout(),
+             track_activity: relay.config.idle_timeout_secs > 0,
++            io_waker: futures_util::task::AtomicWaker::new(),
+             _guard: guard,
+         });
+-        socket
+-            .registry
+-            .register(&mut socket.state.lock().stream, token, Interest::READABLE)?;
++        if let Some(registry) = &socket.registry {
++            registry.register(
++                socket.state.lock().stream.as_mut().unwrap(),
++                token,
++                Interest::READABLE,
++            )?;
++        }
+         Ok(socket)
+     }
+ 
+     fn notify(&self) {
+         if !self.notified.swap(true, Relaxed) {
+             self.signal.pending.lock().push_back(self.token);
+-            let _ = self.signal.waker.wake();
++            self.signal.wake();
+         }
+     }
+ 
+@@ -134,8 +269,11 @@ impl Socket {
+             } else {
+                 Interest::READABLE
+             };
+-            self.registry
+-                .reregister(&mut state.stream, self.token, interest)?;
++            if let Some(registry) = &self.registry {
++                registry.reregister(state.stream.as_mut().unwrap(), self.token, interest)?;
++            } else if enabled {
++                self.notify();
++            }
+             state.writable = enabled;
+         }
+         Ok(())
+@@ -162,18 +300,22 @@ impl Socket {
+ 
+     pub fn deadline(&self) -> Option<Instant> {
+         let state = self.state.lock();
+-        match (
++        [
+             state.queue.front().map(|p| p.deadline),
+             state.control_deadline,
+-        ) {
+-            (Some(a), Some(b)) => Some(a.min(b)),
+-            (a, b) => a.or(b),
+-        }
++            state.io_flight.map(|(deadline, _)| deadline),
++        ]
++        .into_iter()
++        .flatten()
++        .min()
+     }
+ 
+     /// Resume bounded application output. `true` means this socket consumed its
+     /// quantum while still ready and must be explicitly scheduled again.
+     pub fn flush(&self) -> io::Result<bool> {
++        if self.registry_is_monoio() {
++            return Ok(false);
++        }
+         let mut state = self.state.lock();
+         if state.control_pending {
+             return Ok(false);
+@@ -181,7 +323,7 @@ impl Socket {
+         let mut remaining = WRITE_QUANTUM;
+         while let Some(mut pending) = state.queue.pop_front() {
+             match write_frame(
+-                &mut SocketWriter(&state.stream),
++                &mut SocketWriter(state.stream.as_ref().unwrap()),
+                 &pending.packet.frame,
+                 &mut pending.offset,
+                 remaining,
+@@ -215,10 +357,13 @@ impl Socket {
+     /// frame requires dropping TCP; a Close can never be appended inside it.
+     pub fn end_output(&self) -> bool {
+         let mut state = self.state.lock();
++        let was_closed = state.closed;
+         state.closed = true;
+-        let partial = state.queue.front().is_some_and(|p| p.offset != 0);
+-        if !state.queue.is_empty() {
++        let active = state.io_flight.is_some_and(|(_, data)| data);
++        let partial = active || state.queue.front().is_some_and(|p| p.offset != 0);
++        if !was_closed && !state.queue.is_empty() {
+             self.metrics.aborted_writes.fetch_add(1, Relaxed);
++            state.output_aborted = true;
+             if !partial {
+                 self.metrics
+                     .unstarted_writes_cancelled
+@@ -227,11 +372,20 @@ impl Socket {
+         }
+         // Output is terminal, so even a small warm queue has no further use.
+         self.release_queue(&mut state);
+-        partial
++        // A submitted completion write may already have sent bytes. Let its
++        // single owning writer finish that frame before Close, within the
++        // original write deadline. Unstarted queued frames are cancelled here.
++        !self.registry_is_monoio() && partial
+     }
+ 
+     pub fn control_flushed(&self) -> io::Result<()> {
+         let mut state = self.state.lock();
++        if state.control_ack.is_some()
++            || !state.controls.is_empty()
++            || state.io_flight.is_some_and(|(_, data)| !data)
++        {
++            return Ok(());
++        }
+         state.control_pending = false;
+         state.control_deadline = None;
+         let queued = !state.queue.is_empty();
+@@ -249,9 +403,9 @@ impl PeerOutput for Socket {
+             return false;
+         }
+         let mut offset = 0;
+-        if state.queue.is_empty() && !state.control_pending {
++        if !self.registry_is_monoio() && state.queue.is_empty() && !state.control_pending {
+             match write_frame(
+-                &mut SocketWriter(&state.stream),
++                &mut SocketWriter(state.stream.as_ref().unwrap()),
+                 &packet.frame,
+                 &mut offset,
+                 WRITE_QUANTUM,
+@@ -294,6 +448,7 @@ impl PeerOutput for Socket {
+         if first {
+             self.notify();
+         }
++        self.io_waker.wake();
+         true
+     }
+ 
+@@ -316,7 +471,9 @@ impl Drop for Socket {
+                 .output_queue_capacity_bytes
+                 .fetch_sub(capacity, Relaxed);
+         }
+-        let _ = self.registry.deregister(&mut state.stream);
++        if let Some(registry) = &self.registry {
++            let _ = registry.deregister(state.stream.as_mut().unwrap());
++        }
+     }
+ }
+ 
+@@ -339,7 +496,23 @@ impl Read for Stream {
+             Some(remaining) => remaining.min(bytes.len()),
+             None => bytes.len(),
+         };
+-        let read = self.socket.state.lock().stream.read(&mut bytes[..length])?;
++        let mut state = self.socket.state.lock();
++        let read = if let Some(stream) = &mut state.stream {
++            stream.read(&mut bytes[..length])?
++        } else if !state.ingress.is_empty() {
++            let n = length.min(state.ingress.len());
++            bytes[..n].copy_from_slice(&state.ingress[..n]);
++            state.ingress.advance(n);
++            if state.ingress.is_empty() {
++                state.ingress = Bytes::new();
++            }
++            n
++        } else if state.read_eof {
++            0
++        } else {
++            state.read_wanted = true;
++            return Err(io::ErrorKind::WouldBlock.into());
++        };
+         if let Some(remaining) = &mut self.remaining_upgrade {
+             *remaining -= read;
+         }
+@@ -350,6 +523,22 @@ impl Read for Stream {
+ impl Write for Stream {
+     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+         let mut state = self.socket.state.lock();
++        if self.socket.registry_is_monoio() {
++            if let Some(ack) = state.control_ack.take() {
++                assert!(ack <= bytes.len());
++                return Ok(ack);
++            }
++            state.control_pending = true;
++            state
++                .control_deadline
++                .get_or_insert_with(|| Instant::now() + self.socket.write_timeout);
++            if state.io_flight.is_none() && state.controls.is_empty() {
++                state.controls.push_back(Bytes::copy_from_slice(bytes));
++                self.socket.io_waker.wake();
++                self.socket.notify();
++            }
++            return Err(io::ErrorKind::WouldBlock.into());
++        }
+         if state.queue.front().is_some_and(|p| p.offset != 0) {
+             return Err(io::ErrorKind::WouldBlock.into());
+         }
+@@ -357,7 +546,7 @@ impl Write for Stream {
+         state
+             .control_deadline
+             .get_or_insert_with(|| Instant::now() + self.socket.write_timeout);
+-        match state.stream.write(bytes) {
++        match state.stream.as_mut().unwrap().write(bytes) {
+             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                 self.socket.writable(&mut state, true)?;
+                 Err(error)
+@@ -540,6 +729,7 @@ mod tests {
+         let registry = Arc::new(poll.registry().try_clone().unwrap());
+         let signal = Arc::new(Signal {
+             waker: Waker::new(&registry, Token(1)).unwrap(),
++            monoio: None,
+             stopping: AtomicBool::new(false),
+             pending: Mutex::new(VecDeque::new()),
+         });
+@@ -617,7 +807,7 @@ mod tests {
+     #[test]
+     fn an_exact_write_quantum_retires_empty_queue_storage_before_returning() {
+         let (relay, socket, reader, _poll) = connected();
+-        socket2::SockRef::from(&socket.state.lock().stream)
++        socket2::SockRef::from(socket.state.lock().stream.as_ref().unwrap())
+             .set_send_buffer_size(1024 * 1024)
+             .unwrap();
+         let registration = relay
+diff --git a/src/server.rs b/src/server.rs
+index 184a89c..0913c35 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -1,6 +1,9 @@
+ //! Native readiness-driven relay. One event loop owns each decoder; socket
+ //! output is serialized and can be submitted directly by any routing worker.
+ //! Idle connections need no task, message channel, or receive allocation.
++mod monoio_driver;
++#[cfg(test)]
++mod monoio_tests;
+ mod socket;
+ mod timers;
+ 
+@@ -94,6 +97,9 @@ pub async fn serve(
+             .name(format!("war-io-{index}"))
+             .spawn(move || {
+                 let outcome = worker.run();
++                if let Err(error) = &outcome {
++                    eprintln!("Monoio worker failure: {error:#}");
++                }
+                 let _ = finished.send(outcome);
+             })
+             .context("cannot start native I/O worker")?;
+@@ -215,6 +221,9 @@ struct Worker {
+     compacted: bool,
+     accept_queued: bool,
+     accept_retry: Option<Instant>,
++    monoio_listener: Option<std::net::TcpListener>,
++    monoio_new: Vec<(Token, std::net::TcpStream, Arc<Socket>)>,
++    monoio_dirty: Vec<Token>,
+ }
+ 
+ impl Drop for Worker {
+@@ -229,10 +238,21 @@ impl Worker {
+     fn new(listener: std::net::TcpListener, relay: Arc<Relay>) -> io::Result<Self> {
+         let poll = Poll::new()?;
+         let registry = Arc::new(poll.registry().try_clone()?);
++        let monoio_listener = relay
++            .config
++            .monoio
++            .then(|| listener.try_clone())
++            .transpose()?;
+         let mut listener = TcpListener::from_std(listener);
+-        registry.register(&mut listener, LISTENER, Interest::READABLE)?;
++        if !relay.config.monoio {
++            registry.register(&mut listener, LISTENER, Interest::READABLE)?;
++        }
+         let signal = Arc::new(Signal {
+             waker: mio::Waker::new(&registry, WAKE)?,
++            monoio: relay
++                .config
++                .monoio
++                .then(futures_util::task::AtomicWaker::new),
+             stopping: AtomicBool::new(false),
+             pending: parking_lot::Mutex::new(VecDeque::new()),
+         });
+@@ -251,6 +271,9 @@ impl Worker {
+             compacted: false,
+             accept_queued: false,
+             accept_retry: None,
++            monoio_listener,
++            monoio_new: Vec::new(),
++            monoio_dirty: Vec::new(),
+         })
+     }
+ 
+@@ -369,6 +392,13 @@ impl Worker {
+                 Ok(socket) => socket,
+                 Err(error) => return self.setup_failed(error, "register socket"),
+             };
++            if self.relay.config.monoio {
++                self.monoio_new.push((
++                    token,
++                    war_completion_buf::into_std_tcp(socket.take_native_stream()),
++                    socket.clone(),
++                ));
++            }
+             let connection = Connection::new(socket, token, lease, &self.relay);
+             let deadline = connection.deadline(&self.relay);
+             self.connections.insert(connection);
+@@ -396,7 +426,9 @@ impl Worker {
+     ) -> io::Result<()> {
+         // Stop readiness notifications during resource pressure. Existing
+         // sockets, timers and shutdown remain serviced; retry drains queued TCP.
+-        self.registry.deregister(&mut self.listener)?;
++        if !self.relay.config.monoio {
++            self.registry.deregister(&mut self.listener)?;
++        }
+         self.accept_retry = Some(Instant::now() + delay);
+         tracing::warn!(%error, operation, "native admission failed; retrying in one second");
+         Ok(())
+@@ -428,7 +460,63 @@ impl Worker {
+         }
+     }
+ 
+-    fn run(mut self) -> Result<()> {
++    fn drive_ready(&mut self, stopping: bool, incoming: &mut ReceiveBatch<'_>) -> Result<()> {
++        let batch = self.ready.len().min(1024);
++        for _ in 0..batch {
++            let token = self.ready.pop_front().expect("ready batch");
++            if token == LISTENER {
++                self.accept_queued = false;
++                if !stopping {
++                    self.accept()?;
++                }
++                continue;
++            }
++            let Some(&slot) = self.tokens.get(&token) else {
++                continue;
++            };
++            let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
++            else {
++                continue;
++            };
++            if self.relay.config.monoio {
++                self.monoio_dirty.push(token);
++            }
++            connection.scheduled = false;
++            connection.socket.notified();
++            let keep = connection.drive_batched(&self.relay, &mut self.scratch, stopping, incoming);
++            match keep {
++                Drive::Drop => {
++                    self.timers.remove(slot);
++                    self.connections.remove(slot);
++                    self.tokens.remove(&token);
++                    if self.tokens.capacity() > 256
++                        && self.tokens.len() <= self.tokens.capacity() / 8
++                    {
++                        self.tokens.shrink_to(self.tokens.len() * 2);
++                    }
++                    self.reclaim_connections();
++                }
++                Drive::Wait | Drive::Again => {
++                    let deadline = self.connections[slot].deadline(&self.relay);
++                    self.timers.set(slot, deadline);
++                    if keep == Drive::Again {
++                        self.schedule(token);
++                    }
++                }
++            }
++        }
++        Ok(())
++    }
++
++    fn run(self) -> Result<()> {
++        if self.relay.config.monoio {
++            monoio_driver::run(self)
++        } else {
++            self.run_mio()
++        }
++    }
++
++    fn run_mio(mut self) -> Result<()> {
+         let mut events = Events::with_capacity(1024);
+         let mut shutdown_deadline = None;
+         let relay = self.relay.clone();
+@@ -468,52 +556,7 @@ impl Worker {
+             }
+             // A bounded ready batch makes progress on buffered continuations
+             // without starving new socket events, timers, or shutdown signals.
+-            let batch = self.ready.len().min(1024);
+-            for _ in 0..batch {
+-                let token = self.ready.pop_front().expect("ready batch");
+-                if token == LISTENER {
+-                    self.accept_queued = false;
+-                    if shutdown_deadline.is_none() {
+-                        self.accept()?;
+-                    }
+-                    continue;
+-                }
+-                let Some(&slot) = self.tokens.get(&token) else {
+-                    continue;
+-                };
+-                let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
+-                else {
+-                    continue;
+-                };
+-                connection.scheduled = false;
+-                connection.socket.notified();
+-                let keep = connection.drive_batched(
+-                    &self.relay,
+-                    &mut self.scratch,
+-                    shutdown_deadline.is_some(),
+-                    &mut incoming,
+-                );
+-                match keep {
+-                    Drive::Drop => {
+-                        self.timers.remove(slot);
+-                        self.connections.remove(slot);
+-                        self.tokens.remove(&token);
+-                        if self.tokens.capacity() > 256
+-                            && self.tokens.len() <= self.tokens.capacity() / 8
+-                        {
+-                            self.tokens.shrink_to(self.tokens.len() * 2);
+-                        }
+-                        self.reclaim_connections();
+-                    }
+-                    Drive::Wait | Drive::Again => {
+-                        let deadline = self.connections[slot].deadline(&self.relay);
+-                        self.timers.set(slot, deadline);
+-                        if keep == Drive::Again {
+-                            self.schedule(token);
+-                        }
+-                    }
+-                }
+-            }
++            self.drive_ready(shutdown_deadline.is_some(), &mut incoming)?;
+             // Publish before polling, even when no more input will arrive.
+             incoming.publish();
+             {
+@@ -732,6 +775,10 @@ impl Connection {
+             match handshake.take().expect("pending handshake").handshake() {
+                 Ok(mut ws) => {
+                     ws.get_mut().remaining_upgrade = None;
++                    if relay.config.monoio {
++                        ws.enable_external_read();
++                        ws.set_external_read_standby_capacity(14);
++                    }
+                     if let Some(lease) = self.handshake_lease.take()
+                         && ws.set_read_budget(lease).is_err()
+                     {
+@@ -759,12 +806,16 @@ impl Connection {
+         let Stage::WebSocket(ws) = &mut self.stage else {
+             unreachable!()
+         };
+-        ws.swap_read_storage(scratch);
++        if !relay.config.monoio {
++            ws.swap_read_storage(scratch);
++        }
+         let result = self.drive_websocket(relay, now, stopping, incoming);
+         let Stage::WebSocket(ws) = &mut self.stage else {
+             unreachable!()
+         };
+-        if let Some(mut storage) = ws.take_read_storage() {
++        if !relay.config.monoio
++            && let Some(mut storage) = ws.take_read_storage()
++        {
+             // A small message on another connection must not inherit and pin a
+             // previous large receive slab. Refill lazily on the next read.
+             storage.discard_if_larger_than(relay.config.read_buffer_bytes.max(14));
+@@ -801,7 +852,12 @@ impl Connection {
+             return Drive::Drop;
+         };
+         self.closing = Some(Closing {
+-            deadline: now + relay.config.write_timeout(),
++            deadline: self
++                .socket
++                .deadline()
++                .map_or(now + relay.config.write_timeout(), |deadline| {
++                    deadline.min(now + relay.config.write_timeout())
++                }),
+             flush_only: acknowledge,
+         });
+         if acknowledge {
+@@ -1127,6 +1183,9 @@ impl Connection {
+                     return Drive::Drop;
+                 }
+                 Err(error) => {
++                    if relay.config.monoio {
++                        self.socket.state.lock().discard_rejected_input = true;
++                    }
+                     let reason = match error {
+                         Error::Capacity(
+                             tungstenite::error::CapacityError::ReadBufferBudgetExceeded,
+diff --git a/tests/completion_storage.rs b/tests/completion_storage.rs
+new file mode 100644
+index 0000000..03c9a5a
+--- /dev/null
++++ b/tests/completion_storage.rs
+@@ -0,0 +1,243 @@
++//! Completion buffers must preserve decoder state, shared body pointers and
++//! admission across pending reads. This exercises the public decoder hooks.
++use std::io::{self, Read, Write};
++use tokio_tungstenite::tungstenite::{
++    Error, Message, WebSocket,
++    protocol::{ReadBudget, Role, WebSocketConfig},
++};
++
++struct Pending;
++impl Read for Pending {
++    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
++        Err(io::ErrorKind::WouldBlock.into())
++    }
++}
++impl Write for Pending {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++
++fn masked(opcode: u8, body: &[u8]) -> Vec<u8> {
++    let mut wire = vec![opcode];
++    match body.len() {
++        0..=125 => wire.push(0x80 | body.len() as u8),
++        126..=65535 => {
++            wire.push(0xfe);
++            wire.extend_from_slice(&(body.len() as u16).to_be_bytes());
++        }
++        _ => {
++            wire.push(0xff);
++            wire.extend_from_slice(&(body.len() as u64).to_be_bytes());
++        }
++    }
++    let mask = [0x17, 0x39, 0x5b, 0x7d];
++    wire.extend_from_slice(&mask);
++    wire.extend(body.iter().enumerate().map(|(i, byte)| byte ^ mask[i & 3]));
++    wire
++}
++
++fn socket() -> (WebSocket<Pending>, std::sync::Arc<ReadBudget>) {
++    let budget = ReadBudget::new(16 * 1024 * 1024);
++    let mut socket = WebSocket::from_raw_socket(
++        Pending,
++        Role::Server,
++        Some(
++            WebSocketConfig::default()
++                .read_buffer_size(4096)
++                .shared_read_buffer(true),
++        ),
++    );
++    socket
++        .set_read_budget(budget.try_lease(0).unwrap())
++        .unwrap();
++    socket.enable_external_read();
++    (socket, budget)
++}
++
++fn blocked(ws: &mut WebSocket<Pending>) {
++    assert!(matches!(ws.read(), Err(Error::Io(e)) if e.kind() == io::ErrorKind::WouldBlock));
++}
++
++fn feed(ws: &mut WebSocket<Pending>, bytes: &[u8], eof: bool) -> usize {
++    let (mut storage, range) = ws.take_external_read().expect("blocked external read");
++    assert!(bytes.len() <= range.len());
++    let mut buffer = storage.take_io_buffer();
++    let pointer = buffer.as_ptr() as usize;
++    buffer.extend_from_slice(bytes); // Simulated kernel input in this state test.
++    storage.restore_io_buffer(buffer);
++    ws.restore_external_read(storage, eof);
++    pointer
++}
++
++#[test]
++fn every_small_frame_split_resumes_without_losing_input_or_lending_inflight_storage() {
++    let body = vec![0xa5; 257];
++    let wire = masked(0x82, &body);
++    for split in 0..wire.len() {
++        let (mut ws, budget) = socket();
++        blocked(&mut ws);
++        feed(&mut ws, &wire[..split], false);
++        blocked(&mut ws);
++        let (mut storage, range) = ws.take_external_read().unwrap();
++        let reserved = budget.reserved();
++        assert!(reserved > 0);
++        blocked(&mut ws);
++        assert!(ws.take_external_read().is_none());
++        assert!(ws.take_read_storage().is_none());
++        assert_eq!(ws.reclaim_read_buffer(), None);
++        assert_eq!(budget.reserved(), reserved);
++        let mut buffer = storage.take_io_buffer();
++        assert!(wire.len() - split <= range.len());
++        buffer.extend_from_slice(&wire[split..]);
++        storage.restore_io_buffer(buffer);
++        ws.restore_external_read(storage, false);
++        assert_eq!(ws.read().unwrap(), Message::Binary(body.clone().into()));
++        drop(ws);
++        assert_eq!(budget.reserved(), 0);
++    }
++}
++
++#[test]
++fn a_coalesced_body_keeps_its_receive_pointer_after_storage_handoffs_and_eof() {
++    let (mut ws, budget) = socket();
++    let first = masked(0x82, &[0x5a; 257]);
++    let next = masked(0x82, &[0xa5; 11]);
++    let wire = [first.as_slice(), next.as_slice()].concat();
++    blocked(&mut ws);
++    let pointer = feed(&mut ws, &wire, false);
++    let Message::Binary(first_body) = ws.read().unwrap() else {
++        panic!("binary");
++    };
++    let Message::Binary(next_body) = ws.read().unwrap() else {
++        panic!("binary");
++    };
++    assert_eq!(first_body.as_ptr() as usize, pointer + 8);
++    assert_eq!(next_body.as_ptr() as usize, pointer + first.len() + 6);
++    blocked(&mut ws);
++    let (mut storage, _) = ws.take_external_read().unwrap();
++    let buffer = storage.take_io_buffer();
++    let rented = war_completion_buf::ReadBuffer::new(buffer, storage);
++    drop(ws); // The in-flight owner must keep the staging allowance charged.
++    assert!(budget.reserved() > 0);
++    drop(rented);
++    assert_eq!(budget.reserved(), 0);
++    assert_eq!(first_body, &[0x5a; 257][..]);
++    assert_eq!(next_body, &[0xa5; 11][..]);
++
++    let (mut eof, budget) = socket();
++    blocked(&mut eof);
++    feed(&mut eof, &[], true);
++    assert!(matches!(eof.read(), Err(Error::Protocol(_))));
++    drop(eof);
++    assert_eq!(budget.reserved(), 0);
++}
++
++#[test]
++fn fragments_and_interleaved_ping_preserve_state_across_external_reads() {
++    let (mut ws, budget) = socket();
++    blocked(&mut ws);
++    feed(&mut ws, &masked(0x02, &[0x17; 50]), false);
++    blocked(&mut ws);
++    feed(&mut ws, &masked(0x89, b"ping"), false);
++    assert_eq!(ws.read().unwrap(), Message::Ping("ping".into()));
++    blocked(&mut ws);
++    feed(&mut ws, &masked(0x80, &[0x39; 50]), false);
++    assert_eq!(
++        ws.read().unwrap(),
++        Message::Binary([vec![0x17; 50], vec![0x39; 50]].concat().into())
++    );
++    drop(ws);
++    assert_eq!(budget.reserved(), 0);
++}
++
++#[test]
++fn a_real_completion_read_writes_directly_into_the_decoders_lent_allocation() {
++    use monoio::{buf::IoBufMut, io::AsyncReadRent};
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    let mut client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
++    let (server, _) = listener.accept().unwrap();
++    let wire = masked(0x82, &[0xa5; 1024]);
++    client.write_all(&wire).unwrap();
++    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
++        .build()
++        .unwrap()
++        .block_on(async {
++            let mut server = monoio::net::TcpStream::from_std(server).unwrap();
++            let (mut ws, budget) = socket();
++            blocked(&mut ws);
++            let mut first_pointer = None;
++            loop {
++                let (mut storage, range) = ws.take_external_read().unwrap();
++                let bytes = storage.take_io_buffer();
++                first_pointer.get_or_insert(bytes.as_ptr() as usize);
++                let rented = war_completion_buf::ReadBuffer::new(bytes, storage).slice_mut(range);
++                let (result, buffer) = server.read(rented).await;
++                assert!(result.unwrap() > 0);
++                let (bytes, mut storage) = buffer.into_inner().into_parts();
++                storage.restore_io_buffer(bytes);
++                ws.restore_external_read(storage, false);
++                match ws.read() {
++                    Ok(Message::Binary(body)) => {
++                        assert_eq!(body, &[0xa5; 1024][..]);
++                        assert_eq!(body.as_ptr() as usize, first_pointer.unwrap() + 8);
++                        break;
++                    }
++                    Err(Error::Io(e)) if e.kind() == io::ErrorKind::WouldBlock => {}
++                    result => panic!("unexpected receive: {result:?}"),
++                }
++            }
++            drop(ws);
++            assert_eq!(budget.reserved(), 0);
++            war_completion_buf::close_tcp(server);
++        });
++}
++
++#[test]
++fn cancellation_keeps_receive_admission_until_the_kernel_returns_its_buffer() {
++    use monoio::{
++        buf::IoBufMut,
++        io::{CancelableAsyncReadRent, Canceller},
++    };
++    use std::{
++        future::{Future, poll_fn},
++        task::Poll,
++    };
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    let _client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
++    let (server, _) = listener.accept().unwrap();
++    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
++        .enable_timer()
++        .build()
++        .unwrap()
++        .block_on(async {
++            let mut server = monoio::net::TcpStream::from_std(server).unwrap();
++            let budget = ReadBudget::new(8192);
++            let buffer = war_completion_buf::ReadBuffer::new(
++                bytes::BytesMut::with_capacity(4096),
++                budget.try_lease(8192).unwrap(),
++            );
++            let cancel = Canceller::new();
++            let (result, buffer) = {
++                let operation = server.cancelable_read(buffer.slice_mut(..4096), cancel.handle());
++                tokio::pin!(operation);
++                poll_fn(|cx| {
++                    assert!(operation.as_mut().poll(cx).is_pending());
++                    Poll::Ready(())
++                })
++                .await;
++                monoio::time::sleep(std::time::Duration::from_millis(1)).await;
++                assert_eq!(budget.reserved(), 8192);
++                let _cancel = cancel.cancel();
++                operation.await
++            };
++            assert_eq!(result.unwrap_err().raw_os_error(), Some(125));
++            assert_eq!(budget.reserved(), 8192);
++            drop(buffer);
++            assert_eq!(budget.reserved(), 0);
++            war_completion_buf::close_tcp(server);
++        });
++}
+diff --git a/tests/relay_integration.rs b/tests/relay_integration.rs
+index dbe8deb..8007c6e 100644
+--- a/tests/relay_integration.rs
++++ b/tests/relay_integration.rs
+@@ -45,7 +45,8 @@ struct Server {
+ }
+ 
+ impl Server {
+-    async fn new(config: Config) -> Self {
++    async fn new(mut config: Config) -> Self {
++        config.monoio = true;
+         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+         let admin = TcpListener::bind("127.0.0.1:0").await.unwrap();
+         let url = format!("ws://{}/any-path", listener.local_addr().unwrap());
+diff --git a/vendor/README.md b/vendor/README.md
+index d36c4b3..ea71355 100644
+--- a/vendor/README.md
++++ b/vendor/README.md
+@@ -1,5 +1,24 @@
+ # WebSocket decoder storage and scheduling patch
+ 
++This isolated experiment additionally supports completion I/O. After
++`enable_external_read`, a blocked decoder's `take_external_read` transfers its
++actual receive allocation and admission lease to one pending read. Parsing and
++storage lending remain blocked until `restore_external_read` returns that same
++storage. `ReadStorage::take_io_buffer` and `restore_io_buffer` let an owned I/O
++wrapper retain both buffer and lease through the completion, including cancelled
++reads. Published `Bytes` and the framing/fragment/control state stay in place.
++EOF is restored explicitly. The relay's small audited buffer adapter implements
++Monoio's unsafe buffer traits; the relay and decoder APIs require no unsafe code.
++
++`set_external_read_standby_capacity(14)` reserves one maximum-size WebSocket
++header for an idle socket, with the normal twice-capacity admission allowance.
++Body growth still reserves before allocation and may move unfinished input.
++Between frames an oversized slab releases before a later small value is routed;
++only an incomplete header can be copied into the standby slab. Periodic receive
++reclamation first cancels and awaits any active read, then resumes the existing
++reclaim method. This experiment uses normal io_uring receive/writev operations;
++it does not claim kernel-to-userspace zero-copy networking.
++
+ The relay uses the published `tungstenite` and `tokio-tungstenite` **0.30.0**
+ sources with explicit storage reclamation, admission and bounded parsing APIs. The native
+ connection can release unused decoder storage after a quiet input interval
+diff --git a/vendor/read-buffer-reclaim.patch b/vendor/read-buffer-reclaim.patch
+index 373d050..1fdae35 100644
+--- a/vendor/read-buffer-reclaim.patch
++++ b/vendor/read-buffer-reclaim.patch
+@@ -1,75 +1,3 @@
+-diff --git a/tokio-tungstenite/src/lib.rs b/tokio-tungstenite/src/lib.rs
+-index 3091627..a8a0f86 100644
+---- a/tokio-tungstenite/src/lib.rs
+-+++ b/tokio-tungstenite/src/lib.rs
+-@@ -210,6 +210,7 @@ pub struct WebSocketStream<S> {
+-     /// `false` once start_send hits `WouldBlock` errors.
+-     /// `true` initially and after `flush`ing.
+-     ready: bool,
+-+    read_frame_limit: Option<std::num::NonZeroUsize>,
+- }
+- 
+- impl<S> WebSocketStream<S> {
+-@@ -243,7 +244,7 @@ impl<S> WebSocketStream<S> {
+-     }
+- 
+-     pub(crate) fn new(ws: WebSocket<AllowStd<S>>) -> Self {
+--        Self { inner: ws, closing: false, ended: false, ready: true }
+-+        Self { inner: ws, closing: false, ended: false, ready: true, read_frame_limit: None }
+-     }
+- 
+-     fn with_context<F, R>(&mut self, ctx: Option<(ContextWaker, &mut Context<'_>)>, f: F) -> R
+-@@ -285,6 +286,26 @@ impl<S> WebSocketStream<S> {
+-         self.inner.get_config()
+-     }
+- 
+-+    /// Release unused decoder storage between frames. Published payloads remain
+-+    /// shared; a partial next header is preserved. None means a frame is busy.
+-+    pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
+-+        self.inner.reclaim_read_buffer()
+-+    }
+-+
+-+    /// Attach a staging reservation before the first read. See tungstenite's
+-+    /// `WebSocket::set_read_budget` for ownership and admission semantics.
+-+    pub fn set_read_budget(&mut self, lease: tungstenite::protocol::ReadLease) -> Result<(), WsError> {
+-+        self.inner.set_read_budget(lease)
+-+    }
+-+
+-+    /// Bound frames parsed by one stream poll, including empty continuations.
+-+    /// The stream wakes itself and yields when the limit is reached without
+-+    /// a message. Incomplete input and protocol state remain in the decoder.
+-+    /// `None` retains upstream's unlimited parsing behavior.
+-+    pub fn set_read_frame_limit(&mut self, limit: Option<std::num::NonZeroUsize>) {
+-+        self.read_frame_limit = limit;
+-+    }
+-+
+-     /// Close the underlying web socket
+-     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
+-     where
+-@@ -310,11 +331,21 @@ where
+-             return Poll::Ready(None);
+-         }
+- 
+-+        let limit = self.read_frame_limit;
+-         match futures_util::ready!(self.with_context(Some((ContextWaker::Read, cx)), |s| {
+-             trace!("{}:{} Stream.with_context poll_next -> read()", file!(), line!());
+--            cvt(s.read())
+-+            cvt(match limit {
+-+                Some(limit) => s.read_with_frame_limit(limit),
+-+                None => s.read().map(Some),
+-+            })
+-         })) {
+--            Ok(v) => Poll::Ready(Some(Ok(v))),
+-+            Ok(Some(v)) => Poll::Ready(Some(Ok(v))),
+-+            Ok(None) => {
+-+                // This is a cooperative yield, not an underlying WouldBlock:
+-+                // already buffered frames may need no further I/O wakeup.
+-+                cx.waker().wake_by_ref();
+-+                Poll::Pending
+-+            }
+-             Err(e) => {
+-                 self.ended = true;
+-                 if matches!(e, WsError::AlreadyClosed | WsError::ConnectionClosed) {
+ diff --git a/tungstenite/src/error.rs b/tungstenite/src/error.rs
+ index 0bddb6d..d473f3a 100644
+ --- a/tungstenite/src/error.rs
+@@ -85,7 +13,7 @@ index 0bddb6d..d473f3a 100644
+      #[error("Too many headers")]
+      TooManyHeaders,
+ diff --git a/tungstenite/src/protocol/frame/mod.rs b/tungstenite/src/protocol/frame/mod.rs
+-index 51cd54f..b1c8d0a 100644
++index 51cd54f..92522ce 100644
+ --- a/tungstenite/src/protocol/frame/mod.rs
+ +++ b/tungstenite/src/protocol/frame/mod.rs
+ @@ -15,6 +15,7 @@ pub use self::{
+@@ -96,7 +24,7 @@ index 51cd54f..b1c8d0a 100644
+      Message,
+  };
+  use bytes::BytesMut;
+-@@ -24,6 +25,25 @@ use std::io::{self, Cursor, Error as IoError, ErrorKind as IoErrorKind, Read, Wr
++@@ -24,6 +25,39 @@ use std::io::{self, Cursor, Error as IoError, ErrorKind as IoErrorKind, Read, Wr
+  /// Read buffer size used for `FrameSocket`.
+  const READ_BUF_LEN: usize = 128 * 1024;
+  
+@@ -110,6 +38,20 @@ index 51cd54f..b1c8d0a 100644
+ +}
+ +
+ +impl ReadStorage {
+++    /// Temporarily move the allocation into a completion-I/O buffer. Keep this
+++    /// storage object with that operation so its admission lease remains live.
+++    pub fn take_io_buffer(&mut self) -> BytesMut {
+++        std::mem::take(&mut self.buffer)
+++    }
+++
+++    /// Restore the same allocation after I/O completes. Initialized input can
+++    /// grow within the already admitted capacity, without copying its bytes.
+++    pub fn restore_io_buffer(&mut self, buffer: BytesMut) {
+++        assert!(self.buffer.is_empty() && self.buffer.capacity() == 0);
+++        assert!(buffer.capacity() <= self.capacity, "I/O exceeded admitted storage");
+++        self.buffer = buffer;
+++    }
+++
+ +    /// Drop an oversized empty slab before lending storage to another decoder.
+ +    /// Published immutable owners remain valid; no payload bytes are copied.
+ +    pub fn discard_if_larger_than(&mut self, maximum: usize) -> bool {
+@@ -122,7 +64,7 @@ index 51cd54f..b1c8d0a 100644
+  /// A reader and writer for WebSocket frames.
+  #[derive(Debug)]
+  pub struct FrameSocket<Stream> {
+-@@ -104,6 +124,9 @@ where
++@@ -104,6 +138,9 @@ where
+  pub(super) struct FrameCodec {
+      /// Buffer to read data from the stream.
+      in_buffer: BytesMut,
+@@ -132,7 +74,15 @@ index 51cd54f..b1c8d0a 100644
+      in_buf_max_read: usize,
+      /// Buffer to send packets to the network.
+      out_buffer: Vec<u8>,
+-@@ -120,10 +143,41 @@ pub(super) struct FrameCodec {
++@@ -117,18 +154,59 @@ pub(super) struct FrameCodec {
++     out_buffer_write_len: usize,
++     /// Header and remaining size of the incoming packet being processed.
++     header: Option<(FrameHeader, u64)>,
+++    external_read: bool,
+++    read_wanted: bool,
+++    read_suspended: bool,
+++    external_eof: bool,
+++    external_standby: Option<usize>,
+  }
+  
+  impl FrameCodec {
+@@ -141,7 +91,7 @@ index 51cd54f..b1c8d0a 100644
+ +    }
+ +
+ +    pub(super) fn swap_read_storage(&mut self, storage: &mut ReadStorage) -> bool {
+-+        if self.header.is_some() || !self.in_buffer.is_empty() || !storage.buffer.is_empty() {
+++        if self.read_suspended || self.header.is_some() || !self.in_buffer.is_empty() || !storage.buffer.is_empty() {
+ +            return false;
+ +        }
+ +        // An empty owner still keeps a zero-byte lease, ensuring its next
+@@ -174,7 +124,17 @@ index 51cd54f..b1c8d0a 100644
+              in_buf_max_read: in_buf_len.max(FrameHeader::MAX_SIZE),
+              out_buffer: <_>::default(),
+              max_out_buffer_len: usize::MAX,
+-@@ -136,8 +190,11 @@ impl FrameCodec {
++             out_buffer_write_len: 0,
++             header: None,
+++            external_read: false,
+++            read_wanted: false,
+++            read_suspended: false,
+++            external_eof: false,
+++            external_standby: None,
++         }
++     }
++ 
++@@ -136,16 +214,96 @@ impl FrameCodec {
+      pub(super) fn from_partially_read(part: Vec<u8>, min_in_buf_len: usize) -> Self {
+          let mut in_buffer = BytesMut::from_iter(part);
+          in_buffer.reserve(min_in_buf_len.saturating_sub(in_buffer.len()));
+@@ -186,14 +146,20 @@ index 51cd54f..b1c8d0a 100644
+              in_buf_max_read: min_in_buf_len.max(FrameHeader::MAX_SIZE),
+              out_buffer: <_>::default(),
+              max_out_buffer_len: usize::MAX,
+-@@ -146,6 +203,77 @@ impl FrameCodec {
++             out_buffer_write_len: 0,
++             header: None,
+++            external_read: false,
+++            read_wanted: false,
+++            read_suspended: false,
+++            external_eof: false,
+++            external_standby: None,
+          }
+      }
+  
+ +    /// Release decoder ownership between frames without touching published data.
+ +    /// An incomplete next header is copied; a partially received frame is busy.
+ +    pub(super) fn reclaim_read_buffer(&mut self) -> Option<usize> {
+-+        if self.header.is_some() {
+++        if self.read_suspended || self.header.is_some() {
+ +            return None;
+ +        }
+ +        // Header parsing returns None only while at most 13 bytes are buffered.
+@@ -206,7 +172,7 @@ index 51cd54f..b1c8d0a 100644
+ +            return None;
+ +        }
+ +        let copied = self.in_buffer.len();
+-+        let capacity = if self.in_buffer.capacity() == 0 { 0 } else { self.in_buf_max_read };
+++        let capacity = if self.in_buffer.capacity() == 0 { 0 } else { self.external_standby.unwrap_or(self.in_buf_max_read) };
+ +        if let Some(lease) = &mut self.read_lease {
+ +            lease.for_capacity(capacity).ok()?;
+ +        }
+@@ -246,12 +212,13 @@ index 51cd54f..b1c8d0a 100644
+ +        // Leave one read chunk after a large frame. An exact boundary forces a
+ +        // fresh small allocation for the next header while the published body
+ +        // is still shared. This bounded read-ahead is part of the reservation.
+-+        let capacity = if wanted > self.in_buf_max_read {
+++        let chunk = if self.header.is_none() { self.external_standby.unwrap_or(self.in_buf_max_read) } else { self.in_buf_max_read };
+++        let capacity = if wanted > chunk {
+ +            // Overflow saturates to a capacity whose doubled allowance is
+ +            // rejected by the lease before allocation, with a refusal count.
+-+            wanted.saturating_add(self.in_buf_max_read)
+++            wanted.saturating_add(chunk)
+ +        } else {
+-+            self.in_buf_max_read
+++            chunk
+ +        };
+ +        lease.for_capacity(capacity)?;
+ +        let mut fresh = BytesMut::with_capacity(capacity);
+@@ -264,7 +231,17 @@ index 51cd54f..b1c8d0a 100644
+      /// Sets a maximum size for the out buffer.
+      pub(super) fn set_max_out_buffer_len(&mut self, max: usize) {
+          self.max_out_buffer_len = max;
+-@@ -188,9 +316,9 @@ impl FrameCodec {
++@@ -165,6 +323,9 @@ impl FrameCodec {
++         unmask: bool,
++         accept_unmasked: bool,
++     ) -> Result<Option<Frame>> {
+++        if self.read_suspended {
+++            return Err(io::Error::from(io::ErrorKind::WouldBlock).into());
+++        }
++         let max_size = max_size.unwrap_or_else(usize::max_value);
++ 
++         let mut payload = loop {
++@@ -188,9 +349,9 @@ impl FrameCodec {
+  
+                      // Reserve full message length only once, even for multiple
+                      // loops or if WouldBlock errors cause multiple fn calls.
+@@ -276,6 +253,58 @@ index 51cd54f..b1c8d0a 100644
+                  }
+              }
+  
++@@ -232,6 +393,14 @@ impl FrameCodec {
++ 
++     /// Read into available `in_buffer` capacity.
++     fn read_in(&mut self, stream: &mut impl Read) -> io::Result<usize> {
+++        if self.external_read {
+++            if self.external_eof { return Ok(0); }
+++            if self.header.is_none() && self.external_standby.is_some_and(|capacity| self.storage_capacity > capacity) {
+++                self.reclaim_read_buffer();
+++            }
+++            self.read_wanted = true;
+++            return Err(io::ErrorKind::WouldBlock.into());
+++        }
++         let len = self.in_buffer.len();
++         debug_assert!(self.in_buffer.capacity() > len);
++         self.in_buffer.resize(self.in_buffer.capacity().min(len + self.in_buf_max_read), 0);
++@@ -240,6 +409,36 @@ impl FrameCodec {
++         size
++     }
++ 
+++    pub(super) fn enable_external_read(&mut self) { self.external_read = true; }
+++
+++    pub(super) fn set_external_standby(&mut self, capacity: usize) {
+++        self.external_standby = Some(capacity.max(FrameHeader::MAX_SIZE));
+++    }
+++
+++    pub(super) fn take_external_read(&mut self) -> Option<(ReadStorage, std::ops::Range<usize>)> {
+++        if !self.read_wanted || self.read_suspended { return None; }
+++        self.read_wanted = false;
+++        self.read_suspended = true;
+++        let len = self.in_buffer.len();
+++        let end = self.in_buffer.capacity().min(len + self.in_buf_max_read);
+++        assert!(end > len);
+++        Some((ReadStorage {
+++            buffer: std::mem::take(&mut self.in_buffer),
+++            lease: self.read_lease.take(),
+++            capacity: std::mem::take(&mut self.storage_capacity),
+++        }, len..end))
+++    }
+++
+++    pub(super) fn restore_external_read(&mut self, storage: ReadStorage, eof: bool) {
+++        assert!(self.read_suspended);
+++        assert!(self.in_buffer.is_empty() && self.in_buffer.capacity() == 0);
+++        self.in_buffer = storage.buffer;
+++        self.read_lease = storage.lease;
+++        self.storage_capacity = storage.capacity;
+++        self.read_suspended = false;
+++        self.external_eof = eof;
+++    }
+++
++     /// Writes a frame into the `out_buffer`.
++     /// If the out buffer size is over the `out_buffer_write_len` will also write
++     /// the out buffer into the provided `stream`.
+ diff --git a/tungstenite/src/protocol/message.rs b/tungstenite/src/protocol/message.rs
+ index 51ccf4b..33fa471 100644
+ --- a/tungstenite/src/protocol/message.rs
+@@ -364,7 +393,7 @@ index 51ccf4b..33fa471 100644
+      }
+  
+ diff --git a/tungstenite/src/protocol/mod.rs b/tungstenite/src/protocol/mod.rs
+-index 2f1e3bf..2a2346f 100644
++index 2f1e3bf..1289af5 100644
+ --- a/tungstenite/src/protocol/mod.rs
+ +++ b/tungstenite/src/protocol/mod.rs
+ @@ -3,8 +3,9 @@
+@@ -408,7 +437,7 @@ index 2f1e3bf..2a2346f 100644
+      /// Set [`Self::read_buffer_size`].
+      pub fn read_buffer_size(mut self, read_buffer_size: usize) -> Self {
+          self.read_buffer_size = read_buffer_size;
+-@@ -226,6 +236,43 @@ impl<Stream> WebSocket<Stream> {
++@@ -226,6 +236,65 @@ impl<Stream> WebSocket<Stream> {
+          self.context.get_config()
+      }
+  
+@@ -438,6 +467,28 @@ index 2f1e3bf..2a2346f 100644
+ +    /// published payload does not make that allocation smaller.
+ +    pub fn read_storage_capacity(&self) -> usize { self.context.frame.read_storage_capacity() }
+ +
+++    /// Opt into rented-buffer reads. After a blocked read, move its allocation
+++    /// and lease to an I/O operation, then restore them before parsing resumes.
+++    /// The existing decoder retains framing, fragments and protocol state.
+++    pub fn enable_external_read(&mut self) { self.context.frame.enable_external_read(); }
+++
+++    /// Bound storage for an idle completion receive. The WebSocket maximum
+++    /// header size is the minimum; body growth retains normal admission.
+++    pub fn set_external_read_standby_capacity(&mut self, capacity: usize) {
+++        self.context.frame.set_external_standby(capacity);
+++    }
+++
+++    /// Returns admitted initialized storage plus the spare range to receive
+++    /// into. The decoder remains blocked until that storage is restored.
+++    pub fn take_external_read(&mut self) -> Option<(ReadStorage, std::ops::Range<usize>)> {
+++        self.context.frame.take_external_read()
+++    }
+++
+++    /// Restore storage returned by a completion operation without copying input.
+++    pub fn restore_external_read(&mut self, storage: ReadStorage, eof: bool) {
+++        self.context.frame.restore_external_read(storage, eof);
+++    }
+++
+ +    /// Attach a pre-reserved decoder staging lease before the first read.
+ +    /// Initial receive storage must already be covered by this lease. Future
+ +    /// frame and fragment growth is admitted before allocating; consumers must
+@@ -452,7 +503,7 @@ index 2f1e3bf..2a2346f 100644
+      /// Check if it is possible to read messages.
+      ///
+      /// Reading is impossible after receiving `Message::Close`. It is still possible after
+-@@ -260,6 +307,16 @@ impl<Stream: Read + Write> WebSocket<Stream> {
++@@ -260,6 +329,16 @@ impl<Stream: Read + Write> WebSocket<Stream> {
+          self.context.read(&mut self.socket)
+      }
+  
+@@ -469,7 +520,7 @@ index 2f1e3bf..2a2346f 100644
+      /// Writes and immediately flushes a message.
+      /// Equivalent to calling [`write`](Self::write) then [`flush`](Self::flush).
+      pub fn send(&mut self, message: Message) -> Result<()> {
+-@@ -368,6 +425,11 @@ pub struct WebSocketContext {
++@@ -368,6 +447,11 @@ pub struct WebSocketContext {
+      state: WebSocketState,
+      /// Receive: an incomplete message being processed.
+      incomplete: Option<IncompleteMessage>,
+@@ -481,7 +532,7 @@ index 2f1e3bf..2a2346f 100644
+      /// Send in addition to regular messages E.g. "pong" or "close".
+      additional_send: Option<Frame>,
+      /// True indicates there is an additional message (like a pong)
+-@@ -384,7 +446,9 @@ impl WebSocketContext {
++@@ -384,7 +468,9 @@ impl WebSocketContext {
+      /// Panics if config is invalid e.g. `max_write_buffer_size <= write_buffer_size`.
+      pub fn new(role: Role, config: Option<WebSocketConfig>) -> Self {
+          let conf = config.unwrap_or_default();
+@@ -492,7 +543,7 @@ index 2f1e3bf..2a2346f 100644
+      }
+  
+      /// Create a WebSocket context that manages a post-handshake stream.
+-@@ -393,7 +457,9 @@ impl WebSocketContext {
++@@ -393,7 +479,9 @@ impl WebSocketContext {
+      /// Panics if config is invalid e.g. `max_write_buffer_size <= write_buffer_size`.
+      pub fn from_partially_read(part: Vec<u8>, role: Role, config: Option<WebSocketConfig>) -> Self {
+          let conf = config.unwrap_or_default();
+@@ -503,7 +554,7 @@ index 2f1e3bf..2a2346f 100644
+      }
+  
+      fn _new(role: Role, mut frame: FrameCodec, config: WebSocketConfig) -> Self {
+-@@ -405,6 +471,9 @@ impl WebSocketContext {
++@@ -405,6 +493,9 @@ impl WebSocketContext {
+              frame,
+              state: WebSocketState::Active,
+              incomplete: None,
+@@ -513,7 +564,7 @@ index 2f1e3bf..2a2346f 100644
+              additional_send: None,
+              unflushed_additional: false,
+              config,
+-@@ -427,12 +496,31 @@ impl WebSocketContext {
++@@ -427,12 +518,31 @@ impl WebSocketContext {
+          &self.config
+      }
+  
+@@ -546,7 +597,7 @@ index 2f1e3bf..2a2346f 100644
+      }
+  
+      /// Check if it is possible to write messages.
+-@@ -450,6 +538,17 @@ impl WebSocketContext {
++@@ -450,6 +560,17 @@ impl WebSocketContext {
+      where
+          Stream: Read + Write,
+      {
+@@ -564,7 +615,7 @@ index 2f1e3bf..2a2346f 100644
+          // Do not read from already closed connections.
+          self.state.check_not_terminated()?;
+  
+-@@ -471,9 +570,21 @@ impl WebSocketContext {
++@@ -471,9 +592,21 @@ impl WebSocketContext {
+  
+              // If we get here, either write blocks or we have nothing to write.
+              // Thus if read blocks, just let it return WouldBlock.
+@@ -588,7 +639,7 @@ index 2f1e3bf..2a2346f 100644
+              }
+          }
+      }
+-@@ -683,7 +794,12 @@ impl WebSocketContext {
++@@ -683,7 +816,12 @@ impl WebSocketContext {
+                  let payload = match (data, self.incomplete.as_mut()) {
+                      (OpData::Continue, None) => Err(ProtocolError::UnexpectedContinueFrame),
+                      (OpData::Continue, Some(incomplete)) => {
+@@ -602,7 +653,7 @@ index 2f1e3bf..2a2346f 100644
+                          Ok(None)
+                      }
+                      (_, Some(_)) => Err(ProtocolError::ExpectedFragment(data)),
+-@@ -704,7 +820,11 @@ impl WebSocketContext {
++@@ -704,7 +842,11 @@ impl WebSocketContext {
+                      }
+                      (Some((payload, t)), false) => {
+                          let mut incomplete = IncompleteMessage::new(t);
+@@ -740,3 +791,75 @@ index 0000000..111e03c
+ +        self.budget.reserved.fetch_sub(self.reserved, Relaxed);
+ +    }
+ +}
++diff --git a/tokio-tungstenite/src/lib.rs b/tokio-tungstenite/src/lib.rs
++index 3091627..a8a0f86 100644
++--- a/tokio-tungstenite/src/lib.rs
+++++ b/tokio-tungstenite/src/lib.rs
++@@ -210,6 +210,7 @@ pub struct WebSocketStream<S> {
++     /// `false` once start_send hits `WouldBlock` errors.
++     /// `true` initially and after `flush`ing.
++     ready: bool,
+++    read_frame_limit: Option<std::num::NonZeroUsize>,
++ }
++ 
++ impl<S> WebSocketStream<S> {
++@@ -243,7 +244,7 @@ impl<S> WebSocketStream<S> {
++     }
++ 
++     pub(crate) fn new(ws: WebSocket<AllowStd<S>>) -> Self {
++-        Self { inner: ws, closing: false, ended: false, ready: true }
+++        Self { inner: ws, closing: false, ended: false, ready: true, read_frame_limit: None }
++     }
++ 
++     fn with_context<F, R>(&mut self, ctx: Option<(ContextWaker, &mut Context<'_>)>, f: F) -> R
++@@ -285,6 +286,26 @@ impl<S> WebSocketStream<S> {
++         self.inner.get_config()
++     }
++ 
+++    /// Release unused decoder storage between frames. Published payloads remain
+++    /// shared; a partial next header is preserved. None means a frame is busy.
+++    pub fn reclaim_read_buffer(&mut self) -> Option<usize> {
+++        self.inner.reclaim_read_buffer()
+++    }
+++
+++    /// Attach a staging reservation before the first read. See tungstenite's
+++    /// `WebSocket::set_read_budget` for ownership and admission semantics.
+++    pub fn set_read_budget(&mut self, lease: tungstenite::protocol::ReadLease) -> Result<(), WsError> {
+++        self.inner.set_read_budget(lease)
+++    }
+++
+++    /// Bound frames parsed by one stream poll, including empty continuations.
+++    /// The stream wakes itself and yields when the limit is reached without
+++    /// a message. Incomplete input and protocol state remain in the decoder.
+++    /// `None` retains upstream's unlimited parsing behavior.
+++    pub fn set_read_frame_limit(&mut self, limit: Option<std::num::NonZeroUsize>) {
+++        self.read_frame_limit = limit;
+++    }
+++
++     /// Close the underlying web socket
++     pub async fn close(&mut self, msg: Option<CloseFrame>) -> Result<(), WsError>
++     where
++@@ -310,11 +331,21 @@ where
++             return Poll::Ready(None);
++         }
++ 
+++        let limit = self.read_frame_limit;
++         match futures_util::ready!(self.with_context(Some((ContextWaker::Read, cx)), |s| {
++             trace!("{}:{} Stream.with_context poll_next -> read()", file!(), line!());
++-            cvt(s.read())
+++            cvt(match limit {
+++                Some(limit) => s.read_with_frame_limit(limit),
+++                None => s.read().map(Some),
+++            })
++         })) {
++-            Ok(v) => Poll::Ready(Some(Ok(v))),
+++            Ok(Some(v)) => Poll::Ready(Some(Ok(v))),
+++            Ok(None) => {
+++                // This is a cooperative yield, not an underlying WouldBlock:
+++                // already buffered frames may need no further I/O wakeup.
+++                cx.waker().wake_by_ref();
+++                Poll::Pending
+++            }
++             Err(e) => {
++                 self.ended = true;
++                 if matches!(e, WsError::AlreadyClosed | WsError::ConnectionClosed) {
+diff --git a/vendor/tungstenite/src/protocol/frame/mod.rs b/vendor/tungstenite/src/protocol/frame/mod.rs
+index b1c8d0a..92522ce 100644
+--- a/vendor/tungstenite/src/protocol/frame/mod.rs
++++ b/vendor/tungstenite/src/protocol/frame/mod.rs
+@@ -35,6 +35,20 @@ pub struct ReadStorage {
+ }
+ 
+ impl ReadStorage {
++    /// Temporarily move the allocation into a completion-I/O buffer. Keep this
++    /// storage object with that operation so its admission lease remains live.
++    pub fn take_io_buffer(&mut self) -> BytesMut {
++        std::mem::take(&mut self.buffer)
++    }
++
++    /// Restore the same allocation after I/O completes. Initialized input can
++    /// grow within the already admitted capacity, without copying its bytes.
++    pub fn restore_io_buffer(&mut self, buffer: BytesMut) {
++        assert!(self.buffer.is_empty() && self.buffer.capacity() == 0);
++        assert!(buffer.capacity() <= self.capacity, "I/O exceeded admitted storage");
++        self.buffer = buffer;
++    }
++
+     /// Drop an oversized empty slab before lending storage to another decoder.
+     /// Published immutable owners remain valid; no payload bytes are copied.
+     pub fn discard_if_larger_than(&mut self, maximum: usize) -> bool {
+@@ -140,6 +154,11 @@ pub(super) struct FrameCodec {
+     out_buffer_write_len: usize,
+     /// Header and remaining size of the incoming packet being processed.
+     header: Option<(FrameHeader, u64)>,
++    external_read: bool,
++    read_wanted: bool,
++    read_suspended: bool,
++    external_eof: bool,
++    external_standby: Option<usize>,
+ }
+ 
+ impl FrameCodec {
+@@ -148,7 +167,7 @@ impl FrameCodec {
+     }
+ 
+     pub(super) fn swap_read_storage(&mut self, storage: &mut ReadStorage) -> bool {
+-        if self.header.is_some() || !self.in_buffer.is_empty() || !storage.buffer.is_empty() {
++        if self.read_suspended || self.header.is_some() || !self.in_buffer.is_empty() || !storage.buffer.is_empty() {
+             return false;
+         }
+         // An empty owner still keeps a zero-byte lease, ensuring its next
+@@ -183,6 +202,11 @@ impl FrameCodec {
+             max_out_buffer_len: usize::MAX,
+             out_buffer_write_len: 0,
+             header: None,
++            external_read: false,
++            read_wanted: false,
++            read_suspended: false,
++            external_eof: false,
++            external_standby: None,
+         }
+     }
+ 
+@@ -200,13 +224,18 @@ impl FrameCodec {
+             max_out_buffer_len: usize::MAX,
+             out_buffer_write_len: 0,
+             header: None,
++            external_read: false,
++            read_wanted: false,
++            read_suspended: false,
++            external_eof: false,
++            external_standby: None,
+         }
+     }
+ 
+     /// Release decoder ownership between frames without touching published data.
+     /// An incomplete next header is copied; a partially received frame is busy.
+     pub(super) fn reclaim_read_buffer(&mut self) -> Option<usize> {
+-        if self.header.is_some() {
++        if self.read_suspended || self.header.is_some() {
+             return None;
+         }
+         // Header parsing returns None only while at most 13 bytes are buffered.
+@@ -219,7 +248,7 @@ impl FrameCodec {
+             return None;
+         }
+         let copied = self.in_buffer.len();
+-        let capacity = if self.in_buffer.capacity() == 0 { 0 } else { self.in_buf_max_read };
++        let capacity = if self.in_buffer.capacity() == 0 { 0 } else { self.external_standby.unwrap_or(self.in_buf_max_read) };
+         if let Some(lease) = &mut self.read_lease {
+             lease.for_capacity(capacity).ok()?;
+         }
+@@ -259,12 +288,13 @@ impl FrameCodec {
+         // Leave one read chunk after a large frame. An exact boundary forces a
+         // fresh small allocation for the next header while the published body
+         // is still shared. This bounded read-ahead is part of the reservation.
+-        let capacity = if wanted > self.in_buf_max_read {
++        let chunk = if self.header.is_none() { self.external_standby.unwrap_or(self.in_buf_max_read) } else { self.in_buf_max_read };
++        let capacity = if wanted > chunk {
+             // Overflow saturates to a capacity whose doubled allowance is
+             // rejected by the lease before allocation, with a refusal count.
+-            wanted.saturating_add(self.in_buf_max_read)
++            wanted.saturating_add(chunk)
+         } else {
+-            self.in_buf_max_read
++            chunk
+         };
+         lease.for_capacity(capacity)?;
+         let mut fresh = BytesMut::with_capacity(capacity);
+@@ -293,6 +323,9 @@ impl FrameCodec {
+         unmask: bool,
+         accept_unmasked: bool,
+     ) -> Result<Option<Frame>> {
++        if self.read_suspended {
++            return Err(io::Error::from(io::ErrorKind::WouldBlock).into());
++        }
+         let max_size = max_size.unwrap_or_else(usize::max_value);
+ 
+         let mut payload = loop {
+@@ -360,6 +393,14 @@ impl FrameCodec {
+ 
+     /// Read into available `in_buffer` capacity.
+     fn read_in(&mut self, stream: &mut impl Read) -> io::Result<usize> {
++        if self.external_read {
++            if self.external_eof { return Ok(0); }
++            if self.header.is_none() && self.external_standby.is_some_and(|capacity| self.storage_capacity > capacity) {
++                self.reclaim_read_buffer();
++            }
++            self.read_wanted = true;
++            return Err(io::ErrorKind::WouldBlock.into());
++        }
+         let len = self.in_buffer.len();
+         debug_assert!(self.in_buffer.capacity() > len);
+         self.in_buffer.resize(self.in_buffer.capacity().min(len + self.in_buf_max_read), 0);
+@@ -368,6 +409,36 @@ impl FrameCodec {
+         size
+     }
+ 
++    pub(super) fn enable_external_read(&mut self) { self.external_read = true; }
++
++    pub(super) fn set_external_standby(&mut self, capacity: usize) {
++        self.external_standby = Some(capacity.max(FrameHeader::MAX_SIZE));
++    }
++
++    pub(super) fn take_external_read(&mut self) -> Option<(ReadStorage, std::ops::Range<usize>)> {
++        if !self.read_wanted || self.read_suspended { return None; }
++        self.read_wanted = false;
++        self.read_suspended = true;
++        let len = self.in_buffer.len();
++        let end = self.in_buffer.capacity().min(len + self.in_buf_max_read);
++        assert!(end > len);
++        Some((ReadStorage {
++            buffer: std::mem::take(&mut self.in_buffer),
++            lease: self.read_lease.take(),
++            capacity: std::mem::take(&mut self.storage_capacity),
++        }, len..end))
++    }
++
++    pub(super) fn restore_external_read(&mut self, storage: ReadStorage, eof: bool) {
++        assert!(self.read_suspended);
++        assert!(self.in_buffer.is_empty() && self.in_buffer.capacity() == 0);
++        self.in_buffer = storage.buffer;
++        self.read_lease = storage.lease;
++        self.storage_capacity = storage.capacity;
++        self.read_suspended = false;
++        self.external_eof = eof;
++    }
++
+     /// Writes a frame into the `out_buffer`.
+     /// If the out buffer size is over the `out_buffer_write_len` will also write
+     /// the out buffer into the provided `stream`.
+diff --git a/vendor/tungstenite/src/protocol/mod.rs b/vendor/tungstenite/src/protocol/mod.rs
+index 2a2346f..1289af5 100644
+--- a/vendor/tungstenite/src/protocol/mod.rs
++++ b/vendor/tungstenite/src/protocol/mod.rs
+@@ -262,6 +262,28 @@ impl<Stream> WebSocket<Stream> {
+     /// published payload does not make that allocation smaller.
+     pub fn read_storage_capacity(&self) -> usize { self.context.frame.read_storage_capacity() }
+ 
++    /// Opt into rented-buffer reads. After a blocked read, move its allocation
++    /// and lease to an I/O operation, then restore them before parsing resumes.
++    /// The existing decoder retains framing, fragments and protocol state.
++    pub fn enable_external_read(&mut self) { self.context.frame.enable_external_read(); }
++
++    /// Bound storage for an idle completion receive. The WebSocket maximum
++    /// header size is the minimum; body growth retains normal admission.
++    pub fn set_external_read_standby_capacity(&mut self, capacity: usize) {
++        self.context.frame.set_external_standby(capacity);
++    }
++
++    /// Returns admitted initialized storage plus the spare range to receive
++    /// into. The decoder remains blocked until that storage is restored.
++    pub fn take_external_read(&mut self) -> Option<(ReadStorage, std::ops::Range<usize>)> {
++        self.context.frame.take_external_read()
++    }
++
++    /// Restore storage returned by a completion operation without copying input.
++    pub fn restore_external_read(&mut self, storage: ReadStorage, eof: bool) {
++        self.context.frame.restore_external_read(storage, eof);
++    }
++
+     /// Attach a pre-reserved decoder staging lease before the first read.
+     /// Initial receive storage must already be covered by this lease. Future
+     /// frame and fragment growth is admitted before allocating; consumers must
