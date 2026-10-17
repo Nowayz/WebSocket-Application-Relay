@@ -9,6 +9,17 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+The refreshed [direct C++ comparison](performance.md#current-direct-c-comparison-2026-10-16)
+measures this exact selected runtime in 24 fresh passing trials. Four-worker
+private throughput medians are C++ 1,094,299 / Rust 1,021,578 verified deliveries/s
+(Rust −6.65%, overlapping ranges); Rust uses 11.08% more CPU per delivery and
+17.91% less measured RSS, with the same p99 bucket. Against the shipped
+single-listener C++ executable on one core, Rust private throughput is +3.65%;
+beside eight reconnect workers it delivers +54.98% healthy traffic and 2.78×
+complete reconnect cycles. All bodies, ordering, Close/EOF and native counters
+and resource cleanup pass. These are short loopback measurements with two
+active pairs; the earlier fivefold RSS penalty belongs to the retired port.
+
 Runtime `ceda58f` stores resumable HTTP upgrade metadata inline with the live
 decoder. Its 288-byte state fits the existing 320-byte stage and 512-byte
 connection on the measured Linux build. Removing the temporary box avoids an
@@ -1014,11 +1025,12 @@ The continuing improvement goal remains active.
    scheduling windows, adverse networks and its garbage-collection cycle remain
    outside that finite comparison.
 2. Profile private-forwarding CPU and idle-connection allocations against the
-   direct C++ result before changing counters, queue representation or read
-   storage. At this workload the Rust body remains shared, but the complete
-   native release has higher CPU per delivery and about five times the ready
-   RSS. Current profiles still show signal/waker
-   polling; avoid a broad event-loop rewrite without a measured whole-socket win.
+   current direct C++ result before changing counters, queue representation or
+   read storage. The readiness replacement retains shared bodies and now uses
+   less RSS at roughly 8,200 sockets. Its four-worker private CPU per delivery
+   remains higher than rebuilt C++, while its one-core private and churn
+   workloads improve on the shipped executable. Measure more active flows and
+   worker placement before treating two-pair throughput as a scaling ceiling.
    The ID ownership map now shrinks after substantial retirement, with measured
    global-routing recovery after large population waves. Membership indexes now
    have ordinary-room and global-index private-delivery measurements. Channel-name

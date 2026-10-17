@@ -5,6 +5,11 @@ The native runtime was replaced with readiness workers on 2026-10-16. The
 direct C++/old-Rust comparison, heap evidence and verification. Earlier sections
 are historical measurements of the retired async native core.
 
+The [current direct C++ comparison](#current-direct-c-comparison-2026-10-16)
+refreshes both the shipped one-core and rebuilt four-worker baselines against
+the selected `ceda58f` runtime. It supersedes the earlier port's performance
+figures when describing the current implementation.
+
 ## Scope
 
 Measurements on 2026-10-15 used a Linux x86-64 host with an AMD Ryzen AI MAX+ 395,
@@ -4345,3 +4350,104 @@ guard and embedding-cancellation guard check parser state, complete CBOR output,
 physical TCP closure and reservation release. Separate 8,192-idle-peer,
 1,024-refusal and 1,024-reader changing-room checks pass. These are finite local
 Linux loopback checks; hosted CI, deployment and production capacity are unverified.
+
+## Current direct C++ comparison, 2026-10-16
+
+The selected native Rust executable is the inline-upgrade readiness runtime
+`ceda58f`, SHA-256 `6c78289b5adda4d7f67ac8862ed5583a7b0e5223aa82b4b24d3e5000e8dc31e3`.
+This refresh answers the current comparison question; the earlier fivefold RSS
+penalty describes the retired async port. No relay implementation changed for
+these measurements. The benchmark runner now attributes a frozen client's
+source hashes to its adjacent source snapshot or explicit `--client-source-root`,
+with matching parent/child checks, instead of hashing unrelated current sources.
+
+The [audited summary](benchmarks/2026-10-16-current-cpp-summary.json) links
+the [four-worker matrix](benchmarks/2026-10-16-current-cpp-four-worker.json)
+and [one-core matrix](benchmarks/2026-10-16-current-cpp-one-core.json), every
+raw trace and checksum, and the complete orchestration/collector sources.
+Each implementation/workload has three fresh six-second trials. Order rotates
+between workloads and reverses between implementations. All trials run
+sequentially in private network/PID namespaces; builds and diagnostics do not
+overlap timing. Both sides use the same frozen verified client
+(`5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744`),
+8,192 idle single-member rooms, two private pairs, and a protocol/variable probe.
+Values cycle through 64 distinct 1,024-byte application templates (1,027 encoded
+value bytes), using windows of 16 messages. The client verifies complete
+sender/value/FIFO, welcome, query, Close and EOF behavior. Rust exact counters,
+zero routing-copy bytes and final resource release pass at the phase gates.
+
+Rust runs its portable Cargo release build with CBOR. C++ uses the preserved
+upstream binary protocol and treats those same values as opaque bytes; Rust
+also validates their CBOR representation. Rates and heartbeats are disabled
+for both native Rust measurement configurations. This measures the complete
+implementations/protocols, with no legacy bridge on the measured path.
+
+For the four-worker comparison, a temporary source copy changes only upstream
+`881c8daaf2cf05adea8f522b28cf372e8f82d4e9`'s worker-count expression to four.
+The rebuilt C++ binary (`3b8c7cd17446c13c504dfd3ffbd8c483a6d783975d866ac13a99f07e1e4321f6`)
+uses the original `-O3 -march=native` build flags and current system libraries.
+Every fresh process has four verified listeners and six threads. Rust has four
+readiness workers plus main. Both server processes use CPUs 0–3; client CPUs
+4–7 are separate physical cores.
+
+| Four-worker measurement, median of three | C++ | Current Rust | Rust relative to C++ |
+| --- | ---: | ---: | ---: |
+| Private verified deliveries/s | 1,094,299 | 1,021,578 | −6.65% |
+| Private observed throughput range | 747,002–1,105,554 | 1,009,598–1,047,646 | Overlapping ranges |
+| Private server CPU ns/verified delivery | 1,084 | 1,204 | +11.08% |
+| Private RSS at measured gate | 20.54 MiB | 16.86 MiB | −17.91% |
+| Private delivery p99 upper bucket | 0.065536 ms | 0.065536 ms | Same bucket |
+| Healthy deliveries/s with 200 channel queries/s | 1,093,752 | 1,028,642 | −5.95% |
+| Query-workload observed throughput range | 1,026,048–1,099,065 | 1,000,221–1,035,018 | Overlapping ranges |
+| Query-workload healthy p99 upper bucket | 0.065536 ms | 0.065536 ms | Same bucket |
+| Channel query p99 upper bucket | 4.194304 ms | 4.194304 ms | Same bucket |
+| Query-workload RSS at measured gate | 20.71 MiB | 17.23 MiB | −16.81% |
+
+CPU per delivery is the median of each run's CPU/verified-delivery ratio.
+Two private pairs do not saturate four server workers. Per-thread CPU at the
+gates shows both active C++ pairs on one worker in its slower private run
+(3.85 CPU seconds); its faster two runs use two workers (about 3.58 seconds
+each). All three Rust private runs use two workers (about 3.66–3.69 seconds
+each). Kernel flow placement remains uncontrolled. These measurements support
+the reported medians/ranges and higher four-worker Rust CPU cost; they do not
+establish a fixed throughput penalty, saturated multicore capacity or a
+language-only comparison. Query CPU also includes inspection work.
+
+For the one-core comparison, the original shipped C++ executable is unchanged
+(`ce95e4dea01a4db0e5c32942d5520b5f4a8ab1c87affdcd8120bc8aefa332547`),
+using isolated pinned old libraries. Its one listener and three total threads
+are observed in every trial. Both servers are pinned to CPU 0 and Rust uses
+one worker. The shipped executable's build flags are unknown; it is a different
+C++ artifact from the explicitly rebuilt four-worker baseline above.
+
+| One-core measurement, median of three | Shipped C++ | Current Rust | Rust relative to C++ |
+| --- | ---: | ---: | ---: |
+| Private verified deliveries/s | 741,867 | 768,927 | +3.65% |
+| Private observed throughput range | 729,478–742,542 | 765,324–770,419 | No overlap in these trials |
+| Private server CPU ns/verified delivery | 905 | 887 | −1.94% |
+| Private RSS at measured gate | 19.69 MiB | 16.70 MiB | −15.18% |
+| Healthy deliveries/s beside eight reconnect workers | 281,584 | 436,411 | +54.98% |
+| Complete verified reconnect cycles/s | 10,131 | 28,212 | +178.46% / 2.78× |
+| Healthy churn-workload p99 upper bucket | 0.524288 ms | 0.131072 ms | Fourfold lower bucket |
+| Reconnect p99 upper bucket | 2.097152 ms | 0.524288 ms | Fourfold lower bucket |
+| Churn-workload RSS at measured gate | 30.96 MiB | 16.79 MiB | −45.78% |
+
+The churn workload checks welcome, an exact counter self-delivery, Close and
+EOF for every cycle. C++ delays retirement until its 30-second GC; each short
+trial verifies the exact retained member count before that collection. Rust
+retires peers immediately. The previously recorded rebuilt four-worker C++ ID
+and lifecycle failures remain a separate limitation; these new churn numbers
+compare the original single-listener executable only. No successful multicore
+C++ churn rate is inferred from them.
+
+All **24 trials pass**, verifying **113,887,488 healthy deliveries, 689,836
+complete reconnect cycles, 7,200 paced channel queries and 886,576 normal
+closes**. All clients and Rust processes exit zero; C++ receives its expected
+SIGTERM without forced killing. The audit rechecks every trace hash, binary
+identity, listener/thread count, frozen client source hash, phase sequence,
+successful exit and final Rust resource gauges. This refresh does not rerun the
+138-test implementation suite from the selected runtime's existing manifest;
+the relay binary is unchanged. RSS is sampled at gates, and latency values are
+histogram upper bounds including client validation and windowing. Multi-hour
+traffic, TLS, much larger populations, many active flows and adverse networks
+remain outside this loopback comparison.

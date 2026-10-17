@@ -32,6 +32,19 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def client_sources(args):
+    adjacent = args.client.resolve().parent
+    root = args.client_source_root
+    if root is None:
+        root = adjacent if (adjacent / "examples/inspection.rs").is_file() else ROOT
+    root = root.resolve()
+    return {"client_source_root": str(root),
+            "client_source_attribution": "Source snapshot only; binary/source association requires the caller's build record.",
+            "client_source_sha256": sha(root / "examples/inspection.rs"),
+            "client_sources_sha256": {str(p.relative_to(root)): sha(p) for p in
+                                      [root / "examples/inspection.rs"] + sorted((root / "examples/inspection").glob("*.rs"))}}
+
+
 def rebuild_cpp(workers):
     """Apply only explicit worker configuration to a temporary upstream copy."""
     assert 1 <= workers <= 32
@@ -97,7 +110,7 @@ def trial(args):
     record = {"kind": args.kind, "case": args.case, "server_command": server_command,
               "client_command": client_command, "server_sha256": sha(args.cpp_executable if cpp else rust_binary),
               "client_sha256": sha(args.client), "runner_sha256": sha(__file__),
-              "client_source_sha256": sha(ROOT / "examples/inspection.rs"),
+              **client_sources(args),
               "isolation": {"host_netns": args.host_netns, "test_netns": namespace,
                             "root_mount": "read-only", "writable_path": str(CACHE)},
               "events": [], "passed": False}
@@ -220,6 +233,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--relay", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
+    parser.add_argument("--client-source-root", type=Path,
+                        help="source snapshot root for a frozen client; defaults to adjacent examples when available")
     parser.add_argument("--control", type=Path, help="optional frozen async Rust control, measured with the identical client and gates")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--rooms", type=int, default=8192)
@@ -245,6 +260,7 @@ def main():
     args = parser.parse_args()
     args.relay, args.client, args.output = (p.resolve() for p in (args.relay, args.client, args.output))
     args.cpp_executable = args.cpp_executable.resolve()
+    if args.client_source_root: args.client_source_root = args.client_source_root.resolve()
     if args.control: args.control = args.control.resolve()
     if args.isolated:
         result = trial(args)
@@ -263,7 +279,7 @@ def main():
               "cpu": subprocess.check_output(["lscpu", "-J"], text=True), "upstream_commit": reference.UPSTREAM,
               "packages": packages, "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "base_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-              "runner_sha256": sha(__file__), "client_source_sha256": sha(ROOT / "examples/inspection.rs"),
+              "runner_sha256": sha(__file__), **client_sources(args),
               "client_sha256": sha(args.client), "rust_sha256": sha(args.relay), "cpp_sha256": sha(args.cpp_executable), "cpp_build": cpp_build,
               "scope": "Common application work, native Rust CBOR versus C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, two private pairs and idle rooms. C++ treats values as opaque; Rust validates CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
               "cases": [], "passed": False}
@@ -290,6 +306,8 @@ def main():
                     command.append("--cpp-system-libraries")
                 if args.audit_ids:
                     command.append("--audit-ids")
+                if args.client_source_root:
+                    command += ["--client-source-root", str(args.client_source_root)]
                 if args.control:
                     command += ["--control", str(args.control)]
                 completed = subprocess.run(command, cwd=ROOT)
@@ -308,6 +326,7 @@ def main():
                 assert detail["client_sha256"] == record["client_sha256"]
                 assert detail["server_sha256"] == record[f"{kind}_sha256"]
                 assert detail["client_source_sha256"] == record["client_source_sha256"]
+                assert detail["client_sources_sha256"] == record["client_sources_sha256"]
                 assert detail["runner_sha256"] == record["runner_sha256"]
                 print(json.dumps(row), flush=True)
     record["medians"] = {}
