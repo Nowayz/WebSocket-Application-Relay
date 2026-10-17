@@ -62,7 +62,7 @@ sys.path.insert(0,str(root/'scripts'))
 from reference import Client,u64
 peers=[]
 try:
-    peers=[Client(1337,b'worker-affinity-live'),Client(1337,b'worker-affinity-live')]
+    peers=[Client(1337,b'affinity-live'),Client(1337,b'affinity-live')]
     sender,receiver=peers
     assert sender.id!=receiver.id
     body=bytes(range(256))*16

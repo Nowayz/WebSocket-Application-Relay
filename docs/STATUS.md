@@ -24,6 +24,11 @@ was at most 1.05 ms by histogram and maximum 5.18 ms. All 136 tests, strict
 Clippy/fmt and the independent 776-case corpus pass. The option preserves the existing borrowed forwarding path,
 FIFO, accounting and quotas and remains opt-in for operator-selected placement.
 
+The local development service now runs the frozen affinity candidate with
+`--pin-workers`; four singleton worker CPU bindings, native routing, legacy
+private-body routing, Close/EOF, readiness and zero final gauges were verified.
+Runtime source commit: `7162cb4`. No production deployment was performed.
+
 See [performance evidence](performance.md#latency-first-worker-placement-2026-10-17)
 and [operating policy](operations.md#native-worker-cpu-placement). Earlier
 checkpoint records below remain historical evidence.
