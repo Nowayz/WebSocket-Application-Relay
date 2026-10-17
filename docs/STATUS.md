@@ -35,6 +35,14 @@ establish matched C++ capacity at 100,000 users. The [manifest](benchmarks/2026-
 preserves source hashes, build records, all trials, binding diagnostics and the
 reproduction command. Local development services retain their existing binaries.
 
+A [matched CPU diagnosis](performance.md#matched-cpu-diagnosis) adds two resolved
+kernel/user profiles and five additional unprofiled accounting runs per binary.
+It confirms higher Rust application CPU and hot atomic/ownership bookkeeping in
+routing/output, including byte reservations on immediately completed sends.
+Kernel cost also varies substantially; this is not a complete causal allocation
+of the ordinary CPU gap. All twelve diagnostic workloads pass, and no runtime
+change or recovered-performance claim is made.
+
 ## Prior verified checkpoint: AOCL evaluation, 2026-10-17
 
 The [AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17) builds pinned

@@ -5191,3 +5191,74 @@ multi-hour stability claim. All sources, hashes, raw repeats, derived arithmetic
 and isolated loader diagnostics are in the manifest, with an
 [operations recipe](operations.md#evaluating-aocl-libmem). Keep glibc as the
 default and the explicit C++ AOCL options for further measured workloads.
+
+### Matched CPU diagnosis
+
+The [follow-up diagnostic](benchmarks/2026-10-17-cpp-cpu.json) investigates the
+CPU gap using those exact frozen C++/Rust binaries and client, 64 active pairs,
+8,192 idle rooms and the same separated CPU sets. No server code or compiler
+target changes. Fresh processes run sequentially in disposable network/PID
+namespaces. Unlike the ordinary comparison, these diagnostic server/client
+processes run under a root collector to permit resolved kernel sampling; no
+sysctl changes are made. The original five-run ordinary medians remain the
+performance comparison, not these diagnostic timings.
+
+First, one fresh six-second run per implementation samples kernel/user cycles
+at 499 Hz with 8 KiB DWARF stacks, only between the ready/measured gates. C++
+has 8,680 samples and Rust 9,351, both with zero lost samples. Separate `/proc`
+user/system CPU deltas sum exactly to each controller's original CPU delta:
+
+| One matched profiled diagnostic, ns/verified delivery | C++ | Rust |
+| --- | ---: | ---: |
+| User CPU | 102.5 | 230.6 |
+| System CPU | 806.9 | 853.3 |
+| Total CPU | 909.4 | 1,083.8 |
+
+This pair places most of its additional CPU in application work. It is one
+profiled pair, not an exact decomposition of the ordinary median gap. Five
+additional unprofiled accounting repeats per implementation retain all lower
+throughput observations and expose substantial kernel variation:
+
+| Five unprofiled diagnostics, median ns/delivery | C++ | Rust |
+| --- | ---: | ---: |
+| User CPU | 107.3 | 185.8 |
+| System CPU | 820.7 | 1,092.6 |
+| Total CPU | 933.4 | 1,271.7 |
+| Observed total range | 920.0–1,215.9 | 1,079.5–1,363.2 |
+
+Marginal user/system medians need not add to the median total. User CPU is
+higher in every matched pair, while kernel cost changes enough that the whole
+ordinary 16.29% difference cannot be assigned to one application mechanism.
+Packetization, worker/socket interaction and the different output syscalls
+remain unisolated contributors to kernel work.
+
+In the Rust profile, `Relay::receive_with_storage` has 7.13% of total cycle self
+samples, socket `PeerOutput::send` 4.68%, WebSocket reading 1.79% and
+`Peer::enqueue_frame` 1.41%. Annotated routing/output samples cluster at and
+immediately after atomic operations: incoming/delivery counters, registry read
+ownership, byte-budget release and shared-owner increments/decrements. Sampling
+skid and inlining prevent interpreting an adjacent instruction percentage as
+an exact counter or cache-coherence cost. No lock-wait/cache-miss counter study
+or functional ablation is performed here.
+
+The source explains work that C++'s short private-routing path does not express
+in the same way. Rust updates shared input/output and reuse counters, takes the
+registry read guard, retains a recipient, reserves per-peer/global output bytes,
+retains frame/budget owners, locks the destination socket, then releases budgets
+and owners even when output completes immediately. Shared input views avoid
+body copies but still incur reference-count operations. C++ looks up its TBB
+map, replaces the fixed sender field and invokes uWS output. Its uWS output
+formats a contiguous message and uses `send`; Rust keeps header/body slices
+separate and uses vectored `sendmsg`.
+
+Named CBOR helpers each occupy at most 0.14% of total self cycle samples in this
+capture; inlined work is not separately attributable. The tested value is an
+opaque CBOR byte string, so validation checks its structure/length without
+materializing application objects. This evidence supports reducing per-message
+coordination/ownership work before blaming CBOR or changing the zero-copy body
+contract. It does not establish that CBOR has zero cost or that any identified
+operation can be removed without replacement. Earlier padding/striped-counter
+experiments failed to establish a consistent whole-relay gain and remain
+rejected. A future change must preserve pressure limits, FIFO, cross-worker
+lifetime safety and exact quiescent accounting, then pass matched ordinary
+benchmarks. These diagnostics make no optimization or recovered-speed claim.

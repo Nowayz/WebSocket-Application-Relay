@@ -1,0 +1,313 @@
+ Percent |	Source code & Disassembly of war-relay for cycles (424 samples, percent: local period)
+------------------------------------------------------------------------------------------------------
+         :
+         :
+         :
+         : 3      Disassembly of section .text:
+         :
+         : 5      0000000000279b50 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send>:
+    0.00 :   279b50: push   %rbp
+    0.00 :   279b51: push   %r15
+    0.00 :   279b53: push   %r14
+    0.00 :   279b55: push   %r13
+    0.00 :   279b57: push   %r12
+    0.00 :   279b59: push   %rbx
+    0.00 :   279b5a: sub    $0x68,%rsp
+    0.00 :   279b5e: mov    %rsi,%rbx
+    0.00 :   279b61: mov    %rdi,%r15
+    0.00 :   279b64: lea    0x38(%rdi),%r14
+    0.00 :   279b68: mov    $0x1,%bpl
+    0.00 :   279b6b: xor    %eax,%eax
+    0.00 :   279b6d: lock cmpxchg %bpl,0x38(%rdi)
+    9.12 :   279b73: jne    279f22 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3d2>
+    0.00 :   279b79: cmpb   $0x0,0x9d(%r15)
+    0.00 :   279b81: jne    279bc3 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x73>
+    0.00 :   279b83: cmpb   $0x0,0x9c(%r15)
+    0.00 :   279b8b: jne    279bc3 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x73>
+    0.00 :   279b8d: cmpq   $0x0,0x80(%r15)
+    0.00 :   279b95: jne    279bc3 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x73>
+    0.00 :   279b97: mov    0x58(%r15),%rax
+    0.00 :   279b9b: cmp    0xa8(%r15),%rax
+    0.00 :   279ba2: jae    279bc1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x71>
+    0.00 :   279ba4: movq   $0x0,0x8(%rsp)
+    0.00 :   279bad: test   %rax,%rax
+    0.00 :   279bb0: je     279c27 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0xd7>
+    0.00 :   279bb2: xor    %ebp,%ebp
+    0.00 :   279bb4: movq   $0x0,(%rsp)
+    0.00 :   279bbc: jmp    279d0a <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x1ba>
+    0.00 :   279bc1: xor    %ebp,%ebp
+    0.00 :   279bc3: xor    %ecx,%ecx
+    0.00 :   279bc5: mov    $0x1,%al
+    0.00 :   279bc7: lock cmpxchg %cl,(%r14)
+    0.00 :   279bcc: jne    279f12 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3c2>
+    0.00 :   279bd2: mov    0x10(%rbx),%rdx
+    0.00 :   279bd6: mov    0x30(%rbx),%r12
+    0.00 :   279bda: movzbl 0x2a(%rbx),%eax
+    0.00 :   279bde: add    %rdx,%rax
+    0.00 :   279be1: lock sub %rax,0x18(%r12)
+    6.38 :   279be7: mov    0x10(%r12),%rcx
+    0.00 :   279bec: lock sub %rax,0xb8(%rcx)
+    5.74 :   279bf4: lea    0x30(%rbx),%r14
+    0.00 :   279bf8: mov    0x18(%rbx),%rdi
+    0.00 :   279bfc: mov    (%rbx),%rax
+    0.00 :   279bff: mov    0x8(%rbx),%rsi
+    0.00 :   279c03: call   *0x20(%rax)
+    0.00 :   279c06: lock decq (%r12)
+    6.56 :   279c0b: jne    279c16 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0xc6>
+    0.00 :   279c0d: mov    %r14,%rdi
+    0.00 :   279c10: call   *0x81bc2(%rip)        # 2fb7d8 <_DYNAMIC+0x1fe8>
+    0.00 :   279c16: mov    %ebp,%eax
+    0.00 :   279c18: add    $0x68,%rsp
+    0.00 :   279c1c: pop    %rbx
+    0.00 :   279c1d: pop    %r12
+    0.00 :   279c1f: pop    %r13
+    0.00 :   279c21: pop    %r14
+    0.00 :   279c23: pop    %r15
+    0.00 :   279c25: pop    %rbp
+    0.00 :   279c26: ret
+    0.00 :   279c27: cmpb   $0x0,0x9f(%r15)
+    0.00 :   279c2f: je     279c3e <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0xee>
+    0.00 :   279c31: mov    $0x1,%al
+    0.00 :   279c33: mov    %rax,(%rsp)
+    0.00 :   279c37: xor    %ebp,%ebp
+    0.00 :   279c39: jmp    279d0a <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x1ba>
+    0.00 :   279c3e: lea    0x98(%r15),%rdi
+    0.00 :   279c45: mov    $0x1,%r13b
+    0.00 :   279c48: lea    0x8(%rsp),%rdx
+    0.00 :   279c4d: mov    $0x40000,%ecx
+    0.00 :   279c52: mov    %rbx,%rsi
+    0.00 :   279c55: call   295c20 <war_relay::server::socket::write_frame>
+    0.00 :   279c5a: mov    %rax,0x18(%rsp)
+    0.00 :   279c5f: mov    %rdx,0x20(%rsp)
+    0.00 :   279c64: test   $0x1,%al
+    0.00 :   279c66: je     279c91 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x141>
+    0.00 :   279c68: mov    %rdx,%r12
+    0.00 :   279c6b: mov    %rdx,%rdi
+    0.00 :   279c6e: call   23eae0 <std::io::error::Error::kind>
+    0.00 :   279c73: cmp    $0xd,%al
+    0.00 :   279c75: jne    279ed7 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x387>
+    0.00 :   279c7b: mov    %r12,0x10(%rsp)
+    0.00 :   279c80: lea    0x10(%rsp),%rdi
+    0.00 :   279c85: call   24bca0 <core::ptr::drop_in_place<std::io::error::Error>>
+    0.00 :   279c8a: mov    0x8(%rsp),%rbp
+    0.00 :   279c8f: jmp    279cfe <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x1ae>
+    0.00 :   279c91: movzbl 0x2a(%rbx),%eax
+    0.00 :   279c95: add    0x10(%rbx),%rax
+    0.00 :   279c99: mov    0x8(%rsp),%rbp
+    0.00 :   279c9e: cmp    $0x10000,%rax
+    0.00 :   279ca4: mov    $0x4,%ecx
+    0.00 :   279ca9: mov    $0xa,%edx
+    0.00 :   279cae: cmovb  %rcx,%rdx
+    0.00 :   279cb2: cmp    $0x7e,%rax
+    0.00 :   279cb6: mov    $0x2,%ecx
+    0.45 :   279cbb: cmovae %rdx,%rcx
+    0.00 :   279cbf: add    %rax,%rcx
+    0.00 :   279cc2: cmp    %rcx,%rbp
+    0.00 :   279cc5: jne    279cfe <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x1ae>
+    0.00 :   279cc7: mov    0x20(%r15),%rcx
+    0.00 :   279ccb: lock incq 0x70(%rcx)
+   34.35 :   279cd0: mov    0x20(%r15),%rcx
+    0.00 :   279cd4: lock add %rax,0x78(%rcx)
+   28.29 :   279cd9: cmpb   $0x1,0xb0(%r15)
+    0.00 :   279ce1: jne    279f00 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3b0>
+    0.00 :   279ce7: mov    $0x1,%edi
+    0.00 :   279cec: call   1bee00 <std::sys::pal::unix::time::Timespec::now>
+    0.00 :   279cf1: mov    %rax,0x60(%r15)
+    0.00 :   279cf5: mov    %edx,0x68(%r15)
+    0.00 :   279cf9: jmp    279f00 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3b0>
+    0.00 :   279cfe: cmpq   $0x0,0x58(%r15)
+    0.00 :   279d03: sete   %al
+    0.00 :   279d06: mov    %rax,(%rsp)
+    0.00 :   279d0a: mov    0x40(%r15),%r13
+    0.00 :   279d0e: mov    $0x1,%edi
+    0.00 :   279d13: call   1bee00 <std::sys::pal::unix::time::Timespec::now>
+    0.00 :   279d18: mov    (%r15),%rcx
+    0.00 :   279d1b: add    %rcx,%rax
+    0.00 :   279d1e: seto   %sil
+    0.00 :   279d22: test   %rcx,%rcx
+    0.00 :   279d25: sets   %cl
+    0.00 :   279d28: xor    %sil,%cl
+    0.00 :   279d2b: jne    279f35 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3e5>
+    0.00 :   279d31: add    0x8(%r15),%edx
+    0.00 :   279d35: cmp    $0x3b9aca00,%edx
+    0.00 :   279d3b: jb     279d4c <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x1fc>
+    0.00 :   279d3d: inc    %rax
+    0.00 :   279d40: jo     279f35 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x3e5>
+    0.00 :   279d46: add    $0xc4653600,%edx
+    0.00 :   279d4c: lea    0x40(%r15),%r12
+    0.00 :   279d50: mov    0x30(%rbx),%rcx
+    0.00 :   279d54: mov    %rcx,0x50(%rsp)
+    0.00 :   279d59: movups (%rbx),%xmm0
+    0.00 :   279d5c: movups 0x10(%rbx),%xmm1
+    0.00 :   279d60: movups 0x20(%rbx),%xmm2
+    0.00 :   279d64: movups %xmm2,0x40(%rsp)
+    0.00 :   279d69: movups %xmm1,0x30(%rsp)
+    0.00 :   279d6e: movups %xmm0,0x20(%rsp)
+    0.00 :   279d73: mov    %rbp,0x18(%rsp)
+    0.00 :   279d78: mov    %rax,0x58(%rsp)
+    0.00 :   279d7d: mov    %edx,0x60(%rsp)
+    0.00 :   279d81: mov    0x40(%r15),%rcx
+    0.00 :   279d85: mov    0x58(%r15),%rax
+    0.00 :   279d89: cmp    %rcx,%rax
+    0.00 :   279d8c: jne    279da6 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x256>
+    0.00 :   279d8e: lea    0x7b813(%rip),%rsi        # 2f55a8 <anon.27b2063a31928d9007bc497c67c84f18.465.llvm.11158727082986339532+0x2838>
+    0.00 :   279d95: mov    %r12,%rdi
+    0.00 :   279d98: call   *0x81ae2(%rip)        # 2fb880 <_DYNAMIC+0x2090>
+    0.00 :   279d9e: mov    0x40(%r15),%rcx
+    0.00 :   279da2: mov    0x58(%r15),%rax
+    0.00 :   279da6: lea    0x1(%rax),%rdx
+    0.00 :   279daa: mov    %rdx,0x58(%r15)
+    0.00 :   279dae: add    0x50(%r15),%rax
+    0.00 :   279db2: xor    %edx,%edx
+    0.00 :   279db4: cmp    %rcx,%rax
+    0.00 :   279db7: cmovae %rcx,%rdx
+    0.00 :   279dbb: sub    %rdx,%rax
+    0.00 :   279dbe: mov    0x48(%r15),%rcx
+    0.00 :   279dc2: lea    (%rax,%rax,4),%rax
+    0.00 :   279dc6: shl    $0x4,%rax
+    0.00 :   279dca: movups 0x58(%rsp),%xmm0
+    0.00 :   279dcf: movups %xmm0,0x40(%rcx,%rax,1)
+    0.00 :   279dd4: movups 0x18(%rsp),%xmm0
+    0.00 :   279dd9: movups 0x28(%rsp),%xmm1
+    0.00 :   279dde: movups 0x38(%rsp),%xmm2
+    0.00 :   279de3: movups 0x48(%rsp),%xmm3
+    0.00 :   279de8: movups %xmm3,0x30(%rcx,%rax,1)
+    0.00 :   279ded: movups %xmm2,0x20(%rcx,%rax,1)
+    0.00 :   279df2: movups %xmm1,0x10(%rcx,%rax,1)
+    0.00 :   279df7: movups %xmm0,(%rcx,%rax,1)
+    0.00 :   279dfb: mov    0x40(%r15),%rax
+    0.00 :   279dff: sub    %r13,%rax
+    0.00 :   279e02: shl    $0x4,%rax
+    0.00 :   279e06: lea    (%rax,%rax,4),%rax
+    0.00 :   279e0a: test   %rax,%rax
+    0.00 :   279e0d: je     279e45 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x2f5>
+    0.00 :   279e0f: mov    0x20(%r15),%rdx
+    0.00 :   279e13: mov    %rax,%rcx
+    0.00 :   279e16: lock xadd %rcx,0x118(%rdx)
+    0.00 :   279e1f: add    %rax,%rcx
+    0.00 :   279e22: mov    0x20(%r15),%rdx
+    0.00 :   279e26: mov    0x120(%rdx),%rax
+    0.00 :   279e2d: nopl   (%rax)
+    0.00 :   279e30: cmp    %rcx,%rax
+    0.00 :   279e33: mov    %rcx,%rsi
+    0.00 :   279e36: cmova  %rax,%rsi
+    0.00 :   279e3a: lock cmpxchg %rsi,0x120(%rdx)
+    0.00 :   279e43: jne    279e30 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x2e0>
+    0.00 :   279e45: xor    %r13d,%r13d
+    0.00 :   279e48: mov    %r15,%rdi
+    0.00 :   279e4b: mov    %r12,%rsi
+    0.00 :   279e4e: mov    $0x1,%edx
+    0.00 :   279e53: call   2968d0 <war_relay::server::socket::Socket::writable>
+    0.00 :   279e58: test   %rax,%rax
+    0.00 :   279e5b: je     279ea4 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x354>
+    0.00 :   279e5d: mov    %eax,%ecx
+    0.00 :   279e5f: and    $0x3,%ecx
+    0.00 :   279e62: cmp    $0x1,%ecx
+    0.00 :   279e65: jne    279e9c <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x34c>
+    0.00 :   279e67: mov    %rax,%r12
+    0.00 :   279e6a: dec    %r12
+    0.00 :   279e6d: mov    -0x1(%rax),%r13
+    0.00 :   279e71: mov    0x7(%rax),%rbp
+    0.00 :   279e75: mov    0x0(%rbp),%rax
+    0.00 :   279e79: test   %rax,%rax
+    0.00 :   279e7c: je     279e83 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x333>
+    0.00 :   279e7e: mov    %r13,%rdi
+    0.00 :   279e81: call   *%rax
+    0.00 :   279e83: cmpq   $0x0,0x8(%rbp)
+    0.00 :   279e88: je     279e93 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x343>
+    0.00 :   279e8a: mov    %r13,%rdi
+    0.00 :   279e8d: call   *0x7fb75(%rip)        # 2f9a08 <free@GLIBC_2.2.5>
+    0.00 :   279e93: mov    %r12,%rdi
+    0.00 :   279e96: call   *0x7fb6c(%rip)        # 2f9a08 <free@GLIBC_2.2.5>
+    0.00 :   279e9c: movb   $0x1,0x9c(%r15)
+    0.00 :   279ea4: cmpb   $0x0,(%rsp)
+    0.00 :   279ea8: je     279eb5 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x365>
+    0.00 :   279eaa: xor    %r13d,%r13d
+    0.00 :   279ead: mov    %r15,%rdi
+    0.00 :   279eb0: call   296690 <war_relay::server::socket::Socket::notify>
+    0.00 :   279eb5: xor    %ecx,%ecx
+    0.00 :   279eb7: mov    $0x1,%bpl
+    0.00 :   279eba: mov    $0x1,%al
+    0.00 :   279ebc: lock cmpxchg %cl,(%r14)
+    0.00 :   279ec1: je     279c16 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0xc6>
+    0.00 :   279ec7: mov    %r14,%rdi
+    0.00 :   279eca: xor    %esi,%esi
+    0.00 :   279ecc: call   *0x808c6(%rip)        # 2fa798 <_DYNAMIC+0xfa8>
+    0.00 :   279ed2: jmp    279c16 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0xc6>
+    0.00 :   279ed7: lea    0x20(%rsp),%r12
+    0.00 :   279edc: movb   $0x1,0x9c(%r15)
+    0.00 :   279ee4: mov    0x20(%r15),%rax
+    0.00 :   279ee8: lock incq 0xe0(%rax)
+    0.00 :   279ef0: mov    %r15,%rdi
+    0.00 :   279ef3: call   296690 <war_relay::server::socket::Socket::notify>
+    0.00 :   279ef8: mov    %r12,%rdi
+    0.00 :   279efb: call   24bca0 <core::ptr::drop_in_place<std::io::error::Error>>
+    0.00 :   279f00: mov    $0x1,%bpl
+    0.00 :   279f03: xor    %ecx,%ecx
+    0.00 :   279f05: mov    $0x1,%al
+    0.00 :   279f07: lock cmpxchg %cl,(%r14)
+    9.10 :   279f0c: je     279bd2 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x82>
+    0.00 :   279f12: mov    %r14,%rdi
+    0.00 :   279f15: xor    %esi,%esi
+    0.00 :   279f17: call   *0x8087b(%rip)        # 2fa798 <_DYNAMIC+0xfa8>
+    0.00 :   279f1d: jmp    279bd2 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x82>
+    0.00 :   279f22: mov    %r14,%rdi
+    0.00 :   279f25: mov    $0x3b9aca00,%edx
+    0.00 :   279f2a: call   *0x80870(%rip)        # 2fa7a0 <_DYNAMIC+0xfb0>
+    0.00 :   279f30: jmp    279b79 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x29>
+    0.00 :   279f35: lea    -0x234b0a(%rip),%rdi        # 45432 <anon.d1dcce6ae95d40575db8ee2cfbefbb9d.1077.llvm.2585006540407571859>
+    0.00 :   279f3c: lea    0x7462d(%rip),%rdx        # 2ee570 <anon.d1dcce6ae95d40575db8ee2cfbefbb9d.1079.llvm.2585006540407571859>
+    0.00 :   279f43: mov    $0x28,%esi
+    0.00 :   279f48: call   *0x7fbda(%rip)        # 2f9b28 <_DYNAMIC+0x338>
+    0.00 :   279f4e: ud2
+    0.00 :   279f50: mov    %rax,%r15
+    0.00 :   279f53: jmp    279fe1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x491>
+    0.00 :   279f58: mov    %rax,%r15
+    0.00 :   279f5b: mov    %r12,%rdi
+    0.00 :   279f5e: call   24bca0 <core::ptr::drop_in_place<std::io::error::Error>>
+    0.00 :   279f63: mov    $0x1,%r13b
+    0.00 :   279f66: jmp    279fd1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x481>
+    0.00 :   279f68: mov    %rax,%r15
+    0.00 :   279f6b: mov    $0x1,%r13b
+    0.00 :   279f6e: jmp    279fd1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x481>
+    0.00 :   279f70: mov    %rax,%r15
+    0.00 :   279f73: cmpq   $0x0,0x8(%rbp)
+    0.00 :   279f78: je     279f83 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x433>
+    0.00 :   279f7a: mov    %r13,%rdi
+    0.00 :   279f7d: call   *0x7fa85(%rip)        # 2f9a08 <free@GLIBC_2.2.5>
+    0.00 :   279f83: mov    %r12,%rdi
+    0.00 :   279f86: call   *0x7fa7c(%rip)        # 2f9a08 <free@GLIBC_2.2.5>
+    0.00 :   279f8c: jmp    279fce <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x47e>
+    0.00 :   279f8e: mov    %rax,%r15
+    0.00 :   279f91: lea    0x18(%rsp),%rdi
+    0.00 :   279f96: call   24d470 <core::ptr::drop_in_place<war_relay::server::socket::Pending>>
+    0.00 :   279f9b: jmp    279fce <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x47e>
+    0.00 :   279f9d: call   *0x7fc3d(%rip)        # 2f9be0 <_DYNAMIC+0x3f0>
+    0.00 :   279fa3: mov    %rax,%r15
+    0.00 :   279fa6: jmp    279fd1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x481>
+    0.00 :   279fa8: mov    %rax,%r15
+    0.00 :   279fab: lock decq (%r12)
+    0.00 :   279fb0: jne    279fe9 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x499>
+    0.00 :   279fb2: mov    %r14,%rdi
+    0.00 :   279fb5: call   *0x8181d(%rip)        # 2fb7d8 <_DYNAMIC+0x1fe8>
+    0.00 :   279fbb: jmp    279fe9 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x499>
+    0.00 :   279fbd: call   *0x7fc1d(%rip)        # 2f9be0 <_DYNAMIC+0x3f0>
+    0.00 :   279fc3: mov    %rax,%r15
+    0.00 :   279fc6: mov    %rbx,%rdi
+    0.00 :   279fc9: call   24c5b0 <core::ptr::drop_in_place<war_relay::relay::Envelope>>
+    0.00 :   279fce: xor    %r13d,%r13d
+    0.00 :   279fd1: xor    %ecx,%ecx
+    0.00 :   279fd3: mov    $0x1,%al
+    0.00 :   279fd5: lock cmpxchg %cl,(%r14)
+    0.00 :   279fda: jne    279ff1 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x4a1>
+    0.00 :   279fdc: test   %r13b,%r13b
+    0.00 :   279fdf: je     279fe9 <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x499>
+    0.00 :   279fe1: mov    %rbx,%rdi
+    0.00 :   279fe4: call   24c5b0 <core::ptr::drop_in_place<war_relay::relay::Envelope>>
+    0.00 :   279fe9: mov    %r15,%rdi
+    0.00 :   279fec: call   2e0030 <_Unwind_Resume@plt>
+    0.00 :   279ff1: mov    %r14,%rdi
+    0.00 :   279ff4: xor    %esi,%esi
+    0.00 :   279ff6: call   *0x8079c(%rip)        # 2fa798 <_DYNAMIC+0xfa8>
+    0.00 :   279ffc: jmp    279fdc <<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send+0x48c>
+    0.00 :   279ffe: call   *0x7fbdc(%rip)        # 2f9be0 <_DYNAMIC+0x3f0>
