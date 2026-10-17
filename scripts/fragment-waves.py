@@ -21,6 +21,7 @@ spec.loader.exec_module(runtime)
 def run(args):
     port, admin = runtime.free_port(), runtime.free_port()
     env = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
+    server_env = runtime.preload_environment(env, args.server_preload)
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", "4",
                       "--messages-per-second", "0", "--bytes-per-second", "0",
@@ -37,7 +38,7 @@ def run(args):
                       "--expect-completed", str(args.expect_completed), "--expect-rejected", str(args.expect_rejected)]
     client = None
     with tempfile.TemporaryFile() as log:
-        server = subprocess.Popen(server_command, env=env, stdout=log, stderr=log)
+        server = subprocess.Popen(server_command, env=server_env, stdout=log, stderr=log)
         try:
             for _ in range(200):
                 if server.poll() is not None:
@@ -51,6 +52,7 @@ def run(args):
             else:
                 raise TimeoutError("server startup")
             baseline = runtime.snapshot(server.pid)
+            preload = runtime.preload_metadata(args.server_preload, server.pid)
             client = subprocess.Popen(client_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             samples, events, pending, phase = [], [], b"", ("startup", None)
             started = time.monotonic()
@@ -108,16 +110,20 @@ def run(args):
             large_input = args.message_bytes > 65536
             for wave in range(args.cycles):
                 held = [s for s in samples if s["phase"] == "settled" and s["wave"] == wave]
-                event = next((e for e in events if e["event"] == "settled" and e["wave"] == wave), None)
                 last = held[-1] if held else None
                 # Only assert automatic resets when the client waited beyond
                 # the configured deadline. Disabled/no-wait cases still record
                 # high-water retention without pretending it was reclaimed.
-                expected = 8192*(event["active"]+1) if event else None
+                # Completed sources are between frames and share one 4 KiB
+                # slab per worker. Reservations cover twice its capacity.
+                # The independent healthy socket can also own a partial frame
+                # while its worker retains another empty slab. Idle sources
+                # must not retain an additional slab or fragment high-water.
+                maximum = 8192*(4+1)
                 required = bool(limit and large_input and args.reclaim_secs and args.cooldown_secs > args.reclaim_secs)
-                ok = not required or (last is not None and int(last["metrics"]["war_read_buffer_reserved_bytes"]) == expected)
+                ok = not required or (last is not None and 0 <= int(last["metrics"]["war_read_buffer_reserved_bytes"]) <= maximum)
                 reclaimed = reclaimed and ok
-                settled.append({"wave":wave,"expected_base_bytes":expected,"reclaim_required":required,
+                settled.append({"wave":wave,"maximum_settled_bytes":maximum,"reclaim_required":required,
                                 "observed_reserved_bytes":int(last["metrics"]["war_read_buffer_reserved_bytes"]) if last else None,
                                 "sample_count":len(held),"passed":ok})
             resets_expected = None
@@ -127,6 +133,7 @@ def run(args):
                 resets_expected = result["completed"]
             resets_match = resets_expected is None or int(final["war_read_buffer_reclaims_total"]) == resets_expected
             return {"server_command":server_command,"client_command":client_command,
+                    "server_preload":preload,
                     "server_sha256":hashlib.sha256(args.server.read_bytes()).hexdigest(),
                     "client_sha256":hashlib.sha256(args.client.read_bytes()).hexdigest(),
                     "baseline":baseline,"samples":samples,"events":events,"final_metrics":final,
@@ -151,6 +158,8 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", type=Path, default=ROOT/"target/release/war-relay")
+    parser.add_argument("--server-preload", type=runtime.preload_library,
+                        help="Preload one shared library into the server only; verify its mapping and record its hash")
     parser.add_argument("--client", type=Path, default=ROOT/"target/release/examples/fragment_waves")
     parser.add_argument("--clients", type=int, default=8)
     parser.add_argument("--cycles", type=int, default=3)

@@ -33,9 +33,11 @@ def sample(pid, admin, started):
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None,
              payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None,
-             source_addresses=0):
+             source_addresses=0, server_preload=None, server_workers=4):
     if not 0 <= source_addresses <= 65534 or (source_addresses and mode != "churn"):
         raise ValueError("source-addresses requires churn mode and a value in 0..=65534")
+    if not 1 <= server_workers <= 256:
+        raise ValueError("server workers must be in 1..=256")
     port, admin = runtime.free_port(), runtime.free_port()
     actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
     largest_payload = max(payload_sizes or [actual_payload])
@@ -43,16 +45,17 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
     # bytes. Keep the deliberate unread-client case at its original tight cap.
     queue_bytes = max(1048586, (largest_payload + 20) * 32) if mode in ("traffic", "fanout") else 1048586
     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
+    server_env = runtime.preload_environment(env, server_preload)
     with tempfile.TemporaryFile() as logs:
         server_command = [
             str(Path(server_binary or runtime.SERVER).resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
-            "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0",
+            "--workers", str(server_workers), "--messages-per-second", "0", "--bytes-per-second", "0",
             "--max-message-bytes", "1048576", "--queue-bytes", str(queue_bytes),
         ]
         server_command.extend(server_args)
         if server_cpus:
             server_command = ["taskset", "-c", server_cpus] + server_command
-        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)
+        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_env)
         process = None
         try:
             started = time.monotonic()
@@ -67,6 +70,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                     if time.monotonic() - started > 5:
                         raise
                     time.sleep(0.02)
+            preload = runtime.preload_metadata(server_preload, server.pid)
             command = [str(Path(stress_binary or STRESS).resolve()), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
                        "--clients", str(clients), "--duration-secs", str(seconds),
                        "--payload-bytes", str(actual_payload), "--window", str(window)]
@@ -132,6 +136,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                 pressure_valid = result_output is not None and int(metrics["war_slow_consumers_total"]) >= unread_clients and result_output["disconnect_notifications"] == unread_clients * result_output["healthy_readers"]
             result = {"mode": mode, "duration_seconds": seconds, "clients": clients,
                       "command": command, "server_command": server_command,
+                      "server_preload": preload,
                       "server_cpus": server_cpus, "client_cpus": client_cpus,
                       "baseline": baseline, "samples": observations,
                       "admin_errors": errors, "output": output, "stderr": stderr,
@@ -176,10 +181,13 @@ def main():
     parser.add_argument("--modes", nargs="+", choices=["traffic", "churn", "slow", "fanout"], default=["traffic", "churn", "slow"])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
+    parser.add_argument("--server-preload", type=runtime.preload_library,
+                        help="Preload one shared library into the server only; verify its mapping and record its hash")
     parser.add_argument("--stress", type=Path, default=STRESS)
     parser.add_argument("--origin", help="Exact Origin header sent by the workload")
     parser.add_argument("--allowed-origin", action="append", default=[], help="Server allowlist entry; repeat as needed")
     parser.add_argument("--server-cpus")
+    parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--client-cpus")
     parser.add_argument("--payload-bytes", type=int)
     parser.add_argument("--payload-sizes", type=lambda value: [int(item) for item in value.split(",")])
@@ -200,7 +208,7 @@ def main():
               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
               "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(list((ROOT / "src").rglob("*.rs")) + [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/stress.rs"])},
-              "notes": "Sequential fresh four-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic/fanout output budget is max(1 MiB + 10, 32 * (largest payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds; fanout latency starts at window publication. Not a long-term or production capacity guarantee.",
+              "notes": f"Sequential fresh {args.workers}-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic/fanout output budget is max(1 MiB + 10, 32 * (largest payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds; fanout latency starts at window publication. Not a long-term or production capacity guarantee.",
               "cases": []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     server_args = [part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]
@@ -214,7 +222,8 @@ def main():
                                        payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
                                        reader_delay_ms=args.reader_delay_ms, window=args.window,
                                        origin=args.origin, source_addresses=args.source_addresses,
-                                       server_args=server_args))
+                                       server_args=server_args, server_preload=args.server_preload,
+                                       server_workers=args.workers))
         args.output.write_text(json.dumps(output, indent=2) + "\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

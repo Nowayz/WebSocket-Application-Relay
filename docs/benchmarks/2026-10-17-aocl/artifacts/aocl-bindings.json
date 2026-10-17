@@ -1,0 +1,243 @@
+{
+  "server_sha256": "c27ff051a53e8edbef3070d9e328aa262a86fbb61898f882db6427ada7cdc988",
+  "diagnostic_only": true,
+  "runs": [
+    {
+      "label": "glibc",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:49523",
+        "--admin-bind",
+        "127.0.0.1:39655",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0"
+      ],
+      "server_preload": null,
+      "bindings": [
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `memcpy' [GLIBC_2.14]",
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `memset' [GLIBC_2.2.5]",
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `bcmp' [GLIBC_2.2.5]",
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `memmove' [GLIBC_2.2.5]",
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `memcmp' [GLIBC_2.2.5]",
+        "591326:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `strlen' [GLIBC_2.2.5]"
+      ],
+      "client_output": [
+        {
+          "clients": 8,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 8,
+          "deliveries_per_second": 233914.53801926164,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 1.001630775,
+          "event": "result",
+          "joins": 8,
+          "latency_max_ms": 2.079254,
+          "latency_p50_upper_ms": 0.065536,
+          "latency_p99_upper_ms": 0.262144,
+          "mode": "traffic",
+          "payload_bytes": 65520,
+          "setup_seconds": 0.006432626,
+          "slow_observation": null,
+          "source_addresses": 0,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 234296,
+          "window": 4
+        }
+      ],
+      "server_exit_code": 0,
+      "client_aocl_mapping_absent": true,
+      "debug_path": "/home/phil/dev/war_next/artifacts/aocl-bindings-glibc.591326"
+    },
+    {
+      "label": "zen5",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:50707",
+        "--admin-bind",
+        "127.0.0.1:46411",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0"
+      ],
+      "server_preload": {
+        "path": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "d5bc8146b80f85d266f9e8d69597b376a3d20a8cc11442d963bfe0860d69aa0c"
+      },
+      "bindings": [
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcpy' [GLIBC_2.14]",
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memset' [GLIBC_2.2.5]",
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `bcmp' [GLIBC_2.2.5]",
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memmove' [GLIBC_2.2.5]",
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcmp' [GLIBC_2.2.5]",
+        "591336:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `strlen' [GLIBC_2.2.5]"
+      ],
+      "client_output": [
+        {
+          "clients": 8,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 8,
+          "deliveries_per_second": 186263.28880961865,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 1.000197093,
+          "event": "result",
+          "joins": 8,
+          "latency_max_ms": 1.039472,
+          "latency_p50_upper_ms": 0.065536,
+          "latency_p99_upper_ms": 0.262144,
+          "mode": "traffic",
+          "payload_bytes": 65520,
+          "setup_seconds": 0.006819547,
+          "slow_observation": null,
+          "source_addresses": 0,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 186300,
+          "window": 4
+        }
+      ],
+      "server_exit_code": 0,
+      "client_aocl_mapping_absent": true,
+      "debug_path": "/home/phil/dev/war_next/artifacts/aocl-bindings-zen5.591336"
+    },
+    {
+      "label": "dispatch",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:35275",
+        "--admin-bind",
+        "127.0.0.1:42137",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0"
+      ],
+      "server_preload": {
+        "path": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "a561fd4a8f63046add5c9ca3d6608b1daa4de649f80dbdf98501255d71a52483"
+      },
+      "bindings": [
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcpy' [GLIBC_2.14]",
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memset' [GLIBC_2.2.5]",
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `bcmp' [GLIBC_2.2.5]",
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memmove' [GLIBC_2.2.5]",
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcmp' [GLIBC_2.2.5]",
+        "591365:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `strlen' [GLIBC_2.2.5]"
+      ],
+      "client_output": [
+        {
+          "clients": 8,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 8,
+          "deliveries_per_second": 219544.06267498698,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 1.00105645,
+          "event": "result",
+          "joins": 8,
+          "latency_max_ms": 1.976407,
+          "latency_p50_upper_ms": 0.065536,
+          "latency_p99_upper_ms": 0.262144,
+          "mode": "traffic",
+          "payload_bytes": 65520,
+          "setup_seconds": 0.006879795,
+          "slow_observation": null,
+          "source_addresses": 0,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 219776,
+          "window": 4
+        }
+      ],
+      "server_exit_code": 0,
+      "client_aocl_mapping_absent": true,
+      "debug_path": "/home/phil/dev/war_next/artifacts/aocl-bindings-dispatch.591365"
+    },
+    {
+      "label": "avx2",
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:43763",
+        "--admin-bind",
+        "127.0.0.1:59193",
+        "--messages-per-second",
+        "0",
+        "--bytes-per-second",
+        "0"
+      ],
+      "server_preload": {
+        "path": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "899a1a5b8bbeeef020a281ec7fe05f8deee0e16404b29ef803914b88e3130fb3"
+      },
+      "bindings": [
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcpy' [GLIBC_2.14]",
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memset' [GLIBC_2.2.5]",
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /usr/lib/libc.so.6 [0]: normal symbol `bcmp' [GLIBC_2.2.5]",
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memmove' [GLIBC_2.2.5]",
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `memcmp' [GLIBC_2.2.5]",
+        "591375:\tbinding file /home/phil/dev/war_next/artifacts/baselines/c10m-sendmsg/war-relay [0] to /home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2 [0]: normal symbol `strlen' [GLIBC_2.2.5]"
+      ],
+      "client_output": [
+        {
+          "clients": 8,
+          "event": "ready",
+          "mode": "traffic"
+        },
+        {
+          "clients": 8,
+          "deliveries_per_second": 202279.23319922166,
+          "disconnect_notifications": 0,
+          "elapsed_seconds": 1.001941706,
+          "event": "result",
+          "joins": 8,
+          "latency_max_ms": 1.796592,
+          "latency_p50_upper_ms": 0.065536,
+          "latency_p99_upper_ms": 0.262144,
+          "mode": "traffic",
+          "payload_bytes": 65520,
+          "setup_seconds": 0.007139168,
+          "slow_observation": null,
+          "source_addresses": 0,
+          "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+          "verified_deliveries": 202672,
+          "window": 4
+        }
+      ],
+      "server_exit_code": 0,
+      "client_aocl_mapping_absent": true,
+      "debug_path": "/home/phil/dev/war_next/artifacts/aocl-bindings-avx2.591375"
+    }
+  ]
+}

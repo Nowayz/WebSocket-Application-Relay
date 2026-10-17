@@ -1,0 +1,126 @@
+{
+  "passed": true,
+  "runs": [
+    {
+      "label": "glibc",
+      "command": [
+        "python3",
+        "scripts/fragment-waves.py",
+        "--server",
+        "artifacts/baselines/c10m-sendmsg/war-relay",
+        "--client",
+        "target/release/examples/fragment_waves",
+        "--clients",
+        "8",
+        "--cycles",
+        "3",
+        "--message-bytes",
+        "4194304",
+        "--reclaim-secs",
+        "1",
+        "--output",
+        "/home/phil/dev/war_next/artifacts/aocl-fragments-glibc.json"
+      ],
+      "passed": true,
+      "trace": "artifacts/aocl-fragments-glibc.json"
+    },
+    {
+      "label": "zen5",
+      "command": [
+        "python3",
+        "scripts/fragment-waves.py",
+        "--server",
+        "artifacts/baselines/c10m-sendmsg/war-relay",
+        "--client",
+        "target/release/examples/fragment_waves",
+        "--clients",
+        "8",
+        "--cycles",
+        "3",
+        "--message-bytes",
+        "4194304",
+        "--reclaim-secs",
+        "1",
+        "--output",
+        "/home/phil/dev/war_next/artifacts/aocl-fragments-zen5.json",
+        "--server-preload",
+        "artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so"
+      ],
+      "passed": true,
+      "trace": "artifacts/aocl-fragments-zen5.json"
+    },
+    {
+      "label": "dispatch",
+      "command": [
+        "python3",
+        "scripts/fragment-waves.py",
+        "--server",
+        "artifacts/baselines/c10m-sendmsg/war-relay",
+        "--client",
+        "target/release/examples/fragment_waves",
+        "--clients",
+        "8",
+        "--cycles",
+        "3",
+        "--message-bytes",
+        "4194304",
+        "--reclaim-secs",
+        "1",
+        "--output",
+        "/home/phil/dev/war_next/artifacts/aocl-fragments-dispatch.json",
+        "--server-preload",
+        "artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so"
+      ],
+      "passed": true,
+      "trace": "artifacts/aocl-fragments-dispatch.json"
+    },
+    {
+      "label": "avx2",
+      "command": [
+        "python3",
+        "scripts/fragment-waves.py",
+        "--server",
+        "artifacts/baselines/c10m-sendmsg/war-relay",
+        "--client",
+        "target/release/examples/fragment_waves",
+        "--clients",
+        "8",
+        "--cycles",
+        "3",
+        "--message-bytes",
+        "4194304",
+        "--reclaim-secs",
+        "1",
+        "--output",
+        "/home/phil/dev/war_next/artifacts/aocl-fragments-avx2.json",
+        "--server-preload",
+        "artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so"
+      ],
+      "passed": true,
+      "trace": "artifacts/aocl-fragments-avx2.json"
+    },
+    {
+      "label": "no-reclaim",
+      "command": [
+        "python3",
+        "scripts/fragment-waves.py",
+        "--server",
+        "artifacts/baselines/c10m-sendmsg/war-relay",
+        "--client",
+        "target/release/examples/fragment_waves",
+        "--clients",
+        "8",
+        "--cycles",
+        "3",
+        "--message-bytes",
+        "4194304",
+        "--reclaim-secs",
+        "0",
+        "--output",
+        "/home/phil/dev/war_next/artifacts/aocl-fragments-no-reclaim.json"
+      ],
+      "passed": true,
+      "trace": "artifacts/aocl-fragments-no-reclaim.json"
+    }
+  ]
+}

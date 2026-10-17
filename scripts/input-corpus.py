@@ -343,6 +343,7 @@ def run(args):
                "--total-read-buffer-bytes", str(64*LIMIT)]
     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
     env["WAR_ADMIN_TOKEN"] = TOKEN
+    server_env = wire.runtime.preload_environment(env, args.server_preload)
     result = {"server_command": command, "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
               "passed": False, "samples": []}
     stop, ready = threading.Event(), threading.Event()
@@ -350,7 +351,7 @@ def run(args):
     thread = None
     healthy_stats, healthy_errors = [], []
     with tempfile.TemporaryFile() as log:
-        server = subprocess.Popen(command, env=env, stdout=log, stderr=log)
+        server = subprocess.Popen(command, env=server_env, stdout=log, stderr=log)
         try:
             for _ in range(200):
                 if server.poll() is not None:
@@ -362,6 +363,7 @@ def run(args):
                     time.sleep(.02)
             else:
                 raise TimeoutError("server startup")
+            result["server_preload"] = wire.runtime.preload_metadata(args.server_preload, server.pid)
             healthy = Peer(port)
             healthy.join(b"corpus-healthy")
             def probe():
@@ -451,6 +453,8 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", type=Path, default=ROOT/"target/release/war-relay")
+    parser.add_argument("--server-preload", type=wire.runtime.preload_library,
+                        help="Preload one shared library into the server only; verify its mapping and record its hash")
     parser.add_argument("--workers", type=int, choices=[1,4], default=4)
     parser.add_argument("--clients", type=int, choices=range(1,9), default=4)
     parser.add_argument("--modes", nargs="+", choices=["whole","fragmented","pipeline"], default=["whole","fragmented","pipeline"])

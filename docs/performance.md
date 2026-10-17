@@ -4851,3 +4851,224 @@ The selected source therefore retains the small socket-interface change and
 the profiling option. Kernel bypass, a user-space TCP stack, huge-page pools
 and a new cross-worker transport model require separate measured work and
 operational acceptance. They are not implemented by this checkpoint.
+
+## AOCL-LibMem evaluation, 2026-10-17
+
+This study tests the user's request to use AOCL wherever it improves the relay.
+[AOCL-LibMem 5.3.2](https://github.com/amd/aocl-libmem/releases/tag/5.3.2)
+is the applicable component for the current message path: it supplies optimized
+libc-compatible memory and string operations. CBOR routing has no numerical
+kernel for BLAS, FFT or LibM. The native listener has no compression negotiation
+or TLS encryption workload. Its WebSocket upgrade uses SHA-1; the algorithms
+advertised by [AOCL-Cryptography](https://github.com/amd/aocl-crypto) include
+SHA-2/SHA-3, rather than that upgrade hash. Those components are not added as
+dependencies without an applicable operation and a measured benefit.
+
+All comparisons use the same frozen native executable, SHA-256 `c27ff051…`,
+and fixed verifying clients from the previous capacity checkpoint. The native
+Rust implementation, ownership, CBOR encoding and socket path do not change.
+The host is the same Ryzen AI MAX+ 395, with Linux 7.2.9, glibc 2.44 and GCC
+16.2.1. The [evidence manifest](benchmarks/2026-10-17-aocl.json) records the full
+hashes, source snapshots, builds, comparisons, diagnostics and validation logs.
+
+### Library builds and effective use
+
+The pinned source is AMD's `5.3.2` tag, commit
+`876f5c1738d2bf681a52d2e595e16f24187be552`. Three separate release builds use
+AMD's [documented options](https://github.com/amd/aocl-libmem/blob/5.3.2/BUILD_RUN.md):
+
+| Build | CMake option | Shared-library SHA-256 prefix | File bytes |
+| --- | --- | --- | ---: |
+| Zen 5 native | `-DALMEM_ARCH=zen5` | `d5bc8146…` | 58,056 |
+| CPU-dispatched | `-DALMEM_DYN_DISPATCH=Y` | `a561fd4a…` | 378,944 |
+| AVX2 | `-DALMEM_ISA=avx2` | `899a1a5b…` | 78,296 |
+
+Builds and installation stay inside the ignored artifact directory. No system
+library or preload configuration changes. Upstream's Ninja configuration fails
+with duplicate generated outputs on this host; Unix Makefiles build successfully.
+The Zen 5 host supports AVX-512 and AVX2. The native build is architecture-specific;
+the CPU-dispatched build selects the Zen 5 implementations on this actual CPU,
+verified by resolving each function and matching its offset to the library's
+symbols. The AVX2 build resolves to its corresponding implementations.
+
+The runners now accept a server-only preload. `compare.py` associates it with
+a candidate label; capacity, stability, input-corpus and fragment-wave runners
+accept an explicit library path. They record its resolved path and SHA-256 and
+require that path to appear in the server's memory mappings after readiness.
+An inherited `LD_PRELOAD` is rejected so it cannot change the fixed clients.
+Negative checks reject invalid paths and a text file that the ELF loader ignores.
+`compare.py` and `stability.py` also accept an explicit worker count, retaining
+four by default, to make placement-sensitive cases reproducible.
+
+A separate `LD_DEBUG=bindings` diagnostic proves that the relay's `memcpy`,
+`memmove`, `memset`, `memcmp` and `strlen` bind to AOCL in all three builds.
+`bcmp` remains a glibc binding: this AOCL release does not export it. The fixed
+client's live mappings contain no AOCL library. This establishes actual use,
+rather than inferring it from a build flag. Compiler-inlined operations, Rust's
+own SIMD implementations and kernel copies are outside the preload's scope.
+
+### Ordinary comparisons
+
+Each row uses three fresh processes per candidate, rotating candidate order.
+Server and client use separate physical CPU sets. No build, validation job or
+profiler overlaps these trials. CPU cost includes each harness's recorded setup,
+traffic and teardown boundary. Different rows have different boundaries and
+must not be compared as one universal message cost. Every frame, sender, body,
+order, expected counter and normal Close/EOF is checked. Routed-body copy
+counters stay zero in the fixed-size cases. Mixed-size fanout preserves the
+existing compaction policy: small views can detach from a much larger receive
+allocation to bound retention. About 0.0452% of routed value bytes are copied
+once for that purpose; the remaining value bytes and each fanout's shared body
+reuse storage. Reused plus copied bytes match the complete expected input value
+total, and application resources retire after each run. AOCL introduces no
+additional routing copies or buffers.
+
+The four-worker dense case has 64 clients/32 private pairs, 1 KiB bodies,
+16-message windows and eight seconds of traffic. Mixed fanout has one publisher,
+15 healthy readers, four-message windows and the body-size cycle
+32, 1,024, 65,520, 65,536 and 1,048,544 bytes. These cases use OS TCP buffer policy.
+
+| Workload / observation | glibc median | Zen 5 median | CPU-dispatched median |
+| --- | ---: | ---: | ---: |
+| Dense 1 KiB: verified deliveries/s | 2,409,473 | 2,382,557 (−1.12%) | 2,409,955 (+0.02%) |
+| Dense 1 KiB: server CPU ns/delivery | 1,084.29 | 1,106.41 (+2.04%) | 1,102.64 (+1.69%) |
+| Mixed fanout: verified deliveries/s | 98,527 | 100,372 (+1.87%) | 99,455 (+0.94%) |
+| Mixed fanout: server CPU ns/delivery | 11,760.88 | 12,345.68 (+4.97%) | 12,313.64 (+4.70%) |
+
+Dense p99 upper buckets are 0.524288 ms in all variants. Fanout p99 buckets are
+1.048576 ms. Fanout ranges overlap: glibc 89,084–99,907, native 98,398–101,245
+and dispatched 98,257–100,515 deliveries/s. The small fanout throughput medians
+come with more CPU work and do not justify enabling a library by default.
+
+An initial four-worker near-1 MiB private case has only three active pairs and
+four-message windows. Its placement variation is substantial. The native
+AOCL median appears 8.59% faster, but control observations range from 7,316 to
+9,397/s, native from 7,618 to 10,525/s and dispatched from 6,786 to 9,388/s.
+The dispatched median is 0.82% lower than glibc. All raw observations remain
+recorded; that initial native median is not treated as an established gain.
+
+The repeat fixes the server at one worker on CPU 0, keeping the same six clients,
+near-1 MiB bodies, window and duration. It compares native and AVX2 AOCL with
+glibc. All candidates pass, including full output validation and retirement:
+
+| Fixed one-worker large-frame observation | glibc | Zen 5 | AVX2 |
+| --- | ---: | ---: | ---: |
+| Median verified deliveries/s | 4,919.60 | 4,565.42 (−7.20%) | 4,534.75 (−7.82%) |
+| Range of verified deliveries/s | 4,907–5,014 | 4,507–4,686 | 4,460–4,560 |
+| Median server CPU ns/delivery | 178,498.99 | 194,602.58 (+9.02%) | 197,883.36 (+10.86%) |
+| p99 upper bucket | 4.194304 ms | 4.194304 ms | 4.194304 ms |
+
+### 100,000-user comparison
+
+The population comparison uses four server workers on CPUs 0–3, the fixed
+eight-worker capacity client on CPUs 4–11, 100,000 users in 6,250 rooms, 1 KiB
+bodies and the 16 KiB send / 64 KiB receive operating profile. Each case offers
+ten messages/user/s for five seconds. All five million planned messages are
+eventually verified; their actual completion rate is reported. Three fresh
+runs per candidate rotate order. Both native and AVX2 AOCL are compared with
+the same glibc control binary:
+
+| 100,000-user overload observation | glibc | Zen 5 | AVX2 |
+| --- | ---: | ---: | ---: |
+| Median actual completions/s | 532,717 | 526,365 (−1.19%) | 535,008 (+0.43%) |
+| Completion-rate range | 519,459–541,920 | 511,035–534,786 | 525,934–535,845 |
+| Median server CPU ns/completion | 5,274 | 5,274 (unchanged) | 5,280 (+0.11%) |
+| Median user CPU seconds | 6.60 | 6.45 | 6.71 |
+| Median system CPU seconds | 19.89 | 19.92 | 19.94 |
+| RTT p99 upper bucket | 268.435456 ms | 268.435456 ms | 268.435456 ms |
+
+The ranges overlap and the CPU difference is negligible. The AVX2 median is
+not evidence of an established improvement. The offered million messages/s
+continues to overload four workers. Each of the nine runs verifies the entire
+100,000-user population with fresh routing before and after traffic, all
+45 million timed messages collectively, unique welcome IDs, exact counters,
+normal Close acknowledgements and EOF. Connections, sessions, queued bytes
+and receive reservations retire to zero, descriptors return to the permitted
+baseline allowance, and both server and client exit successfully without a
+forced kill. This is a finite loopback comparison, not a new WAN/TLS or
+long-duration acceptance claim.
+
+### Connection churn
+
+The management-side workload checks complete connect/upgrade/join/self-echo/
+normal-Close/EOF lifecycles, with 16 concurrent clients, four server workers,
+separate server/client CPU sets and five seconds per fresh run. The same
+verifying client rotates over 256 loopback source addresses to avoid an
+ephemeral-port ceiling. Three repetitions per candidate rotate order:
+
+| Complete-lifecycle observation | glibc | Zen 5 | AVX2 |
+| --- | ---: | ---: | ---: |
+| Median lifecycles/s | 139,528 | 140,512 (+0.71%) | 140,874 (+0.96%) |
+| Lifecycle-rate range | 137,404–141,114 | 138,728–141,737 | 138,153–141,557 |
+| Median server CPU ns/lifecycle | 14,061.41 | 14,147.71 (+0.61%) | 14,154.25 (+0.66%) |
+| p99 upper bucket | 0.524288 ms | 0.524288 ms | 0.524288 ms |
+
+These ranges overlap and the AOCL variants use slightly more CPU. All
+6,298,165 lifecycles across the nine runs validate the full handshake, distinct
+worker/counter payload, exact response, normal Close acknowledgement and TCP
+EOF. Service acceptance, registration, disconnection and delivery counters
+match, all application resources retire and every server exits successfully.
+The metric is completed lifecycles/s, not simultaneous users or total output
+frames/s.
+
+### Kernel/user diagnostic and validation
+
+A separate ten-second, one-worker near-1 MiB control diagnostic records 4,911
+cycle samples and zero lost samples. Kernel self samples account for about
+88.44% of the displayed total. `_copy_from_iter` is 11.55%, `_copy_to_iter`
+9.55%, page clearing 6.58% and `_raw_spin_lock_bh` 6.15%. All sampled libc code
+together is about 1.33%, including allocator and syscall wrappers that AOCL does
+not replace. Percentages are rounded self samples, not an elapsed-time speedup
+or a guarantee of a maximum possible gain. They do show that the prominent
+memory-copy samples are in the kernel, outside AOCL-LibMem's reach.
+
+All 141 existing Rust tests pass under each of the native, dispatched and AVX2
+libraries, using the 17 test executables built from the unchanged source. The
+completed upstream validation includes 157 iterator/power-of-two tests for
+memory routines and `strlen`, plus 234 boundary/alignment cases across the three
+builds. Iterator tests cover 0–4,096 bytes; shift tests reach 32 MiB for the other
+routines and 1 MiB for `memcmp`. Selected boundary sizes include zero,
+31/32, 63/64/65, 127/128/129, 1,024 and 4,095/4,096, with the upstream validator's
+full alignment sweep for each. The initial broader exhaustive campaign was
+stopped after 162 passes because its combined per-byte/alignment sweeps and
+large mismatch comparisons were expensive; it is retained as an interrupted
+diagnostic, not claimed as a completed suite.
+
+The independent protocol corpus also passes with native AOCL: 776 distinct
+cases and 2,311 scheduled exchanges cover whole, fragmented and pipelined input,
+malformed CBOR and WebSocket frames, Ping/Pong, exact policy Close/EOF,
+disconnect notifications and continuing healthy traffic. Finite validation is
+kept separate from the ordinary timing comparisons and from a production or
+long-duration capacity claim.
+
+The larger fragmented-input check runs eight sources through three 4 MiB
+fragment/reclamation waves, with independent healthy traffic and a fresh
+join/route after each wave. Glibc and all three AOCL builds each complete and
+verify 24 large messages, all Close handshakes, exact counters, staging bounds,
+24 reclamation events and complete retirement. Settled receive reservations
+are 16 or 32 KiB. A no-reclamation control retains 67,141,632 bytes between
+waves and records zero reclamation events; all 24 messages still complete.
+
+This check exposed a stale assertion in `fragment-waves.py`: it required exactly
+8 KiB per live connection after reclamation. The fixed worker reactor instead
+shares one 4 KiB slab per worker, with twice-capacity admission reservations.
+The old assertion fails on both glibc and AOCL because less memory is retained,
+while all message, reset and retirement checks pass. The runner now requires
+settled reservations to fit four worker slabs plus one possible partial frame
+on the independently active healthy socket: a 40 KiB ceiling. It still requires
+the exact reset count, sample coverage and zero final reservations. The original
+failure traces, previous runner and disabled-reclamation control are retained
+to distinguish a harness correction from a relay memory-management change.
+
+### Adoption decision
+
+None of these AOCL variants establishes a useful improvement for the tested
+relay workloads. The small dense, fanout, churn and population differences
+overlap process variation or cost more CPU; both optimized variants regress
+the fixed-layout large-frame case. Glibc remains the default, and no native
+server implementation, dependency, buffer ownership, queue, lock or service
+preload changes. The retained work is the isolated comparison/validation support,
+the corrected fragment-reclamation check, pinned local AOCL builds and this
+evidence record. The [operations recipe](operations.md#evaluating-aocl-libmem)
+can evaluate another release, CPU or operating workload without affecting clients
+or requiring a Rust rewrite.

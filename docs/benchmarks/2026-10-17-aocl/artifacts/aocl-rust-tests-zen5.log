@@ -1,0 +1,243 @@
+Executable: /home/phil/dev/war_next/target/debug/deps/read_budget-6d6a1e77385ac3c7
+
+running 13 tests
+test fragment_growth_fits_the_message_limit_and_rejects_only_actual_excess ... ok
+test final_growth_uses_the_known_length_with_a_larger_configured_limit ... ok
+test worker_storage_moves_between_decoders_without_moving_published_payloads ... ok
+test intermediate_growth_stays_within_the_configured_message_ceiling ... ok
+test a_header_is_denied_before_body_allocation_and_cannot_resume_unreserved ... ok
+test a_decoder_still_reserves_before_growth_after_lending_away_its_allocation ... ok
+test fragmented_utf8_carries_partial_codepoints_and_control_frames ... ok
+test text_assembly_caps_capacity_across_every_utf8_split ... ok
+test an_oversized_worker_slab_retires_even_when_a_published_body_keeps_its_allocation_alive ... ok
+test growth_reclaim_and_drop_preserve_the_published_payload_pointer ... ok
+test fragment_assembly_is_admitted_separately_and_held_until_safe_reclaim ... ok
+test concurrent_leases_never_exceed_the_limit_and_release_on_drop ... ok
+test storage_lending_keeps_every_partial_masked_header_and_payload_with_its_decoder ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/read_buffer_reclaim-3757af7fcf3aa51d
+
+running 3 tests
+test a_coalesced_small_message_is_left_in_its_original_storage ... ok
+test partially_received_payload_is_preserved_across_a_deferred_reclaim ... ok
+test decoder_releases_ownership_without_copying_published_data_or_losing_partial_headers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/read_fairness-2a7c28a5d7282698
+
+running 3 tests
+test bounded_sync_reads_preserve_utf8_control_and_unlimited_resume ... ok
+test buffered_fragments_yield_and_wake_without_needing_an_io_event ... ok
+test yielding_does_not_hide_protocol_errors_or_unfuse_a_failed_stream ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/relay_integration-16edc2319dd1be97
+
+running 52 tests
+test fixed_id_takeover_disconnects_old_session_and_keeps_new_routing ... ok
+test admission::per_ip_admission_spans_workers_and_keeps_other_addresses_usable ... ok
+test an_abrupt_transport_drop_is_counted_separately_from_protocol_violations ... ok
+test channel_admission_variable_and_message_size_limits_are_real_network_limits ... ok
+test input_admission_denies_incomplete_frames_before_and_after_join_and_keeps_routing ... ok
+test handshake_reservations_reject_with_http_503_and_release_after_abandonment ... ok
+test close_before_join_preserves_the_peers_code_and_reason ... ok
+test channel_listing::a_cursor_survives_channel_retirement_and_observes_later_membership ... ok
+test exhausted_input_quota_still_acknowledges_close_before_and_after_join ... ok
+test malformed_packets_text_and_unauthorized_commands_close_cleanly ... ok
+test admission::legacy_ingress_enforces_its_own_direct_peer_limit_before_upgrade ... ok
+test decoder_rejections_before_join_send_policy_close_without_waiting_for_the_body ... ok
+test channel_listing::http_channel_listing_preserves_exact_json_and_authentication ... ok
+test native_workers_do_not_depend_on_the_embedders_blocking_pool ... ok
+test origin_policy::exact_origins_originless_native_clients_and_explicit_null_can_join ... ok
+test authentication_channel_queries_and_admin_drain_are_enforced ... ok
+test origin_policy::legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames ... ok
+test prejoin_rate_rejection_counts_both_the_stage_and_rate_decision_once ... ok
+test origin_policy::denied_origins_release_admission_before_join_and_leave_routing_usable ... ok
+test peer_initiated_close_is_acknowledged_before_the_transport_is_dropped ... ok
+test origin_policy::no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_stay_separate ... ok
+test token_bucket_limits_apply_immediately_after_join ... ok
+test variables_are_typed_scoped_and_deleted_when_last_member_leaves ... ok
+test channel_listing::large_escaped_channel_names_preserve_the_complete_http_response ... ok
+test channel_listing::bounded_http_pages_preserve_order_binary_names_variables_and_validation ... ok
+test upgrade_input_is_bounded_and_frame_reads_continue_after_the_handoff ... ok
+test fragmented_final_growth_fits_staging_at_and_below_the_message_limit ... ok
+test cancelling_the_embedding_service_stops_workers_without_disconnect_fanout ... ok
+test listeners::acknowledged_listener_changes_and_new_id_owners_preserve_wire_fifo ... ok
+test shutdown_of_a_large_channel_does_not_generate_disconnect_fanout ... ok
+test admin_cancellation_retires_membership_before_closing_incomplete_assembly ... ok
+test shared_network_payloads_are_reused_without_copying_later_base_slab_values ... ok
+test simultaneous_peer_closes_finish_handshakes_during_notification_pressure ... ok
+test global_listeners_and_global_broadcast_preserve_legacy_scope ... ok
+test channel_list_output_uses_output_budget_instead_of_incoming_message_limit ... ok
+test routes_typed_cbor_private_and_channel_messages_without_changing_payload ... ok
+test fragmented_input_and_interleaved_control_leave_direct_output_ordered ... ok
+test join_rejections_are_counted_once_and_exclude_normal_close_and_shutdown ... ok
+test small_application_limits_allow_full_sized_controls_before_and_after_join ... ok
+test small_application_limits_bound_complete_and_fragmented_data ... ok
+test reserved_simple_encodings_never_reach_recipients_or_channel_variables ... ok
+test private_routing_keeps_progress_through_registry_growth_and_retirement ... ok
+test admission::handshake_timeout_releases_the_address_lease ... ok
+test unfinished_fragmented_application_input_still_expires_cleanly ... ok
+test enlarged_read_storage_retires_without_closing_sessions_or_copying_later_values ... ok
+test heartbeat_and_control_traffic_do_not_extend_application_idle_policy ... ok
+test reclaiming_between_fragments_preserves_message_assembly_and_ping_replies ... ok
+test idle_half_handshakes_are_bounded_and_release_capacity ... ok
+test incomplete_join_still_times_out_and_releases_staging_while_healthy_routing_continues ... ok
+test read_storage_reclamation_defers_an_incomplete_frame_and_preserves_its_bytes ... ok
+test application_input_and_receive_only_output_extend_idle_policy ... ok
+test heartbeat_disconnects_a_client_that_never_reads_or_pongs ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.48s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/war_legacy_bridge-fbb1805fc3fbc256
+
+running 1 test
+test backlog_tests::listen_backlog_is_positive_and_bounded ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/war_relay-cf48edaf598c5a1d
+
+running 62 tests
+test admission::tests::addresses_are_canonical_bounded_and_retire_with_their_last_lease ... ok
+test admission::tests::an_expired_entry_destructor_cannot_remove_its_live_replacement ... ok
+test frame::tests::routing_reuses_the_body_for_every_integer_width_and_nonminimal_input ... ok
+test frame::tests::variable_replies_preserve_opaque_values_and_missing_is_distinct_from_null ... ok
+test origin::tests::exact_origins_preserve_native_clients_and_reject_ambiguous_values ... ok
+test origin::tests::configuration_rejects_non_origin_urls_and_unbounded_lists ... ok
+test frame::tests::compaction_detaches_a_small_value_from_shared_receive_storage ... ok
+test frame::tests::scalar_control_frames_match_known_vectors_and_every_integer_width ... ok
+test admin::tests::reversible_drain_and_terminal_shutdown_have_distinct_transitions ... ok
+test legacy::tests::truncated_variable_packets_are_rejected_without_reading_outside_payload ... ok
+test admin::tests::shutdown_cannot_be_resumed_by_an_authorized_management_request ... ok
+test legacy::tests::known_little_endian_and_base64_vectors ... ok
+test frame::tests::routed_owned_views_preserve_aliases_and_survive_original_owner_retirement ... ok
+test origin::tests::native_cli_accepts_repeated_and_comma_separated_origins ... ok
+test protocol::tests::independent_known_cbor_vectors_and_full_width_ids ... ok
+test protocol::tests::integer_and_array_header_sizes_match_the_encoder_at_every_width_boundary ... ok
+test protocol::tests::rejects_trailing_indefinite_deep_and_truncated_cbor ... ok
+test relay::broadcast_tests::broadcast_output_releases_the_registry_and_retains_the_original_body ... ok
+test relay::broadcast_tests::uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners ... ok
+test protocol::tests::simple_values_reject_reserved_expansions_and_preserve_valid_forms ... ok
+test relay::broadcast_tests::membership_changes_invalidate_views_without_changing_captured_owners ... ok
+test config::backlog_tests::listen_backlog_is_bounded_for_cli_and_embedding ... ok
+test relay::channel_tests::recreated_channels_have_fresh_variables_while_old_name_views_remain_valid ... ok
+test relay::tests::variable_reply_keeps_stored_bytes_after_replacement_and_channel_retirement ... ok
+test relay::tests::channel_snapshots_own_metadata_and_leave_the_registry_writable ... ok
+test relay::tests::tiny_views_of_a_large_current_allocation_are_compacted ... ok
+test server::arena_tests::accepted_tcp_sockets_apply_both_kernel_buffer_requests ... ok
+test relay::listener_tests::listener_identity_survives_assignment_takeover_and_delayed_cleanup ... ok
+test relay::tests::fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns ... ok
+test relay::tests::slow_consumer_is_closed_and_every_byte_reservation_is_released ... ok
+test relay::listener_tests::listener_mask_changes_preserve_all_three_scopes_and_shared_payloads ... ok
+test relay::tests::takeover_cleanup_cannot_remove_new_id_owner ... ok
+test relay::tests::global_variable_budget_is_released_by_channel_cleanup ... ok
+test relay::tests::global_queue_pressure_refuses_producer_without_closing_unrelated_recipient ... ok
+test protocol::tests::cbor_header_truncation_utf8_and_resource_boundaries ... ok
+test config::backlog_tests::kernel_buffer_requests_are_optional_and_bounded_for_cli_and_embedding ... ok
+test relay::channel_tests::joined_channel_names_share_canonical_storage_and_own_their_input ... ok
+test server::timers::tests::rekeying_sparse_slots_keeps_exact_deadlines_and_equal_deadline_order ... ok
+test admission::tests::concurrent_workers_share_one_admission_count ... ok
+test relay::channel_tests::detached_http_listing_preserves_json_and_base64_order_for_bounded_names ... ok
+test admission::tests::distinct_address_waves_do_not_retain_an_unbounded_index ... ok
+test server::timers::tests::retiming_and_slot_reuse_preserve_order_without_stale_entries ... ok
+test relay::tests::sparse_channel_registry_preserves_names_variables_and_published_storage ... ok
+test server::tests::worker_listeners_keep_an_embedders_ipv6_only_boundary ... ok
+test relay::tests::sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads ... ok
+test server::ownership_tests::a_retained_routing_target_keeps_transport_capacity_until_the_descriptor_closes ... ok
+test server::accept_tests::repeated_listener_readiness_keeps_one_bounded_accept_continuation ... ok
+test server::socket::tests::recovered_queues_keep_small_capacity_but_release_large_empty_storage ... ok
+test server::socket::tests::an_exact_write_quantum_retires_empty_queue_storage_before_returning ... ok
+test server::socket::tests::queued_output_keeps_payload_and_charge_after_membership_retires ... ok
+test server::socket::tests::ordinary_output_has_no_queue_allocation_and_control_never_splits_a_partial_data_frame ... ok
+test server::fairness_tests::a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_fanout ... ok
+test relay::tests::takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish ... ok
+test admin::tests::concurrent_resume_and_drain_cannot_overwrite_shutdown ... ok
+test relay::channel_tests::bounded_channel_pages_match_the_independent_full_listing_and_own_metadata ... ok
+test server::socket::tests::direct_vectored_writes_keep_bodies_borrowed_across_short_writes_and_backpressure ... ok
+test admin::tests::management_readiness_metrics_and_real_admission_stay_stopped ... ok
+test relay::tests::sparse_membership_keeps_peers_variables_and_published_payloads_alive ... ok
+test relay::broadcast_tests::a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave ... ok
+test server::close_tests::a_blocked_server_close_survives_the_peers_acknowledgement_before_output_finishes ... ok
+test server::close_tests::a_blocked_close_acknowledgement_waits_for_output_without_reading_a_closed_decoder ... ok
+test server::arena_tests::compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadlines ... ok
+
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+Executable: /home/phil/dev/war_next/target/debug/deps/war_relay-dbf01c587eca83ef
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/admission-57c82b7cdfe36f43
+
+running 1 test
+test tests::a_refusal_requires_eof_or_reset_without_application_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/capacity-1e04d2a10d75da79
+
+running 1 test
+test tests::ring_oracle_rejects_wrong_sender_corruption_sequence_and_trailing_data ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/fragment_waves-7b1a44dad5b6bf5e
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/input_budget-c0a49ddef3d0af27
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/inspection-7a845b05c568f104
+
+running 2 tests
+test fanout::tests::corruption_at_a_non_primary_reader_is_rejected ... ok
+test fanout::tests::a_changed_departure_at_a_non_primary_reader_is_rejected ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/load-839ded2570fd07b5
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/queue_waves-9dd4cc662bc3aaae
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/registry_peak-9343fd3ea34239e1
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/retention-9de47ad0cf0fe75e
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Executable: /home/phil/dev/war_next/target/debug/examples/stress-a2eb387245cdce5c
+
+running 3 tests
+test tests::source_binding_and_welcome_validation_reject_ambiguous_inputs ... ok
+test tests::churn_close_rejects_missing_acknowledgements_wrong_codes_and_application_data ... ok
+test tests::churn_close_waits_for_transport_eof_after_the_exact_acknowledgement ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

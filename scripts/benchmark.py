@@ -22,6 +22,32 @@ SERVER = ROOT / "target/release/war-relay"
 LOAD = ROOT / "target/release/examples/load"
 
 
+def preload_library(value):
+    """Resolve one loader-safe library path for a server-only experiment."""
+    path = Path(value).resolve()
+    if not path.is_file() or any(char.isspace() or char == ":" for char in str(path)):
+        raise argparse.ArgumentTypeError("preload must name a file with no whitespace or colon in its absolute path")
+    return path
+
+
+def preload_environment(environment, library):
+    # A process-wide preload would also change the supposedly fixed client.
+    if environment.get("LD_PRELOAD"):
+        raise ValueError("start without LD_PRELOAD; use the server-only preload option")
+    return environment | ({"LD_PRELOAD": str(library)} if library else {})
+
+
+def preload_metadata(library, pid=None):
+    if library is None:
+        return None
+    path = Path(library).resolve()
+    if pid is not None:
+        mappings = Path(f"/proc/{pid}/maps").read_text().splitlines()
+        if not any(line.split(maxsplit=5)[-1] == str(path) for line in mappings):
+            raise RuntimeError(f"requested preload was not mapped into server {pid}: {path}")
+    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))

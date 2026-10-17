@@ -12,7 +12,7 @@ import platform
 import statistics
 import subprocess
 
-from stability import ROOT, STRESS, run_case
+from stability import ROOT, STRESS, run_case, runtime
 
 
 def candidate(value):
@@ -27,6 +27,8 @@ def main():
     parser.add_argument("--candidate", type=candidate, action="append", required=True)
     parser.add_argument("--server-arg", action="append", default=[], metavar="LABEL=ARG",
                         help="Append one server argument for a candidate, e.g. enabled=--idle-timeout-secs=300; repeat as needed.")
+    parser.add_argument("--server-preload", action="append", default=[], metavar="LABEL=LIBRARY",
+                        help="Preload one shared library into this candidate's server only; record its hash and verify it is mapped.")
     parser.add_argument("--stress", type=Path, default=STRESS)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seconds", type=int, default=15)
@@ -39,13 +41,25 @@ def main():
     parser.add_argument("--window", type=int, default=16)
     parser.add_argument("--record-failures", action="store_true", help="Keep comparing after a failed case; exit 1 if any case fails.")
     parser.add_argument("--server-cpus", default="0-3")
+    parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--client-cpus", default="4-7")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if not 1 <= args.workers <= 256:
+        parser.error("workers must be in 1..=256")
     labels = [label for label, _ in args.candidate]
     if len(set(labels)) != len(labels) or args.repetitions < 1 or not 1 <= args.seconds <= 3600 or not 8 <= args.payload_bytes <= 1048544:
         parser.error("use unique labels, positive repetitions, seconds in 1..=3600, and payload bytes in 8..=1048544")
     server_args = {label: [] for label in labels}
+    server_preloads = {label: None for label in labels}
+    for item in args.server_preload:
+        label, separator, value = item.partition("=")
+        if not separator or label not in server_preloads or server_preloads[label] is not None:
+            parser.error("preloads require an existing candidate label and at most one library per candidate")
+        try:
+            server_preloads[label] = runtime.preload_library(value)
+        except argparse.ArgumentTypeError as error:
+            parser.error(str(error))
     for item in args.server_arg:
         label, separator, value = item.partition("=")
         if not separator or label not in server_args or not value or len(value) > 4096:
@@ -64,13 +78,17 @@ def main():
         "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
         "server_cpus": args.server_cpus, "client_cpus": args.client_cpus,
+        "workers": args.workers,
+        "runner_sources_sha256": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                                  for name in ("scripts/compare.py", "scripts/stability.py", "scripts/benchmark.py")},
         "seconds": args.seconds, "clients": args.clients, "repetitions": args.repetitions,
         "payload_bytes": args.payload_bytes,
         "mode": args.mode, "payload_sizes": args.payload_sizes, "unread_clients": args.unread_clients,
         "reader_delay_ms": args.reader_delay_ms, "window": args.window,
         "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
-        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "server_args": server_args[label]} for label, path in args.candidate},
-        "notes": "Sequential fresh four-worker servers. Same fixed verifying client binary, sizes and window for each candidate. CPU sets separate client/server physical cores on the recorded host. Rates disabled; heartbeat enabled. Position rotates per repetition. CPU seconds include setup and teardown. Latency quantiles are fixed-histogram upper bounds; fanout latency begins at window publication. Summary timings include only passed cases. No frequency governor changes.",
+        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "server_args": server_args[label],
+                               "server_preload": runtime.preload_metadata(server_preloads[label])} for label, path in args.candidate},
+        "notes": f"Sequential fresh {args.workers}-worker servers. Same fixed verifying client binary, sizes and window for each candidate. CPU sets separate client/server physical cores on the recorded host. Rates disabled; heartbeat enabled. Position rotates per repetition. CPU seconds include setup and teardown. Latency quantiles are fixed-histogram upper bounds; fanout latency begins at window publication. Summary timings include only passed cases. No frequency governor changes.",
         "runs": [], "summary": {},
     }
     for repetition in range(args.repetitions):
@@ -81,7 +99,8 @@ def main():
                             stress_binary=args.stress, server_cpus=args.server_cpus,
                             client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
                             payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
-                            reader_delay_ms=args.reader_delay_ms, window=args.window, server_args=server_args[label])
+                            reader_delay_ms=args.reader_delay_ms, window=args.window, server_args=server_args[label],
+                            server_preload=server_preloads[label], server_workers=args.workers)
             trace = traces / f"{repetition}-{position}.json"
             trace.write_text(json.dumps(case, indent=2) + "\n")
             result = next((entry for entry in case["output"] if entry.get("event") == "result"), {})

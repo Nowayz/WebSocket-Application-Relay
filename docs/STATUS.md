@@ -8,7 +8,34 @@ instruction makes 100,000 simultaneous users an explicit operating target.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: C10M guidance, 2026-10-17
+## Latest verified checkpoint: AOCL evaluation, 2026-10-17
+
+The [AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17) builds pinned
+AOCL-LibMem 5.3.2 native Zen 5, CPU-dispatched and AVX2 libraries. Real loader
+bindings prove the relay uses their memory/string routines; client mappings
+remain unaffected. The CPU dispatcher selects Zen 5 on this host. Server-only
+preload options record library hashes and reject ignored/invalid loads, and
+the comparison tools can fix worker count to reduce socket-placement variation.
+
+All 54 ordinary trials pass. Nine 100,000-user runs verify 45 million timed
+messages, complete pre/post routing through every user and exact Close/EOF,
+counter and descriptor retirement. Glibc's median is 532,717 completions/s;
+native AOCL is 1.19% lower and AVX2 0.43% higher, with overlapping ranges and
+effectively unchanged CPU cost. Dense and mixed fanout gain no efficiency;
+complete join/leave throughput differs by less than 1% with more CPU. A fixed
+one-worker near-1 MiB case regresses 7.20%/7.82% with native/AVX2. No AOCL
+variant is enabled by default and the native executable remains `c27ff051…`.
+
+All 141 Rust tests pass under each library. Completed upstream validation has
+157 size-sweep tests and 234 boundary/alignment cases; the independent protocol
+corpus and 4 MiB fragment/reclamation waves pass. A stale fragment-harness
+assertion requiring per-connection storage is corrected for worker-shared
+storage, with a live disabled-reclamation control proving the check still
+detects retained large leases. The [manifest](benchmarks/2026-10-17-aocl.json)
+preserves build provenance, timings, diagnostics, original failures and checks.
+The running local native/legacy services retain the previously verified binaries.
+
+## Prior verified checkpoint: C10M guidance, 2026-10-17
 
 The [C10M-guided study](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
 adds full kernel/user profiling and a small native socket-interface optimization.

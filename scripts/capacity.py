@@ -116,6 +116,7 @@ def run(args):
         admin = runtime.free_port()
     environment = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
     environment.update(WAR_ADMIN_TOKEN=TOKEN)
+    server_environment = runtime.preload_environment(environment, args.server_preload)
     extra = 10 if args.pressure_client else 0
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", str(args.workers),
@@ -152,7 +153,7 @@ def run(args):
               "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = subprocess.Popen(server_command, env=environment, stdout=logs, stderr=logs)
+        server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
         client = None
         pressure = pressure_result = None
         perf = perf_log = None
@@ -169,6 +170,7 @@ def run(args):
                         raise
                     time.sleep(.02)
             result["baseline"] = {"server": process(server.pid), "machine": machine(), "metrics": observed}
+            result["server_preload"] = runtime.preload_metadata(args.server_preload, server.pid)
             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
             events = []
@@ -312,6 +314,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")
+    parser.add_argument("--server-preload", type=runtime.preload_library,
+                        help="Preload one shared library into the server only; record its hash and verify it is mapped")
     parser.add_argument("--users", type=int, default=100_000)
     parser.add_argument("--room-size", type=int, default=16)
     parser.add_argument("--concurrency", type=int, default=64)

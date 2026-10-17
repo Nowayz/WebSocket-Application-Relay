@@ -1,0 +1,692 @@
+diff --git a/.gitattributes b/.gitattributes
+index d4c45d3..8a5b41d 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -2,6 +2,8 @@
+ docs/upstream-README.md whitespace=-blank-at-eol
+ # Keep machine-produced measurement traces separate from hand-written review content.
+ docs/benchmarks/**/*.json linguist-generated=true
++# Keep hashed raw tool output, source snapshots and replayable patches byte exact.
++docs/benchmarks/2026-10-17-aocl/** -text -whitespace linguist-generated=true
+ # The source audit compares published package bytes, including original LF endings.
+ vendor/tungstenite/** -text
+ vendor/tokio-tungstenite/** -text
+diff --git a/docs/STATUS.md b/docs/STATUS.md
+index 572d398..ba8d673 100644
+--- a/docs/STATUS.md
++++ b/docs/STATUS.md
+@@ -8,7 +8,34 @@ instruction makes 100,000 simultaneous users an explicit operating target.
+ This file records reviewable checkpoints; they do not complete the open-ended
+ improvement goal.
+ 
+-## Latest verified checkpoint: C10M guidance, 2026-10-17
++## Latest verified checkpoint: AOCL evaluation, 2026-10-17
++
++The [AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17) builds pinned
++AOCL-LibMem 5.3.2 native Zen 5, CPU-dispatched and AVX2 libraries. Real loader
++bindings prove the relay uses their memory/string routines; client mappings
++remain unaffected. The CPU dispatcher selects Zen 5 on this host. Server-only
++preload options record library hashes and reject ignored/invalid loads, and
++the comparison tools can fix worker count to reduce socket-placement variation.
++
++All 54 ordinary trials pass. Nine 100,000-user runs verify 45 million timed
++messages, complete pre/post routing through every user and exact Close/EOF,
++counter and descriptor retirement. Glibc's median is 532,717 completions/s;
++native AOCL is 1.19% lower and AVX2 0.43% higher, with overlapping ranges and
++effectively unchanged CPU cost. Dense and mixed fanout gain no efficiency;
++complete join/leave throughput differs by less than 1% with more CPU. A fixed
++one-worker near-1 MiB case regresses 7.20%/7.82% with native/AVX2. No AOCL
++variant is enabled by default and the native executable remains `c27ff051…`.
++
++All 141 Rust tests pass under each library. Completed upstream validation has
++157 size-sweep tests and 234 boundary/alignment cases; the independent protocol
++corpus and 4 MiB fragment/reclamation waves pass. A stale fragment-harness
++assertion requiring per-connection storage is corrected for worker-shared
++storage, with a live disabled-reclamation control proving the check still
++detects retained large leases. The [manifest](benchmarks/2026-10-17-aocl.json)
++preserves build provenance, timings, diagnostics, original failures and checks.
++The running local native/legacy services retain the previously verified binaries.
++
++## Prior verified checkpoint: C10M guidance, 2026-10-17
+ 
+ The [C10M-guided study](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
+ adds full kernel/user profiling and a small native socket-interface optimization.
+diff --git a/docs/operations.md b/docs/operations.md
+index a15ef0d..abc2471 100644
+--- a/docs/operations.md
++++ b/docs/operations.md
+@@ -842,3 +842,57 @@ changing interrupt or flow steering; the [kernel scaling guide](https://docs.ker
+ describes RSS, RPS, RFS and XPS. The [C10M-guided measurements](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
+ record the current socket-call improvement and the prototypes removed after
+ measurement. They cover loopback without a TLS edge or remote NIC.
++
++## Evaluating AOCL-LibMem
++
++The Linux benchmark tools accept an explicit **server-only** shared-library
++preload. This allows the same frozen relay and verifying client to compare
++glibc with [AMD AOCL-LibMem](https://github.com/amd/aocl-libmem), preserving the
++relay's shared CBOR bodies and vectored output. The library replaces eligible
++out-of-line libc calls; compiler-inlined operations, Rust's own SIMD routines
++and kernel TCP copies remain separate. A successful preload does not establish
++a performance improvement. See the [measured AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17)
++before selecting it for an operating workload.
++
++Build a pinned library inside the ignored artifact directory:
++
++```sh
++git clone --depth 1 --branch 5.3.2 https://github.com/amd/aocl-libmem.git artifacts/reference/aocl-libmem-5.3.2
++cmake -S artifacts/reference/aocl-libmem-5.3.2 \
++  -B artifacts/aocl-libmem-5.3.2-dispatch -G 'Unix Makefiles' \
++  -DCMAKE_C_COMPILER=gcc -DALMEM_DYN_DISPATCH=Y
++cmake --build artifacts/aocl-libmem-5.3.2-dispatch --parallel
++cmake --install artifacts/aocl-libmem-5.3.2-dispatch
++```
++
++Upstream's standalone build installs into its own build directory. These
++commands do not install system libraries. The study also builds
++`-DALMEM_ARCH=zen5` in a separate directory on its verified Zen 5/AVX-512 host.
++That architecture-specific build must only be used on a compatible CPU. The
++dispatched build performs CPU selection at runtime. Follow AMD's
++[build requirements and CPU compatibility guidance](https://github.com/amd/aocl-libmem/blob/5.3.2/BUILD_RUN.md)
++when building on another host. This release's CMake configuration produces
++duplicate-output errors with Ninja on the measured host; Makefiles work.
++
++After building the relay and fixed stress client, compare the same executable:
++
++```sh
++python3 scripts/compare.py \
++  --candidate glibc=target/release/war-relay \
++  --candidate aocl=target/release/war-relay \
++  --server-preload aocl=artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so \
++  --stress target/release/examples/stress \
++  --mode traffic --clients 64 --payload-bytes 1024 --window 16 \
++  --seconds 8 --repetitions 3 --output artifacts/aocl-comparison.json
++```
++
++`capacity.py`, `stability.py`, `input-corpus.py` and `fragment-waves.py` also
++accept `--server-preload PATH`. The client and pressure sidecar retain the
++original environment. The runners reject an inherited `LD_PRELOAD`, reject
++loader paths containing whitespace or colons, verify the resolved library path
++in the server's `/proc/PID/maps` after readiness, and record its SHA-256. A
++loader that ignores an invalid library therefore cannot silently produce a
++baseline result labelled as AOCL. Mapping verification establishes loading;
++the separate loader-binding diagnostic in the study proves which symbols are
++actually replaced. Run diagnostics, builds and validation separately from
++ordinary timing trials. Avoid setting a machine-wide preload.
+diff --git a/docs/performance.md b/docs/performance.md
+index bf0416c..6d32f94 100644
+--- a/docs/performance.md
++++ b/docs/performance.md
+@@ -4851,3 +4851,224 @@ The selected source therefore retains the small socket-interface change and
+ the profiling option. Kernel bypass, a user-space TCP stack, huge-page pools
+ and a new cross-worker transport model require separate measured work and
+ operational acceptance. They are not implemented by this checkpoint.
++
++## AOCL-LibMem evaluation, 2026-10-17
++
++This study tests the user's request to use AOCL wherever it improves the relay.
++[AOCL-LibMem 5.3.2](https://github.com/amd/aocl-libmem/releases/tag/5.3.2)
++is the applicable component for the current message path: it supplies optimized
++libc-compatible memory and string operations. CBOR routing has no numerical
++kernel for BLAS, FFT or LibM. The native listener has no compression negotiation
++or TLS encryption workload. Its WebSocket upgrade uses SHA-1; the algorithms
++advertised by [AOCL-Cryptography](https://github.com/amd/aocl-crypto) include
++SHA-2/SHA-3, rather than that upgrade hash. Those components are not added as
++dependencies without an applicable operation and a measured benefit.
++
++All comparisons use the same frozen native executable, SHA-256 `c27ff051…`,
++and fixed verifying clients from the previous capacity checkpoint. The native
++Rust implementation, ownership, CBOR encoding and socket path do not change.
++The host is the same Ryzen AI MAX+ 395, with Linux 7.2.9, glibc 2.44 and GCC
++16.2.1. The [evidence manifest](benchmarks/2026-10-17-aocl.json) records the full
++hashes, source snapshots, builds, comparisons, diagnostics and validation logs.
++
++### Library builds and effective use
++
++The pinned source is AMD's `5.3.2` tag, commit
++`876f5c1738d2bf681a52d2e595e16f24187be552`. Three separate release builds use
++AMD's [documented options](https://github.com/amd/aocl-libmem/blob/5.3.2/BUILD_RUN.md):
++
++| Build | CMake option | Shared-library SHA-256 prefix | File bytes |
++| --- | --- | --- | ---: |
++| Zen 5 native | `-DALMEM_ARCH=zen5` | `d5bc8146…` | 58,056 |
++| CPU-dispatched | `-DALMEM_DYN_DISPATCH=Y` | `a561fd4a…` | 378,944 |
++| AVX2 | `-DALMEM_ISA=avx2` | `899a1a5b…` | 78,296 |
++
++Builds and installation stay inside the ignored artifact directory. No system
++library or preload configuration changes. Upstream's Ninja configuration fails
++with duplicate generated outputs on this host; Unix Makefiles build successfully.
++The Zen 5 host supports AVX-512 and AVX2. The native build is architecture-specific;
++the CPU-dispatched build selects the Zen 5 implementations on this actual CPU,
++verified by resolving each function and matching its offset to the library's
++symbols. The AVX2 build resolves to its corresponding implementations.
++
++The runners now accept a server-only preload. `compare.py` associates it with
++a candidate label; capacity, stability, input-corpus and fragment-wave runners
++accept an explicit library path. They record its resolved path and SHA-256 and
++require that path to appear in the server's memory mappings after readiness.
++An inherited `LD_PRELOAD` is rejected so it cannot change the fixed clients.
++Negative checks reject invalid paths and a text file that the ELF loader ignores.
++`compare.py` and `stability.py` also accept an explicit worker count, retaining
++four by default, to make placement-sensitive cases reproducible.
++
++A separate `LD_DEBUG=bindings` diagnostic proves that the relay's `memcpy`,
++`memmove`, `memset`, `memcmp` and `strlen` bind to AOCL in all three builds.
++`bcmp` remains a glibc binding: this AOCL release does not export it. The fixed
++client's live mappings contain no AOCL library. This establishes actual use,
++rather than inferring it from a build flag. Compiler-inlined operations, Rust's
++own SIMD implementations and kernel copies are outside the preload's scope.
++
++### Ordinary comparisons
++
++Each row uses three fresh processes per candidate, rotating candidate order.
++Server and client use separate physical CPU sets. No build, validation job or
++profiler overlaps these trials. CPU cost includes each harness's recorded setup,
++traffic and teardown boundary. Different rows have different boundaries and
++must not be compared as one universal message cost. Every frame, sender, body,
++order, expected counter and normal Close/EOF is checked. Routed-body copy
++counters stay zero in the fixed-size cases. Mixed-size fanout preserves the
++existing compaction policy: small views can detach from a much larger receive
++allocation to bound retention. About 0.0452% of routed value bytes are copied
++once for that purpose; the remaining value bytes and each fanout's shared body
++reuse storage. Reused plus copied bytes match the complete expected input value
++total, and application resources retire after each run. AOCL introduces no
++additional routing copies or buffers.
++
++The four-worker dense case has 64 clients/32 private pairs, 1 KiB bodies,
++16-message windows and eight seconds of traffic. Mixed fanout has one publisher,
++15 healthy readers, four-message windows and the body-size cycle
++32, 1,024, 65,520, 65,536 and 1,048,544 bytes. These cases use OS TCP buffer policy.
++
++| Workload / observation | glibc median | Zen 5 median | CPU-dispatched median |
++| --- | ---: | ---: | ---: |
++| Dense 1 KiB: verified deliveries/s | 2,409,473 | 2,382,557 (−1.12%) | 2,409,955 (+0.02%) |
++| Dense 1 KiB: server CPU ns/delivery | 1,084.29 | 1,106.41 (+2.04%) | 1,102.64 (+1.69%) |
++| Mixed fanout: verified deliveries/s | 98,527 | 100,372 (+1.87%) | 99,455 (+0.94%) |
++| Mixed fanout: server CPU ns/delivery | 11,760.88 | 12,345.68 (+4.97%) | 12,313.64 (+4.70%) |
++
++Dense p99 upper buckets are 0.524288 ms in all variants. Fanout p99 buckets are
++1.048576 ms. Fanout ranges overlap: glibc 89,084–99,907, native 98,398–101,245
++and dispatched 98,257–100,515 deliveries/s. The small fanout throughput medians
++come with more CPU work and do not justify enabling a library by default.
++
++An initial four-worker near-1 MiB private case has only three active pairs and
++four-message windows. Its placement variation is substantial. The native
++AOCL median appears 8.59% faster, but control observations range from 7,316 to
++9,397/s, native from 7,618 to 10,525/s and dispatched from 6,786 to 9,388/s.
++The dispatched median is 0.82% lower than glibc. All raw observations remain
++recorded; that initial native median is not treated as an established gain.
++
++The repeat fixes the server at one worker on CPU 0, keeping the same six clients,
++near-1 MiB bodies, window and duration. It compares native and AVX2 AOCL with
++glibc. All candidates pass, including full output validation and retirement:
++
++| Fixed one-worker large-frame observation | glibc | Zen 5 | AVX2 |
++| --- | ---: | ---: | ---: |
++| Median verified deliveries/s | 4,919.60 | 4,565.42 (−7.20%) | 4,534.75 (−7.82%) |
++| Range of verified deliveries/s | 4,907–5,014 | 4,507–4,686 | 4,460–4,560 |
++| Median server CPU ns/delivery | 178,498.99 | 194,602.58 (+9.02%) | 197,883.36 (+10.86%) |
++| p99 upper bucket | 4.194304 ms | 4.194304 ms | 4.194304 ms |
++
++### 100,000-user comparison
++
++The population comparison uses four server workers on CPUs 0–3, the fixed
++eight-worker capacity client on CPUs 4–11, 100,000 users in 6,250 rooms, 1 KiB
++bodies and the 16 KiB send / 64 KiB receive operating profile. Each case offers
++ten messages/user/s for five seconds. All five million planned messages are
++eventually verified; their actual completion rate is reported. Three fresh
++runs per candidate rotate order. Both native and AVX2 AOCL are compared with
++the same glibc control binary:
++
++| 100,000-user overload observation | glibc | Zen 5 | AVX2 |
++| --- | ---: | ---: | ---: |
++| Median actual completions/s | 532,717 | 526,365 (−1.19%) | 535,008 (+0.43%) |
++| Completion-rate range | 519,459–541,920 | 511,035–534,786 | 525,934–535,845 |
++| Median server CPU ns/completion | 5,274 | 5,274 (unchanged) | 5,280 (+0.11%) |
++| Median user CPU seconds | 6.60 | 6.45 | 6.71 |
++| Median system CPU seconds | 19.89 | 19.92 | 19.94 |
++| RTT p99 upper bucket | 268.435456 ms | 268.435456 ms | 268.435456 ms |
++
++The ranges overlap and the CPU difference is negligible. The AVX2 median is
++not evidence of an established improvement. The offered million messages/s
++continues to overload four workers. Each of the nine runs verifies the entire
++100,000-user population with fresh routing before and after traffic, all
++45 million timed messages collectively, unique welcome IDs, exact counters,
++normal Close acknowledgements and EOF. Connections, sessions, queued bytes
++and receive reservations retire to zero, descriptors return to the permitted
++baseline allowance, and both server and client exit successfully without a
++forced kill. This is a finite loopback comparison, not a new WAN/TLS or
++long-duration acceptance claim.
++
++### Connection churn
++
++The management-side workload checks complete connect/upgrade/join/self-echo/
++normal-Close/EOF lifecycles, with 16 concurrent clients, four server workers,
++separate server/client CPU sets and five seconds per fresh run. The same
++verifying client rotates over 256 loopback source addresses to avoid an
++ephemeral-port ceiling. Three repetitions per candidate rotate order:
++
++| Complete-lifecycle observation | glibc | Zen 5 | AVX2 |
++| --- | ---: | ---: | ---: |
++| Median lifecycles/s | 139,528 | 140,512 (+0.71%) | 140,874 (+0.96%) |
++| Lifecycle-rate range | 137,404–141,114 | 138,728–141,737 | 138,153–141,557 |
++| Median server CPU ns/lifecycle | 14,061.41 | 14,147.71 (+0.61%) | 14,154.25 (+0.66%) |
++| p99 upper bucket | 0.524288 ms | 0.524288 ms | 0.524288 ms |
++
++These ranges overlap and the AOCL variants use slightly more CPU. All
++6,298,165 lifecycles across the nine runs validate the full handshake, distinct
++worker/counter payload, exact response, normal Close acknowledgement and TCP
++EOF. Service acceptance, registration, disconnection and delivery counters
++match, all application resources retire and every server exits successfully.
++The metric is completed lifecycles/s, not simultaneous users or total output
++frames/s.
++
++### Kernel/user diagnostic and validation
++
++A separate ten-second, one-worker near-1 MiB control diagnostic records 4,911
++cycle samples and zero lost samples. Kernel self samples account for about
++88.44% of the displayed total. `_copy_from_iter` is 11.55%, `_copy_to_iter`
++9.55%, page clearing 6.58% and `_raw_spin_lock_bh` 6.15%. All sampled libc code
++together is about 1.33%, including allocator and syscall wrappers that AOCL does
++not replace. Percentages are rounded self samples, not an elapsed-time speedup
++or a guarantee of a maximum possible gain. They do show that the prominent
++memory-copy samples are in the kernel, outside AOCL-LibMem's reach.
++
++All 141 existing Rust tests pass under each of the native, dispatched and AVX2
++libraries, using the 17 test executables built from the unchanged source. The
++completed upstream validation includes 157 iterator/power-of-two tests for
++memory routines and `strlen`, plus 234 boundary/alignment cases across the three
++builds. Iterator tests cover 0–4,096 bytes; shift tests reach 32 MiB for the other
++routines and 1 MiB for `memcmp`. Selected boundary sizes include zero,
++31/32, 63/64/65, 127/128/129, 1,024 and 4,095/4,096, with the upstream validator's
++full alignment sweep for each. The initial broader exhaustive campaign was
++stopped after 162 passes because its combined per-byte/alignment sweeps and
++large mismatch comparisons were expensive; it is retained as an interrupted
++diagnostic, not claimed as a completed suite.
++
++The independent protocol corpus also passes with native AOCL: 776 distinct
++cases and 2,311 scheduled exchanges cover whole, fragmented and pipelined input,
++malformed CBOR and WebSocket frames, Ping/Pong, exact policy Close/EOF,
++disconnect notifications and continuing healthy traffic. Finite validation is
++kept separate from the ordinary timing comparisons and from a production or
++long-duration capacity claim.
++
++The larger fragmented-input check runs eight sources through three 4 MiB
++fragment/reclamation waves, with independent healthy traffic and a fresh
++join/route after each wave. Glibc and all three AOCL builds each complete and
++verify 24 large messages, all Close handshakes, exact counters, staging bounds,
++24 reclamation events and complete retirement. Settled receive reservations
++are 16 or 32 KiB. A no-reclamation control retains 67,141,632 bytes between
++waves and records zero reclamation events; all 24 messages still complete.
++
++This check exposed a stale assertion in `fragment-waves.py`: it required exactly
++8 KiB per live connection after reclamation. The fixed worker reactor instead
++shares one 4 KiB slab per worker, with twice-capacity admission reservations.
++The old assertion fails on both glibc and AOCL because less memory is retained,
++while all message, reset and retirement checks pass. The runner now requires
++settled reservations to fit four worker slabs plus one possible partial frame
++on the independently active healthy socket: a 40 KiB ceiling. It still requires
++the exact reset count, sample coverage and zero final reservations. The original
++failure traces, previous runner and disabled-reclamation control are retained
++to distinguish a harness correction from a relay memory-management change.
++
++### Adoption decision
++
++None of these AOCL variants establishes a useful improvement for the tested
++relay workloads. The small dense, fanout, churn and population differences
++overlap process variation or cost more CPU; both optimized variants regress
++the fixed-layout large-frame case. Glibc remains the default, and no native
++server implementation, dependency, buffer ownership, queue, lock or service
++preload changes. The retained work is the isolated comparison/validation support,
++the corrected fragment-reclamation check, pinned local AOCL builds and this
++evidence record. The [operations recipe](operations.md#evaluating-aocl-libmem)
++can evaluate another release, CPU or operating workload without affecting clients
++or requiring a Rust rewrite.
+diff --git a/scripts/benchmark.py b/scripts/benchmark.py
+index 713a2a9..1349c32 100755
+--- a/scripts/benchmark.py
++++ b/scripts/benchmark.py
+@@ -22,6 +22,32 @@ SERVER = ROOT / "target/release/war-relay"
+ LOAD = ROOT / "target/release/examples/load"
+ 
+ 
++def preload_library(value):
++    """Resolve one loader-safe library path for a server-only experiment."""
++    path = Path(value).resolve()
++    if not path.is_file() or any(char.isspace() or char == ":" for char in str(path)):
++        raise argparse.ArgumentTypeError("preload must name a file with no whitespace or colon in its absolute path")
++    return path
++
++
++def preload_environment(environment, library):
++    # A process-wide preload would also change the supposedly fixed client.
++    if environment.get("LD_PRELOAD"):
++        raise ValueError("start without LD_PRELOAD; use the server-only preload option")
++    return environment | ({"LD_PRELOAD": str(library)} if library else {})
++
++
++def preload_metadata(library, pid=None):
++    if library is None:
++        return None
++    path = Path(library).resolve()
++    if pid is not None:
++        mappings = Path(f"/proc/{pid}/maps").read_text().splitlines()
++        if not any(line.split(maxsplit=5)[-1] == str(path) for line in mappings):
++            raise RuntimeError(f"requested preload was not mapped into server {pid}: {path}")
++    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
++
++
+ def free_port():
+     with socket.socket() as sock:
+         sock.bind(("127.0.0.1", 0))
+diff --git a/scripts/capacity.py b/scripts/capacity.py
+index 79ba808..604e954 100644
+--- a/scripts/capacity.py
++++ b/scripts/capacity.py
+@@ -116,6 +116,7 @@ def run(args):
+         admin = runtime.free_port()
+     environment = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
+     environment.update(WAR_ADMIN_TOKEN=TOKEN)
++    server_environment = runtime.preload_environment(environment, args.server_preload)
+     extra = 10 if args.pressure_client else 0
+     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
+                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", str(args.workers),
+@@ -152,7 +153,7 @@ def run(args):
+               "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
+     args.output.parent.mkdir(parents=True, exist_ok=True)
+     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
+-        server = subprocess.Popen(server_command, env=environment, stdout=logs, stderr=logs)
++        server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
+         client = None
+         pressure = pressure_result = None
+         perf = perf_log = None
+@@ -169,6 +170,7 @@ def run(args):
+                         raise
+                     time.sleep(.02)
+             result["baseline"] = {"server": process(server.pid), "machine": machine(), "metrics": observed}
++            result["server_preload"] = runtime.preload_metadata(args.server_preload, server.pid)
+             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
+             events = []
+@@ -312,6 +314,8 @@ if __name__ == "__main__":
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
+     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")
++    parser.add_argument("--server-preload", type=runtime.preload_library,
++                        help="Preload one shared library into the server only; record its hash and verify it is mapped")
+     parser.add_argument("--users", type=int, default=100_000)
+     parser.add_argument("--room-size", type=int, default=16)
+     parser.add_argument("--concurrency", type=int, default=64)
+diff --git a/scripts/compare.py b/scripts/compare.py
+index a763e08..18972d2 100644
+--- a/scripts/compare.py
++++ b/scripts/compare.py
+@@ -12,7 +12,7 @@ import platform
+ import statistics
+ import subprocess
+ 
+-from stability import ROOT, STRESS, run_case
++from stability import ROOT, STRESS, run_case, runtime
+ 
+ 
+ def candidate(value):
+@@ -27,6 +27,8 @@ def main():
+     parser.add_argument("--candidate", type=candidate, action="append", required=True)
+     parser.add_argument("--server-arg", action="append", default=[], metavar="LABEL=ARG",
+                         help="Append one server argument for a candidate, e.g. enabled=--idle-timeout-secs=300; repeat as needed.")
++    parser.add_argument("--server-preload", action="append", default=[], metavar="LABEL=LIBRARY",
++                        help="Preload one shared library into this candidate's server only; record its hash and verify it is mapped.")
+     parser.add_argument("--stress", type=Path, default=STRESS)
+     parser.add_argument("--repetitions", type=int, default=3)
+     parser.add_argument("--seconds", type=int, default=15)
+@@ -39,13 +41,25 @@ def main():
+     parser.add_argument("--window", type=int, default=16)
+     parser.add_argument("--record-failures", action="store_true", help="Keep comparing after a failed case; exit 1 if any case fails.")
+     parser.add_argument("--server-cpus", default="0-3")
++    parser.add_argument("--workers", type=int, default=4)
+     parser.add_argument("--client-cpus", default="4-7")
+     parser.add_argument("--output", type=Path, required=True)
+     args = parser.parse_args()
++    if not 1 <= args.workers <= 256:
++        parser.error("workers must be in 1..=256")
+     labels = [label for label, _ in args.candidate]
+     if len(set(labels)) != len(labels) or args.repetitions < 1 or not 1 <= args.seconds <= 3600 or not 8 <= args.payload_bytes <= 1048544:
+         parser.error("use unique labels, positive repetitions, seconds in 1..=3600, and payload bytes in 8..=1048544")
+     server_args = {label: [] for label in labels}
++    server_preloads = {label: None for label in labels}
++    for item in args.server_preload:
++        label, separator, value = item.partition("=")
++        if not separator or label not in server_preloads or server_preloads[label] is not None:
++            parser.error("preloads require an existing candidate label and at most one library per candidate")
++        try:
++            server_preloads[label] = runtime.preload_library(value)
++        except argparse.ArgumentTypeError as error:
++            parser.error(str(error))
+     for item in args.server_arg:
+         label, separator, value = item.partition("=")
+         if not separator or label not in server_args or not value or len(value) > 4096:
+@@ -64,13 +78,17 @@ def main():
+         "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+         "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+         "server_cpus": args.server_cpus, "client_cpus": args.client_cpus,
++        "workers": args.workers,
++        "runner_sources_sha256": {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
++                                  for name in ("scripts/compare.py", "scripts/stability.py", "scripts/benchmark.py")},
+         "seconds": args.seconds, "clients": args.clients, "repetitions": args.repetitions,
+         "payload_bytes": args.payload_bytes,
+         "mode": args.mode, "payload_sizes": args.payload_sizes, "unread_clients": args.unread_clients,
+         "reader_delay_ms": args.reader_delay_ms, "window": args.window,
+         "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
+-        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "server_args": server_args[label]} for label, path in args.candidate},
+-        "notes": "Sequential fresh four-worker servers. Same fixed verifying client binary, sizes and window for each candidate. CPU sets separate client/server physical cores on the recorded host. Rates disabled; heartbeat enabled. Position rotates per repetition. CPU seconds include setup and teardown. Latency quantiles are fixed-histogram upper bounds; fanout latency begins at window publication. Summary timings include only passed cases. No frequency governor changes.",
++        "candidates": {label: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "server_args": server_args[label],
++                               "server_preload": runtime.preload_metadata(server_preloads[label])} for label, path in args.candidate},
++        "notes": f"Sequential fresh {args.workers}-worker servers. Same fixed verifying client binary, sizes and window for each candidate. CPU sets separate client/server physical cores on the recorded host. Rates disabled; heartbeat enabled. Position rotates per repetition. CPU seconds include setup and teardown. Latency quantiles are fixed-histogram upper bounds; fanout latency begins at window publication. Summary timings include only passed cases. No frequency governor changes.",
+         "runs": [], "summary": {},
+     }
+     for repetition in range(args.repetitions):
+@@ -81,7 +99,8 @@ def main():
+                             stress_binary=args.stress, server_cpus=args.server_cpus,
+                             client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
+                             payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
+-                            reader_delay_ms=args.reader_delay_ms, window=args.window, server_args=server_args[label])
++                            reader_delay_ms=args.reader_delay_ms, window=args.window, server_args=server_args[label],
++                            server_preload=server_preloads[label], server_workers=args.workers)
+             trace = traces / f"{repetition}-{position}.json"
+             trace.write_text(json.dumps(case, indent=2) + "\n")
+             result = next((entry for entry in case["output"] if entry.get("event") == "result"), {})
+diff --git a/scripts/fragment-waves.py b/scripts/fragment-waves.py
+index 5786143..4bfe26c 100644
+--- a/scripts/fragment-waves.py
++++ b/scripts/fragment-waves.py
+@@ -21,6 +21,7 @@ spec.loader.exec_module(runtime)
+ def run(args):
+     port, admin = runtime.free_port(), runtime.free_port()
+     env = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
++    server_env = runtime.preload_environment(env, args.server_preload)
+     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
+                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", "4",
+                       "--messages-per-second", "0", "--bytes-per-second", "0",
+@@ -37,7 +38,7 @@ def run(args):
+                       "--expect-completed", str(args.expect_completed), "--expect-rejected", str(args.expect_rejected)]
+     client = None
+     with tempfile.TemporaryFile() as log:
+-        server = subprocess.Popen(server_command, env=env, stdout=log, stderr=log)
++        server = subprocess.Popen(server_command, env=server_env, stdout=log, stderr=log)
+         try:
+             for _ in range(200):
+                 if server.poll() is not None:
+@@ -51,6 +52,7 @@ def run(args):
+             else:
+                 raise TimeoutError("server startup")
+             baseline = runtime.snapshot(server.pid)
++            preload = runtime.preload_metadata(args.server_preload, server.pid)
+             client = subprocess.Popen(client_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+             samples, events, pending, phase = [], [], b"", ("startup", None)
+             started = time.monotonic()
+@@ -108,16 +110,20 @@ def run(args):
+             large_input = args.message_bytes > 65536
+             for wave in range(args.cycles):
+                 held = [s for s in samples if s["phase"] == "settled" and s["wave"] == wave]
+-                event = next((e for e in events if e["event"] == "settled" and e["wave"] == wave), None)
+                 last = held[-1] if held else None
+                 # Only assert automatic resets when the client waited beyond
+                 # the configured deadline. Disabled/no-wait cases still record
+                 # high-water retention without pretending it was reclaimed.
+-                expected = 8192*(event["active"]+1) if event else None
++                # Completed sources are between frames and share one 4 KiB
++                # slab per worker. Reservations cover twice its capacity.
++                # The independent healthy socket can also own a partial frame
++                # while its worker retains another empty slab. Idle sources
++                # must not retain an additional slab or fragment high-water.
++                maximum = 8192*(4+1)
+                 required = bool(limit and large_input and args.reclaim_secs and args.cooldown_secs > args.reclaim_secs)
+-                ok = not required or (last is not None and int(last["metrics"]["war_read_buffer_reserved_bytes"]) == expected)
++                ok = not required or (last is not None and 0 <= int(last["metrics"]["war_read_buffer_reserved_bytes"]) <= maximum)
+                 reclaimed = reclaimed and ok
+-                settled.append({"wave":wave,"expected_base_bytes":expected,"reclaim_required":required,
++                settled.append({"wave":wave,"maximum_settled_bytes":maximum,"reclaim_required":required,
+                                 "observed_reserved_bytes":int(last["metrics"]["war_read_buffer_reserved_bytes"]) if last else None,
+                                 "sample_count":len(held),"passed":ok})
+             resets_expected = None
+@@ -127,6 +133,7 @@ def run(args):
+                 resets_expected = result["completed"]
+             resets_match = resets_expected is None or int(final["war_read_buffer_reclaims_total"]) == resets_expected
+             return {"server_command":server_command,"client_command":client_command,
++                    "server_preload":preload,
+                     "server_sha256":hashlib.sha256(args.server.read_bytes()).hexdigest(),
+                     "client_sha256":hashlib.sha256(args.client.read_bytes()).hexdigest(),
+                     "baseline":baseline,"samples":samples,"events":events,"final_metrics":final,
+@@ -151,6 +158,8 @@ def run(args):
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--server", type=Path, default=ROOT/"target/release/war-relay")
++    parser.add_argument("--server-preload", type=runtime.preload_library,
++                        help="Preload one shared library into the server only; verify its mapping and record its hash")
+     parser.add_argument("--client", type=Path, default=ROOT/"target/release/examples/fragment_waves")
+     parser.add_argument("--clients", type=int, default=8)
+     parser.add_argument("--cycles", type=int, default=3)
+diff --git a/scripts/input-corpus.py b/scripts/input-corpus.py
+index 826598d..ebd425f 100644
+--- a/scripts/input-corpus.py
++++ b/scripts/input-corpus.py
+@@ -343,6 +343,7 @@ def run(args):
+                "--total-read-buffer-bytes", str(64*LIMIT)]
+     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
+     env["WAR_ADMIN_TOKEN"] = TOKEN
++    server_env = wire.runtime.preload_environment(env, args.server_preload)
+     result = {"server_command": command, "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
+               "passed": False, "samples": []}
+     stop, ready = threading.Event(), threading.Event()
+@@ -350,7 +351,7 @@ def run(args):
+     thread = None
+     healthy_stats, healthy_errors = [], []
+     with tempfile.TemporaryFile() as log:
+-        server = subprocess.Popen(command, env=env, stdout=log, stderr=log)
++        server = subprocess.Popen(command, env=server_env, stdout=log, stderr=log)
+         try:
+             for _ in range(200):
+                 if server.poll() is not None:
+@@ -362,6 +363,7 @@ def run(args):
+                     time.sleep(.02)
+             else:
+                 raise TimeoutError("server startup")
++            result["server_preload"] = wire.runtime.preload_metadata(args.server_preload, server.pid)
+             healthy = Peer(port)
+             healthy.join(b"corpus-healthy")
+             def probe():
+@@ -451,6 +453,8 @@ def run(args):
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--server", type=Path, default=ROOT/"target/release/war-relay")
++    parser.add_argument("--server-preload", type=wire.runtime.preload_library,
++                        help="Preload one shared library into the server only; verify its mapping and record its hash")
+     parser.add_argument("--workers", type=int, choices=[1,4], default=4)
+     parser.add_argument("--clients", type=int, choices=range(1,9), default=4)
+     parser.add_argument("--modes", nargs="+", choices=["whole","fragmented","pipeline"], default=["whole","fragmented","pipeline"])
+diff --git a/scripts/stability.py b/scripts/stability.py
+index fd22dca..7122263 100644
+--- a/scripts/stability.py
++++ b/scripts/stability.py
+@@ -33,9 +33,11 @@ def sample(pid, admin, started):
+ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
+              server_cpus=None, client_cpus=None, payload_bytes=None,
+              payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None,
+-             source_addresses=0):
++             source_addresses=0, server_preload=None, server_workers=4):
+     if not 0 <= source_addresses <= 65534 or (source_addresses and mode != "churn"):
+         raise ValueError("source-addresses requires churn mode and a value in 0..=65534")
++    if not 1 <= server_workers <= 256:
++        raise ValueError("server workers must be in 1..=256")
+     port, admin = runtime.free_port(), runtime.free_port()
+     actual_payload = payload_bytes if payload_bytes is not None else (65536 if mode == "slow" else 1024)
+     largest_payload = max(payload_sizes or [actual_payload])
+@@ -43,16 +45,17 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
+     # bytes. Keep the deliberate unread-client case at its original tight cap.
+     queue_bytes = max(1048586, (largest_payload + 20) * 32) if mode in ("traffic", "fanout") else 1048586
+     env = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
++    server_env = runtime.preload_environment(env, server_preload)
+     with tempfile.TemporaryFile() as logs:
+         server_command = [
+             str(Path(server_binary or runtime.SERVER).resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
+-            "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0",
++            "--workers", str(server_workers), "--messages-per-second", "0", "--bytes-per-second", "0",
+             "--max-message-bytes", "1048576", "--queue-bytes", str(queue_bytes),
+         ]
+         server_command.extend(server_args)
+         if server_cpus:
+             server_command = ["taskset", "-c", server_cpus] + server_command
+-        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=env)
++        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_env)
+         process = None
+         try:
+             started = time.monotonic()
+@@ -67,6 +70,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
+                     if time.monotonic() - started > 5:
+                         raise
+                     time.sleep(0.02)
++            preload = runtime.preload_metadata(server_preload, server.pid)
+             command = [str(Path(stress_binary or STRESS).resolve()), "--url", f"ws://127.0.0.1:{port}", "--mode", mode,
+                        "--clients", str(clients), "--duration-secs", str(seconds),
+                        "--payload-bytes", str(actual_payload), "--window", str(window)]
+@@ -132,6 +136,7 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
+                 pressure_valid = result_output is not None and int(metrics["war_slow_consumers_total"]) >= unread_clients and result_output["disconnect_notifications"] == unread_clients * result_output["healthy_readers"]
+             result = {"mode": mode, "duration_seconds": seconds, "clients": clients,
+                       "command": command, "server_command": server_command,
++                      "server_preload": preload,
+                       "server_cpus": server_cpus, "client_cpus": client_cpus,
+                       "baseline": baseline, "samples": observations,
+                       "admin_errors": errors, "output": output, "stderr": stderr,
+@@ -176,10 +181,13 @@ def main():
+     parser.add_argument("--modes", nargs="+", choices=["traffic", "churn", "slow", "fanout"], default=["traffic", "churn", "slow"])
+     parser.add_argument("--output", type=Path, required=True)
+     parser.add_argument("--server", type=Path, default=runtime.SERVER)
++    parser.add_argument("--server-preload", type=runtime.preload_library,
++                        help="Preload one shared library into the server only; verify its mapping and record its hash")
+     parser.add_argument("--stress", type=Path, default=STRESS)
+     parser.add_argument("--origin", help="Exact Origin header sent by the workload")
+     parser.add_argument("--allowed-origin", action="append", default=[], help="Server allowlist entry; repeat as needed")
+     parser.add_argument("--server-cpus")
++    parser.add_argument("--workers", type=int, default=4)
+     parser.add_argument("--client-cpus")
+     parser.add_argument("--payload-bytes", type=int)
+     parser.add_argument("--payload-sizes", type=lambda value: [int(item) for item in value.split(",")])
+@@ -200,7 +208,7 @@ def main():
+               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+               "working_tree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+               "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(list((ROOT / "src").rglob("*.rs")) + [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "examples/stress.rs"])},
+-              "notes": "Sequential fresh four-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic/fanout output budget is max(1 MiB + 10, 32 * (largest payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds; fanout latency starts at window publication. Not a long-term or production capacity guarantee.",
++              "notes": f"Sequential fresh {args.workers}-worker servers; 4 KiB default read buffers; heartbeats enabled, rates disabled for stress, 1 MiB message limit. Traffic/fanout output budget is max(1 MiB + 10, 32 * (largest payload bytes + 20)); other modes retain the tight 1 MiB + 10 budget. Server-only RSS/CPU and HTTP metrics sampled every 250ms. Loopback, no TLS. Latency quantiles are fixed-histogram bucket upper bounds; fanout latency starts at window publication. Not a long-term or production capacity guarantee.",
+               "cases": []}
+     args.output.parent.mkdir(parents=True, exist_ok=True)
+     server_args = [part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]
+@@ -214,7 +222,8 @@ def main():
+                                        payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
+                                        reader_delay_ms=args.reader_delay_ms, window=args.window,
+                                        origin=args.origin, source_addresses=args.source_addresses,
+-                                       server_args=server_args))
++                                       server_args=server_args, server_preload=args.server_preload,
++                                       server_workers=args.workers))
+         args.output.write_text(json.dumps(output, indent=2) + "\n")
+     if not all(case["passed"] for case in output["cases"]):
+         raise SystemExit(1)

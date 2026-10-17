@@ -842,3 +842,57 @@ changing interrupt or flow steering; the [kernel scaling guide](https://docs.ker
 describes RSS, RPS, RFS and XPS. The [C10M-guided measurements](performance.md#c10m-guidance-and-the-socket-send-path-2026-10-17)
 record the current socket-call improvement and the prototypes removed after
 measurement. They cover loopback without a TLS edge or remote NIC.
+
+## Evaluating AOCL-LibMem
+
+The Linux benchmark tools accept an explicit **server-only** shared-library
+preload. This allows the same frozen relay and verifying client to compare
+glibc with [AMD AOCL-LibMem](https://github.com/amd/aocl-libmem), preserving the
+relay's shared CBOR bodies and vectored output. The library replaces eligible
+out-of-line libc calls; compiler-inlined operations, Rust's own SIMD routines
+and kernel TCP copies remain separate. A successful preload does not establish
+a performance improvement. See the [measured AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17)
+before selecting it for an operating workload.
+
+Build a pinned library inside the ignored artifact directory:
+
+```sh
+git clone --depth 1 --branch 5.3.2 https://github.com/amd/aocl-libmem.git artifacts/reference/aocl-libmem-5.3.2
+cmake -S artifacts/reference/aocl-libmem-5.3.2 \
+  -B artifacts/aocl-libmem-5.3.2-dispatch -G 'Unix Makefiles' \
+  -DCMAKE_C_COMPILER=gcc -DALMEM_DYN_DISPATCH=Y
+cmake --build artifacts/aocl-libmem-5.3.2-dispatch --parallel
+cmake --install artifacts/aocl-libmem-5.3.2-dispatch
+```
+
+Upstream's standalone build installs into its own build directory. These
+commands do not install system libraries. The study also builds
+`-DALMEM_ARCH=zen5` in a separate directory on its verified Zen 5/AVX-512 host.
+That architecture-specific build must only be used on a compatible CPU. The
+dispatched build performs CPU selection at runtime. Follow AMD's
+[build requirements and CPU compatibility guidance](https://github.com/amd/aocl-libmem/blob/5.3.2/BUILD_RUN.md)
+when building on another host. This release's CMake configuration produces
+duplicate-output errors with Ninja on the measured host; Makefiles work.
+
+After building the relay and fixed stress client, compare the same executable:
+
+```sh
+python3 scripts/compare.py \
+  --candidate glibc=target/release/war-relay \
+  --candidate aocl=target/release/war-relay \
+  --server-preload aocl=artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so \
+  --stress target/release/examples/stress \
+  --mode traffic --clients 64 --payload-bytes 1024 --window 16 \
+  --seconds 8 --repetitions 3 --output artifacts/aocl-comparison.json
+```
+
+`capacity.py`, `stability.py`, `input-corpus.py` and `fragment-waves.py` also
+accept `--server-preload PATH`. The client and pressure sidecar retain the
+original environment. The runners reject an inherited `LD_PRELOAD`, reject
+loader paths containing whitespace or colons, verify the resolved library path
+in the server's `/proc/PID/maps` after readiness, and record its SHA-256. A
+loader that ignores an invalid library therefore cannot silently produce a
+baseline result labelled as AOCL. Mapping verification establishes loading;
+the separate loader-binding diagnostic in the study proves which symbols are
+actually replaced. Run diagnostics, builds and validation separately from
+ordinary timing trials. Avoid setting a machine-wide preload.

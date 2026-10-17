@@ -1,0 +1,1472 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "parent_revision": "ec1b55b8b837a92c6c74e0ddedd081997fbc2752",
+  "decision": "Retain glibc. No AOCL candidate establishes a useful whole-workload benefit; keep the server-only evaluation support and corrected fragment-harness assertion.",
+  "native_runtime_changed": false,
+  "native_source_hashes": {
+    "Cargo.toml": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4",
+    "Cargo.lock": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620",
+    "src/admin.rs": "835c1362f83dbb39c57c83ab067d9f6fa5d0f92eb19799389e9a0b491151249d",
+    "src/admission.rs": "cef4441d064bfe1aff33a6fcee33b475cd609ccd89e4068732e3c5ddbfded75d",
+    "src/bin/war-legacy-bridge.rs": "0b595f2a1b9b8695227fc52d15f7a9298e952b8b4a9aad507fed2b525479f80f",
+    "src/common.rs": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529",
+    "src/config.rs": "106aa1507232da1d036fb14f04f60669472e658575eb342f2a5bad42b1187ac7",
+    "src/frame.rs": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563",
+    "src/legacy.rs": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde",
+    "src/legacy_bridge.rs": "cbfe9f40f7629f78777bfe3b67ec82b21540300bfca87d33592034eab4126e12",
+    "src/lib.rs": "7cb9923b3c87e649a19cea41f74833ca0ad2d1a03fcb72ba7da3fe5cfcedce83",
+    "src/main.rs": "d58e81259758ebce6e327beb0374055a6930ba8cbeeeba70b2857eb366a021ae",
+    "src/metrics.rs": "84cb61384398b86e9d31e5f2c884132f402932fa7e4a6cb09768361c8525e506",
+    "src/origin.rs": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf",
+    "src/protocol.rs": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54",
+    "src/relay/broadcast_tests.rs": "d1e6a721ce1fefb6490abfbf932c2549e61e9d545452d1135895a3e9d9edca33",
+    "src/relay/channel_tests.rs": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4",
+    "src/relay/listener_tests.rs": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765",
+    "src/relay/listing.rs": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4",
+    "src/relay.rs": "f8bf9a0df11df5442cf84d3ba587db02fda3b8f3df2ae99cc5f2104c639d71d9",
+    "src/server/accept_tests.rs": "620c95dd05d625ebf03e6d22426ab1cf5e967998269f001cb1b773d9187ad1ef",
+    "src/server/arena_tests.rs": "75afb417e1d5a9b140f9858af926afeed5f675b999e086b35aad981d3716eb5c",
+    "src/server/close_tests.rs": "157d9ca4d4d444a0c1a7785b79cc3d82a971f8c7e3379cfb774c5f780c1fcb10",
+    "src/server/fairness_tests.rs": "91fae8dc7ce1d5fdf71aba5fb0975715849a6c012ea8b0631285e81786a8c5b7",
+    "src/server/ownership_tests.rs": "16fbc340ffb4412efb96ae9d19f924484bf2692ec1c2a636e1586c1dadf85574",
+    "src/server/socket.rs": "3137ac470df0862bf4dc077825c013f692b9338e745afcad1930c1942ce6ecaa",
+    "src/server/timers.rs": "9402ecec9e77b18a8c91bc6b9ade140a1564c445e1919f61b943357e7c2b16d1",
+    "src/server.rs": "1d06c51b3dbfe712508f1909420ba5da37279ecc636bfcea8197a077d2f4e13f",
+    "src/transport.rs": "236c0793c8a529699f1b700a5271b85a6fc452e60f9fae3807733b5cff9bddd1"
+  },
+  "mixed_size_routing_policy": "Existing compaction detaches small views from large receive allocations; about 0.0452 percent of mixed-fanout routed value bytes are copied once. Reused plus copied value bytes match the client's expected total. Fixed-size cases have zero routed-body copies.",
+  "baseline_manifest": {
+    "path": "2026-10-17-c10m.json",
+    "sha256": "c594f32f0ab646fdcd1493cce31224b463664390aa2c29d723b1c62798eb7a91"
+  },
+  "binaries": {
+    "native": {
+      "path": "artifacts/baselines/c10m-sendmsg/war-relay",
+      "sha256": "c27ff051a53e8edbef3070d9e328aa262a86fbb61898f882db6427ada7cdc988",
+      "bytes": 3791584
+    },
+    "capacity_client": {
+      "path": "artifacts/baselines/capacity-final/capacity",
+      "sha256": "fd81cb4b6183b7aa942f83d3ec90ed4faeb6376a5103efcd7aff4aaf16b3fc39",
+      "bytes": 1961768
+    },
+    "stress_client": {
+      "path": "artifacts/baselines/capacity-final/stress",
+      "sha256": "8aa8270a97d98fde8f4878bb8798161c92539f7111fae86e50a54adaf0c8b1aa",
+      "bytes": 2099064
+    },
+    "fragment_client": {
+      "path": "target/release/examples/fragment_waves",
+      "sha256": "15f54cd490dad387ba6c19521e3d139892c4e930d8aa77bab42fa0e7401dc245",
+      "bytes": 1811104
+    }
+  },
+  "aocl_builds": {
+    "repository": "https://github.com/amd/aocl-libmem",
+    "tag": "5.3.2",
+    "source_revision": "876f5c1738d2bf681a52d2e595e16f24187be552",
+    "source_status": "",
+    "host": "Linux-7.2.9-arch1-1-x86_64-with-glibc2.44",
+    "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  32\nOn-line CPU(s) list:                     0-31\nVendor ID:                               AuthenticAMD\nModel name:                              AMD RYZEN AI MAX+ 395 w/ Radeon 8060S\nCPU family:                              26\nModel:                                   112\nThread(s) per core:                      2\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                0\nMicrocode version:                       0xb700037\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      61%\nCPU max MHz:                             5187.5000\nCPU min MHz:                             625.0000\nBogoMIPS:                                6000.15\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx_vnni avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid bus_lock_detect movdiri movdir64b overflow_recov succor smca fsrm avx512_vp2intersect flush_l1d amd_lbr_pmc_freeze\nVirtualization:                          AMD-V\nL1d cache:                               768 KiB (16 instances)\nL1i cache:                               512 KiB (16 instances)\nL2 cache:                                16 MiB (16 instances)\nL3 cache:                                64 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-31\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Mitigation; IBPB on VMEXIT only\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP always-on; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB on VMEXIT\n",
+    "compiler": "gcc (GCC) 16.2.1 20260810\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\n",
+    "glibc": "ldd (GNU libc) 2.44\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\n",
+    "builds": {
+      "zen5": {
+        "configure_command": [
+          "cmake",
+          "-S",
+          "/home/phil/dev/war_next/artifacts/reference/aocl-libmem-5.3.2",
+          "-B",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5",
+          "-G",
+          "Unix Makefiles",
+          "-DCMAKE_C_COMPILER=gcc",
+          "-DALMEM_ARCH=zen5"
+        ],
+        "build_command": [
+          "cmake",
+          "--build",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5",
+          "--parallel",
+          "12"
+        ],
+        "install_command": [
+          "cmake",
+          "--install",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5"
+        ],
+        "library": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "d5bc8146b80f85d266f9e8d69597b376a3d20a8cc11442d963bfe0860d69aa0c",
+        "bytes": 58056,
+        "dependencies": "\tlinux-vdso.so.1 (0x00007fe91566b000)\n\tlibc.so.6 => /usr/lib/libc.so.6 (0x00007fe915200000)\n\t/usr/lib64/ld-linux-x86-64.so.2 (0x00007fe91566d000)\n",
+        "cache_sha256": "0c18f228fec86814913b5c83773249f801e7646a327c9d6596f66e465f6aba3f"
+      },
+      "dispatch": {
+        "configure_command": [
+          "cmake",
+          "-S",
+          "/home/phil/dev/war_next/artifacts/reference/aocl-libmem-5.3.2",
+          "-B",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch",
+          "-G",
+          "Unix Makefiles",
+          "-DCMAKE_C_COMPILER=gcc",
+          "-DALMEM_DYN_DISPATCH=Y"
+        ],
+        "build_command": [
+          "cmake",
+          "--build",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch",
+          "--parallel",
+          "12"
+        ],
+        "install_command": [
+          "cmake",
+          "--install",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch"
+        ],
+        "library": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "a561fd4a8f63046add5c9ca3d6608b1daa4de649f80dbdf98501255d71a52483",
+        "bytes": 378944,
+        "dependencies": "\tlinux-vdso.so.1 (0x00007f4fbfaff000)\n\tlibc.so.6 => /usr/lib/libc.so.6 (0x00007f4fbf800000)\n\t/usr/lib64/ld-linux-x86-64.so.2 (0x00007f4fbfb01000)\n",
+        "cache_sha256": "b55f05617f0a840c8213a99aa14b95a22581f22b1475ee43544d97b70095a025"
+      },
+      "avx2": {
+        "configure_command": [
+          "cmake",
+          "-S",
+          "/home/phil/dev/war_next/artifacts/reference/aocl-libmem-5.3.2",
+          "-B",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2",
+          "-G",
+          "Unix Makefiles",
+          "-DCMAKE_C_COMPILER=gcc",
+          "-DALMEM_ISA=avx2"
+        ],
+        "build_command": [
+          "cmake",
+          "--build",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2",
+          "--parallel",
+          "12"
+        ],
+        "install_command": [
+          "cmake",
+          "--install",
+          "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2"
+        ],
+        "library": "/home/phil/dev/war_next/artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so.5.3.2",
+        "sha256": "899a1a5b8bbeeef020a281ec7fe05f8deee0e16404b29ef803914b88e3130fb3",
+        "bytes": 78296,
+        "dependencies": "\tlinux-vdso.so.1 (0x00007f1920c89000)\n\tlibc.so.6 => /usr/lib/libc.so.6 (0x00007f1920a00000)\n\t/usr/lib64/ld-linux-x86-64.so.2 (0x00007f1920c8b000)\n",
+        "cache_sha256": "c3ba8abd055d3bce1b20403b826f252de34840a06d55b7a02d0afbb285968c67"
+      }
+    }
+  },
+  "ordinary_passed_trials": 54,
+  "comparisons": {
+    "aocl-dense-1k": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-dense-1k.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 2409473.2953298744,
+          "min_deliveries_per_second": 2402207.653600418,
+          "max_deliveries_per_second": 2424246.280973933,
+          "median_server_cpu_ns_per_delivery": 1084.2906851850935,
+          "median_p99_upper_ms": 0.524288
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 2382556.629371769,
+          "min_deliveries_per_second": 2369088.8421177603,
+          "max_deliveries_per_second": 2418252.636664677,
+          "median_server_cpu_ns_per_delivery": 1106.4147503500237,
+          "median_p99_upper_ms": 0.524288
+        },
+        "dispatch": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 2409954.8204141445,
+          "min_deliveries_per_second": 2409320.3532300745,
+          "max_deliveries_per_second": 2436151.920717859,
+          "median_server_cpu_ns_per_delivery": 1102.6440221134585,
+          "median_p99_upper_ms": 0.524288
+        }
+      },
+      "passed_runs": 9
+    },
+    "aocl-dense-1m": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-dense-1m.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 7768.869355232329,
+          "min_deliveries_per_second": 7316.234058302954,
+          "max_deliveries_per_second": 9397.08223283765,
+          "median_server_cpu_ns_per_delivery": 226853.4335497096,
+          "median_p99_upper_ms": 4.194304
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 8436.09312434928,
+          "min_deliveries_per_second": 7618.049725210638,
+          "max_deliveries_per_second": 10524.762660224636,
+          "median_server_cpu_ns_per_delivery": 197481.4814814815,
+          "median_p99_upper_ms": 4.194304
+        },
+        "dispatch": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 7705.022447541941,
+          "min_deliveries_per_second": 6785.608735738593,
+          "max_deliveries_per_second": 9388.274844881335,
+          "median_server_cpu_ns_per_delivery": 238967.01445142893,
+          "median_p99_upper_ms": 4.194304
+        }
+      },
+      "passed_runs": 9
+    },
+    "aocl-fanout-mixed": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-fanout-mixed.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 98527.17439232042,
+          "min_deliveries_per_second": 89083.5401434859,
+          "max_deliveries_per_second": 99907.35678280405,
+          "median_server_cpu_ns_per_delivery": 11760.878812901934,
+          "median_p99_upper_ms": 1.048576
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 100371.62840396135,
+          "min_deliveries_per_second": 98398.40809825397,
+          "max_deliveries_per_second": 101245.0860064725,
+          "median_server_cpu_ns_per_delivery": 12345.67901234568,
+          "median_p99_upper_ms": 1.048576
+        },
+        "dispatch": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 99455.29293786676,
+          "min_deliveries_per_second": 98257.04003751886,
+          "max_deliveries_per_second": 100514.99256189055,
+          "median_server_cpu_ns_per_delivery": 12313.641683203583,
+          "median_p99_upper_ms": 1.048576
+        }
+      },
+      "passed_runs": 9
+    },
+    "aocl-single-1m": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-single-1m.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 4919.60199379569,
+          "min_deliveries_per_second": 4907.350268560535,
+          "max_deliveries_per_second": 5013.583514426771,
+          "median_server_cpu_ns_per_delivery": 178498.98580121703,
+          "median_p99_upper_ms": 4.194304
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 4565.4239106612895,
+          "min_deliveries_per_second": 4506.659639873367,
+          "max_deliveries_per_second": 4685.851192441487,
+          "median_server_cpu_ns_per_delivery": 194602.58375301072,
+          "median_p99_upper_ms": 4.194304
+        },
+        "avx2": {
+          "passed_runs": 3,
+          "failed_runs": 0,
+          "median_deliveries_per_second": 4534.748101353124,
+          "min_deliveries_per_second": 4459.784721329781,
+          "max_deliveries_per_second": 4560.186499271379,
+          "median_server_cpu_ns_per_delivery": 197883.3645684048,
+          "median_p99_upper_ms": 4.194304
+        }
+      },
+      "passed_runs": 9
+    },
+    "aocl-capacity": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-capacity.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "median_deliveries_per_second": 532716.7842015281,
+          "min_deliveries_per_second": 519459.0716765797,
+          "max_deliveries_per_second": 541919.675496452,
+          "median_server_cpu_ns_per_delivery": 5273.999999999999,
+          "median_p99_upper_ms": 268.435456,
+          "median_server_user_cpu_seconds": 6.6000000000000005,
+          "median_server_system_cpu_seconds": 19.89
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "median_deliveries_per_second": 526365.244480374,
+          "min_deliveries_per_second": 511035.1902605498,
+          "max_deliveries_per_second": 534786.4434776417,
+          "median_server_cpu_ns_per_delivery": 5274.0,
+          "median_p99_upper_ms": 268.435456,
+          "median_server_user_cpu_seconds": 6.449999999999999,
+          "median_server_system_cpu_seconds": 19.919999999999998
+        },
+        "avx2": {
+          "passed_runs": 3,
+          "median_deliveries_per_second": 535008.1325500163,
+          "min_deliveries_per_second": 525933.9145605527,
+          "max_deliveries_per_second": 535844.9419730008,
+          "median_server_cpu_ns_per_delivery": 5280.0,
+          "median_p99_upper_ms": 268.435456,
+          "median_server_user_cpu_seconds": 6.71,
+          "median_server_system_cpu_seconds": 19.939999999999998
+        }
+      },
+      "passed_runs": 9
+    },
+    "aocl-churn": {
+      "artifact": "2026-10-17-aocl/artifacts/aocl-churn.json",
+      "summary": {
+        "glibc": {
+          "passed_runs": 3,
+          "median_lifecycles_per_second": 139528.39525601343,
+          "min_lifecycles_per_second": 137404.40908669712,
+          "max_lifecycles_per_second": 141114.07812208706,
+          "median_server_cpu_ns_per_lifecycle": 14061.41153064413,
+          "median_p99_upper_ms": 0.524288
+        },
+        "zen5": {
+          "passed_runs": 3,
+          "median_lifecycles_per_second": 140512.09586509803,
+          "min_lifecycles_per_second": 138728.27166860038,
+          "max_lifecycles_per_second": 141736.68146182218,
+          "median_server_cpu_ns_per_lifecycle": 14147.714090923972,
+          "median_p99_upper_ms": 0.524288
+        },
+        "avx2": {
+          "passed_runs": 3,
+          "median_lifecycles_per_second": 140874.32421683267,
+          "min_lifecycles_per_second": 138152.6935684114,
+          "max_lifecycles_per_second": 141556.59962474016,
+          "median_server_cpu_ns_per_lifecycle": 14154.251528290048,
+          "median_p99_upper_ms": 0.524288
+        }
+      },
+      "passed_runs": 9
+    }
+  },
+  "capacity_verified_timed_messages": 45000000,
+  "churn_verified_lifecycles": 6298165,
+  "validation": {
+    "rust_tests_per_library": 141,
+    "library_builds": 3,
+    "test_executables_per_library": 17,
+    "completed_upstream_size_tests": 157,
+    "completed_upstream_boundary_alignment_cases": 234,
+    "protocol_corpus_cases": 776,
+    "protocol_corpus_exchanges": 2311,
+    "fragment_cases": [
+      "glibc",
+      "zen5",
+      "dispatch",
+      "avx2",
+      "no-reclaim"
+    ],
+    "fragment_messages_per_case": 24,
+    "initial_exhaustive_validation": "Stopped after 162 passes to bound cost; not a completed suite.",
+    "fragment_harness_fix": "Original per-connection equality fails on glibc and AOCL after worker-shared receive storage. Require the 40 KiB worker/witness ceiling, exact resets, sample coverage and final zero; disabled reclamation retains 64 MiB."
+  },
+  "diagnostic": {
+    "profile_raw_path": "artifacts/aocl-large-profile.perf.data",
+    "profile_sha256": "4de4b1a56c1a28c1aeba009304d874134d81d3714d3b11dabc64a5a55ae65622",
+    "profile_bytes": 41848599,
+    "samples": 4911,
+    "lost_samples": 0,
+    "expected_stop_signal": "SIGINT",
+    "raw_profile_tracked": false,
+    "ordinary_timing_uses_profile": false,
+    "collector_privilege": "Separate root perf diagnostic; no sysctl or system preload changes."
+  },
+  "source_snapshot_notes": "Initial three comparisons use artifacts/aocl-harness-initial. Later ordinary comparisons use the archived current compare/stability/benchmark sources. Snapshots retain repository-relative paths; restore those paths to replay helpers. Runtime binary provenance is in the pinned baseline manifests.",
+  "files": [
+    {
+      "path": "2026-10-17-aocl/.gitattributes",
+      "source_path": ".gitattributes",
+      "sha256": "320f4320cc9a4e78e1f5c969ddcdc87a52d00b2aa809ed13e19bc3fd21afde7b",
+      "bytes": 889
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-archive.py",
+      "source_path": "artifacts/aocl-archive.py",
+      "sha256": "095fb8033617ca4c8ba2d68a8ab8046d0875561b5ee136cc08427dea4ba83598",
+      "bytes": 8875
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-avx2-server.log",
+      "source_path": "artifacts/aocl-bindings-avx2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-avx2.591375",
+      "source_path": "artifacts/aocl-bindings-avx2.591375",
+      "sha256": "bfd3abf62990ead8b5cd455fb918940e243c0b9b54fd6bf89d6cd3b3c5eacac8",
+      "bytes": 59557
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-dispatch-server.log",
+      "source_path": "artifacts/aocl-bindings-dispatch-server.log",
+      "sha256": "0222197770dee4b7527e64b907c7212038a39010c8041937185d575522213da9",
+      "bytes": 1762
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-dispatch.591365",
+      "source_path": "artifacts/aocl-bindings-dispatch.591365",
+      "sha256": "2f93c04bca77b575cfa4998abc1342cceec2547c742351174818a4059f2886ad",
+      "bytes": 59645
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-glibc-server.log",
+      "source_path": "artifacts/aocl-bindings-glibc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-glibc.587212",
+      "source_path": "artifacts/aocl-bindings-glibc.587212",
+      "sha256": "4de0df69eae18dbd22c0572deeb5ecdde5d9e3cb64f85d17b74d60073c7b8d2e",
+      "bytes": 57648
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-glibc.591326",
+      "source_path": "artifacts/aocl-bindings-glibc.591326",
+      "sha256": "b76f0221af826c76898b3f9452c48412dff2a7538d188969b87e2b7fce853a56",
+      "bytes": 57648
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-zen5-server.log",
+      "source_path": "artifacts/aocl-bindings-zen5-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-zen5.587223",
+      "source_path": "artifacts/aocl-bindings-zen5.587223",
+      "sha256": "d2d798179704a546c389201baef5925a54ce553f1f1af8e55b0906feda53eaa0",
+      "bytes": 59557
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings-zen5.591336",
+      "source_path": "artifacts/aocl-bindings-zen5.591336",
+      "sha256": "a9ea80097b997ddcd36b825cdba893df8a99fbf16a24d3639900b9d0270ae23d",
+      "bytes": 59557
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings.json",
+      "source_path": "artifacts/aocl-bindings.json",
+      "sha256": "450753d9d251c28883aa439800a28808ccf8e5c8c8e599d2d8996e75157a6eb1",
+      "bytes": 11798
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings.log",
+      "source_path": "artifacts/aocl-bindings.log",
+      "sha256": "3d87005946947326bdfda0c2482b4013346147b9b3e8d780cb69732bbe2f72a0",
+      "bytes": 5123
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-bindings.py",
+      "source_path": "artifacts/aocl-bindings.py",
+      "sha256": "10d4d7d0541e345ad23df42f8374afbc8ab40ffb29e2e1d17dcc5348f1699047",
+      "bytes": 3821
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-build-avx2.log",
+      "source_path": "artifacts/aocl-build-avx2.log",
+      "sha256": "6474ea83df10e5bf6f0e512bf5aeb90040f50a0cef1f02fb8b64d9e0e6008498",
+      "bytes": 2761
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-build-dispatch.log",
+      "source_path": "artifacts/aocl-build-dispatch.log",
+      "sha256": "72bfa3e2815eebd75f57b30b2fde05291230a851261b0246a93931c28f63cfb2",
+      "bytes": 11674
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-build-native.log",
+      "source_path": "artifacts/aocl-build-native.log",
+      "sha256": "283dd0a8b41098e6adf06a381f2f20c23bffd710447254cc93eb93e168716988",
+      "bytes": 158
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-build-zen5.log",
+      "source_path": "artifacts/aocl-build-zen5.log",
+      "sha256": "04fc9cb919d373bde96d5c87a50103d80ca3e2d80e5b78bfc7093ab3462a1228",
+      "bytes": 2759
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-build.json",
+      "source_path": "artifacts/aocl-build.json",
+      "sha256": "54821a32691d85ce8cf004e40943ea6355e0efcacbf7940548c3c14e192e0281",
+      "bytes": 8370
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-0-glibc.json",
+      "source_path": "artifacts/aocl-capacity-0-0-glibc.json",
+      "sha256": "757e08dfe88d479f103587ee682d5b9d0c74de017b2aadd4e52ad06f38bcc59f",
+      "bytes": 42565
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-0-glibc.log",
+      "source_path": "artifacts/aocl-capacity-0-0-glibc.log",
+      "sha256": "648cc5986e51dfb5d6e3bab499607c41db386da0c40dc21a069cb49e72785fbb",
+      "bytes": 1581
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-1-zen5.json",
+      "source_path": "artifacts/aocl-capacity-0-1-zen5.json",
+      "sha256": "9526194c9a792cb0191082501a349556a3fced855c00c0652fabc569efb28944",
+      "bytes": 42879
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-1-zen5.log",
+      "source_path": "artifacts/aocl-capacity-0-1-zen5.log",
+      "sha256": "ec58e54a399be555f4fde1307d21a063739f35404d3e7f832883d9e068552e40",
+      "bytes": 1568
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-2-avx2.json",
+      "source_path": "artifacts/aocl-capacity-0-2-avx2.json",
+      "sha256": "53610be049944b1b9fea0f9ce12af713bc2bd12bc04f3b58aab84c213c065911",
+      "bytes": 42862
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-0-2-avx2.log",
+      "source_path": "artifacts/aocl-capacity-0-2-avx2.log",
+      "sha256": "987f7d7c9f65634b03b875d1ab9bc4fe64eec6af0320190e455772fea1d24721",
+      "bytes": 1569
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-0-zen5.json",
+      "source_path": "artifacts/aocl-capacity-1-0-zen5.json",
+      "sha256": "37fb0865b975d02ca665dabe99bfdad3475e4c30534b37df5c576031faed3ce3",
+      "bytes": 43040
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-0-zen5.log",
+      "source_path": "artifacts/aocl-capacity-1-0-zen5.log",
+      "sha256": "383a731c2dcb64e44b8e0444032b4185648721846c1011aae3ebe9e6b7d01a24",
+      "bytes": 1561
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-1-avx2.json",
+      "source_path": "artifacts/aocl-capacity-1-1-avx2.json",
+      "sha256": "f222edcc35f31c2cdf12170666ef8bf20dda86b3d2eba0b0b99cb58f632bdef7",
+      "bytes": 42915
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-1-avx2.log",
+      "source_path": "artifacts/aocl-capacity-1-1-avx2.log",
+      "sha256": "c9e57d276c8c9167c6d0f4179935326a2efce0cef2850128ecd408f8663d422a",
+      "bytes": 1578
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-2-glibc.json",
+      "source_path": "artifacts/aocl-capacity-1-2-glibc.json",
+      "sha256": "2add79dd14cdf5867f6c1f31250341039eeef5dd78eb6650f7ba574b1eb49b36",
+      "bytes": 42401
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-1-2-glibc.log",
+      "source_path": "artifacts/aocl-capacity-1-2-glibc.log",
+      "sha256": "d23bb0c03c3d63c6e355710180c2ef62c44e721d6a05f95937eff353b0257d8a",
+      "bytes": 1573
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-0-avx2.json",
+      "source_path": "artifacts/aocl-capacity-2-0-avx2.json",
+      "sha256": "ec763616ebbd0b8ca44cc5d73c25065945ab9085b6c06cd461a26898b07490fb",
+      "bytes": 42891
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-0-avx2.log",
+      "source_path": "artifacts/aocl-capacity-2-0-avx2.log",
+      "sha256": "8ee88e89cb25cf3e8fe5f2559114c24d537a59c43351f85153fef690d27ec320",
+      "bytes": 1573
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-1-glibc.json",
+      "source_path": "artifacts/aocl-capacity-2-1-glibc.json",
+      "sha256": "b58a09abb6bdcf2d90b71c708378388163f69d2880dc98f143d0b7d6c88df8d9",
+      "bytes": 42831
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-1-glibc.log",
+      "source_path": "artifacts/aocl-capacity-2-1-glibc.log",
+      "sha256": "e908df5504b95820e0d68a2a95c1d71815d5a373e3d2da9ca5153a6276c38bae",
+      "bytes": 1573
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-2-zen5.json",
+      "source_path": "artifacts/aocl-capacity-2-2-zen5.json",
+      "sha256": "a18505d89544f1a18387c8b7c62d0b4ea41800103f4d3333139ecbe1c211ec24",
+      "bytes": 42840
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity-2-2-zen5.log",
+      "source_path": "artifacts/aocl-capacity-2-2-zen5.log",
+      "sha256": "735e0a64304693c89a8935ea143554705f7518d8149a3bb237e87104a7d9e4bf",
+      "bytes": 1564
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity.json",
+      "source_path": "artifacts/aocl-capacity.json",
+      "sha256": "4a2ae2ecf36f46971dce752fffd82e81c21f12a4ec2b6719bb9a305fb9ffbe5a",
+      "bytes": 18913
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity.log",
+      "source_path": "artifacts/aocl-capacity.log",
+      "sha256": "64f88d88085ff6b576e562694782992912392b85b6612a49208370e235bab94c",
+      "bytes": 2034
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-capacity.py",
+      "source_path": "artifacts/aocl-capacity.py",
+      "sha256": "3e7b54e4c547bee3e1cc39c6f7d557897ac83694af58dc715287581df1973f7f",
+      "bytes": 3489
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-changes.patch",
+      "source_path": "artifacts/aocl-changes.patch",
+      "sha256": "3a7b635edd227fcdb2bf07dbe85a203857a2e4f8a485df6dc0d4005e8ba76060",
+      "bytes": 46142
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-0-0-glibc.json",
+      "source_path": "artifacts/aocl-churn-0-0-glibc.json",
+      "sha256": "df14596c7b77a940c2ea6af453b1970ea2959766b0b1a022b6db48cbb79b0384",
+      "bytes": 51647
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-0-1-zen5.json",
+      "source_path": "artifacts/aocl-churn-0-1-zen5.json",
+      "sha256": "0fc848db551446c00b50ea5d52b334fef02e72374dffa74ad9b2ccb9e82f2cce",
+      "bytes": 51828
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-0-2-avx2.json",
+      "source_path": "artifacts/aocl-churn-0-2-avx2.json",
+      "sha256": "0c2e44c1172e67df1600b8d67daf15c48d03e22dc121a432f54b2395040083ca",
+      "bytes": 51830
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-1-0-zen5.json",
+      "source_path": "artifacts/aocl-churn-1-0-zen5.json",
+      "sha256": "876732619c4a560e318f7a590998caca3b60782a17762c41c63c5eb773cca0c3",
+      "bytes": 51846
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-1-1-avx2.json",
+      "source_path": "artifacts/aocl-churn-1-1-avx2.json",
+      "sha256": "641f0184d8eac98e13695d11ac4992771c1bc7d604eb9c345aeba52ac9c83eaa",
+      "bytes": 51829
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-1-2-glibc.json",
+      "source_path": "artifacts/aocl-churn-1-2-glibc.json",
+      "sha256": "45c7aa59a5ab2e8081ab9435c3e296dc501cab9a674bc93f47b9637fa51b5cca",
+      "bytes": 51631
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-2-0-avx2.json",
+      "source_path": "artifacts/aocl-churn-2-0-avx2.json",
+      "sha256": "38a391d3f027cd40b2326be81306603a4a7438bc579146e8d0a1a6c9a0c9b70b",
+      "bytes": 51837
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-2-1-glibc.json",
+      "source_path": "artifacts/aocl-churn-2-1-glibc.json",
+      "sha256": "5a57ef7746c8339217496265b46662c77b746a67b007af90a47ce02118e13127",
+      "bytes": 51651
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn-2-2-zen5.json",
+      "source_path": "artifacts/aocl-churn-2-2-zen5.json",
+      "sha256": "f15fb830c8a9a02d2519a24b86ef781ecee824aace4653fefafce205cf427bfe",
+      "bytes": 51818
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn.json",
+      "source_path": "artifacts/aocl-churn.json",
+      "sha256": "576dfa819459a79ea134a2dec2cb380df68710fa754bd302a6da8cebed502948",
+      "bytes": 9815
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn.log",
+      "source_path": "artifacts/aocl-churn.log",
+      "sha256": "c03c1221a2fe0088a9b24d541b54114dbdc3a53ef21b994336c4c0c87b470553",
+      "bytes": 8286
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-churn.py",
+      "source_path": "artifacts/aocl-churn.py",
+      "sha256": "f5b59f067c342a8ffc229acddaf4ce7291f4c54ecedc493f6939cc177017b8d8",
+      "bytes": 2507
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-configure-avx2.log",
+      "source_path": "artifacts/aocl-configure-avx2.log",
+      "sha256": "2215e3802349f0616328d1bb0d479c9f1fca38ff3713f5ad414f35ec8c1cf835",
+      "bytes": 1906
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-configure-dispatch.log",
+      "source_path": "artifacts/aocl-configure-dispatch.log",
+      "sha256": "a5bbb2298e73d9f87d7e2c71222d26c30395568ee76ea1102fae7b2e09c9cace",
+      "bytes": 1924
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-configure-native.log",
+      "source_path": "artifacts/aocl-configure-native.log",
+      "sha256": "eb7b6109ba89978a8120904920292876887d4b2189d3e32a064aba0831e4147a",
+      "bytes": 1968
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-configure-zen5.log",
+      "source_path": "artifacts/aocl-configure-zen5.log",
+      "sha256": "5e14aab227d0867ac727f521cc041b266c8ff4cc15eb264572227b59f0dca2fb",
+      "bytes": 1966
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-corpus-zen5.json",
+      "source_path": "artifacts/aocl-corpus-zen5.json",
+      "sha256": "1433fba8a5a041047481614560632f7331b362ff09a0df1293823f137b248d91",
+      "bytes": 1132537
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-corpus-zen5.log",
+      "source_path": "artifacts/aocl-corpus-zen5.log",
+      "sha256": "c1ddfa34f6270e9a994d27bd7e6eebc9fa76a51f96b72fb638f6243a881c5d7f",
+      "bytes": 325
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/0-0.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/0-0.json",
+      "sha256": "3d66df6a63cbf812e5b73b5fce1422609f91a43a141a1dd5ec6d007bd9e5210d",
+      "bytes": 78868
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/0-1.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/0-1.json",
+      "sha256": "54b2ecd2a067ae0d91577fec94ecfff6e263bfc098e83d64c2ec6bcc0ff46ef1",
+      "bytes": 79050
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/0-2.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/0-2.json",
+      "sha256": "77713ab68d97d24da44a704dbec08151394aca2eef203565f55f354768d06a2a",
+      "bytes": 80825
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/1-0.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/1-0.json",
+      "sha256": "fb92081f2ef22204a0389806a1f4b6b8d6cb269494fab957e82b3571a858b3d4",
+      "bytes": 79037
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/1-1.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/1-1.json",
+      "sha256": "813cf971ee129d685331ea9192fb584fa568e61a87f49effa8dd4d69eefc6603",
+      "bytes": 80825
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/1-2.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/1-2.json",
+      "sha256": "c8c485faf650443ba7c59e3bf531be9c15aaccbab11801b2303018e51026b542",
+      "bytes": 78868
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/2-0.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/2-0.json",
+      "sha256": "9eae063ce6ada573c9844ed68883005a9b2d4c85127affbd4f5b87e471854768",
+      "bytes": 80817
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/2-1.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/2-1.json",
+      "sha256": "d1e60712cef5e456c7875a6cda19eb36586f2ea51ed665eb68e6646962f6f616",
+      "bytes": 78866
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k-traces/2-2.json",
+      "source_path": "artifacts/aocl-dense-1k-traces/2-2.json",
+      "sha256": "5dc55f6faa1f8206485cc63cac20d51ef6cf4e30309bdd95a696fb858f3dfe24",
+      "bytes": 79047
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k.json",
+      "source_path": "artifacts/aocl-dense-1k.json",
+      "sha256": "132d7bcf532a04351ed06935c044885dddcd751ae7827e9d5a3b56d3860ed84d",
+      "bytes": 29438
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1k.log",
+      "source_path": "artifacts/aocl-dense-1k.log",
+      "sha256": "c198f731cd0ddd29f5ad9ab5d4e7047c7c1194f4e643494c8f676947e301ffaa",
+      "bytes": 9680
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/0-0.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/0-0.json",
+      "sha256": "525df8dce1ec322b9e8ebb3e8d2dbc96b00ac2d6c2336ddae90e296e95d56ac9",
+      "bytes": 78888
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/0-1.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/0-1.json",
+      "sha256": "65572c902cbf7f4d4b38cbdf4107b507a387244a46729cd4211fd560c5279911",
+      "bytes": 79069
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/0-2.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/0-2.json",
+      "sha256": "8c01875a005e27b655329370bfb6ac08ccc513fbe215a2406cc7c9a0837a633c",
+      "bytes": 80820
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/1-0.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/1-0.json",
+      "sha256": "cc291f33abed8f51f70e57d10b1203d75c3694c2a7083ebcf8e99acd185efc1a",
+      "bytes": 79091
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/1-1.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/1-1.json",
+      "sha256": "2a7eded4c04f2737f0ae7ae37e0d3393dd4f1a74d9c55c09853b2860f109bd28",
+      "bytes": 80862
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/1-2.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/1-2.json",
+      "sha256": "39d869044ae268cd6493518ed5e4b88b50c5e4525fc38fa1e82de265d1b197cd",
+      "bytes": 78927
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/2-0.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/2-0.json",
+      "sha256": "f8c62fb6b29f8920934b700f8529d4864613405dfbe1aa306c33e70a77ed859d",
+      "bytes": 80839
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/2-1.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/2-1.json",
+      "sha256": "f623cb20b9c1bf48723b090fe4a95e3523ca243d7846df703855fce4b21bff02",
+      "bytes": 78904
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m-traces/2-2.json",
+      "source_path": "artifacts/aocl-dense-1m-traces/2-2.json",
+      "sha256": "2e60ddade8d19d8adceb60b2141c8749876f9a664bf7393ac3fe3870f8f7bc69",
+      "bytes": 79102
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m.json",
+      "source_path": "artifacts/aocl-dense-1m.json",
+      "sha256": "babfa6340db32bad26810f75897ae198691e0e668e2899b81683de0deba55b48",
+      "bytes": 29351
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-dense-1m.log",
+      "source_path": "artifacts/aocl-dense-1m.log",
+      "sha256": "a0bbda0d3f0650791420ce700da85d0ca033479df1f4e7d516b3e191ef8a3d0a",
+      "bytes": 9633
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/0-0.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/0-0.json",
+      "sha256": "0fd30ff3ef15742ea7350b785e9a9981a883b517c29097dd4bc3840e22ecdaab",
+      "bytes": 80086
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/0-1.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/0-1.json",
+      "sha256": "6976760e2bb3d390d28b1ebbf599f97367bb7e2cb44a70e93a30fbbab3339204",
+      "bytes": 80298
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/0-2.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/0-2.json",
+      "sha256": "8485b6cf169d0d5e11c9a1c2b639dfcd9d4a2b3491209509d07758864328d64c",
+      "bytes": 82080
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/1-0.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/1-0.json",
+      "sha256": "085b676239a22eaa3a31ded12db7169cea74cbb6e8047d79c02b287d4404938c",
+      "bytes": 80272
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/1-1.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/1-1.json",
+      "sha256": "b25bf025368c54332a45c881fe354a126f209487d1472f52221502d7e7b86b02",
+      "bytes": 82038
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/1-2.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/1-2.json",
+      "sha256": "887d6e21c87c91438bc281cb2b574757c7806583be78398ae0282b93cd601a4b",
+      "bytes": 80128
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/2-0.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/2-0.json",
+      "sha256": "369df040341d0ecea6a84a856023e86750108280f562e67e51d5ade30ccb514d",
+      "bytes": 82096
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/2-1.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/2-1.json",
+      "sha256": "10443def6600763ff65d34d2de8bb71c7bbc4214989d70f9779b4a49e08b9bd7",
+      "bytes": 80113
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed-traces/2-2.json",
+      "source_path": "artifacts/aocl-fanout-mixed-traces/2-2.json",
+      "sha256": "ffa89ed636801929aac9cb9d9c8c12cc784d82593235ea0ea520da883d8d728b",
+      "bytes": 80287
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed.json",
+      "source_path": "artifacts/aocl-fanout-mixed.json",
+      "sha256": "cf12ab55d1ed737d813acfa01e81e4bb798aa936d14dd0e74f3964d46857e27d",
+      "bytes": 33840
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fanout-mixed.log",
+      "source_path": "artifacts/aocl-fanout-mixed.log",
+      "sha256": "91176d3e9669e45e653ecd22195c5665b598a3a8253a7cf0a34cd9528f18da79",
+      "bytes": 12716
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-format.log",
+      "source_path": "artifacts/aocl-format.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragment-runner-before.py",
+      "source_path": "artifacts/aocl-fragment-runner-before.py",
+      "sha256": "5a6d4e251bcd7f3c5ef72b858c47ff511813a7e91b90a3f900bb4de9e03aed37",
+      "bytes": 13307
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-avx2.json",
+      "source_path": "artifacts/aocl-fragments-avx2.json",
+      "sha256": "ece5ed230ce412d6c785f07f7d4348bfa4a0c5ee5d18154b99e78a06fdd05e45",
+      "bytes": 444255
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-avx2.log",
+      "source_path": "artifacts/aocl-fragments-avx2.log",
+      "sha256": "10aa0a9ac2c6354cdb3fbba2dccaab1c17d438b7f4382a29483126ee660c2e96",
+      "bytes": 530
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-control-before.json",
+      "source_path": "artifacts/aocl-fragments-control-before.json",
+      "sha256": "447571f347bd4cfcd9ef55d0c1dde4404430b168f72569be645427fa0a98ae1b",
+      "bytes": 444135
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-control-before.log",
+      "source_path": "artifacts/aocl-fragments-control-before.log",
+      "sha256": "564d639350515fa3411eec7c3e126b2b450552d63c10a805ab532a5305b02e82",
+      "bytes": 528
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-dispatch.json",
+      "source_path": "artifacts/aocl-fragments-dispatch.json",
+      "sha256": "e6af7df9e2d1bb10c237719041247b7d07cd2fa099256aeafb8defea81896fee",
+      "bytes": 441806
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-dispatch.log",
+      "source_path": "artifacts/aocl-fragments-dispatch.log",
+      "sha256": "2a05c263c50a425c997a85cda557c6ec877434ba18e037a8db12425061eaff8f",
+      "bytes": 530
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-glibc.json",
+      "source_path": "artifacts/aocl-fragments-glibc.json",
+      "sha256": "99ceba37d6e8a533b9c66ee8aac2b0e7c019ac7b7d11d2f88b61515d6706c9ec",
+      "bytes": 443991
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-glibc.log",
+      "source_path": "artifacts/aocl-fragments-glibc.log",
+      "sha256": "ac01cdbc88a2c0249d2e8806cd11034c1aebd254aa7e7dc2daf4f0e01de00a7c",
+      "bytes": 530
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-no-reclaim.json",
+      "source_path": "artifacts/aocl-fragments-no-reclaim.json",
+      "sha256": "9d1f60e5a0bb2b476ccabc52fd0b7078aad04678cf437518e1bf1f9d899b91c4",
+      "bytes": 444314
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-no-reclaim.log",
+      "source_path": "artifacts/aocl-fragments-no-reclaim.log",
+      "sha256": "e399eef6232e807384f98e41cb91c05b1a77b8468693a0f1c0a9d8bd99e472d8",
+      "bytes": 543
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-zen5-before.json",
+      "source_path": "artifacts/aocl-fragments-zen5-before.json",
+      "sha256": "92738100b91598518117fa0de68490e8e4652fddb86a50386987bed57bbc057a",
+      "bytes": 444255
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-zen5-before.log",
+      "source_path": "artifacts/aocl-fragments-zen5-before.log",
+      "sha256": "c103dad5b2ea45c7259518a72286d3e8f50c165fd8e4690f6fbbe81f4b51dbdc",
+      "bytes": 528
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-zen5.json",
+      "source_path": "artifacts/aocl-fragments-zen5.json",
+      "sha256": "c98372d2aefc2a48410a0c7e11f78fbe6e0a25bdbbe09e2ed17547d4a723ba4e",
+      "bytes": 444309
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments-zen5.log",
+      "source_path": "artifacts/aocl-fragments-zen5.log",
+      "sha256": "2b4119316faa7e913dc581672184b562ab0a67b10f0970887dc965a0ade19fc9",
+      "bytes": 530
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-fragments.json",
+      "source_path": "artifacts/aocl-fragments.json",
+      "sha256": "7e6d61fb22b7f3d6f53df41b4bd732130ebac9b224c9c3ecb2513bca5586cab9",
+      "bytes": 3251
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-checks.json",
+      "source_path": "artifacts/aocl-harness-checks.json",
+      "sha256": "5127d05e7cd56d4595be0b4012eb50d81cd8e5cbeda4b2372779dba80f80c021",
+      "bytes": 643
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/benchmark.py",
+      "source_path": "artifacts/aocl-harness-initial/benchmark.py",
+      "sha256": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce",
+      "bytes": 8458
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/capacity.py",
+      "source_path": "artifacts/aocl-harness-initial/capacity.py",
+      "sha256": "6cd5bfba53b127b9dd409e3b0176e092ac25560949c17bee039ddd06290cb311",
+      "bytes": 22368
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/compare.py",
+      "source_path": "artifacts/aocl-harness-initial/compare.py",
+      "sha256": "d36fcc9dea19e56d71b440a49c5f968c9d3e6fb50a5b8b0db6aa136ec69a402d",
+      "bytes": 9215
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/fragment-waves.py",
+      "source_path": "artifacts/aocl-harness-initial/fragment-waves.py",
+      "sha256": "5a6d4e251bcd7f3c5ef72b858c47ff511813a7e91b90a3f900bb4de9e03aed37",
+      "bytes": 13307
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/input-corpus.py",
+      "source_path": "artifacts/aocl-harness-initial/input-corpus.py",
+      "sha256": "acf86ea578d87272fdaa28ee4b33fa71a72247501f535f4b7cbb0f73707a38db",
+      "bytes": 24960
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-harness-initial/stability.py",
+      "source_path": "artifacts/aocl-harness-initial/stability.py",
+      "sha256": "d4eec4708fe54c5b9cb7751f1459ef7f73f2abb7bcac7fe064348225276ff245",
+      "bytes": 15175
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-install-avx2.log",
+      "source_path": "artifacts/aocl-install-avx2.log",
+      "sha256": "08c0f1630f370af0b5637474391bcabcab19e96c4cee6be537b8d0899e4a8da3",
+      "bytes": 4790
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-install-dispatch.log",
+      "source_path": "artifacts/aocl-install-dispatch.log",
+      "sha256": "22adda617121856f7f99c94b714b3d5af56e3956a83025e639d237afa8a38db7",
+      "bytes": 4966
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-install-zen5.log",
+      "source_path": "artifacts/aocl-install-zen5.log",
+      "sha256": "27a26790003bf5c1f16643f2ca2339abbf5fed28c29a643a40b94a57b2f6641a",
+      "bytes": 4790
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile-inclusive.txt",
+      "source_path": "artifacts/aocl-large-profile-inclusive.txt",
+      "sha256": "2d4a7041ebef2c8b128a99be331a577668bfcacd7db0b76d8e087692bd732672",
+      "bytes": 485089
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile-perf.log",
+      "source_path": "artifacts/aocl-large-profile-perf.log",
+      "sha256": "831eca57464dcf66790ea89e1b5d15a030632e61ca707ed9bac68961805ea85a",
+      "bytes": 174
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile-self.txt",
+      "source_path": "artifacts/aocl-large-profile-self.txt",
+      "sha256": "265d057fb9864d0f927a75311df145e9c3bf293930d95ae749479198083bbb40",
+      "bytes": 35267
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile-server.log",
+      "source_path": "artifacts/aocl-large-profile-server.log",
+      "sha256": "b7db03858fa4687b6268b84a47d21b4e276623bb8de8f2e0807f6b8e2f2fa791",
+      "bytes": 369
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile.json",
+      "source_path": "artifacts/aocl-large-profile.json",
+      "sha256": "d4f9f5a74b4719b3309070745e47e8a2992d8c3ba3ed13481bef780ed98a5d36",
+      "bytes": 3501
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-large-profile.log",
+      "source_path": "artifacts/aocl-large-profile.log",
+      "sha256": "84f69d5159795f1916f7abd6c997b16b3e3a07533169feaf6a2a373f7f8acb98",
+      "bytes": 88
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-libmem-5.3.2-avx2/CMakeCache.txt",
+      "source_path": "artifacts/aocl-libmem-5.3.2-avx2/CMakeCache.txt",
+      "sha256": "c3ba8abd055d3bce1b20403b826f252de34840a06d55b7a02d0afbb285968c67",
+      "bytes": 17378
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-libmem-5.3.2-dispatch/CMakeCache.txt",
+      "source_path": "artifacts/aocl-libmem-5.3.2-dispatch/CMakeCache.txt",
+      "sha256": "b55f05617f0a840c8213a99aa14b95a22581f22b1475ee43544d97b70095a025",
+      "bytes": 17400
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-libmem-5.3.2-zen5/CMakeCache.txt",
+      "source_path": "artifacts/aocl-libmem-5.3.2-zen5/CMakeCache.txt",
+      "sha256": "0c18f228fec86814913b5c83773249f801e7646a327c9d6596f66e465f6aba3f",
+      "bytes": 17381
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-manual-acceptance.json",
+      "source_path": "artifacts/aocl-manual-acceptance.json",
+      "sha256": "242311c4474198fb679d09ce084c53599a7e4a2f0ca2079d8e3bd84472ef1cc6",
+      "bytes": 6401
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-manual-acceptance.log",
+      "source_path": "artifacts/aocl-manual-acceptance.log",
+      "sha256": "3f39355f27f02424c7b417d2e8265b15f25bf2c3968b92fac3b143d057baaaf7",
+      "bytes": 189
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-manual-acceptance.py",
+      "source_path": "artifacts/aocl-manual-acceptance.py",
+      "sha256": "6edefe9ee0f165ab94d9f95d7f281d92059c58795f3adcce97459dfd93452150",
+      "bytes": 4248
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-profile.py",
+      "source_path": "artifacts/aocl-profile.py",
+      "sha256": "8851112d4d10b46a48e9b0e2f897bad03f04b02ad1253ba43667fd1cece61b3a",
+      "bytes": 3519
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-resolvers.json",
+      "source_path": "artifacts/aocl-resolvers.json",
+      "sha256": "3158b458d3e4f5afda29f982e426158078864f019046e2f30a21d4373f43cd25",
+      "bytes": 4133
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-rust-tests-avx2.log",
+      "source_path": "artifacts/aocl-rust-tests-avx2.log",
+      "sha256": "16dada2af094d15318321544db5d21d56ef71447bf370bab029fd041322dfab2",
+      "bytes": 15832
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-rust-tests-dispatch.log",
+      "source_path": "artifacts/aocl-rust-tests-dispatch.log",
+      "sha256": "64cc202d03cb7bfe395bcf441c1ee72abc8ae719090e67311271552060d5d71c",
+      "bytes": 35870
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-rust-tests-zen5.log",
+      "source_path": "artifacts/aocl-rust-tests-zen5.log",
+      "sha256": "f4d28fe5c0c346d71cb8cc5f34c2013a2afe048e4aa2bbf66cbd20468375113c",
+      "bytes": 15832
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-rust-tests.json",
+      "source_path": "artifacts/aocl-rust-tests.json",
+      "sha256": "cb2721eb98a7b00e1a1875a9a9400093b55633dc37798f79d03ba36b3d77b867",
+      "bytes": 10484
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/0-0.json",
+      "source_path": "artifacts/aocl-single-1m-traces/0-0.json",
+      "sha256": "1eb32671be5a9e741e0ac7f517cc44db0ea636cb0a8db3703caf4ef5bec0da8c",
+      "bytes": 76211
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/0-1.json",
+      "source_path": "artifacts/aocl-single-1m-traces/0-1.json",
+      "sha256": "c7ccd491bd4e1653965496aa58ad337ea4392c17ba90bfe1f816b736802bcb71",
+      "bytes": 76379
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/0-2.json",
+      "source_path": "artifacts/aocl-single-1m-traces/0-2.json",
+      "sha256": "79ee7d1c8b6abcae6b64f003cf9ef3f3c5d78020058fa2bbda75e76704411f20",
+      "bytes": 76426
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/1-0.json",
+      "source_path": "artifacts/aocl-single-1m-traces/1-0.json",
+      "sha256": "6f688bd645627de953c4559b9fbdf48381437ef2b54c2488d589e5c74a9f4c77",
+      "bytes": 76360
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/1-1.json",
+      "source_path": "artifacts/aocl-single-1m-traces/1-1.json",
+      "sha256": "0263c2c15e01bd643739f4398cdaf8fa204931772f576a93971983e25f61f022",
+      "bytes": 76407
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/1-2.json",
+      "source_path": "artifacts/aocl-single-1m-traces/1-2.json",
+      "sha256": "35ce167163e5b1b49f52b4139bc2d806a834bab3bb752b7717328e24061e4f4c",
+      "bytes": 76233
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/2-0.json",
+      "source_path": "artifacts/aocl-single-1m-traces/2-0.json",
+      "sha256": "ef7a19147d11425b89008b568c3b7118406c1f560aad600ab73fe62e41aa1946",
+      "bytes": 76391
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/2-1.json",
+      "source_path": "artifacts/aocl-single-1m-traces/2-1.json",
+      "sha256": "e1abc045915443d78cc0d860e7c529a5b4c406799616319223a9278b286cc5fa",
+      "bytes": 76244
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m-traces/2-2.json",
+      "source_path": "artifacts/aocl-single-1m-traces/2-2.json",
+      "sha256": "dca7a74ac770718e69a5410a7ea7d3bde961aa7779dde54e7093de6ed6a29c9b",
+      "bytes": 76400
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m.json",
+      "source_path": "artifacts/aocl-single-1m.json",
+      "sha256": "104d062ce156a396c786c2302ab6ca2269052f3e90adab623482f3f5dcae51dc",
+      "bytes": 29688
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-single-1m.log",
+      "source_path": "artifacts/aocl-single-1m.log",
+      "sha256": "c6a23870fa5f47ab2d5025557f46c549469ea9110db203d5a88d26328a569e0b",
+      "bytes": 9624
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-source-diff-check.log",
+      "source_path": "artifacts/aocl-source-diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-test-build.jsonl",
+      "source_path": "artifacts/aocl-test-build.jsonl",
+      "sha256": "0aed1be0553f49ef57d6b140358dcebf5b950712a567c6dae291eef75fd02263",
+      "bytes": 111525
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-test-build.log",
+      "source_path": "artifacts/aocl-test-build.log",
+      "sha256": "84665cd69cf2ee7880b9da312b6d9f0bb8c946832af82968c8d8f3e5516808c3",
+      "bytes": 73
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-validator-avx2-boundaries.json",
+      "source_path": "artifacts/aocl-validator-avx2-boundaries.json",
+      "sha256": "2311c6c012bfcad5e9fbcf41ff1ad592483f1871000b45c2a6ded171c72b91be",
+      "bytes": 20025
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-validator-boundaries.json",
+      "source_path": "artifacts/aocl-validator-boundaries.json",
+      "sha256": "749e5b9c505db805688e407800495c1c40e0981039c3ee21af4d090ab54fa27e",
+      "bytes": 446470
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-validator-zen5-exhaustive-interrupted.log",
+      "source_path": "artifacts/aocl-validator-zen5-exhaustive-interrupted.log",
+      "sha256": "119a3ddfc7924d906ae10f0fbc94cdb3641727a375363c5c1300ae813f1321a8",
+      "bytes": 20088
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/aocl-validator-zen5.log",
+      "source_path": "artifacts/aocl-validator-zen5.log",
+      "sha256": "efaaf8b0c13648afedb69fdb7529213d3a618c6465b362cbf8d79447cc4d63d9",
+      "bytes": 19001
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/baselines/c10m-sendmsg/build.json",
+      "source_path": "artifacts/baselines/c10m-sendmsg/build.json",
+      "sha256": "17670fdb41664a9efbc1824f7bee8acf04d034bb4a6ca1f06b719aed8e233597",
+      "bytes": 404
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/baselines/c10m-sendmsg/runtime.patch",
+      "source_path": "artifacts/baselines/c10m-sendmsg/runtime.patch",
+      "sha256": "1466d178acfe1cdd0d019a16c47488cdc7cc4eb967ce3ff32ae5971f7cf2f1cd",
+      "bytes": 1988
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/baselines/capacity-final/build.json",
+      "source_path": "artifacts/baselines/capacity-final/build.json",
+      "sha256": "b1a50a957933afb3e7f4c6d9967a71b2cefbe83165bbd7c91c899c1b1cf94714",
+      "bytes": 1818
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/BUILD_RUN.md",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/BUILD_RUN.md",
+      "sha256": "ef05208d22972b8800f8df9400af235c0df9a9444594876336a853304f2ac175",
+      "bytes": 4373
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/CMakeLists.txt",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/CMakeLists.txt",
+      "sha256": "c4bf80c67d31cf7316619083841c17b36987865191f78cb047ec2e59f5a1e0e8",
+      "bytes": 7095
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/LICENSE.txt",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/LICENSE.txt",
+      "sha256": "6b11c1beec555a5d7b3bdb0374f6cfcf51f0f417101e3b1b0c0c3c31d5b33262",
+      "bytes": 2993
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/NOTICES",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/NOTICES",
+      "sha256": "2b6ad6be8cb79c1889e2264313704b324ee69de876fd08748a0c586a0bdc960e",
+      "bytes": 2824
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/README.md",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/README.md",
+      "sha256": "8e1411870450fec3abda41c3bf4da5c2ba05743b6af9ec6c8a0d68375a3ed4d3",
+      "bytes": 3511
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/docs/User_Guide.md",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/docs/User_Guide.md",
+      "sha256": "b7184fc6e86892d781e5a2f4171a922c3f0843f3fa40604541f71dc981785cbd",
+      "bytes": 8672
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/src/cpu_features.c",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/src/cpu_features.c",
+      "sha256": "5cafa7c4f7d10855a7acd7aefd6e162989c2637e27d436a4398bdc4390beb75e",
+      "bytes": 3781
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/src/libmem_ifunc_dispatcher.c",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/src/libmem_ifunc_dispatcher.c",
+      "sha256": "01aeca2853c1da39f7b5daca49a4ff8884727b69c1f828f2710698cbb6ef9e7a",
+      "bytes": 4652
+    },
+    {
+      "path": "2026-10-17-aocl/artifacts/reference/aocl-libmem-5.3.2/tools/validator/validator_guide.md",
+      "source_path": "artifacts/reference/aocl-libmem-5.3.2/tools/validator/validator_guide.md",
+      "sha256": "2ed77148d1120c853dabf5ae32acf956ab83b5fce33d7c17dc8f4285ee7a8fe9",
+      "bytes": 8166
+    },
+    {
+      "path": "2026-10-17-aocl/examples/fragment_waves.rs",
+      "source_path": "examples/fragment_waves.rs",
+      "sha256": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054",
+      "bytes": 12114
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/benchmark.py",
+      "source_path": "scripts/benchmark.py",
+      "sha256": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce",
+      "bytes": 8458
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/capacity.py",
+      "source_path": "scripts/capacity.py",
+      "sha256": "6cd5bfba53b127b9dd409e3b0176e092ac25560949c17bee039ddd06290cb311",
+      "bytes": 22368
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/capacity_pressure.py",
+      "source_path": "scripts/capacity_pressure.py",
+      "sha256": "0eb55b9d8439764acd8f517b0c34803fef69553c2107b6c538c531c3fec6c42d",
+      "bytes": 3341
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/compare.py",
+      "source_path": "scripts/compare.py",
+      "sha256": "8b8f7fe023a42d5d919d9aefc7574d29e3d51b709bfc0987a015f7b80fe03672",
+      "bytes": 9648
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/fragment-fairness.py",
+      "source_path": "scripts/fragment-fairness.py",
+      "sha256": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340",
+      "bytes": 14362
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/fragment-waves.py",
+      "source_path": "scripts/fragment-waves.py",
+      "sha256": "0abe03719d317c0755e5782023628b794af2f363d5ee1b6d4d8485d45225a304",
+      "bytes": 13553
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/input-corpus.py",
+      "source_path": "scripts/input-corpus.py",
+      "sha256": "acf86ea578d87272fdaa28ee4b33fa71a72247501f535f4b7cbb0f73707a38db",
+      "bytes": 24960
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/reference.py",
+      "source_path": "scripts/reference.py",
+      "sha256": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7",
+      "bytes": 27115
+    },
+    {
+      "path": "2026-10-17-aocl/scripts/stability.py",
+      "source_path": "scripts/stability.py",
+      "sha256": "67f46374997026dfbb19be2510f9ba9f4576230d3354ac978500d561d441572c",
+      "bytes": 15447
+    }
+  ]
+}
