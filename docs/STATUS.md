@@ -11,6 +11,17 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest experiment: unchanged timer-key guard rejected, 2026-10-17
+
+A diagnostic finds 91.16% equal optional deadlines across 4.74m worker-lifetime
+sets, including unarmed states; instrumented times are not ordinary performance.
+A narrower live-key guard passes 140 prototype tests and eight matched100k-user
+cases /120m messages. Both400k pairs improve measured tails and save about0.6–0.7%
+processCPU;600k latency ranking andCPU benefit do not repeat. The extra hot-path
+logic is not selected. Source/default executable are restored to the selected
+heartbeat-phase runtime; local service and400k operating recommendation stay.
+See [experiment evidence](performance.md#unchanged-timer-key-guard-2026-10-17).
+
 ## Latest selected runtime: spread initial heartbeat phases, 2026-10-17
 
 First Ping deadlines now spread within the configured interval using existing

@@ -6244,3 +6244,46 @@ kernel/descriptor retirement pass. This is acceptance, not a matched mixed-load
 speedup claim. The [archive](benchmarks/2026-10-17-heartbeat-phase/manifest.json)
 contains exact source/build identities, replay patch, all traces and samples,
 control-cohort analysis, inspected plots and validation.
+
+## Unchanged timer-key guard (2026-10-17)
+
+The earlier in-place timer experiment did not cover the active-heartbeat profile.
+After heartbeat spreading increased the 400k CPU cost, a separate diagnostic
+measures repeated timer updates. It observes 4,324,097 identical optional
+deadlines out of 4,743,521 `set` calls (91.16%) during the whole worker lifetime,
+including setup and retirement. Equality includes unarmed `None` states; this is
+not an exact hit-rate counter for a live-key-only guard. Instrumented elapsed time
+also includes the extra comparison, counters and clocks and is excluded from
+ordinary performance claims. Its four million application messages pass.
+
+The candidate only returns early when a live slot already has exactly the same
+`Some(deadline)`. None/removal, insertion, changed-key repair, expiry and rekeying
+keep the original algorithms. It adds no field, lock, allocation or approximate
+deadline. A focused heap-state/order test and all 140 prototype tests, strict
+Clippy/fmt and release build pass. The candidate is not selected.
+
+Fresh baseline/skip/skip/baseline processes compare the same frozen client and
+selected heartbeat-phase executable at each rate: 100,000 users, rooms of 16,
+1 KiB private messages, 30 seconds, heartbeat 15s, eight pinned server workers
+on physical CPUs 0–7, eight client workers allowed on 8–15 and 16/64 KiB socket
+buffers. No build, profile or other benchmark overlaps timing. All 120 million
+matched messages, exact counters, postcheck routing, Close/EOF, worker affinities
+and descriptor/kernel retirement pass.
+
+| Rate / pair | Median user p99 ms baseline → skip | 99th percentile of user p99s ms baseline → skip | Worst packet ms baseline → skip | Process CPU ns/message baseline → skip |
+| --- | ---: | ---: | ---: | ---: |
+| 400k / first | 0.844 → 0.818 | 1.582 → 1.185 | 4.821 → 4.103 | 4524 → 4498 |
+| 400k / reverse | 0.876 → 0.834 | 2.245 → 1.356 | 12.282 → 8.000 | 4542 → 4512 |
+| 600k / first | 36.281 → 1.714 | 50.128 → 3.506 | 67.994 → 18.340 | 4831 → 4737 |
+| 600k / reverse | 2.236 → 33.386 | 8.195 → 44.547 | 24.000 → 64.402 | 4812 → 4824 |
+
+The 400k pairs favor the candidate, with about 0.6–0.7% less process CPU and
+lower measured user tails. At 600k the latency ranking reverses sharply and CPU
+benefit does not repeat. These observations neither prove the guard causes the
+slow regime nor establish a stable benefit across the targeted workloads. The
+small inconsistent saving is insufficient to retain extra hot-path logic under
+the latency-first priority. The guard and its test are removed from selected
+source, with patch, exact sources, build hashes, all results and inspected plots
+preserved in the [archive](benchmarks/2026-10-17-timer-equality/manifest.json).
+The selected heartbeat-phase source/binary `c9a6c6da…`, local service and measured
+400k/s responsive operating recommendation remain unchanged.
