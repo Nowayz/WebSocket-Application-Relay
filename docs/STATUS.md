@@ -11,6 +11,19 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest investigation: ready-batch tail latency, 2026-10-17
+
+Measured timer-dispatch maxima below 0.18 ms and ready-socket pass maxima up to
+7.37 ms in a separate instrumented worker-lifetime diagnostic. An ordinary
+100,000-user ABBA comparison tested ready quantum 64 versus selected 1,024.
+All 48 million messages and retirement checks passed. Median/CPU improved
+slightly, but user-tail improvements did not repeat in both orders; the candidate
+is not selected. Source and the default release executable were restored to the
+pinned-capable baseline; the running local service is unchanged.
+
+See [full evidence and tradeoffs](performance.md#ready-batch-latency-experiment-2026-10-17).
+The ongoing priority remains consistent per-user response latency at mass scale.
+
 ## Latest verified checkpoint: latency-first worker placement, 2026-10-17
 
 Native `--pin-workers` binds one I/O worker per inherited allowed CPU at startup.

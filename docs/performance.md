@@ -5866,3 +5866,45 @@ peers. All 6.5 million stable-user messages passed; pooled p99 was in the
 Close/EOF, accounting, descriptor/kernel retirement and normal exits passed.
 The eight slow-consumer disconnects were expected. The full 136-test suite,
 strict Clippy/fmt and independent 776-case/2,311-exchange corpus also passed.
+
+
+## Ready-batch latency experiment (2026-10-17)
+
+A diagnostic build measured timer dispatch and ready-socket service separately
+on the pinned 100,000-user workload. Across four workers, whole-lifetime timer
+passes had p99 upper bounds of 0.008192 ms and maxima of 0.158–0.176 ms;
+maximum expired timers dispatched per pass was 177–205. Ready-socket passes had
+p99 upper bounds of 1.049–2.097 ms and maxima of 5.12–7.37 ms. These measurements
+include admission and retirement, add clock/counter overhead and are not
+packet-aligned causal measurements. They do not support timer draining as the
+main observed stall. Diagnostic instrumentation is absent from selected source.
+
+An uninstrumented candidate lowered the ready queue service quantum from 1,024
+to 64 sockets per reactor turn, allowing more frequent polling and pending-work
+checks. Per-socket limits, poll event capacity, routing, ownership and protection
+policies stayed identical. Both executables used native worker pinning, four
+server CPUs and eight separate client CPUs. Fresh baseline/candidate/candidate/
+baseline processes each verified 12 million messages: 100,000 users, 1 KiB
+private payloads, 400,000 messages/s, 30 seconds, 15-second heartbeat, 16/64 KiB
+send/receive buffers, 120 exact samples/user.
+
+| Quantum/run | Median user p99 ms | 99th percentile of user p99s ms | Worst packet ms | CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| 1,024 / 1 | 1.669 | 3.819 | 6.792 | 4083 |
+| 64 / 1 | 1.430 | 3.947 | 7.291 | 4016 |
+| 64 / 2 | 1.646 | 3.642 | 12.217 | 4027 |
+| 1,024 / 2 | 1.717 | 4.376 | 19.383 | 4078 |
+
+The 64-socket candidate shows a small median/CPU improvement but no repeatable
+win for the slowest users: the first pair's user p99 tail and maximum regress,
+while the reverse pair improves. This finite experiment is inconclusive for
+consistent tail latency, so the candidate is **not selected**. The 1,024 quantum,
+pinned-capable binary `d505a4b7…`, and running local service remain selected.
+All 48 million messages, exact resource accounting, post-load routing,
+Close/EOF, FD/kernel retirement and normal process exits passed. This rejects
+neither every smaller quantum nor all possible fairness changes.
+
+The [evidence manifest](benchmarks/2026-10-17-ready-quantum/manifest.json) binds
+both diagnostic/candidate source patches and binary hashes, raw run records,
+compressed per-user samples and the distribution plot. No new production
+runtime change was retained from this experiment.
