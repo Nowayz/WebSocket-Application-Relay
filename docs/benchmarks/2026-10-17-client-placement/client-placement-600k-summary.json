@@ -1,0 +1,198 @@
+{
+  "scope": "Unchanged selected heartbeat-phase relay and frozen exact client. Only client worker placement changes: inherited CPU mask8-15 versus one singleton CPU per runtime worker applied at ready gate. Native8workers always pinned0-7.100000users,600000messages/s,30seconds,1KiBprivate,room16,15sheartbeat16/64KiBTCP. Fresh off/on/on/off ordinary processes,no perf/build/other benchmark. Diagnostic/client-placement result,not a relay runtime speedup.",
+  "runs": [
+    {
+      "kind": "baseline",
+      "repetition": 1,
+      "trace": "artifacts/client-placement-600k-baseline-1.json",
+      "trace_sha256": "644b151f6bcb0fa0d5b9d0351a00fc47d6ccb56f55721c5fb98b972c4e1d7cac",
+      "users": 100000,
+      "samples_each": 180,
+      "median_user_p99_ms": 9.313654,
+      "p95_user_p99_ms": 17.926156,
+      "p99_user_p99_ms": 20.685364,
+      "worst_user_p99_ms": 24.362287,
+      "worst_packet_ms": 36.683751,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.217181912972592,
+        "server_cpu_seconds": 87.33,
+        "client_cpu_seconds": 119.55000000000001,
+        "application_deliveries": 18000000,
+        "planned_deliveries_per_second": 600000,
+        "stable_deliveries_per_second": 599833.7155969464,
+        "server_user_cpu_seconds": 21.009999999999998,
+        "server_system_cpu_seconds": 66.32,
+        "round_trip": {
+          "max_ms": 36.683751,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 8.388608,
+          "samples": 18000000
+        },
+        "schedule_lag": {
+          "max_ms": 35.056463,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 8.388608,
+          "samples": 1125000
+        }
+      },
+      "schedule_p99_ms": {
+        "median": 20.128055,
+        "p95": 33.955835,
+        "p99": 38.780237,
+        "maximum": 44.233532
+      },
+      "schedule_max_ms": {
+        "median": 31.455843,
+        "p95": 47.719441,
+        "p99": 53.420836,
+        "maximum": 60.317235
+      }
+    },
+    {
+      "kind": "pinned",
+      "repetition": 1,
+      "trace": "artifacts/client-placement-600k-pinned-1.json",
+      "trace_sha256": "9c582da71a078583214666f117c2bd74e0c4bdbab8c112bb59a79791bd77bc45",
+      "users": 100000,
+      "samples_each": 180,
+      "median_user_p99_ms": 1.696375,
+      "p95_user_p99_ms": 2.620521,
+      "p99_user_p99_ms": 3.492108,
+      "worst_user_p99_ms": 6.115878,
+      "worst_packet_ms": 11.664322,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.297558215999743,
+        "server_cpu_seconds": 86.22999999999999,
+        "client_cpu_seconds": 118.52000000000001,
+        "application_deliveries": 18000000,
+        "planned_deliveries_per_second": 600000,
+        "stable_deliveries_per_second": 599837.068336563,
+        "server_user_cpu_seconds": 20.919999999999998,
+        "server_system_cpu_seconds": 65.31,
+        "round_trip": {
+          "max_ms": 11.664322,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 18000000
+        },
+        "schedule_lag": {
+          "max_ms": 16.342636,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 1125000
+        }
+      },
+      "schedule_p99_ms": {
+        "median": 3.434402,
+        "p95": 5.696796,
+        "p99": 7.466878,
+        "maximum": 10.238625
+      },
+      "schedule_max_ms": {
+        "median": 4.439656,
+        "p95": 8.969488,
+        "p99": 16.723811,
+        "maximum": 20.647219
+      }
+    },
+    {
+      "kind": "pinned",
+      "repetition": 2,
+      "trace": "artifacts/client-placement-600k-pinned-2.json",
+      "trace_sha256": "84253f030ff7cac4d60fb09413c2d364bea53664985a70bffc2c92c4253cfbbc",
+      "users": 100000,
+      "samples_each": 180,
+      "median_user_p99_ms": 3.580815,
+      "p95_user_p99_ms": 6.892928,
+      "p99_user_p99_ms": 8.570103,
+      "worst_user_p99_ms": 12.537958,
+      "worst_packet_ms": 24.898962,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.306152450008085,
+        "server_cpu_seconds": 86.59,
+        "client_cpu_seconds": 119.03,
+        "application_deliveries": 18000000,
+        "planned_deliveries_per_second": 600000,
+        "stable_deliveries_per_second": 599834.55571227,
+        "server_user_cpu_seconds": 21.22,
+        "server_system_cpu_seconds": 65.37,
+        "round_trip": {
+          "max_ms": 24.898962,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 18000000
+        },
+        "schedule_lag": {
+          "max_ms": 21.271401,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 1125000
+        }
+      },
+      "schedule_p99_ms": {
+        "median": 8.721282,
+        "p95": 14.573314,
+        "p99": 17.068554,
+        "maximum": 20.190053
+      },
+      "schedule_max_ms": {
+        "median": 17.890315,
+        "p95": 27.022034,
+        "p99": 32.213843,
+        "maximum": 39.240828
+      }
+    },
+    {
+      "kind": "baseline",
+      "repetition": 2,
+      "trace": "artifacts/client-placement-600k-baseline-2.json",
+      "trace_sha256": "8ba31906127e7d4b1ddc1e968a42e9c09e5f390b58b035aa528198f31d7ba97b",
+      "users": 100000,
+      "samples_each": 180,
+      "median_user_p99_ms": 13.922701,
+      "p95_user_p99_ms": 22.108935,
+      "p99_user_p99_ms": 25.856396,
+      "worst_user_p99_ms": 34.739561,
+      "worst_packet_ms": 39.68423,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 31.31558645699988,
+        "server_cpu_seconds": 87.45,
+        "client_cpu_seconds": 119.67,
+        "application_deliveries": 18000000,
+        "planned_deliveries_per_second": 600000,
+        "stable_deliveries_per_second": 599824.5644910326,
+        "server_user_cpu_seconds": 21.46,
+        "server_system_cpu_seconds": 65.99000000000001,
+        "round_trip": {
+          "max_ms": 39.68423,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 16.777216,
+          "samples": 18000000
+        },
+        "schedule_lag": {
+          "max_ms": 39.364661,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 16.777216,
+          "samples": 1125000
+        }
+      },
+      "schedule_p99_ms": {
+        "median": 27.488239,
+        "p95": 41.401559,
+        "p99": 45.755081,
+        "maximum": 55.988546
+      },
+      "schedule_max_ms": {
+        "median": 39.105725,
+        "p95": 54.183415,
+        "p99": 59.432582,
+        "maximum": 68.338358
+      }
+    }
+  ],
+  "passed": true
+}

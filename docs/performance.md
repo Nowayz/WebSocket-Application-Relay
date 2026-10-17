@@ -6441,3 +6441,94 @@ workspace snapshot, which differs from this older frozen client. The archive
 preserves both sources separately and binds the actual client binary through
 its original build record and source patch; it does not relabel that snapshot
 as the executable's source.
+
+## Client-placement refresh and migration counters (2026-10-17)
+
+This refresh follows the rejected socket-state snapshot candidate. Inspection of
+its four 600k cases finds evenly balanced ready-to-measured process CPU across
+all eight native workers, despite sharply different latency. That excludes a
+large sustained CPU imbalance in those cases, not short stalls or a scheduling
+cause. The earlier client-placement ablation already had mixed results with
+older relay `d505a4b7…` (see the borrowed-submission section). This is a refresh
+on selected heartbeat-phase `c9a6c6da…`, with a new 400k comparison and scoped
+migration counts; it is not the first placement study or an isolated comparison
+between old and new relay runtimes.
+
+The relay and frozen exact client `888485f3…` stay identical in all new cases.
+At each rate, four fresh ordinary processes run inherited/pinned/pinned/inherited
+client placement: 100,000 active users in rooms of 16, full checked 1 KiB private
+messages for 30 seconds, eight native workers fixed to CPUs 0–7, eight client
+workers allowed CPUs 8–15, heartbeat 15s and 16/64 KiB TCP buffers. The existing
+`--pin-client-workers` option fixes each client worker to one singleton CPU at
+the ready gate; all sixteen server/client singleton masks are verified after
+measurement. The inherited case verifies only the eight native singleton masks.
+No profiler, build or competing benchmark overlaps ordinary timing.
+
+All 120 million ordinary application messages pass sender/body/sequence checks.
+Every case has 100,000 unique per-user rows, with 120 samples/user at 400k and
+180 at 600k. The table gives exact nearest-rank statistics across user p99s, not
+pooled packet percentiles or histogram upper bounds:
+
+| Rate / repetition | Median user p99, inherited → pinned client | 99th percentile of user p99s, inherited → pinned client | Worst packet, inherited → pinned client |
+| --- | ---: | ---: | ---: |
+| 400k/s / 1 | 0.832 → 0.836 ms | 1.463 → 1.816 ms | 5.152 → 17.293 ms |
+| 400k/s / 2 | 0.776 → 0.838 ms | 1.430 → 1.528 ms | 13.182 → 14.511 ms |
+| 600k/s / 1 | 9.314 → 1.696 ms | 20.685 → 3.492 ms | 36.684 → 11.664 ms |
+| 600k/s / 2 | 13.923 → 3.581 ms | 25.856 → 8.570 ms | 39.684 → 24.899 ms |
+
+At 600k, median user p99 falls 74.3–81.8%, and the 99th percentile across user
+p99s falls 66.9–83.1% in these two pairs. Server process CPU/message falls
+1.0–1.3%, and client process CPU/message falls 0.5–0.9%. These include kernel,
+heartbeat and client work within the recorded boundaries. Pinned results still
+vary: median user p99 is 1.696 versus 3.581 ms, with worst-user p99 reaching
+12.538 ms and worst packet 24.899 ms in the second run. Fixed placement does
+not establish uniformly low latency at this offered rate.
+
+At 400k, the direction is adverse in both new pairs: median user p99 increases
+0.6–8.1%, and the 99th percentile across user p99s increases 6.8–24.1%. Server
+CPU/message rises 0.3–0.4%, and client CPU/message rises 1.3–2.1%. Intended-send
+curves remain separate in the archived plots; they include generator scheduling
+and preparation. There is no general client-pinning win across both rates.
+
+Two separate 30-second counter diagnostics at 600k verify another 36 million
+messages, with the same selected relay. All requested events are counted for
+all nine threads/process with 100% reported counter running coverage. The eight
+native workers record zero migrations in both cases. The client workers record
+29,417 migrations with the inherited mask and seven with singleton masks; each
+fixed worker records at most one. Pinning occurs at the ready gate before perf
+attachment. The counters do not timestamp those residual migrations, so they
+are not labeled as proven startup events or silently rounded to zero. Main
+threads are excluded from those worker counts and remain in the archived totals.
+
+Perf task-clock and process CPU remain distinct: in the inherited diagnostic,
+server task-clock is 132.729 seconds versus 89.18 process CPU seconds, and client
+task-clock is 173.775 versus 118.85. Whole CPU-set IRQ plus softirq totals are
+46.96 and 55.98 seconds respectively, but include other tasks and are not
+exclusive process attribution. Counter and process boundaries also differ.
+These diagnostics are not ordinary performance results or direct runqueue
+latency measurements. Scheduler tracepoints/statistics remain unavailable under
+the existing host setup; no machine-wide settings are changed.
+
+All ten cases pass live population/error/resource assertions, post-load routing,
+Close/EOF, zero final gauges, exact descriptor return and established-socket
+retirement, with normal process exits. An independent analyzer rechecks source
+identities, per-user populations/counts, fixed worker masks and final resources.
+The existing four counter-analysis fixtures pass. Both actual output plots are
+visually inspected. No runtime changes require a new relay implementation test
+run; this study does not claim to rerun the selected runtime's 139-test suite.
+
+The evidence supports treating client placement as an explicit experimental
+control. It does not isolate migration itself from other scheduling/locality
+changes, resolve the high-rate variability, or establish a relay-code speedup.
+The older adverse 600k result remains relevant. Benchmark defaults, selected
+relay, local manual services and the 400k operating recommendation stay unchanged.
+Future server comparisons must keep client placement identical on both sides,
+and report separately any intervention on the generator. These finite same-host
+plaintext observations do not upgrade WAN/TLS or production capacity claims.
+
+The [archive](benchmarks/2026-10-17-client-placement/manifest.json) contains only
+this refresh's eight ordinary cases and two diagnostics, with exact client/server
+build records, source patches, runner/analyzer sources, counter input and reports,
+per-user CSVs and inspected plots. It explicitly distinguishes the current
+workspace source snapshot in raw traces from the older frozen client's source.
+See the [control recipe](operations.md#controlling-client-placement-in-latency-studies).

@@ -11,6 +11,19 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest diagnosis: client-placement refresh, 2026-10-17
+
+Eight ordinary cases on unchanged selected `c9a6c6da…` verify 120 million
+messages; two counter diagnostics add 36 million. Singleton client placement
+improves median/user-tail p99 in both 600k pairs, but worsens both 400k pairs.
+The counters record 29,417 → seven client-worker migrations, at most one per
+fixed worker, and zero native-worker migrations in both cases. The older mixed
+600k ablation remains explicit. This is a generator control, not a relay speedup
+or universal pinning recommendation. Defaults, runtime, local services and the
+400k operating recommendation remain. Four counter-analysis fixtures pass;
+per-user rows, exact final resources, masks, hashes and actual plots are checked.
+See [full evidence](performance.md#client-placement-refresh-and-migration-counters-2026-10-17).
+
 ## Latest experiment: socket-state inspection coalescing rejected, 2026-10-17
 
 A candidate combines socket status/deadline inspection under one mutex guard,

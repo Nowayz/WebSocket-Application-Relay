@@ -1216,3 +1216,44 @@ distinct from exact-mode output. Optional thresholds describe histogram upper
 bounds meeting the threshold; an upper bound above a threshold does not prove
 the exact percentile exceeded it. Do not compare a new bounded-client run with
 old exact-client timings as a relay-only speedup.
+
+## Controlling client placement in latency studies
+
+Client placement is part of the workload configuration. `--client-cpus` sets the
+process's allowed CPU set. The existing `--pin-client-workers` additionally fixes
+each Tokio runtime worker to one allowed CPU at the ready gate, using the
+harness; it does not change the client executable or pin setup/main-thread work.
+The harness records the singleton masks and verifies them after measurement.
+`--pin-workers` independently selects native server-worker startup affinity.
+
+For a new matched study, build once and reuse the same executable files in every
+case. This example uses the current client, so its identity differs from the
+older frozen client in the archived study:
+
+```sh
+cargo build --release --locked --bin war-relay --example capacity
+python3 scripts/capacity.py \
+  --server target/release/war-relay --client target/release/examples/capacity \
+  --users 100000 --seconds 30 --messages-per-second 6 \
+  --workers 8 --client-workers 8 --server-cpus 0-7 --client-cpus 8-15 \
+  --pin-workers --pin-client-workers --ping-interval-secs 15 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
+  --user-latency-output artifacts/client-fixed-1.csv \
+  --output artifacts/client-fixed-1.json
+```
+
+Compare with the identical command omitting only `--pin-client-workers`, using
+fresh CSV/JSON output paths. Run inherited/fixed/fixed/inherited order, each as
+a fresh server/client process. Repeat separately at four messages/user/s for
+400k/s. Keep binary hashes, active population, payload, heartbeat, CPU sets and
+socket buffers identical. Use the comparison plotter for both actual-send and
+intended-send user p99 distributions. Record the CPU topology too; the numeric
+CPU sets above describe this machine, not a portable placement prescription.
+
+The [selected-runtime refresh](performance.md#client-placement-refresh-and-migration-counters-2026-10-17)
+favors fixed client placement in both 600k pairs but finds adverse 400k results;
+an older 600k ablation was mixed. Benchmark defaults remain unchanged. Client
+placement is an explicit control for investigating generator/relay/kernel
+coupling, not a universal tuning rule. A generator intervention is not a
+relay-code speedup, and it does not justify raising the operating recommendation.
+Keep placement identical on both sides of a server optimization comparison.
