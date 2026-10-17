@@ -71,6 +71,35 @@ No Origin values are used as metric labels. Checks borrow bounded configuration
 and header bytes once at upgrade; application messages retain their shared-body
 forwarding path.
 
+## Pending TCP connections
+
+Both binaries accept `--listen-backlog` / `WAR_LISTEN_BACKLOG`, default `1024`,
+with requested values in `1..=65535`. This controls completed TCP handshakes
+waiting for userspace `accept`; the OS may cap the request. It applies to every
+native data listener and the bridge CLI's public listener. The separate native
+management listener retains its HTTP runtime's backlog.
+
+```sh
+./target/release/war-relay --workers 4 --listen-backlog 2048
+./target/release/war-legacy-bridge --listen-backlog 2048
+ss -ltn 'sport = :1338'
+```
+
+On Linux, LISTEN `Recv-Q` shows currently queued connections and `Send-Q` shows
+the effective accept backlog. Larger queues can absorb bursts and retain more
+kernel socket memory. They do not increase established-session quotas or
+application buffer budgets. Kernel listen drops occur before userspace accept
+and are not relay `war_rejected_total` or `war_accept_errors_total` events.
+Inspect kernel TCP listen-overflow/drop and retransmission counters when clients
+time out while relay error counters remain quiet.
+
+Native `serve` applies `Config::listen_backlog` to a supplied pre-bound listener
+and all additional worker listeners. Embedders that previously chose their own
+backlog should set that value in `Config` too. Bridge embedding functions retain
+the supplied listener's backlog; the bridge CLI applies its requested setting.
+The [admission measurements](performance.md#tcp-admission-continuations-and-backlogs-2026-10-16)
+record effective queues and the workload limits.
+
 ## Direct-peer connection admission
 
 Both binaries accept `--max-connections-per-ip` / `WAR_MAX_CONNECTIONS_PER_IP`.
@@ -191,6 +220,7 @@ variables. All bounds are per process.
 | Budget | Default | Counts |
 | --- | ---: | --- |
 | Connections | 10,000 | TCP handshakes, unjoined sockets, joined sessions, and closing transports |
+| Pending TCP accept backlog | 1,024 per public data listener | Kernel queue outside userspace admission counts; OS may cap the requested value |
 | Connections per direct peer IP | Disabled (`0`) | Optional native/bridge TCP admission; shared NAT/proxy addresses share a quota |
 | Channels | 10,000 | Includes persistent `re_globl` |
 | Members per channel | 10,000 | Includes closing sessions until removal |

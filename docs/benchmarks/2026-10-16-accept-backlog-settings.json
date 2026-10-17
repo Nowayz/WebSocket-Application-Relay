@@ -1,0 +1,379 @@
+{
+  "scope": "Twelve fresh local processes verify native one/four-worker and bridge listening queues using Linux ss. Default1024, CLI173, environment37 and65535 requested with the read-only host somaxconn clamp. No host limits or sysctls change. No connections or message load required. All processes must stop normally.",
+  "driver_source": "import hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport signal\nimport subprocess\nimport sys\nimport tempfile\nimport time\n\nroot = Path(__file__).resolve().parents[1]\nsys.path.insert(0, str(root / 'scripts'))\nimport benchmark\nimport importlib.util\nspec = importlib.util.spec_from_file_location('admission_flood', root / 'scripts/admission-flood.py')\nprobe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe)\nmeta = json.loads((root / 'artifacts/accept-backlog-candidate.json').read_text())\noutput = root / 'docs/benchmarks/2026-10-16-accept-backlog-settings.json'\nrecord = {'scope': 'Twelve fresh local processes verify native one/four-worker and bridge listening queues using Linux ss. Default1024, CLI173, environment37 and65535 requested with the read-only host somaxconn clamp. No host limits or sysctls change. No connections or message load required. All processes must stop normally.',\n          'driver_source': Path(__file__).read_text(), 'cases': [], 'passed': False}\nlimit = int(Path('/proc/sys/net/core/somaxconn').read_text())\nfor role, workers in [('native', 1), ('native', 4), ('bridge', 1)]:\n    name = 'war-relay' if role == 'native' else 'war-legacy-bridge'\n    binary = root / meta['directory'] / name\n    for mode, backlog in [('default', 1024), ('cli', 173), ('env', 37), ('clamped', 65535)]:\n        port = benchmark.free_port()\n        command = [str(binary), '--bind', f'127.0.0.1:{port}']\n        if role == 'native': command += ['--workers', str(workers), '--no-admin']\n        if mode in ['cli', 'clamped']: command += ['--listen-backlog', str(backlog)]\n        env = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}\n        if mode == 'env': env['WAR_LISTEN_BACKLOG'] = str(backlog)\n        row = {'role': role, 'workers': workers, 'mode': mode, 'requested': backlog, 'os_limit': limit,\n               'command': command, 'sha256': hashlib.sha256(binary.read_bytes()).hexdigest()}\n        with tempfile.TemporaryFile() as log:\n            process = subprocess.Popen(command, env=env, stdout=log, stderr=log)\n            try:\n                deadline = time.monotonic() + 5\n                while True:\n                    assert process.poll() is None\n                    queues = probe.listeners(port)\n                    if len(queues) == workers and all(q['backlog'] == min(backlog, limit) for q in queues): break\n                    assert time.monotonic() < deadline, queues\n                    time.sleep(.01)\n                row['queues'] = queues\n            finally:\n                process.send_signal(signal.SIGTERM)\n                row['exit_code'] = process.wait(timeout=5)\n            log.seek(0); row['log'] = log.read().decode(errors='replace')\n        assert row['exit_code'] == 0\n        row['passed'] = True\n        record['cases'].append(row)\n        output.write_text(json.dumps(record, indent=2) + '\\n')\n        print(json.dumps({k: row[k] for k in ['role', 'workers', 'mode', 'requested', 'exit_code']}), flush=True)\nrecord['passed'] = True\noutput.write_text(json.dumps(record, indent=2) + '\\n')\n",
+  "cases": [
+    {
+      "role": "native",
+      "workers": 1,
+      "mode": "default",
+      "requested": 1024,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:46255",
+        "--workers",
+        "1",
+        "--no-admin"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:46255"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 1,
+      "mode": "cli",
+      "requested": 173,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:46805",
+        "--workers",
+        "1",
+        "--no-admin",
+        "--listen-backlog",
+        "173"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:46805"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 1,
+      "mode": "env",
+      "requested": 37,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:60493",
+        "--workers",
+        "1",
+        "--no-admin"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:60493"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 1,
+      "mode": "clamped",
+      "requested": 65535,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:48031",
+        "--workers",
+        "1",
+        "--no-admin",
+        "--listen-backlog",
+        "65535"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:48031"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 4,
+      "mode": "default",
+      "requested": 1024,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:40601",
+        "--workers",
+        "4",
+        "--no-admin"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:40601"
+        },
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:40601"
+        },
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:40601"
+        },
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:40601"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 4,
+      "mode": "cli",
+      "requested": 173,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:45077",
+        "--workers",
+        "4",
+        "--no-admin",
+        "--listen-backlog",
+        "173"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:45077"
+        },
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:45077"
+        },
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:45077"
+        },
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:45077"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 4,
+      "mode": "env",
+      "requested": 37,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:45559",
+        "--workers",
+        "4",
+        "--no-admin"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:45559"
+        },
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:45559"
+        },
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:45559"
+        },
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:45559"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "native",
+      "workers": 4,
+      "mode": "clamped",
+      "requested": 65535,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-relay",
+        "--bind",
+        "127.0.0.1:40075",
+        "--workers",
+        "4",
+        "--no-admin",
+        "--listen-backlog",
+        "65535"
+      ],
+      "sha256": "b369bf27a881990fa3944348341be3a557f7abe481db401d1c338e71159265be",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:40075"
+        },
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:40075"
+        },
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:40075"
+        },
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:40075"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "bridge",
+      "workers": 1,
+      "mode": "default",
+      "requested": 1024,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:57983"
+      ],
+      "sha256": "bc71b284226c8092681dd5c03380f39ee97236718150fd5c103b6fae3bc0b7e5",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 1024,
+          "local": "127.0.0.1:57983"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "bridge",
+      "workers": 1,
+      "mode": "cli",
+      "requested": 173,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:52069",
+        "--listen-backlog",
+        "173"
+      ],
+      "sha256": "bc71b284226c8092681dd5c03380f39ee97236718150fd5c103b6fae3bc0b7e5",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 173,
+          "local": "127.0.0.1:52069"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "bridge",
+      "workers": 1,
+      "mode": "env",
+      "requested": 37,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:34999"
+      ],
+      "sha256": "bc71b284226c8092681dd5c03380f39ee97236718150fd5c103b6fae3bc0b7e5",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 37,
+          "local": "127.0.0.1:34999"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    },
+    {
+      "role": "bridge",
+      "workers": 1,
+      "mode": "clamped",
+      "requested": 65535,
+      "os_limit": 4096,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/baselines/accept-backlog/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:36361",
+        "--listen-backlog",
+        "65535"
+      ],
+      "sha256": "bc71b284226c8092681dd5c03380f39ee97236718150fd5c103b6fae3bc0b7e5",
+      "queues": [
+        {
+          "queued": 0,
+          "backlog": 4096,
+          "local": "127.0.0.1:36361"
+        }
+      ],
+      "exit_code": 0,
+      "log": "",
+      "passed": true
+    }
+  ],
+  "passed": true
+}

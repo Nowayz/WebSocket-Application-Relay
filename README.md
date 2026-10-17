@@ -194,6 +194,11 @@ recorded results and local dependency setup.
 - OS entropy supplies IDs. Fixed-ID takeover closes the old owner with `4001`;
   old-session cleanup cannot erase its replacement. Reserved IDs cannot be claimed.
 - Mio workers drive native sockets; Tokio handles management and process signals.
+  Each worker keeps at most one pending accept continuation, so repeated
+  listener events cannot multiply queued admission batches. Both public CLIs
+  accept `--listen-backlog` / `WAR_LISTEN_BACKLOG` (default 1,024), applied
+  consistently to native listeners and subject to the OS cap. See
+  [pending TCP connections](docs/operations.md#pending-tcp-connections).
   Routing submits bounded nonblocking writes directly. Only backpressure creates
   a recipient queue. A per-socket lock serializes writes from different workers;
   registry reads protect routing and writes protect membership/ID changes.

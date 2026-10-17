@@ -4011,3 +4011,135 @@ The [checkpoint manifest](benchmarks/2026-10-16-room-churn-reuse-build.json)
 binds source, frozen binaries/clients, ordinary and diagnostic evidence, tests,
 C++ compatibility, socket stress, management and real Chrome acceptance. All
 results are finite Linux loopback checks without TLS or hosted acceptance.
+
+## TCP admission continuations and backlogs, 2026-10-16
+
+Runtime `8676e7e` retains at most one queued listener continuation per native
+worker. A full 64-accept turn queues another turn; intervening listener readiness
+cannot append a duplicate. Popping the token clears its flag before accepting,
+so yielding before `WouldBlock` still guarantees progress with edge-triggered
+readiness. The worker adds one boolean, with no new payload allocations or
+per-message admission checks. The initial real-TCP regression fixture fails on
+the baseline with two queued continuations. The final fixture also verifies 128
+actual policy refusals, EOF, exact counters and retained/released physical capacity.
+
+The same investigation exposed inconsistent kernel queues. The initial Tokio
+listener had backlog 128; additional native reuse-port listeners used 1,024.
+Both CLIs now request 1,024 by default through `--listen-backlog` /
+`WAR_LISTEN_BACKLOG`, range `1..=65535`. Native `serve` applies it to the supplied
+socket and every worker listener. Bridge embedding keeps its supplied listener's
+backlog; its CLI applies the setting. The separate management listener is
+unchanged. The [operations guide](operations.md#pending-tcp-connections) describes
+embedding migration, the OS cap and kernel memory outside application quotas.
+
+The [comparison](benchmarks/2026-10-16-accept-admission-comparison.json) contains
+48 sequential ordinary fresh-process cases, three alternating rounds and
+six-second phases. The baseline is runtime `0f70200`, native SHA-256 `2db288da…`;
+the coalescing-only intermediate is `317cb3cd…`; the selected native is
+`b369bf27…`. Each runs the identical frozen Rust client `626b41b8…`, built from
+helper `a6949d5`, and isolated two-process controller `ab2a97d`. The admitted
+session explicitly negotiates `war.cbor.v1`, verifies uint64 welcome, 64 distinct
+cyclic 1-KiB byte-string bodies, sender and FIFO in windows of 16, then exact
+Close/EOF. Independently, 0/64/256 raw clients repeatedly connect and require
+EOF/reset without any application bytes. They never send an HTTP upgrade.
+
+Global capacity one or direct-IP capacity one holds the admitted socket through
+every refusal. Each case uses a fresh network/PID namespace: server CPUs 0–3,
+healthy generator CPU 4, flood generator CPUs 5–7. Healthy rates use that
+generator's own actual phase duration; server CPU and aggregate elapsed include
+the final refused-TCP tail. Every phase independently checks exact message,
+byte, admission and delivery counters, zero copied routing bytes and final
+resource retirement. No builds, profiles, fault injection or other load overlap
+these timings. All 48 cases pass and disposable servers/clients exit zero.
+
+The table gives three-run medians. Rates are thousands of verified operations
+per second; p99 is the fixed histogram's upper bound, in milliseconds. Echo
+latency starts at the beginning of its 16-message window; refusal latency spans
+TCP connect through EOF/reset.
+
+| Workers / policy / raw clients | Echo before → selected (k/s) | Refusals before → selected (k/s) | Echo p99 before → selected | Refusal p99 before → selected |
+| --- | ---: | ---: | ---: | ---: |
+| 1 / global / 0 | 561.2 → 571.3 | — | 0.065536 → 0.065536 | — |
+| 4 / global / 0 | 567.6 → 563.6 | — | 0.065536 → 0.065536 | — |
+| 1 / global / 64 | 199.8 → 209.3 | 265.5 → 264.4 | 0.524288 → 0.524288 | 1.048576 → 1.048576 |
+| 1 / global / 256 | 152.6 → 109.8 | 272.2 → 293.3 | 1.048576 → 1.048576 | 2.097152 → 4.194304 |
+| 1 / direct-IP / 256 | 145.8 → 102.4 | 270.6 → 295.8 | 1.048576 → 1.048576 | 2.097152 → 4.194304 |
+| 4 / global / 256 | 406.9 → 400.5 | 279.7 → 289.8 | 0.131072 → 0.131072 | 4.194304 → 4.194304 |
+| 4 / direct-IP / 256 | 410.9 → 400.1 | 259.3 → 289.8 | 0.131072 → 0.131072 | 2.097152 → 4.194304 |
+
+The ordinary controls are +1.81%/−0.70% for one/four workers. Their echo ranges
+are 560,520–568,849 → 569,003–574,411 and 566,456–570,401 → 558,845–571,199/s.
+The one-worker 256/global echo ranges are 151,354–152,756 → 105,524–117,485/s;
+four-worker ranges are 395,093–407,077 → 396,228–405,881/s. Full ranges and CPU
+figures for every cohort remain in the comparison. Process RSS medians stay
+about 5.0–5.2 MiB; this excludes kernel socket memory and cannot measure the
+larger queue's total memory cost.
+
+Coalescing alone leaves the smaller first-listener queue. On 256/global, its
+echo/refusal medians are 154.6/266.9 k/s with one worker and 407.5/270.8 k/s
+with four, versus baseline 152.6/272.2 and 406.9/279.7. Echo ranges overlap.
+These intermediate runs support the bounded-queue invariant without establishing
+a throughput gain from the boolean itself.
+
+Kernel counters explain the backlog tradeoff. Across the 21 matched runs per
+variant, baseline listen drops and SYN retransmissions both total 6,655; selected
+totals are zero drops and one SYN retransmission. These are separate from
+userspace policy refusals and accept errors. No-overflow operation sustains more
+actual refused lifecycles, consuming worker time: saturated one-worker echo
+throughput falls 28.0–29.8% while refusal throughput rises 7.8–9.3%. Four-worker
+echo rates fall 1.6–2.6%, refusal rates rise 3.6–11.7%. The baseline's kernel
+drops had throttled incoming work. Larger queues can also increase ordinary
+refusal waiting time, as the p99 table shows.
+
+The benefit is fewer dropped handshakes and shorter extreme refusal tails in
+these finite bursts. The maximum observed refusal in the 256/global one-worker
+cohort falls from 3,076 ms to 50.3 ms; for four workers, 1,065 ms to 35.2 ms.
+Baseline aggregate phases extend as far as 7.040 seconds for a requested six;
+selected phases finish by 6.001 seconds. These three-run extrema are observations,
+not latency guarantees. The setting remains tunable, including 128 if that is
+the intended kernel queue policy. No general speedup, CPU saving or denial-of-
+service capacity follows from these results.
+
+A separate isolated [1,024-client diagnosis](benchmarks/2026-10-16-accept-flood-backlog-diagnosis.json)
+fails with the coalescing-only binary and backlog 128: 2,138 kernel listen drops,
+843 syncookies, 1,416 SYN retransmissions and a flood-client TCP deadline. At
+failure the server still has one healthy session, 344,512 processed application
+messages, 557,635 policy refusals and zero accept errors. The controller kills
+its waiting healthy client during cleanup; this failed fixture is retained and
+is not included in the successful ordinary medians. The selected
+[1,024-client check](benchmarks/2026-10-16-accept-backlog-upper-bound.json)
+completes 530,535 refusals and 157,312 echoes, with zero kernel drop/retransmission
+counters and normal exit/cleanup. This is a finite Linux loopback check.
+
+Earlier `accept-flood-*` smoke/pilot traces used a shared echo/flood runtime, or
+shorter exploratory phases. A shared saturated generator can bottleneck echo
+progress; those apparent gains are not the retained comparison. The final
+controller uses independent processes and records actual role-specific phase
+durations. Failed exploratory traces remain distinguishable from passing cases.
+In particular, `accept-flood-isolated-smoke-selected.json` uses the coalescing-only
+`317cb3cd…` binary; its filename does not identify the final backlog candidate.
+
+The [12 setting cases](benchmarks/2026-10-16-accept-backlog-settings.json) use
+Linux `ss` to check native one/four-worker and bridge defaults, CLI value 173,
+environment value 37 and requested 65,535 clamped to host `somaxconn`. No host
+limits change. Six separate shutdown diagnostics exercise baseline,
+coalescing-only and selected binaries with one/four workers during an active
+256-client refusal flood. Each held peer verifies eight echoes, shutdown Close
+1001 and EOF; each native process exits zero. Flood clients intentionally exit
+one when the listener closes. These are cancellation checks, not successful
+throughput trials; their approximately 1.1–1.3 ms shutdown observations do not
+establish a comparative speedup.
+
+Reproduce the ordinary workload after building the binaries and helper:
+
+```sh
+cargo build --locked --release --bins --example admission
+python3 scripts/admission-flood.py --workers 1 --policy global \
+  --flood-workers 256 --seconds 6 --isolate --output artifacts/admission.json
+```
+
+The [manifest](benchmarks/2026-10-16-accept-backlog-build.json) binds exact source,
+frozen binaries/clients/controller, all ordinary and diagnostic traces, 138 Rust
+tests, strict checks, C++ compatibility, socket stress, management and real
+Chrome acceptance. GitHub-hosted CI execution and hosted deployment are not
+claimed. The goal remains active.

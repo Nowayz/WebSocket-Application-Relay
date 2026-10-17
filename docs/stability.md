@@ -938,3 +938,47 @@ The small [two-worker CI command](benchmarks/2026-10-16-room-churn-ci.json)
 passes locally with CPU affinity disabled; workflow `e52a953` runs it on Linux.
 Hosted CI execution is not claimed. These finite local checks do not establish
 continuous concurrent membership performance or production capacity.
+
+## Bounded TCP admission and consistent listener queues, 2026-10-16
+
+Runtime `8676e7e` coalesces pending listener continuations: one worker can retain
+one accept token even if more readiness arrives before its next turn. The
+initial actual-TCP regression fixture fails baseline with two tokens; the
+selected fixture also verifies 128 refused sockets reaching EOF, exact counters
+and physical admission retiring on worker teardown. Established socket work,
+resource-error retries and shutdown retain their existing scheduling paths.
+
+The initial data listener previously had backlog 128 while extra native workers
+used 1,024. Both CLIs now expose `--listen-backlog` / `WAR_LISTEN_BACKLOG`, default
+1,024 with positive `u16` bounds and OS clamping. Native embedding applies its
+`Config` setting to the supplied listener; bridge embedding retains its supplied
+listener's queue. Twelve [live setting checks](benchmarks/2026-10-16-accept-backlog-settings.json)
+verify defaults, CLI/env overrides, every native listener and the host clamp.
+
+The [48-process comparison](benchmarks/2026-10-16-accept-admission-comparison.json)
+keeps one negotiated CBOR session alive while an independent process completes
+raw policy-refused TCP lifecycles. It checks whole bodies, FIFO, EOF/reset,
+all exact counters, zero routing copies and final resource retirement, in fresh
+network namespaces. All ordinary cases pass. The
+[1,024-client baseline diagnosis](benchmarks/2026-10-16-accept-flood-backlog-diagnosis.json)
+retains a client deadline with 2,138 kernel listen drops while application work
+continues. The selected [upper-bound check](benchmarks/2026-10-16-accept-backlog-upper-bound.json)
+completes with zero kernel drops/retransmissions. Larger kernel queues consume
+memory and worker time; the [performance record](performance.md#tcp-admission-continuations-and-backlogs-2026-10-16)
+explicitly retains the saturated one-worker echo-throughput loss.
+
+Six independent shutdown diagnostics cover before/coalesced/selected and one/four
+workers with an active 256-client refusal flood. Each native process exits zero;
+the held peer receives Close 1001 and EOF after eight verified echoes. The flood
+client's expected exit one on listener closure is a cancellation result, separate
+from completed normal workloads. Three [descriptor-pressure cases](benchmarks/2026-10-16-accept-backlog-accept.json)
+and four [socket-setup fault cases](benchmarks/2026-10-16-accept-backlog-setup.json)
+preserve recovery, held physical slots, queued admission and shutdown.
+
+The same selected binaries pass [C++ compatibility](benchmarks/2026-10-16-accept-backlog-reference.json),
+[four socket stress cases](benchmarks/2026-10-16-accept-backlog-stability.json),
+[management API checks](benchmarks/2026-10-16-accept-backlog-api.json),
+[real Chrome acceptance](benchmarks/2026-10-16-accept-backlog-browser.json) and
+the small unpinned [CI command](benchmarks/2026-10-16-accept-backlog-ci.json).
+The manifest retains 138 passing Rust tests and strict checks. Hosted CI and
+deployment are unverified; these finite loopback cases are local acceptance.

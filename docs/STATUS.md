@@ -9,6 +9,55 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Runtime `8676e7e` bounds each native worker to one queued accept continuation
+and applies a configurable TCP backlog to every data listener. Previously,
+repeated listener events could enqueue duplicate admission turns; the initial
+listener also had backlog 128 while additional workers used 1,024. Both public
+CLIs now accept `--listen-backlog` / `WAR_LISTEN_BACKLOG`, default 1,024 and
+subject to the OS cap. Native embedding applies `Config::listen_backlog` to
+the supplied listener too; bridge embedding preserves its supplied listener.
+Shared CBOR body ownership and application routing retain their behavior.
+
+The initial actual-TCP regression fixture fails on the baseline with two queued
+continuations instead of one. A separate isolated 1,024-client refusal diagnostic
+finds 2,138 kernel listen drops, 1,416 SYN retransmissions and a client deadline,
+while the admitted CBOR peer keeps making progress and relay accept errors stay
+zero. With the selected backlog, that workload completes 530,535 refusals and
+157,312 verified echoes, with no kernel drops or retransmissions.
+
+The ordinary comparison passes 48 sequential fresh processes: three alternating
+rounds, one/four workers, global/direct-IP admission, zero/64/256 refused TCP
+clients, plus a coalescing-only intermediate. Independent echo/flood generators
+have separate CPU sets and each case has a fresh network namespace. Across the
+21 matched runs per variant, kernel listen drops fall from 6,655 to zero and SYN
+retransmissions from 6,655 to one. The largest observed refused-TCP lifecycle
+falls from 3,076 ms to 50.3 ms in the one-worker/global 256-client cohort.
+
+This is a reliability and bounded-scheduling change. Saturated one-worker
+refusal throughput rises 7.8–9.3%, while established echo throughput falls
+28.0–29.8%; the baseline's kernel drops had throttled incoming work. Four-worker
+flood cases show 3.6–11.7% more completed refusals and 1.6–2.6% fewer echoes.
+Ordinary echo medians are +1.81%/−0.70% for one/four workers. Healthy median p99
+buckets stay unchanged, while refused-TCP p99 can rise. The
+[performance record](performance.md#tcp-admission-continuations-and-backlogs-2026-10-16)
+retains rates, ranges, tails and the larger kernel-queue cost; no general speedup
+or production capacity claim follows.
+
+Verification passes 138 Rust tests, strict Clippy/formatting, locked release
+builds, the small unpinned CI command, 12 live backlog-setting cases, six shutdown
+diagnostics, three descriptor-pressure cases and four socket-setup fault cases.
+The preserved C++ comparison passes 48 common cases and eight explicit
+differences. Seven JavaScript, four management API and seven real Chrome checks
+pass. Separate socket cases verify 6,793,728 ordinary deliveries, 519,848 full
+reconnects across 4,096 source IPs, 204,361 healthy deliveries beside an unread
+peer and 742,176 mixed-size fanout deliveries. Native/bridge services on 1338/1337
+run the selected frozen binaries; management is on 1339 and browser acceptance
+on 4180. Chrome has a clear console, four native listeners and zero retained
+resources. The [manifest](benchmarks/2026-10-16-accept-backlog-build.json) binds
+source, binaries, clients and evidence. Acceptance is local; the goal remains active.
+
+## Previous checkpoint: recipient storage reuse, 2026-10-16
+
 Runtime `0f70200` reuses uncaptured broadcast recipient storage across joins
 and departures. The registry write lock plus exclusive `Arc` ownership permit
 in-place handle updates. An active capture keeps its immutable view and the
