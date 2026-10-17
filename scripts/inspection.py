@@ -132,6 +132,8 @@ def run(args):
         command += ["--page-size", str(args.page_size)]
     if args.fanout_readers:
         command += ["--fanout-readers", str(args.fanout_readers)]
+    if getattr(args, "fanout_global_observers", False):
+        command += ["--fanout-global-observers"]
     if getattr(args, "fanout_churn_every", 0):
         command += ["--fanout-churn-every", str(args.fanout_churn_every)]
     if getattr(args, "fanout_window", 16) != 16:
@@ -297,6 +299,8 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=4, help="Native server worker count")
     parser.add_argument("--fanout-readers", type=int, default=0,
                         help="Add a verified broadcast room; requires the updated client")
+    parser.add_argument("--fanout-global-observers", action="store_true",
+                        help="Use authenticated global channel-message observers as fanout readers")
     parser.add_argument("--fanout-churn-every", type=int, default=0,
                         help="Join/retire a verifying room member every N fanout windows; zero disables")
     parser.add_argument("--fanout-window", type=int, default=16,

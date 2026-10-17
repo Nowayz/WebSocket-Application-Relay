@@ -10,6 +10,7 @@ pub(super) struct Fanout {
     readers: Vec<(Socket, u64)>,
     packets: Arc<Vec<(Bytes, Bytes)>>,
     wire: Wire,
+    global_observers: bool,
 }
 
 #[derive(Clone)]
@@ -61,15 +62,20 @@ mod tests {
 
     #[tokio::test]
     async fn corruption_at_a_non_primary_reader_is_rejected() {
-        check_corruption(false).await;
+        check_corruption(false, false).await;
     }
 
     #[tokio::test]
     async fn a_changed_departure_at_a_non_primary_reader_is_rejected() {
-        check_corruption(true).await;
+        check_corruption(true, false).await;
     }
 
-    async fn check_corruption(bad_departure: bool) {
+    #[tokio::test]
+    async fn corruption_at_a_non_primary_global_observer_is_rejected() {
+        check_corruption(false, true).await;
+    }
+
+    async fn check_corruption(bad_departure: bool, global_observers: bool) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://{}/", listener.local_addr().unwrap());
         let fake = tokio::spawn(async move {
@@ -79,6 +85,16 @@ mod tests {
                 let mut socket = tokio_tungstenite::accept_async(stream).await?;
                 ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
                 socket.send(Message::Binary(protocol::uint(id))).await?;
+                if global_observers && id != 1 {
+                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
+                    socket
+                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\0\xf5")))
+                        .await?;
+                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
+                    socket
+                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\x01\x01")))
+                        .await?;
+                }
                 peers.push(socket);
             }
             let mut transient = if bad_departure {
@@ -130,7 +146,9 @@ mod tests {
             std::future::pending::<Result<()>>().await
         });
         let mut counts = Counts::default();
-        let group = Fanout::new(&url, 2, Wire::Cbor, &mut counts).await.unwrap();
+        let group = Fanout::new(&url, 2, Wire::Cbor, global_observers, &mut counts)
+            .await
+            .unwrap();
         let error = timeout(
             Duration::from_secs(2),
             group.run(
@@ -160,13 +178,34 @@ impl Fanout {
         url: &str,
         readers: usize,
         wire: Wire,
+        global_observers: bool,
         counts: &mut Counts,
     ) -> Result<Self> {
         let name = Bytes::from_static(b"fanout");
         let (sender, id) = join(url, &name, wire, counts).await?;
         let mut peers = Vec::with_capacity(readers);
         for _ in 0..readers {
-            peers.push(join(url, &name, wire, counts).await?);
+            let reader_name = if global_observers {
+                Bytes::from_static(protocol::GLOBAL_CHANNEL)
+            } else {
+                name.clone()
+            };
+            let (mut socket, id) = join(url, &reader_name, wire, counts).await?;
+            if global_observers {
+                authenticate(&mut socket, wire, counts).await?;
+                ensure!(
+                    exchange(
+                        &mut socket,
+                        protocol::request(1, &protocol::uint(u64::from(protocol::CHANNEL_MESSAGE))),
+                        counts
+                    )
+                    .await?
+                    .as_ref()
+                        == b"\x82\0\x82\x01\x01",
+                    "channel observer opt-in"
+                );
+            }
+            peers.push((socket, id));
         }
         let mut payload = [0x5a; 1024];
         let packets = (0u64..64)
@@ -184,6 +223,7 @@ impl Fanout {
             readers: peers,
             packets: Arc::new(packets),
             wire,
+            global_observers,
         })
     }
 
@@ -199,6 +239,7 @@ impl Fanout {
             readers,
             packets,
             wire,
+            global_observers,
         } = self;
         let readers_len = readers.len();
         let (windows, initial) = watch::channel(None::<Step>);
@@ -310,6 +351,7 @@ impl Fanout {
                 readers,
                 packets,
                 wire,
+                global_observers,
             },
             counts,
             stats,
@@ -328,9 +370,11 @@ impl Fanout {
                 ensure!(actual == expected, "fanout departure changed");
                 counts.received(&actual);
             }
-            let actual = data(&mut self.sender).await?;
-            ensure!(actual == expected, "fanout sender departure changed");
-            counts.received(&actual);
+            if !self.global_observers {
+                let actual = data(&mut self.sender).await?;
+                ensure!(actual == expected, "fanout sender departure changed");
+                counts.received(&actual);
+            }
         }
         close(&mut self.sender, counts).await
     }

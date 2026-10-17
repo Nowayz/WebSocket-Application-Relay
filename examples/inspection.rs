@@ -113,6 +113,9 @@ struct Args {
     /// Add a stable broadcast room with this many fully verifying readers.
     #[arg(long, default_value_t = 0)]
     fanout_readers: usize,
+    /// Subscribe fanout readers as authenticated global channel-message observers.
+    #[arg(long)]
+    fanout_global_observers: bool,
     /// Join and retire a verifying reader every N broadcast windows; zero disables.
     #[arg(long, default_value_t = 0)]
     fanout_churn_every: usize,
@@ -704,6 +707,11 @@ async fn run(args: Args) -> Result<()> {
         "fanout membership churn requires CBOR readers, mode none and no inspectors"
     );
     ensure!(
+        !args.fanout_global_observers
+            || (args.fanout_readers > 0 && args.wire == Wire::Cbor && args.fanout_churn_every == 0),
+        "global observers require CBOR fanout readers without fanout membership churn"
+    );
+    ensure!(
         args.page_size
             .is_none_or(|limit| (1..=1000).contains(&limit)
                 && args.mode == Mode::Http
@@ -814,12 +822,25 @@ async fn run(args: Args) -> Result<()> {
         None
     };
     let fanout = if args.fanout_readers > 0 {
-        let group =
-            fanout::Fanout::new(&args.url, args.fanout_readers, args.wire, &mut counts).await?;
+        let group = fanout::Fanout::new(
+            &args.url,
+            args.fanout_readers,
+            args.wire,
+            args.fanout_global_observers,
+            &mut counts,
+        )
+        .await?;
         stable.push((
             Bytes::from_static(b"fanout"),
-            args.fanout_readers as u64 + 1,
+            if args.fanout_global_observers {
+                1
+            } else {
+                args.fanout_readers as u64 + 1
+            },
         ));
+        if args.fanout_global_observers {
+            stable[0].1 += args.fanout_readers as u64;
+        }
         Some(group)
     } else {
         None

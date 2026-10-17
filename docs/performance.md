@@ -6532,3 +6532,124 @@ build records, source patches, runner/analyzer sources, counter input and report
 per-user CSVs and inspected plots. It explicitly distinguishes the current
 workspace source snapshot in raw traces from the older frozen client's source.
 See the [control recipe](operations.md#controlling-client-placement-in-latency-studies).
+
+## Global and observer fanout work quotas (2026-10-17)
+
+Ordinary room broadcasts charged recipient count to the native connection's
+existing read-turn budget, but global broadcasts and channel/private routes with
+global observers returned a cost of one. A ready publisher could therefore
+submit up to 256 buffered messages regardless of their recipient count. With
+1,024 observers that permits up to 262,144 recipient visits before another
+connection gets a turn. The previous source already bounded ordinary room
+fanout; this change closes the remaining routing-path gap.
+
+Three new deterministic buffered-frame tests fail on the old implementation:
+global broadcast, channel observers and private observers. Both complete frames
+are already in decoder storage, so TCP arrival timing cannot accidentally make
+them pass. The original ordinary-room case remains. The selected implementation
+charges global owner count, channel members plus channel observers, or the
+primary private target plus private observers. Counts conservatively include a
+skipped sender or duplicate primary and use saturating arithmetic. The existing
+256-frame/recipient quantum is unchanged; no new limit, connection field,
+allocation, lock, queue or body copy is introduced. Ordinary private/no-observer
+and cached ordinary-room paths retain their existing fast returns.
+
+A complete message still finishes fanout before yielding. This preserves source
+FIFO, recipient selection, observer de-duplication, membership locking and shared
+body ownership. It does not bound the duration of one enormous fanout or split
+it into independently scheduled chunks. The change is selected for repeated
+private/churn responsiveness under observer load, with explicit costs below.
+
+The inspection client adds `--fanout-global-observers`: readers join the global
+channel, authenticate, opt into channel-message observations, then independently
+verify the full sender/body/FIFO matrix. Global-room departures are checked for
+every surviving observer; the ordinary-room sender does not expect those
+notifications. An additional negative fixture corrupts a non-primary observer
+and must fail. Observer mode requires CBOR and excludes the separate in-room
+fanout membership-churn option; independent ordinary-room churn remains active.
+The existing ordinary-room/churn mode also passes a live regression check.
+
+Eight fresh ordinary cases compare baseline `c9a6c6da…` with candidate/selected
+`f1bf8bf9…`, using the same frozen new client. Each has 512 global channel
+observers, one private pair, 64 idle rooms, eight independent churn workers,
+two HTTP inspectors at 10 ms intervals, 1 KiB values and 16-frame fanout windows
+for six seconds. One native worker is allowed CPU 0; four are allowed CPUs 0–3.
+Eight client workers are allowed CPUs 8–15. Thread startup pinning is not enabled
+in this inspection study. Heartbeat/rate limits are disabled to isolate this
+workload. Order is baseline/candidate/candidate/baseline at each worker count;
+no builds, profiles or other benchmarks overlap timing. The initial four-second
+diagnosis uses the older four-client-worker CPU 4–7 profile and is separate.
+
+All table percentiles are reported power-of-two histogram upper bounds,
+including client/windowing time, not exact percentiles or hard latency bounds:
+
+| Native workers / pair | Private p99 upper bound, baseline → selected | Churn p99 upper bound, baseline → selected | Observer deliveries/s, baseline → selected |
+| --- | ---: | ---: | ---: |
+| 1 / 1 | 33.554 → 4.194 ms | 134.218 → 16.777 ms | 386,768 → 368,266 |
+| 1 / 2 | 33.554 → 4.194 ms | 134.218 → 16.777 ms | 390,064 → 367,551 |
+| 4 / 1 | 33.554 → 8.389 ms | 134.218 → 33.554 ms | 382,656 → 373,226 |
+| 4 / 2 | 33.554 → 8.389 ms | 134.218 → 33.554 ms | 385,238 → 369,811 |
+
+Private throughput rises 7.7–10.0 times in these four pairs, and its observed
+maximum falls in all four. Fanout throughput costs 2.5–5.8%. HTTP inspection has
+no consistent improvement: its p99 upper bound increases 2.097 → 4.194 ms in
+the first single-worker pair and is unchanged in the other three. HTTP maxima
+are higher in three pairs, with the highest selected observation 8.321 ms.
+Mixed process CPU includes the much larger volume of completed private/churn
+work, so it is not an isolated cost per broadcast or opcode.
+
+The eight cases verify 18,178,048 observer deliveries, 185,312 independent private
+deliveries and 31,538 complete churn cycles. The independent analyzer also
+checks the delivery/input/value-byte equations for the entire matrix, including
+579 stable welcomes, 1,024 observer-control responses and the private pair's
+variable acknowledgement. Live counters and all final resource gauges pass,
+with normal process exits. These inspection cases do not independently scan
+kernel descriptors; that is covered by the separate capacity checks below.
+
+Four matched private-traffic guards use the older exact-sample client `888485f3…`,
+100,000 active users, 16-member rooms, 400k messages/s for 30s, eight pinned
+native workers on CPUs 0–7, eight client workers allowed 8–15, heartbeat 15s and
+16/64 KiB TCP buffers. Both sides retain inherited client placement. All 48
+million timed messages pass; each case has 100,000 unique per-user rows and 120
+samples/user. Exact nearest-rank statistics across user-level p99s are:
+
+| Pair | Median user p99, baseline → selected | 99th percentile of user p99s, baseline → selected | Worst user's p99, baseline → selected |
+| --- | ---: | ---: | ---: |
+| 1 | 0.834 → 0.831 ms | 1.562 → 1.499 ms | 3.034 → 3.426 ms |
+| 2 | 0.831 → 0.846 ms | 1.864 → 1.884 ms | 3.420 → 3.788 ms |
+
+These guards are mixed, with adverse worst-user p99 results of 10.8–12.9%.
+Server CPU/message is 0.2–1.2% higher. Worst observed packets are 5.146 → 5.852 ms
+and 14.904 → 13.882 ms. This is not a universal latency/CPU improvement or a
+reason to raise the 400k operating recommendation. Selection addresses the
+reproduced high-fanout turn-accounting error and the repeated stressed-workload
+benefit. Exact counters, every user's routing proof, Close/EOF, zero final
+gauges, descriptor return to baseline and zero established sockets pass.
+
+A separate 65-second mixed acceptance keeps 100,000 stable users, heartbeat 15s,
+16 churn workers and eight unread pressure recipients. All 6.5 million stable
+messages pass; stable pooled p99 upper bound is 1.049 ms and exact maximum
+14.993 ms. Another 66,560 churn sessions route/close, and the pressure sidecar
+verifies 2,320,176 healthy deliveries while all eight unread peers receive the
+expected 1013 Close. All postcheck routes, live/error/resource assertions,
+normal process exits and exact descriptor return (42 → 42) pass. This is finite
+acceptance, not a matched mixed-load speedup or a universal response bound.
+
+All 142 Rust tests, three inspection-client tests, strict all-target Clippy,
+formatting and Python compilation pass. The independent raw protocol corpus
+passes 776 cases / 2,311 exchanges. Frozen source patches and build records bind
+both server/client versions. The first client smoke supplied a flat source-root
+and failed before process launch; the corrected source layout and complete
+successful smoke remain separate from that setup failure. Both actual generated
+plots are visually inspected.
+
+The [archive](benchmarks/2026-10-17-observer-quantum/manifest.json) preserves
+source/build identities, failed-before/passed-after fairness tests, all matched
+traces, per-user CSVs, mixed acceptance, independent analysis and inspected plots.
+Raw capacity traces explicitly label current-workspace source snapshots; actual
+frozen guard/mixed clients bind to their own original build/source records.
+All five build source sets replay and match hashes. The older mixed-client
+record included three then-untracked files absent from its base/diff; its
+preserved original capacity example and two runner sources are explicit overlays
+in the manifest, rather than being misrepresented as part of that patch.
+This remains same-host plaintext evidence, not a new C++/WAN/TLS comparison.

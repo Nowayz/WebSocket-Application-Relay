@@ -11,6 +11,23 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest selected runtime: global/observer fanout work quotas, 2026-10-17
+
+Global broadcasts and channel/private routes with global observers now charge
+recipient visits to the existing read-turn quantum. Three buffered-frame
+regressions fail before and pass after; complete fanout/FIFO and shared payload
+ownership remain. No new per-connection state, allocation or body copy.
+All 142 Rust tests, three client fixtures, strict Clippy/fmt and the 776-case /
+2,311-exchange corpus pass. New selected native SHA: `f1bf8bf9…`.
+
+Eight matched 512-observer cases improve private/churn p99 upper bounds in all
+four pairs, at 2.5–5.8% lower observer throughput. HTTP inspection does not improve
+consistently. Four 100k-user guards verify 48 million messages, with mixed latency
+and 0.2–1.2% more server CPU/message; adverse worst-user results are retained.
+A separate 65s 100k heartbeat/churn/unread acceptance passes 6.5 million stable
+messages, 66,560 churn sessions, pressure validation and complete retirement.
+The 400k operating recommendation remains. See [results and limits](performance.md#global-and-observer-fanout-work-quotas-2026-10-17).
+
 ## Latest diagnosis: client-placement refresh, 2026-10-17
 
 Eight ordinary cases on unchanged selected `c9a6c6da…` verify 120 million

@@ -1257,3 +1257,43 @@ placement is an explicit control for investigating generator/relay/kernel
 coupling, not a universal tuning rule. A generator intervention is not a
 relay-code speedup, and it does not justify raising the operating recommendation.
 Keep placement identical on both sides of a server optimization comparison.
+
+## Checking responsiveness with global observers
+
+The native turn budget counts recipient visits for global broadcasts and
+channel/private fanout through global observers, as well as ordinary room
+broadcasts. It finishes one complete message before yielding; it does not split
+that message or impose a hard duration bound on a single large fanout.
+
+The inspection client can place its verifying readers in the global channel as
+authenticated channel-message observers. The publisher stays in its ordinary
+room, alongside independent private traffic, connection churn and management
+queries:
+
+```sh
+cargo build --release --locked --bins --example inspection
+python3 scripts/inspection.py \
+  --server target/release/war-relay --client target/release/examples/inspection \
+  --mode http --rooms 64 --seconds 6 --inspectors 2 \
+  --inspection-interval-ms 10 --pairs 1 --churn-workers 8 \
+  --workers 4 --client-workers 8 --server-cpus 0-3 --client-cpus 8-15 \
+  --fanout-readers 512 --fanout-global-observers --fanout-window 16 \
+  --output artifacts/observer-mixed.json
+```
+
+This command uses allowed CPU sets, not singleton server-worker startup pinning.
+The numeric sets describe the benchmark host. Observer mode requires CBOR and
+cannot be combined with `--fanout-churn-every`, whose departure oracle models
+readers inside the publisher's room. Independent `--churn-workers` remain
+supported. Omitting `--fanout-global-observers` retains the existing ordinary-room
+probe. Setup authentication, complete reader/message matrices, sender/body/FIFO,
+all global-room departures and final resource/counter totals are checked.
+
+For a server comparison, freeze the same client and run fresh baseline/candidate/
+candidate/baseline cases, separately with one and four native workers. Compare
+private, churn, inspection and fanout results together. Histogram percentile
+columns are upper bounds; maxima are observed durations. The
+[measured selection](performance.md#global-and-observer-fanout-work-quotas-2026-10-17)
+improves stressed private/churn responsiveness at a fanout-throughput cost and
+has explicit adverse inspection and normal-traffic observations. It does not
+raise the 100,000-user operating recommendation or establish a hard latency SLO.

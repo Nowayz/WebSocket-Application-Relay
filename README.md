@@ -49,6 +49,9 @@ heartbeats, reconnect churn, unread-recipient isolation and complete retirement.
 A [ten-minute per-user soak](docs/performance.md#bounded-per-user-latency-and-ten-minute-soak-2026-10-17)
 verifies 240 million application messages with bounded histogram retention;
 its finite loopback scope and histogram bounds are reported explicitly.
+[Global/observer fanout accounting](docs/performance.md#global-and-observer-fanout-work-quotas-2026-10-17)
+charges recipient visits to the native turn budget so a buffered publisher yields
+between complete messages; measured responsiveness and throughput costs are explicit.
 Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
 buffers independently of application queues; their default `0` retains OS policy.
 

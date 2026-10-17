@@ -717,6 +717,23 @@ impl Relay {
             }
             return Ok(work);
         }
+        // Charge every fanout path by recipient visits, including global
+        // observers. One complete message remains atomic with respect to this
+        // source's FIFO; the connection yields before its next buffered frame.
+        // Counts conservatively include the sender or duplicate primary target.
+        let work = if target == BROADCAST {
+            if peer.channel.as_ref() == GLOBAL_CHANNEL {
+                state.users.len()
+            } else {
+                state
+                    .channels
+                    .get(&peer.channel)
+                    .map_or(0, |c| c.members.len())
+                    .saturating_add(state.listeners(CHANNEL_MESSAGE).len())
+            }
+        } else {
+            state.listeners(PRIVATE_MESSAGE).len().saturating_add(1)
+        };
         if target == BROADCAST {
             if peer.channel.as_ref() == GLOBAL_CHANNEL {
                 for recipient in state.users.values() {
@@ -744,7 +761,7 @@ impl Relay {
                 }
             }
         }
-        Ok(1)
+        Ok(work.max(1))
     }
 
     fn control(&self, peer: &Peer, value: &[u8]) -> Result<(), Disconnect> {

@@ -13,7 +13,7 @@ impl PeerOutput for Sequence {
         if !packet.frame.payload().is_empty() {
             let bytes = packet.frame.to_vec();
             let (sender, value) = protocol::parse(&bytes).unwrap();
-            if sender != protocol::BROADCAST {
+            if sender != protocol::BROADCAST && sender != protocol::RELAY {
                 let next = self.messages.fetch_add(1, Relaxed) + 1;
                 assert_eq!(value, [next as u8], "recipient FIFO changed");
             }
@@ -26,9 +26,36 @@ impl PeerOutput for Sequence {
 
 #[test]
 fn a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_fanout() {
+    check_fanout_quantum(FanoutScope::Room);
+}
+
+#[test]
+fn a_large_global_broadcast_yields_without_splitting_fanout() {
+    check_fanout_quantum(FanoutScope::Global);
+}
+
+#[test]
+fn channel_observer_fanout_yields_without_splitting_fanout() {
+    check_fanout_quantum(FanoutScope::ChannelObservers);
+}
+
+#[test]
+fn private_observer_fanout_yields_without_splitting_fanout() {
+    check_fanout_quantum(FanoutScope::PrivateObservers);
+}
+
+enum FanoutScope {
+    Room,
+    Global,
+    ChannelObservers,
+    PrivateObservers,
+}
+
+fn check_fanout_quantum(scope: FanoutScope) {
     let relay = Relay::new(crate::Config {
         ping_interval_secs: 0,
         total_read_buffer_bytes: 0,
+        auth_password: Some("fairness".into()),
         ..crate::Config::default()
     })
     .unwrap();
@@ -49,25 +76,68 @@ fn a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_f
     )
     .unwrap();
     let mut connection = Connection::new(socket.clone(), Token(2), None, &relay);
+    let source_channel = if matches!(scope, FanoutScope::Global) {
+        protocol::GLOBAL_CHANNEL
+    } else {
+        b"wide"
+    };
     connection.registration = Some(
         relay
-            .subscribe_with_output(b"wide", socket.clone())
+            .subscribe_with_output(source_channel, socket.clone())
             .unwrap(),
     );
     let mut targets = Vec::new();
     let mut outputs = Vec::new();
     for _ in 0..300 {
         let output = Arc::new(Sequence::default());
-        targets.push(
+        let channel = if matches!(scope, FanoutScope::Room) {
+            source_channel
+        } else {
+            protocol::GLOBAL_CHANNEL
+        };
+        let target = relay
+            .subscribe_with_output(channel, output.clone())
+            .unwrap();
+        if matches!(
+            scope,
+            FanoutScope::ChannelObservers | FanoutScope::PrivateObservers
+        ) {
             relay
-                .subscribe_with_output(b"wide", output.clone())
-                .unwrap(),
-        );
+                .receive(
+                    &target.peer,
+                    protocol::request(0, &protocol::text("fairness")),
+                )
+                .unwrap();
+            let flags = if matches!(scope, FanoutScope::ChannelObservers) {
+                protocol::CHANNEL_MESSAGE
+            } else {
+                protocol::PRIVATE_MESSAGE
+            };
+            relay
+                .receive(
+                    &target.peer,
+                    protocol::request(1, &protocol::uint(u64::from(flags))),
+                )
+                .unwrap();
+        }
+        targets.push(target);
         outputs.push(output);
     }
+    let incoming_before = relay.metrics.incoming_messages.load(Relaxed);
+    let destination = if matches!(scope, FanoutScope::PrivateObservers) {
+        connection
+            .registration
+            .as_ref()
+            .unwrap()
+            .peer
+            .id
+            .load(Relaxed)
+    } else {
+        protocol::BROADCAST
+    };
     let mut input = Vec::new();
     for value in [1, 2] {
-        let body = protocol::envelope(protocol::BROADCAST, &protocol::uint(value));
+        let body = protocol::envelope(destination, &protocol::uint(value));
         input.extend_from_slice(&[0x82, 0x80 | body.len() as u8, 0, 0, 0, 0]);
         input.extend_from_slice(&body);
     }
@@ -91,13 +161,19 @@ fn a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_f
         connection.drive(&relay, &mut scratch, false) == Drive::Again,
         "recipient work must yield even with more complete input buffered"
     );
-    assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 1);
+    assert_eq!(
+        relay.metrics.incoming_messages.load(Relaxed),
+        incoming_before + 1
+    );
     assert!(
         outputs.iter().all(|out| out.messages.load(Relaxed) == 1),
         "one complete broadcast must reach every recipient before yielding"
     );
     assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
-    assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 2);
+    assert_eq!(
+        relay.metrics.incoming_messages.load(Relaxed),
+        incoming_before + 2
+    );
     assert!(outputs.iter().all(|out| out.messages.load(Relaxed) == 2));
     assert!(connection.drive(&relay, &mut scratch, false) == Drive::Wait);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
