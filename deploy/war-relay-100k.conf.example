@@ -1,0 +1,8 @@
+# /etc/systemd/system/war-relay.service.d/100k.conf
+# The base unit's 65,536 descriptors cannot admit 100,000 sessions.
+[Service]
+LimitNOFILE=262144
+# Includes the cgroup's charged kernel socket memory and admitted buffer budgets.
+# These are operational guardrails, not a reservation; validate on the target host.
+MemoryHigh=6G
+MemoryMax=8G

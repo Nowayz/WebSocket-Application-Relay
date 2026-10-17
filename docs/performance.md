@@ -4590,3 +4590,143 @@ client's byte/message totals, routing-copy bytes stay zero and all final native
 resources retire. Clients and Rust processes exit zero; C++ receives its expected
 SIGTERM without forced killing. Multi-hour operation, adverse networks, TLS
 and a successful rebuilt multicore C++ churn workload remain outside this check.
+
+## 100,000 connected users, 2026-10-16
+
+The [capacity manifest](benchmarks/2026-10-16-capacity.json) binds the release
+executables, client/harness source snapshots, test/build logs, raw traces and
+separate diagnostic profile. The target is **100,000 real concurrent native
+CBOR users**, with small rooms and a stated traffic rate. An open descriptor
+alone does not count: every user has a valid unique welcome ID and must deliver
+a complete checked private ring message. Current acceptance repeats that proof
+after the workload, outside its timed interval. All stable peers complete exact
+normal Close acknowledgements, EOF and checked room departure notifications.
+
+The host is an AMD Ryzen AI MAX+ 395 with 16 physical cores/32 threads and
+124 GiB reported RAM. Ordinary four-worker trials pin server CPUs 0–3 and
+eight client workers to distinct physical CPUs 4–11. The eight-worker trial
+uses server 0–7/client 8–15. No compilation, other load test or profiler overlaps
+ordinary trials. These are plaintext loopback measurements; the client also
+consumes CPU and kernel memory. Global `/proc` socket/slab samples include both
+endpoints and other machine activity. Process RSS excludes kernel socket memory.
+
+The generator bounds setup/retirement concurrency to 64 rooms, with 16 users in
+each of 6,250 rooms. It binds a pool of 64 loopback source addresses to avoid a
+single source address's ephemeral-port ceiling. Every application payload has
+an independently checked sender ID, sequence and complete 1 KiB body. Rooms are
+staggered across each second, and scheduling lag is measured separately from
+the client-observed round-trip histogram. Quantiles are histogram upper bounds,
+including send/receive/verification work. Idle sockets answer actual heartbeats.
+Temporary churn rooms verify complete joins, ring delivery, all departure
+messages, normal Close and EOF, while the original 100,000 users remain joined.
+
+| Workload | Observed result |
+| --- | --- |
+| Previous runtime, two full 65 s population waves | 13,000,000 stable-user messages; 133,120 additional user join/Close/EOF cycles; all stable users retire after each wave |
+| Final 16 KiB send / 64 KiB receive profile, all stable users active, 65 s | 6,500,000 stable-user messages; 66,560 additional churn sessions; eight unread recipients; final fresh routing proof through all 100,000 users; all checks pass |
+| Stable-user p99 with that mixed workload | 0.524288 ms upper bucket; observed maximum 3.315591 ms |
+| Final-profile RSS at measured gate | 112.45 MiB; 54.28 MiB after retirement |
+| Authenticated metric polling during that mixed workload | Slowest sampled response 0.872 ms; 4 Hz target |
+| Shared receive allowance and output queue after retirement | Both zero; sessions/connections zero; channel count returns to persistent global room |
+| Routing application-body copy counter | Zero; validated values retain shared ownership |
+
+RSS is a gate sample, not a continuous peak or live-allocation measurement.
+The previous runtime's two waves retain 54.19 then 61.23 MiB after complete
+retirement. Allocator pages therefore remain resident; zero live reservations
+do not imply returning to startup RSS or prove a long-term memory plateau.
+
+### Kernel buffering and unread recipients
+
+An unread recipient with OS buffer policy later drained approximately 2,400 full
+1 KiB messages before its capacity Close. This exposed a separate resource
+layer from the bounded application queue. The new native
+`--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` requests run only at
+accept. Zero retains OS policy; positive requests are checked before startup.
+Setup failures use the existing refusal/retry handling and descriptor ownership.
+Linux accepted-socket tests verify actual `getsockopt` values for both options.
+
+An initial matched pair uses the **same new native/client binaries**, 100,000 stable
+users, 1,008 active users at one message/s for 65 seconds, heartbeats and a
+10-second additional fanout publisher/healthy reader/eight unread recipients.
+Only the kernel-buffer requests differ: OS defaults versus 16 KiB send/receive.
+
+| Observation | OS policy | 16 KiB requests |
+| --- | ---: | ---: |
+| Median full frames drained per unread peer | 2,427.5 | 28 |
+| Stable private-message p99 upper bucket | 1.048576 ms | 1.048576 ms |
+| Sidecar healthy verified deliveries/s | 494,020 | 486,109 |
+| Total server CPU over the mixed interval | 7.77 s | 7.97 s |
+
+The buffered-frame observation falls 98.85%, while healthy sidecar throughput
+is 1.60% lower in this single matched pair. It measures retained payload observed
+by unread peers, rather than total kernel memory. The eight intentional capacity
+closes, cancelled queues and absent acknowledgements have explicit expected
+counters. All stable users remain usable and close normally. In pressure cases,
+incoming bytes/messages, reused bytes and lifecycle totals are exact; the
+sidecar's intentionally discarded output and uncounted publisher notifications
+have explicit bounds, and every received healthy/buffered frame is validated.
+Ordinary cases check every output byte/message exactly.
+
+The near-maximum packet check changed the final receive setting. With 32 users,
+a 65,520-byte application body makes a 65,533-byte CBOR routing packet. The
+16 KiB receive request introduces a large latency cost on loopback. Controlled
+send/receive combinations use the same native/client binaries, room size,
+one-second paced workload and full pre/post routing checks:
+
+| Send request | Receive request | Timed maximum RTT | Timed p99 upper bucket |
+| ---: | ---: | ---: | ---: |
+| 16 KiB | 16 KiB | 417.155 ms | 536.870912 ms |
+| 64 KiB | 16 KiB | 417.115 ms | 536.870912 ms |
+| 16 KiB | 64 KiB | 1.146 ms | 2.097152 ms |
+| 32 KiB | 64 KiB | 1.146 ms | 2.097152 ms |
+| 64 KiB | 64 KiB | 1.279 ms | 2.097152 ms |
+
+These are finite small-population observations, rather than network-independent
+latency guarantees. The selected profile uses **16 KiB send / 64 KiB receive**.
+It then repeats the full 100,000-user/65-second active, heartbeat, churn and
+unread workload with fresh routing proofs before and after. All large-frame
+checks retain zero routing-copy bytes and retire their resources. The smaller
+receive choice remains an archived experiment; the CI workload also exercises
+near-maximum packets with the final receive setting.
+
+The [deployment profile](operations.md#100000-native-connections) requests the
+selected buffers with 110,000 TCP admissions for 100,000 joined users plus transient
+headroom, 262,144 descriptors, bounded 64 KiB messages/256 KiB recipient queues,
+256 MiB global queues/staging and independent cgroup memory guardrails. Linux
+adjusts and may clamp socket-buffer requests; smaller windows can limit a flow
+on networks with a larger bandwidth-delay product. This configuration needs
+acceptance on the intended TLS edge and network before a hosted capacity claim.
+
+### Overload and rejected routing-cache experiment
+
+A separate three-pair ordinary comparison offers ten messages per user per
+second at the same 100,000-user population. Four cores do not sustain the
+offered one million messages/s: the previous runtime completes a median
+**518,162/s**, with a **268.435456 ms** round-trip p99 bucket and seconds of
+client scheduling backlog. All ten million planned messages per trial are
+eventually checked; planned rate is not reported as achieved throughput.
+An eight-worker/eight-core trial improves the observed completion rate to
+about **715,126/s**, but retains the same p99 bucket and falls behind schedule.
+
+A separate five-second-offer diagnostic completes five million checked
+messages in 9.566 s. Its 27.51 server CPU seconds split into 6.78 user and
+20.73 system seconds: **75.35% system CPU**. The user-cycle capture has zero lost
+samples; receive/routing is 30.71% of user samples, drive 14.10%, worker run
+9.34%, schedule 9.17% and receive-storage swap 6.81%. These percentages describe
+user samples, rather than total cost or an isolated synchronization bottleneck.
+They do not justify replacing the registry based on total throughput alone.
+
+The interrupted worker-local weak recipient-cache prototype passes seven
+focused lifetime/invalidation tests and full large-population checks. Three
+paired dense-flow comparisons show a 3.76% private-throughput median gain and
+1.23% lower CPU per output, with scheduling variation. In the 100,000-user
+overload comparison, however, median CPU per completed message rises
+**5,529 → 5,616 ns** and completion rate falls **518,162 → 502,862/s**. It is
+removed, preserving the simpler registry/ownership model. Source patches,
+focused tests and all ordinary traces remain in the manifest.
+
+The accepted change targets observed kernel buffering, adds no message-path
+allocation or new routing lock, and retains the shared-body/vectored-output
+design. This evidence establishes a usable finite 100,000-user workload on this
+host. It does not establish all-to-all delivery, 100,000 members in one room,
+mass unread clients, WAN/TLS capacity or multi-hour stability.

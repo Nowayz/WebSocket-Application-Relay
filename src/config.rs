@@ -18,6 +18,12 @@ pub struct Config {
     /// Requested pending TCP queue per native listener; the OS may cap it.
     #[arg(long, env = "WAR_LISTEN_BACKLOG", default_value_t = 1024, value_parser = clap::value_parser!(u16).range(1..))]
     pub listen_backlog: u16,
+    /// Requested per-socket kernel send buffer; zero keeps OS autotuning/defaults.
+    #[arg(long, env = "WAR_TCP_SEND_BUFFER_BYTES", default_value_t = 0)]
+    pub tcp_send_buffer_bytes: usize,
+    /// Requested per-socket kernel receive buffer; zero keeps OS autotuning/defaults.
+    #[arg(long, env = "WAR_TCP_RECEIVE_BUFFER_BYTES", default_value_t = 0)]
+    pub tcp_receive_buffer_bytes: usize,
     #[command(flatten)]
     pub origin_policy: crate::origin::OriginPolicy,
     #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
@@ -105,6 +111,15 @@ impl Config {
             self.listen_backlog > 0,
             "listen-backlog must be in 1..=65535"
         );
+        for (name, bytes) in [
+            ("tcp-send-buffer-bytes", self.tcp_send_buffer_bytes),
+            ("tcp-receive-buffer-bytes", self.tcp_receive_buffer_bytes),
+        ] {
+            ensure!(
+                bytes == 0 || (4096..=16 * 1024 * 1024).contains(&bytes),
+                "{name} must be zero (OS default) or in 4096..=16777216"
+            );
+        }
         ensure!(
             self.max_connections_per_ip <= u32::MAX as usize,
             "max-connections-per-ip must be in 0..=4294967295"
@@ -247,5 +262,41 @@ mod backlog_tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn kernel_buffer_requests_are_optional_and_bounded_for_cli_and_embedding() {
+        let default = Config::default();
+        assert_eq!(default.tcp_send_buffer_bytes, 0);
+        assert_eq!(default.tcp_receive_buffer_bytes, 0);
+        let parsed = Config::try_parse_from([
+            "war-relay",
+            "--tcp-send-buffer-bytes",
+            "16384",
+            "--tcp-receive-buffer-bytes",
+            "24576",
+        ])
+        .unwrap();
+        parsed.validate().unwrap();
+        assert_eq!(parsed.tcp_send_buffer_bytes, 16384);
+        assert_eq!(parsed.tcp_receive_buffer_bytes, 24576);
+        for invalid in [1, 4095, 16 * 1024 * 1024 + 1] {
+            assert!(
+                Config {
+                    tcp_send_buffer_bytes: invalid,
+                    ..Config::default()
+                }
+                .validate()
+                .is_err()
+            );
+            assert!(
+                Config {
+                    tcp_receive_buffer_bytes: invalid,
+                    ..Config::default()
+                }
+                .validate()
+                .is_err()
+            );
+        }
     }
 }

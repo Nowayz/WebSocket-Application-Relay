@@ -38,6 +38,14 @@ keep their immutable owner. `--read-buffer-idle-secs` additionally controls quie
 decoder/fragment high-water reclamation. The storage hooks and source provenance
 are documented in [vendor/README.md](vendor/README.md).
 
+The [100,000-user operating profile](docs/operations.md#100000-native-connections)
+adds TCP/admission headroom, descriptor and memory settings, kernel buffer
+controls and reproducible real-socket acceptance. The [measured workloads](docs/performance.md#100000-connected-users-2026-10-16)
+cover 100,000 connected users in rooms of 16, full checked 1 KiB private messages,
+heartbeats, reconnect churn, unread-recipient isolation and complete retirement.
+Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
+buffers independently of application queues; their default `0` retains OS policy.
+
 After large connection populations retire, sparse worker arenas compact while
 surviving clients stay connected. Socket tokens and shared payload storage stay
 stable; small arenas remain allocated for ordinary reconnect traffic. See the

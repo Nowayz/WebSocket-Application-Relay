@@ -323,6 +323,19 @@ impl Worker {
             if let Err(error) = stream.set_nodelay(true) {
                 return self.setup_failed(error, "TCP_NODELAY");
             }
+            let config = &self.relay.config;
+            if config.tcp_send_buffer_bytes != 0
+                && let Err(error) = socket2::SockRef::from(&stream)
+                    .set_send_buffer_size(config.tcp_send_buffer_bytes)
+            {
+                return self.setup_failed(error, "SO_SNDBUF");
+            }
+            if config.tcp_receive_buffer_bytes != 0
+                && let Err(error) = socket2::SockRef::from(&stream)
+                    .set_recv_buffer_size(config.tcp_receive_buffer_bytes)
+            {
+                return self.setup_failed(error, "SO_RCVBUF");
+            }
             let lease = match &metrics.read_budget {
                 Some(budget) => {
                     match budget.try_lease(self.relay.config.handshake_read_reservation()) {

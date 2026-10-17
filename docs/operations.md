@@ -20,6 +20,100 @@ Keep it on a trusted network or behind TLS termination as well. Its upstream URL
 currently supports plain `ws://`; connect locally to the relay. Native CBOR clients
 avoid the translation, second socket, and extra memory/CPU entirely.
 
+## 100,000 native connections
+
+The [100,000-user environment example](../deploy/war-relay-100k.env.example)
+and [systemd override](../deploy/war-relay-100k.conf.example) provide a separate
+native CBOR operating profile. Copy the environment example to
+`/etc/war-relay.env` and the override to
+`/etc/systemd/system/war-relay.service.d/100k.conf`, then reload systemd before
+starting the service. Set the secrets, allowed browser origins and TLS edge for
+your deployment. These files are examples; installing them is an administrator's
+action. The ordinary 5,000-user environment example remains available.
+
+The base unit's `LimitNOFILE=65536` cannot accommodate 100,000 relay sockets.
+The override raises it to 262,144 and supplies 6 GiB/8 GiB memory pressure/hard
+guardrails, including the service's charged kernel memory. One
+native user needs one relay descriptor plus shared listener, reactor and
+management descriptors. Size the TLS proxy separately: each proxied user also
+needs a public and backend proxy socket. Check the running processes' actual
+limits in `/proc/<pid>/limits`, descriptor counts in `/proc/<pid>/fd`, and the
+proxy's own connection limits. A shell's `ulimit` does not establish the limits
+of a systemd service.
+
+The profile caps incoming messages at 64 KiB, per-recipient pending data at
+256 KiB/64 messages, process pending data at 256 MiB and shared receive staging
+at 256 MiB. Its TCP ceiling is 110,000, leaving headroom for handshakes and
+closing/reconnecting transports around 100,000 joined users. It allows 10,000 channels and 1,024
+members per channel. Authenticated global broadcast remains available; ordinary
+global broadcast is disabled. These are admission ceilings, rather than
+preallocated buffers. Large-room broadcasts and departure notifications still
+cost work per recipient. Select limits to match the application's fanout and
+latency requirements; connection count alone does not specify traffic capacity.
+
+Idle native sockets retain no dedicated receive allocation. Workers reuse
+receive scratch; incomplete frames retain separately admitted storage. Ordinary
+routing shares the validated application body and uses vectored writes for
+the WebSocket header, CBOR sender prefix and body. Kernel socket storage, TLS
+proxy buffers and allocator overhead add to relay RSS. Kernel TCP memory and
+cgroup memory accounting must be observed alongside process memory.
+
+Native `--tcp-send-buffer-bytes` / `WAR_TCP_SEND_BUFFER_BYTES` and
+`--tcp-receive-buffer-bytes` / `WAR_TCP_RECEIVE_BUFFER_BYTES` request kernel
+buffers on each accepted socket, before HTTP upgrade. `0` preserves OS defaults;
+positive requests must be between 4 KiB and 16 MiB. A rejected socket setting
+uses the existing setup-error/admission-retry path. The 100,000-user example
+requests 16 KiB send and 64 KiB receive buffers. A 16 KiB receive request added
+hundreds of milliseconds to near-64 KiB packets on loopback; the larger request
+removes that observed stall. Linux normally reports twice the requested
+value for bookkeeping and may clamp requests to kernel limits; see
+[socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html).
+These settings constrain a different layer from the application queues. Smaller
+windows can constrain throughput on high-latency networks; tune and verify them
+against the target network's bandwidth-delay product. Kernel buffer requests
+are not a complete accounting of TCP memory, allocator state or TLS edge costs.
+
+To reproduce the population acceptance on a Linux test host with enough file
+descriptors and available memory:
+
+```sh
+cargo build --locked --release --bins --example capacity --example stress
+python3 scripts/capacity.py --users 100000 --seconds 65 \
+  --ping-interval-secs 15 --churn-workers 16 \
+  --connection-headroom 10000 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
+  --output artifacts/capacity-100k.json
+```
+
+This creates a fresh isolated loopback relay. It uses four physical CPU cores
+for the server and eight different cores for the client by default; override
+`--server-cpus` and `--client-cpus` for the host, or pass empty strings to leave
+affinity unrestricted. A pool of source addresses avoids the ephemeral-port
+ceiling of a single client address. The driver changes no host limits or
+sysctls. Every stable socket must first deliver a full checked ring message.
+The timed workload sends one 1 KiB private message per user per second;
+`--messages-per-second`, `--active-percent` and `--payload-bytes` vary that load.
+Additional churn rooms verify complete lifecycles while the stable population
+remains connected. Inactive clients answer heartbeats. The controller checks
+management responses, exact counters, actual established TCP sockets, all
+departure messages, Close acknowledgements, EOF and final resource release.
+After the timed workload, a separate checked ring proves every stable user's
+application routing still works, including the inactive population. This sweep
+is outside the timing interval.
+`--waves 2` repeats complete population/traffic/retirement on the same process.
+An optional `--pressure-client target/release/examples/stress` adds one verifying
+fanout reader and eight unread recipients during a single wave of at least
+25 seconds. Its exact input, shared-byte and lifecycle totals are checked;
+intentionally cancelled output has explicit bounds and full frame validation
+by the pressure client. Expected slow-consumer and missing-close-ack counters
+are separated from unexpected errors. All stable users must still complete
+their routing and normal Close/EOF checks.
+
+The workload is plaintext loopback evidence. A deployment's TLS edge, network,
+message sizes, fanout, admission bursts and required latency need corresponding
+acceptance on that deployment. See the [capacity measurements](performance.md#100000-connected-users-2026-10-16)
+for the tested artifact and observed limits.
+
 ## Browser-origin admission
 
 Both binaries accept `--allowed-origin` and `WAR_ALLOWED_ORIGINS`. The default
@@ -235,6 +329,7 @@ variables. All bounds are per process.
 | --- | ---: | --- |
 | Connections | 10,000 | TCP handshakes, unjoined sockets, joined sessions, and closing transports |
 | Pending TCP accept backlog | 1,024 per public data listener | Kernel queue outside userspace admission counts; OS may cap the requested value |
+| Native kernel TCP buffers | OS defaults (`0`) | `--tcp-send-buffer-bytes` / `--tcp-receive-buffer-bytes`; independent of application queue/staging budgets; OS may clamp or adjust requests |
 | Connections per direct peer IP | Disabled (`0`) | Optional native/bridge TCP admission; shared NAT/proxy addresses share a quota |
 | Channels | 10,000 | Includes persistent `re_globl` |
 | Members per channel | 10,000 | Includes closing sessions until removal |

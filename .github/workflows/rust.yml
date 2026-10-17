@@ -20,7 +20,9 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: ./scripts/check-js.sh
-      - run: cargo build --locked --example inspection --example admission
+      - run: cargo build --locked --example inspection --example admission --example capacity
+      - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 256 --seconds 2 --churn-workers 2 --ping-interval-secs 1 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-ci.json
+      - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 32 --seconds 1 --payload-bytes 65520 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-large-frame-ci.json
       - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 16 --client-workers 2 --mode none --inspectors 0 --churn-workers 0 --workers 2 --seconds 1 --server-cpus '' --client-cpus '' --output artifacts/active-pairs-ci.json
       - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 1 --mode none --inspectors 0 --churn-workers 4 --fanout-readers 32 --fanout-churn-every 2 --fanout-window 1 --workers 2 --seconds 2 --server-cpus '' --client-cpus '' --output artifacts/room-churn-ci.json
       - run: python3 scripts/admission-flood.py --server target/debug/war-relay --client target/debug/examples/admission --workers 1 --flood-workers 32 --seconds 1 --server-cpus '' --client-cpus '' --flood-cpus '' --output artifacts/admission-flood-ci.json

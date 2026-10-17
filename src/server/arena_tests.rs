@@ -2,6 +2,29 @@ use super::*;
 use std::io::Read;
 use tungstenite::protocol::Role;
 
+#[cfg(target_os = "linux")]
+#[test]
+fn accepted_tcp_sockets_apply_both_kernel_buffer_requests() {
+    let relay = Relay::new(crate::Config {
+        tcp_send_buffer_bytes: 16384,
+        tcp_receive_buffer_bytes: 24576,
+        ..crate::Config::default()
+    })
+    .unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let mut worker = Worker::new(listener, relay).unwrap();
+    let _client = std::net::TcpStream::connect(address).unwrap();
+    worker.accept().unwrap();
+    assert_eq!(worker.connections.len(), 1);
+    let state = worker.connections[0].socket.state.lock();
+    let socket = socket2::SockRef::from(&state.stream);
+    // Linux reports twice the requested values for protocol bookkeeping.
+    assert_eq!(socket.send_buffer_size().unwrap(), 32768);
+    assert_eq!(socket.recv_buffer_size().unwrap(), 49152);
+}
+
 #[test]
 fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadlines() {
     let relay = Relay::new(crate::Config {

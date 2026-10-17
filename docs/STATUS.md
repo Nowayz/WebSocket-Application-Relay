@@ -3,11 +3,57 @@
 The user's ongoing goal is to port the upstream relay faithfully to Rust and keep
 improving simplicity, code, documentation, stability, performance, concurrency,
 and adjacent platform management. A later instruction makes CBOR the primary
-protocol, and the latest instruction emphasizes preserving the upstream's
-zero-copy routing intent. The goal remains active; this file is a reviewable checkpoint, not a
-claim that an open-ended improvement effort is complete.
+protocol and preserves the upstream's zero-copy routing intent. The latest
+instruction makes 100,000 simultaneous users an explicit operating target.
+This file records reviewable checkpoints; they do not complete the open-ended
+improvement goal.
 
-## Latest verified checkpoint: 2026-10-16
+## Latest verified checkpoint: 100,000 users, 2026-10-16
+
+The [capacity evidence](performance.md#100000-connected-users-2026-10-16)
+now covers real 100,000-user populations, with every welcome ID and full routed
+body checked. Two complete waves on the previous selected runtime verify
+13 million stable-user messages, 133,120 additional user join/Close/EOF cycles,
+and final resource retirement. A new optional kernel-buffer policy closes an
+observed memory-management gap: application queue limits alone do not constrain
+the TCP payload buffered before backpressure. Native settings request send and
+receive buffers once per accepted socket, preserving OS policy when unset.
+The new runtime passes 141 Rust tests, strict Clippy, formatting and a real
+accepted-socket `getsockopt` check. The data path keeps its shared CBOR bodies,
+vectored writes, exact global reservations and existing ownership/locking model.
+
+The new runtime also passes 100,000 stable users sending one 1 KiB message per
+second for 65 seconds with heartbeats, 66,560 additional churn sessions and
+eight deliberately unread recipients. With the final 16 KiB send / 64 KiB
+receive profile, stable-message p99 is the 0.524288 ms histogram bucket and
+measured RSS is 112.45 MiB. An initial matched mostly idle
+comparison keeps a 1.048576 ms p99 bucket and cuts unread-peer buffered full frames from
+a median 2,427.5 to 28, with a 1.60% lower sidecar healthy-throughput observation.
+That is one matched pair, not a universal throughput estimate or allocated-memory
+measurement. A near-64 KiB packet check finds hundreds of milliseconds of
+loopback latency with the initial 16 KiB receive request; a 64 KiB receive
+request reduces its observed maximum to 1.146 ms. The final profile retains
+the small send buffer and uses that larger receive window.
+The [operating profile](operations.md#100000-native-connections)
+includes 10% TCP admission headroom, descriptor/memory settings and bounded
+kernel/application storage. The CI case exercises a smaller real population.
+Final acceptance routes fresh messages through all 100,000 users after a
+65-second mostly idle/heartbeat/pressure interval, then verifies every normal
+Close/EOF and descriptor/resource recovery. The selected native hash begins
+`5c22e737`; the local CBOR and legacy services now run the frozen selected
+binaries. Real native traffic and an independent legacy binary-message/Close/EOF
+probe pass on those running services, with zero remaining sessions.
+
+A worker-local weak route-cache prototype is removed after measurement: its
+small dense-flow benefit does not carry to the 100,000-user overload workload,
+where median CPU per message rises 1.57%. Offering one million messages/s to
+four cores creates substantial backlog (about 518,162 verified/s and 268.435456 ms
+p99); eight cores improve the observed rate but still miss that offered load.
+A separate diagnostic attributes 75.35% of server CPU time to the kernel.
+Larger single rooms, mass unread populations, long WAN/TLS runs and multi-hour
+operation remain outside this finite capacity evidence.
+
+## Prior verified checkpoint: 2026-10-16
 
 The [forwarding study and larger active-pair comparison](performance.md#forwarding-counter-experiments-and-64-active-pairs-2026-10-16)
 adds a verified 64-pair client with configurable runtime threads and a 16-pair
@@ -1066,12 +1112,15 @@ The continuing improvement goal remains active.
    concurrent healthy traffic. Extend partial-frame and blocked-output schedules,
    duration and populations when measurements justify the next change. Preserve shared bodies,
    exact peer Close acknowledgements, and immediate dropping of partial output.
-3. Extend duration, fanout, active populations, adverse networks, and connection
-   mixes. Thirty-second traffic and twenty-second churn are now verified, while
-   multi-hour, TLS, and much larger concurrent populations remain unmeasured.
-   Examine global counter/registry contention only if those profiles show it;
-   keep the current simple ownership model until a measured bottleneck justifies
-   a different representation or sharding.
+3. Extend duration, fanout, adverse networks and connection mixes beyond the
+   verified 100,000-user small-room workload. The new 65-second heartbeat/churn/
+   unread checks and complete population waves establish finite local capacity;
+   multi-hour operation, mass unread recipients, larger broadcasts and TLS/WAN
+   behavior remain unmeasured at that population. The overload diagnostic is
+   predominantly system CPU. Profile kernel work, scheduling/locality and
+   higher-rate traffic before selecting a broader routing/index change. Keep
+   exact global budgets and the current ownership model until a measured
+   bottleneck justifies another representation or sharding.
 4. Extend browser acceptance across engines and production bundlers. Broaden the
    deterministic CBOR/fragmentation corpus into reproducible stateful operation
    sequences and paced transport failures, preserving resource bounds, exact
