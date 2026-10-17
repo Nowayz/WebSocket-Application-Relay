@@ -9,6 +9,53 @@ claim that an open-ended improvement effort is complete.
 
 ## Latest verified checkpoint: 2026-10-16
 
+Runtime `0f70200` reuses uncaptured broadcast recipient storage across joins
+and departures. The registry write lock plus exclusive `Arc` ownership permit
+in-place handle updates. An active capture keeps its immutable view and the
+cache follows the previous invalidation path. Departed peers retire immediately;
+retained rooms shrink sparse handle capacity. Shared CBOR body ownership,
+sender ordering, global broadcasts and observer routing retain their behavior.
+
+Helper `b01b166` adds complete membership churn inside a busy room: every
+temporary reader verifies its window, exact Close/EOF and departure at every
+survivor. A corrupted departure at a secondary reader is rejected. Linux CI
+commit `e52a953` runs a small unpinned two-worker case; that exact command
+passes locally. The selected source passes 134 Rust tests, strict Clippy,
+formatting and locked release builds.
+Harness `d65308d` also resolves source snapshots beside older frozen clients;
+a separate check verifies attribution against their preserved files.
+
+Four separate allocator diagnostics measure requested allocations per complete
+membership cycle falling from 32.82 to 30.83 objects and 15.24 to 11.10 KB
+(−27.2% bytes). Stable-room totals match exactly, and both builds return to
+identical live allocations after cleanup. Reuse keeps a small metadata cache
+alive between updates; growth can retain spare handles, with sparse retirement
+covered by a 1,024-member wave test. No application values enter that cache.
+
+Forty-eight ordinary comparison processes and twelve private/reconnect guards
+all verify exact bodies, matrix/counters and final cleanup. Fanout throughput
+medians range from −0.96% to +1.31%, with seven of eight ranges overlapping and unchanged median p99
+buckets. The pure-private guard is −1.74% with overlapping ranges; mixed private
+is +0.12% and reconnects +2.00%. Allocation reduction is the retained benefit;
+no general throughput or CPU-saving claim follows. Separate profiles retain
+3,369/3,349 samples with zero lost samples. The
+[performance record](performance.md#recipient-views-during-membership-churn-2026-10-16)
+states the gated-workload, cold-room, allocator and timing limits.
+
+Further checks pass the 1,024-reader changing-room workload, 48 common C++ cases
+plus eight documented differences, three descriptor-pressure cases, four socket
+setup fault cases, seven JavaScript checks, four API checks and seven Chrome
+checks. Separate socket cases verify 8,807,056 ordinary deliveries, 551,622 full
+reconnects across 4,096 source IPs, 206,893 healthy deliveries beside an unread
+peer and 740,016 mixed-size fanout deliveries. Native/bridge services on 1338/1337
+run the selected frozen binaries; management is on 1339 and the browser check
+on 4180. Chrome has a clear console, four native listeners and zero retained
+resources. The [manifest](benchmarks/2026-10-16-room-churn-reuse-build.json)
+binds source, clients, binaries and evidence. Acceptance is local; the goal
+remains active.
+
+## Previous checkpoint: socket setup recovery, 2026-10-16
+
 Runtime `9a941637c63f5bd34a82c27db985cdeba2388c31` keeps accepted native
 socket setup failures from stopping the relay. A failure configuring TCP or
 registering readiness retires that socket, increments `war_setup_errors_total`

@@ -3888,3 +3888,126 @@ shutdown remain serviced. It neither reserves kernel resources nor guarantees
 successful allocation under system-wide exhaustion. The
 [build record](benchmarks/2026-10-16-setup-pressure-build.json) binds final
 functional checks, frozen binaries, helpers, comparisons and local acceptance.
+
+## Recipient views during membership churn, 2026-10-16
+
+Runtime `0f70200` reuses an ordinary room's recipient storage across membership
+changes when the cached view has no routing owner. The registry write lock
+excludes new captures; `Arc::get_mut` establishes exclusive ownership before
+appending/removing a handle. Captured views retain the prior invalidation and
+lazy rebuild path. Removal scans the metadata view and releases the departed
+handle immediately. Sparse capacity shrinks below one eighth occupancy when
+more than 256 slots remain. No per-peer index, lock or per-message allocation
+is added, and CBOR bodies keep their existing storage.
+
+The new probe in helper commit `b01b1667710fdb05b3bd2db0bf0955fffc2dc1d7`
+adds `--fanout-churn-every` and `--fanout-window`, and permits zero private
+pairs when fanout is present. A temporary reader joins between windows,
+receives every body in its next window, completes exact Close/EOF, and then
+every survivor including the sender verifies its unique departure. All normal
+readers verify complete sender/body/FIFO sequences. Independent counters cover
+the full message/reader matrix, welcomes, notifications, joins and closes.
+A negative oracle corrupts a departure at a secondary reader while keeping
+the primary transport open. It fails for that changed departure. This preserves
+the earlier non-primary body-corruption oracle too.
+
+[Eight exploratory baseline processes](benchmarks/2026-10-16-room-churn-baseline.json)
+measure stable/changing rooms with 64/512 readers and windows 1/16. A separate
+eight-second baseline profile has 3,369 samples and zero lost samples. Recipient
+view initialization and vector destruction account for 3.76%/3.56% sampled self
+work; socket output and enqueue remain larger costs at 37.97%/18.93%.
+The candidate profile has 3,349 samples and zero lost samples, without material
+self samples for those construction/drop symbols at the report's 0.1% cutoff.
+That trace does not establish a wall-time or CPU saving. The
+[profile record](benchmarks/2026-10-16-room-churn-profiles.json) retains raw-capture
+hashes, verifying traces and normalized symbol reports. Neither profile overlaps
+ordinary timing, and neither measures off-CPU waiting.
+
+The [final comparison](benchmarks/2026-10-16-room-churn-reuse-comparison.json)
+has 48 fresh processes: three alternating pairs for eight cohorts, six seconds
+per process. Baseline is runtime `9a941637c63f5bd34a82c27db985cdeba2388c31`;
+both use frozen client SHA
+`850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198`.
+Server CPUs 0–3 and client CPUs 4–7 are separate. Each stream uses 64 distinct
+cyclic 1 KiB values. Changing rooms join/retire one temporary reader every two
+windows. Membership transitions are gated between complete windows; this does
+not measure continuous membership changes during a deliberately suspended
+route. The room starts cold, so its first timed join precedes its first cache
+construction. Separate ownership/capacity tests exercise captured views and
+growth of an already warm cache. All processes verify complete output and
+cleanup, with zero routed value copies. No build, profile, fault injection or
+competing workload overlaps ordinary timings.
+
+| Workers / readers / window / membership | Fanout deliveries/s before → selected | Median change | CPU ns per verified output before → selected |
+| --- | ---: | ---: | ---: |
+| 1 / 64 / 1 / changing | 394,454 → 395,325 | +0.22% | 751.59 → 749.96 |
+| 1 / 64 / 16 / changing | 714,001 → 715,530 | +0.21% | 682.23 → 680.76 |
+| 1 / 512 / 1 / changing | 459,792 → 463,308 | +0.76% | 718.58 → 708.41 |
+| 1 / 512 / 16 / changing | 794,961 → 794,956 | −0.001% | 675.36 → 675.36 |
+| 1 / 512 / 1 / stable | 790,787 → 799,203 | +1.06% | 689.12 → 683.10 |
+| 1 / 512 / 16 / stable | 841,078 → 850,264 | +1.09% | 666.74 → 660.32 |
+| 4 / 512 / 1 / changing | 458,561 → 454,140 | −0.96% | 725.28 → 727.48 |
+| 4 / 512 / 16 / changing | 786,151 → 796,419 | +1.31% | 681.55 → 674.24 |
+
+CPU per output includes every timed verified application output, including
+transient welcomes and departures. The exact workload mix within a cohort is
+preserved; the last timed window may change the ratio by one window. Fanout
+p99 medians keep their cohort's 0.131072/2.097152/1.048576/
+16.777216 ms bounds. Seven of eight cohort ranges overlap. The stable
+single-message guard has separated ranges: 786,037–792,661 → 795,297–807,916/s
+(+1.06% median). The change is retained for allocation
+reduction, without a general throughput or CPU-saving claim. Full ranges,
+membership latency, server/client CPU and RSS are in the comparison.
+
+The [private/reconnect guard](benchmarks/2026-10-16-room-churn-routing-guard.json)
+adds twelve ordinary fresh processes using the earlier fixed private client.
+Pure-private median is 584,748 → 574,558/s (−1.74%), with overlapping
+572,910–593,005 and 565,692–587,086 ranges and unchanged 0.032768 ms p99.
+Mixed private is 365,278 → 365,715/s (+0.12%) and complete reconnects are
+70,921 → 72,343/s (+2.00%), with unchanged 0.131072/0.524288 ms p99 buckets.
+Mixed server CPU/wall is 1.43832 → 1.46164 while more cycles complete; it is not
+a per-operation CPU comparison. These guards do not show a consistent speedup.
+Their raw traces captured checkout-context client hashes in the older source
+fields; the comparison's `client.source_hashes` identifies the actual frozen
+`c8b55d3` sources. Harness `d65308d` now discovers adjacent frozen source
+snapshots, accepts `--client-source-root`, and labels snapshots as requiring an
+independent build record. A [source check](benchmarks/2026-10-16-room-churn-source-check.json)
+verifies the older client's hashes differ from the current checkout and resolve
+to its frozen sources. The original traffic, timings and raw traces are unchanged.
+
+[Four separate allocator diagnostics](benchmarks/2026-10-16-room-churn-memory.json)
+replace only the server allocator with gperftools. They use one worker, 512
+readers, one-frame windows and two seconds of work. In the changing case every
+window has one complete membership cycle, so sent messages equal completed
+cycles exactly. After subtracting the ready phase, requested allocations per
+cycle are 32.8226 → 30.8349 objects (−6.06%) and 15,242.70 → 11,097.17 bytes
+(−27.20%). This includes fixed HTTP/dump overhead amortized over the completed
+cycles; it is not an exact allocator-site count. The difference is about two
+objects/4.05 KiB per cycle, consistent with reusing the 514-handle array and
+its owner. The stable control has identical phase deltas in both builds:
+52 objects/66,600 bytes total across thousands of broadcasts, including the
+fixed gates and initial cache warmup. No per-message allocation claim follows
+from those totals.
+
+At the changing-case measured gate the old cache has been invalidated after
+departure; the selected cache retains two objects/4,152 requested bytes.
+Both return to the identical 206 objects/112,866 bytes after cleanup. Stable
+live sizes are identical. A previously warm view that grows can retain extra
+capacity; a 1,024-member wave test verifies sparse retirement to at most 256
+slots while two peers remain, and releases the view when the room empties.
+These are handle slots, not retained departed peers or values. Heap figures
+are requested sizes, not RSS, kernel memory or a production bound.
+
+Reproduce the changing-room workload after building both binaries and the helper:
+
+```sh
+cargo build --locked --release --bins --example inspection
+python3 scripts/inspection.py --rooms 0 --pairs 0 --mode none --inspectors 0 \
+  --churn-workers 0 --fanout-readers 512 --fanout-churn-every 2 \
+  --fanout-window 1 --workers 4 --seconds 6 --output artifacts/room-churn.json
+```
+
+The [checkpoint manifest](benchmarks/2026-10-16-room-churn-reuse-build.json)
+binds source, frozen binaries/clients, ordinary and diagnostic evidence, tests,
+C++ compatibility, socket stress, management and real Chrome acceptance. All
+results are finite Linux loopback checks without TLS or hosted acceptance.

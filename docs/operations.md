@@ -266,10 +266,18 @@ reservations and measure actual RSS on the intended deployment.
 
 Ordinary channel broadcasts without global channel observers capture a shared
 view of recipient handles under the registry lock, then release that lock before
-submitting output. Stable membership reuses the view; a join or departure
-invalidates it. The cache owns peer handles, never application values. In-flight
+submitting output. Stable membership reuses the view. A join or departure updates
+it in place when no routing owner has captured it; otherwise it invalidates the
+cache and leaves existing captures intact. The cache owns peer handles, never application values. In-flight
 views keep their captured owners valid across membership changes, and frames
 retain their own body storage and byte reservations.
+
+Reusable views can retain spare handle capacity after growth. A retained room
+releases sparse capacity when more than 256 slots remain and live membership is
+at most one eighth of capacity, keeping twice the live size after shrinking.
+Empty ordinary rooms drop the view completely. Spare slots do not own departed
+peers, sockets or bodies. The [membership measurements](performance.md#recipient-views-during-membership-churn-2026-10-16)
+record allocation savings, retention costs and the timing limits.
 
 Those broadcasts also charge a native read turn for recipient slots visited,
 with a quota of 256. A large broadcast still completes against one coherent

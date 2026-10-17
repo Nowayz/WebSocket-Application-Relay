@@ -885,3 +885,56 @@ Release shutdown takes 1.1–1.2 ms in these finite cases. The existing
 also passes one/four native workers and the legacy bridge after sharing the
 listener suspension helper. These checks use child-only fault injection or FD
 limits, and do not establish behavior under system-wide memory exhaustion.
+
+## Reusable recipient views under membership churn, 2026-10-16
+
+Runtime `0f70200` updates a broadcast recipient view in place only while the
+registry is exclusively locked and the view has no routing owner. Otherwise a
+membership change invalidates the cache and existing captures finish unchanged.
+The cache holds peer handles and no application values. Removal releases its
+handle immediately, and sparse capacity shrinks after a large wave; an empty
+ordinary room drops the view. No new index, per-peer field or synchronization
+object is required.
+
+The new reuse/retirement tests fail on the baseline and pass on the selected
+implementation. They verify that uncaptured membership updates preserve the
+view allocation, welcome/new-body delivery reaches the added member, departure
+releases its last cached owner, an older retained frame keeps its original
+bytes/reservation, and final cleanup releases everything. A 1,024-member wave
+leaves at most 256 slots while two members remain. Existing tests still verify
+in-flight view invalidation, captured-owner lifetime, original 8 KiB payload
+pointers and output after releasing the registry lock. The complete suite has
+134 passing Rust tests.
+
+Helper `b01b166` joins and retires a fully verifying temporary reader inside the
+broadcast room. Its controller gates membership changes between complete
+windows, checks every stable/transient body and FIFO, completes exact Close/EOF,
+and checks the unique departure at every survivor including the sender.
+Independent service counters verify all bytes/messages/joins/closes and final
+resource retirement. The negative departure oracle keeps transports open and
+changes a notification only at a secondary reader; validation rejects it there.
+The existing secondary-body corruption oracle continues to pass.
+
+The [ordinary comparison](benchmarks/2026-10-16-room-churn-reuse-comparison.json)
+and [routing guards](benchmarks/2026-10-16-room-churn-routing-guard.json) pass all
+60 fresh processes. Separate [allocator diagnostics](benchmarks/2026-10-16-room-churn-memory.json)
+measure about two fewer allocated objects and 27.2% fewer requested bytes per
+complete membership cycle. This is the retained improvement; seven of eight
+fanout ranges overlap, with fanout/private/reconnect median p99 buckets unchanged. Cache retention
+and cold-start/allocator limits are recorded in the
+[performance section](performance.md#recipient-views-during-membership-churn-2026-10-16).
+
+The [1,024-reader check](benchmarks/2026-10-16-room-churn-reuse-upper-bound.json)
+also runs an independent private pair and eight reconnect workers, verifies
+396 complete in-room membership cycles and 809,984 broadcast deliveries,
+then checks every controlled teardown departure and final cleanup. The same
+selected binaries pass [C++ compatibility](benchmarks/2026-10-16-room-churn-reuse-reference.json),
+[mixed-size socket stress](benchmarks/2026-10-16-room-churn-reuse-stability.json),
+[descriptor pressure](benchmarks/2026-10-16-room-churn-reuse-accept.json),
+[setup faults](benchmarks/2026-10-16-room-churn-reuse-setup.json),
+[management API checks](benchmarks/2026-10-16-room-churn-reuse-api.json) and
+[real Chrome acceptance](benchmarks/2026-10-16-room-churn-reuse-browser.json).
+The small [two-worker CI command](benchmarks/2026-10-16-room-churn-ci.json)
+passes locally with CPU affinity disabled; workflow `e52a953` runs it on Linux.
+Hosted CI execution is not claimed. These finite local checks do not establish
+continuous concurrent membership performance or production capacity.

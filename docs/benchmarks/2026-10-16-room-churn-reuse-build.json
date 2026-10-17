@@ -1,0 +1,1331 @@
+{
+  "passed": true,
+  "source_revision": "d65308da2010f6ae60a66a3dec5760aa195e6e19",
+  "runtime_implementation_revision": "0f70200984db89d9fd11ce0cefdb00f9bdc22ae5",
+  "helper_source_revision": "b01b1667710fdb05b3bd2db0bf0955fffc2dc1d7",
+  "candidate": {
+    "directory": "artifacts/baselines/room-churn-reuse",
+    "binaries": {
+      "war-relay": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e",
+      "war-legacy-bridge": "07ce8dcc7bdcd13a039d611c985610b7a1f5e0f80e618a7591e6cf161db02ffe"
+    },
+    "sources": {
+      "src/relay.rs": "f8bf9a0df11df5442cf84d3ba587db02fda3b8f3df2ae99cc5f2104c639d71d9",
+      "src/relay/broadcast_tests.rs": "d1e6a721ce1fefb6490abfbf932c2549e61e9d545452d1135895a3e9d9edca33"
+    },
+    "baseline_path": "artifacts/baselines/setup-pressure/war-relay",
+    "baseline_revision": "9a941637c63f5bd34a82c27db985cdeba2388c31",
+    "baseline_sha256": "45ee9e45f6adf0101d7c725cc625871b41cfec10d341aa7fa5804288af676678",
+    "helper": {
+      "source_revision": "b01b1667710fdb05b3bd2db0bf0955fffc2dc1d7",
+      "directory": "artifacts/baselines/room-churn-client",
+      "client_sha256": "850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198",
+      "sources": {
+        "examples/inspection.rs": "85dc79e69bc4a2c793cc8475baf9dced384b9381aec1ebadc806796aa83b0cfd",
+        "examples/inspection/fanout.rs": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72",
+        "scripts/inspection.py": "e93bc6e1313da2c455b0beb359dc0b99ef8339df85206d257f477d2559d3036b",
+        "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+      },
+      "runtime_revision": "9a941637c63f5bd34a82c27db985cdeba2388c31",
+      "runtime_path": "artifacts/baselines/setup-pressure/war-relay"
+    },
+    "source_revision": "0f70200984db89d9fd11ce0cefdb00f9bdc22ae5"
+  },
+  "platform": "Linux-7.2.9-arch1-1-x86_64-with-glibc2.44",
+  "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+  "scope": "Local Linux checkpoint.48 ordinary room fanout processes and12 private/reconnect guards; eight exploratory baseline cases. Profiles and four allocator diagnostics run separately. Metadata allocation reduction is retained; no general throughput/CPU gain or production capacity claim. Gated membership transitions are between verified windows, not continuous concurrent membership during a suspended route. Source attribution in older private raw traces is contextual; their master comparison preserves the actual frozen sources, and the corrected harness has a separate verified source check. Runtime sources match the browser acceptance revision. Hosted deployment and GitHub CI execution are not claimed. Goal remains active.",
+  "runtime_sources": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "b01cdc9ff2c368477a5312e79ae720c9c689977fea7e72bbd5232d04c80f2620"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "b84bec4cc117187ee63c75931b21a01a2f45fd4f1497482456bd6b07e84262f4"
+    },
+    {
+      "path": "src/admin.rs",
+      "sha256": "835c1362f83dbb39c57c83ab067d9f6fa5d0f92eb19799389e9a0b491151249d"
+    },
+    {
+      "path": "src/admission.rs",
+      "sha256": "cef4441d064bfe1aff33a6fcee33b475cd609ccd89e4068732e3c5ddbfded75d"
+    },
+    {
+      "path": "src/bin/war-legacy-bridge.rs",
+      "sha256": "b40f4accdc5e8e72e7d21c29463b9a140297e92ab0e8ab6a6f375fa4f1212fb4"
+    },
+    {
+      "path": "src/common.rs",
+      "sha256": "3e626b7ba9cc7ab6b8fd95f5e4dda77cec918b84fbe5cf0ce6b99b3615c4d529"
+    },
+    {
+      "path": "src/config.rs",
+      "sha256": "67cd5d0aea87f460c8c155ba21cb38ee6abab910d2fb0e830403c9cedeaad8a8"
+    },
+    {
+      "path": "src/frame.rs",
+      "sha256": "415cd30cb2eeb2a4e0b121009e2a9553351684278530a0221d4fbf51d7dd6563"
+    },
+    {
+      "path": "src/legacy.rs",
+      "sha256": "9a80a3c6ab6087ab5a7c4abdc91fd538d1dc7f0447d775f972d9a22a0a5d4fde"
+    },
+    {
+      "path": "src/legacy_bridge.rs",
+      "sha256": "cbfe9f40f7629f78777bfe3b67ec82b21540300bfca87d33592034eab4126e12"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "7cb9923b3c87e649a19cea41f74833ca0ad2d1a03fcb72ba7da3fe5cfcedce83"
+    },
+    {
+      "path": "src/main.rs",
+      "sha256": "0b70966df79a602285a0bfc4dfbab64468322ae03a9ac12794d30f94180346f3"
+    },
+    {
+      "path": "src/metrics.rs",
+      "sha256": "84cb61384398b86e9d31e5f2c884132f402932fa7e4a6cb09768361c8525e506"
+    },
+    {
+      "path": "src/origin.rs",
+      "sha256": "03715cb033d2d4ed2af37cd8b2419f4bc5fd78923e398e40ab7995885f0a0bdf"
+    },
+    {
+      "path": "src/protocol.rs",
+      "sha256": "4940c031ce2f0ced7b584211112d053d349edb325805060c618b5b80134fcd54"
+    },
+    {
+      "path": "src/relay.rs",
+      "sha256": "f8bf9a0df11df5442cf84d3ba587db02fda3b8f3df2ae99cc5f2104c639d71d9"
+    },
+    {
+      "path": "src/relay/broadcast_tests.rs",
+      "sha256": "d1e6a721ce1fefb6490abfbf932c2549e61e9d545452d1135895a3e9d9edca33"
+    },
+    {
+      "path": "src/relay/channel_tests.rs",
+      "sha256": "73fcb279a6b43640af06d054e68ccda85ba398046d25e67b131220522fca31d4"
+    },
+    {
+      "path": "src/relay/listener_tests.rs",
+      "sha256": "c242d53af182905948335555d8cb365476269fbb51c8a43a41c08ee76c8cb765"
+    },
+    {
+      "path": "src/relay/listing.rs",
+      "sha256": "74eae81781074c657cdc31718c8d9d6549ba91897788bcdfaa203d8d03c064c4"
+    },
+    {
+      "path": "src/server.rs",
+      "sha256": "5334b66de0e6d837439b5fec53e3bd092b0c8baa0cbdc67083b097c91bfe0d69"
+    },
+    {
+      "path": "src/server/arena_tests.rs",
+      "sha256": "5cb2480ab7813ffaa34c635baf2c49eb242ef03b3cfb4a1cf946c0baca1c2883"
+    },
+    {
+      "path": "src/server/close_tests.rs",
+      "sha256": "157d9ca4d4d444a0c1a7785b79cc3d82a971f8c7e3379cfb774c5f780c1fcb10"
+    },
+    {
+      "path": "src/server/fairness_tests.rs",
+      "sha256": "91fae8dc7ce1d5fdf71aba5fb0975715849a6c012ea8b0631285e81786a8c5b7"
+    },
+    {
+      "path": "src/server/ownership_tests.rs",
+      "sha256": "16fbc340ffb4412efb96ae9d19f924484bf2692ec1c2a636e1586c1dadf85574"
+    },
+    {
+      "path": "src/server/socket.rs",
+      "sha256": "b0c2748c7d22ec7b51be5bdb0b900fa2d2d5bb1e1994cdf8ac8692187956d06d"
+    },
+    {
+      "path": "src/server/timers.rs",
+      "sha256": "9402ecec9e77b18a8c91bc6b9ade140a1564c445e1919f61b943357e7c2b16d1"
+    },
+    {
+      "path": "src/transport.rs",
+      "sha256": "236c0793c8a529699f1b700a5271b85a6fc452e60f9fae3807733b5cff9bddd1"
+    },
+    {
+      "path": "vendor/README.md",
+      "sha256": "0d40a604d86a164dee23a21a4559a9879d8c553caecf4b3db66342aadf8e0012"
+    },
+    {
+      "path": "vendor/provenance.json",
+      "sha256": "48cd086e057e3f0ae9bfbb557a8ccd0ae5a417fc8ded78afe6113ba21c38cc07"
+    },
+    {
+      "path": "vendor/read-buffer-reclaim.patch",
+      "sha256": "84e86124bfef4207204412f93c25e8527ea640c034baba8bc2b6890393a2afab"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/.cargo_vcs_info.json",
+      "sha256": "7904b96b5c1d841e95481db9b63de2859427e72998c46e04b7a10b32ec2de516"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/CHANGELOG.md",
+      "sha256": "e374356eacf72059d3a65ee08a6a41a171c0424d2a67735bae7ee59da50fcb43"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.lock",
+      "sha256": "d2c691100eab31ebcd1e24bab5e6ad1368340ee8a4f9f16ede4702f492c7be20"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.toml",
+      "sha256": "d35883d4f3476aa6792059750d5fb0d66051b84e5ccbed911914ea0b2b2992f1"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/Cargo.toml.orig",
+      "sha256": "38f845507abfdb2e904396563ee08779d1b3dc4ff609e4f2344f0ee1d2597cbd"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/LICENSE",
+      "sha256": "fdd55e2b2da854b0fbdc1e607df7c2ba1e1ebf91ecb77c515511ebeef972bc8f"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/README.md",
+      "sha256": "ff6376adb37c3f09445aaa97cfc356e35ba0e4fcfee3452fdd1fa791cdbd97da"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/README.md",
+      "sha256": "067ceaf7b70949f087fd582d71bb114e88ef0313560dbd33b345158ffa33eff3"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/autobahn-client.rs",
+      "sha256": "b60afbb9979fcfd7a38348ea1571f9d23935692eafdc4117d9b24c98de66c732"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/autobahn-server.rs",
+      "sha256": "3d59e3c2d27fb2ec1439e1c429cdfe9b641387a251e23cf62e6808011941530f"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/client.rs",
+      "sha256": "a4e5f1e82c4b352b99aea71f47eb2e5f0289d6e8eb67c8d719341115f506c3b7"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/echo-server.rs",
+      "sha256": "5bb6b5d84a10086edd28d3d5b6d402e851b7558b90e2a9327bba8d1034a49b52"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/interval-server.rs",
+      "sha256": "8775e9dec5ccb26473944fd4879a27de3bcb0a0a7a813329d40a15d3e78a092e"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server-custom-accept.rs",
+      "sha256": "66a2811054c188e74dcf393b776ca2040107f5a813bbbdc9960c89dd74f0c535"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server-headers.rs",
+      "sha256": "f04770383986cf020b895ece939931c1a6b4ecd722f7df307e25bd577bf8d483"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/examples/server.rs",
+      "sha256": "b3f8369b474af3e73ae544dae200e5634c45f84a62788c7d6ce50d2eefc8dd1e"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/compat.rs",
+      "sha256": "58e610b11d36e969ecb311d6e8f048db2f19049c8b3787752c53a511f86e39d9"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/connect.rs",
+      "sha256": "2e73c599a8de04240c543a24b2b564319c75ebef73fb434d116ede5d389ead30"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/handshake.rs",
+      "sha256": "2030d6e704a97606cd88c3cf16404e9fded9beef9b9f661c9ddb988528e1873d"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/lib.rs",
+      "sha256": "660d88e194415738e8de4bb080cd59feebd310fd2db9a2d3d4c6594ef722c5a5"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/stream.rs",
+      "sha256": "1a3c9595145c913a4b29a7ff3fc8caaea171b1946e96243edb280986b6eb6172"
+    },
+    {
+      "path": "vendor/tokio-tungstenite/src/tls.rs",
+      "sha256": "ede833940750523f43aecad570e38d9b21de8e4128c8efc3f5e8900116d7c211"
+    },
+    {
+      "path": "vendor/tungstenite/.cargo_vcs_info.json",
+      "sha256": "05db1b097178b9822b792a31c0909ad819609ac829e66892ab29d0ec046ae35c"
+    },
+    {
+      "path": "vendor/tungstenite/CHANGELOG.md",
+      "sha256": "7e416d40b723071c0b44f9647de19e18a1180fdddabbb6bea8aca11e3c60427e"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.lock",
+      "sha256": "62974d50013c278220b6cc72e1064015b3c2d0339eaca013ea882c212c9b4356"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.toml",
+      "sha256": "84e09d25e81a69d487b38e57839339f69794c0b642c76c9545f5de53d94eb887"
+    },
+    {
+      "path": "vendor/tungstenite/Cargo.toml.orig",
+      "sha256": "bc5bdace1ae1157ffa559d8699d78d39023e5f861b1404552e42792e05f24d8b"
+    },
+    {
+      "path": "vendor/tungstenite/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "path": "vendor/tungstenite/LICENSE-MIT",
+      "sha256": "7fea0ee51a4ca5d5cea7464135fd55e8b09caf3a61da3d451ac8a22af95c033f"
+    },
+    {
+      "path": "vendor/tungstenite/README.md",
+      "sha256": "39e59dbbfd67127ad101be692fb5f04babdd80eeffeb2ea97b6327fec5ace9b4"
+    },
+    {
+      "path": "vendor/tungstenite/benches/buffer.rs",
+      "sha256": "0227e5c8e2936957343e77975d25adbb2ba666cbae04306fcf7eb99d869d758e"
+    },
+    {
+      "path": "vendor/tungstenite/benches/e2e.rs",
+      "sha256": "2b51899e4e36c9a8a755a84bcaebfe88b43a5e95b620697a4a035ed2459472ce"
+    },
+    {
+      "path": "vendor/tungstenite/benches/read.rs",
+      "sha256": "390a9e8713c3b44c54f2114c2992672f0e4fc6664bc2b953a1666688d2209e42"
+    },
+    {
+      "path": "vendor/tungstenite/benches/write.rs",
+      "sha256": "1900f4e0fa5102467aa7edfd22f7826be7bcc3f97aa5172b091bd9957ee130c8"
+    },
+    {
+      "path": "vendor/tungstenite/examples/autobahn-client.rs",
+      "sha256": "b90d16b05a770464f1a570bb06e3f7c61a5ffd5dcfe5646634693049b9ba55c4"
+    },
+    {
+      "path": "vendor/tungstenite/examples/autobahn-server.rs",
+      "sha256": "73bddfc63244fdf047a58f92e6c2cd610a1cc884b1f3175ab30e6b34a547b776"
+    },
+    {
+      "path": "vendor/tungstenite/examples/callback-error.rs",
+      "sha256": "fe732374176dfe4e5d1f36a3fa09d6d6e3cc95885e920480ef5bcd94206835e0"
+    },
+    {
+      "path": "vendor/tungstenite/examples/client.rs",
+      "sha256": "0bc678b780ac35dd85c58dad3dc1509d9e5d24f3a5363646e4c15baca4321040"
+    },
+    {
+      "path": "vendor/tungstenite/examples/server.rs",
+      "sha256": "3196389707aea1346e458f47d7ba227cc6d371ac1d46cd408cfb24123d866157"
+    },
+    {
+      "path": "vendor/tungstenite/examples/srv_accept_unmasked_frames.rs",
+      "sha256": "77a9fcbf8f7e97d45407c10848772e7aeca86430ade6458485977adda4ca127c"
+    },
+    {
+      "path": "vendor/tungstenite/src/buffer.rs",
+      "sha256": "0b3b99d4c041fbeca72d1cf41706cd07ca9f7bd4caa37acf524f2cd6ba156c30"
+    },
+    {
+      "path": "vendor/tungstenite/src/client.rs",
+      "sha256": "b8623d8132368d49b6f0ea0cfaf27f6141bb5c6c70132ab5928c8c56e7113637"
+    },
+    {
+      "path": "vendor/tungstenite/src/error.rs",
+      "sha256": "3e532ffb30f7afdb93b958efb929ceb2483b971a6835003ae3e3483dbe9dbd0b"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/client.rs",
+      "sha256": "de10261830df421a9a624633c8858eef054c52969b1b2e60f04ed79425003dd5"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/headers.rs",
+      "sha256": "0e6d3e15faa8b82bd2a239f5094335368e578acef2f17ee74825de606f529b75"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/machine.rs",
+      "sha256": "54a82a2643682e2ae17a98e69dcfa8ad10761919ea42f696551970057a428420"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/mod.rs",
+      "sha256": "fe625e5455a1dfd2f8f83fb67cc791094c59969331655cab01633c204fd94eb0"
+    },
+    {
+      "path": "vendor/tungstenite/src/handshake/server.rs",
+      "sha256": "9322e43f0da0ec4f4a00579a09716657046be2c9d87dc1acf92bd3287b6f777f"
+    },
+    {
+      "path": "vendor/tungstenite/src/lib.rs",
+      "sha256": "24a92b12c39e4ef9f91baa5e9bb1d03c05b12b7fddcd8c215d6f45f52c38cda7"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/coding.rs",
+      "sha256": "88b62c0bbce91edc9aea625889cfcb15b7e7c9b3fae00a31cbdae5b6aae1dde6"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/frame.rs",
+      "sha256": "36897ee772b3bf527614751c43d19ee94e95b32fb644cf4e1409587c021ee15a"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/mask.rs",
+      "sha256": "60347b95fd65e369d8376c98d62f1e80232e83be1341e2d30c1fad0ead0278f6"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/mod.rs",
+      "sha256": "a678afc526347b3d5b685b273619dcbbb050f15b1c5f267f97cd6df241ed6a6b"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/frame/utf8.rs",
+      "sha256": "99f032fefcbf8a823bcef910cf66bcb7288bf7e7844b1610127c1f32ea35a886"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/message.rs",
+      "sha256": "5ff4980af33825a5543bcdffa4df13f7f2c65cfb9bd99ee4e1193fec51340f84"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/mod.rs",
+      "sha256": "a1214f11d0927de8a622f0c074a27f6739697a8e157883f1f6ec5f2843741453"
+    },
+    {
+      "path": "vendor/tungstenite/src/protocol/read_budget.rs",
+      "sha256": "4f112c7459d575424671d2f95a36a681ef903ed33bf643aba6abc53a27530883"
+    },
+    {
+      "path": "vendor/tungstenite/src/server.rs",
+      "sha256": "f01a418588a7d924dcfc0cdc632aec7f483a4ab5409c1b5563b2205d97cf8a49"
+    },
+    {
+      "path": "vendor/tungstenite/src/stream.rs",
+      "sha256": "dae1230f9ed257797c4874eccfa06ab6bc2ce8557a4292acc3a9ab734f3e4c0d"
+    },
+    {
+      "path": "vendor/tungstenite/src/tls.rs",
+      "sha256": "e0698e952a6b11b2411e7784175c9943d8f321e2c8753fe7f49141b9f3f9c6b9"
+    },
+    {
+      "path": "vendor/tungstenite/src/utf8.rs",
+      "sha256": "68c62c7992dbe5682ae192de590cf90701421d10dfc520aaa75c4ca605d52c35"
+    },
+    {
+      "path": "vendor/tungstenite/src/util.rs",
+      "sha256": "48d0da233482cfa7e5d880632711ca6b0e45d8d7a2ff84f83d6ee70a38fd879a"
+    }
+  ],
+  "helpers_and_tests": [
+    {
+      "path": ".github/workflows/rust.yml",
+      "sha256": "a3f2964b86c51dbef497c3c3cb68f90b7e5b8e6bf616d03f2a1540096c3950fe"
+    },
+    {
+      "path": "clients/js/browser/check.mjs",
+      "sha256": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa"
+    },
+    {
+      "path": "clients/js/browser/index.html",
+      "sha256": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2"
+    },
+    {
+      "path": "clients/js/build-browser.mjs",
+      "sha256": "c5c74996c06f3e135f75cc7f19ad7a7d28c60e2657ac60349105f33c58fc3c9d"
+    },
+    {
+      "path": "clients/js/package-lock.json",
+      "sha256": "d81dfe1f811aa60161f38c90eff5fa40c699259accd7e103b46c9ab9f9964e36"
+    },
+    {
+      "path": "clients/js/package.json",
+      "sha256": "da9e2eb7932ff7527c240673dd362a61101da91d774b50f24e6d0e0552efac07"
+    },
+    {
+      "path": "clients/js/relay.mjs",
+      "sha256": "988d1c1aab75899f911fc6b20a730011cec9ac8796631b3ab74a2195374002c8"
+    },
+    {
+      "path": "clients/js/relay.test.mjs",
+      "sha256": "0f400e735143bdc6f419e71c036cffc37c731958f25574e0aebe53c251cd64a1"
+    },
+    {
+      "path": "examples/fragment_waves.rs",
+      "sha256": "a3717ee605825fe8aafe13d1b9248f106e3c9552d0cebbcfc08b7b39d1a4e054"
+    },
+    {
+      "path": "examples/input_budget.rs",
+      "sha256": "8feaa3b292668f84ba155447e0db9e9bd997c2aa9f2482ee98717354b48c70b1"
+    },
+    {
+      "path": "examples/inspection.rs",
+      "sha256": "85dc79e69bc4a2c793cc8475baf9dced384b9381aec1ebadc806796aa83b0cfd"
+    },
+    {
+      "path": "examples/inspection/fanout.rs",
+      "sha256": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72"
+    },
+    {
+      "path": "examples/load.rs",
+      "sha256": "b2d2cb93456b4a91e5ff889e739f9b8a647a0c3564b4ef10ecbcd78b8c204c6c"
+    },
+    {
+      "path": "examples/queue_waves.rs",
+      "sha256": "413bc55d2ea14673ee7cbda6b30a7af611e400b57e8b8b00779e1a1cf5dcf63e"
+    },
+    {
+      "path": "examples/registry_peak.rs",
+      "sha256": "1c568805f9b3459b0109caf082bb6a93234bda7dbc4fdb98678da5c28ea11c39"
+    },
+    {
+      "path": "examples/retention.rs",
+      "sha256": "143546d2e7e9a419f5c7c53d347864de3bd066b55f93cfa58987e61c26c21c14"
+    },
+    {
+      "path": "examples/stress.rs",
+      "sha256": "0357bb650d0a41ec6aaf2fcf6cb3eb422eea97deaaa5d23bd33cb5f46281520d"
+    },
+    {
+      "path": "scripts/accept-pressure.py",
+      "sha256": "1d19a9b999d1bd3f84f1d69e123dd11d942b87a1b691d0092792714d974f8dfc"
+    },
+    {
+      "path": "scripts/benchmark.py",
+      "sha256": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+    },
+    {
+      "path": "scripts/check-js.sh",
+      "sha256": "c7a9aa566baa3a373d0dbca518288a4c3ec177dd04a017e419c94278106c3a1b"
+    },
+    {
+      "path": "scripts/check-vendor.py",
+      "sha256": "37dead04de28782201e2144dfc98bb2818bdd32b9e00f347ea126c248e8d893f"
+    },
+    {
+      "path": "scripts/compare-cpp.py",
+      "sha256": "33028dea75e856343da3b1266e729e12155e6684de24aed550ce809d6aaa5221"
+    },
+    {
+      "path": "scripts/compare.py",
+      "sha256": "4c858bc0be5dbea2b26b1e3418de7000d405deb9580c99e6c70da62633c03943"
+    },
+    {
+      "path": "scripts/fragment-fairness.py",
+      "sha256": "c0aabb338a5f2a6326b178d8372e3c4ba4155043305a4ce031923c0c8510d340"
+    },
+    {
+      "path": "scripts/fragment-waves.py",
+      "sha256": "ae7a92c15649a7f9347503bbd987c4711dcf3ac228da37cafd16441123b3e7ff"
+    },
+    {
+      "path": "scripts/input-budget.py",
+      "sha256": "9c259d5c6362a54d522294f5b875c3b8c4f04410e7eca5124b56aead6c53e579"
+    },
+    {
+      "path": "scripts/input-corpus.py",
+      "sha256": "1d4397006a3ba89876465916a612fdf35d66bc8ce578e31023a345d5cdf0e292"
+    },
+    {
+      "path": "scripts/inspection.py",
+      "sha256": "ef1340431a03e39b30561a39fa8215e25187b2d8fcd9539dab1cb74160b0e0f4"
+    },
+    {
+      "path": "scripts/queue-waves.py",
+      "sha256": "aab226bcf1412f1e7e467132e8658303b1de4e165e02535a9336a605dfcac5be"
+    },
+    {
+      "path": "scripts/reference.py",
+      "sha256": "315311c89cb75a2121e33f14b661260147406fd86534bb68f649606ceb29fba7"
+    },
+    {
+      "path": "scripts/registry-peak.py",
+      "sha256": "621daa486206a7c9427c57b1e102331c2a18a42d3cc595a296fca2a49f082cbc"
+    },
+    {
+      "path": "scripts/retention.py",
+      "sha256": "55e78d9dd8c092bb06170baee3b7920e932b4acbc18ee1d0da237e4acedc6701"
+    },
+    {
+      "path": "scripts/setup-pressure.c",
+      "sha256": "46274344e593ede9bf9d3d9c54053ae7e20faf8ece370761fcf931e54d91704a"
+    },
+    {
+      "path": "scripts/setup-pressure.py",
+      "sha256": "248fbf98b3badd03257089f28788f0a3ac61bd6f33304b2c3f1415c322bc192f"
+    },
+    {
+      "path": "scripts/stability.py",
+      "sha256": "2ed8e6f67c44c879e7d16ddca65513f55186e608f611cf1500f07ed3ab1bb64d"
+    },
+    {
+      "path": "tests/read_budget.rs",
+      "sha256": "af91ad4ee136b6412c7fb63067bdf56beab1dbd8d4769c99eba1ac4ea2552823"
+    },
+    {
+      "path": "tests/read_buffer_reclaim.rs",
+      "sha256": "55536d45d80a681fa796b0c3f85c8430ae8fa8c42978d122496fc9b428944156"
+    },
+    {
+      "path": "tests/read_fairness.rs",
+      "sha256": "02d75423af8786888a0ecb397138eaa3791be5017cf2494f80643e6ecfd99dd4"
+    },
+    {
+      "path": "tests/relay_integration.rs",
+      "sha256": "1e8ae87dc89b97b2faf6cbdeaa7a64b7286276d93a4c2ef2fbf6c449340beacb"
+    },
+    {
+      "path": "tests/relay_integration/admission.rs",
+      "sha256": "6c7eaa36c19a0b185c6d4b134df5c666ab68bfe7187303db017464a9ad3f709e"
+    },
+    {
+      "path": "tests/relay_integration/channel_listing.rs",
+      "sha256": "3bce596425ea23391d3a7616324e9aabe7b0b5041693fa933b12b02dab485717"
+    },
+    {
+      "path": "tests/relay_integration/listeners.rs",
+      "sha256": "0b6ecfd78ccd71766dca8d95eeeb840ed503934903b556cce7dedca645c0cecb"
+    },
+    {
+      "path": "tests/relay_integration/origin_policy.rs",
+      "sha256": "0b2f8356cc7879e446ac1d7978946bd1446a0b571d45a0d4c6a4a12141cc987e"
+    },
+    {
+      "path": "artifacts/room-churn-baseline.py",
+      "sha256": "2c6eaca3a6b651df05999634d3b1e882a8166d0d801b0965826a63ac111e949c"
+    },
+    {
+      "path": "artifacts/room-churn-reuse-study.py",
+      "sha256": "37f1f01e6c6000e46dde5f9038c403ecb718a15d28a4bb4acc5a06754bc7420e"
+    },
+    {
+      "path": "artifacts/room-churn-routing-guard.py",
+      "sha256": "3fdc1eb7153a43ecb442f1b6318c7e0db2ed8ac97da7a949483c20643ca66e5c"
+    },
+    {
+      "path": "artifacts/room-churn-memory.py",
+      "sha256": "5db42b5202d720f1144948a0de00adff43ded0a34e7a6215cb1445409e8c5d97"
+    },
+    {
+      "path": "artifacts/room-churn-reuse-stability.py",
+      "sha256": "51ba6d1693a7279eafe6786f17f0db65807c555df2fe373d9b8ce0c7c6d3f847"
+    },
+    {
+      "path": "artifacts/room-churn-reuse-api.py",
+      "sha256": "321692a86963f907f166dfe5804250bb07da2e739892f928551cd979dc1039ab"
+    },
+    {
+      "path": "artifacts/refresh-room-churn-reuse-runtime.py",
+      "sha256": "1e83019d01cd3df2125f85aa36bd2c2fe0cd8dfdd6abd39013c4c2362064cf26"
+    },
+    {
+      "path": "artifacts/record-room-churn-reuse-browser.py",
+      "sha256": "a486195a5a4339c84ba31abde01fee75774ddfb0e99c48282c150aceab628404"
+    },
+    {
+      "path": "artifacts/record-room-churn-reuse-checkpoint.py",
+      "sha256": "c44860f678d9b3900dbf31ada753d90d130e175177e55903d4ae3a16e9aa7a6a"
+    },
+    {
+      "path": "artifacts/paging-accept.mjs",
+      "sha256": "fa831d7c10a072ba811e727d9cb076f77a87cd4a09027ff9b52131d8ccba51b5"
+    }
+  ],
+  "frozen_runtime": [
+    {
+      "path": "artifacts/baselines/room-churn-reuse/war-relay",
+      "sha256": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e"
+    },
+    {
+      "path": "artifacts/baselines/room-churn-reuse/war-legacy-bridge",
+      "sha256": "07ce8dcc7bdcd13a039d611c985610b7a1f5e0f80e618a7591e6cf161db02ffe"
+    }
+  ],
+  "clients": [
+    {
+      "path": "artifacts/baselines/room-churn-client/inspection",
+      "sha256": "850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198"
+    },
+    {
+      "path": "artifacts/baselines/fanout-probe/inspection",
+      "sha256": "5af8d672f365d0770a3a2a7c554fcfead2715c428bdc3c61137c514526037744"
+    },
+    {
+      "path": "artifacts/baselines/address-churn-client/stress",
+      "sha256": "1296af910bbfad5dc04829da121dfd6e791aaffc7aa439d8d352839ef9c12a66"
+    }
+  ],
+  "frozen_client_sources": {
+    "examples/inspection.rs": "85dc79e69bc4a2c793cc8475baf9dced384b9381aec1ebadc806796aa83b0cfd",
+    "examples/inspection/fanout.rs": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72"
+  },
+  "evidence": [
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-512-1-0.json",
+      "sha256": "3a8f963bcc6e8047ca86a61c864dcacb6334f03d2dbe81937dc311b4a34785c5"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-512-1-2.json",
+      "sha256": "582adbaf7f73ef73f5023a5dc7a784e2db78c594a2258243efaf3aae36981e29"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-512-16-0.json",
+      "sha256": "b352d95f8a4c1598a6d548bda41e6fbfdbd3b59c4644ba9fe1568626d17271d6"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-512-16-2.json",
+      "sha256": "e7ab691bb31988dcbea4782953e765fae9f0374c2a5db950f5240dd388a0795c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-64-1-0.json",
+      "sha256": "fdc941d8596c486ec5876f4db2e113cd8202b5cce14a6fdc2f007b4260a8b7d4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-64-1-2.json",
+      "sha256": "767b322d7ec0194663edaebabfa656b77527df19e3037d8777f4f74f81f27b4a"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-64-16-0.json",
+      "sha256": "263967f68409ed9a76dc921ba5f9d24394b668e2d5a626501d8bd6a2f18c58b5"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline-64-16-2.json",
+      "sha256": "9834978cc7802f90d44f0652c594f3d6b344b04159e9012ae842ebd0f778ec12"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-baseline.json",
+      "sha256": "70046abb4f58e3820500941441cd6401d357286f7a5149029e6956edc6cf9877"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-ci.json",
+      "sha256": "53dedc050282712ac8e80ddbec984e01d0fe482be17d822bee018f8a484aefc1"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-heap-churn-before.json",
+      "sha256": "0e40f8a990f501a1e328acf9676b9f7ca564be218a7df2ece5720d500bd0c402"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-heap-churn-selected.json",
+      "sha256": "88db9e6091d70b54f0a5f88ac85515e9e813d387df8ea3bd3bfd182b53d2b296"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-heap-stable-before.json",
+      "sha256": "eeaf6ad858694455498755369ceb9ef4c89565fbb3694186cb82c2322938d99f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-heap-stable-selected.json",
+      "sha256": "fbc2a77a7f9ea50b22d8fa3ef8c75a095a66a8d7ba100e55303492375175e6a2"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-memory.json",
+      "sha256": "1cf2747043e4e713cc05bd76a6854b1af4ee082d90fd8ab848e59996e0ce8c6d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-profile-before.json",
+      "sha256": "ac5bdc32ea32c650ca69d04296046bb8d3a8aa386c99a8a0351e28ba3b039761"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-profile-linear.json",
+      "sha256": "209c3e5cc153f362114eb1861a3fc31af89d2145296cb3e35df99d39842ee12f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-profiles.json",
+      "sha256": "5ac6e78a54eecf859a6375148c6e0e8ebcfbaf8729ab57f4e3ddeedb976d0c17"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-accept.json",
+      "sha256": "ab56423fe7d5bbae6b9c4a1a761f5ef79694847af2e996a6a155b46ff7d11e50"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-api.json",
+      "sha256": "a9848788dbfc829ca2daf241af8abbee6c62d1b6214c7cc59040e8b76a4044cc"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-browser.json",
+      "sha256": "8b72f576a5bc995bb2b2eea18f415e9664c0c824009891dbb8735852d45778ff"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-checks.json",
+      "sha256": "0e7916a503d764ba3437c42b62649cd85795ae25550cae7a50d69bf97dd06aba"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-comparison.json",
+      "sha256": "196486285ae5f7894ea68718eb4967aa3268135bda110d705e572e73cd802400"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-reference.json",
+      "sha256": "746c2e3ff9125ac4e1a3abe71f93c2570a282c2bb81e059ccfeb48a973a0ae24"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-setup.json",
+      "sha256": "0f6dfe6e58cc0118966cde8a7d79f918bd22745c502abc5285eb39ed864e8bea"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-stability.json",
+      "sha256": "ee6c3b2b89d5bb8e88e2d6315dc3a937ce363971ca30bb4f98252bff44bde7e0"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-upper-bound.json",
+      "sha256": "dfd754d91323412864f605da23b7de0f0339e95a8facb7b532bc3950207c504c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-1.json",
+      "sha256": "cea7c4afe2dd0bdf0c951e00adfa9b984863cbd8ed014f8e4e3216e829d90b8c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-2.json",
+      "sha256": "1fbf3d1a0b476953062d02339375a024f65af617505279102ae915d37effc713"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-3.json",
+      "sha256": "34c37d9c1fb771cf818409b7d807eebc5e6dce5af1adc9597f94b2390c173373"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-1.json",
+      "sha256": "6f001637f98f96e8c9601d040e140c7bc5685cd6c8b5de0a79a4b56a15bd924e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-2.json",
+      "sha256": "1db89bcb761c665198f0195c5f525408214140db00df653998494b525e305ce4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-3.json",
+      "sha256": "2a39a44e973f504a96b079c2b5e281255d100c7e3a7125ace362a1e16f64e041"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-1.json",
+      "sha256": "0b505206c5d21d4a1c27ea185d22168c5dc646562f8901e3d72e664d8cfbb412"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-2.json",
+      "sha256": "a847aba3f605572dc9ff3497ab5ae8f628b7be07e20bcb089b4c4a4f878d7426"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-3.json",
+      "sha256": "759e583144dfe60ed348186856f23c2c2179fce1db55557d7809e8b6845a4f28"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-1.json",
+      "sha256": "57c1c913aa0400205117bbbb101cc0073aee88c1a15103db125a70f6774ca8ba"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-2.json",
+      "sha256": "cb8cbfa32ebd38964f8944fd43beacaef37187fbd5cd238124c67c0e65677f8e"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-3.json",
+      "sha256": "2094e796dd3b41d93768108c98a2bb2108eea29ef2d5b76abc4717c05efaddee"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-1.json",
+      "sha256": "d46434b938d938b0e1e80a83c477c3f6cf98e5a10517942442acfb10809ef068"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-2.json",
+      "sha256": "9df23eaa8d481093e2185b0efb537f60ec6ee7053c8b461e8ef0cde95bca1d58"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-3.json",
+      "sha256": "acbe0781658ccdd3b0a1416e0d77a7cc6fc6bbf317a381add9db27786ef0be58"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-1.json",
+      "sha256": "57e600bff61c99a5c762902ba45a9350c8e7fe4dd33080dde6bb7b364ed3cb99"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-2.json",
+      "sha256": "1cf825e287a39c7cbe0157b0f79c5b6e9dbde0bd73c37755751a66b0f8db4e3b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-3.json",
+      "sha256": "50ef56991560775639db2f8f9029e50657ff0cae71e8ace012a3d85d8184cc01"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-1.json",
+      "sha256": "05d608dd641b34f64e20dfa5f43156d4b16c0c4a51ef19eaf074a3dbadf4a0e4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-2.json",
+      "sha256": "226f54ecb5743f250602320066106edca903f56f5b150ccbf14a66c1e09ed4bf"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-3.json",
+      "sha256": "5b0ea3d042c7f42b863214c576afdf2f3f640b8589bafa15ea892d312ee813a9"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-1.json",
+      "sha256": "6322de5af20aa2c509b1cdd42eeca6b03349b8c5b3c1c59fbe3f0cac7a838928"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-2.json",
+      "sha256": "f1c068e7203732dd82789c74bf2f3e00ea39c43cfc371bbde9c566ca58b574eb"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-3.json",
+      "sha256": "e26c5ef12428e3a224928adddaeee871bd5198ee7ed1773233c00ca56038d66a"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-1.json",
+      "sha256": "8a7958eee8febc4bb77bc4b6c7d03a0d7c27e2e3151230b8facf923eef612012"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-2.json",
+      "sha256": "f5978cf98a508d7b470c695b8e07558a144e244e567ade5a8772c046207ec326"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-3.json",
+      "sha256": "e66ff01b19ecdee6381dffb9f2321d2d5eee85259774bb0d349eee710019f7c1"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-1.json",
+      "sha256": "b7a08c98cf42f8f4fbd7c92a43e7045d407432e5023bd25e3397c83807bd476d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-2.json",
+      "sha256": "b1eb28792abd6bb091bc7f09c00fccb53aee2c6a2e5dec25251952fdecf738be"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-3.json",
+      "sha256": "9ac2f45af46b945d4e35978ab9f943ad87dd2fb783c630f77981fa30fafa8b7a"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-1.json",
+      "sha256": "c8c1f25b5c8289520ba3f0687fd657172e7ad5f7e3aeac76a72a0bed89fcda06"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-2.json",
+      "sha256": "a76a797f0c62a831720f1d26211f9a50918ae328bd7aba5befd23a77179b42d5"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-3.json",
+      "sha256": "583e5c79ec8a5b04801aaf59e8000582fd7df9350f1e74069486b62cb9317151"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-1.json",
+      "sha256": "a611a0e50170959bb5b3a39d1cb79787fca39d94b135c3ff8ffd419a824d6844"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-2.json",
+      "sha256": "18d816e110a6b27a5b095d756f8d5e57533a1ab60c1441d5c6e0ab7736161c60"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-3.json",
+      "sha256": "78c3fecc73e980ca64a7f9d796e58f0007552659f22fdd5a2289ab49174a6f37"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-1.json",
+      "sha256": "42bcf3095da8f7485a75ad703d0bba89095346ec53cd3aec4ddc8f46182adfe3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-2.json",
+      "sha256": "269ca0e0dd594b021f63f266ac66c6fbcffffdbcfe9a91df64cf1b2ba2cdd4e6"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-3.json",
+      "sha256": "ed33703a6990a1fa17bd27b4386212d537541fb6f649213aa4e86ae9c036e2d8"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-1.json",
+      "sha256": "745032948682b69db0cbab10e44897358cefcefe6bb1d8235567984d55e4b70d"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-2.json",
+      "sha256": "60fa5069027628d711d71ea095f3cc9b9b937f96674b6cf5fae7b306b02150ca"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-3.json",
+      "sha256": "3c67fdc41d4e460fa26ec981699c1cf670e22174437fb4d5ace44775d1214a7b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-1.json",
+      "sha256": "6e6a3ed230f04f1e29b2f798fc30e2203adb7615faddf8d4896e8d24e39aa750"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-2.json",
+      "sha256": "218b1b5e1c475419c650c2040b1c09a8b19cc73ae82c5e6293d6b66a37449e9f"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-3.json",
+      "sha256": "ca299561bb9d22ea71e3a24882c89cf7f0502bce6ec02bb3a2d6e0dabd1b99ac"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-1.json",
+      "sha256": "0cab1daad105c28ca07e6e7db877751fa4e93d18e5a1b7d15205186e020b5d60"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-2.json",
+      "sha256": "6b1f92b7500fed646a4df02499d0872c08dac5494e3e190aec832b23672ab225"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-3.json",
+      "sha256": "5308cd3efe72a3404c83ca8b5f12c5a302b1a84ce11fa0492f81f7871a4b9bf5"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-before-1.json",
+      "sha256": "dc9c849a90450ff223248ce52b2581bb4320a249c780d8f694df8d51323636a3"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-before-2.json",
+      "sha256": "ad012d1f5a7066d119ad314bf2397e78a9efbf82edbec7a52bffdcec4e9b6020"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-before-3.json",
+      "sha256": "618607f79bc6aa74247ab5c1c00ccc884949f22affa237af8301f1bddf3d9136"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-selected-1.json",
+      "sha256": "49d1d9a1d8e846754fb45704dcf92f325507c7f26423414263f107d51bad898c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-selected-2.json",
+      "sha256": "da758b83030f191a0125ef628342cb85021dce6f08308e2e94c58db4f823a69a"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-mixed-selected-3.json",
+      "sha256": "d88e6df72e08bcbdd700749e3e8ad17f3721a14b5fdb338405551c36e9163112"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-before-1.json",
+      "sha256": "05e0a5d1b9ef3ee2093c8deb2c3579443f9fddef187e82c69eca9d9a4b224e9c"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-before-2.json",
+      "sha256": "6fe5b2c14108eddf2abe0f18a708a3e5cbd26d601cc17430df0ef80cb3fe40b4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-before-3.json",
+      "sha256": "86c5091bc537ea0e8f62c28e38a4386322552242279482464baddbbed6eeedee"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-selected-1.json",
+      "sha256": "f1ac075e922c7fe4a339eed8276f159510dcaabff5b896c6009d02568d6e80c7"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-selected-2.json",
+      "sha256": "c81f4c36a7b0f95e1046e9b0b92c80a742e5c8127072869c5c8f3d10a37b933b"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard-private-selected-3.json",
+      "sha256": "2ae636aadd69fce3e2979ca39a243cdbb63f2d86d8f1c374305b01dd8d80f494"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-routing-guard.json",
+      "sha256": "45d1735b807d5254f82e6bb36110743f3dda05ee3223eff0d136af58ac588ed4"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-smoke.json",
+      "sha256": "6f5c8b7d6e32737fd105391800b30756edac59836c0fbba89d83cdeedffe0acd"
+    },
+    {
+      "path": "docs/benchmarks/2026-10-16-room-churn-source-check.json",
+      "sha256": "a0751156436aacd8091376e79bd9cff4637892d588a987b16ffc1a7f06b62227"
+    }
+  ],
+  "fanout_range_overlap": {
+    "w1-r64-b1-c2": true,
+    "w1-r64-b16-c2": true,
+    "w1-r512-b1-c2": true,
+    "w1-r512-b16-c2": true,
+    "w1-r512-b1-c0": false,
+    "w1-r512-b16-c0": true,
+    "w4-r512-b1-c2": true,
+    "w4-r512-b16-c2": true
+  },
+  "profiles": {
+    "scope": "Two separate eight-second cycles:u499Hz DWARF8192 one-worker diagnostics,512 readers,one-frame windows,one temporary membership cycle every2 windows, no private traffic. All bodies,counters,Close/EOF and cleanup still verify. Excluded from ordinary timing. Sampled self symbols are not wall-time/CPU savings and no off-CPU waiting is measured. Full normalized flat reports retain the0.1% cutoff; raw captures remain local and ignored for size.",
+    "cases": [
+      {
+        "kind": "before",
+        "samples": 3369,
+        "lost": 0,
+        "trace": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-before.json",
+          "sha256": "ac5bdc32ea32c650ca69d04296046bb8d3a8aa386c99a8a0351e28ba3b039761"
+        },
+        "raw_data": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-before.perf.data",
+          "sha256": "422c2d945e39d34e37a4fba65e95e5c4e1a662609e2cfa2f16d378212f8b6786"
+        },
+        "raw_report": {
+          "path": "artifacts/room-churn-profile-before-flat.txt",
+          "sha256": "d6997d9a6e09c895c5fcaa11914d682027082ffa5d3942192ccdbf9d0e2f2079"
+        },
+        "published_report": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-before.perf.txt",
+          "sha256": "5c9f811cea6edc34c1e95e5002d024f226ef4bef2afdfcb164ff29aedff1636a"
+        },
+        "server_sha256": "45ee9e45f6adf0101d7c725cc625871b41cfec10d341aa7fa5804288af676678",
+        "verified": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 4186678560,
+            "deliveries": 6007230,
+            "joins": 4416,
+            "normal_closes": 3903,
+            "sent_bytes": 8094822,
+            "sent_messages": 7806,
+            "value_bytes": 8016762
+          },
+          "elapsed_seconds": 8.000238597,
+          "fanout": {
+            "max_ms": 3.491556,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "per_second": 499569.1005389149,
+            "verified": 3996672
+          },
+          "fanout_membership": {
+            "max_ms": 4.547108,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 2.097152,
+            "per_second": 487.8604497450341,
+            "verified": 3903
+          },
+          "healthy": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "server_cpu_seconds": 4.07,
+          "server_cpu_seconds_per_wall_second": 0.5087348271745552,
+          "client_cpu_seconds": 13.71,
+          "client_cpu_seconds_per_wall_second": 1.713698889573256
+        }
+      },
+      {
+        "kind": "selected",
+        "samples": 3349,
+        "lost": 0,
+        "trace": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-linear.json",
+          "sha256": "209c3e5cc153f362114eb1861a3fc31af89d2145296cb3e35df99d39842ee12f"
+        },
+        "raw_data": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-linear.perf.data",
+          "sha256": "dbc23a7aa07a6df2b6760db8769d8be3dc1281cceb3895941a365b7ca35b6d4f"
+        },
+        "raw_report": {
+          "path": "artifacts/room-churn-profile-linear-flat.txt",
+          "sha256": "f6da3611d304e74a8c6fa88b142632216d7964250c3fc8dfe7960bd25373406e"
+        },
+        "published_report": {
+          "path": "docs/benchmarks/2026-10-16-room-churn-profile-linear.perf.txt",
+          "sha256": "cdcda8d96910124e9d5e84c3577c250fec9ea8d1a3c25f23e2e87e768397879e"
+        },
+        "server_sha256": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e",
+        "verified": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 4060102202,
+            "deliveries": 5825628,
+            "joins": 4298,
+            "normal_closes": 3785,
+            "sent_bytes": 7850090,
+            "sent_messages": 7570,
+            "value_bytes": 7774390
+          },
+          "elapsed_seconds": 8.000829871,
+          "fanout": {
+            "max_ms": 2.936381,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "per_second": 484429.7482250513,
+            "verified": 3875840
+          },
+          "fanout_membership": {
+            "max_ms": 4.252086,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "per_second": 473.0759260010267,
+            "verified": 3785
+          },
+          "healthy": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "server_cpu_seconds": 4.07,
+          "server_cpu_seconds_per_wall_second": 0.5086972308650406,
+          "client_cpu_seconds": 13.51,
+          "client_cpu_seconds_per_wall_second": 1.6885748375888692
+        }
+      }
+    ],
+    "passed": true
+  },
+  "heap_captures": [
+    {
+      "mode": "stable",
+      "kind": "before",
+      "event": "ready",
+      "path": "artifacts/room-churn-heap/stable-before_446347.0001.heap",
+      "sha256": "6c05540f98573e4316a3daa825f5958ea2de55adf4742d735acde18112a58fd2",
+      "header": "heap profile:   1754:   873984 [ 14589:  7162600] @ heapprofile"
+    },
+    {
+      "mode": "stable",
+      "kind": "before",
+      "event": "measured",
+      "path": "artifacts/room-churn-heap/stable-before_446347.0002.heap",
+      "sha256": "89d7a80ee67faf107937f178664a4c2be15909dd2cdd395d81dfab455a2e7f2b",
+      "header": "heap profile:   1756:   878128 [ 14641:  7229200] @ heapprofile"
+    },
+    {
+      "mode": "stable",
+      "kind": "before",
+      "event": "done",
+      "path": "artifacts/room-churn-heap/stable-before_446347.0003.heap",
+      "sha256": "2f788195d6fc8fa0511984bf8d25860e1e0e80d47d58e0ba0ab4f3b80bd315fc",
+      "header": "heap profile:    206:   112866 [ 16797:  7446544] @ heapprofile"
+    },
+    {
+      "mode": "stable",
+      "kind": "selected",
+      "event": "ready",
+      "path": "artifacts/room-churn-heap/stable-selected_446364.0001.heap",
+      "sha256": "468c16103580ecb73fc2d13dd83912e5b0e393b56ac1ce3531c50b98554f34a6",
+      "header": "heap profile:   1754:   873984 [ 14536:  7147338] @ heapprofile"
+    },
+    {
+      "mode": "stable",
+      "kind": "selected",
+      "event": "measured",
+      "path": "artifacts/room-churn-heap/stable-selected_446364.0002.heap",
+      "sha256": "64a852401afb1306adf4a54b9d249f1275a0f01fac55e64c2700ac1af5e8f2c5",
+      "header": "heap profile:   1756:   878128 [ 14588:  7213938] @ heapprofile"
+    },
+    {
+      "mode": "stable",
+      "kind": "selected",
+      "event": "done",
+      "path": "artifacts/room-churn-heap/stable-selected_446364.0003.heap",
+      "sha256": "dba7fe600c012c908660520baed1d91c0d34a2e5ae626a100ea05cc9df59f8d8",
+      "header": "heap profile:    206:   112866 [ 16745:  7432306] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "before",
+      "event": "ready",
+      "path": "artifacts/room-churn-heap/churn-before_446373.0001.heap",
+      "sha256": "9f2d2dc100badf6fbd8e6530578d35076d86672ecb77554508470629b525e4a2",
+      "header": "heap profile:   1754:   873984 [ 14566:  7155976] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "before",
+      "event": "measured",
+      "path": "artifacts/room-churn-heap/churn-before_446373.0002.heap",
+      "sha256": "903a6ff905995a6349e9d2c2c166afed1dc001938d6855d1c00f325eaf83b649",
+      "header": "heap profile:   1754:   873984 [ 59894: 28206151] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "before",
+      "event": "done",
+      "path": "artifacts/room-churn-heap/churn-before_446373.0003.heap",
+      "sha256": "496c94096385c51c86fb67d10b8edd5b22c61fa4f873f416fcddf0e2960d75d1",
+      "header": "heap profile:    206:   112866 [ 62050: 28423495] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "selected",
+      "event": "ready",
+      "path": "artifacts/room-churn-heap/churn-selected_446388.0001.heap",
+      "sha256": "d3bdb8d3810401e5dd306d06b7d4f729844d3716fe412f684ce30bbcbd4a0b6d",
+      "header": "heap profile:   1754:   873984 [ 14600:  7165770] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "selected",
+      "event": "measured",
+      "path": "artifacts/room-churn-heap/churn-selected_446388.0002.heap",
+      "sha256": "44164d5e2f978556b71a2d3cb144d417c94fa54960e231a4c6e2466826110ba4",
+      "header": "heap profile:   1756:   878136 [ 56813: 22357797] @ heapprofile"
+    },
+    {
+      "mode": "churn",
+      "kind": "selected",
+      "event": "done",
+      "path": "artifacts/room-churn-heap/churn-selected_446388.0003.heap",
+      "sha256": "b08590083b0f22d021b245a7dda10f62948d90c75f54b04f6f1e106ff050ee03",
+      "header": "heap profile:    206:   112866 [ 58970: 22576165] @ heapprofile"
+    }
+  ],
+  "browser_screenshot": {
+    "path": "output/playwright/room-churn-reuse-browser-check.png",
+    "sha256": "ddbd6c9301f9c7cad0a07b549e507b61bb953e9b4c1a1bef3982c3d91cf6f351"
+  },
+  "browser_assets": {
+    "target/browser/check.js": "9ef292ea2cf2bbd8825f8cb3d22e7cbc9030e408942167e9ceab8e00a102d5fa",
+    "target/browser/check.js.map": "82235f3e33f9469ac4577231e2bc79b8a675283f614b1165550fd3c25ed93e90",
+    "target/browser/index.html": "0a2798337f459e7e233fdc1d01285f0a0375e02f30eed8c12374aba8d7aad5c2",
+    "target/browser/relay.js": "cb6e6ca48a7f844f2215952fe91230a843e71a8c81dd3235bae62534bce9c817",
+    "target/browser/relay.js.map": "d08ddb5e70267d2ad9618031a93e11cf7b61405b01d868d3e0a77595514c216b"
+  },
+  "manual_services": {
+    "pids": [
+      447717,
+      447718,
+      219427
+    ],
+    "commands": [
+      [
+        "/home/phil/dev/war_next/artifacts/baselines/room-churn-reuse/war-relay",
+        "--workers",
+        "4",
+        "--bind",
+        "127.0.0.1:1338",
+        "--admin-bind",
+        "127.0.0.1:1339"
+      ],
+      [
+        "/home/phil/dev/war_next/artifacts/baselines/room-churn-reuse/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:1337",
+        "--upstream",
+        "ws://127.0.0.1:1338"
+      ],
+      [
+        "python3",
+        "-m",
+        "http.server",
+        "4180",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "target/browser"
+      ]
+    ],
+    "native_sha256": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e",
+    "bridge_sha256": "07ce8dcc7bdcd13a039d611c985610b7a1f5e0f80e618a7591e6cf161db02ffe",
+    "source_revision": "e52a95399374cd887560575be927c8e57a57290c",
+    "previous_pids": [
+      437196,
+      437197
+    ]
+  },
+  "collector_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport platform\nimport re\nimport subprocess\n\nroot = Path(__file__).resolve().parents[1]\nbench = root / 'docs/benchmarks'\nsha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()\nread = lambda name: json.loads((bench / f'2026-10-16-room-churn-{name}.json').read_text())\ndesc = lambda path: {'path': str(Path(path).relative_to(root)), 'sha256': sha(path)}\nmeta = json.loads((root / 'artifacts/room-churn-reuse-candidate.json').read_text())\nrevision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()\nassert subprocess.run(['git', 'diff', '--quiet', meta['source_revision'], 'HEAD', '--', 'src', 'vendor', 'Cargo.toml', 'Cargo.lock'], cwd=root).returncode == 0\nfor name, digest in meta['sources'].items():\n    assert sha(root / name) == sha(root / meta['directory'] / name) == digest\nfor name, digest in meta['binaries'].items():\n    assert sha(root / meta['directory'] / name) == sha(root / 'target/release' / name) == digest\n\ndef empty(metrics):\n    for key in ['war_connections', 'war_sessions', 'war_queued_bytes', 'war_variable_bytes',\n                'war_output_queue_capacity_bytes', 'war_read_buffer_reserved_bytes']:\n        assert int(metrics[key]) == 0, (key, metrics[key])\n    assert int(metrics['war_channels']) == 1\n\ndef trace_ok(data, binary, diagnostic=False):\n    assert data['passed'] and data['server_sha256'] == binary and data['profile_diagnostic'] == diagnostic\n    assert data['server_exit_code'] == data['client_exit_code'] == 0 and not data['server_forced_kill']\n    assert [event['event'] for event in data['events']] == ['ready', 'measured', 'done']\n    for event in data['events']:\n        assert 'exact_counter_checks' in event\n        assert event['metrics']['war_routing_copied_bytes_total'] == 0\n        assert event['metrics']['war_setup_errors_total'] == event['metrics']['war_accept_errors_total'] == 0\n    empty(data['events'][-1]['metrics'])\n\ncomparison = read('reuse-comparison')\nassert comparison['passed'] and len(comparison['cases']) == 48\nassert comparison['candidate']['sources'] == meta['sources']\nassert comparison['variants']['selected']['sha256'] == meta['binaries']['war-relay']\nassert comparison['variants']['before']['sha256'] == meta['baseline_sha256']\nassert comparison['client']['sha256'] == meta['helper']['client_sha256']\noverlap = {}\nfor key, old in comparison['medians'].items():\n    if key.endswith('/before'):\n        new = comparison['medians'][key[:-6] + 'selected']\n        a, b = old['ranges']['fanout'], new['ranges']['fanout']\n        overlap[key.split('/')[0]] = max(a[0], b[0]) <= min(a[1], b[1])\nassert sum(overlap.values()) == 7 and not overlap['w1-r512-b1-c0']\nfor row in comparison['cases']:\n    path = root / row['trace']; assert sha(path) == row['sha256']\n    data = json.loads(path.read_text()); trace_ok(data, comparison['variants'][row['kind']]['sha256'])\n    assert data['client_sha256'] == meta['helper']['client_sha256']\n    assert data['args']['pairs'] == 0 and data['args']['workers'] == row['workers']\nguard = read('routing-guard'); assert guard['passed'] and len(guard['cases']) == 12\nassert 'source_attribution_note' in guard\nfor row in guard['cases']:\n    path = root / row['trace']; assert sha(path) == row['trace_sha256']\n    data = json.loads(path.read_text()); trace_ok(data, guard['variants'][row['kind']]['sha256'])\n    assert data['client_sha256'] == guard['client']['sha256']\nfor name, digest in guard['client']['source_hashes'].items():\n    assert sha(root / 'artifacts/baselines/fanout-probe' / name) == digest\nsource = read('source-check'); trace_ok(source, meta['binaries']['war-relay'])\nassert source['client_source_root'] == str(root / 'artifacts/baselines/fanout-probe')\nassert source['client_sources_sha256'] == guard['client']['source_hashes']\nassert source['client_source_sha256'] != sha(root / 'examples/inspection.rs')\nassert source['runner_sha256'] == sha(root / 'scripts/inspection.py')\nbaseline = read('baseline'); assert baseline['passed'] and len(baseline['cases']) == 8\nfor row in baseline['cases']:\n    path = root / row['trace']; assert sha(path) == row['sha256']\n    trace_ok(json.loads(path.read_text()), meta['baseline_sha256'])\nsmoke = read('smoke'); trace_ok(smoke, meta['baseline_sha256'])\nmemory = read('memory'); assert memory['passed'] and len(memory['cases']) == 4 and len(memory['captures']) == 12\nfor row in memory['cases']:\n    path = root / row['trace']; assert sha(path) == row['sha256']\n    data = json.loads(path.read_text()); trace_ok(data, comparison['variants'][row['kind']]['sha256'], True)\n    if row['mode'] == 'churn':\n        assert data['mixed']['counts']['sent_messages'] == row['work_units']\nfor capture in memory['captures']:\n    assert sha(root / capture['path']) == capture['sha256']\nold, new = [case for case in memory['cases'] if case['mode'] == 'churn']\nassert new['allocation_per_work_unit']['allocated_bytes'] < old['allocation_per_work_unit']['allocated_bytes'] * .74\nassert all(old['phases']['done'][key] == new['phases']['done'][key] for key in ['live_objects', 'live_bytes'])\nstable = [case for case in memory['cases'] if case['mode'] == 'stable']\nassert stable[0]['allocation_delta'] == stable[1]['allocation_delta'] == {'allocated_objects': 52, 'allocated_bytes': 66600}\nprofiles = read('profiles'); assert profiles['passed'] and [case['samples'] for case in profiles['cases']] == [3369, 3349]\nfor case in profiles['cases']:\n    for name in ['trace', 'raw_data', 'raw_report', 'published_report']:\n        assert sha(root / case[name]['path']) == case[name]['sha256']\n    assert case['lost'] == 0\n    trace_ok(json.loads((root / case['trace']['path']).read_text()), case['server_sha256'], True)\nupper = read('reuse-upper-bound'); trace_ok(upper, meta['binaries']['war-relay'])\nassert upper['args']['fanout_readers'] == 1024 and upper['mixed']['fanout_membership']['verified'] > 0\nci = read('ci'); trace_ok(ci, sha(root / 'target/debug/war-relay'))\nassert ci['args']['workers'] == 2 and not ci['args']['server_cpus'] and not ci['args']['client_cpus']\nstress = read('reuse-stability'); assert stress['passed'] and len(stress['cases']) == 4\nassert stress['server_sha256'] == meta['binaries']['war-relay']\nfor case in stress['cases']:\n    assert case['passed'] and case['server_exit_code'] == case['exit_code'] == 0 and not case['server_forced_kill']\n    assert case['cleaned_up'] and case['counts_match'] and case['pressure_valid']; empty(case['final']['metrics'])\naccept, setup = read('reuse-accept'), read('reuse-setup')\nassert accept['passed'] and len(accept['cases']) == 3 and accept['server_sha256'] == meta['binaries']['war-relay']\nassert accept['bridge_sha256'] == meta['binaries']['war-legacy-bridge']\nfor case in accept['cases']:\n    assert case['passed'] and case['pressure']['fd_count'] == 64 and all(code == 0 for code in case['process_exit_codes'])\nassert setup['passed'] and setup['server_sha256'] == meta['binaries']['war-relay'] and len(setup['cases']) == 4\nfor case in setup['cases']:\n    assert case['passed'] and case['process_exit_code'] == 0 and len(case['injected_calls']) == 3\n    assert all(wave['slot_held_until_descriptor_close'] for wave in case['waves'])\nreference, api, browser = read('reuse-reference'), read('reuse-api'), read('reuse-browser')\nassert reference['passed'] and reference['common_cases'] == 48\nassert reference['upstream_commit'] == '881c8daaf2cf05adea8f522b28cf372e8f82d4e9'\nassert len(reference['results']['cpp']['intentional_differences']) == len(reference['results']['rust']['intentional_differences']) == 8\nfor role, name in [('native', 'war-relay'), ('bridge', 'war-legacy-bridge')]:\n    assert reference[role]['sha256'] == meta['binaries'][name] and reference[role]['exit_code'] == 0\n    live = browser['runtime'][role]\n    assert sha(f'/proc/{live[\"pid\"]}/exe') == live['sha256'] == meta['binaries'][name]\nassert api['passed'] and len(api['checks']) == 4 and api['server_exit_code'] == 0; empty(api['final_metrics'])\nassert api['server_sha256'] == meta['binaries']['war-relay']\nassert [row['status'] for row in api['manual_admission_transitions']] == [401, 204, 200, 503, 200, 401, 204, 200]\nassert browser['passed'] and len(browser['browser']['checks']) == 7 and not browser['browser']['errors']\nassert browser['worker_listener_sockets'] == 4 and all(status == 200 for status in browser['health'].values()); empty(browser['metrics'])\nassert subprocess.run(['git', 'diff', '--quiet', browser['source_revision'], 'HEAD', '--', 'src', 'vendor', 'Cargo.toml', 'Cargo.lock'], cwd=root).returncode == 0\nassert 'Total messages: 0 (Errors: 0, Warnings: 0)' in (root / 'artifacts/room-churn-reuse-browser-console.txt').read_text()\n\ntests = (root / 'artifacts/room-churn-cache-tests.log').read_text()\nsuites = [int(value) for value in re.findall(r'test result: ok\\. (\\d+) passed;', tests) if int(value)]\nassert suites == [58, 13, 3, 3, 52, 2, 3] and sum(suites) == 134\nclippy = (root / 'artifacts/room-churn-cache-clippy.log').read_text()\nrelease = (root / 'artifacts/room-churn-cache-release.log').read_text()\njs = (root / 'artifacts/room-churn-reuse-js.log').read_text()\nassert 'Finished' in clippy and 'warning:' not in clippy and 'Finished' in release\nassert 'pass 6' in js and 'pass 1' in js and 'fail 0' in js\nbefore = (root / 'artifacts/room-churn-cache-before.log').read_text(); assert '2 failed' in before and 'an uncaptured view must survive' in before\nchecks = {'source_revision': revision, 'runtime_implementation_revision': meta['source_revision'],\n          'rust': {'command': ['cargo', 'test', '--locked', '--all-targets'], 'passed': 134, 'suites': suites, 'exit_code': 0, 'output': tests},\n          'clippy': {'exit_code': 0, 'output': clippy}, 'release': {'exit_code': 0, 'output': release},\n          'javascript': {'passed': 7, 'exit_code': 0, 'output': js}, 'before_reuse_invariants': {'expected_exit_code': 101, 'output': before}, 'small_checks': []}\nfor command in [['cargo', 'fmt', '--check'], ['python3', '-m', 'py_compile', 'scripts/inspection.py'], ['python3', 'scripts/check-vendor.py']]:\n    done = subprocess.run(command, cwd=root, capture_output=True, text=True); assert done.returncode == 0, done.stdout + done.stderr\n    checks['small_checks'].append({'command': command, 'exit_code': 0, 'output': done.stdout + done.stderr})\n(bench / '2026-10-16-room-churn-reuse-checks.json').write_text(json.dumps(checks, indent=2) + '\\n')\ntracked = lambda *paths: subprocess.check_output(['git', 'ls-files', *paths], cwd=root, text=True).splitlines()\nruntime = tracked('src', 'vendor', 'Cargo.toml', 'Cargo.lock')\nhelpers = tracked('scripts', 'examples', 'tests', 'clients/js', '.github/workflows/rust.yml')\nextra = [root / 'artifacts' / name for name in ['room-churn-baseline.py', 'room-churn-reuse-study.py', 'room-churn-routing-guard.py',\n    'room-churn-memory.py', 'room-churn-reuse-stability.py', 'room-churn-reuse-api.py', 'refresh-room-churn-reuse-runtime.py',\n    'record-room-churn-reuse-browser.py', 'record-room-churn-reuse-checkpoint.py', 'paging-accept.mjs']]\nevidence = [desc(path) for path in sorted(bench.glob('2026-10-16-room-churn-*.json')) if path.name != '2026-10-16-room-churn-reuse-build.json']\nrecord = {'passed': True, 'source_revision': revision, 'runtime_implementation_revision': meta['source_revision'],\n          'helper_source_revision': meta['helper']['source_revision'], 'candidate': meta, 'platform': platform.platform(),\n          'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),\n          'scope': 'Local Linux checkpoint.48 ordinary room fanout processes and12 private/reconnect guards; eight exploratory baseline cases. Profiles and four allocator diagnostics run separately. Metadata allocation reduction is retained; no general throughput/CPU gain or production capacity claim. Gated membership transitions are between verified windows, not continuous concurrent membership during a suspended route. Source attribution in older private raw traces is contextual; their master comparison preserves the actual frozen sources, and the corrected harness has a separate verified source check. Runtime sources match the browser acceptance revision. Hosted deployment and GitHub CI execution are not claimed. Goal remains active.',\n          'runtime_sources': [desc(root / name) for name in runtime],\n          'helpers_and_tests': [desc(root / name) for name in helpers] + [desc(path) for path in extra],\n          'frozen_runtime': [desc(root / meta['directory'] / name) for name in meta['binaries']],\n          'clients': [desc(root / meta['helper']['directory'] / 'inspection'), desc(root / 'artifacts/baselines/fanout-probe/inspection'), desc(root / 'artifacts/baselines/address-churn-client/stress')],\n          'frozen_client_sources': {name: sha(root / meta['helper']['directory'] / name) for name in ['examples/inspection.rs', 'examples/inspection/fanout.rs']},\n          'evidence': evidence, 'fanout_range_overlap': overlap, 'profiles': profiles, 'heap_captures': memory['captures'],\n          'browser_screenshot': browser['screenshot'], 'browser_assets': browser['browser_assets'],\n          'manual_services': json.loads((root / 'artifacts/reactor-manual-services.json').read_text()),\n          'collector_source': Path(__file__).read_text()}\n(bench / '2026-10-16-room-churn-reuse-build.json').write_text(json.dumps(record, indent=2) + '\\n')\nprint(json.dumps({'passed': True, 'source': revision, 'runtime': meta['source_revision'], 'rust': 134,\n                  'ordinary_comparison_cases': 60, 'runtime_sources': len(runtime), 'helpers_and_tests': len(record['helpers_and_tests']), 'evidence': len(evidence)}))\n"
+}

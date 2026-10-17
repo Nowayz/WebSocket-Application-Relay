@@ -1,0 +1,67 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cycles:u'
+# Event count (approx.): 2505567757
+#
+# Overhead  Command    Shared Object     Symbol
+# ........  .........  ................  ..............................................................................................................................
+#
+    37.97%  war-io-0   war-relay         [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send
+    18.93%  war-io-0   war-relay         [.] war_relay::relay::Peer::enqueue_frame
+     4.83%  war-io-0   war-relay         [.] bytes::bytes_mut::shared_v_clone
+     4.43%  war-io-0   [unknown]         [k] 0xffffffff8b410b05
+     3.76%  war-io-0   war-relay         [.] std::sync::poison::once::Once::call_once_force::{{closure}}
+     3.56%  war-io-0   war-relay         [.] core::ptr::drop_in_place<alloc::vec::Vec<alloc::sync::Arc<war_relay::relay::Peer>>>
+     3.36%  war-io-0   war-relay         [.] bytes::bytes_mut::shared_v_drop
+     3.08%  war-io-0   [unknown]         [k] 0xffffffff8ac00080
+     1.92%  war-io-0   war-relay         [.] bytes::bytes::promotable_even_clone
+     1.78%  war-io-0   war-relay         [.] bytes::bytes::shared_drop
+     0.86%  war-io-0   [unknown]         [k] 0xffffffff8b410af7
+     0.83%  war-io-0   [unknown]         [k] 0xffffffff8ac0008f
+     0.74%  war-io-0   war-relay         [.] <war_relay::server::socket::Stream as std::io::Read>::read
+     0.70%  war-io-0   war-relay         [.] war_relay::server::Connection::drive
+     0.65%  war-io-0   war-relay         [.] war_relay::server::socket::write_frame
+     0.49%  war-io-0   [vdso]            [.] __vdso_clock_gettime
+     0.47%  war-io-0   [unknown]         [k] 0xffffffff8ac00087
+     0.46%  war-io-0   [unknown]         [k] 0xffffffff8ac000ab
+     0.33%  war-io-0   [unknown]         [k] 0xffffffff8b410ad0
+     0.32%  war-io-0   war-relay         [.] tungstenite::protocol::WebSocketContext::read_bounded
+     0.31%  war-io-0   war-relay         [.] war_relay::server::Worker::run
+     0.30%  war-io-0   [unknown]         [k] 0xffffffff8ac000ad
+     0.30%  war-io-0   war-relay         [.] war_relay::server::Worker::accept
+     0.26%  war-io-0   war-relay         [.] core::hash::BuildHasher::hash_one
+     0.22%  war-io-0   [unknown]         [k] 0xffffffff8c18ea79
+     0.21%  war-io-0   [unknown]         [k] 0xffffffff8c18ea54
+     0.21%  war-io-0   war-relay         [.] http::header::map::HeaderMap<T>::try_append2
+     0.20%  war-io-0   libc.so.6         [.] 0x000000000018f380
+     0.19%  war-io-0   [unknown]         [k] 0xffffffff8ac00084
+     0.18%  war-io-0   war-relay         [.] war_relay::server::Worker::schedule
+     0.18%  war-io-0   war-relay         [.] war_relay::relay::Relay::subscribe_with_output
+     0.17%  war-io-0   war-relay         [.] std::sys::sync::once::futex::Once::call
+     0.17%  war-io-0   war-relay         [.] war_relay::server::socket::Socket::flush
+     0.16%  war-io-0   [unknown]         [k] 0xffffffff8c18eac1
+     0.16%  war-io-0   war-relay         [.] tungstenite::protocol::frame::FrameCodec::swap_read_storage
+     0.16%  war-io-0   war-relay         [.] tungstenite::handshake::server::<impl tungstenite::handshake::machine::TryParse for http::request::Request<()>>::try_parse
+     0.15%  war-io-0   [unknown]         [k] 0xffffffff8b410a4c
+     0.15%  war-io-0   [unknown]         [k] 0xffffffff8aeaae20
+     0.14%  war-io-0   libc.so.6         [.] 0x00000000000a08e6
+     0.14%  war-io-0   libc.so.6         [.] 0x00000000000a62ff
+     0.14%  war-io-0   libc.so.6         [.] writev
+     0.14%  war-io-0   war-relay         [.] http::header::name::StandardHeader::from_bytes
+     0.14%  war-io-0   libc.so.6         [.] 0x000000000018fc0a
+     0.13%  war-io-0   war-relay         [.] <war_relay::relay::Registration as core::ops::drop::Drop>::drop
+     0.12%  war-io-0   libc.so.6         [.] 0x000000000018f437
+     0.12%  war-io-0   war-relay         [.] httparse::parse_headers_iter_uninit
+     0.12%  war-io-0   war-relay         [.] war_relay::relay::Relay::receive_with_storage
+     0.11%  war-io-0   [unknown]         [k] 0xffffffff8c18ea85
+     0.11%  war-io-0   libc.so.6         [.] 0x00000000000a08c6
+     0.11%  war-io-0   [unknown]         [k] 0xffffffff8b410ade
+     0.11%  war-io-0   [unknown]         [k] 0xffffffff8b410a4e
+
+
+#
+# (Tip: If call chains don't work try perf record --call-graph dwarf or --call-graph lbr)
+#

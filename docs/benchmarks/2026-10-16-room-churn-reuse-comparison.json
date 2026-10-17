@@ -1,0 +1,1766 @@
+{
+  "scope": "48 sequential fresh processes: three alternating pairs per cohort, six seconds each. One/four native workers,64/512 stable readers,1/16-message windows; every2 windows one temporary reader joins before a broadcast and completes exact Close/EOF plus departure at every survivor. Membership updates are gated between complete windows, not concurrent with an intentionally suspended route. Stable512-reader guards have no membership churn. No private traffic or other churn/inspection. Same frozen verifying client and body cycle. Server CPUs0-3/client4-7. No builds, injection, profiling or competing loads overlap timing. CPU per output message uses all timed verified application outputs, including welcomes/departures, with exact body/counter checks.",
+  "candidate": {
+    "directory": "artifacts/baselines/room-churn-reuse",
+    "binaries": {
+      "war-relay": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e",
+      "war-legacy-bridge": "07ce8dcc7bdcd13a039d611c985610b7a1f5e0f80e618a7591e6cf161db02ffe"
+    },
+    "sources": {
+      "src/relay.rs": "f8bf9a0df11df5442cf84d3ba587db02fda3b8f3df2ae99cc5f2104c639d71d9",
+      "src/relay/broadcast_tests.rs": "d1e6a721ce1fefb6490abfbf932c2549e61e9d545452d1135895a3e9d9edca33"
+    },
+    "baseline_path": "artifacts/baselines/setup-pressure/war-relay",
+    "baseline_revision": "9a941637c63f5bd34a82c27db985cdeba2388c31",
+    "baseline_sha256": "45ee9e45f6adf0101d7c725cc625871b41cfec10d341aa7fa5804288af676678",
+    "helper": {
+      "source_revision": "b01b1667710fdb05b3bd2db0bf0955fffc2dc1d7",
+      "directory": "artifacts/baselines/room-churn-client",
+      "client_sha256": "850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198",
+      "sources": {
+        "examples/inspection.rs": "85dc79e69bc4a2c793cc8475baf9dced384b9381aec1ebadc806796aa83b0cfd",
+        "examples/inspection/fanout.rs": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72",
+        "scripts/inspection.py": "e93bc6e1313da2c455b0beb359dc0b99ef8339df85206d257f477d2559d3036b",
+        "scripts/benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+      },
+      "runtime_revision": "9a941637c63f5bd34a82c27db985cdeba2388c31",
+      "runtime_path": "artifacts/baselines/setup-pressure/war-relay"
+    }
+  },
+  "variants": {
+    "before": {
+      "path": "artifacts/baselines/setup-pressure/war-relay",
+      "sha256": "45ee9e45f6adf0101d7c725cc625871b41cfec10d341aa7fa5804288af676678"
+    },
+    "selected": {
+      "path": "artifacts/baselines/room-churn-reuse/war-relay",
+      "sha256": "2db288daafd310c5fa68f3dae16cdcc4f5beaca20d4e7c1ff64956646b6b309e"
+    }
+  },
+  "client": {
+    "path": "artifacts/baselines/room-churn-client/inspection",
+    "sha256": "850593ed3a75ebc320f823b320ba80198793c04c87207de6210d711626865198"
+  },
+  "helpers": {
+    "inspection.py": "e93bc6e1313da2c455b0beb359dc0b99ef8339df85206d257f477d2559d3036b",
+    "benchmark.py": "eaebf7f8d3b896bbab48fe1bdf7f31098d2e30064a3ccc6873cc6309e38151f4"
+  },
+  "driver_source": "import hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parents[1]\nmeta = json.loads((root / 'artifacts/room-churn-reuse-candidate.json').read_text())\nsha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()\nservers = {'before': root / meta['baseline_path'], 'selected': root / meta['directory'] / 'war-relay'}\nclient = root / meta['helper']['directory'] / 'inspection'\noutput = root / 'docs/benchmarks/2026-10-16-room-churn-reuse-comparison.json'\ncohorts = [(1, 64, 1, 2), (1, 64, 16, 2), (1, 512, 1, 2), (1, 512, 16, 2),\n           (1, 512, 1, 0), (1, 512, 16, 0), (4, 512, 1, 2), (4, 512, 16, 2)]\nrecord = {'scope': '48 sequential fresh processes: three alternating pairs per cohort, six seconds each. One/four native workers,64/512 stable readers,1/16-message windows; every2 windows one temporary reader joins before a broadcast and completes exact Close/EOF plus departure at every survivor. Membership updates are gated between complete windows, not concurrent with an intentionally suspended route. Stable512-reader guards have no membership churn. No private traffic or other churn/inspection. Same frozen verifying client and body cycle. Server CPUs0-3/client4-7. No builds, injection, profiling or competing loads overlap timing. CPU per output message uses all timed verified application outputs, including welcomes/departures, with exact body/counter checks.',\n          'candidate': meta, 'variants': {key: {'path': str(path.relative_to(root)), 'sha256': sha(path)} for key, path in servers.items()},\n          'client': {'path': str(client.relative_to(root)), 'sha256': sha(client)},\n          'helpers': {name: sha(root / 'scripts' / name) for name in ['inspection.py', 'benchmark.py']},\n          'driver_source': Path(__file__).read_text(), 'cases': [], 'passed': False}\nfor repetition in range(1, 4):\n    ordered = cohorts if repetition % 2 else list(reversed(cohorts))\n    for workers, readers, window, every in ordered:\n        cohort = f'w{workers}-r{readers}-b{window}-c{every}'\n        for role in (['before', 'selected'] if repetition % 2 else ['selected', 'before']):\n            trace = output.with_name(f'2026-10-16-room-churn-reuse-{cohort}-{role}-{repetition}.json')\n            command = [sys.executable, str(root / 'scripts/inspection.py'), '--server', str(servers[role]), '--client', str(client),\n                       '--rooms', '0', '--pairs', '0', '--mode', 'none', '--inspectors', '0', '--churn-workers', '0',\n                       '--fanout-readers', str(readers), '--fanout-window', str(window), '--fanout-churn-every', str(every),\n                       '--seconds', '6', '--workers', str(workers), '--output', str(trace)]\n            done = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=90)\n            data = json.loads(trace.read_text()); assert done.returncode == 0 and data['passed'], done.stdout + done.stderr\n            assert not data['profile_diagnostic'] and data['server_sha256'] == record['variants'][role]['sha256']\n            assert data['client_sha256'] == record['client']['sha256'] == meta['helper']['client_sha256']\n            assert data['server_exit_code'] == data['client_exit_code'] == 0 and not data['server_forced_kill']\n            m = data['mixed']; initial, measured = data['events'][:2]\n            count = measured['details']['counts']['deliveries'] - initial['details']['counts']['deliveries']\n            row = {'cohort': cohort, 'workers': workers, 'readers': readers, 'window': window, 'every': every,\n                   'kind': role, 'repetition': repetition, 'passed': True, 'trace': str(trace.relative_to(root)), 'sha256': sha(trace),\n                   'fanout': m['fanout']['per_second'], 'fanout_p99_ms': m['fanout']['p99_upper_ms'],\n                   'membership': m['fanout_membership']['per_second'], 'membership_p99_ms': m['fanout_membership']['p99_upper_ms'],\n                   'wire_deliveries': count, 'cpu_ns_per_output': m['server_cpu_seconds'] * 1e9 / count,\n                   'cpu_wall': m['server_cpu_seconds_per_wall_second'], 'client_cpu_wall': m['client_cpu_seconds_per_wall_second'],\n                   'rss_mib': measured['process']['VmRSS'] / 1024}\n            record['cases'].append(row); output.write_text(json.dumps(record, indent=2) + '\\n'); print(json.dumps(row), flush=True)\nrecord['medians'] = {}\nfor workers, readers, window, every in cohorts:\n    cohort = f'w{workers}-r{readers}-b{window}-c{every}'\n    for role in servers:\n        rows = [row for row in record['cases'] if row['cohort'] == cohort and row['kind'] == role]\n        fields = ['fanout', 'fanout_p99_ms', 'membership', 'membership_p99_ms', 'cpu_ns_per_output', 'cpu_wall', 'client_cpu_wall', 'rss_mib']\n        summary = {key: statistics.median(row[key] for row in rows) for key in fields}\n        summary['ranges'] = {key: [min(row[key] for row in rows), max(row[key] for row in rows)] for key in fields}\n        record['medians'][cohort + '/' + role] = summary\nrecord['passed'] = True\noutput.write_text(json.dumps(record, indent=2) + '\\n')\nprint(json.dumps(record['medians']), flush=True)\n",
+  "cases": [
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-1.json",
+      "sha256": "8a7958eee8febc4bb77bc4b6c7d03a0d7c27e2e3151230b8facf923eef612012",
+      "fanout": 385127.316251579,
+      "fanout_p99_ms": 0.262144,
+      "membership": 3008.8071582154607,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3520335,
+      "cpu_ns_per_output": 766.9724614276766,
+      "cpu_wall": 0.4499960852590563,
+      "client_cpu_wall": 1.3049886472512633,
+      "rss_mib": 5.109375
+    },
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-1.json",
+      "sha256": "b7a08c98cf42f8f4fbd7c92a43e7045d407432e5023bd25e3397c83807bd476d",
+      "fanout": 398785.9173701039,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3115.5983109589906,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3645266,
+      "cpu_ns_per_output": 746.173255943462,
+      "cpu_wall": 0.45332338749376566,
+      "client_cpu_wall": 1.3199710400553764,
+      "rss_mib": 5.1875
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-1.json",
+      "sha256": "c8c1f25b5c8289520ba3f0687fd657172e7ad5f7e3aeac76a72a0bed89fcda06",
+      "fanout": 714000.8092476683,
+      "fanout_p99_ms": 2.097152,
+      "membership": 348.633207640463,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4455960,
+      "cpu_ns_per_output": 682.232336017379,
+      "cpu_wall": 0.5066180455196021,
+      "client_cpu_wall": 1.148223136062519,
+      "rss_mib": 5.21875
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-1.json",
+      "sha256": "a611a0e50170959bb5b3a39d1cb79787fca39d94b135c3ff8ffd419a824d6844",
+      "fanout": 710743.0959535011,
+      "fanout_p99_ms": 2.097152,
+      "membership": 347.12585085701687,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4435766,
+      "cpu_ns_per_output": 685.3382256863865,
+      "cpu_wall": 0.5066070987063521,
+      "client_cpu_wall": 1.1515312671252937,
+      "rss_mib": 5.1796875
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-1.json",
+      "sha256": "0b505206c5d21d4a1c27ea185d22168c5dc646562f8901e3d72e664d8cfbb412",
+      "fanout": 480796.11242573796,
+      "fanout_p99_ms": 1.048576,
+      "membership": 469.6107769575371,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4336390,
+      "cpu_ns_per_output": 684.9014964059967,
+      "cpu_wall": 0.4949410956578727,
+      "client_cpu_wall": 1.5714796404221345,
+      "rss_mib": 5.59765625
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-1.json",
+      "sha256": "57c1c913aa0400205117bbbb101cc0073aee88c1a15103db125a70f6774ca8ba",
+      "fanout": 467734.53537257,
+      "fanout_p99_ms": 1.048576,
+      "membership": 456.7720071997754,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4218399,
+      "cpu_ns_per_output": 704.0585776736624,
+      "cpu_wall": 0.49493355030402514,
+      "client_cpu_wall": 1.52646172416999,
+      "rss_mib": 5.48828125
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-1.json",
+      "sha256": "05d608dd641b34f64e20dfa5f43156d4b16c0c4a51ef19eaf074a3dbadf4a0e4",
+      "fanout": 806389.5549911298,
+      "fanout_p99_ms": 16.777216,
+      "membership": 49.30139186540259,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4998352,
+      "cpu_ns_per_output": 666.2195859755375,
+      "cpu_wall": 0.5546406584857791,
+      "client_cpu_wall": 1.5306749704157088,
+      "rss_mib": 5.609375
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-1.json",
+      "sha256": "6322de5af20aa2c509b1cdd42eeca6b03349b8c5b3c1c59fbe3f0cac7a838928",
+      "fanout": 811101.1298628887,
+      "fanout_p99_ms": 16.777216,
+      "membership": 49.58888702631402,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 5032180,
+      "cpu_ns_per_output": 661.7410347006665,
+      "cpu_wall": 0.5541308516698848,
+      "client_cpu_wall": 1.5392523657496802,
+      "rss_mib": 5.6171875
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-1.json",
+      "sha256": "cea7c4afe2dd0bdf0c951e00adfa9b984863cbd8ed014f8e4e3216e829d90b8c",
+      "fanout": 790786.8297525984,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4745216,
+      "cpu_ns_per_output": 689.1151003452741,
+      "cpu_wall": 0.544943145536683,
+      "client_cpu_wall": 1.9381311261748084,
+      "rss_mib": 5.6015625
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-1.json",
+      "sha256": "6f001637f98f96e8c9601d040e140c7bc5685cd6c8b5de0a79a4b56a15bd924e",
+      "fanout": 807915.7406311696,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4848128,
+      "cpu_ns_per_output": 674.4871422536698,
+      "cpu_wall": 0.5449287790800748,
+      "client_cpu_wall": 1.9997386388259624,
+      "rss_mib": 5.60546875
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-1.json",
+      "sha256": "d46434b938d938b0e1e80a83c477c3f6cf98e5a10517942442acfb10809ef068",
+      "fanout": 841078.4649635429,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 5054464,
+      "cpu_ns_per_output": 666.7373632495949,
+      "cpu_wall": 0.5607784380158093,
+      "client_cpu_wall": 1.5542049291001954,
+      "rss_mib": 5.60546875
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-1.json",
+      "sha256": "57e600bff61c99a5c762902ba45a9350c8e7fe4dd33080dde6bb7b364ed3cb99",
+      "fanout": 857969.6672008319,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 5152768,
+      "cpu_ns_per_output": 654.0174135532592,
+      "cpu_wall": 0.5611271026498387,
+      "client_cpu_wall": 1.600128028624614,
+      "rss_mib": 5.578125
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-1.json",
+      "sha256": "42bcf3095da8f7485a75ad703d0bba89095346ec53cd3aec4ddc8f46182adfe3",
+      "fanout": 458560.9789079309,
+      "fanout_p99_ms": 1.048576,
+      "membership": 447.8967700961186,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4136320,
+      "cpu_ns_per_output": 725.2823766052917,
+      "cpu_wall": 0.4998847880537038,
+      "client_cpu_wall": 1.5146509078027224,
+      "rss_mib": 5.89453125
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-1.json",
+      "sha256": "745032948682b69db0cbab10e44897358cefcefe6bb1d8235567984d55e4b70d",
+      "fanout": 456243.57275372086,
+      "fanout_p99_ms": 1.048576,
+      "membership": 445.63369118469234,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4114774,
+      "cpu_ns_per_output": 726.6498719006196,
+      "cpu_wall": 0.49829646097316016,
+      "client_cpu_wall": 1.5182209897877887,
+      "rss_mib": 5.78515625
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-1.json",
+      "sha256": "6e6a3ed230f04f1e29b2f798fc30e2203adb7615faddf8d4896e8d24e39aa750",
+      "fanout": 788378.7216555453,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.118818460421465,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4888146,
+      "cpu_ns_per_output": 681.2398811328467,
+      "cpu_wall": 0.5544486694574515,
+      "client_cpu_wall": 1.5051699615301386,
+      "rss_mib": 5.96484375
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 1,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-1.json",
+      "sha256": "0cab1daad105c28ca07e6e7db877751fa4e93d18e5a1b7d15205186e020b5d60",
+      "fanout": 796419.3912890332,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60958198785603,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4938888,
+      "cpu_ns_per_output": 674.2408412581941,
+      "cpu_wall": 0.5543490000669883,
+      "client_cpu_wall": 1.5082288109930673,
+      "rss_mib": 5.875
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-2.json",
+      "sha256": "6b1f92b7500fed646a4df02499d0872c08dac5494e3e190aec832b23672ab225",
+      "fanout": 798912.877023269,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.761772279252256,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4955802,
+      "cpu_ns_per_output": 669.9218411066463,
+      "cpu_wall": 0.552522470877534,
+      "client_cpu_wall": 1.5161083462934746,
+      "rss_mib": 5.97265625
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-2.json",
+      "sha256": "218b1b5e1c475419c650c2040b1c09a8b19cc73ae82c5e6293d6b66a37449e9f",
+      "fanout": 786151.0975997878,
+      "fanout_p99_ms": 16.777216,
+      "membership": 47.982855078112046,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4871232,
+      "cpu_ns_per_output": 681.552428625859,
+      "cpu_wall": 0.5531356904837916,
+      "client_cpu_wall": 1.4977981498341226,
+      "rss_mib": 5.94140625
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-2.json",
+      "sha256": "60fa5069027628d711d71ea095f3cc9b9b937f96674b6cf5fae7b306b02150ca",
+      "fanout": 454139.5574361309,
+      "fanout_p99_ms": 1.048576,
+      "membership": 443.57897842168586,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4096306,
+      "cpu_ns_per_output": 727.4847142767167,
+      "cpu_wall": 0.49656850326695107,
+      "client_cpu_wall": 1.5063688823937038,
+      "rss_mib": 5.91015625
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-2.json",
+      "sha256": "269ca0e0dd594b021f63f266ac66c6fbcffffdbcfe9a91df64cf1b2ba2cdd4e6",
+      "fanout": 428505.7707148304,
+      "fanout_p99_ms": 1.048576,
+      "membership": 418.46266671370154,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 3864429,
+      "cpu_ns_per_output": 784.0744389403972,
+      "cpu_wall": 0.5049549502757927,
+      "client_cpu_wall": 1.4632027932084029,
+      "rss_mib": 5.875
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-2.json",
+      "sha256": "1cf825e287a39c7cbe0157b0f79c5b6e9dbde0bd73c37755751a66b0f8db4e3b",
+      "fanout": 841667.1269850155,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 5054464,
+      "cpu_ns_per_output": 666.7373632495949,
+      "cpu_wall": 0.5611709209798511,
+      "client_cpu_wall": 1.5702794613768534,
+      "rss_mib": 5.5859375
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-2.json",
+      "sha256": "9df23eaa8d481093e2185b0efb537f60ec6ee7053c8b461e8ef0cde95bca1d58",
+      "fanout": 826634.1946749105,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4964352,
+      "cpu_ns_per_output": 680.8542182343234,
+      "cpu_wall": 0.5628173783811456,
+      "client_cpu_wall": 1.5469152204617878,
+      "rss_mib": 5.56640625
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-2.json",
+      "sha256": "1db89bcb761c665198f0195c5f525408214140db00df653998494b525e305ce4",
+      "fanout": 799202.776406566,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4795904,
+      "cpu_ns_per_output": 683.9169424575638,
+      "cpu_wall": 0.5465883192435746,
+      "client_cpu_wall": 1.969717662639955,
+      "rss_mib": 5.62890625
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-2.json",
+      "sha256": "1fbf3d1a0b476953062d02339375a024f65af617505279102ae915d37effc713",
+      "fanout": 792661.1777623143,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4756480,
+      "cpu_ns_per_output": 685.3807857911733,
+      "cpu_wall": 0.5432747408808919,
+      "client_cpu_wall": 1.9697875574270376,
+      "rss_mib": 5.6015625
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-2.json",
+      "sha256": "f1c068e7203732dd82789c74bf2f3e00ea39c43cfc371bbde9c566ca58b574eb",
+      "fanout": 768370.987348657,
+      "fanout_p99_ms": 16.777216,
+      "membership": 46.980942814789906,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4761556,
+      "cpu_ns_per_output": 697.2510666681228,
+      "cpu_wall": 0.5531089721457535,
+      "client_cpu_wall": 1.4927278284415517,
+      "rss_mib": 5.61328125
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-2.json",
+      "sha256": "226f54ecb5743f250602320066106edca903f56f5b150ccbf14a66c1e09ed4bf",
+      "fanout": 768307.5572765414,
+      "fanout_p99_ms": 16.777216,
+      "membership": 46.97706447393651,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4761556,
+      "cpu_ns_per_output": 699.3512204833881,
+      "cpu_wall": 0.5547291655964843,
+      "client_cpu_wall": 1.5042655751760519,
+      "rss_mib": 5.6015625
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-2.json",
+      "sha256": "cb8cbfa32ebd38964f8944fd43beacaef37187fbd5cd238124c67c0e65677f8e",
+      "fanout": 441001.8084750429,
+      "fanout_p99_ms": 1.048576,
+      "membership": 430.74914563835557,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 3977803,
+      "cpu_ns_per_output": 751.6712114702513,
+      "cpu_wall": 0.4982359556900129,
+      "client_cpu_wall": 1.4847098211364598,
+      "rss_mib": 5.6015625
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-2.json",
+      "sha256": "a847aba3f605572dc9ff3497ab5ae8f628b7be07e20bcb089b4c4a4f878d7426",
+      "fanout": 451238.06509496015,
+      "fanout_p99_ms": 1.048576,
+      "membership": 440.7454896720233,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4070143,
+      "cpu_ns_per_output": 732.161007610789,
+      "cpu_wall": 0.49656769724863115,
+      "client_cpu_wall": 1.491369426300419,
+      "rss_mib": 5.51953125
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-2.json",
+      "sha256": "18d816e110a6b27a5b095d756f8d5e57533a1ab60c1441d5c6e0ab7736161c60",
+      "fanout": 721399.1404971555,
+      "fanout_p99_ms": 2.097152,
+      "membership": 352.32900638080594,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4501796,
+      "cpu_ns_per_output": 675.2860413932573,
+      "cpu_wall": 0.5066604443697493,
+      "client_cpu_wall": 1.163319046612122,
+      "rss_mib": 5.19140625
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-2.json",
+      "sha256": "a76a797f0c62a831720f1d26211f9a50918ae328bd7aba5befd23a77179b42d5",
+      "fanout": 709898.6738078876,
+      "fanout_p99_ms": 2.097152,
+      "membership": 346.7135163652757,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4431506,
+      "cpu_ns_per_output": 683.7404710723623,
+      "cpu_wall": 0.5048255428096038,
+      "client_cpu_wall": 1.1379400849470607,
+      "rss_mib": 5.1875
+    },
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-2.json",
+      "sha256": "b1eb28792abd6bb091bc7f09c00fccb53aee2c6a2e5dec25251952fdecf738be",
+      "fanout": 390871.44382409466,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3053.7664863849463,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3572921,
+      "cpu_ns_per_output": 758.4830451051115,
+      "cpu_wall": 0.4516567798997546,
+      "client_cpu_wall": 1.3183044756483613,
+      "rss_mib": 5.28125
+    },
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 2,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-2.json",
+      "sha256": "f5978cf98a508d7b470c695b8e07558a144e244e567ade5a8772c046207ec326",
+      "fanout": 394454.4204771715,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3081.758491287493,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3605681,
+      "cpu_ns_per_output": 751.5917242817653,
+      "cpu_wall": 0.4516556979822133,
+      "client_cpu_wall": 1.3349675796448444,
+      "rss_mib": 5.22265625
+    },
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-before-3.json",
+      "sha256": "e66ff01b19ecdee6381dffb9f2321d2d5eee85259774bb0d349eee710019f7c1",
+      "fanout": 394577.9527618297,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3082.7235863185115,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3606851,
+      "cpu_ns_per_output": 751.3479209426727,
+      "cpu_wall": 0.45165058760464755,
+      "client_cpu_wall": 1.33161926013326,
+      "rss_mib": 5.20703125
+    },
+    {
+      "cohort": "w1-r64-b1-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b1-c2-selected-3.json",
+      "sha256": "9ac2f45af46b945d4e35978ab9f943ad87dd2fb783c630f77981fa30fafa8b7a",
+      "fanout": 395325.03499635,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3088.4768359089844,
+      "membership_p99_ms": 0.524288,
+      "wire_deliveries": 3613545,
+      "cpu_ns_per_output": 749.9560680716581,
+      "cpu_wall": 0.45166327911679605,
+      "client_cpu_wall": 1.328323370686666,
+      "rss_mib": 5.11328125
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-before-3.json",
+      "sha256": "583e5c79ec8a5b04801aaf59e8000582fd7df9350f1e74069486b62cb9317151",
+      "fanout": 721610.7173266152,
+      "fanout_p99_ms": 2.097152,
+      "membership": 352.4323003983357,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4503926,
+      "cpu_ns_per_output": 674.9666846213726,
+      "cpu_wall": 0.5065693584921706,
+      "client_cpu_wall": 1.1714416415131443,
+      "rss_mib": 5.1875
+    },
+    {
+      "cohort": "w1-r64-b16-c2",
+      "workers": 1,
+      "readers": 64,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r64-b16-c2-selected-3.json",
+      "sha256": "78c3fecc73e980ca64a7f9d796e58f0007552659f22fdd5a2289ab49174a6f37",
+      "fanout": 715530.1250351861,
+      "fanout_p99_ms": 2.097152,
+      "membership": 349.4632684400492,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4465586,
+      "cpu_ns_per_output": 680.7617186187882,
+      "cpu_wall": 0.5066134172902954,
+      "client_cpu_wall": 1.1565451039456087,
+      "rss_mib": 5.203125
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-before-3.json",
+      "sha256": "759e583144dfe60ed348186856f23c2c2179fce1db55557d7809e8b6845a4f28",
+      "fanout": 459792.09278228914,
+      "fanout_p99_ms": 1.048576,
+      "membership": 449.0990363936771,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4147093,
+      "cpu_ns_per_output": 718.5756384050225,
+      "cpu_wall": 0.49659188439820323,
+      "client_cpu_wall": 1.5314360461810361,
+      "rss_mib": 5.6875
+    },
+    {
+      "cohort": "w1-r512-b1-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c2-selected-3.json",
+      "sha256": "2094e796dd3b41d93768108c98a2bb2108eea29ef2d5b76abc4717c05efaddee",
+      "fanout": 463307.82489817095,
+      "fanout_p99_ms": 1.048576,
+      "membership": 452.44904775212007,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4178385,
+      "cpu_ns_per_output": 708.4076742569198,
+      "cpu_wall": 0.49327778318463184,
+      "client_cpu_wall": 1.5281612404740115,
+      "rss_mib": 5.609375
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-before-3.json",
+      "sha256": "5b0ea3d042c7f42b863214c576afdf2f3f640b8589bafa15ea892d312ee813a9",
+      "fanout": 794961.1520432316,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60380381910973,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4930696,
+      "cpu_ns_per_output": 675.3610443637166,
+      "cpu_wall": 0.5542831051973816,
+      "client_cpu_wall": 1.5313527230678408,
+      "rss_mib": 5.6328125
+    },
+    {
+      "cohort": "w1-r512-b16-c2",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c2-selected-3.json",
+      "sha256": "e26c5ef12428e3a224928adddaeee871bd5198ee7ed1773233c00ca56038d66a",
+      "fanout": 794955.8827362175,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60348165448102,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4930696,
+      "cpu_ns_per_output": 675.3610443637166,
+      "cpu_wall": 0.55427943119665,
+      "client_cpu_wall": 1.533007075471816,
+      "rss_mib": 5.609375
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-before-3.json",
+      "sha256": "34c37d9c1fb771cf818409b7d807eebc5e6dce5af1adc9597f94b2390c173373",
+      "fanout": 786037.0233079987,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4716544,
+      "cpu_ns_per_output": 693.3042498914459,
+      "cpu_wall": 0.544962808831457,
+      "client_cpu_wall": 1.944867271884741,
+      "rss_mib": 5.59765625
+    },
+    {
+      "cohort": "w1-r512-b1-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 1,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b1-c0-selected-3.json",
+      "sha256": "2a39a44e973f504a96b079c2b5e281255d100c7e3a7125ace362a1e16f64e041",
+      "fanout": 795296.8404796955,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 4772352,
+      "cpu_ns_per_output": 683.1013303293638,
+      "cpu_wall": 0.5432683297384198,
+      "client_cpu_wall": 1.9580990412351023,
+      "rss_mib": 5.58203125
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-before-3.json",
+      "sha256": "acbe0781658ccdd3b0a1416e0d77a7cc6fc6bbf317a381add9db27786ef0be58",
+      "fanout": 845767.3211198736,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 5079040,
+      "cpu_ns_per_output": 661.5423387096774,
+      "cpu_wall": 0.5595108916178598,
+      "client_cpu_wall": 1.5819504376100204,
+      "rss_mib": 5.62890625
+    },
+    {
+      "cohort": "w1-r512-b16-c0",
+      "workers": 1,
+      "readers": 512,
+      "window": 16,
+      "every": 0,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w1-r512-b16-c0-selected-3.json",
+      "sha256": "50ef56991560775639db2f8f9029e50657ff0cae71e8ace012a3d85d8184cc01",
+      "fanout": 850264.3539908822,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "wire_deliveries": 5103616,
+      "cpu_ns_per_output": 660.3161366372392,
+      "cpu_wall": 0.5614432733476172,
+      "client_cpu_wall": 1.569375559327761,
+      "rss_mib": 5.6328125
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-before-3.json",
+      "sha256": "ed33703a6990a1fa17bd27b4386212d537541fb6f649213aa4e86ae9c036e2d8",
+      "fanout": 461257.18534923607,
+      "fanout_p99_ms": 1.048576,
+      "membership": 450.44647006761335,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4159917,
+      "cpu_ns_per_output": 721.1682348469933,
+      "cpu_wall": 0.4999405883103367,
+      "client_cpu_wall": 1.5414834806235382,
+      "rss_mib": 5.91796875
+    },
+    {
+      "cohort": "w4-r512-b1-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 1,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b1-c2-selected-3.json",
+      "sha256": "3c67fdc41d4e460fa26ec981699c1cf670e22174437fb4d5ace44775d1214a7b",
+      "fanout": 450259.85119611386,
+      "fanout_p99_ms": 1.048576,
+      "membership": 439.7902110968533,
+      "membership_p99_ms": 4.194304,
+      "wire_deliveries": 4060909,
+      "cpu_ns_per_output": 736.2883531741293,
+      "cpu_wall": 0.49828447562697664,
+      "client_cpu_wall": 1.4998529366698292,
+      "rss_mib": 5.83984375
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "before",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-before-3.json",
+      "sha256": "ca299561bb9d22ea71e3a24882c89cf7f0502bce6ec02bb3a2d6e0dabd1b99ac",
+      "fanout": 779299.8418207074,
+      "fanout_p99_ms": 16.777216,
+      "membership": 47.647988289955755,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4829212,
+      "cpu_ns_per_output": 689.5534923710121,
+      "cpu_wall": 0.554782520998436,
+      "client_cpu_wall": 1.5144063411038386,
+      "rss_mib": 5.828125
+    },
+    {
+      "cohort": "w4-r512-b16-c2",
+      "workers": 4,
+      "readers": 512,
+      "window": 16,
+      "every": 2,
+      "kind": "selected",
+      "repetition": 3,
+      "passed": true,
+      "trace": "docs/benchmarks/2026-10-16-room-churn-reuse-w4-r512-b16-c2-selected-3.json",
+      "sha256": "5308cd3efe72a3404c83ca8b5f12c5a302b1a84ce11fa0492f81f7871a4b9bf5",
+      "fanout": 776839.2149617259,
+      "fanout_p99_ms": 16.777216,
+      "membership": 47.49783239683705,
+      "membership_p99_ms": 16.777216,
+      "wire_deliveries": 4812298,
+      "cpu_ns_per_output": 689.899087712357,
+      "cpu_wall": 0.5533080826578911,
+      "client_cpu_wall": 1.5149308648675395,
+      "rss_mib": 5.8203125
+    }
+  ],
+  "passed": true,
+  "medians": {
+    "w1-r64-b1-c2/before": {
+      "fanout": 394454.4204771715,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3081.758491287493,
+      "membership_p99_ms": 0.524288,
+      "cpu_ns_per_output": 751.5917242817653,
+      "cpu_wall": 0.45165058760464755,
+      "client_cpu_wall": 1.33161926013326,
+      "rss_mib": 5.20703125,
+      "ranges": {
+        "fanout": [
+          385127.316251579,
+          394577.9527618297
+        ],
+        "fanout_p99_ms": [
+          0.131072,
+          0.262144
+        ],
+        "membership": [
+          3008.8071582154607,
+          3082.7235863185115
+        ],
+        "membership_p99_ms": [
+          0.524288,
+          0.524288
+        ],
+        "cpu_ns_per_output": [
+          751.3479209426727,
+          766.9724614276766
+        ],
+        "cpu_wall": [
+          0.4499960852590563,
+          0.4516556979822133
+        ],
+        "client_cpu_wall": [
+          1.3049886472512633,
+          1.3349675796448444
+        ],
+        "rss_mib": [
+          5.109375,
+          5.22265625
+        ]
+      }
+    },
+    "w1-r64-b1-c2/selected": {
+      "fanout": 395325.03499635,
+      "fanout_p99_ms": 0.131072,
+      "membership": 3088.4768359089844,
+      "membership_p99_ms": 0.524288,
+      "cpu_ns_per_output": 749.9560680716581,
+      "cpu_wall": 0.45166327911679605,
+      "client_cpu_wall": 1.3199710400553764,
+      "rss_mib": 5.1875,
+      "ranges": {
+        "fanout": [
+          390871.44382409466,
+          398785.9173701039
+        ],
+        "fanout_p99_ms": [
+          0.131072,
+          0.131072
+        ],
+        "membership": [
+          3053.7664863849463,
+          3115.5983109589906
+        ],
+        "membership_p99_ms": [
+          0.524288,
+          0.524288
+        ],
+        "cpu_ns_per_output": [
+          746.173255943462,
+          758.4830451051115
+        ],
+        "cpu_wall": [
+          0.4516567798997546,
+          0.45332338749376566
+        ],
+        "client_cpu_wall": [
+          1.3183044756483613,
+          1.328323370686666
+        ],
+        "rss_mib": [
+          5.11328125,
+          5.28125
+        ]
+      }
+    },
+    "w1-r64-b16-c2/before": {
+      "fanout": 714000.8092476683,
+      "fanout_p99_ms": 2.097152,
+      "membership": 348.633207640463,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 682.232336017379,
+      "cpu_wall": 0.5065693584921706,
+      "client_cpu_wall": 1.148223136062519,
+      "rss_mib": 5.1875,
+      "ranges": {
+        "fanout": [
+          709898.6738078876,
+          721610.7173266152
+        ],
+        "fanout_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "membership": [
+          346.7135163652757,
+          352.4323003983357
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          674.9666846213726,
+          683.7404710723623
+        ],
+        "cpu_wall": [
+          0.5048255428096038,
+          0.5066180455196021
+        ],
+        "client_cpu_wall": [
+          1.1379400849470607,
+          1.1714416415131443
+        ],
+        "rss_mib": [
+          5.1875,
+          5.21875
+        ]
+      }
+    },
+    "w1-r64-b16-c2/selected": {
+      "fanout": 715530.1250351861,
+      "fanout_p99_ms": 2.097152,
+      "membership": 349.4632684400492,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 680.7617186187882,
+      "cpu_wall": 0.5066134172902954,
+      "client_cpu_wall": 1.1565451039456087,
+      "rss_mib": 5.19140625,
+      "ranges": {
+        "fanout": [
+          710743.0959535011,
+          721399.1404971555
+        ],
+        "fanout_p99_ms": [
+          2.097152,
+          2.097152
+        ],
+        "membership": [
+          347.12585085701687,
+          352.32900638080594
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          675.2860413932573,
+          685.3382256863865
+        ],
+        "cpu_wall": [
+          0.5066070987063521,
+          0.5066604443697493
+        ],
+        "client_cpu_wall": [
+          1.1515312671252937,
+          1.163319046612122
+        ],
+        "rss_mib": [
+          5.1796875,
+          5.203125
+        ]
+      }
+    },
+    "w1-r512-b1-c2/before": {
+      "fanout": 459792.09278228914,
+      "fanout_p99_ms": 1.048576,
+      "membership": 449.0990363936771,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 718.5756384050225,
+      "cpu_wall": 0.49656769724863115,
+      "client_cpu_wall": 1.5314360461810361,
+      "rss_mib": 5.59765625,
+      "ranges": {
+        "fanout": [
+          451238.06509496015,
+          480796.11242573796
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          440.7454896720233,
+          469.6107769575371
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          684.9014964059967,
+          732.161007610789
+        ],
+        "cpu_wall": [
+          0.4949410956578727,
+          0.49659188439820323
+        ],
+        "client_cpu_wall": [
+          1.491369426300419,
+          1.5714796404221345
+        ],
+        "rss_mib": [
+          5.51953125,
+          5.6875
+        ]
+      }
+    },
+    "w1-r512-b1-c2/selected": {
+      "fanout": 463307.82489817095,
+      "fanout_p99_ms": 1.048576,
+      "membership": 452.44904775212007,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 708.4076742569198,
+      "cpu_wall": 0.49493355030402514,
+      "client_cpu_wall": 1.52646172416999,
+      "rss_mib": 5.6015625,
+      "ranges": {
+        "fanout": [
+          441001.8084750429,
+          467734.53537257
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          430.74914563835557,
+          456.7720071997754
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          704.0585776736624,
+          751.6712114702513
+        ],
+        "cpu_wall": [
+          0.49327778318463184,
+          0.4982359556900129
+        ],
+        "client_cpu_wall": [
+          1.4847098211364598,
+          1.5281612404740115
+        ],
+        "rss_mib": [
+          5.48828125,
+          5.609375
+        ]
+      }
+    },
+    "w1-r512-b16-c2/before": {
+      "fanout": 794961.1520432316,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60380381910973,
+      "membership_p99_ms": 16.777216,
+      "cpu_ns_per_output": 675.3610443637166,
+      "cpu_wall": 0.5546406584857791,
+      "client_cpu_wall": 1.5306749704157088,
+      "rss_mib": 5.609375,
+      "ranges": {
+        "fanout": [
+          768307.5572765414,
+          806389.5549911298
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          46.97706447393651,
+          49.30139186540259
+        ],
+        "membership_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "cpu_ns_per_output": [
+          666.2195859755375,
+          699.3512204833881
+        ],
+        "cpu_wall": [
+          0.5542831051973816,
+          0.5547291655964843
+        ],
+        "client_cpu_wall": [
+          1.5042655751760519,
+          1.5313527230678408
+        ],
+        "rss_mib": [
+          5.6015625,
+          5.6328125
+        ]
+      }
+    },
+    "w1-r512-b16-c2/selected": {
+      "fanout": 794955.8827362175,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60348165448102,
+      "membership_p99_ms": 16.777216,
+      "cpu_ns_per_output": 675.3610443637166,
+      "cpu_wall": 0.5541308516698848,
+      "client_cpu_wall": 1.533007075471816,
+      "rss_mib": 5.61328125,
+      "ranges": {
+        "fanout": [
+          768370.987348657,
+          811101.1298628887
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          46.980942814789906,
+          49.58888702631402
+        ],
+        "membership_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "cpu_ns_per_output": [
+          661.7410347006665,
+          697.2510666681228
+        ],
+        "cpu_wall": [
+          0.5531089721457535,
+          0.55427943119665
+        ],
+        "client_cpu_wall": [
+          1.4927278284415517,
+          1.5392523657496802
+        ],
+        "rss_mib": [
+          5.609375,
+          5.6171875
+        ]
+      }
+    },
+    "w1-r512-b1-c0/before": {
+      "fanout": 790786.8297525984,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "cpu_ns_per_output": 689.1151003452741,
+      "cpu_wall": 0.544943145536683,
+      "client_cpu_wall": 1.944867271884741,
+      "rss_mib": 5.6015625,
+      "ranges": {
+        "fanout": [
+          786037.0233079987,
+          792661.1777623143
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          0.0,
+          0.0
+        ],
+        "membership_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "cpu_ns_per_output": [
+          685.3807857911733,
+          693.3042498914459
+        ],
+        "cpu_wall": [
+          0.5432747408808919,
+          0.544962808831457
+        ],
+        "client_cpu_wall": [
+          1.9381311261748084,
+          1.9697875574270376
+        ],
+        "rss_mib": [
+          5.59765625,
+          5.6015625
+        ]
+      }
+    },
+    "w1-r512-b1-c0/selected": {
+      "fanout": 799202.776406566,
+      "fanout_p99_ms": 1.048576,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "cpu_ns_per_output": 683.1013303293638,
+      "cpu_wall": 0.5449287790800748,
+      "client_cpu_wall": 1.969717662639955,
+      "rss_mib": 5.60546875,
+      "ranges": {
+        "fanout": [
+          795296.8404796955,
+          807915.7406311696
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          0.0,
+          0.0
+        ],
+        "membership_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "cpu_ns_per_output": [
+          674.4871422536698,
+          683.9169424575638
+        ],
+        "cpu_wall": [
+          0.5432683297384198,
+          0.5465883192435746
+        ],
+        "client_cpu_wall": [
+          1.9580990412351023,
+          1.9997386388259624
+        ],
+        "rss_mib": [
+          5.58203125,
+          5.62890625
+        ]
+      }
+    },
+    "w1-r512-b16-c0/before": {
+      "fanout": 841078.4649635429,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "cpu_ns_per_output": 666.7373632495949,
+      "cpu_wall": 0.5607784380158093,
+      "client_cpu_wall": 1.5542049291001954,
+      "rss_mib": 5.60546875,
+      "ranges": {
+        "fanout": [
+          826634.1946749105,
+          845767.3211198736
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          0.0,
+          0.0
+        ],
+        "membership_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "cpu_ns_per_output": [
+          661.5423387096774,
+          680.8542182343234
+        ],
+        "cpu_wall": [
+          0.5595108916178598,
+          0.5628173783811456
+        ],
+        "client_cpu_wall": [
+          1.5469152204617878,
+          1.5819504376100204
+        ],
+        "rss_mib": [
+          5.56640625,
+          5.62890625
+        ]
+      }
+    },
+    "w1-r512-b16-c0/selected": {
+      "fanout": 850264.3539908822,
+      "fanout_p99_ms": 16.777216,
+      "membership": 0.0,
+      "membership_p99_ms": 0.0,
+      "cpu_ns_per_output": 660.3161366372392,
+      "cpu_wall": 0.5611709209798511,
+      "client_cpu_wall": 1.5702794613768534,
+      "rss_mib": 5.5859375,
+      "ranges": {
+        "fanout": [
+          841667.1269850155,
+          857969.6672008319
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          0.0,
+          0.0
+        ],
+        "membership_p99_ms": [
+          0.0,
+          0.0
+        ],
+        "cpu_ns_per_output": [
+          654.0174135532592,
+          666.7373632495949
+        ],
+        "cpu_wall": [
+          0.5611271026498387,
+          0.5614432733476172
+        ],
+        "client_cpu_wall": [
+          1.569375559327761,
+          1.600128028624614
+        ],
+        "rss_mib": [
+          5.578125,
+          5.6328125
+        ]
+      }
+    },
+    "w4-r512-b1-c2/before": {
+      "fanout": 458560.9789079309,
+      "fanout_p99_ms": 1.048576,
+      "membership": 447.8967700961186,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 725.2823766052917,
+      "cpu_wall": 0.4999405883103367,
+      "client_cpu_wall": 1.5146509078027224,
+      "rss_mib": 5.89453125,
+      "ranges": {
+        "fanout": [
+          428505.7707148304,
+          461257.18534923607
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          418.46266671370154,
+          450.44647006761335
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          721.1682348469933,
+          784.0744389403972
+        ],
+        "cpu_wall": [
+          0.4998847880537038,
+          0.5049549502757927
+        ],
+        "client_cpu_wall": [
+          1.4632027932084029,
+          1.5414834806235382
+        ],
+        "rss_mib": [
+          5.875,
+          5.91796875
+        ]
+      }
+    },
+    "w4-r512-b1-c2/selected": {
+      "fanout": 454139.5574361309,
+      "fanout_p99_ms": 1.048576,
+      "membership": 443.57897842168586,
+      "membership_p99_ms": 4.194304,
+      "cpu_ns_per_output": 727.4847142767167,
+      "cpu_wall": 0.49828447562697664,
+      "client_cpu_wall": 1.5063688823937038,
+      "rss_mib": 5.83984375,
+      "ranges": {
+        "fanout": [
+          450259.85119611386,
+          456243.57275372086
+        ],
+        "fanout_p99_ms": [
+          1.048576,
+          1.048576
+        ],
+        "membership": [
+          439.7902110968533,
+          445.63369118469234
+        ],
+        "membership_p99_ms": [
+          4.194304,
+          4.194304
+        ],
+        "cpu_ns_per_output": [
+          726.6498719006196,
+          736.2883531741293
+        ],
+        "cpu_wall": [
+          0.49656850326695107,
+          0.49829646097316016
+        ],
+        "client_cpu_wall": [
+          1.4998529366698292,
+          1.5182209897877887
+        ],
+        "rss_mib": [
+          5.78515625,
+          5.91015625
+        ]
+      }
+    },
+    "w4-r512-b16-c2/before": {
+      "fanout": 786151.0975997878,
+      "fanout_p99_ms": 16.777216,
+      "membership": 47.982855078112046,
+      "membership_p99_ms": 16.777216,
+      "cpu_ns_per_output": 681.552428625859,
+      "cpu_wall": 0.5544486694574515,
+      "client_cpu_wall": 1.5051699615301386,
+      "rss_mib": 5.94140625,
+      "ranges": {
+        "fanout": [
+          779299.8418207074,
+          788378.7216555453
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          47.647988289955755,
+          48.118818460421465
+        ],
+        "membership_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "cpu_ns_per_output": [
+          681.2398811328467,
+          689.5534923710121
+        ],
+        "cpu_wall": [
+          0.5531356904837916,
+          0.554782520998436
+        ],
+        "client_cpu_wall": [
+          1.4977981498341226,
+          1.5144063411038386
+        ],
+        "rss_mib": [
+          5.828125,
+          5.96484375
+        ]
+      }
+    },
+    "w4-r512-b16-c2/selected": {
+      "fanout": 796419.3912890332,
+      "fanout_p99_ms": 16.777216,
+      "membership": 48.60958198785603,
+      "membership_p99_ms": 16.777216,
+      "cpu_ns_per_output": 674.2408412581941,
+      "cpu_wall": 0.5533080826578911,
+      "client_cpu_wall": 1.5149308648675395,
+      "rss_mib": 5.875,
+      "ranges": {
+        "fanout": [
+          776839.2149617259,
+          798912.877023269
+        ],
+        "fanout_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "membership": [
+          47.49783239683705,
+          48.761772279252256
+        ],
+        "membership_p99_ms": [
+          16.777216,
+          16.777216
+        ],
+        "cpu_ns_per_output": [
+          669.9218411066463,
+          689.899087712357
+        ],
+        "cpu_wall": [
+          0.552522470877534,
+          0.5543490000669883
+        ],
+        "client_cpu_wall": [
+          1.5082288109930673,
+          1.5161083462934746
+        ],
+        "rss_mib": [
+          5.8203125,
+          5.97265625
+        ]
+      }
+    }
+  }
+}
