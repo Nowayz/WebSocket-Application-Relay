@@ -896,3 +896,37 @@ baseline result labelled as AOCL. Mapping verification establishes loading;
 the separate loader-binding diagnostic in the study proves which symbols are
 actually replaced. Run diagnostics, builds and validation separately from
 ordinary timing trials. Avoid setting a machine-wide preload.
+
+The direct upstream C++ comparison accepts repeatable `--cpp-preload
+LABEL=LIBRARY` options. Each adds a C++ candidate alongside the glibc C++ and
+native Rust controls. For the three pinned libraries from the study:
+
+```sh
+python3 scripts/compare-cpp.py \
+  --relay artifacts/baselines/c10m-sendmsg/war-relay \
+  --client artifacts/baselines/active-pairs-client/inspection \
+  --client-source-root artifacts/baselines/active-pairs-client \
+  --rebuild-cpp --workers 4 --rooms 8192 --pairs 64 --client-workers 8 \
+  --server-cpus 0-3 --client-cpus 4-11 \
+  --seconds 6 --repetitions 5 --cases private query \
+  --cpp-preload zen5=artifacts/aocl-libmem-5.3.2-zen5/lib/libaocl-libmem.so \
+  --cpp-preload avx2=artifacts/aocl-libmem-5.3.2-avx2/lib/libaocl-libmem.so \
+  --cpp-preload dispatch=artifacts/aocl-libmem-5.3.2-dispatch/lib/libaocl-libmem.so \
+  --output artifacts/cpp-aocl-four-worker.json
+```
+
+Build the AVX2 library in its own directory with `-DALMEM_ISA=avx2`; use
+`-DALMEM_ARCH=zen5` for the compatible native build. The frozen binaries in
+this command belong to the archived checkpoint; when testing a new build,
+pass its executable and associated client source snapshot explicitly. C++ is
+rebuilt in a temporary directory with only the worker-count expression changed;
+the upstream routing, storage and protocol sources remain intact. The runner
+clears inherited library preload/search settings, applies the requested
+library to the selected C++ server, verifies its mapping and records all loaded
+C++ library hashes. It also verifies the client has no AOCL mapping. The glibc
+and Rust controls retain their ordinary environments.
+
+See the [C++ AOCL results](performance.md#current-c-versus-rust-with-aocl-2026-10-17)
+before selecting a library: loading AOCL succeeds, but these workloads do not
+establish a useful improvement. The recorded binding diagnostics run separately
+from ordinary timing trials, including a negative test for an ignored library.

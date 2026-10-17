@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import select
 import signal
 import statistics
@@ -26,6 +27,13 @@ import reference
 
 ROOT = runtime.ROOT
 CACHE = reference.CACHE
+
+
+def cpp_preload(value):
+    label, separator, library = value.partition("=")
+    if not separator or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", label):
+        raise argparse.ArgumentTypeError("use a simple lowercase label=library-path")
+    return label, str(runtime.preload_library(library))
 
 
 def sha(path):
@@ -80,7 +88,8 @@ def rebuild_cpp(workers):
 def trial(args):
     namespace = os.readlink("/proc/self/ns/net")
     assert namespace != args.host_netns, "refusing reference listeners in host network namespace"
-    cpp = args.kind == "cpp"
+    cpp = args.kind == "cpp" or args.kind.startswith("cpp-")
+    preload = dict(args.cpp_preload).get(args.kind.removeprefix("cpp-")) if args.kind.startswith("cpp-") else None
     rust_binary = args.control if args.kind == "control" else args.relay
     port, admin = (1338, 19139) if cpp else (19138, 19139)
     env = {k: v for k, v in os.environ.items()
@@ -95,6 +104,9 @@ def trial(args):
                           "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0",
                           "--ping-interval-secs", "0", "--idle-timeout-secs", "0"]
         env.update(WAR_AUTH_PASSWORD=inspection.TOKEN, WAR_ADMIN_TOKEN=inspection.TOKEN)
+    server_env = runtime.preload_environment(env, preload)
+    if args.loader_bindings:
+        server_env.update(LD_DEBUG="bindings", LD_DEBUG_OUTPUT=str(args.output.with_suffix(".bindings")))
     churn = args.churn_workers if args.case == "churn" else 0
     mode = ("binary" if cpp else "cbor") if args.case == "query" else "none"
     client_command = [str(args.client), "--url", f"ws://127.0.0.1:{port}", "--wire", "cpp" if cpp else "cbor",
@@ -112,13 +124,14 @@ def trial(args):
     record = {"kind": args.kind, "case": args.case, "server_command": server_command,
               "client_command": client_command, "server_sha256": sha(args.cpp_executable if cpp else rust_binary),
               "client_sha256": sha(args.client), "runner_sha256": sha(__file__),
+              "diagnostic_only": args.loader_bindings,
               **client_sources(args),
               "isolation": {"host_netns": args.host_netns, "test_netns": namespace,
                             "root_mount": "read-only", "writable_path": str(CACHE)},
               "events": [], "passed": False}
     started = time.monotonic()
     with tempfile.TemporaryFile(dir=CACHE) as logs, tempfile.TemporaryFile(dir=CACHE) as client_errors:
-        server = subprocess.Popen(server_command, cwd=ROOT, env=env, stdout=logs, stderr=logs)
+        server = subprocess.Popen(server_command, cwd=ROOT, env=server_env, stdout=logs, stderr=logs)
         client = None
         try:
             if cpp:
@@ -141,7 +154,9 @@ def trial(args):
                     time.sleep(.025)
                 # libstdc++ may report affinity-aware hardware concurrency; do
                 # not assume Python's host CPU count equals the resulting loops.
-                record["startup_server"] = runtime.snapshot(server.pid)
+            record["server_preload"] = runtime.preload_metadata(preload, server.pid)
+            record["startup_server"] = runtime.snapshot(server.pid)
+            if cpp:
                 listeners = [line for file in ("tcp", "tcp6") for line in Path(f"/proc/net/{file}").read_text().splitlines()[1:]
                              if line.split()[1].endswith(f":{port:04X}") and line.split()[3] == "0A"]
                 record["listening_sockets"] = len(listeners)
@@ -174,6 +189,8 @@ def trial(args):
                                      read_storage="connection" if args.kind == "control" else "worker", workers=args.workers)
                 record["events"].append(event)
                 if event["event"] == "ready":
+                    record["client_aocl_mapping_absent"] = "libaocl-libmem" not in Path(f"/proc/{client.pid}/maps").read_text()
+                    assert record["client_aocl_mapping_absent"], "AOCL unexpectedly loaded into the fixed client"
                     ready = event
                 elif event["event"] == "measured":
                     assert ready is not None
@@ -227,6 +244,8 @@ def trial(args):
             client_errors.seek(0)
             record.update(server_log=logs.read().decode(errors="replace"),
                           client_log=client_errors.read().decode(errors="replace"))
+            if args.loader_bindings:
+                record["loader_bindings_file"] = str(args.output.with_suffix(".bindings")) + f".{server.pid}"
             args.output.write_text(json.dumps(record, indent=2) + "\n")
     return record
 
@@ -251,12 +270,15 @@ def main():
     parser.add_argument("--client-cpus", default="4-7")
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--rebuild-cpp", action="store_true", help="build temporary upstream copy with explicit matching worker count and system libraries")
+    parser.add_argument("--cpp-preload", type=cpp_preload, action="append", default=[], metavar="LABEL=LIBRARY",
+                        help="Add a C++ candidate with this server-only shared-library preload; repeat for independent variants")
     parser.add_argument("--audit-ids", action="store_true", help="diagnostic only: check welcome ID reuse before C++ GC")
     parser.add_argument("--cases", nargs="+", choices=["private", "churn", "query"], default=["private", "churn", "query"])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--isolated", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--host-netns", help=argparse.SUPPRESS)
-    parser.add_argument("--kind", choices=["cpp", "rust", "control"], help=argparse.SUPPRESS)
+    parser.add_argument("--kind", help=argparse.SUPPRESS)
+    parser.add_argument("--loader-bindings", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--case", choices=["private", "churn", "query"], help=argparse.SUPPRESS)
     parser.add_argument("--cpp-executable", type=Path, default=CACHE / "app", help=argparse.SUPPRESS)
     parser.add_argument("--cpp-system-libraries", action="store_true", help=argparse.SUPPRESS)
@@ -266,7 +288,14 @@ def main():
     args.cpp_executable = args.cpp_executable.resolve()
     if args.client_source_root: args.client_source_root = args.client_source_root.resolve()
     if args.control: args.control = args.control.resolve()
+    if len(dict(args.cpp_preload)) != len(args.cpp_preload):
+        parser.error("C++ preload labels must be unique")
+    kinds = ["cpp", *[f"cpp-{label}" for label, _ in args.cpp_preload], "rust"] + (["control"] if args.control else [])
+    if args.loader_bindings and not args.isolated:
+        parser.error("loader binding diagnostics require a separate isolated trial")
     if args.isolated:
+        if args.kind not in kinds:
+            parser.error("isolated kind must name a configured implementation")
         result = trial(args)
         print(json.dumps({"kind": args.kind, "case": args.case, "passed": result["passed"], "error": result.get("error")}), flush=True)
         return 0 if result["passed"] else 1
@@ -285,9 +314,11 @@ def main():
               "base_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "runner_sha256": sha(__file__), **client_sources(args),
               "client_sha256": sha(args.client), "rust_sha256": sha(args.relay), "cpp_sha256": sha(args.cpp_executable), "cpp_build": cpp_build,
+              "cpp_preloads": {f"cpp-{label}": runtime.preload_metadata(library) for label, library in args.cpp_preload},
               "scope": f"Common application work, native Rust CBOR versus C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, {args.pairs} private pairs and {args.rooms} idle rooms. C++ treats values as opaque; Rust validates CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
               "cases": [], "passed": False}
-    kinds = ["cpp", "rust"] + (["control"] if args.control else [])
+    for label, _ in args.cpp_preload:
+        record[f"cpp-{label}_sha256"] = record["cpp_sha256"]
     if args.control: record["control_sha256"] = sha(args.control)
     for repetition in range(1, args.repetitions + 1):
         offset = (repetition - 1) % len(args.cases)
@@ -308,6 +339,8 @@ def main():
                            "--server-cpus", args.server_cpus, "--client-cpus", args.client_cpus, "--output", str(path)]
                 if args.cpp_system_libraries:
                     command.append("--cpp-system-libraries")
+                for label, library in args.cpp_preload:
+                    command += ["--cpp-preload", f"{label}={library}"]
                 if args.audit_ids:
                     command.append("--audit-ids")
                 if args.client_source_root:

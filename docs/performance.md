@@ -5072,3 +5072,122 @@ the corrected fragment-reclamation check, pinned local AOCL builds and this
 evidence record. The [operations recipe](operations.md#evaluating-aocl-libmem)
 can evaluate another release, CPU or operating workload without affecting clients
 or requiring a Rust rewrite.
+
+## Current C++ versus Rust with AOCL, 2026-10-17
+
+This [direct comparison](benchmarks/2026-10-17-cpp-aocl.json) answers the request
+to include AOCL on the C++ side and refreshes the earlier comparison against the
+exact current Rust executable. It compares C++ with glibc, AOCL-LibMem 5.3.2
+Zen 5, AVX2 and CPU-dispatched builds, and the selected Rust release with glibc.
+The [preceding Rust AOCL study](#aocl-libmem-evaluation-2026-10-17) remains the
+evidence for using these same libraries with Rust; it did not justify changing
+the Rust default. No server implementation or running service changes here.
+
+### Frozen implementations and workload
+
+- Upstream C++ source is `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`.
+  Only the temporary copy's worker-count expression changes to four. Routing,
+  storage, uWS and protocol sources retain their upstream hashes. Clang 23.1.3
+  uses upstream `-O3 -march=native -mrdrnd -fomit-frame-pointer -std=c++1z`
+  with the recorded current system TBB, OpenSSL, libuv and zlib. The binary is
+  `0f07d539c145f0be960af3b27649126d3bafd7ec2015e6c9e2444cde5fe587b4`.
+  The preceding comparison used Clang 23.1.1 and a different C++ executable;
+  these are fresh measurements, not an isolated before/after compiler test.
+- Rust is the unchanged portable Cargo release from runtime `ec1b55b`, SHA-256
+  `c27ff051a53e8edbef3070d9e328aa262a86fbb61898f882db6427ada7cdc988`.
+  It retains shared immutable bodies, worker receive scratch, CBOR validation,
+  vectored `sendmsg`, exact output budgets and the current management counters.
+- One frozen client, SHA-256
+  `c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569`,
+  verifies each protocol directly. No bridge participates. Each case has 64
+  active private pairs, 8,192 idle single-member rooms, 64 changing 1 KiB
+  application values (1,027-byte CBOR byte strings) and a window of 16 per
+  pair. C++ forwards those identical encoded values as opaque binary; Rust
+  validates them. The query workload adds two authenticated inspectors issuing
+  200 total channel queries/s. Full names, counts and replies are checked.
+- The Ryzen AI MAX+ 395 host supplies four physical server cores (0–3) and
+  eight separate client cores (4–11). Every rebuilt C++ case checks four live
+  listeners and six threads; Rust has four workers plus main. OS TCP buffer
+  defaults are retained for both; TLS, proxies, rates and heartbeats are absent.
+- Five fresh six-second repetitions per candidate and workload run sequentially
+  in private network/PID namespaces. Candidate and workload order rotate.
+  Setup/cleanup use explicit client phase gates outside timing. No builds,
+  profilers or other load tests overlap ordinary timing trials. All lower-rate
+  repeats are retained. Neither implementation exhausts its allowed CPU budget;
+  this is not a maximum saturated-capacity measurement.
+
+### Private routing
+
+All values below are medians of five trials. CPU cost is computed per trial
+before taking its median. RSS is the measured gate's process resident memory,
+excluding kernel TCP memory; it is not a continuous peak or allocated-byte count.
+
+| Implementation | Verified deliveries/s | Observed range, millions/s | Server CPU ns/delivery | Measured RSS, MiB |
+| --- | ---: | ---: | ---: | ---: |
+| C++ glibc | 2,177,406 | 1.593–2.236 | 937 | 20.71 |
+| C++ AOCL Zen 5 | 2,171,757 | 1.552–2.205 | 929 | 20.72 |
+| C++ AOCL AVX2 | 2,181,384 | 1.614–2.207 | 939 | 20.75 |
+| C++ AOCL CPU dispatch | 2,184,462 | 1.552–2.213 | 928 | 20.90 |
+| Rust glibc, current | 2,066,077 | 1.527–2.096 | 1,090 | 17.02 |
+
+Against C++ glibc, Rust's median throughput is **5.11% lower**, CPU per verified
+delivery **16.29% higher** and sampled RSS **17.86% lower**. Against the
+numerically fastest C++ median (CPU dispatch), the corresponding differences
+are −5.42%, +17.40% and −18.59%. All candidates have the same **2.097152 ms**
+median private p99 upper bucket; individual trial p99 buckets span 2.097152 to
+4.194304 ms. Latencies include client windowing, scheduling and full validation.
+
+C++ AOCL median throughput changes are **−0.26% Zen 5**, **+0.18% AVX2** and
+**+0.32% dispatch** versus C++ glibc. CPU cost changes are −0.89%, +0.23% and
+−0.94%, respectively. Observed private throughput ranges overlap for every
+candidate, with lower-rate repeats in both implementations. These medians do
+not establish a useful AOCL gain or a universally fixed Rust/C++ gap.
+
+### Private routing with 200 channel queries/s
+
+| Implementation | Verified private deliveries/s | Observed range, millions/s | Server CPU ns/private delivery | Measured RSS, MiB |
+| --- | ---: | ---: | ---: | ---: |
+| C++ glibc | 2,075,964 | 1.536–2.094 | 996 | 20.82 |
+| C++ AOCL Zen 5 | 2,085,300 | 2.080–2.094 | 998 | 20.89 |
+| C++ AOCL AVX2 | 2,036,102 | 1.458–2.095 | 1,001 | 20.93 |
+| C++ AOCL CPU dispatch | 2,077,547 | 2.073–2.116 | 990 | 21.00 |
+| Rust glibc, current | 1,995,017 | 1.454–2.024 | 1,149 | 17.66 |
+
+Rust's median is **3.90% lower throughput**, **15.35% higher CPU cost** and
+**15.18% lower sampled RSS** than C++ glibc. CPU includes all query work as
+well as private forwarding. Every trial completes exactly 1,200 timed queries.
+All candidates have a median 2.097152 ms private-delivery p99 upper bucket and
+8.388608 ms query p99 upper bucket. C++ AOCL throughput changes are +0.45%,
+−1.92% and +0.08% for Zen 5, AVX2 and dispatch; these do not justify selecting
+an AOCL default for this workload.
+
+### Correctness, effective loading and limits
+
+All **50 ordinary trials** pass, verifying **603,190,320 private deliveries**,
+**30,000 timed queries** and **416,100 normal Close/EOF exchanges**. The client
+checks exact sender IDs, payload bytes, FIFO, welcome messages, complete channel
+replies and final close acknowledgements/EOF. Rust counters match the client;
+connections, sessions, output queue bytes and receive reservations return to
+zero. Rust reports **zero routing-copy bytes**, and its reused-byte total equals
+the verified private value bytes in every trial. No server needs a forced kill.
+C++ exits on its expected SIGTERM; Rust completes graceful shutdown with zero.
+
+Ten preliminary smoke cases pass. Four separate loader diagnostics prove actual
+C++ `memcpy`, `memmove`, `memset`, `memchr`, `strncmp` and `strlen` bindings to
+AOCL for all three builds, with glibc as control. `bcmp` retains its glibc
+binding because this AOCL release does not export it. Each ordinary trial also
+verifies the requested server mapping/hash and the absence of AOCL in the fixed
+client. An invalid text-file preload that the ELF loader ignores is rejected
+before client startup. Binding diagnostics and the negative probe are excluded
+from ordinary timing results.
+
+This is a comparison of actual builds and protocol implementations, not a
+language-only benchmark: C++ uses native CPU compilation and its original
+opaque binary protocol, while the current Rust release is portable and validates
+CBOR. It has roughly 8,320 stable users plus query/probe sessions, not a matched
+100,000-user C++ capacity test. Previous one-core churn and 100,000-user Rust
+results remain separate evidence; this matrix makes no fresh churn, WAN/TLS or
+multi-hour stability claim. All sources, hashes, raw repeats, derived arithmetic
+and isolated loader diagnostics are in the manifest, with an
+[operations recipe](operations.md#evaluating-aocl-libmem). Keep glibc as the
+default and the explicit C++ AOCL options for further measured workloads.

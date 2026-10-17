@@ -1,0 +1,62 @@
+{
+  "kind": "cpp-ignored-library",
+  "case": "private",
+  "server_command": [
+    "taskset",
+    "-c",
+    "0-3",
+    "/home/phil/dev/war_next/artifacts/reference/build-4/app"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "4-7",
+    "/home/phil/dev/war_next/artifacts/baselines/active-pairs-client/inspection",
+    "--url",
+    "ws://127.0.0.1:1338",
+    "--wire",
+    "cpp",
+    "--protocol-only",
+    "--mode",
+    "none",
+    "--rooms",
+    "64",
+    "--seconds",
+    "1",
+    "--pairs",
+    "4",
+    "--churn-workers",
+    "0",
+    "--inspectors",
+    "2",
+    "--inspection-interval-ms",
+    "10",
+    "--client-workers",
+    "4"
+  ],
+  "server_sha256": "0f07d539c145f0be960af3b27649126d3bafd7ec2015e6c9e2444cde5fe587b4",
+  "client_sha256": "c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569",
+  "runner_sha256": "12db9ffcfbe6c6ea2fa4b9add23c70240fd95be8279813d3b2bafb9bd5f66169",
+  "diagnostic_only": true,
+  "client_source_root": "/home/phil/dev/war_next/artifacts/baselines/active-pairs-client",
+  "client_source_attribution": "Source snapshot only; binary/source association requires the caller's build record.",
+  "client_source_sha256": "c2eb57eb8896eb19d4e6d99020db50d8a3107721433fd3faf5a0ef349ab5d66b",
+  "client_sources_sha256": {
+    "examples/inspection.rs": "c2eb57eb8896eb19d4e6d99020db50d8a3107721433fd3faf5a0ef349ab5d66b",
+    "examples/inspection/fanout.rs": "406d1d810dfb71cf2a2326efcac37a83bb47b4736aed7a3302d74482a491ee72"
+  },
+  "isolation": {
+    "host_netns": "net:[4026531833]",
+    "test_netns": "net:[4026532998]",
+    "root_mount": "read-only",
+    "writable_path": "/home/phil/dev/war_next/artifacts/reference"
+  },
+  "events": [],
+  "passed": false,
+  "error": "RuntimeError('requested preload was not mapped into server 3: /home/phil/dev/war_next/Cargo.toml')",
+  "server_forced_kill": false,
+  "server_exit_code": -15,
+  "server_log": "ERROR: ld.so: object '/home/phil/dev/war_next/Cargo.toml' from LD_PRELOAD cannot be preloaded (invalid ELF header): ignored.\nERROR: ld.so: object '/home/phil/dev/war_next/Cargo.toml' from LD_PRELOAD cannot be preloaded (invalid ELF header): ignored.\n",
+  "client_log": "",
+  "loader_bindings_file": "/home/phil/dev/war_next/artifacts/reference/cpp-aocl-binding-ignored-library.bindings.3"
+}

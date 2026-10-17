@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "invalid_values_rejected": [
+    "bad/label=Cargo.toml",
+    "Upper=Cargo.toml",
+    "x=/does/not/exist.so",
+    "missing-separator"
+  ],
+  "additional_checks": [
+    {
+      "name": "duplicate_labels",
+      "exit_code": 2,
+      "error": "compare-cpp.py: error: C++ preload labels must be unique"
+    },
+    {
+      "name": "diagnostic_on_timing_parent",
+      "exit_code": 2,
+      "error": "compare-cpp.py: error: loader binding diagnostics require a separate isolated trial"
+    },
+    {
+      "name": "unconfigured_isolated_kind",
+      "exit_code": 2,
+      "error": "compare-cpp.py: error: isolated kind must name a configured implementation"
+    }
+  ]
+}

@@ -8,7 +8,34 @@ instruction makes 100,000 simultaneous users an explicit operating target.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: AOCL evaluation, 2026-10-17
+## Latest verified checkpoint: C++ with AOCL, 2026-10-17
+
+The [fresh direct comparison](performance.md#current-c-versus-rust-with-aocl-2026-10-17)
+tests the current frozen Rust executable (`c27ff051…`) against rebuilt upstream
+C++ with glibc, AOCL Zen 5, AVX2 and CPU dispatch. All candidates use four
+server workers, 64 active private pairs, 8,192 idle rooms, a fixed verifying
+client and separate server/client CPUs. Five fresh six-second repetitions per
+candidate/workload all pass: 603,190,320 private deliveries, 30,000 timed channel
+queries and 416,100 normal Close/EOF exchanges. Real C++ loader bindings prove
+AOCL use; the client remains unaffected and an ignored preload is rejected.
+
+Private medians are C++ glibc 2,177,406 / Rust 2,066,077 deliveries/s:
+Rust is 5.11% lower, uses 16.29% more CPU per delivery and 17.86% less sampled
+RSS, with the same 2.097152 ms p99 upper bucket. With 200 channel queries/s,
+Rust throughput is 3.90% lower, CPU cost 15.35% higher and RSS 15.18% lower.
+C++ AOCL private medians differ from glibc by −0.26% to +0.32%, without a
+useful established improvement; all observed private throughput ranges overlap.
+AOCL remains an explicit benchmark option. The native runtime is unchanged.
+
+C++ uses upstream `-march=native` flags and a fresh Clang 23.1.3 build; Rust
+is the current portable release. This compares their actual implementations
+and native protocols, including Rust's CBOR validation, rather than isolating
+language overhead. About 8,320 stable users and short loopback trials do not
+establish matched C++ capacity at 100,000 users. The [manifest](benchmarks/2026-10-17-cpp-aocl.json)
+preserves source hashes, build records, all trials, binding diagnostics and the
+reproduction command. Local development services retain their existing binaries.
+
+## Prior verified checkpoint: AOCL evaluation, 2026-10-17
 
 The [AOCL study](performance.md#aocl-libmem-evaluation-2026-10-17) builds pinned
 AOCL-LibMem 5.3.2 native Zen 5, CPU-dispatched and AVX2 libraries. Real loader
