@@ -32,6 +32,14 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
     // Keep an unfinished HTTP upgrade, two joined decoders and a Close in
     // flight, including live slots near the end of the large arena.
     let survivors = [0, 193, 450, 511];
+    let upgrade = b"GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Protocol: war.cbor.v1\r\n\r\n";
+    clients[0]
+        .as_mut()
+        .unwrap()
+        .get_mut()
+        .write_all(&upgrade[..73])
+        .unwrap();
+    assert!(worker.connections[0].drive(&relay, &mut worker.scratch, false) == Drive::Wait);
     for &slot in &survivors[1..] {
         let connection = &mut worker.connections[slot];
         let mut ws = WebSocket::from_raw_socket(
@@ -178,6 +186,62 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
         assert_eq!(worker.timers.pop_due(deadline), Some(slot));
     }
     assert_eq!(worker.timers.next(), None);
+
+    // The partially parsed HTTP state moved with its connection. Complete the
+    // same upgrade, then verify a full CBOR body through the resulting decoder.
+    let upgrade_slot = worker.tokens[&Token(2)];
+    clients[0]
+        .as_mut()
+        .unwrap()
+        .get_mut()
+        .write_all(&upgrade[73..])
+        .unwrap();
+    assert!(
+        worker.connections[upgrade_slot].drive(&relay, &mut worker.scratch, false) == Drive::Wait
+    );
+    let mut response = Vec::new();
+    while !response.ends_with(b"\r\n\r\n") {
+        let mut byte = [0];
+        clients[0]
+            .as_mut()
+            .unwrap()
+            .get_mut()
+            .read_exact(&mut byte)
+            .unwrap();
+        response.push(byte[0]);
+        assert!(response.len() < 8192);
+    }
+    assert!(response.starts_with(b"HTTP/1.1 101 "));
+    assert!(
+        String::from_utf8(response)
+            .unwrap()
+            .to_ascii_lowercase()
+            .contains("sec-websocket-protocol: war.cbor.v1\r\n")
+    );
+    let client = clients[0].as_mut().unwrap();
+    client
+        .send(Message::Binary(crate::protocol::byte_string(
+            b"survivor-http",
+        )))
+        .unwrap();
+    assert!(
+        worker.connections[upgrade_slot].drive(&relay, &mut worker.scratch, false) == Drive::Wait
+    );
+    let Message::Binary(welcome) = client.read().unwrap() else {
+        panic!("expected uint64 welcome after the resumed upgrade")
+    };
+    let mut decoder = minicbor::Decoder::new(&welcome);
+    let upgrade_id = decoder.u64().unwrap();
+    assert_eq!(decoder.position(), welcome.len());
+    let upgrade_packet =
+        crate::protocol::envelope(upgrade_id, &crate::protocol::byte_string(&[0x6c; 1024]));
+    client
+        .send(Message::Binary(upgrade_packet.clone()))
+        .unwrap();
+    assert!(
+        worker.connections[upgrade_slot].drive(&relay, &mut worker.scratch, false) == Drive::Wait
+    );
+    assert_eq!(client.read().unwrap(), Message::Binary(upgrade_packet));
 
     let queued_slot = worker.tokens[&Token(195)];
     assert_eq!(packet.as_ptr(), pointer);
