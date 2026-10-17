@@ -1,0 +1,143 @@
+{
+  "scope": "CDFs of user-level p99s, not pooled packet percentiles. Intended-send latency includes generator backlog. Finite workload observations, not latency bounds.",
+  "percentile_method": "nearest rank",
+  "cases": {
+    "Baseline 1": {
+      "users": 100000,
+      "total_packet_samples": 18000000,
+      "samples_per_user": {
+        "minimum": 180,
+        "maximum": 180
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 24.288793,
+            "median": 36.766705,
+            "p95": 43.744212,
+            "p99": 46.897859,
+            "maximum": 55.25065
+          },
+          "worst_packet_ms": 59.423481,
+          "users_with_p99_at_or_below_ms_percent": {}
+        },
+        "intended_send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 47.528317,
+            "median": 69.226751,
+            "p95": 78.350008,
+            "p99": 83.465582,
+            "maximum": 91.717284
+          },
+          "worst_packet_ms": 104.732227,
+          "users_with_p99_at_or_below_ms_percent": {}
+        }
+      },
+      "csv": "artifacts/socket-snapshot-600k-baseline-1.csv",
+      "csv_sha256": "86b713fc55c4a6f8f9addfd9d8a0492f2592aabb00c2f3fa6869cece58121ae1"
+    },
+    "Candidate 1": {
+      "users": 100000,
+      "total_packet_samples": 18000000,
+      "samples_per_user": {
+        "minimum": 180,
+        "maximum": 180
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 1.092372,
+            "median": 1.90166,
+            "p95": 5.217593,
+            "p99": 6.799981,
+            "maximum": 8.33939
+          },
+          "worst_packet_ms": 19.123667,
+          "users_with_p99_at_or_below_ms_percent": {}
+        },
+        "intended_send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 2.490128,
+            "median": 3.929021,
+            "p95": 10.26824,
+            "p99": 12.619707,
+            "maximum": 15.451152
+          },
+          "worst_packet_ms": 36.257733,
+          "users_with_p99_at_or_below_ms_percent": {}
+        }
+      },
+      "csv": "artifacts/socket-snapshot-600k-snapshot-1.csv",
+      "csv_sha256": "56db4eadcd6e037648b4860fa6531b5f7d630aa413b5d219dbdbbe826b8c1bef"
+    },
+    "Candidate 2": {
+      "users": 100000,
+      "total_packet_samples": 18000000,
+      "samples_per_user": {
+        "minimum": 180,
+        "maximum": 180
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 8.641993,
+            "median": 24.382878,
+            "p95": 33.540598,
+            "p99": 37.659359,
+            "maximum": 45.313479
+          },
+          "worst_packet_ms": 51.920204,
+          "users_with_p99_at_or_below_ms_percent": {}
+        },
+        "intended_send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 20.000292,
+            "median": 46.239599,
+            "p95": 59.496473,
+            "p99": 66.098309,
+            "maximum": 74.979559
+          },
+          "worst_packet_ms": 94.743411,
+          "users_with_p99_at_or_below_ms_percent": {}
+        }
+      },
+      "csv": "artifacts/socket-snapshot-600k-snapshot-2.csv",
+      "csv_sha256": "ffd7add6f2e5d6b906cb0e48d87362096e0c74558f484f261c781ded5f694c7a"
+    },
+    "Baseline 2": {
+      "users": 100000,
+      "total_packet_samples": 18000000,
+      "samples_per_user": {
+        "minimum": 180,
+        "maximum": 180
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 1.212668,
+            "median": 1.91214,
+            "p95": 2.869734,
+            "p99": 3.769121,
+            "maximum": 6.085599
+          },
+          "worst_packet_ms": 10.483724,
+          "users_with_p99_at_or_below_ms_percent": {}
+        },
+        "intended_send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 2.458856,
+            "median": 4.032723,
+            "p95": 5.898097,
+            "p99": 6.888738,
+            "maximum": 8.812616
+          },
+          "worst_packet_ms": 20.24053,
+          "users_with_p99_at_or_below_ms_percent": {}
+        }
+      },
+      "csv": "artifacts/socket-snapshot-600k-baseline-2.csv",
+      "csv_sha256": "f637ce7b66159823f0245a7b67f299b13cbad938322c7128739936307167f488"
+    }
+  },
+  "histogram_bounds": false
+}

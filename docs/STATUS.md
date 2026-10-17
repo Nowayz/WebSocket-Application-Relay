@@ -11,6 +11,18 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest experiment: socket-state inspection coalescing rejected, 2026-10-17
+
+A candidate combines socket status/deadline inspection under one mutex guard,
+without new state or body copies. All 139 existing Rust tests, strict Clippy/fmt
+and release builds pass. Eight matched 100,000-user cases verify 120 million
+messages. Both 400k pairs improve the 99th percentile across user p99s by
+25–26%, with CPU/message 0.5–1.6% lower. At 600k the latency ranking reverses
+sharply and CPU savings do not repeat; both binaries show large variation.
+The candidate is not selected. Source/default executables are restored to
+`c9a6c6da…`, and the unchanged local service's identity is checked. The 400k
+operating recommendation remains. See [evidence and limits](performance.md#socket-state-inspection-coalescing-2026-10-17).
+
 ## Latest verification: bounded per-user ten-minute soak, 2026-10-17
 
 A new bounded per-user histogram mode freezes 1,064-byte values per active user

@@ -6364,3 +6364,80 @@ client/harness source versions, build identity, full trace, per-user bounds, RSS
 observations, tests and inspected plots. The
 [operations recipe](operations.md#longer-runs-with-bounded-per-user-latency-storage)
 reproduces collection and bound-aware plotting.
+
+## Socket-state inspection coalescing (2026-10-17)
+
+The next candidate removes repeated inspection of the same socket mutex at the
+start of a connection drive. Fatal status, a requested Close and the earliest
+application/control output deadline are captured under one guard. The optional
+idle check reads output deadline and activity under its existing guard. This
+removes one lock acquisition in an ordinary drive and another when idle expiry
+is enabled, without adding connection state, atomics, allocations or payload
+copies. Deadline selection is unchanged. New cross-worker output retains the
+existing owner notification and timer update path. Idle expiry is disabled in
+the timed cases, so its extra consolidation is not a measured contribution.
+
+This is a narrow userspace hypothesis. The existing joint profile identifies
+substantial kernel cost in both processes; its kernel spinlock samples do not
+measure this Rust mutex. Source inspection proves the repeated guards, not that
+they cause the higher-rate latency variation.
+
+The candidate `aed94b03…` passes all 139 existing Rust tests, strict all-target
+Clippy, formatting and release builds. It is frozen against source base
+`77c4e02`, alongside its source patch. Eight ordinary fresh-process cases compare
+it with selected baseline `c9a6c6da…`, in baseline/candidate/candidate/baseline
+order at each rate. Every case uses the same exact-sample client `888485f3…`,
+100,000 active users in 16-member rooms, checked 1 KiB private messages for
+30 seconds, eight pinned relay workers on CPUs 0–7, eight client workers on
+8–15, 15-second heartbeats and 16/64 KiB TCP buffers. No builds, profiles or
+other benchmarks overlap traffic.
+
+All 120 million application messages pass sender/body/sequence verification.
+Each case has 100,000 unique per-user rows and 120 or 180 samples per user.
+The table reports exact nearest-rank statistics across the users' individual
+p99 values, rather than pooled packet percentiles. CPU is server process CPU
+across the measurement boundary, normalized by verified application messages.
+
+| Rate / repetition | Median user p99, baseline → candidate | 99th percentile of user p99s, baseline → candidate | Server CPU ns/message, baseline → candidate |
+| --- | ---: | ---: | ---: |
+| 400k/s / 1 | 0.866 → 0.812 ms | 1.916 → 1.419 ms | 4,566.7 → 4,542.5 |
+| 400k/s / 2 | 0.844 → 0.860 ms | 2.494 → 1.863 ms | 4,573.3 → 4,499.2 |
+| 600k/s / 1 | 36.767 → 1.902 ms | 46.898 → 6.800 ms | 4,888.3 → 4,832.2 |
+| 600k/s / 2 | 1.912 → 24.383 ms | 3.769 → 37.659 ms | 4,901.7 → 4,902.8 |
+
+At 400k, the 99th percentile across user p99s improves 25.3–25.9% and CPU/message
+falls 0.5–1.6%; median user p99 improves once and worsens 1.9% once. At 600k,
+the ranking reverses sharply in the second pair, while CPU changes from a 1.1%
+saving to a 0.02% increase. Intended-send measurements reverse too: the 99th
+percentile across user intended-send p99s is 83.466 → 12.620 ms in the first
+600k pair and 6.889 → 66.098 ms in the second. Both binaries exhibit large
+run-to-run variation at that offered rate. These finite comparisons do not
+establish a causal latency win or regression from the mutex change, a thermal
+cause, or an isolated server/client bottleneck.
+
+All live population/resource/counter assertions, post-load routing, Close/EOF,
+zero final gauges, descriptor return to baseline and established-socket
+retirement pass, with normal process exits. The independent result analyzer
+checks final resources and trace hashes again. Both actual CDF plots are
+visually inspected; their titles identify the workload, and actual/intended
+clocks remain separate. This is same-host plaintext loopback evidence, not a
+WAN/TLS result or a new C++ comparison.
+
+The candidate is **not selected**: small CPU savings at 400k do not establish
+consistent latency improvement across the tested headroom range. Runtime source
+and both default release executables are restored to the heartbeat-phase
+selection. The unchanged local development service's executable/command identity
+is verified; no new manual-service traffic acceptance is claimed. The 400k
+operating recommendation remains. Further diagnosis should account for the
+higher-rate variation across workers and kernel scheduling before another
+small userspace guard change is treated as a solution.
+
+The [archive](benchmarks/2026-10-17-socket-snapshot/manifest.json) preserves the
+candidate patch/build identity, exact client source, eight traces and compressed
+per-user CSVs, summaries, test/build logs, plotting sources and inspected plots.
+The candidate can be reconstructed from the recorded base plus its patch;
+selected source remains unchanged. Raw traces label `client_source_sha256` as a
+workspace snapshot, which differs from this older frozen client. The archive
+preserves both sources separately and binds the actual client binary through
+its original build record and source patch; it does not relabel that snapshot
+as the executable's source.

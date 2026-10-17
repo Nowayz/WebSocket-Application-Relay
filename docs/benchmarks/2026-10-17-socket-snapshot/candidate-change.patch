@@ -1,0 +1,75 @@
+diff --git a/src/server.rs b/src/server.rs
+index 33c745f..79a1da8 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -871,9 +871,11 @@ impl Connection {
+         stopping: bool,
+         incoming: &mut ReceiveBatch<'_>,
+     ) -> Drive {
+-        let (fatal, requested) = {
++        // Inspect one socket-state snapshot before deciding whether to drive
++        // output. Cross-worker submissions still notify the owning worker.
++        let (fatal, requested, output_deadline) = {
+             let state = self.socket.state.lock();
+-            (state.fatal, state.requested)
++            (state.fatal, state.requested, state.deadline())
+         };
+         if fatal {
+             return Drive::Drop;
+@@ -907,7 +909,7 @@ impl Connection {
+                 }
+                 return self.start_close(reason, relay, false, now);
+             }
+-            if self.socket.deadline().is_some_and(|d| d <= now) {
++            if output_deadline.is_some_and(|d| d <= now) {
+                 relay.metrics.write_timeouts.fetch_add(1, Relaxed);
+                 return Drive::Drop;
+             }
+@@ -934,8 +936,8 @@ impl Connection {
+                 );
+             }
+             if self.registration.is_some() && relay.config.idle_timeout_secs > 0 {
+-                let output_pending = self.socket.deadline().is_some();
+                 let mut state = self.socket.state.lock();
++                let output_pending = state.deadline().is_some();
+                 if state.activity + Duration::from_secs(relay.config.idle_timeout_secs) <= now {
+                     if !output_pending {
+                         drop(state);
+diff --git a/src/server/socket.rs b/src/server/socket.rs
+index f4e13b8..619fb05 100644
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -68,6 +68,18 @@ pub(super) struct State {
+     pub activity: Instant,
+ }
+ 
++impl State {
++    pub fn deadline(&self) -> Option<Instant> {
++        match (
++            self.queue.front().map(|p| p.deadline),
++            self.control_deadline,
++        ) {
++            (Some(a), Some(b)) => Some(a.min(b)),
++            (a, b) => a.or(b),
++        }
++    }
++}
++
+ struct Pending {
+     packet: Envelope,
+     offset: usize,
+@@ -162,13 +174,7 @@ impl Socket {
+ 
+     pub fn deadline(&self) -> Option<Instant> {
+         let state = self.state.lock();
+-        match (
+-            state.queue.front().map(|p| p.deadline),
+-            state.control_deadline,
+-        ) {
+-            (Some(a), Some(b)) => Some(a.min(b)),
+-            (a, b) => a.or(b),
+-        }
++        state.deadline()
+     }
+ 
+     /// Resume bounded application output. `true` means this socket consumed its
