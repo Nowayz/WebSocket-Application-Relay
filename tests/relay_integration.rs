@@ -1105,6 +1105,44 @@ async fn cancelling_the_embedding_service_stops_workers_without_disconnect_fanou
     for _ in 0..64 {
         sockets.push(server.join("abort-group").await.0);
     }
+    let address = server
+        .url
+        .strip_prefix("ws://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let mut pending = TcpStream::connect(address).await.unwrap();
+    pending
+        .write_all(b"GET / HTTP/1.1\r\nHost: pending")
+        .await
+        .unwrap();
+    timeout(Duration::from_secs(3), async {
+        while server.relay.metrics.connections.load(Relaxed) != 65
+            || server
+                .relay
+                .metrics
+                .read_budget
+                .as_ref()
+                .unwrap()
+                .reserved()
+                < 40960
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        server
+            .relay
+            .metrics
+            .read_budget
+            .as_ref()
+            .unwrap()
+            .reserved()
+            >= 40960
+    );
     let delivered = server.relay.metrics.deliveries.load(Relaxed);
     let task = server.task.take().unwrap();
     task.abort();
@@ -1126,10 +1164,23 @@ async fn cancelling_the_embedding_service_stops_workers_without_disconnect_fanou
     .await
     .unwrap();
     assert!(server.relay.is_draining());
+    let mut byte = [0];
+    let ended = timeout(Duration::from_secs(3), pending.read(&mut byte))
+        .await
+        .unwrap();
+    assert!(match ended {
+        Ok(0) => true,
+        Err(error) => matches!(
+            error.kind(),
+            std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+        ),
+        _ => false,
+    });
     assert_eq!(server.relay.counts(), (0, 1));
     assert_eq!(server.relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.variable_bytes.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.disconnected.load(Relaxed), 64);
+    assert_eq!(server.relay.metrics.handshake_errors.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.deliveries.load(Relaxed), delivered);
 }
 
