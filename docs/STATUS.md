@@ -9,7 +9,26 @@ the latest requested experiment evaluates Monoio.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: owned Monoio completion I/O, 2026-10-17
+## Latest verified checkpoint: per-user latency and measured ablations, 2026-10-17
+
+The selected native Mio runtime remains unchanged. Per-user instrumentation now
+measures all 100,000 users separately: at two 1 KiB packets/user/s for 60 seconds,
+every user receives 120 verified probes. Median user p99 is 0.658 ms; 99.753%
+of users have p99 below 2 ms, and the worst observed packet is 4.566 ms. A
+separate overload run has median user p99 215.551 ms and intended-send p99
+8.65 seconds. The [fairness study and plot](performance.md#per-user-latency-fairness-at-100000-connections-2026-10-17)
+distinguish client-observed latency, generator waiting and finite-tail evidence.
+
+Two measured ablations are rejected: in-place timer retiming and delayed CBOR
+nesting-stack initialization. Each passes twelve ordinary matched trials but
+shows small mixed throughput/CPU changes with overlapping ranges. The CBOR
+candidate also passes all 136 tests, strict checks and the 776-case independent
+corpus. Both source patches remain archived and both runtime changes are
+reverted. See the [CBOR record](performance.md#cbor-leaf-validation-ablation-2026-10-17).
+Per-user tails remain a selection criterion alongside throughput, CPU and memory.
+The continuing optimization goal remains active.
+
+## Previous checkpoint: owned Monoio completion I/O, 2026-10-17
 
 A second isolated prototype now uses actual Monoio 0.2.4 owned-buffer receive
 and vectored-write completions, with one accepted descriptor per user. It

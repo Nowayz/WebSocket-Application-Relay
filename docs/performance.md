@@ -5631,3 +5631,43 @@ candidate. Three 100,000-user overload pairs measure 551,474/s and 5,048 ns
 versus 549,066/s and 5,028 ns. All twelve trials pass, but the small mixed
 throughput/CPU changes establish no consistent benefit. The source change is
 reverted and its patch retained. No active-heartbeat timer comparison is claimed.
+
+
+## CBOR leaf-validation ablation, 2026-10-17
+
+The selected Mio profile attributes 6.34% of sampled cycles to the receive/routing
+symbol, which includes inlined parsing work. This does not attribute that entire
+share to CBOR. An isolated source candidate validates the first CBOR item before
+initializing the 65-entry nesting stack, using the bounded container walker only
+when that item has children. Parsing each type remains shared; no opaque-payload
+shortcut, allocation, copy, UTF-8 relaxation, item/depth change or unsafe code is
+introduced. The source change is rejected after measurement.
+
+[The archive](benchmarks/2026-10-17-cbor-leaf.json) preserves the source patch,
+build/source hashes, full tests, independent corpus and twelve fresh ordinary
+trials. Applying the patch to its base reproduces every recorded source hash.
+Both compared backends are native Mio with worker receive storage. The reused
+runner's generic completion-study scope text is historical boilerplate, not a
+claim that this candidate uses Monoio or completion I/O.
+
+| Median of three rotating pairs | Selected Mio deliveries/s | Candidate deliveries/s | Selected CPU ns/delivery | Candidate CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| Dense private, six seconds | 2,114,067 | 2,118,663 | 1,065.10 | 1,061.15 |
+| 100,000 users, offered overload plus drain | 559,216 | 556,756 | 4,956 | 4,930 |
+
+The same frozen clients, payloads, portable compiler/release configuration,
+CPU placement and TCP settings are retained from the preceding matched studies.
+No builds, profiles or competing trials overlap ordinary timing. Private
+throughput changes +0.22% and CPU -0.37%; capacity throughput changes -0.44% and
+CPU -0.52%. Throughput and CPU ranges overlap in both workloads. Private and
+capacity p99 upper RTT buckets remain 2.097152 and 268.435456 ms. These small,
+mixed differences do not establish a useful whole-relay benefit, so the original
+validator is restored. No candidate per-user fairness result is claimed.
+
+All 136 ordinary tests and five focused protocol tests pass, as do strict
+all-target Clippy and formatting. The independent raw protocol corpus passes
+776 cases/2,311 exchanges. Every ordinary trial passes exact bytes/FIFO,
+quiescent counters, routing, Close/EOF and resource retirement, with normal
+client/server exits. Capacity verifies 15 million timed messages per backend.
+This rules out this specific stack-initialization refactor as the next selected
+optimization; it does not establish that parsing has no remaining cost.

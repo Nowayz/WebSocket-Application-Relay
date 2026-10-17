@@ -1,0 +1,173 @@
+{
+  "passed": true,
+  "diagnostic_only": false,
+  "runs": [
+    {
+      "variant": "mio",
+      "repetition": 1,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-mio-1.json",
+      "trace_sha256": "f465b8ccc8604462ae0f9fc853064bdda85768026d69209367a0d0735a425e3b",
+      "verified": 5000000,
+      "deliveries_per_second": 556999.163149641,
+      "cpu_ns_per_delivery": 4956.000000000001,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 107.0625,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "leaf",
+      "repetition": 1,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-leaf-1.json",
+      "trace_sha256": "62001b70a414334c0c9fd28d8fa4a6f959377207cbb578be44fdd61b2d22df8f",
+      "verified": 5000000,
+      "deliveries_per_second": 556756.1871584614,
+      "cpu_ns_per_delivery": 4929.999999999999,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 108.421875,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "leaf",
+      "repetition": 2,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-leaf-2.json",
+      "trace_sha256": "3b131df073a0e55f661f804026d1c7a5fac953c748010ff875c4cab59291d5b6",
+      "verified": 5000000,
+      "deliveries_per_second": 554005.493735646,
+      "cpu_ns_per_delivery": 4898.0,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 106.97265625,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "mio",
+      "repetition": 2,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-mio-2.json",
+      "trace_sha256": "40963dbdc4e674108cadcf8497214a46527fe3cc5f0798d72cc64ed99cf7264b",
+      "verified": 5000000,
+      "deliveries_per_second": 569930.3448560986,
+      "cpu_ns_per_delivery": 4941.999999999999,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 108.46875,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "mio",
+      "repetition": 3,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-mio-3.json",
+      "trace_sha256": "75281039a13b4e85c8100c12e6340d9921f6f5dc6c1bb3d194f91edb2d70d1fb",
+      "verified": 5000000,
+      "deliveries_per_second": 559216.0195205025,
+      "cpu_ns_per_delivery": 4966.0,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 108.2578125,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    },
+    {
+      "variant": "leaf",
+      "repetition": 3,
+      "passed": true,
+      "trace": "artifacts/cbor-leaf-capacity-leaf-3.json",
+      "trace_sha256": "f17245286decf68c899865acdd4a5b3bbf7344e309975dc3f5c8d855fbb4a42f",
+      "verified": 5000000,
+      "deliveries_per_second": 557111.6383098161,
+      "cpu_ns_per_delivery": 4952.0,
+      "p99_ms": 268.435456,
+      "ready_rss_mib": 107.4921875,
+      "ready_fd_count": 100026,
+      "ready_staging_bytes": 32768
+    }
+  ],
+  "scope": "Fresh sequential four-worker servers on cores0-3, identical frozen clients and bodies. Private:64 pairs/8192 idle rooms, client cores4-7, six seconds. Capacity:100000 users/16-member rooms, 1KiB bodies, ten offered messages/user/s for five seconds plus drain, client cores8-15,16KiB/64KiB TCP. Three rotating backend orders. No build/profile/load overlap. Exact payload/FIFO/counters/Close/EOF/resource checks. Completion changes quiescent receive ownership: at most 28 admitted bytes per idle user; original worker bounds stay enforced for Mio/readiness. Normal hard staging quota unchanged.",
+  "variants": {
+    "mio": {
+      "path": "artifacts/candidates/input-batch/war-relay",
+      "sha256": "35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e"
+    },
+    "leaf": {
+      "path": "artifacts/candidates/cbor-leaf/war-relay",
+      "sha256": "50a9b6eaf2ed3ad6429dd90752966d95067fd1cb174a3516285260ca08d36184"
+    }
+  },
+  "clients": {
+    "private": {
+      "path": "artifacts/baselines/active-pairs-client/inspection",
+      "sha256": "c69a691b6e2cb12ea8ffd566eb7998ace9123c6c34815ee577be87da79f48569"
+    },
+    "capacity": {
+      "path": "artifacts/baselines/capacity-final/capacity",
+      "sha256": "fd81cb4b6183b7aa942f83d3ec90ed4faeb6376a5103efcd7aff4aaf16b3fc39"
+    }
+  },
+  "helpers": {
+    "scripts/inspection.py": "b9529d0fda708462911dae1da011bcdd455668112df66610762824a16ee17d3d",
+    "scripts/capacity.py": "f9513e09b82b5596c071f29332aa3339a78150b104bb3c68602fc4607f2ce3ac",
+    "scripts/capacity_pressure.py": "0eb55b9d8439764acd8f517b0c34803fef69553c2107b6c538c531c3fec6c42d",
+    "scripts/benchmark.py": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce"
+  },
+  "summary": {
+    "mio": {
+      "deliveries_per_second": {
+        "median": 559216.0195205025,
+        "min": 556999.163149641,
+        "max": 569930.3448560986
+      },
+      "cpu_ns_per_delivery": {
+        "median": 4956.000000000001,
+        "min": 4941.999999999999,
+        "max": 4966.0
+      },
+      "p99_ms": {
+        "median": 268.435456,
+        "min": 268.435456,
+        "max": 268.435456
+      },
+      "ready_rss_mib": {
+        "median": 108.2578125,
+        "min": 107.0625,
+        "max": 108.46875
+      },
+      "ready_staging_bytes": {
+        "median": 32768,
+        "min": 32768,
+        "max": 32768
+      }
+    },
+    "leaf": {
+      "deliveries_per_second": {
+        "median": 556756.1871584614,
+        "min": 554005.493735646,
+        "max": 557111.6383098161
+      },
+      "cpu_ns_per_delivery": {
+        "median": 4929.999999999999,
+        "min": 4898.0,
+        "max": 4952.0
+      },
+      "p99_ms": {
+        "median": 268.435456,
+        "min": 268.435456,
+        "max": 268.435456
+      },
+      "ready_rss_mib": {
+        "median": 107.4921875,
+        "min": 106.97265625,
+        "max": 108.421875
+      },
+      "ready_staging_bytes": {
+        "median": 32768,
+        "min": 32768,
+        "max": 32768
+      }
+    }
+  }
+}
