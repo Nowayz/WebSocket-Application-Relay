@@ -5489,7 +5489,7 @@ sustainable rate. Ready RSS medians are 108.39 versus 420.51 MiB, and descriptor
 100,026 versus 100,038. RSS excludes kernel socket/ring memory and clients.
 Overload p99 upper RTT buckets are 268.435456 versus 536.870912 ms (completion's
 maximum trial bucket is 1,073.741824 ms). Private p99 upper buckets are
-2.097152 versus 4.194304 ms. Completion has 2.76 times less overload throughput,
+2.097152 versus 4.194304 ms. Mio has 2.76 times the overload throughput; completion has
 3.06 times the CPU cost and 3.88 times the ready RSS in this cohort.
 
 The initial completion design reserves a 4 KiB body quantum per active reader.
@@ -5535,3 +5535,22 @@ the bounded variant through `scripts/try-monoio.py completion` succeeds, and the
 new binary passes 40 independent smoke cases/103 exchanges. Its hash differs
 with the build path and is recorded separately, never substituted into measured
 trials. The selected native Mio runtime remains unchanged.
+
+
+### Selected Mio kernel profile after the completion study
+
+A separate [selected-runtime diagnostic](benchmarks/2026-10-17-mio-kernel.json)
+uses the same 100,000-user offered-overload workload and CPU placement, including
+kernel cycles at 499 Hz with DWARF call stacks. All five million timed deliveries,
+postcheck routing, counters, Close/EOF and retirement pass; client and server exit
+zero. It records 17,993 samples with zero lost samples. Diagnostic timings are
+excluded from ordinary performance medians.
+
+Self samples attribute 6.34% to `ReceiveBatch::receive`, 3.42% to connection
+driving, 2.14% to worker scheduling and 1.54% to decoder-storage swapping.
+Kernel established-socket lookup accounts for 5.70%, IRQ-safe spinlocks 5.39%
+and socket locking 4.03%, with further poll, descriptor and TCP work. These
+symbol percentages are diagnostic observations, not exclusive causal categories
+or predicted speedups. The next source inspection targets repeated routing and
+timer work while retaining full CBOR validation, exact quotas and payload
+ownership. No new runtime optimization is selected from this profile alone.
