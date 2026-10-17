@@ -1,0 +1,41 @@
+{
+  "scope": "CDFs of user-level histogram p99 upper bounds, not exact percentiles. Threshold results describe bounds only. Maxima are exact observed durations. Intended-send includes generator backlog.",
+  "percentile_method": "nearest rank of reported histogram upper bounds",
+  "cases": {
+    "Ten-minute run": {
+      "users": 100000,
+      "total_packet_samples": 240000000,
+      "samples_per_user": {
+        "minimum": 2400,
+        "maximum": 2400
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_upper_ms": {
+            "minimum": 1.048576,
+            "median": 1.048576,
+            "p95": 1.048576,
+            "p99": 2.097152,
+            "maximum": 2.097152
+          },
+          "worst_packet_ms": 7.173446,
+          "users_with_p99_upper_bound_at_or_below_ms_percent": {}
+        },
+        "intended_send_to_receive": {
+          "user_p99_upper_ms": {
+            "minimum": 2.097152,
+            "median": 4.194304,
+            "p95": 4.194304,
+            "p99": 4.194304,
+            "maximum": 4.194304
+          },
+          "worst_packet_ms": 9.873215,
+          "users_with_p99_upper_bound_at_or_below_ms_percent": {}
+        }
+      },
+      "csv": "artifacts/soak-600-bounded-users.csv",
+      "csv_sha256": "9ee6445fd7f3c45c8e546f37c6270701e97308cc44086f362bcc1cbc4981d671"
+    }
+  },
+  "histogram_bounds": true
+}

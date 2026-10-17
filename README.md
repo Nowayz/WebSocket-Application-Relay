@@ -46,6 +46,9 @@ adds TCP/admission headroom, descriptor and memory settings, kernel buffer
 controls and reproducible real-socket acceptance. The [measured workloads](docs/performance.md#100000-connected-users-2026-10-16)
 cover 100,000 connected users in rooms of 16, full checked 1 KiB private messages,
 heartbeats, reconnect churn, unread-recipient isolation and complete retirement.
+A [ten-minute per-user soak](docs/performance.md#bounded-per-user-latency-and-ten-minute-soak-2026-10-17)
+verifies 240 million application messages with bounded histogram retention;
+its finite loopback scope and histogram bounds are reported explicitly.
 Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
 buffers independently of application queues; their default `0` retains OS policy.
 

@@ -1172,3 +1172,47 @@ At 100,000 idle users, one exploratory 30-second pair uses 0.91 versus 1.51
 server process CPU seconds; that is not a repeated median or total-host cost.
 Keep the current 400k/s eight-worker operating recommendation and capacity
 headroom. See [full comparisons](performance.md#initial-heartbeat-phase-spreading-2026-10-17).
+
+## Longer runs with bounded per-user latency storage
+
+Build the capacity example and use the histogram mode for sustained tests:
+
+```sh
+cargo build --release --locked --bins --example capacity
+python3 scripts/capacity.py \
+  --server target/release/war-relay --client target/release/examples/capacity \
+  --users 100000 --seconds 600 --messages-per-second 4 \
+  --workers 8 --client-workers 8 --server-cpus 0-7 --client-cpus 8-15 \
+  --pin-workers --ping-interval-secs 15 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
+  --timeout 900 --user-latency-histogram-output artifacts/soak-users.csv \
+  --output artifacts/soak.json
+```
+
+The new per-user mode preallocates two fixed 64-bucket nanosecond histograms
+before the ready gate. Each active user's histogram value occupies 1,064 bytes,
+excluding its Box allocation overhead and the rest of the load generator.
+Recording adds no histogram allocation as message count grows. Send-to-receive
+and intended-send-to-receive histograms stay separate. CSV percentile columns
+have `_upper_ms` names because they are power-of-two bucket bounds; maxima are
+exact observed durations. These are instrumented end-to-end observations,
+including the client, not isolated server time or exact percentile samples.
+
+This mode requires one wave and excludes `--user-latency-output`. Only active
+users have latency rows; all connected users still receive routing proofs before
+and after the workload. The controller records process RSS during traffic and
+logs child PIDs for observation/recovery. RSS excludes kernel socket memory.
+The monitor time series grows with duration; per-user histogram storage does not.
+
+Plot bounded outputs explicitly:
+
+```sh
+python3 scripts/plot-user-latency-comparison.py --histogram-bounds \
+  --case 'Ten-minute run=artifacts/soak-users.csv' --output artifacts/soak-latency
+```
+
+Every case must use the same format. Bound-mode JSON keys and axis labels remain
+distinct from exact-mode output. Optional thresholds describe histogram upper
+bounds meeting the threshold; an upper bound above a threshold does not prove
+the exact percentile exceeded it. Do not compare a new bounded-client run with
+old exact-client timings as a relay-only speedup.

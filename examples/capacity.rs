@@ -50,7 +50,7 @@ struct Args {
     waves: usize,
     #[arg(long, default_value_t = 1024)]
     payload_bytes: usize,
-    /// Each selected user sends one private message per second.
+    /// Percentage of users generating paced private traffic.
     #[arg(long, default_value_t = 100)]
     active_percent: usize,
     #[arg(long, default_value_t = 1)]
@@ -63,6 +63,9 @@ struct Args {
     /// Diagnostic per-user CSV plus a companion .windows.json latency/Ping timeline.
     #[arg(long)]
     user_latency_output: Option<std::path::PathBuf>,
+    /// Bounded per-user histogram CSV for long runs; percentile columns are bounds.
+    #[arg(long, conflicts_with = "user_latency_output")]
+    user_latency_histogram_output: Option<std::path::PathBuf>,
 }
 
 #[derive(Default, Serialize)]
@@ -128,23 +131,38 @@ impl Histogram {
         self.n += rhs.n;
         self.maximum = self.maximum.max(rhs.maximum);
     }
+    fn percentile_upper_ms(&self, p: u64) -> f64 {
+        if self.n == 0 {
+            return 0.0;
+        }
+        let rank = (self.n * p).div_ceil(100);
+        let mut count = 0;
+        for (bucket, n) in self.buckets.iter().enumerate() {
+            count += n;
+            if count >= rank {
+                return (1u128 << (bucket + 1)) as f64 / 1e6;
+            }
+        }
+        unreachable!()
+    }
     fn report(&self) -> serde_json::Value {
-        let percentile = |p: u64| {
-            if self.n == 0 {
-                return 0.0;
-            }
-            let rank = (self.n * p).div_ceil(100);
-            let mut count = 0;
-            for (bucket, n) in self.buckets.iter().enumerate() {
-                count += n;
-                if count >= rank {
-                    return (1u128 << (bucket + 1)) as f64 / 1e6;
-                }
-            }
-            unreachable!()
-        };
-        serde_json::json!({"samples":self.n,"p50_upper_ms":percentile(50),
-            "p99_upper_ms":percentile(99),"max_ms":self.maximum as f64/1e6})
+        serde_json::json!({"samples":self.n,"p50_upper_ms":self.percentile_upper_ms(50),
+            "p99_upper_ms":self.percentile_upper_ms(99),"max_ms":self.maximum as f64/1e6})
+    }
+}
+
+#[derive(Default)]
+struct UserLatencyHistogram {
+    send: Histogram,
+    scheduled: Histogram,
+    pings: u64,
+}
+
+impl UserLatencyHistogram {
+    fn record(&mut self, send: Duration, scheduled: Duration, pings: u64) {
+        self.send.record(send);
+        self.scheduled.record(scheduled);
+        self.pings += pings;
     }
 }
 
@@ -179,6 +197,7 @@ struct Peer {
     socket: Socket,
     id: u64,
     latency: Option<Vec<LatencySample>>,
+    histogram: Option<Box<UserLatencyHistogram>>,
 }
 struct Room {
     index: usize,
@@ -196,7 +215,8 @@ struct Observations {
 fn main() -> Result<()> {
     let args = Args::parse();
     ensure!(
-        args.user_latency_output.is_none() || args.waves == 1,
+        (args.user_latency_output.is_none() && args.user_latency_histogram_output.is_none())
+            || args.waves == 1,
         "per-user diagnostic requires one wave"
     );
     ensure!(
@@ -333,6 +353,7 @@ async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result
             socket,
             id,
             latency: None,
+            histogram: None,
         });
     }
     Ok((Room { index, peers }, counts))
@@ -353,7 +374,7 @@ async fn ring(
         payload[8..16].copy_from_slice(&sequence.to_le_bytes());
         values.push(protocol::byte_string(&payload));
     }
-    let diagnostic = room.peers[0].latency.is_some();
+    let diagnostic = room.peers[0].latency.is_some() || room.peers[0].histogram.is_some();
     let ids: Vec<_> = if diagnostic {
         room.peers.iter().map(|p| p.id).collect()
     } else {
@@ -379,29 +400,37 @@ async fn ring(
             .send(Message::Binary(packet))
             .await?;
     }
-    if room.peers[0].latency.is_some() {
+    if diagnostic {
         let mut receives = futures_util::stream::FuturesUnordered::new();
         for (member, peer) in room.peers.iter_mut().enumerate() {
             receives.push(async move {
                 let (packet, pings) = data_counted(&mut peer.socket).await?;
-                Ok::<_, anyhow::Error>((member, packet, Instant::now(), pings, &mut peer.latency))
+                Ok::<_, anyhow::Error>((
+                    member,
+                    packet,
+                    Instant::now(),
+                    pings,
+                    &mut peer.latency,
+                    &mut peer.histogram,
+                ))
             });
         }
         while let Some(received) = receives.next().await {
-            let (member, packet, received, pings, samples) = received?;
+            let (member, packet, received, pings, samples, histogram) = received?;
             let previous = (member + values.len() - 1) % values.len();
             let latency = received.duration_since(sent_at[previous]);
             check_packet(&packet, ids[previous], &values[previous])?;
-            samples
-                .as_mut()
-                .expect("diagnostic samples")
-                .push(LatencySample {
+            let scheduled = received.duration_since(observations.scheduled.unwrap_or(started));
+            if let Some(samples) = samples {
+                samples.push(LatencySample {
                     send_ns: latency.as_nanos() as u64,
-                    scheduled_ns: received
-                        .duration_since(observations.scheduled.unwrap_or(started))
-                        .as_nanos() as u64,
+                    scheduled_ns: scheduled.as_nanos() as u64,
                     pings,
                 });
+            }
+            if let Some(histogram) = histogram {
+                histogram.record(latency, scheduled, pings);
+            }
             observations.round_trip.record(latency);
             observations.counts.received(&packet);
             observations.counts.routing_checks += 1;
@@ -434,6 +463,29 @@ fn check_packet(packet: &[u8], expected_id: u64, expected_value: &[u8]) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_user_histograms_keep_separate_clocks_counts_and_ping_totals() {
+        let mut histogram = UserLatencyHistogram::default();
+        for millis in [1, 2, 3, 100] {
+            histogram.record(
+                Duration::from_millis(millis),
+                Duration::from_millis(millis + 200),
+                2,
+            );
+        }
+        assert_eq!(histogram.send.n, 4);
+        assert_eq!(histogram.scheduled.n, 4);
+        assert_eq!(histogram.pings, 8);
+        assert_eq!(histogram.send.maximum, 100_000_000);
+        assert_eq!(histogram.send.percentile_upper_ms(99), 134.217728);
+        assert_eq!(histogram.scheduled.percentile_upper_ms(99), 536.870912);
+        assert_eq!(histogram.send.buckets.iter().sum::<u64>(), 4);
+        assert_eq!(
+            UserLatencyHistogram::default().send.percentile_upper_ms(99),
+            0.0
+        );
+    }
 
     #[test]
     fn exact_timeline_quantiles_use_nearest_rank_and_handle_empty_windows() {
@@ -678,13 +730,24 @@ async fn run_wave(
     let audit = std::sync::Arc::new(parking_lot::Mutex::new(ids));
 
     // Prove every socket usable before the timed workload, independent of activity.
-    let (checked, proof) = prove_rooms(rooms, 0, args.payload_bytes, args.concurrency).await?;
+    let (mut checked, proof) = prove_rooms(rooms, 0, args.payload_bytes, args.concurrency).await?;
     merge(&mut total, proof);
+    if args.user_latency_histogram_output.is_some() {
+        let active_rooms = (room_count * args.active_percent).div_ceil(100);
+        for room in &mut checked {
+            if room.index < active_rooms {
+                for peer in &mut room.peers {
+                    peer.histogram = Some(Box::default());
+                }
+            }
+        }
+    }
     gate(
         "ready",
         &total.counts,
         serde_json::json!({"users":args.users,"rooms":room_count,
-        "all_connections_routed":true,"proof_round_trip":total.round_trip.report()}),
+        "all_connections_routed":true,"proof_round_trip":total.round_trip.report(),
+        "per_user_histogram_value_bytes":args.user_latency_histogram_output.as_ref().map(|_| std::mem::size_of::<UserLatencyHistogram>())}),
         wave,
     )?;
 
@@ -833,6 +896,37 @@ async fn run_wave(
                     percentile(&latency, 100),
                     percentile(&scheduled, 99),
                     percentile(&scheduled, 100)
+                )?;
+            }
+        }
+        output.flush()?;
+    }
+
+    if let Some(path) = &args.user_latency_histogram_output {
+        use std::io::BufWriter;
+        let mut output = BufWriter::new(std::fs::File::create(path)?);
+        writeln!(
+            output,
+            "room,member,id,samples,p50_upper_ms,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms,pings"
+        )?;
+        for room in &mut rooms {
+            for (member, peer) in room.peers.iter_mut().enumerate() {
+                let Some(histogram) = peer.histogram.take() else {
+                    continue;
+                };
+                writeln!(
+                    output,
+                    "{},{},{},{},{},{},{},{},{},{}",
+                    room.index,
+                    member,
+                    peer.id,
+                    histogram.send.n,
+                    histogram.send.percentile_upper_ms(50),
+                    histogram.send.percentile_upper_ms(99),
+                    histogram.send.maximum as f64 / 1e6,
+                    histogram.scheduled.percentile_upper_ms(99),
+                    histogram.scheduled.maximum as f64 / 1e6,
+                    histogram.pings
                 )?;
             }
         }

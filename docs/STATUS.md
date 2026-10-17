@@ -11,6 +11,23 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest verification: bounded per-user ten-minute soak, 2026-10-17
+
+A new bounded per-user histogram mode freezes 1,064-byte values per active user
+before the timed gate. Exact mode remains available and separately labeled.
+Three example tests, three plotter fixtures, strict Clippy/fmt and both live output
+modes pass. No relay runtime change; selected binary remains `c9a6c6da…`.
+
+The 100,000-user, 400,000-message/s ten-minute run passes 240 million application
+messages, with 2,400 samples per unique user. Every user's observed send-to-receive
+p99 has a histogram upper bound of at most 2.097 ms; the median bound is 1.049 ms.
+The worst observed packet takes 7.173 ms. Second-half process RSS stays within
+106.84–106.88 MiB for the server and 759.45–759.78 MiB for the client. All live
+assertions, postcheck routing, Close/EOF and zero final resources pass; FDs return
+to the baseline of 42. These are finite same-host histogram bounds, not exact
+percentiles or guarantees.
+See [full evidence](performance.md#bounded-per-user-latency-and-ten-minute-soak-2026-10-17).
+
 ## Latest experiment: unchanged timer-key guard rejected, 2026-10-17
 
 A diagnostic finds 91.16% equal optional deadlines across 4.74m worker-lifetime

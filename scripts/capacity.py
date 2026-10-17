@@ -37,6 +37,13 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def resident_kib(pid):
+    for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+        if line.startswith("VmRSS:"):
+            return int(line.split()[1])
+    raise RuntimeError("missing resident-memory observation")
+
+
 def cpu_stat_snapshot():
     rows = {}
     for line in Path("/proc/stat").read_text().splitlines():
@@ -174,6 +181,8 @@ def run(args):
         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
     if args.user_latency_output:
         client_command += ["--user-latency-output", str(args.user_latency_output.resolve())]
+    if args.user_latency_histogram_output:
+        client_command += ["--user-latency-histogram-output", str(args.user_latency_histogram_output.resolve())]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -240,7 +249,8 @@ def run(args):
                         result["management_samples"].append({"seconds":began-started,
                             "response_ms":(time.monotonic()-began)*1000,"sessions":current["war_sessions"],
                             "connections":current["war_connections"],"queued_bytes":current["war_queued_bytes"],
-                            "read_reserved_bytes":current["war_read_buffer_reserved_bytes"]})
+                            "read_reserved_bytes":current["war_read_buffer_reserved_bytes"],
+                            "server_rss_kib":resident_kib(server.pid), "client_rss_kib":resident_kib(client.pid)})
                         next_sample = time.monotonic() + .25
                     if args.pressure_client and pressure is None and pressure_start is not None and time.monotonic() >= pressure_start:
                         cmd = capacity_pressure.command(args.pressure_client, f"ws://127.0.0.1:{port}", args.client_cpus)
@@ -281,7 +291,8 @@ def run(args):
                         if time.monotonic() >= deadline:
                             raise
                         time.sleep(.02)
-                event.update(metrics=observed, server=process(server.pid), client=process(client.pid),
+                event.update(metrics=observed, server_pid=server.pid, client_pid=client.pid,
+                             server=process(server.pid), client=process(client.pid),
                              machine=machine(), seconds=time.monotonic() - started,
                              established_server_sockets=established(port))
                 expected_population = 0 if event["event"] == "done" else args.users
@@ -295,7 +306,7 @@ def run(args):
                     connected = result["events"][-5]["client"]["fd_count"]
                     assert event["client"]["fd_count"] <= connected - args.users + 2
                 events.append(event["event"])
-                print(json.dumps({"event":event["event"],"sessions":observed["war_sessions"],
+                print(json.dumps({"event":event["event"],"server_pid":server.pid,"client_pid":client.pid,"sessions":observed["war_sessions"],
                                   "rss_mib":event["server"]["VmRSS"]/1024,
                                   "details":event["details"]}), flush=True)
                 if event["event"] == "ready":
@@ -421,7 +432,9 @@ if __name__ == "__main__":
     parser.add_argument("--active-percent", type=int, default=100)
     parser.add_argument("--client-workers", type=int, default=8)
     parser.add_argument("--messages-per-second", type=int, default=1)
-    parser.add_argument("--user-latency-output", type=Path, help="Diagnostic per-user latency CSV; requires an instrumented client")
+    parser.add_argument("--user-latency-output", type=Path, help="Exact per-user latency CSV; requires an instrumented client")
+    parser.add_argument("--user-latency-histogram-output", type=Path,
+                        help="Bounded per-user histogram CSV; percentile columns are bounds, not exact samples")
     parser.add_argument("--churn-workers", type=int, default=0)
     parser.add_argument("--ping-interval-secs", type=int, default=0)
     parser.add_argument("--tcp-send-buffer-bytes", type=int, default=0)
@@ -456,6 +469,8 @@ if __name__ == "__main__":
         parser.error("waves must be in 1..=16 and seconds in 1..=3600")
     if not 16 <= args.payload_bytes <= 65520:
         parser.error("payload-bytes must be in 16..=65520, allowing envelope headroom")
+    if args.user_latency_histogram_output and (args.user_latency_output or args.waves != 1):
+        parser.error("histogram output requires one wave and excludes exact sample output")
     if args.pin_workers and args.pin_server_workers:
         parser.error("choose native --pin-workers or the harness-only --pin-server-workers intervention")
     if args.profile and args.waves != 1:

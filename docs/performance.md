@@ -6287,3 +6287,80 @@ source, with patch, exact sources, build hashes, all results and inspected plots
 preserved in the [archive](benchmarks/2026-10-17-timer-equality/manifest.json).
 The selected heartbeat-phase source/binary `c9a6c6da…`, local service and measured
 400k/s responsive operating recommendation remain unchanged.
+
+
+## Bounded per-user latency and ten-minute soak (2026-10-17)
+
+The capacity client now supports `--user-latency-histogram-output`, retaining two
+fixed 64-bucket nanosecond histograms and a Ping count per active user instead of
+every sample. The histogram value is 1,064 bytes on this build, excluding its Box
+allocation overhead and all other generator/socket state. Values are allocated
+before the ready gate; recording adds no histogram allocation as duration or
+packet count grows. Exact sample mode remains available, with mutually exclusive
+flags and one-wave output. Active users keep independent send-to-receive and
+intended-send-to-receive distributions. CSV `_upper_ms` columns are power-of-two
+bucket bounds; observed maxima are exact durations. No exact-window timeline is
+produced in bounded mode.
+
+The collector now samples process RSS with existing management observations and
+logs child PIDs for live observation/recovery. The comparison plotter requires
+explicit `--histogram-bounds` for bounded columns and uses distinct JSON keys and
+axis labels; a bound may legitimately exceed the observed maximum. Bound-mode
+thresholds certify bounds meeting a threshold, not exact failure percentages.
+Three example tests, three independent plotter fixtures, strict all-target
+Clippy/fmt and Python compilation pass. Final 32-user live checks verify both
+exact output (256 samples, two exact cohorts) and bounded output (eight samples
+per user, separate bounds, nonzero Ping observations). CLI conflict rejection is
+also checked. Intermediate smoke sources are preserved with matching hashes.
+
+The unchanged selected server `c9a6c6da…` then completes a 600-second same-host
+plaintext loopback run: 100,000 active users, 16-member rooms, 1 KiB private
+messages at four/user/s, eight pinned server workers on physical CPUs 0–7,
+eight client workers on 8–15, heartbeat 15 s and 16/64 KiB socket buffers. The new
+bounded client is frozen and hashed separately from prior exact clients. No
+builds, profiles or other benchmarks overlap traffic. Lightweight management
+and RSS monitoring remain active. This is stability/fairness acceptance, not an
+old/new server speedup comparison or new C++ result.
+
+All 240 million application messages pass full sender/body/sequence checking;
+each of 100,000 unique users has 2,400 histogram samples. Completion rate is
+399,994.55/s over 600.008 s. The distributions below are nearest-rank statistics
+across user-level histogram bounds, not exact or pooled percentiles:
+
+| Observation | Send-to-receive | Intended-send-to-receive |
+| --- | ---: | ---: |
+| Median user's p99 upper bound | 1.048576 ms | 4.194304 ms |
+| 99th percentile of users' p99 upper bounds | 2.097152 ms | 4.194304 ms |
+| Maximum user's p99 upper bound | 2.097152 ms | 4.194304 ms |
+| Maximum observed packet duration | 7.173446 ms | 9.873215 ms |
+
+Every user's observed p99 is bounded above by 2.097152 ms for send-to-receive in
+this finite run. The pooled send-to-receive p99 is in the 1.048576 ms histogram
+bucket, and 4,006,925 Pings are encountered while reading probes. Neither the
+histogram bound nor the finite maximum is a future latency guarantee. Intended
+latency includes generator scheduling/preparation and room batching; these two
+clock distributions cannot be subtracted to recover a delay percentile.
+
+Server process RSS ranges 104.25–106.88 MiB across monitoring samples; client RSS
+ranges 719.66–759.78 MiB during warmup and traffic. During the second half, ranges
+are 106.84–106.88 MiB server and 759.45–759.78 MiB client. Server's last-minus-first
+second-half RSS is +0.035 MiB; client's is −0.176 MiB. This is an observed plateau,
+not proof of leak freedom. Process RSS excludes kernel socket memory. Fixed
+histogram values total 106.4 MB for 100k users; raw 24-byte sample values alone would
+require 5.76 GB for the same 240m samples, with different statistical precision.
+That is a representation-size comparison, not a measured process-memory ratio.
+
+All live population/error/resource assertions pass. Postcheck routes through all
+users again; final connections, sessions, queued bytes, receive reservations and
+variable bytes are zero. Server FDs return exactly to baseline 42 and established
+sockets to zero; client/server exit normally. Application Close/EOF retirement
+takes 2.346 s. There is no churn or unread-pressure sidecar in this longer run;
+those remain separate 65-second acceptance evidence. The experiment does not
+establish multi-hour, WAN, TLS, adverse-network or production behavior. The measured
+400k operating recommendation stays; no relay runtime change is introduced.
+
+The [archive](benchmarks/2026-10-17-bounded-latency-soak/manifest.json) binds exact
+client/harness source versions, build identity, full trace, per-user bounds, RSS
+observations, tests and inspected plots. The
+[operations recipe](operations.md#longer-runs-with-bounded-per-user-latency-storage)
+reproduces collection and bound-aware plotting.
