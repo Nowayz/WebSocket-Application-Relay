@@ -5262,3 +5262,76 @@ experiments failed to establish a consistent whole-relay gain and remain
 rejected. A future change must preserve pressure limits, FIFO, cross-worker
 lifetime safety and exact quiescent accounting, then pass matched ordinary
 benchmarks. These diagnostics make no optimization or recovered-speed claim.
+
+## Worker-local input statistics, 2026-10-17
+
+The [manifest and complete evidence](benchmarks/2026-10-17-input-batch.json)
+retain both optimization attempts, source snapshots, frozen binary hashes,
+all ordinary timings and independent acceptance checks. The selected executable
+has SHA-256 `35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e`;
+the control remains `c27ff051…`. Both use portable Rust 1.91.1 release builds.
+
+An explicit accumulator replaces four shared atomic input/routing updates with
+worker-local arithmetic. It publishes before the existing event loop polls and
+on drop, including unwinding. This adds no connection fields, payload movement,
+new lock or thread-local lookup. Quotas, live resource gauges, delivery counts
+and output byte totals still change immediately. The four cumulative incoming
+message/byte and reused/copied byte counters can lag during a worker's bounded
+ready batch, then become exact at that boundary and at quiescence. The new tests
+cover that observation contract, independent relays and unwind publication.
+
+| Ordinary workload | Control deliveries/s | Selected deliveries/s | Control CPU ns/delivery | Selected CPU ns/delivery |
+| --- | ---: | ---: | ---: | ---: |
+| 100,000 users, overloaded, three repetitions | 517,197 | 537,647 | 5,394 | 5,232 |
+| Mixed-size fanout with unread peers, three repetitions | 190,486 | 195,975 | 4,457 | 4,216 |
+| 64 active private pairs, five repetitions | 1,959,128 | 2,014,019 | 1,125 | 1,088 |
+
+These are medians of per-trial measurements. The first and third rows use the
+same timed-message CPU window; the fanout runner includes lifecycle CPU, so
+absolute CPU costs should only be compared within a row. The offered million
+messages/s still overloads four server cores. The 100,000-user three-run CPU
+ranges do not overlap, but these small cohorts establish no statistical or
+universal performance guarantee. No p99 upper bucket improves in these cases.
+
+The original client CPU set 4–11 spans the host's two separate L3 domains.
+Server CPUs 0–3 share L3 with CPUs 4–7; CPUs 8–11 use the other L3. The direct
+C++/Rust matrix with the original mixed set has two throughput regimes and
+includes a private Rust throughput regression. All 40 cases remain recorded.
+Two additional 20-case matrices confine the client to one L3 at a time, keeping
+eight client workers and four physical client cores in both configurations:
+
+| Client placement | Implementation | Deliveries/s | CPU ns/delivery |
+| --- | --- | ---: | ---: |
+| Same L3 as server | C++ glibc | 2,154,649 | 924 |
+| Same L3 as server | C++ AOCL dispatch | 2,171,840 | 921 |
+| Same L3 as server | Rust control | 2,043,285 | 1,089 |
+| Same L3 as server | Rust selected | 2,057,077 | 1,071 |
+| Other L3 | C++ glibc | 1,357,901 | 1,368 |
+| Other L3 | C++ AOCL dispatch | 1,346,325 | 1,375 |
+| Other L3 | Rust control | 1,354,355 | 1,435 |
+| Other L3 | Rust selected | 1,359,558 | 1,425 |
+
+Each row has five six-second trials; all 40 fixed-domain cases pass. Within
+each placement the before/after change is small (+0.68%/-1.65% throughput/CPU
+on the same L3; +0.38%/-0.70% across L3). C++ still has lower CPU cost. C++ uses
+the upstream native compiler flags and opaque binary values; Rust validates
+CBOR. The mixed-domain set also had eight allowed client cores, so its change
+to four cores cannot be attributed solely to cache topology. AOCL remains an
+explicit option because these results establish no consistent benefit.
+
+All 143 Rust tests, strict Clippy, formatting and release build pass. The
+independent 776-case corpus performs 2,311 scheduled exchanges; 24 large body
+waves verify fragmentation, reuse, reclamation and retirement. Two selected
+65-second 100,000-user mixed runs and one control each verify 6.5 million stable
+messages, churn, heartbeats, unread-peer pressure, fresh postcheck routing
+through every stable user and complete resource/descriptor retirement. All
+three have a 1.048576 ms p99 upper bucket; selected RTT maxima are 3.852 and
+3.177 ms. This is finite local acceptance, without a remote/TLS or long-duration
+capacity claim. Local manual services are unchanged at this checkpoint.
+
+The separate borrowed private-submission specialization is rejected: five
+private trials show -0.46% throughput and +0.34% CPU; fanout is flat with more
+CPU, and three 100,000-user overload trials show +2.32% throughput but +0.91%
+CPU. Its source and all measurements are retained. Only the explicit input
+accumulator is selected. The requested Monoio experiment follows from this
+frozen baseline.

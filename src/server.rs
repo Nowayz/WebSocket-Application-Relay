@@ -49,7 +49,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     Relay,
     protocol::{self, Disconnect},
-    relay::Registration,
+    relay::{ReceiveBatch, Registration},
 };
 use socket::{Signal, Socket, Stream};
 use timers::Timers;
@@ -431,6 +431,8 @@ impl Worker {
     fn run(mut self) -> Result<()> {
         let mut events = Events::with_capacity(1024);
         let mut shutdown_deadline = None;
+        let relay = self.relay.clone();
+        let mut incoming = relay.receive_batch();
         loop {
             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
                 if self.accept_retry.take().is_none() {
@@ -485,8 +487,12 @@ impl Worker {
                 };
                 connection.scheduled = false;
                 connection.socket.notified();
-                let keep =
-                    connection.drive(&self.relay, &mut self.scratch, shutdown_deadline.is_some());
+                let keep = connection.drive_batched(
+                    &self.relay,
+                    &mut self.scratch,
+                    shutdown_deadline.is_some(),
+                    &mut incoming,
+                );
                 match keep {
                     Drive::Drop => {
                         self.timers.remove(slot);
@@ -508,6 +514,8 @@ impl Worker {
                     }
                 }
             }
+            // Publish before polling, even when no more input will arrive.
+            incoming.publish();
             {
                 let mut pending = self.signal.pending.lock();
                 while let Some(token) = pending.pop_front() {
@@ -700,7 +708,18 @@ impl Connection {
         deadline
     }
 
+    #[cfg(test)]
     fn drive(&mut self, relay: &Arc<Relay>, scratch: &mut ReadStorage, stopping: bool) -> Drive {
+        self.drive_batched(relay, scratch, stopping, &mut relay.receive_batch())
+    }
+
+    fn drive_batched(
+        &mut self,
+        relay: &Arc<Relay>,
+        scratch: &mut ReadStorage,
+        stopping: bool,
+        incoming: &mut ReceiveBatch<'_>,
+    ) -> Drive {
         let now = Instant::now();
         if let Stage::Upgrade(handshake) = &mut self.stage {
             if stopping {
@@ -741,7 +760,7 @@ impl Connection {
             unreachable!()
         };
         ws.swap_read_storage(scratch);
-        let result = self.drive_websocket(relay, now, stopping);
+        let result = self.drive_websocket(relay, now, stopping, incoming);
         let Stage::WebSocket(ws) = &mut self.stage else {
             unreachable!()
         };
@@ -821,7 +840,13 @@ impl Connection {
         }
     }
 
-    fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {
+    fn drive_websocket(
+        &mut self,
+        relay: &Arc<Relay>,
+        now: Instant,
+        stopping: bool,
+        incoming: &mut ReceiveBatch<'_>,
+    ) -> Drive {
         let (fatal, requested) = {
             let state = self.socket.state.lock();
             (state.fatal, state.requested)
@@ -1013,16 +1038,13 @@ impl Connection {
                                 let large = relay.config.read_buffer_idle_secs > 0
                                     && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
                                 let capacity = ws.read_storage_capacity().max(bytes.len());
-                                let work = match relay.receive_with_storage(
-                                    &registration.peer,
-                                    bytes,
-                                    capacity,
-                                ) {
-                                    Ok(work) => work,
-                                    Err(reason) => {
-                                        return self.start_close(reason, relay, false, now);
-                                    }
-                                };
+                                let work =
+                                    match incoming.receive(&registration.peer, bytes, capacity) {
+                                        Ok(work) => work,
+                                        Err(reason) => {
+                                            return self.start_close(reason, relay, false, now);
+                                        }
+                                    };
                                 route_budget = route_budget.saturating_sub(work);
                                 if large {
                                     self.reclaim_deadline = Some(

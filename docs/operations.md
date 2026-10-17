@@ -618,6 +618,15 @@ Monitor `war_connections`, `war_sessions`, `war_channels`, `war_queued_bytes`,
 `war_rate_limited_total`. Metric labels deliberately exclude user/channel IDs.
 Debug logging reports connection failures without message bodies or credentials.
 
+Native cumulative input counters (`war_incoming_messages_total`,
+`war_incoming_bytes_total`, `war_routing_reused_bytes_total` and
+`war_routing_copied_bytes_total`) publish at each worker's existing ready-batch
+boundary, before it polls again. An active worker can temporarily have unpublished
+input statistics; totals are exact once its batch finishes. Worker exit also
+publishes remaining totals. Admission, retained-byte gauges, pressure decisions
+and output completion accounting remain immediate. No quota depends on deferred
+statistics. See the [input-counter measurements](performance.md#worker-local-input-statistics-2026-10-17).
+
 `war_output_queue_capacity_bytes` reports allocated native output queue slots,
 including unused retained capacity. `war_output_queue_peak_capacity_bytes` is
 the process-wide high-water mark of that aggregate. These count requested slot
@@ -930,3 +939,8 @@ See the [C++ AOCL results](performance.md#current-c-versus-rust-with-aocl-2026-1
 before selecting a library: loading AOCL succeeds, but these workloads do not
 establish a useful improvement. The recorded binding diagnostics run separately
 from ordinary timing trials, including a negative test for an ignored library.
+
+To include a frozen native Rust baseline in the same C++ matrix, pass
+`--control PATH --control-read-storage worker`. The default `connection` storage
+contract remains available for the older asynchronous control. This option
+selects the verifier's receive-staging checks; it does not alter either server.

@@ -1,0 +1,320 @@
+diff --git a/src/relay.rs b/src/relay.rs
+index c1d6403..6e3b439 100644
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -47,6 +47,54 @@ pub struct Relay {
+     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
+ }
+ 
++#[derive(Default)]
++struct InputTotals {
++    messages: u64,
++    bytes: u64,
++    reused: u64,
++    copied: u64,
++}
++
++/// One worker publishes cumulative input statistics at its ready-batch boundary.
++/// Admission and retained-byte gauges remain immediate, independent atomics.
++pub(crate) struct ReceiveBatch<'a> {
++    relay: &'a Relay,
++    totals: InputTotals,
++}
++
++impl ReceiveBatch<'_> {
++    pub(crate) fn receive(
++        &mut self,
++        peer: &Peer,
++        bytes: Bytes,
++        storage_capacity: usize,
++    ) -> Result<usize, Disconnect> {
++        self.relay
++            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals)
++    }
++
++    pub(crate) fn publish(&mut self) {
++        let totals = std::mem::take(&mut self.totals);
++        let metrics = &self.relay.metrics;
++        for (counter, value) in [
++            (&metrics.incoming_messages, totals.messages),
++            (&metrics.incoming_bytes, totals.bytes),
++            (&metrics.routing_reused_bytes, totals.reused),
++            (&metrics.routing_copied_bytes, totals.copied),
++        ] {
++            if value != 0 {
++                counter.fetch_add(value, Relaxed);
++            }
++        }
++    }
++}
++
++impl Drop for ReceiveBatch<'_> {
++    fn drop(&mut self) {
++        self.publish();
++    }
++}
++
+ struct Registry {
+     users: HashMap<u64, Arc<Peer>>,
+     channels: HashMap<Bytes, Channel>,
+@@ -547,19 +595,35 @@ impl Relay {
+         self.receive_with_storage(peer, bytes, capacity).map(|_| ())
+     }
+ 
++    pub(crate) fn receive_batch(&self) -> ReceiveBatch<'_> {
++        ReceiveBatch {
++            relay: self,
++            totals: InputTotals::default(),
++        }
++    }
++
++    #[cfg(test)]
+     pub(crate) fn receive_with_storage(
+         &self,
+         peer: &Peer,
+         bytes: Bytes,
+         storage_capacity: usize,
++    ) -> Result<usize, Disconnect> {
++        self.receive_batch().receive(peer, bytes, storage_capacity)
++    }
++
++    fn receive_with_totals(
++        &self,
++        peer: &Peer,
++        bytes: Bytes,
++        storage_capacity: usize,
++        totals: &mut InputTotals,
+     ) -> Result<usize, Disconnect> {
+         if peer.closing.load(Relaxed) {
+             return Ok(1);
+         }
+-        self.metrics.incoming_messages.fetch_add(1, Relaxed);
+-        self.metrics
+-            .incoming_bytes
+-            .fetch_add(bytes.len() as u64, Relaxed);
++        totals.messages = totals.messages.wrapping_add(1);
++        totals.bytes = totals.bytes.wrapping_add(bytes.len() as u64);
+         let (target, value) = protocol::parse(&bytes)?;
+         if target == 0 {
+             return self.control(peer, value).map(|_| 1);
+@@ -591,11 +655,11 @@ impl Relay {
+             && !bytes.is_unique();
+         let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+         let counter = if compact {
+-            &self.metrics.routing_copied_bytes
++            &mut totals.copied
+         } else {
+-            &self.metrics.routing_reused_bytes
++            &mut totals.reused
+         };
+-        counter.fetch_add(frame.payload().len() as u64, Relaxed);
++        *counter = counter.wrapping_add(frame.payload().len() as u64);
+         if let Some(recipient) = private_recipient
+             && state.listeners(PRIVATE_MESSAGE).is_empty()
+         {
+@@ -857,6 +921,92 @@ mod listener_tests;
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
++        let relay = Relay::new(config()).unwrap();
++        let mut sender = relay.subscribe(b"batch").unwrap();
++        let mut recipient = relay.subscribe(b"batch").unwrap();
++        sender.outgoing.try_recv().unwrap();
++        recipient.outgoing.try_recv().unwrap();
++        let bytes = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf5]);
++        let mut batch = relay.receive_batch();
++        batch
++            .receive(&sender.registration.peer, bytes.clone(), 4096)
++            .unwrap();
++        let held = recipient.outgoing.try_recv().unwrap();
++        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 0);
++        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 0);
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
++        assert_eq!(
++            recipient.registration.peer.budget.used.load(Relaxed),
++            held.frame.len()
++        );
++        assert_eq!(
++            batch.receive(&sender.registration.peer, Bytes::from_static(b"\xff"), 4096),
++            Err(Disconnect::PROTOCOL)
++        );
++        batch.publish();
++        batch.publish();
++        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 2);
++        assert_eq!(
++            relay.metrics.incoming_bytes.load(Relaxed),
++            bytes.len() as u64 + 1
++        );
++        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 1);
++        batch
++            .receive(&sender.registration.peer, bytes.clone(), 4096)
++            .unwrap();
++        drop(batch);
++        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 3);
++        assert_eq!(
++            relay.metrics.incoming_bytes.load(Relaxed),
++            bytes.len() as u64 * 2 + 1
++        );
++        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 2);
++        drop((sender, recipient));
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
++        drop(held);
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    }
++
++    #[test]
++    fn input_batches_keep_instance_identity_and_publish_during_unwind() {
++        let first = Relay::new(config()).unwrap();
++        let second = Relay::new(config()).unwrap();
++        let mut one = first.subscribe(b"batch").unwrap();
++        let mut two = second.subscribe(b"batch").unwrap();
++        one.outgoing.try_recv().unwrap();
++        two.outgoing.try_recv().unwrap();
++        assert!(
++            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                let mut a = first.receive_batch();
++                let mut b = second.receive_batch();
++                a.receive(
++                    &one.registration.peer,
++                    protocol::envelope(one.registration.peer.id.load(Relaxed), &[0xf5]),
++                    4096,
++                )
++                .unwrap();
++                b.receive(
++                    &two.registration.peer,
++                    protocol::envelope(two.registration.peer.id.load(Relaxed), &[0xf5]),
++                    4096,
++                )
++                .unwrap();
++                b.publish();
++                assert_eq!(first.metrics.incoming_messages.load(Relaxed), 0);
++                assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
++                panic!("interrupted ready batch");
++            }))
++            .is_err()
++        );
++        assert_eq!(first.metrics.incoming_messages.load(Relaxed), 1);
++        assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
++        drop((one, two));
++        assert_eq!(first.metrics.queued_bytes.load(Relaxed), 0);
++        assert_eq!(second.metrics.queued_bytes.load(Relaxed), 0);
++    }
++
+     fn config() -> Config {
+         Config {
+             auth_password: Some("test-password".into()),
+diff --git a/src/server.rs b/src/server.rs
+index 8237951..184a89c 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -49,7 +49,7 @@ use tokio_util::sync::CancellationToken;
+ use crate::{
+     Relay,
+     protocol::{self, Disconnect},
+-    relay::Registration,
++    relay::{ReceiveBatch, Registration},
+ };
+ use socket::{Signal, Socket, Stream};
+ use timers::Timers;
+@@ -431,6 +431,8 @@ impl Worker {
+     fn run(mut self) -> Result<()> {
+         let mut events = Events::with_capacity(1024);
+         let mut shutdown_deadline = None;
++        let relay = self.relay.clone();
++        let mut incoming = relay.receive_batch();
+         loop {
+             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
+                 if self.accept_retry.take().is_none() {
+@@ -485,8 +487,12 @@ impl Worker {
+                 };
+                 connection.scheduled = false;
+                 connection.socket.notified();
+-                let keep =
+-                    connection.drive(&self.relay, &mut self.scratch, shutdown_deadline.is_some());
++                let keep = connection.drive_batched(
++                    &self.relay,
++                    &mut self.scratch,
++                    shutdown_deadline.is_some(),
++                    &mut incoming,
++                );
+                 match keep {
+                     Drive::Drop => {
+                         self.timers.remove(slot);
+@@ -508,6 +514,8 @@ impl Worker {
+                     }
+                 }
+             }
++            // Publish before polling, even when no more input will arrive.
++            incoming.publish();
+             {
+                 let mut pending = self.signal.pending.lock();
+                 while let Some(token) = pending.pop_front() {
+@@ -700,7 +708,18 @@ impl Connection {
+         deadline
+     }
+ 
++    #[cfg(test)]
+     fn drive(&mut self, relay: &Arc<Relay>, scratch: &mut ReadStorage, stopping: bool) -> Drive {
++        self.drive_batched(relay, scratch, stopping, &mut relay.receive_batch())
++    }
++
++    fn drive_batched(
++        &mut self,
++        relay: &Arc<Relay>,
++        scratch: &mut ReadStorage,
++        stopping: bool,
++        incoming: &mut ReceiveBatch<'_>,
++    ) -> Drive {
+         let now = Instant::now();
+         if let Stage::Upgrade(handshake) = &mut self.stage {
+             if stopping {
+@@ -741,7 +760,7 @@ impl Connection {
+             unreachable!()
+         };
+         ws.swap_read_storage(scratch);
+-        let result = self.drive_websocket(relay, now, stopping);
++        let result = self.drive_websocket(relay, now, stopping, incoming);
+         let Stage::WebSocket(ws) = &mut self.stage else {
+             unreachable!()
+         };
+@@ -821,7 +840,13 @@ impl Connection {
+         }
+     }
+ 
+-    fn drive_websocket(&mut self, relay: &Arc<Relay>, now: Instant, stopping: bool) -> Drive {
++    fn drive_websocket(
++        &mut self,
++        relay: &Arc<Relay>,
++        now: Instant,
++        stopping: bool,
++        incoming: &mut ReceiveBatch<'_>,
++    ) -> Drive {
+         let (fatal, requested) = {
+             let state = self.socket.state.lock();
+             (state.fatal, state.requested)
+@@ -1013,16 +1038,13 @@ impl Connection {
+                                 let large = relay.config.read_buffer_idle_secs > 0
+                                     && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
+                                 let capacity = ws.read_storage_capacity().max(bytes.len());
+-                                let work = match relay.receive_with_storage(
+-                                    &registration.peer,
+-                                    bytes,
+-                                    capacity,
+-                                ) {
+-                                    Ok(work) => work,
+-                                    Err(reason) => {
+-                                        return self.start_close(reason, relay, false, now);
+-                                    }
+-                                };
++                                let work =
++                                    match incoming.receive(&registration.peer, bytes, capacity) {
++                                        Ok(work) => work,
++                                        Err(reason) => {
++                                            return self.start_close(reason, relay, false, now);
++                                        }
++                                    };
+                                 route_budget = route_budget.saturating_sub(work);
+                                 if large {
+                                     self.reclaim_deadline = Some(

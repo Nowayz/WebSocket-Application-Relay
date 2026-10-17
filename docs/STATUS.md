@@ -8,7 +8,33 @@ instruction makes 100,000 simultaneous users an explicit operating target.
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
-## Latest verified checkpoint: C++ with AOCL, 2026-10-17
+## Latest verified checkpoint: worker-local input statistics, 2026-10-17
+
+Four cumulative input/routing counters now publish at the existing worker ready
+batch boundary, using an explicit accumulator and a drop guard. Quotas, live
+gauges and output completion remain immediate. No connection fields, payload
+copies or new locks are added. All 143 tests, strict Clippy, release build,
+776-case input corpus and large-fragment reclamation checks pass.
+
+Three 100,000-user overload pairs measure 537,647 versus 517,197 completions/s
+and 5,232 versus 5,394 server CPU ns/completion. Three 65-second mixed acceptance
+runs pass, including two selected runs, each verifying 6.5 million stable
+messages with churn, heartbeats, unread-peer pressure and complete retirement.
+These finite loopback trials do not establish indefinite or remote capacity.
+
+Cache placement materially affects comparisons. Five private repetitions with
+both server and client in the same L3 domain measure a smaller +0.68% throughput
+and -1.65% CPU change; across separate L3 domains the change is +0.38% and
+-0.70%. The earlier mixed-domain comparison includes a private throughput
+regression and remains archived. There is no universal throughput claim.
+The private borrowed-submission experiment was rejected after measurement.
+See the [study](performance.md#worker-local-input-statistics-2026-10-17) and
+[manifest](benchmarks/2026-10-17-input-batch.json). The selected native hash is
+`35d46da1…`. Local services have not yet been replaced at this checkpoint.
+
+The user's next requested experiment is Monoio for native socket I/O.
+
+## Prior verified checkpoint: C++ with AOCL, 2026-10-17
 
 The [fresh direct comparison](performance.md#current-c-versus-rust-with-aocl-2026-10-17)
 tests the current frozen Rust executable (`c27ff051…`) against rebuilt upstream

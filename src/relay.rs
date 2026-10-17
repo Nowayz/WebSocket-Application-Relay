@@ -47,6 +47,54 @@ pub struct Relay {
     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
 
+#[derive(Default)]
+struct InputTotals {
+    messages: u64,
+    bytes: u64,
+    reused: u64,
+    copied: u64,
+}
+
+/// One worker publishes cumulative input statistics at its ready-batch boundary.
+/// Admission and retained-byte gauges remain immediate, independent atomics.
+pub(crate) struct ReceiveBatch<'a> {
+    relay: &'a Relay,
+    totals: InputTotals,
+}
+
+impl ReceiveBatch<'_> {
+    pub(crate) fn receive(
+        &mut self,
+        peer: &Peer,
+        bytes: Bytes,
+        storage_capacity: usize,
+    ) -> Result<usize, Disconnect> {
+        self.relay
+            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals)
+    }
+
+    pub(crate) fn publish(&mut self) {
+        let totals = std::mem::take(&mut self.totals);
+        let metrics = &self.relay.metrics;
+        for (counter, value) in [
+            (&metrics.incoming_messages, totals.messages),
+            (&metrics.incoming_bytes, totals.bytes),
+            (&metrics.routing_reused_bytes, totals.reused),
+            (&metrics.routing_copied_bytes, totals.copied),
+        ] {
+            if value != 0 {
+                counter.fetch_add(value, Relaxed);
+            }
+        }
+    }
+}
+
+impl Drop for ReceiveBatch<'_> {
+    fn drop(&mut self) {
+        self.publish();
+    }
+}
+
 struct Registry {
     users: HashMap<u64, Arc<Peer>>,
     channels: HashMap<Bytes, Channel>,
@@ -547,19 +595,35 @@ impl Relay {
         self.receive_with_storage(peer, bytes, capacity).map(|_| ())
     }
 
+    pub(crate) fn receive_batch(&self) -> ReceiveBatch<'_> {
+        ReceiveBatch {
+            relay: self,
+            totals: InputTotals::default(),
+        }
+    }
+
+    #[cfg(test)]
     pub(crate) fn receive_with_storage(
         &self,
         peer: &Peer,
         bytes: Bytes,
         storage_capacity: usize,
     ) -> Result<usize, Disconnect> {
+        self.receive_batch().receive(peer, bytes, storage_capacity)
+    }
+
+    fn receive_with_totals(
+        &self,
+        peer: &Peer,
+        bytes: Bytes,
+        storage_capacity: usize,
+        totals: &mut InputTotals,
+    ) -> Result<usize, Disconnect> {
         if peer.closing.load(Relaxed) {
             return Ok(1);
         }
-        self.metrics.incoming_messages.fetch_add(1, Relaxed);
-        self.metrics
-            .incoming_bytes
-            .fetch_add(bytes.len() as u64, Relaxed);
+        totals.messages = totals.messages.wrapping_add(1);
+        totals.bytes = totals.bytes.wrapping_add(bytes.len() as u64);
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
             return self.control(peer, value).map(|_| 1);
@@ -591,11 +655,11 @@ impl Relay {
             && !bytes.is_unique();
         let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
         let counter = if compact {
-            &self.metrics.routing_copied_bytes
+            &mut totals.copied
         } else {
-            &self.metrics.routing_reused_bytes
+            &mut totals.reused
         };
-        counter.fetch_add(frame.payload().len() as u64, Relaxed);
+        *counter = counter.wrapping_add(frame.payload().len() as u64);
         if let Some(recipient) = private_recipient
             && state.listeners(PRIVATE_MESSAGE).is_empty()
         {
@@ -856,6 +920,92 @@ mod listener_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
+        let relay = Relay::new(config()).unwrap();
+        let mut sender = relay.subscribe(b"batch").unwrap();
+        let mut recipient = relay.subscribe(b"batch").unwrap();
+        sender.outgoing.try_recv().unwrap();
+        recipient.outgoing.try_recv().unwrap();
+        let bytes = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf5]);
+        let mut batch = relay.receive_batch();
+        batch
+            .receive(&sender.registration.peer, bytes.clone(), 4096)
+            .unwrap();
+        let held = recipient.outgoing.try_recv().unwrap();
+        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 0);
+        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
+        assert_eq!(
+            recipient.registration.peer.budget.used.load(Relaxed),
+            held.frame.len()
+        );
+        assert_eq!(
+            batch.receive(&sender.registration.peer, Bytes::from_static(b"\xff"), 4096),
+            Err(Disconnect::PROTOCOL)
+        );
+        batch.publish();
+        batch.publish();
+        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 2);
+        assert_eq!(
+            relay.metrics.incoming_bytes.load(Relaxed),
+            bytes.len() as u64 + 1
+        );
+        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 1);
+        batch
+            .receive(&sender.registration.peer, bytes.clone(), 4096)
+            .unwrap();
+        drop(batch);
+        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 3);
+        assert_eq!(
+            relay.metrics.incoming_bytes.load(Relaxed),
+            bytes.len() as u64 * 2 + 1
+        );
+        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 2);
+        drop((sender, recipient));
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
+        drop(held);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+
+    #[test]
+    fn input_batches_keep_instance_identity_and_publish_during_unwind() {
+        let first = Relay::new(config()).unwrap();
+        let second = Relay::new(config()).unwrap();
+        let mut one = first.subscribe(b"batch").unwrap();
+        let mut two = second.subscribe(b"batch").unwrap();
+        one.outgoing.try_recv().unwrap();
+        two.outgoing.try_recv().unwrap();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut a = first.receive_batch();
+                let mut b = second.receive_batch();
+                a.receive(
+                    &one.registration.peer,
+                    protocol::envelope(one.registration.peer.id.load(Relaxed), &[0xf5]),
+                    4096,
+                )
+                .unwrap();
+                b.receive(
+                    &two.registration.peer,
+                    protocol::envelope(two.registration.peer.id.load(Relaxed), &[0xf5]),
+                    4096,
+                )
+                .unwrap();
+                b.publish();
+                assert_eq!(first.metrics.incoming_messages.load(Relaxed), 0);
+                assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
+                panic!("interrupted ready batch");
+            }))
+            .is_err()
+        );
+        assert_eq!(first.metrics.incoming_messages.load(Relaxed), 1);
+        assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
+        drop((one, two));
+        assert_eq!(first.metrics.queued_bytes.load(Relaxed), 0);
+        assert_eq!(second.metrics.queued_bytes.load(Relaxed), 0);
+    }
 
     fn config() -> Config {
         Config {

@@ -186,7 +186,7 @@ def trial(args):
                         stable_sessions = event["details"]["stable_sessions"]
                         stable_channels = event["details"]["stable_channels"]
                     inspection.check(event, stable_sessions, stable_channels,
-                                     read_storage="connection" if args.kind == "control" else "worker", workers=args.workers)
+                                     read_storage=args.control_read_storage if args.kind == "control" else "worker", workers=args.workers)
                 record["events"].append(event)
                 if event["event"] == "ready":
                     record["client_aocl_mapping_absent"] = "libaocl-libmem" not in Path(f"/proc/{client.pid}/maps").read_text()
@@ -256,7 +256,9 @@ def main():
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
     parser.add_argument("--client-source-root", type=Path,
                         help="source snapshot root for a frozen client; defaults to adjacent examples when available")
-    parser.add_argument("--control", type=Path, help="optional frozen async Rust control, measured with the identical client and gates")
+    parser.add_argument("--control", type=Path, help="optional frozen Rust control, measured with the identical client and gates")
+    parser.add_argument("--control-read-storage", choices=["worker", "connection"], default="connection",
+                        help="receive-staging contract for --control; use worker for a native control")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--rooms", type=int, default=8192)
     parser.add_argument("--seconds", type=int, default=8, choices=range(1, 13))
@@ -348,7 +350,7 @@ def main():
                 if args.client_workers is not None:
                     command += ["--client-workers", str(args.client_workers)]
                 if args.control:
-                    command += ["--control", str(args.control)]
+                    command += ["--control", str(args.control), "--control-read-storage", args.control_read_storage]
                 completed = subprocess.run(command, cwd=ROOT)
                 detail = json.loads(path.read_text())
                 trace = args.output.with_name(f"{args.output.stem}-{case}-{kind}-{repetition}.json")
