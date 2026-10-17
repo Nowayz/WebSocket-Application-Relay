@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async move {
         let listener = TcpListener::bind(config.bind).await.context("cannot bind relay listener")?;
         let admin = if config.no_admin { None } else { Some(TcpListener::bind(config.admin_bind).await.context("cannot bind admin listener")?) };
-        info!(address = %listener.local_addr()?, workers, protocol = "war.cbor.v1", "relay listening");
+        info!(address = %listener.local_addr()?, workers, listen_backlog = config.listen_backlog, protocol = "war.cbor.v1", "relay listening");
         if let Some(admin) = &admin { info!(address = %admin.local_addr()?, "admin listening"); }
         let relay = Relay::new(config)?;
         let shutdown = CancellationToken::new();

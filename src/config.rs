@@ -15,6 +15,9 @@ pub struct Config {
     pub admin_bind: SocketAddr,
     #[arg(long, env = "WAR_NO_ADMIN")]
     pub no_admin: bool,
+    /// Requested pending TCP queue per native listener; the OS may cap it.
+    #[arg(long, env = "WAR_LISTEN_BACKLOG", default_value_t = 1024, value_parser = clap::value_parser!(u16).range(1..))]
+    pub listen_backlog: u16,
     #[command(flatten)]
     pub origin_policy: crate::origin::OriginPolicy,
     #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
@@ -98,6 +101,10 @@ impl Config {
 
     pub fn validate(&self) -> Result<()> {
         self.origin_policy.validate()?;
+        ensure!(
+            self.listen_backlog > 0,
+            "listen-backlog must be in 1..=65535"
+        );
         ensure!(
             self.max_connections_per_ip <= u32::MAX as usize,
             "max-connections-per-ip must be in 0..=4294967295"
@@ -212,5 +219,33 @@ impl Config {
         // The HTTP reader retains a bounded Vec plus a 4 KiB chunk. Two times
         // their sum covers growth and transfer into the decoder's BytesMut.
         2 * self.read_buffer_bytes.max(MAX_HTTP_UPGRADE_BYTES + 4096)
+    }
+}
+
+#[cfg(test)]
+mod backlog_tests {
+    use super::*;
+
+    #[test]
+    fn listen_backlog_is_bounded_for_cli_and_embedding() {
+        assert_eq!(Config::default().listen_backlog, 1024);
+        for value in ["0", "65536"] {
+            assert!(Config::try_parse_from(["war-relay", "--listen-backlog", value]).is_err());
+        }
+        for backlog in [1, u16::MAX] {
+            let config = Config {
+                listen_backlog: backlog,
+                ..Config::default()
+            };
+            config.validate().unwrap();
+        }
+        assert!(
+            Config {
+                listen_backlog: 0,
+                ..Config::default()
+            }
+            .validate()
+            .is_err()
+        );
     }
 }

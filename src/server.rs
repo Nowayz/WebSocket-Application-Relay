@@ -5,6 +5,8 @@ mod socket;
 mod timers;
 
 #[cfg(test)]
+mod accept_tests;
+#[cfg(test)]
 mod arena_tests;
 #[cfg(all(test, target_os = "linux"))]
 mod close_tests;
@@ -58,7 +60,8 @@ const READ_QUANTUM: usize = 256;
 const ACCEPT_QUANTUM: usize = 64;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
-/// sockets belong to a fixed number of readiness workers.
+/// sockets belong to a fixed number of readiness workers. Config's backlog
+/// applies to the pre-bound socket and every additional native listener.
 pub async fn serve(
     listener: AsyncListener,
     admin: Option<AsyncListener>,
@@ -72,7 +75,7 @@ pub async fn serve(
             .min(16)
     });
     let mut prepared = Vec::with_capacity(workers);
-    for listener in worker_listeners(listener, workers)? {
+    for listener in worker_listeners(listener, workers, relay.config.listen_backlog)? {
         prepared.push(Worker::new(listener, relay.clone())?);
     }
     let signals = StopOnDrop {
@@ -145,7 +148,9 @@ pub async fn serve(
 fn worker_listeners(
     listener: std::net::TcpListener,
     workers: usize,
+    backlog: u16,
 ) -> io::Result<Vec<std::net::TcpListener>> {
+    socket2::SockRef::from(&listener).listen(i32::from(backlog))?;
     let mut listeners = Vec::with_capacity(workers);
     // Linux distributes new flows across independent accept queues. Cloning one
     // listen socket lets a single ready worker consume all arrivals instead.
@@ -168,7 +173,7 @@ fn worker_listeners(
             }
             socket.set_nonblocking(true)?;
             socket.bind(&address.into())?;
-            socket.listen(1024)?;
+            socket.listen(i32::from(backlog))?;
             listeners.push(socket.into());
         }
     }
@@ -208,6 +213,7 @@ struct Worker {
     timers: Timers,
     scratch: ReadStorage,
     compacted: bool,
+    accept_queued: bool,
     accept_retry: Option<Instant>,
 }
 
@@ -243,6 +249,7 @@ impl Worker {
             timers: Timers::default(),
             scratch: ReadStorage::default(),
             compacted: false,
+            accept_queued: false,
             accept_retry: None,
         })
     }
@@ -257,6 +264,15 @@ impl Worker {
         {
             connection.scheduled = true;
             self.ready.push_back(token);
+        }
+    }
+
+    fn schedule_accept(&mut self) {
+        // Another listener edge may arrive before this continuation runs.
+        // Keep one queued turn, as data sockets do with their scheduled flag.
+        if !self.accept_queued {
+            self.accept_queued = true;
+            self.ready.push_back(LISTENER);
         }
     }
 
@@ -349,7 +365,7 @@ impl Worker {
         }
         // EPOLLET requires an explicit continuation when we yield before
         // WouldBlock. The listener uses the same bounded ready queue.
-        self.ready.push_back(LISTENER);
+        self.schedule_accept();
         Ok(())
     }
 
@@ -441,6 +457,7 @@ impl Worker {
             for _ in 0..batch {
                 let token = self.ready.pop_front().expect("ready batch");
                 if token == LISTENER {
+                    self.accept_queued = false;
                     if shutdown_deadline.is_none() {
                         self.accept()?;
                     }
@@ -514,7 +531,9 @@ impl Worker {
             }
             for event in &events {
                 match event.token() {
-                    LISTENER if shutdown_deadline.is_none() => self.accept()?,
+                    LISTENER if shutdown_deadline.is_none() && !self.accept_queued => {
+                        self.accept()?
+                    }
                     LISTENER | WAKE => {}
                     token => self.schedule(token),
                 }
@@ -1168,7 +1187,7 @@ mod tests {
             .bind(&std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)).into())
             .unwrap();
         original.listen(128).unwrap();
-        let listeners = worker_listeners(original.into(), 4).unwrap();
+        let listeners = worker_listeners(original.into(), 4, 173).unwrap();
         assert_eq!(listeners.len(), 4);
         for listener in listeners {
             assert!(socket2::SockRef::from(&listener).only_v6().unwrap());
