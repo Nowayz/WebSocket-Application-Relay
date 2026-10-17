@@ -1,0 +1,95 @@
+{
+  "scope": "Per-user latency fairness, selected Mio input-batch runtime. One normal and one overload run; diagnostic instrumented client, not ordinary benchmark comparison. Exact nearest-rank percentiles within each user. Normal 120 samples/user; overload 100. Source send before socket send to recipient data receipt, including loopback and client work. Intended-send latency includes generator queueing. Batched room sends precede concurrent receives. Not isolated server time or production/WAN/SLO proof.",
+  "base_revision": "96db08d7c24e3622ca8366a20b9eaa418634b896",
+  "server_sha256": "35d46da18a5eb4e945d5eacb7962581e520b7e613e9006d89db559264e63db6e",
+  "client_sha256": "0f189cba616f934b06ef4534404a081fb498d8dcf5ab6eae11a46973848b014d",
+  "summary": {
+    "Normal": {
+      "users": 100000,
+      "samples_per_user": [
+        120
+      ],
+      "user_p99_ms": {
+        "minimum": 0.278632,
+        "median": 0.6583479999999999,
+        "p95": 1.0958919999999996,
+        "p99": 1.490312109999999,
+        "maximum": 2.98705
+      },
+      "worst_observed_packet_ms": 4.565859,
+      "users_with_p99_below_ms": {
+        "1": 87.764,
+        "2": 99.753,
+        "5": 100.0,
+        "10": 100.0,
+        "20": 100.0,
+        "50": 100.0,
+        "100": 100.0,
+        "250": 100.0,
+        "500": 100.0
+      },
+      "schedule_p99_ms": {
+        "median": 2.1119700000000003,
+        "p95": 2.6345943,
+        "p99": 2.8668070399999994,
+        "maximum": 5.018618
+      }
+    },
+    "Overload": {
+      "users": 100000,
+      "samples_per_user": [
+        100
+      ],
+      "user_p99_ms": {
+        "minimum": 185.752534,
+        "median": 215.5513605,
+        "p95": 246.35328855,
+        "p99": 248.92565230000002,
+        "maximum": 252.875427
+      },
+      "worst_observed_packet_ms": 259.026153,
+      "users_with_p99_below_ms": {
+        "1": 0.0,
+        "2": 0.0,
+        "5": 0.0,
+        "10": 0.0,
+        "20": 0.0,
+        "50": 0.0,
+        "100": 0.0,
+        "250": 99.795,
+        "500": 100.0
+      },
+      "schedule_p99_ms": {
+        "median": 8654.248954,
+        "p95": 8740.335372900001,
+        "p99": 8770.631830679999,
+        "maximum": 8817.476527
+      }
+    }
+  },
+  "files": {
+    "user-latency-normal.csv.gz": "119f15af50a20cad778a6c7a6d9fa439d4a85ebe23ffd3688891f865f861fce4",
+    "user-latency-smoke.csv.gz": "f55ff8d35f71db9e501a6844e9da84b7202e97498b7e9127665b467dcb28ab1c",
+    "user-latency-build.log": "7a365c3dca2291f82d9f590162ff6057d304273ffd878e320a7e2d00c8b99403",
+    "user-latency-overload.csv.gz": "be534b34659b42e933f11daf5c5962f94187ca81ae34160fb45e165dfdfe9889",
+    "user-latency-normal.json": "410db8f4a824c89feda52ea0ee553fa51a5ecc2eddcb6560012fa8cb6723b339",
+    "user-latency-summary.log": "c7ce121005cb9d7271595ea870c2f491c5150a9f9c739aa328b152e02cb01ec5",
+    "user-latency-fairness.png": "cec801d27e34aa29167c1b316aeb68c6c860dc5a1299ce7f7326cc80633c38d5",
+    "user-latency-smoke.json": "58da29a849527e6a770a3a082d43658264383141f42b47fd1b8cdb0c3535cdd9",
+    "user-latency-run.log": "807962f813b52f92b976e8670e043954c638a0aeb65468013d10cbea0f1c97bf",
+    "user-latency-normal.log": "99c2b12c3c8a340ddc61480963b6a521e35f47fe76c51b78ffdc6c738915c4c7",
+    "user-latency-tests.log": "2005badca27e3ea557eaa8ce742d2ebb11b9b5a40ab6de1e80f04ef096f60cc0",
+    "user-latency-run.py": "183377ecf396ee180c4942dd3191d2c8afb321132c47d1f009d4a143964b9118",
+    "user-latency-overload.log": "06aa276eef4faf4a89a69eee3a84efa3201c7b7c2cbf80f240c4200f7f915b23",
+    "user-latency-overload.json": "3e3b79ba437b83d9ece52f27aae7460c4025c4d8839e65dcfc218d34f9b9b873",
+    "user-latency-smoke.log": "5c84a984f1ed3f516b838f04547dced0546173c7e52d34edb668540882cae2a6",
+    "user-latency-clippy.log": "cbaaf315a1be901377892b63dc4debe299f2042736d902bb74fcddb896dbfc39",
+    "user-latency-fairness.pdf": "ef06b402fb949a07fc7fec931b4c137a71c530f73baaf67c4476a8bd055a36cc",
+    "user-latency-fairness.json": "c7ce121005cb9d7271595ea870c2f491c5150a9f9c739aa328b152e02cb01ec5",
+    "sources/change.patch": "d4336fa0a33d16b0982f50e06db72087e38840c432fe13d9bc9d20064dac6ecc",
+    "sources/capacity.py": "f9513e09b82b5596c071f29332aa3339a78150b104bb3c68602fc4607f2ce3ac",
+    "sources/capacity.rs": "0a7d6f4c560a0164c702f3049a4505e2d2c07434a6254372fad3640f8662e789",
+    "sources/benchmark.py": "41126a207262477842d5f2766bb257aa69ecf7a315630f23f160ddc8196093ce",
+    "sources/plot-user-latency.py": "e7f243d9d25c3e3aa045a15e598203e12fd4ea6633fe2e8b9b975a0a7e7a904c"
+  }
+}

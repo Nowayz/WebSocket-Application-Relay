@@ -135,6 +135,8 @@ def run(args):
     for name in ("users", "room_size", "concurrency", "source_addresses", "seconds",
                  "payload_bytes", "active_percent", "client_workers", "messages_per_second", "churn_workers", "waves"):
         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
+    if args.user_latency_output:
+        client_command += ["--user-latency-output", str(args.user_latency_output.resolve())]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -332,6 +334,7 @@ if __name__ == "__main__":
     parser.add_argument("--active-percent", type=int, default=100)
     parser.add_argument("--client-workers", type=int, default=8)
     parser.add_argument("--messages-per-second", type=int, default=1)
+    parser.add_argument("--user-latency-output", type=Path, help="Diagnostic per-user latency CSV; requires an instrumented client")
     parser.add_argument("--churn-workers", type=int, default=0)
     parser.add_argument("--ping-interval-secs", type=int, default=0)
     parser.add_argument("--tcp-send-buffer-bytes", type=int, default=0)

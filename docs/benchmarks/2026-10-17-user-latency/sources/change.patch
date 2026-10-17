@@ -1,0 +1,190 @@
+diff --git a/examples/capacity.rs b/examples/capacity.rs
+index e4f1370..85ac2b6 100644
+--- a/examples/capacity.rs
++++ b/examples/capacity.rs
+@@ -60,6 +60,9 @@ struct Args {
+     churn_workers: usize,
+     #[arg(long, default_value_t = 8)]
+     client_workers: usize,
++    /// Diagnostic only: exact per-user send-to-receive and schedule-to-receive samples.
++    #[arg(long)]
++    user_latency_output: Option<std::path::PathBuf>,
+ }
+ 
+ #[derive(Default, Serialize)]
+@@ -148,6 +151,7 @@ impl Histogram {
+ struct Peer {
+     socket: Socket,
+     id: u64,
++    latency: Option<Vec<(u64, u64)>>,
+ }
+ struct Room {
+     index: usize,
+@@ -159,6 +163,7 @@ struct Observations {
+     round_trip: Histogram,
+     schedule_lag: Histogram,
+     lifecycle: Histogram,
++    scheduled: Option<Instant>,
+ }
+ 
+ fn main() -> Result<()> {
+@@ -285,7 +290,11 @@ async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result
+         );
+         counts.joins += 1;
+         counts.received(&welcome);
+-        peers.push(Peer { socket, id });
++        peers.push(Peer {
++            socket,
++            id,
++            latency: None,
++        });
+     }
+     Ok((Room { index, peers }, counts))
+ }
+@@ -305,18 +314,57 @@ async fn ring(
+         payload[8..16].copy_from_slice(&sequence.to_le_bytes());
+         values.push(protocol::byte_string(&payload));
+     }
++    let diagnostic = room.peers[0].latency.is_some();
++    let ids: Vec<_> = if diagnostic {
++        room.peers.iter().map(|p| p.id).collect()
++    } else {
++        Vec::new()
++    };
+     let started = Instant::now();
++    let mut sent_at = if diagnostic {
++        Vec::with_capacity(room.peers.len())
++    } else {
++        Vec::new()
++    };
+     for (member, value) in values.iter().enumerate() {
+         let next = (member + 1) % room.peers.len();
+         let packet = protocol::envelope(room.peers[next].id, value);
+         observations.counts.sent_messages += 1;
+         observations.counts.sent_bytes += packet.len() as u64;
+         observations.counts.value_bytes += value.len() as u64;
++        if diagnostic {
++            sent_at.push(Instant::now());
++        }
+         room.peers[member]
+             .socket
+             .send(Message::Binary(packet))
+             .await?;
+     }
++    if room.peers[0].latency.is_some() {
++        let mut receives = futures_util::stream::FuturesUnordered::new();
++        for (member, peer) in room.peers.iter_mut().enumerate() {
++            receives.push(async move {
++                let packet = data(&mut peer.socket).await?;
++                Ok::<_, anyhow::Error>((member, packet, Instant::now(), &mut peer.latency))
++            });
++        }
++        while let Some(received) = receives.next().await {
++            let (member, packet, received, samples) = received?;
++            let previous = (member + values.len() - 1) % values.len();
++            let latency = received.duration_since(sent_at[previous]);
++            check_packet(&packet, ids[previous], &values[previous])?;
++            samples.as_mut().expect("diagnostic samples").push((
++                latency.as_nanos() as u64,
++                received
++                    .duration_since(observations.scheduled.unwrap_or(started))
++                    .as_nanos() as u64,
++            ));
++            observations.round_trip.record(latency);
++            observations.counts.received(&packet);
++            observations.counts.routing_checks += 1;
++        }
++        return Ok(());
++    }
+     for member in 0..room.peers.len() {
+         let previous = (member + room.peers.len() - 1) % room.peers.len();
+         let expected_id = room.peers[previous].id;
+@@ -603,6 +651,13 @@ async fn run_wave(
+         jobs.spawn(async move {
+             let mut observations = Observations::default();
+             if room.index < active_rooms {
++                if args.user_latency_output.is_some() {
++                    for peer in &mut room.peers {
++                        peer.latency = Some(Vec::with_capacity(
++                            (args.seconds * args.messages_per_second) as usize,
++                        ));
++                    }
++                }
+                 // Spread rooms over each period to avoid a generator-made burst.
+                 let period_ns = 1_000_000_000 / args.messages_per_second;
+                 let phase =
+@@ -613,6 +668,7 @@ async fn run_wave(
+                     observations
+                         .schedule_lag
+                         .record(Instant::now().saturating_duration_since(due));
++                    observations.scheduled = Some(due);
+                     ring(&mut room, sequence, args.payload_bytes, &mut observations).await?;
+                 }
+             }
+@@ -648,6 +704,45 @@ async fn run_wave(
+         wave,
+     )?;
+ 
++    if let Some(path) = &args.user_latency_output {
++        use std::io::BufWriter;
++        ensure!(args.waves == 1, "per-user diagnostic requires one wave");
++        let mut output = BufWriter::new(std::fs::File::create(path)?);
++        writeln!(
++            output,
++            "room,member,id,samples,p50_ms,p95_ms,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms"
++        )?;
++        for room in &mut rooms {
++            for (member, peer) in room.peers.iter_mut().enumerate() {
++                let Some(samples) = peer.latency.take() else {
++                    continue;
++                };
++                let mut latency: Vec<_> = samples.iter().map(|s| s.0).collect();
++                let mut scheduled: Vec<_> = samples.iter().map(|s| s.1).collect();
++                latency.sort_unstable();
++                scheduled.sort_unstable();
++                let percentile = |values: &[u64], p: usize| {
++                    values[(values.len() * p).div_ceil(100) - 1] as f64 / 1e6
++                };
++                writeln!(
++                    output,
++                    "{},{},{},{},{},{},{},{},{},{}",
++                    room.index,
++                    member,
++                    peer.id,
++                    latency.len(),
++                    percentile(&latency, 50),
++                    percentile(&latency, 95),
++                    percentile(&latency, 99),
++                    percentile(&latency, 100),
++                    percentile(&scheduled, 99),
++                    percentile(&scheduled, 100)
++                )?;
++            }
++        }
++        output.flush()?;
++    }
++
+     // Idle heartbeat responses alone do not prove application routing survived.
+     let (rooms, proof) = prove_rooms(
+         rooms,
+diff --git a/scripts/capacity.py b/scripts/capacity.py
+index d55bad6..620ae50 100644
+--- a/scripts/capacity.py
++++ b/scripts/capacity.py
+@@ -135,6 +135,8 @@ def run(args):
+     for name in ("users", "room_size", "concurrency", "source_addresses", "seconds",
+                  "payload_bytes", "active_percent", "client_workers", "messages_per_second", "churn_workers", "waves"):
+         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
++    if args.user_latency_output:
++        client_command += ["--user-latency-output", str(args.user_latency_output.resolve())]
+     if args.server_cpus:
+         server_command = ["taskset", "-c", args.server_cpus] + server_command
+     if args.client_cpus:
+@@ -332,6 +334,7 @@ if __name__ == "__main__":
+     parser.add_argument("--active-percent", type=int, default=100)
+     parser.add_argument("--client-workers", type=int, default=8)
+     parser.add_argument("--messages-per-second", type=int, default=1)
++    parser.add_argument("--user-latency-output", type=Path, help="Diagnostic per-user latency CSV; requires an instrumented client")
+     parser.add_argument("--churn-workers", type=int, default=0)
+     parser.add_argument("--ping-interval-secs", type=int, default=0)
+     parser.add_argument("--tcp-send-buffer-bytes", type=int, default=0)

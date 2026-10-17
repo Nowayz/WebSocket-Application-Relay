@@ -5554,3 +5554,80 @@ symbol percentages are diagnostic observations, not exclusive causal categories
 or predicted speedups. The next source inspection targets repeated routing and
 timer work while retaining full CBOR validation, exact quotas and payload
 ownership. No new runtime optimization is selected from this profile alone.
+
+
+## Per-user latency fairness at 100,000 connections, 2026-10-17
+
+The [fairness archive](benchmarks/2026-10-17-user-latency.json) measures every
+stable user separately with the selected Mio binary. A new optional capacity
+client diagnostic preallocates each user's exact sample vector, timestamps each
+sender immediately before socket send, and polls room receivers concurrently.
+It records per-user nearest-rank p50/p95/p99/max and intended-send-to-receive
+p99/max. CSV encoding and sorting occur after the measured gate. The ordinary
+client path retains its original receive loop when this option is absent.
+These diagnostic results are distinct from earlier client/binary comparisons.
+
+Both runs use 100,000 users, 16-member private rings, 1 KiB payloads, four server
+workers on CPUs 0–3, eight client workers on CPUs 8–15, 16 KiB send/64 KiB receive
+buffers and 15-second heartbeats. Each user has the same offered rate. Normal
+load offers two packets/user/s for 60 seconds, verifies 12 million deliveries
+and achieves 199,970/s. Overload offers ten/user/s for ten seconds, verifies ten
+million including drain and achieves 531,406/s over 18.818 seconds. All users
+have exactly 120 or 100 measured samples, all IDs and room/member pairs are unique,
+and both runs pass payload/FIFO, counter, fresh routing, Close/EOF and retirement
+checks with both processes exiting zero. The 32-user smoke and client oracle
+test pass, as do strict Clippy and formatting.
+
+| Across-user statistic of individual user p99 | Normal ms | Overload ms |
+| --- | ---: | ---: |
+| Median user | 0.658 | 215.551 |
+| 95th percentile user | 1.096 | 246.353 |
+| 99th percentile user | 1.490 | 248.926 |
+| Worst user p99 | 2.987 | 252.875 |
+| Worst single packet across all users | 4.566 | 259.026 |
+
+At normal load, 87.764% of users have individual p99 at most 1 ms, and 99.753%
+at most 2 ms. Every measured packet is below 5 ms. This does not mean every
+user has identical latency: the connection-index plot contains localized tail
+spikes. It does not establish whether those spikes originate in the relay,
+client executor, kernel scheduling or another host effect. Repeated and longer
+measurements with independent load generators are needed to test persistence.
+
+The overload case is poor for every user, not merely a small unfairly served
+subset. Its median user's intended-send-to-receive p99 is 8,654 ms, versus
+2.112 ms normally. Sending behind schedule is included explicitly rather than
+hidden by reporting only post-send latency. The room workload is closed-loop
+within each ring and batched sends precede concurrent receives; client scheduling
+and batch effects remain included. These are local loopback observations, not
+isolated server processing time, WAN/TLS results, guaranteed SLOs or precise
+long-term tail estimates from only 100/120 samples per user.
+
+![Per-user latency fairness](benchmarks/2026-10-17-user-latency/user-latency-fairness.png)
+
+Reproduce with a freshly built release capacity example and the selected relay:
+
+```sh
+cargo build --release --locked --example capacity
+python3 scripts/capacity.py --server artifacts/candidates/input-batch/war-relay \
+  --client target/release/examples/capacity --users 100000 --seconds 60 \
+  --messages-per-second 2 --read-storage worker --server-cpus 0-3 --client-cpus 8-15 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --ping-interval-secs 15 \
+  --user-latency-output artifacts/fairness-normal.csv --output artifacts/fairness-normal.json
+```
+
+Repeat with fresh paths, `--seconds 10 --messages-per-second 10` for overload.
+Then run `scripts/plot-user-latency.py --normal artifacts/fairness-normal.csv
+--overload artifacts/fairness-overload.csv --output artifacts/fairness`. The
+plotter emits PNG, PDF and machine-readable summary. Archived compressed CSVs
+retain all 100,000 per-user rows per run.
+
+### Timer retiming ablation
+
+The [timer experiment](benchmarks/2026-10-17-timer-inplace.json) avoids removing
+and reinserting unchanged deadlines and repairs moved deadlines in place.
+Existing ordering/rekey tests pass. Three rotating private pairs measure
+2,089,632/s and 1,055 ns for selected Mio versus 2,064,577/s and 1,068 ns for the
+candidate. Three 100,000-user overload pairs measure 551,474/s and 5,048 ns
+versus 549,066/s and 5,028 ns. All twelve trials pass, but the small mixed
+throughput/CPU changes establish no consistent benefit. The source change is
+reverted and its patch retained. No active-heartbeat timer comparison is claimed.
