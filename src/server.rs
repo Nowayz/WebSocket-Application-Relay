@@ -57,7 +57,7 @@ use timers::Timers;
 const LISTENER: Token = Token(0);
 const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
-const ACCEPT_QUANTUM: usize = 64;
+const ACCEPT_QUANTUM: usize = 16;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
 /// sockets belong to a fixed number of readiness workers. Config's backlog
