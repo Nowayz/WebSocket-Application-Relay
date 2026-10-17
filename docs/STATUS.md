@@ -28,6 +28,13 @@ A separate 65s 100k heartbeat/churn/unread acceptance passes 6.5 million stable
 messages, 66,560 churn sessions, pressure validation and complete retirement.
 The 400k operating recommendation remains. See [results and limits](performance.md#global-and-observer-fanout-work-quotas-2026-10-17).
 
+The idle local native development service now runs selected `f1bf8bf9…` from
+runtime commit `c7bb20a`, with its prior four-worker general-development arguments
+and environment. Native routing, legacy 4 KiB private delivery, exact Close/EOF,
+readiness and static-page availability pass. All four I/O singleton bindings and
+the running executable hash are verified; final gauges clear. This is local
+acceptance, not production deployment or a new 100k manual-service test.
+
 ## Latest diagnosis: client-placement refresh, 2026-10-17
 
 Eight ordinary cases on unchanged selected `c9a6c6da…` verify 120 million

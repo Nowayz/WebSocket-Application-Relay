@@ -6653,3 +6653,12 @@ record included three then-untracked files absent from its base/diff; its
 preserved original capacity example and two runner sources are explicit overlays
 in the manifest, rather than being misrepresented as part of that patch.
 This remains same-host plaintext evidence, not a new C++/WAN/TLS comparison.
+
+The idle local native development service is updated to selected `f1bf8bf9…`
+from runtime commit `c7bb20a`, preserving its four-worker arguments, environment,
+CPU allowance, endpoints and OS TCP-buffer policy. Live native routing and legacy
+4 KiB private delivery pass, including exact Close/EOF. Readiness and static test
+page return 200, all four I/O workers have the expected singleton CPU masks,
+the running executable matches the selected hash, and final gauges clear.
+Bridge/static processes stay in place. This is local acceptance, not production
+deployment, a new 100k manual-service case or fresh browser-render acceptance.
