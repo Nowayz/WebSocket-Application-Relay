@@ -587,11 +587,10 @@ impl Callback for UpgradePolicy {
 }
 
 type Upgrade = MidHandshake<ServerHandshake<Stream, UpgradePolicy>>;
-// The live decoder stays inline in the connection slab. Boxing the steady
-// state to match the temporary handshake variant would add an idle allocation.
-#[allow(clippy::large_enum_variant)]
+// Both phases keep their metadata inline in the connection slab. Input and
+// frame buffers retain their own lifetimes across resumptions and slab moves.
 enum Stage {
-    Upgrade(Option<Box<Upgrade>>),
+    Upgrade(Option<Upgrade>),
     WebSocket(WebSocket<Stream>),
 }
 
@@ -650,7 +649,7 @@ impl Connection {
             token,
             scheduled: false,
             socket,
-            stage: Stage::Upgrade(Some(Box::new(handshake))),
+            stage: Stage::Upgrade(Some(handshake)),
             handshake_lease: lease,
             registration: None,
             phase_deadline: now + Duration::from_secs(config.handshake_timeout_secs),
@@ -713,7 +712,7 @@ impl Connection {
                     self.stage = Stage::WebSocket(ws);
                 }
                 Err(HandshakeError::Interrupted(mid)) => {
-                    *handshake = Some(Box::new(mid));
+                    *handshake = Some(mid);
                     return Drive::Wait;
                 }
                 Err(HandshakeError::Failure(Error::Http(response))) if response.status() == 403 => {
