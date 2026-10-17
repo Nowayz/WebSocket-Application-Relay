@@ -1077,3 +1077,29 @@ the selected physical cores and their SMT siblings. These CPU IDs describe the
 measured machine; inspect topology before applying them elsewhere. The binary
 and four-worker development service are unchanged. See the
 [measurement and limits](performance.md#eight-worker-latency-operating-profile-2026-10-17).
+
+## Comparing latency headroom without hiding backlog
+
+Use the generic plotter for any per-user capacity CSVs:
+
+```sh
+python3 scripts/plot-user-latency-comparison.py \
+  --case '600k/s repeat 1=artifacts/latency-headroom-six-1.csv' \
+  --case '800k/s repeat 1=artifacts/latency-headroom-eight-1.csv' \
+  --output artifacts/headroom-comparison
+```
+
+Repeat `--case LABEL=CSV` for each workload/repetition. The output includes PNG,
+PDF and JSON with CSV hashes, sample counts and exact nearest-rank user-level
+percentiles. Left-hand curves start at actual send; right-hand curves start at
+intended send and include generator backlog. Neither curve is a pooled packet
+percentile. Optional repeated `--threshold-ms N` reports the fraction of users
+whose p99 meets that threshold; it does not establish a packet-loss rate or
+latency guarantee. No threshold is imposed by default. Empty data, duplicate IDs,
+nonpositive sample counts and invalid latency values fail validation.
+
+A run that eventually verifies every planned packet can still be overloaded.
+Compare offered rate with completed rate and inspect intended-send latency and
+scheduling lag before selecting operating headroom. The test includes the load
+generator, loopback stack and relay; its delay does not isolate a server-only
+capacity limit or predict WAN/TLS behavior.

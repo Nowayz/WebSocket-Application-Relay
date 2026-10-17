@@ -5964,3 +5964,47 @@ histogram bucket, maximum is 5.981503 ms, and client scheduling-lag maximum is
 retirement and normal exits pass; eight worker affinities remain intact. This
 single mixed run is acceptance evidence, not a matched mixed-load speedup claim.
 The default four-worker local development service is left unchanged.
+
+## Eight-worker latency headroom (2026-10-17)
+
+The next study keeps the exact eight-worker pinned executable, 100,000 users,
+16-member rooms, 1 KiB private messages, 15-second heartbeats, 16/64 KiB socket
+buffers and disjoint server/client physical cores. Fresh sequential processes
+rotate 600,000/800,000/800,000/600,000 offered messages/s over 30 seconds. Each
+user has 180 or 240 exact samples. All 84 million messages pass complete
+verification, exact counters, post-load routing, Close/EOF, kernel/descriptor
+retirement and normal process exits. No builds, profiles or competing benchmarks
+overlap timing; each worker's singleton affinity is checked before and after.
+
+| Offered rate / run | Median user p99 ms | 99th percentile of user p99s ms | Median user intended-send p99 ms | Worst intended-send packet ms | Achieved completions/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 600k / 1 | 2.993 | 6.236 | 6.005 | 19.435 | 599,847 |
+| 800k / 1 | 158.224 | 161.468 | 5,490.577 | 5,580.992 | 675,749 |
+| 800k / 2 | 162.421 | 171.676 | 5,591.306 | 5,721.065 | 674,189 |
+| 600k / 2 | 17.544 | 25.731 | 27.140 | 82.207 | 599,847 |
+
+The 800k cases deliver eventually but accumulate seconds of backlog. Their
+actual completion rates include the final drain and must not be described as
+800k sustained realtime capacity. Even 600k varies substantially despite both
+cases keeping up in aggregate: a useful throughput result is not a consistent
+latency result. The prior 400k eight-worker runs remain the measured responsive
+profile (median user p99 0.919–0.922 ms,99th user p99 1.570–1.584 ms); this study
+does not raise that operating recommendation. The plot includes one previous
+400k run as context, explicitly not a newly interleaved baseline.
+
+These measurements include generator scheduling/preparation, TCP loopback, relay
+and client reception. At 800k the client consumes 181.08–184.55 CPU seconds and
+the server 115.78–119.41 CPU seconds over the measurement boundary. This does
+not isolate a server-only ceiling, thermal cause, lock mechanism or generator
+bottleneck. The next optimization needs to diagnose the higher-rate variability
+rather than infer its cause from successful packet counts or aggregate rate.
+
+The new `scripts/plot-user-latency-comparison.py` accepts arbitrary labeled
+cases and writes side-by-side actual-send and intended-send CDFs with exact
+nearest-rank user percentiles, sample counts and source hashes. Optional explicit
+thresholds summarize users meeting a user-p99 target, not packet percentile or
+loss guarantees. Independent tiny fixtures verify nearest-rank semantics,
+separate backlog statistics, threshold arithmetic and malformed-input rejection.
+The actual comparison PNG was visually inspected. See the
+[evidence archive](benchmarks/2026-10-17-latency-headroom/manifest.json) and
+[plotting recipe](operations.md#comparing-latency-headroom-without-hiding-backlog).

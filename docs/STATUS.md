@@ -11,6 +11,23 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest investigation: eight-worker latency headroom, 2026-10-17
+
+Four fresh higher-rate cases verify 84 million messages at 100,000 users.
+At 800k offered/s, actual completion is 674–676k/s with median user p99
+158–162 ms after actual send and 5.49–5.59 seconds from intended send. At
+600k/s, both runs keep up in aggregate but median user p99 varies from 2.99 to
+17.54 ms. Complete counters, routing and retirement checks pass. The existing
+400k eight-worker operating recommendation is retained; correct delivery alone
+does not justify increasing the low-latency target. No server code changes.
+
+A reusable plotter now compares arbitrary cases with actual/intended-send CDFs,
+nearest-rank user percentiles and explicit optional thresholds. Independent
+fixtures and real rendered-output inspection pass. See
+[headroom evidence](performance.md#eight-worker-latency-headroom-2026-10-17).
+The next diagnosis must separate higher-rate client/host/relay effects rather
+than treat a successful aggregate rate as reliable responsiveness.
+
 ## Latest verified profile: eight pinned workers, 2026-10-17
 
 The unchanged pinned-capable binary improves per-user latency when provisioned
