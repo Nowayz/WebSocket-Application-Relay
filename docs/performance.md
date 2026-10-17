@@ -6117,3 +6117,60 @@ failed initial candidate launch lacked executable permission; a fresh complete
 v2 comparison replaces that incomplete set. Initial test-helper compilation and
 unsupported corpus CLI attempts are retained with their corrected successful
 checks, separately from runtime acceptance. Selected binary: `0067fde4…`.
+
+## Per-thread counter diagnosis (2026-10-17)
+
+The unchanged selected `0067fde4…` relay has three separate 30-second counter
+runs at 100,000 users / 600,000 messages/s, plus one CPU-accounting follow-up.
+All 72 million messages, exact counters, routing, affinities, Close/EOF and
+retirement checks pass. These are diagnostic runs, not ordinary timing medians.
+`perf stat` counts six events per ready-time thread for the fresh server/client;
+all event rows in the three large repeats have counted values and 100% running
+coverage. The collector avoids stack captures but its overhead is not quantified.
+
+Across those three repeats, server instructions range 370.70–372.08 billion
+and client instructions 550.18–550.58 billion. Server IPC is 0.744–0.785;
+client IPC 0.650–0.661. Native worker migrations are zero; client migrations
+range 11,296–13,288. No obvious large increase in aggregate instruction work
+explains the differing tails. All three runs have slow cohorts, so there is no
+matched fast counter case and no isolated causal explanation.
+
+A measurement-scope check is essential: first-run summed server perf task-clock
+is 133.56 s, while process user/system CPU is 89.36 s. A fresh follow-up records
+per-CPU accounting over the server/client masks around collection:
+
+| Follow-up CPU seconds | Server / CPUs 0–7 | Client / CPUs 8–15 |
+| --- | ---: | ---: |
+| Process user + system, existing gate boundary | 88.46 | 119.48 |
+| Summed perf task-clock | 132.72 | 174.16 |
+| CPU-set IRQ + softirq | 46.75 | 55.66 |
+| CPU-set total user/system/IRQ/softirq | 164.67 | 191.33 |
+
+The interrupt totals are consistent in size with much of the task-clock/process
+CPU gap, but their boundaries and attribution differ. Whole CPU-set totals also
+include other processes and kernel workers. They cannot be charged entirely to
+the relay/client, nor can the older process-CPU metric be called total host cost.
+The running kernel enables IRQ time accounting and generic virtual CPU accounting.
+Upstream [CPU accounting source](https://github.com/torvalds/linux/blob/master/kernel/sched/cputime.c)
+distinguishes task system time from IRQ/softirq time, while
+[perf task-clock source](https://github.com/torvalds/linux/blob/master/kernel/events/core.c)
+uses perf context time. Those sources explain a possible mechanism, not an exact
+source match or complete attribution for this running kernel. Consequently,
+cycles/task-clock ratios alone are not used to claim a frequency cause.
+
+The one-second intended-send timelines provide a narrower next lead: each
+repeat's worst send-to-receive p99 cohort also contains 65k–100k observed Pings.
+Worst cohort p99 values are 34.50,42.35 and48.33 ms at intended seconds27,12,27.
+Other delayed cohorts without Pings also exist. Co-occurrence is not proof, and
+Ping counts are encountered control frames rather than kernel arrival timestamps.
+This motivates a heartbeat-phase ablation, not disabling heartbeat protection.
+
+The reusable collector/analyzer preserve unavailable observations and separate
+all three CPU scopes. Four independent fixtures verify attribution, ratios,
+missing values, malformed rows and accounting separation. A 32-user real-socket
+smoke also passes. Render inspection caught stale hardcoded workload labels in
+the timeline plotter; explicit titles/subtitles and data-derived Ping-axis limits
+replace them, and the correct 600k/eight-worker figure was regenerated and
+inspected. No relay runtime change is selected from counters alone. The
+[evidence archive](benchmarks/2026-10-17-perf-counters/manifest.json) binds raw
+counts, exact harness versions, source, tests, accounting snapshots and plots.

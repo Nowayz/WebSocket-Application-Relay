@@ -1125,3 +1125,31 @@ percentage denominator; `--percentage relative` is necessary for fractions of
 that process's own samples. Per-process user/system CPU deltas are available
 from the existing ready/measured event snapshots. Sample fractions and call
 chains are diagnostic evidence, not syscall counts or predicted speedups.
+
+## Per-thread counter and CPU-accounting diagnostics
+
+Use `--profile --profile-counters` with the capacity harness to collect `perf stat`
+for existing ready-time threads. Add `--profile-client` to include client threads.
+This mode includes kernel and user counts and excludes the kernel/scheduling
+sample flags. It collects task-clock, cycles, instructions, cache misses,
+context switches and CPU migrations, with explicit TID attribution and event
+running percentages. No future-thread inheritance is assumed. The collector
+records per-CPU `/proc/stat` snapshots around collection and the process CPU
+masks, without changing system settings.
+
+```sh
+python3 scripts/analyze-perf-counters.py \
+  --run artifacts/counter-accounting.json \
+  --output artifacts/counter-accounting-analysis.json
+```
+
+The analyzer preserves missing/unsupported values, rejects malformed or duplicated
+counter rows and reports ratios over counted observations. These are diagnostic
+runs; overhead is not assumed negligible. Process user/system CPU, perf task-clock
+and whole CPU-set busy time must stay distinct. CPU-set data includes other
+processes and kernel workers; IRQ totals are not exclusive process attribution.
+See the [observed accounting discrepancy](performance.md#per-thread-counter-diagnosis-2026-10-17).
+
+Timeline plots now accept `--title` and `--subtitle`; supply the actual workload
+when comparing cases. Defaults make no user/rate/worker-count claim. Ping-axis
+limits derive from the recorded cohorts instead of assuming 100,000 users.

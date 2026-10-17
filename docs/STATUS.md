@@ -11,6 +11,21 @@ Measured throughput or bandwidth costs are acceptable when responsiveness improv
 This file records reviewable checkpoints; they do not complete the open-ended
 improvement goal.
 
+## Latest diagnosis: counters and heartbeat cohorts, 2026-10-17
+
+Three counter repeats plus a CPU-accounting follow-up verify 72 million messages
+at 100,000 users / 600k/s with the unchanged selected relay. Native worker
+migrations are zero; aggregate instruction counts vary little. Slow tails remain.
+CPU-set IRQ/softirq time is consistent in size with much of the perf task-clock
+versus process-CPU gap, but whole CPU-set totals include other work and cannot
+be assigned entirely to the relay/client. Separate accounting scopes are retained.
+
+All three counter runs' worst one-second cohorts coincide with large observed
+Ping cohorts; this motivates a heartbeat-phase ablation, not a causal conclusion.
+The collector/analyzer and four fixtures pass; actual regenerated timeline labels
+now match the 600k/eight-worker workload. No runtime or operating-target change.
+See [evidence and limits](performance.md#per-thread-counter-diagnosis-2026-10-17).
+
 ## Latest selected runtime: borrowed synchronous submissions, 2026-10-17
 
 Synchronous sends now borrow frame/budget owners while keeping byte reservations

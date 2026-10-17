@@ -37,6 +37,16 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def cpu_stat_snapshot():
+    rows = {}
+    for line in Path("/proc/stat").read_text().splitlines():
+        fields = line.split()
+        if fields and fields[0].startswith("cpu"):
+            rows[fields[0]] = [int(value) for value in fields[1:]]
+    return {"ticks_per_second": os.sysconf("SC_CLK_TCK"),
+            "monotonic_seconds": time.monotonic(), "cpus": rows}
+
+
 def pin_child_workers(pid, count, native, apply=True):
     """Pin or verify this fresh child's known I/O threads within its allowed mask."""
     allowed = sorted(os.sched_getaffinity(pid))
@@ -254,6 +264,8 @@ def run(args):
                     perf.send_signal(signal.SIGINT)
                     result["perf_exit_code"] = perf.wait(timeout=15)
                     assert result["perf_exit_code"] in (0, -signal.SIGINT)
+                    if args.profile_counters:
+                        result["counter_cpu_end"] = cpu_stat_snapshot()
                     perf_log.seek(0)
                     result["perf_log"] = perf_log.read().decode(errors="replace")
                     perf_log.close()
@@ -297,7 +309,23 @@ def run(args):
                     path = args.output.with_suffix(".perf.data")
                     assert not path.exists(), "use a fresh profile path"
                     perf_log = tempfile.TemporaryFile()
-                    if args.profile_scheduling:
+                    if args.profile_counters:
+                        path = args.output.with_suffix(".perf-stat.csv")
+                        assert not path.exists(), "use a fresh counter path"
+                        result["profile_pids"] = {"server": server.pid}
+                        if args.profile_client:
+                            result["profile_pids"]["client"] = client.pid
+                        threads = []
+                        for role, pid in result["profile_pids"].items():
+                            for task in sorted(Path(f"/proc/{pid}/task").iterdir()):
+                                threads.append({"role": role, "pid": pid, "tid": int(task.name),
+                                                "name": (task / "comm").read_text().strip()})
+                        result["profile_threads"] = threads
+                        command = ["perf", "stat", "--no-inherit", "--per-thread", "-x", ";",
+                            "-e", "task-clock,cycles,instructions,cache-misses,context-switches,cpu-migrations",
+                            "--tid", ",".join(str(t["tid"]) for t in threads), "-o", str(path)]
+                        result["profile_scope"] = "Diagnostic counters for ready-gate threads only, kernel and user included; unsupported/unmeasured events are not zero. Timings excluded from ordinary comparisons."
+                    elif args.profile_scheduling:
                         # Sideband context-switch records cover both processes;
                         # low-rate clock samples identify threads without DWARF.
                         command = ["perf", "record", "-e", "cpu-clock", "-F", "49",
@@ -316,6 +344,10 @@ def run(args):
                             result["profile_pids"]["client"] = client.pid
                         result["profile_scope"] = "Diagnostic cycle samples; per-process reports required; timings excluded from ordinary comparisons."
                     result["profile_command"] = command
+                    if args.profile_counters:
+                        result["counter_cpu_masks"] = {role: sorted(os.sched_getaffinity(pid))
+                            for role, pid in result["profile_pids"].items()}
+                        result["counter_cpu_start"] = cpu_stat_snapshot()
                     perf = subprocess.Popen(command, stdout=perf_log, stderr=perf_log)
                     time.sleep(.2)
                     assert perf.poll() is None, "perf could not attach"
@@ -399,6 +431,8 @@ if __name__ == "__main__":
     parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
     parser.add_argument("--pin-client-workers", action="store_true", help="Benchmark intervention: one allowed CPU per client I/O worker")
     parser.add_argument("--profile", action="store_true", help="Separate diagnostic perf capture; not an ordinary timing trial")
+    parser.add_argument("--profile-counters", action="store_true",
+                        help="With --profile, collect per-thread perf stat instead of stack samples")
     parser.add_argument("--profile-client", action="store_true",
                         help="Include client cycle samples in --profile; report processes separately")
     parser.add_argument("--profile-frequency", type=int, default=499,
@@ -428,6 +462,8 @@ if __name__ == "__main__":
         parser.error("use a single wave for an isolated diagnostic profile")
     if args.profile_scheduling and (not args.profile or args.profile_kernel):
         parser.error("--profile-scheduling requires --profile and excludes --profile-kernel")
+    if args.profile_counters and (not args.profile or args.profile_scheduling or args.profile_kernel):
+        parser.error("--profile-counters requires --profile and excludes scheduling/kernel sample flags")
     if args.profile_client and (not args.profile or args.profile_scheduling):
         parser.error("--profile-client requires --profile and excludes scheduling sideband")
     if args.profile_frequency <= 0:
