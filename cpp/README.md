@@ -158,3 +158,13 @@ halved allocation count for retained 1 KiB bodies, but delivered mixed CPU and
 latency results across 44 benchmark trials, including 96 million timed probes
 at 100,000 users. It was rejected and the accepted runtime restored. The archive
 keeps the source, allocation diagnostic, every observation and per-user plots.
+
+
+For private-path investigations, build `cargo build --release --example placement`
+and use `cpp/placement-compare.py --server control=artifacts/candidates/cpp-modern/war-relay-cpp --output artifacts/placement-new.json`.
+The Linux controller maps real TCP sockets to their epoll owners, balances
+32 active pairs across four workers, and measures fully local and fully remote
+routing separately. It verifies exact copied-byte deltas and Close/EOF cleanup.
+Add another `--server label=/absolute/path/to/war-relay-cpp` to compare builds.
+[Controlled ownership results](../docs/benchmarks/2026-10-17-cpp-placement/README.md)
+show why that distinction matters; the rejected array prototype remains unselected.

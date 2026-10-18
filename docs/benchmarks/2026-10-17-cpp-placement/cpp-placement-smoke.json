@@ -1,0 +1,54 @@
+{
+  "scope": "Linux plaintext native CBOR. /proc TCP inode/fd/epoll ownership determines balanced disjoint pairs. All pairs local or remote; idle pool remains connected. Server CPU measured between gates; topology queries, templates, postchecks and Close/EOF excluded. Window latency includes client scheduling; not isolated relay-hop latency. Fresh sequential rotated processes, server CPUs0..3 by default, client8..15.",
+  "server_sha256": {
+    "control": "b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1"
+  },
+  "client_sha256": "598d6f9fa19dcc7674db6b5ff9340425b31647afab71a43821aa167eac904373",
+  "runner_sha256": "fcb679916c551e6da4e5f75d140e2761ff1636be8285b1c18475ce0dd02e2e3b",
+  "runs": [
+    {
+      "kind": "control",
+      "mode": "local",
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-modern/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:36767",
+        "--admin-bind",
+        "127.0.0.1:60249",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/candidates/placement-client/placement",
+        "--url",
+        "ws://127.0.0.1:36767",
+        "--pool",
+        "64",
+        "--seconds",
+        "1",
+        "--window",
+        "16",
+        "--payload-bytes",
+        "1024"
+      ],
+      "passed": false,
+      "gates": [],
+      "baseline": {
+        "cpu_seconds": 0.0,
+        "fd_count": 28
+      },
+      "client_exit_code": 126,
+      "error": "taskset: failed to execute /home/phil/dev/war_next/artifacts/candidates/placement-client/placement: Permission denied\n",
+      "server_exit_code": 0
+    }
+  ],
+  "passed": false
+}

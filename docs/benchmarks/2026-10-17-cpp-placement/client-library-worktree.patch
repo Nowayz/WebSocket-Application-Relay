@@ -1,0 +1,383 @@
+diff --git a/src/relay.rs b/src/relay.rs
+index b219422..2d2c69c 100644
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -44,6 +44,9 @@ pub struct Relay {
+     pub metrics: Arc<Metrics>,
+     admission: AtomicU8,
+     state: RwLock<Registry>,
++    // Registry before index is the only lock order. A retained index read guard
++    // preserves observer permission/FIFO barriers after membership is released.
++    listeners: [RwLock<Vec<Arc<Peer>>>; 3],
+     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
+ }
+ 
+@@ -98,22 +101,28 @@ impl Drop for ReceiveBatch<'_> {
+ struct Registry {
+     users: HashMap<u64, Arc<Peer>>,
+     channels: HashMap<Bytes, Channel>,
+-    // Only authenticated global members opting into each class belong here.
+-    // Routing visits eligible listeners, independent of the idle population.
+-    listeners: [Vec<Arc<Peer>>; 3],
++    // Counts change under this registry's write guard, together with the
++    // corresponding index. Empty fast paths need no additional lock.
++    listener_counts: [usize; 3],
+     next_key: u64,
+     sessions: usize,
+ }
+ 
+ impl Registry {
+-    fn set_listener_flags(&mut self, peer: &Peer, flags: u8) {
++    fn set_listener_flags(
++        &mut self,
++        peer: &Peer,
++        flags: u8,
++        indexes: &[RwLock<Vec<Arc<Peer>>>; 3],
++    ) {
+         let previous = peer.listener.load(Relaxed);
+         peer.listener.store(flags, Relaxed);
+-        for (bit, listeners) in self.listeners.iter_mut().enumerate() {
++        for (bit, index) in indexes.iter().enumerate() {
+             let mask = 1 << bit;
+             if (previous ^ flags) & mask == 0 {
+                 continue;
+             }
++            let mut listeners = index.write();
+             if flags & mask != 0 {
+                 if let Some(member) = self.channels[GLOBAL_CHANNEL].members.get(&peer.key) {
+                     listeners.push(member.clone());
+@@ -121,14 +130,16 @@ impl Registry {
+             } else if let Some(position) = listeners.iter().position(|p| p.key == peer.key) {
+                 listeners.swap_remove(position);
+                 if listeners.capacity() > 256 && listeners.len() <= listeners.capacity() / 8 {
+-                    listeners.shrink_to(listeners.len() * 2);
++                    let remaining = listeners.len();
++                    listeners.shrink_to(remaining * 2);
+                 }
+             }
++            self.listener_counts[bit] = listeners.len();
+         }
+     }
+ 
+-    fn listeners(&self, flag: u8) -> &[Arc<Peer>] {
+-        &self.listeners[flag.trailing_zeros() as usize]
++    fn listener_count(&self, flag: u8) -> usize {
++        self.listener_counts[flag.trailing_zeros() as usize]
+     }
+ }
+ 
+@@ -439,10 +450,11 @@ impl Relay {
+                 ..Metrics::default()
+             }),
+             admission: AtomicU8::new(Admission::Open as u8),
++            listeners: Default::default(),
+             state: RwLock::new(Registry {
+                 users: HashMap::new(),
+                 channels,
+-                listeners: Default::default(),
++                listener_counts: [0; 3],
+                 next_key: 1,
+                 sessions: 0,
+             }),
+@@ -689,7 +701,7 @@ impl Relay {
+         };
+         *counter = counter.wrapping_add(frame.payload().len() as u64);
+         if let Some(recipient) = private_recipient
+-            && state.listeners(PRIVATE_MESSAGE).is_empty()
++            && state.listener_count(PRIVATE_MESSAGE) == 0
+         {
+             // Lookup and sender identity form one registry snapshot. The
+             // retained target owns its lifetime through the socket write.
+@@ -699,7 +711,7 @@ impl Relay {
+         }
+         if target == BROADCAST
+             && peer.channel.as_ref() != GLOBAL_CHANNEL
+-            && state.listeners(CHANNEL_MESSAGE).is_empty()
++            && state.listener_count(CHANNEL_MESSAGE) == 0
+         {
+             let Some(channel) = state.channels.get(&peer.channel) else {
+                 return Ok(1);
+@@ -717,31 +729,25 @@ impl Relay {
+             }
+             return Ok(work);
+         }
+-        // Charge every fanout path by recipient visits, including global
+-        // observers. One complete message remains atomic with respect to this
+-        // source's FIFO; the connection yields before its next buffered frame.
+-        // Counts conservatively include the sender or duplicate primary target.
+-        let work = if target == BROADCAST {
+-            if peer.channel.as_ref() == GLOBAL_CHANNEL {
+-                state.users.len()
+-            } else {
+-                state
+-                    .channels
+-                    .get(&peer.channel)
+-                    .map_or(0, |c| c.members.len())
+-                    .saturating_add(state.listeners(CHANNEL_MESSAGE).len())
+-            }
+-        } else {
+-            state.listeners(PRIVATE_MESSAGE).len().saturating_add(1)
+-        };
++        // Charge recipient visits and preserve complete-message/source FIFO.
++        // An index read guard protects permission changes through submission,
++        // without holding unrelated membership/ID writers behind observer I/O.
++        let work;
+         if target == BROADCAST {
+             if peer.channel.as_ref() == GLOBAL_CHANNEL {
++                work = state.users.len();
+                 for recipient in state.users.values() {
+                     if recipient.key != peer.key {
+                         recipient.enqueue_frame(&frame)?;
+                     }
+                 }
+             } else {
++                let listeners = self.listeners[CHANNEL_MESSAGE.trailing_zeros() as usize].read();
++                work = state
++                    .channels
++                    .get(&peer.channel)
++                    .map_or(0, |c| c.members.len())
++                    .saturating_add(listeners.len());
+                 if let Some(channel) = state.channels.get(&peer.channel) {
+                     for recipient in channel.members.values() {
+                         if recipient.key != peer.key {
+@@ -749,17 +755,24 @@ impl Relay {
+                         }
+                     }
+                 }
+-                for recipient in state.listeners(CHANNEL_MESSAGE) {
++                drop(state);
++                for recipient in listeners.iter() {
+                     recipient.enqueue_frame(&frame)?;
+                 }
+             }
+         } else if let Some(recipient) = private_recipient {
++            let listeners = self.listeners[PRIVATE_MESSAGE.trailing_zeros() as usize].read();
++            work = listeners.len().saturating_add(1);
++            let primary_key = recipient.key;
+             recipient.enqueue_frame(&frame)?;
+-            for listener in state.listeners(PRIVATE_MESSAGE) {
+-                if listener.key != recipient.key {
++            drop(state);
++            for listener in listeners.iter() {
++                if listener.key != primary_key {
+                     listener.enqueue_frame(&frame)?;
+                 }
+             }
++        } else {
++            unreachable!("private recipient was resolved under the registry guard")
+         }
+         Ok(work.max(1))
+     }
+@@ -781,7 +794,7 @@ impl Relay {
+                     if peer.closing.load(Relaxed) {
+                         return Ok(());
+                     }
+-                    state.set_listener_flags(peer, flags & 7);
++                    state.set_listener_flags(peer, flags & 7, &self.listeners);
+                 } else {
+                     peer.listener.store(flags & 7, Relaxed);
+                 }
+@@ -928,10 +941,13 @@ impl Relay {
+             shrink_sparse_map(&mut channel.members);
+         }
+         if peer.channel.as_ref() == GLOBAL_CHANNEL {
+-            state.set_listener_flags(peer, 0);
++            state.set_listener_flags(peer, 0, &self.listeners);
+         }
+         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
+-            for recipient in state.listeners(DISCONNECT_MESSAGE) {
++            for recipient in self.listeners[DISCONNECT_MESSAGE.trailing_zeros() as usize]
++                .read()
++                .iter()
++            {
+                 let _ = recipient.enqueue_frame(frame.as_ref().expect("notifications enabled"));
+             }
+         }
+diff --git a/src/relay/listener_tests.rs b/src/relay/listener_tests.rs
+index 0a4a075..88751e7 100644
+--- a/src/relay/listener_tests.rs
++++ b/src/relay/listener_tests.rs
+@@ -171,3 +171,183 @@ fn listener_identity_survives_assignment_takeover_and_delayed_cleanup() {
+     assert_eq!(relay.counts(), (0, 1));
+     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+ }
++
++struct UnlockedObserver {
++    relay: std::sync::Weak<Relay>,
++    received: parking_lot::Mutex<Option<Envelope>>,
++}
++
++impl PeerOutput for UnlockedObserver {
++    fn send(&self, packet: Submission<'_>) -> bool {
++        if packet.frame.payload().len() > 100 {
++            assert!(
++                self.relay.upgrade().unwrap().state.try_write().is_some(),
++                "observer output must release the membership registry"
++            );
++            self.received.lock().replace(packet.into_owned());
++        }
++        true
++    }
++    fn close(&self, _: Disconnect) {}
++}
++
++fn observer_output_releases_membership(flags: u8) {
++    let relay = relay();
++    let source = joined(&relay, b"data");
++    let mut target = joined(&relay, b"data");
++    let probe = Arc::new(UnlockedObserver {
++        relay: Arc::downgrade(&relay),
++        received: parking_lot::Mutex::new(None),
++    });
++    let observer = relay
++        .subscribe_with_output(GLOBAL_CHANNEL, probe.clone())
++        .unwrap();
++    relay
++        .receive(
++            &observer.peer,
++            protocol::request(0, &protocol::text("listeners-test")),
++        )
++        .unwrap();
++    relay
++        .receive(
++            &observer.peer,
++            protocol::request(1, &protocol::uint(u64::from(flags))),
++        )
++        .unwrap();
++    let value = protocol::byte_string(&vec![0xa5; 8192]);
++    let destination = if flags == CHANNEL_MESSAGE {
++        BROADCAST
++    } else {
++        target.registration.peer.id.load(Relaxed)
++    };
++    let input = protocol::envelope(destination, &value);
++    let pointer = protocol::parse(&input).unwrap().1.as_ptr();
++    let expected = protocol::envelope(source.registration.peer.id.load(Relaxed), &value);
++    relay.receive(&source.registration.peer, input).unwrap();
++    drop(take(&mut target, &expected));
++    let held = probe.received.lock().take().unwrap();
++    assert_eq!(held.frame.payload().as_ptr(), pointer);
++    drop(observer);
++    drop(source);
++    drop(target);
++    assert_eq!(relay.counts(), (0, 1));
++    assert_eq!(held.frame.payload(), value.as_ref());
++    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
++    drop(held);
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++}
++
++#[test]
++fn channel_observer_output_releases_membership_and_retains_the_original_body() {
++    observer_output_releases_membership(CHANNEL_MESSAGE);
++}
++
++#[test]
++fn private_observer_output_releases_membership_and_retains_the_original_body() {
++    observer_output_releases_membership(PRIVATE_MESSAGE);
++}
++
++struct PausedObserver {
++    entered: std::sync::mpsc::SyncSender<()>,
++    resume: parking_lot::Mutex<std::sync::mpsc::Receiver<()>>,
++    sent: parking_lot::Mutex<Vec<Vec<u8>>>,
++}
++
++impl PeerOutput for PausedObserver {
++    fn send(&self, packet: Submission<'_>) -> bool {
++        if packet.frame.payload().len() > 100 {
++            self.entered.send(()).unwrap();
++            self.resume
++                .lock()
++                .recv_timeout(std::time::Duration::from_secs(3))
++                .unwrap();
++        }
++        self.sent.lock().push(packet.frame.to_vec());
++        true
++    }
++    fn close(&self, _: Disconnect) {}
++}
++
++#[test]
++fn observer_permission_reply_waits_for_selected_output_while_unrelated_membership_progresses() {
++    for flags in [CHANNEL_MESSAGE, PRIVATE_MESSAGE] {
++        let relay = relay();
++        let source = joined(&relay, b"data");
++        let mut target = joined(&relay, b"data");
++        let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
++        let (resume_tx, resume_rx) = std::sync::mpsc::sync_channel(1);
++        let probe = Arc::new(PausedObserver {
++            entered: entered_tx,
++            resume: parking_lot::Mutex::new(resume_rx),
++            sent: parking_lot::Mutex::new(Vec::new()),
++        });
++        let observer = relay
++            .subscribe_with_output(GLOBAL_CHANNEL, probe.clone())
++            .unwrap();
++        relay
++            .receive(
++                &observer.peer,
++                protocol::request(0, &protocol::text("listeners-test")),
++            )
++            .unwrap();
++        relay
++            .receive(
++                &observer.peer,
++                protocol::request(1, &protocol::uint(u64::from(flags))),
++            )
++            .unwrap();
++        probe.sent.lock().clear();
++        let value = protocol::byte_string(&vec![0x5a; 8192]);
++        let expected = protocol::envelope(source.registration.peer.id.load(Relaxed), &value);
++        let destination = if flags == CHANNEL_MESSAGE {
++            BROADCAST
++        } else {
++            target.registration.peer.id.load(Relaxed)
++        };
++        let input = protocol::envelope(destination, &value);
++        let route_relay = relay.clone();
++        let sender = source.registration.peer.clone();
++        let route = std::thread::spawn(move || route_relay.receive(&sender, input).unwrap());
++        entered_rx
++            .recv_timeout(std::time::Duration::from_secs(3))
++            .unwrap();
++        // Admission and complete retirement work while observer output is parked.
++        let transient = joined(&relay, b"unrelated");
++        drop(transient);
++        let index = flags.trailing_zeros() as usize;
++        assert!(relay.listeners[index].try_write().is_none());
++        let update_relay = relay.clone();
++        let recipient = observer.peer.clone();
++        let update = std::thread::spawn(move || {
++            update_relay
++                .receive(&recipient, protocol::request(1, &[0]))
++                .unwrap()
++        });
++        let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
++        // The flag changes before the writer waits for the retained index guard.
++        while observer.peer.listener.load(Relaxed) != 0 {
++            assert!(std::time::Instant::now() < until);
++            std::thread::yield_now();
++        }
++        assert!(
++            probe.sent.lock().is_empty(),
++            "permission reply overtook selected output"
++        );
++        resume_tx.send(()).unwrap();
++        route.join().unwrap();
++        update.join().unwrap();
++        assert_eq!(
++            *probe.sent.lock(),
++            vec![expected.to_vec(), protocol::reply(1, &[0]).to_vec()]
++        );
++        drop(take(&mut target, &expected));
++        assert_eq!(relay.state.read().listener_count(flags), 0);
++        assert!(relay.listeners[index].read().is_empty());
++        drop(observer);
++        drop(source);
++        drop(target);
++        assert_eq!(relay.counts(), (0, 1));
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    }
++}

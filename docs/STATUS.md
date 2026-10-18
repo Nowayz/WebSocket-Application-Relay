@@ -1667,3 +1667,23 @@ include both source trees, all observations, compressed census CSVs and a
 hash verifier. Cache-line placement of ownership metadata and controlled
 worker-ownership measurement remain follow-up investigations, not diagnosed
 causes or claimed optimizations.
+
+
+### Controlled C++ worker-placement measurement (2026-10-17)
+
+Added the gated `examples/placement.rs` client and Linux
+`cpp/placement-compare.py` controller. TCP inode/descriptor/epoll observations
+select balanced disjoint local or remote pairs without changing relay code.
+Exact copy-counter deltas prove zero retained bytes on the local path and
+one 1,037-byte encoded-body copy per remote delivery. The mapping is rechecked
+after timing; all clients verify postchecks, normal Close and raw TCP EOF.
+
+Sixteen fresh rotated eight-second trials verify 197,348,704 deliveries. The
+array prototype has +13.00% median remote throughput and -9.32% CPU/delivery,
+winning all four remote pairs. Local throughput is -2.36% and CPU +0.63%.
+This provides direct ownership-path evidence while preserving the previous
+latency-based rejection. No relay runtime, selected executable or manual service
+is changed. The new client passes strict release Clippy. Both successful smoke
+topologies and all ordinary cases retire exact descriptor/resource baselines.
+[Sources, every trial, provenance, plot and verifier](benchmarks/2026-10-17-cpp-placement/README.md)
+are archived with an explicit dependency on the prior ownership source archive.

@@ -120,3 +120,28 @@ end-to-end evidence, the prototype was rejected. The accepted executable and
 static library above are restored exactly. All 36 smaller-population trials,
 eight population trials, full protocol corpus, both source trees and per-user
 plots are archived; the rejected change did not receive a new sanitizer campaign.
+
+
+## Controlled worker ownership
+
+A new [epoll ownership study](../docs/benchmarks/2026-10-17-cpp-placement/README.md)
+removes the private-path placement confound without instrumenting either relay.
+Sixteen rotated eight-second trials verify 197,348,704 deliveries with exactly
+zero retained copies for local pairs and one encoded-body copy per delivery
+for remote pairs. Each worker has eight active sources and eight receivers;
+256 sessions stay connected throughout. CPU gates exclude topology discovery,
+setup, postchecks and retirement.
+
+| Topology | Accepted C++ deliveries/s | Array prototype deliveries/s | Accepted CPU us/delivery | Array CPU us/delivery |
+|---|---:|---:|---:|---:|
+| Every pair local | 1,648,831 | 1,609,891 | 1.472 | 1.481 |
+| Every pair remote | 1,352,783 | 1,528,636 | 1.791 | 1.624 |
+
+The array prototype improves remote throughput/CPU in all four matched pairs,
+but slightly worsens the local medians. Remote p99 is 1.049 ms in all candidate
+trials versus 1.049/2.097/2.097/2.097 ms for the control (windowed histogram
+bounds). This isolates a real ownership-path benefit; it does not override the
+previous 100,000-user and competing-traffic selection decision. The accepted
+runtime is unchanged. Use `examples/placement.rs` and `cpp/placement-compare.py`
+for subsequent local/remote guards instead of assuming random socket placement
+gives equivalent work.

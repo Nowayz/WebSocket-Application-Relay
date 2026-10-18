@@ -6732,3 +6732,35 @@ metadata after payload storage. Cache-line sharing is a plausible investigation
 target, not a measured explanation of these runs. Future work should control
 worker placement and measure ownership/cache traffic before introducing another
 allocation or layout variant.
+
+
+## Controlled worker ownership (2026-10-17)
+
+The [placement study](benchmarks/2026-10-17-cpp-placement/README.md) adds a
+real-WebSocket client and external Linux controller to eliminate a source of
+variation in the private comparisons. It maps client TCP ports through accepted
+socket inodes and descriptors to exact epoll owners. From 256 live peers it
+selects 32 disjoint pairs, balanced at eight sources and eight receivers per
+worker, with either every pair local or every pair remote. All idle peers remain
+connected. Before/after counter deltas and a second ownership census verify the
+actual measured work. CPU snapshots are gated outside setup, topology queries,
+template creation, postchecks and cleanup.
+
+Four fresh eight-second trials per build/topology verify 197,348,704 deliveries.
+Accepted C++ versus the rejected array prototype: local median throughput
+1,648,831 versus 1,609,891/s, CPU 1.472 versus 1.481 us/delivery; remote
+1,352,783 versus 1,528,636/s, CPU 1.791 versus 1.624 us/delivery. The array
+wins every remote matched pair and records a 1.049 ms p99 upper bucket in all
+four remote trials, versus one 1.049 and three 2.097 ms control trials. Those
+windowed latency bounds include client scheduling and are not isolated relay
+hop latency. Every local trial records exactly zero retained-copy bytes and
+every remote trial exactly one full encoded-body copy per verified delivery.
+
+This supports a real retained-path allocation benefit, with a small local-path
+tradeoff. It does not diagnose cache sharing or override the array prototype's
+prior mixed/population responsiveness evidence; the accepted runtime remains
+selected. The benchmark client checks every encoded frame, sender, cyclic
+sequence, post-timing active pair and all 256 normal Close/EOF exchanges, and
+all server resource/descriptor gauges return to baseline. Release Clippy passes.
+Future ownership changes can now be evaluated against equivalent local and
+remote work rather than a changing copy-path fraction.
