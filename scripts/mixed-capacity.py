@@ -231,6 +231,15 @@ def main():
             rows = list(csv.DictReader(source))
         assert len(rows) == args.users and len({row['id'] for row in rows}) == args.users
         assert all(int(row['samples']) == args.seconds * 4 for row in rows)
+        # Short screens can rank users without establishing a per-user tail SLO.
+        record['latency_sampling'] = {
+            'users': len(rows),
+            'observations_per_user': args.seconds * 4,
+            'total_private_observations': sum(int(row['samples']) for row in rows),
+            'all_user_p99_equal_observed_max': all(
+                float(row['p99_ms']) == float(row['max_ms']) for row in rows),
+            'scope': 'Finite per-user observations; not a latency deadline or long-term p99 guarantee',
+        }
         record['csv_sha256'] = digest(str(prefix) + '.csv')
         record['latency'] = {}
         for column in ('p99_ms', 'max_ms', 'schedule_p99_ms', 'schedule_max_ms'):
