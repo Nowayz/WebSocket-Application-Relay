@@ -6998,3 +6998,13 @@ Keep nominal and completed fanout windows distinct: the short headroom study
 completes 123–128 of 128 planned windows. Full checking of submitted matrices
 does not prove the generator offered every planned window. Preserve shortfalls
 when comparing CPU cost and latency.
+
+The [owned TCP census regression](benchmarks/2026-10-18-owned-census/README.md)
+shows that a matching listener IP/port in the host TCP table can belong to an
+unrelated outbound connection. The capacity helper now scopes established
+socket inodes to the tested server's descriptor ownership, reusing its existing
+quiescent walk. Exact population checks stay in place; `tcp_census` retains
+raw/foreign/duplicate counts. The temporary set is released before traffic.
+The real alias/descriptor regression and two two-second 100k-user integrations
+pass. This fixes a demonstrated counting flaw without claiming the cause of the
+older setup failure or a server performance improvement.

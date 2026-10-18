@@ -1,5 +1,20 @@
 # Continuing goal status
 
+## 2026-10-18: server-owned connection census
+
+Code `51f1402` corrects the capacity helper's connection ownership check. A real
+TCP regression reproduces a foreign connection sharing the listener's source
+endpoint: old host count1, server-owned count0. Genuine accepted/retired sockets
+and duplicate descriptors are checked as well. The exact population assertion
+is retained; raw/foreign/duplicate diagnostics are preserved separately.
+Two two-second 100k-user integrations check 1.6M measured private probes and
+exactly 100k owned sockets at live gates, zero after retirement. The final helper
+reuses the descriptor scan and releases its gate-only inode set before traffic.
+The older unexplained setup failure cannot be attributed retrospectively.
+No core relay/client behavior or manual service changes.
+[Reproducer, source pins and verifier](benchmarks/2026-10-18-owned-census/README.md).
+
+
 ## 2026-10-18: generator headroom and explicit backlog reporting
 
 Keep code `c83c99c`: mixed results now flag sends more than one workload period

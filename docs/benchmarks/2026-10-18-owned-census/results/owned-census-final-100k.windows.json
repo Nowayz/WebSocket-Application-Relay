@@ -1,0 +1,75 @@
+{
+  "scope": "One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Ping counts are control frames encountered while reading probes in that cohort, not kernel arrival timestamps. Includes client scheduling and room batching.",
+  "stage_order": [
+    "wake_delay",
+    "prepare",
+    "room_send_delay",
+    "socket_send",
+    "after_send"
+  ],
+  "stage_scope": "Opt-in client clocks: wake_delay=due to ring entry; prepare=entry to all payloads ready; room_send_delay=ready to this sender's send call (includes earlier room sends); socket_send=send call through flush completion; after_send=flush completion to application read. Runtime preemption counts toward the interval it interrupts. after_send includes client receive scheduling, kernel and relay; it is not server-only latency. Component percentiles cannot be summed.",
+  "windows": [
+    {
+      "client_stages": {},
+      "intended_second": 0,
+      "intended_to_receive": {
+        "max_ms": 4.11037,
+        "p50_ms": 1.522063,
+        "p95_ms": 2.496228,
+        "p99_ms": 2.858574,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.229397,
+        "p50_ms": 1.141364,
+        "p95_ms": 1.939519,
+        "p99_ms": 2.23029,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 1.48607,
+        "p50_ms": 0.37594,
+        "p95_ms": 0.73022,
+        "p99_ms": 0.867287,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": null,
+        "intended_to_receive": null,
+        "pre_send_delay": null
+      }
+    },
+    {
+      "client_stages": {},
+      "intended_second": 1,
+      "intended_to_receive": {
+        "max_ms": 4.872569,
+        "p50_ms": 1.500875,
+        "p95_ms": 2.466455,
+        "p99_ms": 2.810658,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.852216,
+        "p50_ms": 1.1314,
+        "p95_ms": 1.934007,
+        "p99_ms": 2.210656,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 1.82582,
+        "p50_ms": 0.36706,
+        "p95_ms": 0.701791,
+        "p99_ms": 0.843827,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": null,
+        "intended_to_receive": null,
+        "pre_send_delay": null
+      }
+    }
+  ]
+}
