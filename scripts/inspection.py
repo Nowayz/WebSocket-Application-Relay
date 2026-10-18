@@ -140,6 +140,8 @@ def run(args):
         command += ["--fanout-churn-every", str(args.fanout_churn_every)]
     if getattr(args, "fanout_window", 16) != 16:
         command += ["--fanout-window", str(args.fanout_window)]
+    if getattr(args, "fanout_close_window", 1) != 1:
+        command += ["--fanout-close-window", str(args.fanout_close_window)]
     if args.server_cpus:
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
@@ -313,6 +315,8 @@ if __name__ == "__main__":
                         help="Join/retire a verifying room member every N fanout windows; zero disables")
     parser.add_argument("--fanout-window", type=int, default=16,
                         help="Broadcast window size in 1..=32; requires updated client when not16")
+    parser.add_argument("--fanout-close-window", type=int, choices=range(1, 33), default=1,
+                        help="Departure drain batch outside timing; 32 shortens large-audience cleanup")
     parser.add_argument("--read-storage", choices=["worker", "connection", "completion"], default="worker",
                         help="staging contract: worker scratch, frozen async connection, or experimental completion header receives")
     parser.add_argument("--pin-workers", action="store_true",
