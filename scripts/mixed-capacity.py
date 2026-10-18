@@ -43,7 +43,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, required=True)
     parser.add_argument('--kind', choices=['rust', 'cpp'], default='rust')
-    parser.add_argument('--sidecar', type=Path, default=ROOT / 'artifacts/candidates/mixed-capacity-client-final/inspection')
+    parser.add_argument('--sidecar', type=Path, default=ROOT / 'target/release/examples/inspection')
+    parser.add_argument('--capacity-client', type=Path, default=ROOT / 'artifacts/candidates/latency-timeline-client/capacity')
     parser.add_argument('--users', type=int, default=100000)
     parser.add_argument('--seconds', type=int, default=30)
     parser.add_argument('--readers', type=int, default=8192)
@@ -53,13 +54,15 @@ def main():
     parser.add_argument('--pairs', type=int, default=1)
     parser.add_argument('--churn-cycles-per-second', type=int, default=0)
     parser.add_argument('--fanout-windows-per-second', type=int, default=0)
+    parser.add_argument('--fanout-churn-every', type=int, default=0)
+    parser.add_argument('--exact-fanout-latency', action='store_true')
     parser.add_argument('--profile', action='store_true')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     assert args.users % 16 == 0 and args.seconds >= 2
     prefix = args.output.with_suffix('')
     assert not args.output.exists() and not Path(str(prefix) + '.csv').exists()
-    client_path = ROOT / 'artifacts/candidates/latency-timeline-client/capacity'
+    client_path = args.capacity_client.resolve()
     port, admin = free_port(), free_port()
     while admin == port:
         admin = free_port()
@@ -85,6 +88,12 @@ def main():
           '--churn-workers', '8', '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
           '--fanout-readers', str(args.readers), '--fanout-window', str(args.window), '--fanout-global-observers',
           '--external-capacity-rooms', str(args.users // 16), '--fanout-close-window', '32', '--fanout-windows-per-second', str(args.fanout_windows_per_second)]
+    if args.fanout_churn_every:
+        assert args.scope == 'room' and args.inspectors == 0
+        sc[sc.index('--mode') + 1] = 'none'
+        sc += ['--fanout-churn-every', str(args.fanout_churn_every)]
+    if args.exact_fanout_latency:
+        sc += ['--fanout-latency-output', str(prefix) + '-fanout.csv']
     if args.scope == 'room':
         sc.remove('--fanout-global-observers')
     record = {'passed': False, 'args': vars(args).copy(), 'server_command': cmd, 'client_command': cc,
@@ -214,6 +223,22 @@ def main():
             values = sorted(float(row[column]) for row in rows)
             record['latency'][column] = {name: values[(len(values) - 1) * percentile // 100]
                                         for name, percentile in [('median', 50), ('p95', 95), ('p99', 99), ('max', 100)]}
+        if args.exact_fanout_latency:
+            fanout_path = str(prefix) + '-fanout.csv'
+            with open(fanout_path) as source:
+                audience = list(csv.DictReader(source))
+            assert len(audience) == args.readers and len({r['id'] for r in audience}) == args.readers
+            assert sum(int(r['samples']) for r in audience) == fanout['verified']
+            assert all(int(r['samples']) == fanout['verified'] // args.readers for r in audience)
+            assert all(int(r['schedule_p99_ns']) >= int(r['p99_ns']) and
+                       int(r['schedule_max_ns']) >= int(r['max_ns']) for r in audience)
+            record['fanout_csv_sha256'] = digest(fanout_path)
+            record['fanout_exact_ms'] = {}
+            for column in ('p99_ns', 'max_ns', 'schedule_p99_ns', 'schedule_max_ns'):
+                values = sorted(int(r[column]) / 1e6 for r in audience)
+                record['fanout_exact_ms'][column.removesuffix('_ns') + '_ms'] = {
+                    name: values[(len(values) - 1) * q // 100]
+                    for name, q in [('median', 50), ('p95', 95), ('p99', 99), ('max', 100)]}
         record['passed'] = True
     except Exception as error:
         record['error'] = repr(error)
@@ -233,7 +258,7 @@ def main():
         for handle in files:
             handle.close()
         args.output.write_text(json.dumps(record, indent=2) + '\n')
-    print(json.dumps({'passed': record['passed'], 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency')}))
+    print(json.dumps({'passed': record['passed'], 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
     if not record['passed']:
         raise SystemExit(1)
 

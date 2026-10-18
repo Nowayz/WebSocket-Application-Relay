@@ -1,5 +1,29 @@
 # Continuing goal status
 
+## 2026-10-18: short multicast experiments; runtime retained
+
+Retain selected runtime `279c3c1` / executable `3db9ebeb…`; no experimental
+server change is adopted and the manual services are unchanged. Four-frame
+staging plus a smaller ready batch saves 13.6% server CPU across the final two
+30-second runs, with lower broadcast p99. Private intended-to-receive p99 tails
+vary too widely to establish the required joint latency improvement. Every
+outlier and both repetitions remain in the archive. Shorter two-frame and
+priority-scheduling alternatives are rejected as well.
+
+Kept tooling adds bounded preallocated exact recipient p99/max CSVs, intended
+window latency, complete audience checks, a hot-room membership option and
+explicit client pinning. Eight-second screens are followed by 30 seconds only
+when 120 probes per private user are needed to distinguish p99 from maximum.
+No multi-hour test ran. The retained workspace passes 80 library plus four
+inspection tests, strict Clippy/formatting, vendor provenance, and the updated
+helper's end-to-end smoke. Experimental pointer/FIFO/admission and pressure
+proofs remain separate from selected-runtime evidence. All three original dirty
+experimental files are preserved byte-for-byte.
+
+The next focused diagnosis is an eight-second load-generator profile to identify
+its recorded pre-send stalls before changing server policy again. See the
+[full comparison, source pins and verifier](benchmarks/2026-10-18-buffered-fanout/README.md).
+
 ## 2026-10-17: Rust multicast now uses socket owners
 
 Selected runtime `7290017`, executable

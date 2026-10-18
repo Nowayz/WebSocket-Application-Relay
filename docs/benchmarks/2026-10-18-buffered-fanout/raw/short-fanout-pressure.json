@@ -1,0 +1,302 @@
+{
+  "passed": true,
+  "server_command": [
+    "/home/phil/dev/war_next/artifacts/candidates/short-fanout-batch-selected/war-relay",
+    "--bind",
+    "127.0.0.1:41943",
+    "--admin-bind",
+    "127.0.0.1:33759",
+    "--workers",
+    "4",
+    "--messages-per-second",
+    "0",
+    "--bytes-per-second",
+    "0",
+    "--ping-interval-secs",
+    "0",
+    "--idle-timeout-secs",
+    "0",
+    "--max-message-bytes",
+    "1048576",
+    "--queue-bytes",
+    "1048586",
+    "--queue-messages",
+    "64",
+    "--total-queue-bytes",
+    "268435456",
+    "--tcp-send-buffer-bytes",
+    "16384"
+  ],
+  "client_command": [
+    "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-pressure-client/stress",
+    "--url",
+    "ws://127.0.0.1:41943",
+    "--mode",
+    "fanout",
+    "--clients",
+    "1100",
+    "--unread-clients",
+    "8",
+    "--duration-secs",
+    "5",
+    "--payload-bytes",
+    "1024",
+    "--window",
+    "4",
+    "--teardown-gate"
+  ],
+  "server_sha256": "428917269ad73e3d92eebbc2100641b9011b1df10730687deb151dfcb74c4ab1",
+  "client_sha256": "9ff5e641cc3433af3876e62072eaeac9ff07a3977159170db63f556c04d6352a",
+  "events": [
+    {
+      "clients": 1100,
+      "event": "ready",
+      "healthy_readers": 1091,
+      "mode": "fanout",
+      "payload_sizes": [
+        1024
+      ],
+      "unread_clients": 8
+    },
+    {
+      "elapsed_seconds": 5.002362428,
+      "event": "traffic_finished",
+      "mode": "fanout",
+      "sent_messages": 9856,
+      "verified_deliveries": 10752896
+    },
+    {
+      "clients": 1100,
+      "deliveries_per_second": 2149563.56217059,
+      "disconnect_notifications": 8728,
+      "elapsed_seconds": 5.002362428,
+      "event": "result",
+      "healthy_readers": 1091,
+      "joins": 1100,
+      "latency_max_ms": 4.314722,
+      "latency_p50_upper_ms": 2.097152,
+      "latency_p99_upper_ms": 4.194304,
+      "mode": "fanout",
+      "payload_bytes": null,
+      "payload_sizes": [
+        1024
+      ],
+      "reader_delay_ms": 0,
+      "sent_encoded_bytes": 10220672,
+      "sent_messages": 9856,
+      "sent_value_bytes": 10122112,
+      "setup_seconds": 0.190352621,
+      "slow_observation": null,
+      "source_addresses": 0,
+      "teardown_capacity_closes": 0,
+      "unread_clients": 8,
+      "unread_observations": [
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 78
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 69
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 87
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 80
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 72
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 70
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 76
+        },
+        {
+          "code": 1013,
+          "kind": "close",
+          "verified_buffered_frames": 72
+        }
+      ],
+      "validation": "64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram",
+      "verified_deliveries": 10752896,
+      "window": 4
+    }
+  ],
+  "live_metrics": {
+    "war_read_buffer_reserved_bytes": 32768,
+    "war_read_buffer_peak_reserved_bytes": 73728,
+    "war_read_buffer_limit_bytes": 1073741824,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 8,
+    "war_routing_reused_bytes_total": 10122112,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 8,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 1100,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 1100,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 8,
+    "war_incoming_messages_total": 9856,
+    "war_incoming_bytes_total": 10220672,
+    "war_deliveries_total": 10763336,
+    "war_delivered_bytes_total": 11151555384,
+    "war_slow_consumers_total": 8,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 1100,
+    "war_sessions": 1092,
+    "war_channels": 2,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 376320,
+    "war_output_queue_peak_capacity_bytes": 406400
+  },
+  "client_exit_code": 0,
+  "result": {
+    "clients": 1100,
+    "deliveries_per_second": 2149563.56217059,
+    "disconnect_notifications": 8728,
+    "elapsed_seconds": 5.002362428,
+    "event": "result",
+    "healthy_readers": 1091,
+    "joins": 1100,
+    "latency_max_ms": 4.314722,
+    "latency_p50_upper_ms": 2.097152,
+    "latency_p99_upper_ms": 4.194304,
+    "mode": "fanout",
+    "payload_bytes": null,
+    "payload_sizes": [
+      1024
+    ],
+    "reader_delay_ms": 0,
+    "sent_encoded_bytes": 10220672,
+    "sent_messages": 9856,
+    "sent_value_bytes": 10122112,
+    "setup_seconds": 0.190352621,
+    "slow_observation": null,
+    "source_addresses": 0,
+    "teardown_capacity_closes": 0,
+    "unread_clients": 8,
+    "unread_observations": [
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 78
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 69
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 87
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 80
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 72
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 70
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 76
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 72
+      }
+    ],
+    "validation": "64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram",
+    "verified_deliveries": 10752896,
+    "window": 4
+  },
+  "final_metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 73728,
+    "war_read_buffer_limit_bytes": 1073741824,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 1098,
+    "war_routing_reused_bytes_total": 10122112,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 1098,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 1100,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 1100,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 1100,
+    "war_incoming_messages_total": 9856,
+    "war_incoming_bytes_total": 10220672,
+    "war_deliveries_total": 10766280,
+    "war_delivered_bytes_total": 11151611320,
+    "war_slow_consumers_total": 1033,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 5352960
+  },
+  "teardown_capacity_markings": 1025,
+  "server_exit_code": 0
+}

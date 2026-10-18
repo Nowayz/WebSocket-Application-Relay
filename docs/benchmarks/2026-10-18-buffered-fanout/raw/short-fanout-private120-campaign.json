@@ -1,0 +1,60 @@
+{
+  "passed": true,
+  "runs": [
+    {
+      "name": "private120-control",
+      "command": [
+        "python3",
+        "scripts/mixed-capacity.py",
+        "--server",
+        "artifacts/candidates/mixed-capacity-final/war-relay",
+        "--sidecar",
+        "artifacts/candidates/short-fanout-client-v2/inspection",
+        "--seconds",
+        "30",
+        "--scope",
+        "room",
+        "--pairs",
+        "0",
+        "--churn-cycles-per-second",
+        "4",
+        "--fanout-windows-per-second",
+        "16",
+        "--exact-fanout-latency",
+        "--output",
+        "artifacts/short-fanout-private120-control.json"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 62.10332368701347,
+      "result": "artifacts/short-fanout-private120-control.json"
+    },
+    {
+      "name": "private120-batch",
+      "command": [
+        "python3",
+        "scripts/mixed-capacity.py",
+        "--server",
+        "artifacts/candidates/short-fanout-batch-final/war-relay",
+        "--sidecar",
+        "artifacts/candidates/short-fanout-client-v2/inspection",
+        "--seconds",
+        "30",
+        "--scope",
+        "room",
+        "--pairs",
+        "0",
+        "--churn-cycles-per-second",
+        "4",
+        "--fanout-windows-per-second",
+        "16",
+        "--exact-fanout-latency",
+        "--output",
+        "artifacts/short-fanout-private120-batch.json"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 63.38987559499219,
+      "result": "artifacts/short-fanout-private120-batch.json"
+    }
+  ],
+  "contract": "30-second measured phases; 100000 private users at4Hz plus8192 room recipients,4 frames16Hz,8 churn workers4Hz,2 CBOR inspectors10ms. Fresh sequential processes; physical server/client core separation. Exact optional fanout per-recipient nearest-rank p99; private120-probe per-user p99 and maxima. No soak."
+}

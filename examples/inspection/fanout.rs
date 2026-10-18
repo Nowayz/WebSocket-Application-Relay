@@ -15,11 +15,53 @@ pub(super) struct Fanout {
 
 #[derive(Clone)]
 enum Step {
-    Messages(usize, Instant, usize),
+    Messages(usize, Instant, Instant, usize),
     Departure(Bytes),
 }
 
-type ReaderResult = Result<((Socket, u64), Counts, Histogram)>;
+type ReaderResult = Result<((Socket, u64), Counts, Histogram, Option<ExactLatency>)>;
+
+// Diagnostic client storage only. A paced run has a finite sample bound; reserve
+// once and refuse overflow instead of allocating while recording deliveries.
+struct ExactLatency {
+    samples: Vec<(u64, u64)>,
+    limit: usize,
+}
+impl ExactLatency {
+    fn new(limit: usize) -> Self {
+        Self {
+            samples: Vec::with_capacity(limit),
+            limit,
+        }
+    }
+    fn record(&mut self, elapsed: Duration, scheduled: Duration) -> Result<()> {
+        ensure!(
+            self.samples.len() < self.limit,
+            "exact fanout sample bound exceeded"
+        );
+        self.samples.push((
+            elapsed.as_nanos().try_into()?,
+            scheduled.as_nanos().try_into()?,
+        ));
+        Ok(())
+    }
+    fn write(&mut self, out: &mut impl Write, id: u64) -> Result<()> {
+        ensure!(!self.samples.is_empty(), "missing exact fanout samples");
+        let rank = (self.samples.len() * 99).div_ceil(100) - 1;
+        self.samples.sort_unstable_by_key(|sample| sample.0);
+        let p99 = self.samples[rank].0;
+        let max = self.samples.last().unwrap().0;
+        self.samples.sort_unstable_by_key(|sample| sample.1);
+        writeln!(
+            out,
+            "{id},{},{p99},{max},{},{}",
+            self.samples.len(),
+            self.samples[rank].1,
+            self.samples.last().unwrap().1
+        )?;
+        Ok(())
+    }
+}
 
 async fn acknowledge(
     acks: &mut mpsc::Receiver<usize>,
@@ -59,6 +101,21 @@ fn departure(wire: Wire, id: u64) -> Bytes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_latency_is_bounded_and_reports_nearest_rank() {
+        let mut samples = ExactLatency::new(100);
+        for ns in 1..=100 {
+            samples
+                .record(Duration::from_nanos(ns), Duration::from_nanos(ns + 10))
+                .unwrap();
+        }
+        assert!(samples.record(Duration::ZERO, Duration::ZERO).is_err());
+        let mut out = Vec::new();
+        samples.write(&mut out, 42).unwrap();
+        assert_eq!(String::from_utf8(out).unwrap(), "42,100,99,100,109,110\n");
+        assert!(ExactLatency::new(1).write(&mut Vec::new(), 0).is_err());
+    }
 
     #[tokio::test]
     async fn corruption_at_a_non_primary_reader_is_rejected() {
@@ -157,6 +214,7 @@ mod tests {
                 if bad_departure { 2 } else { 0 },
                 if bad_departure { 1 } else { WINDOW },
                 0,
+                None,
             ),
         )
         .await
@@ -235,6 +293,7 @@ impl Fanout {
         churn_every: usize,
         window: usize,
         windows_per_second: u32,
+        latency_output: Option<std::path::PathBuf>,
     ) -> Result<(Self, Counts, Histogram, Histogram)> {
         let Self {
             mut sender,
@@ -243,6 +302,14 @@ impl Fanout {
             wire,
             global_observers,
         } = self;
+        ensure!(
+            latency_output.is_none() || windows_per_second != 0,
+            "exact fanout latency requires paced windows"
+        );
+        let sample_limit = (until.saturating_duration_since(Instant::now()).as_secs() as usize + 2)
+            .checked_mul(windows_per_second as usize)
+            .and_then(|n| n.checked_mul(window))
+            .context("exact fanout sample bound overflow")?;
         let readers_len = readers.len();
         let (windows, initial) = watch::channel(None::<Step>);
         let (ack, mut acks) = mpsc::channel(readers_len);
@@ -251,16 +318,18 @@ impl Fanout {
             let mut windows = initial.clone();
             let packets = packets.clone();
             let ack = ack.clone();
+            let exact_enabled = latency_output.is_some();
             jobs.spawn(async move {
                 let mut counts = Counts::default();
                 let mut stats = Histogram::new();
+                let mut exact = exact_enabled.then(|| ExactLatency::new(sample_limit));
                 while windows.changed().await.is_ok() {
                     let step = windows
                         .borrow_and_update()
                         .clone()
                         .context("missing fanout window")?;
                     match step {
-                        Step::Messages(first, stamp, length) => {
+                        Step::Messages(first, stamp, scheduled, length) => {
                             for offset in 0..length {
                                 let bytes = data(&mut socket).await?;
                                 ensure!(
@@ -268,7 +337,14 @@ impl Fanout {
                                     "fanout reader {index}: body/sender/FIFO changed"
                                 );
                                 counts.received(&bytes);
-                                stats.record(stamp.elapsed());
+                                let now = Instant::now();
+                                stats.record(now.duration_since(stamp));
+                                if let Some(exact) = &mut exact {
+                                    exact.record(
+                                        now.duration_since(stamp),
+                                        now.duration_since(scheduled),
+                                    )?;
+                                }
                             }
                         }
                         Step::Departure(expected) => {
@@ -282,7 +358,7 @@ impl Fanout {
                     }
                     ack.send(index).await.context("fanout controller stopped")?;
                 }
-                Ok::<_, anyhow::Error>(((socket, id), counts, stats))
+                Ok::<_, anyhow::Error>(((socket, id), counts, stats, exact))
             });
         }
         drop(initial);
@@ -299,19 +375,27 @@ impl Fanout {
             timer
         });
         while Instant::now() < until {
-            if let Some(timer) = &mut pacing {
-                timer.tick().await;
+            let scheduled = if let Some(timer) = &mut pacing {
+                let scheduled = timer.tick().await.into_std();
                 if Instant::now() >= until {
                     break;
                 }
-            }
+                scheduled
+            } else {
+                Instant::now()
+            };
             let joined_at = Instant::now();
             let transient = if churn_every > 0 && iteration.is_multiple_of(churn_every) {
                 Some(join(&url, &Bytes::from_static(b"fanout"), wire, &mut counts).await?)
             } else {
                 None
             };
-            windows.send_replace(Some(Step::Messages(sequence, Instant::now(), window)));
+            windows.send_replace(Some(Step::Messages(
+                sequence,
+                Instant::now(),
+                scheduled,
+                window,
+            )));
             for offset in 0..window {
                 let packet = packets[(sequence + offset) % 64].0.clone();
                 counts.sent(&packet);
@@ -343,11 +427,32 @@ impl Fanout {
         drop(windows);
         let mut stats = Histogram::new();
         let mut readers = Vec::with_capacity(readers_len);
+        let mut exact_output = latency_output
+            .map(|path| {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path)
+            })
+            .transpose()?
+            .map(io::BufWriter::new);
+        if let Some(out) = &mut exact_output {
+            writeln!(
+                out,
+                "id,samples,p99_ns,max_ns,schedule_p99_ns,schedule_max_ns"
+            )?;
+        }
         while let Some(job) = jobs.join_next().await {
-            let (peer, n, s) = job??;
+            let (peer, n, s, mut exact) = job??;
+            if let (Some(out), Some(exact)) = (&mut exact_output, &mut exact) {
+                exact.write(out, peer.1)?;
+            }
             readers.push(peer);
             counts.merge(&n);
             stats.merge(&s);
+        }
+        if let Some(out) = &mut exact_output {
+            out.flush()?;
         }
         ensure!(
             stats.n == counts.sent_messages * readers_len as u64,

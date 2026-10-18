@@ -26,6 +26,11 @@ small quiet-path CPU cost are reported explicitly. The earlier
 [fanout throughput study](docs/benchmarks/2026-10-17-rust-owner-fanout/README.md)
 records the preceding owner-worker transport change.
 
+The [short multicast experiments](docs/benchmarks/2026-10-18-buffered-fanout/README.md)
+add exact recipient latency and intended-send measurements. Buffered batches cut
+CPU and broadcast delay, but did not establish consistent private-user tails;
+the current runtime remains selected. The longest measured phase was 30 seconds.
+
 ## Modern C++ comparison candidate
 
 A separate [C++20 static library and relay](cpp/README.md) now implements the

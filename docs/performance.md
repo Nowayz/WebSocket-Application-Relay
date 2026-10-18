@@ -6939,3 +6939,27 @@ contains all per-user CSV identities, every primary and preliminary trial,
 rejected variants, diagnostic limits, exact sources and a verifier. This is finite
 plaintext loopback evidence; global/observer continuation, WAN/TLS and longer
 production operation remain outside this new revision's acceptance scope.
+
+
+## Short buffered multicast trials (2026-10-18)
+
+The [targeted 100,000-user study](benchmarks/2026-10-18-buffered-fanout/README.md)
+uses eight-second screens and 30-second final comparisons, with exact
+per-recipient and per-user latency distributions. It rejects smaller ready
+batches alone, priority continuations, naive speculative admission, two-frame
+staging, and the final policy-safe batching/ready-batch combination. The last
+combination saves 13.6% CPU and improves broadcast latency, but private intended
+tails do not establish consistent improvement. The selected `279c3c1` / `3db9…`
+relay remains unchanged. Queue credit is not relaxed and no extra payload copy
+is accepted for a throughput win.
+
+The retained exact-recipient recorder preallocates a finite pacing/duration
+bound and fails on overflow. Use `--exact-fanout-latency` with a current built
+inspection client; `--sidecar` and `--capacity-client` pin other binaries.
+Eight seconds at four probes/s gives only 32 observations per private user, so
+nearest-rank p99 is the maximum; the 30-second check supplies 120 observations.
+The archived one-second cohorts retain generator delay instead of removing
+inconvenient windows. Profile that client scheduling/allocation question in a
+short diagnostic before drawing another server-only tail conclusion. Long
+soaks answer a different reliability question and were not used for this
+optimization decision.

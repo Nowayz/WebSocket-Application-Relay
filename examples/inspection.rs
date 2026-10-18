@@ -136,6 +136,9 @@ struct Args {
     /// Departure-drain batch, outside the measured interval and below queue depth.
     #[arg(long, default_value_t = 1)]
     fanout_close_window: usize,
+    /// Exact per-reader latency CSV; requires paced fanout. Storage is preallocated.
+    #[arg(long)]
+    fanout_latency_output: Option<std::path::PathBuf>,
 }
 
 #[derive(Default, Serialize)]
@@ -727,6 +730,17 @@ async fn run(args: Args) -> Result<()> {
         "invalid workload bounds"
     );
     ensure!(
+        args.fanout_latency_output.is_none()
+            || (args.fanout_readers > 0 && args.fanout_windows_per_second > 0),
+        "exact fanout latency requires paced fanout readers"
+    );
+    ensure!(
+        args.fanout_latency_output
+            .as_ref()
+            .is_none_or(|path| !path.exists()),
+        "exact fanout output already exists"
+    );
+    ensure!(
         args.fanout_churn_every == 0
             || (args.fanout_readers > 0
                 && args.mode == Mode::None
@@ -909,6 +923,7 @@ async fn run(args: Args) -> Result<()> {
             args.fanout_churn_every,
             args.fanout_window,
             args.fanout_windows_per_second,
+            args.fanout_latency_output.clone(),
         ))
     });
     let traffic: Vec<_> = pairs
