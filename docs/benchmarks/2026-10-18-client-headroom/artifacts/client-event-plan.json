@@ -1,0 +1,9 @@
+{
+  "question": "Does more frequent client I/O polling reduce the measured post-send tail under identical relay traffic?",
+  "control": "Tokio1.53.3 default event interval61",
+  "candidate": "event_interval8; one runtime-builder line only",
+  "evidence_before_change": "Existing same-packet stages: 2.60-4.34ms post-send p99 against 8-14us preparation and111-153us room wait; pinned Tokio source polls external events every61 task polls by default",
+  "measurement": "Two fresh8s phases each, control/candidate/candidate/control. Diagnostic stage clocks enabled equally. Same build directory, physical CPU sets, payloads, sample counts and frozen native executable. No concurrent timing/build/profile.",
+  "acceptance": "All complete-population, fanout body/FIFO, counters, zero-copy and resource-retirement gates must pass. Assess all windows and both repeats; retain excursions. Only call it a client scheduling result, not server-only latency. If clear, expose a small explicit client experiment option while preserving historical default61; verify via final option path before adopting. No server change or deployment is authorized by a client-only result.",
+  "launch_fixture": "First control launch stopped before connecting because copied artifact lacked executable mode. chmod corrected artifact permissions; failed receipt retained; no measured phase occurred."
+}

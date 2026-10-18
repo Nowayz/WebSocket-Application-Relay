@@ -1,0 +1,36 @@
+{
+  "passed": false,
+  "scope": "Matched clean build context; only capacity runtime event_interval changes61 to8. Same frozen native relay, fixed physical CPU sets, full100k mixed4Hz/1KiB and8192fanout4frames16Hz,8churn4Hz,2inspectors. Diagnostic stages ON in both. Four fresh8s phases ABBA; no builds/profiles during measured phases. No server optimization claim.",
+  "runs": [
+    {
+      "label": "control",
+      "repeat": 1,
+      "command": [
+        "python3",
+        "scripts/mixed-capacity.py",
+        "--server",
+        "artifacts/candidates/mixed-capacity-final/war-relay",
+        "--capacity-client",
+        "artifacts/candidates/client-event-control/capacity",
+        "--sidecar",
+        "artifacts/candidates/short-fanout-client-v2/inspection",
+        "--seconds",
+        "8",
+        "--scope",
+        "room",
+        "--pairs",
+        "0",
+        "--churn-cycles-per-second",
+        "4",
+        "--fanout-windows-per-second",
+        "16",
+        "--exact-fanout-latency",
+        "--latency-stages",
+        "--output",
+        "artifacts/client-event-control-1.json"
+      ],
+      "receipt": "artifacts/client-event-control-1.json",
+      "exit_code": 1
+    }
+  ]
+}

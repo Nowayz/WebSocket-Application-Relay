@@ -6981,3 +6981,20 @@ and room-send waiting are much smaller. Post-send includes client receive
 scheduling, so it remains inappropriate to call it server-only latency.
 Instrumented runs add clocks and bounded storage; use them for diagnosis, and
 retain instrumentation-disabled results for ordinary performance comparisons.
+
+The [client-headroom study](benchmarks/2026-10-18-client-headroom/README.md)
+rejects more frequent event polling and a four-worker generator. The latter
+passes delivery checks while accumulating two seconds of pre-send backlog.
+Mixed results now expose `generator_lag` and `generator_exceeded_one_period`,
+using the configured message period as a coarse backlog signal. Functional
+`passed` does not certify pacing. Missing older-client timelines are unavailable,
+not zero. The calculation/sampling validation occurs after measurement.
+Private-only placement on eight physical cores uses 24.2% less client CPU than
+eight logical workers sharing four physical cores; worst intended tails still
+overlap. Keep generator headroom explicit and avoid assigning all client-observed
+post-send latency to relay processing. Defaults and server policy are unchanged.
+
+Keep nominal and completed fanout windows distinct: the short headroom study
+completes 123–128 of 128 planned windows. Full checking of submitted matrices
+does not prove the generator offered every planned window. Preserve shortfalls
+when comparing CPU cost and latency.

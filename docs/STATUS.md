@@ -1,5 +1,25 @@
 # Continuing goal status
 
+## 2026-10-18: generator headroom and explicit backlog reporting
+
+Keep code `c83c99c`: mixed results now flag sends more than one workload period
+behind their intended time, outside measurement. Event interval8 is rejected
+(higher CPU, worse tails). Four generator workers are rejected despite lower
+CPU: two 100k-user runs develop roughly two seconds of pre-send backlog.
+
+A separate private-only ABBA placement comparison keeps the relay/workload and
+eight client workers fixed. Eight physical client cores reduce mean client CPU
+24.2% versus eight logical CPUs on four physical cores; cross-user p99-of-worst
+improves, but absolute maxima overlap. This is a generator placement result,
+not a server-code speedup. Eleven eight-second offered population phases verify
+35.2M private probes; the final runner passes a separate two-second integration smoke.
+Fanout completes 123–128 of 128 nominal windows; every submitted matrix is checked.
+The initial private census mismatch remains unexplained and is preserved; four
+subsequent runs retain exact owned-inode census evidence without relaxing gates.
+Selected native/bridge services and historical benchmark defaults are unchanged.
+[Results, failed setups and verifier](benchmarks/2026-10-18-client-headroom/README.md).
+
+
 ## 2026-10-18: client latency stages identify a timer floor
 
 Kept opt-in `--latency-stages` tooling separates wakeup, preparation, earlier
