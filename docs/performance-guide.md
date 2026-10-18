@@ -61,3 +61,5 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 | [Notification queue handoff](benchmarks/2026-10-18-pending-lock-screen/README.md) | Fewer measured lock collisions did not establish a repeatable application benefit. |
 
 A change earns selection through the required workload and invariants: low and consistent user latency, complete delivery, FIFO, shared payload ownership and bounded resource admission. Neither a microbenchmark win nor a shorter critical section establishes that by itself.
+
+The source now defers bounded management-page reservations until a channel qualifies. Empty pages avoid two unused allocations (80 KB at limit 1,000); the running native baseline above remains unchanged. See the [short allocation and concurrent HTTP checks](benchmarks/2026-10-18-empty-channel-page/README.md).

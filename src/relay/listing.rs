@@ -14,8 +14,8 @@ impl Relay {
         let limit = limit.get().min(MAX_CHANNEL_PAGE_SIZE);
         let state = self.state.read();
         let capacity = limit.min(state.channels.len());
-        let mut selected = BinaryHeap::<([u8; 24], usize)>::with_capacity(capacity);
-        let mut snapshots = Vec::with_capacity(capacity);
+        let mut selected = BinaryHeap::<([u8; 24], usize)>::new();
+        let mut snapshots = Vec::new();
         for (name, channel) in &state.channels {
             let name = SnapshotName::new(name);
             let key = name.base64();
@@ -29,6 +29,11 @@ impl Relay {
                 variable_bytes: channel.variable_bytes,
             };
             if selected.len() < limit {
+                // A cursor past the last channel needs no page storage.
+                if selected.is_empty() {
+                    selected.reserve_exact(capacity);
+                    snapshots.reserve_exact(capacity);
+                }
                 selected.push((key, snapshots.len()));
                 snapshots.push(snapshot());
             } else if let Some(mut largest) = selected.peek_mut()
