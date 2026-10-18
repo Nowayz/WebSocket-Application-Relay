@@ -349,6 +349,15 @@ variables. All bounds are per process.
 | Application idle timeout | Disabled (`0`) | Joined sessions; `--idle-timeout-secs` / `WAR_IDLE_TIMEOUT_SECS`, up to one day |
 | Shutdown deadline | 10 s | Workers drop remaining transports and run registration cleanup |
 
+Native HTTP-upgrade and channel-join deadlines are absolute within their phases.
+Dripped header bytes and WebSocket Ping/Pong traffic do not extend them. A join
+timeout starts a 1008 policy Close; the TCP admission lease remains held until
+the transport retires through acknowledgement or its close deadline. See the
+[short stalled-ingress checks](benchmarks/2026-10-18-stalled-ingress/README.md)
+for silent/dripping HTTP peers and silent/Ping-active upgraded peers beside
+verified healthy traffic. The join fixture deliberately uses two seconds rather
+than the ten-second production default to keep the regression short.
+
 Queue limits concern logical payload storage, not the complete process RSS. WebSocket
 read/write buffers, partially assembled incoming frames, metadata, allocator
 overhead, stacks, and kernel socket buffers also cost memory. In particular, a
