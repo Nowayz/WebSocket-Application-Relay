@@ -63,6 +63,9 @@ struct Args {
     /// Diagnostic per-user CSV plus a companion .windows.json latency/Ping timeline.
     #[arg(long)]
     user_latency_output: Option<std::path::PathBuf>,
+    /// Diagnostic clock decomposition; adds clocks/storage, never a throughput mode.
+    #[arg(long, requires = "user_latency_output")]
+    latency_stages: bool,
     /// Bounded per-user histogram CSV for long runs; percentile columns are bounds.
     #[arg(long, conflicts_with = "user_latency_output")]
     user_latency_histogram_output: Option<std::path::PathBuf>,
@@ -172,11 +175,58 @@ struct LatencySample {
     pings: u64,
 }
 
+const LATENCY_STAGES: [&str; 5] = [
+    "wake_delay",
+    "prepare",
+    "room_send_delay",
+    "socket_send",
+    "after_send",
+];
+
+/// Client observation intervals, not kernel or server arrival timestamps.
+struct StageSample([u64; 5]);
+
+impl StageSample {
+    fn new(
+        due: Instant,
+        entered: Instant,
+        prepared: Instant,
+        began: Instant,
+        flushed: Instant,
+        received: Instant,
+    ) -> Self {
+        let clocks = [due, entered, prepared, began, flushed, received];
+        Self(std::array::from_fn(|i| {
+            clocks[i + 1].duration_since(clocks[i]).as_nanos() as u64
+        }))
+    }
+}
+
+#[derive(Clone, Copy, Serialize)]
+struct StageProbe {
+    id: u64,
+    sequence: usize,
+    intended_ns: u64,
+    stages_ns: [u64; 5],
+}
+
+impl StageProbe {
+    fn keys(&self) -> [u64; 3] {
+        [
+            self.intended_ns,
+            self.stages_ns[..3].iter().sum(),
+            self.stages_ns[4],
+        ]
+    }
+}
+
 #[derive(Default)]
 struct LatencyWindow {
     send: Vec<u64>,
     scheduled: Vec<u64>,
     pre_send: Vec<u64>,
+    stages: [Vec<u64>; 5],
+    worst_probes: [Option<StageProbe>; 3],
     pings: u64,
 }
 
@@ -197,6 +247,7 @@ struct Peer {
     socket: Socket,
     id: u64,
     latency: Option<Vec<LatencySample>>,
+    stages: Option<Vec<StageSample>>,
     histogram: Option<Box<UserLatencyHistogram>>,
 }
 struct Room {
@@ -353,6 +404,7 @@ async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result
             socket,
             id,
             latency: None,
+            stages: None,
             histogram: None,
         });
     }
@@ -367,6 +419,8 @@ async fn ring(
     payload_bytes: usize,
     observations: &mut Observations,
 ) -> Result<()> {
+    let stage_timing = room.peers[0].stages.is_some();
+    let entered = stage_timing.then(Instant::now);
     let mut values = Vec::with_capacity(room.peers.len());
     for peer in &room.peers {
         let mut payload = vec![0x5a; payload_bytes];
@@ -386,6 +440,12 @@ async fn ring(
     } else {
         Vec::new()
     };
+    let mut flushed_at = if stage_timing {
+        Vec::with_capacity(room.peers.len())
+    } else {
+        Vec::new()
+    };
+    let prepared = stage_timing.then(Instant::now);
     for (member, value) in values.iter().enumerate() {
         let next = (member + 1) % room.peers.len();
         let packet = protocol::envelope(room.peers[next].id, value);
@@ -399,6 +459,9 @@ async fn ring(
             .socket
             .send(Message::Binary(packet))
             .await?;
+        if stage_timing {
+            flushed_at.push(Instant::now());
+        }
     }
     if diagnostic {
         let mut receives = futures_util::stream::FuturesUnordered::new();
@@ -412,11 +475,12 @@ async fn ring(
                     pings,
                     &mut peer.latency,
                     &mut peer.histogram,
+                    &mut peer.stages,
                 ))
             });
         }
         while let Some(received) = receives.next().await {
-            let (member, packet, received, pings, samples, histogram) = received?;
+            let (member, packet, received, pings, samples, histogram, stages) = received?;
             let previous = (member + values.len() - 1) % values.len();
             let latency = received.duration_since(sent_at[previous]);
             check_packet(&packet, ids[previous], &values[previous])?;
@@ -427,6 +491,21 @@ async fn ring(
                     scheduled_ns: scheduled.as_nanos() as u64,
                     pings,
                 });
+            }
+            if let Some(stages) = stages {
+                let stage = StageSample::new(
+                    observations.scheduled.expect("paced stage timing"),
+                    entered.unwrap(),
+                    prepared.unwrap(),
+                    sent_at[previous],
+                    flushed_at[previous],
+                    received,
+                );
+                ensure!(
+                    stage.0.iter().sum::<u64>() == scheduled.as_nanos() as u64,
+                    "stage clocks must partition intended latency"
+                );
+                stages.push(stage);
             }
             if let Some(histogram) = histogram {
                 histogram.record(latency, scheduled, pings);
@@ -485,6 +564,18 @@ mod tests {
             UserLatencyHistogram::default().send.percentile_upper_ms(99),
             0.0
         );
+    }
+
+    #[test]
+    fn stage_clocks_partition_each_probe_including_room_send_delay() {
+        let due = Instant::now();
+        let clocks = [0, 10, 30, 90, 130, 300].map(|n| due + Duration::from_nanos(n));
+        let sample = StageSample::new(
+            clocks[0], clocks[1], clocks[2], clocks[3], clocks[4], clocks[5],
+        );
+        assert_eq!(sample.0, [10, 20, 60, 40, 170]);
+        assert_eq!(sample.0.iter().sum::<u64>(), 300);
+        assert_eq!(sample.0[..3].iter().sum::<u64>(), 90);
     }
 
     #[test]
@@ -772,6 +863,11 @@ async fn run_wave(
             if room.index < active_rooms {
                 if args.user_latency_output.is_some() {
                     for peer in &mut room.peers {
+                        if args.latency_stages {
+                            peer.stages = Some(Vec::with_capacity(
+                                (args.seconds * args.messages_per_second) as usize,
+                            ));
+                        }
                         peer.latency = Some(Vec::with_capacity(
                             (args.seconds * args.messages_per_second) as usize,
                         ));
@@ -850,20 +946,42 @@ async fn run_wave(
                                 .checked_sub(sample.send_ns)
                                 .expect("send follows schedule"),
                         );
+                        if let Some(stages) = &peer.stages {
+                            let probe = StageProbe {
+                                id: peer.id,
+                                sequence: sequence + 1,
+                                intended_ns: sample.scheduled_ns,
+                                stages_ns: stages[sequence].0,
+                            };
+                            for (key, worst) in window.worst_probes.iter_mut().enumerate() {
+                                if worst.is_none_or(|old| probe.keys()[key] > old.keys()[key]) {
+                                    *worst = Some(probe);
+                                }
+                            }
+                            for (column, value) in window.stages.iter_mut().zip(stages[sequence].0)
+                            {
+                                column.push(value);
+                            }
+                        }
                         window.pings += sample.pings;
                     }
                 }
             }
         }
         let timeline: Vec<_> = windows.iter_mut().enumerate().map(|(second, window)| {
-            serde_json::json!({"intended_second":second,"send_to_receive":exact_latency_report(&mut window.send),
+            let stages: serde_json::Map<String, serde_json::Value> = LATENCY_STAGES.iter()
+                .zip(&mut window.stages).filter(|(_, values)| !values.is_empty())
+                .map(|(name, values)| ((*name).to_owned(), exact_latency_report(values))).collect();
+            serde_json::json!({"worst_stage_probes":{"intended_to_receive":window.worst_probes[0],
+                "pre_send_delay":window.worst_probes[1],"after_send":window.worst_probes[2]},
+                "client_stages":stages,"intended_second":second,"send_to_receive":exact_latency_report(&mut window.send),
                 "intended_to_receive":exact_latency_report(&mut window.scheduled),"pre_send_delay":exact_latency_report(&mut window.pre_send),"pings_encountered":window.pings})
         }).collect();
         let mut timeline_output =
             BufWriter::new(std::fs::File::create(path.with_extension("windows.json"))?);
         serde_json::to_writer_pretty(
             &mut timeline_output,
-            &serde_json::json!({"scope":"One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Ping counts are control frames encountered while reading probes in that cohort, not kernel arrival timestamps. Includes client scheduling and room batching.","windows":timeline}),
+            &serde_json::json!({"stage_order":LATENCY_STAGES,"stage_scope":"Opt-in client clocks: wake_delay=due to ring entry; prepare=entry to all payloads ready; room_send_delay=ready to this sender's send call (includes earlier room sends); socket_send=send call through flush completion; after_send=flush completion to application read. Runtime preemption counts toward the interval it interrupts. after_send includes client receive scheduling, kernel and relay; it is not server-only latency. Component percentiles cannot be summed.","scope":"One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Ping counts are control frames encountered while reading probes in that cohort, not kernel arrival timestamps. Includes client scheduling and room batching.","windows":timeline}),
         )?;
         timeline_output.flush()?;
         let mut output = BufWriter::new(std::fs::File::create(path)?);

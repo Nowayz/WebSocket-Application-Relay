@@ -56,6 +56,7 @@ def main():
     parser.add_argument('--fanout-windows-per-second', type=int, default=0)
     parser.add_argument('--fanout-churn-every', type=int, default=0)
     parser.add_argument('--exact-fanout-latency', action='store_true')
+    parser.add_argument('--latency-stages', action='store_true', help='Opt-in client clock decomposition; diagnostic timing only')
     parser.add_argument('--profile', action='store_true')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
@@ -83,6 +84,8 @@ def main():
     cc = ['taskset', '-c', '8-11,24-27', str(client_path), '--url', f'ws://127.0.0.1:{port}',
           '--users', str(args.users), '--seconds', str(args.seconds), '--messages-per-second', '4',
           '--client-workers', '8', '--user-latency-output', str(prefix) + '.csv']
+    if args.latency_stages:
+        cc += ['--latency-stages']
     sc = ['taskset', '-c', '12-15,28-31', str(args.sidecar.resolve()), '--url', f'ws://127.0.0.1:{port}',
           '--protocol-only', '--mode', 'cbor', '--rooms', '0', '--pairs', str(args.pairs), '--seconds', str(args.seconds),
           '--churn-workers', '8', '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
@@ -223,6 +226,26 @@ def main():
             values = sorted(float(row[column]) for row in rows)
             record['latency'][column] = {name: values[(len(values) - 1) * percentile // 100]
                                         for name, percentile in [('median', 50), ('p95', 95), ('p99', 99), ('max', 100)]}
+        if args.latency_stages:
+            timeline_path = str(prefix) + '.windows.json'
+            timeline = json.loads(Path(timeline_path).read_text())
+            assert timeline['stage_order'] == ['wake_delay', 'prepare', 'room_send_delay', 'socket_send', 'after_send']
+            assert len(timeline['windows']) == args.seconds
+            identities = {int(row['id']) for row in rows}
+            for second, window in enumerate(timeline['windows']):
+                assert window['intended_second'] == second
+                assert set(window['client_stages']) == set(timeline['stage_order'])
+                assert all(stage['samples'] == args.users * 4 for stage in window['client_stages'].values())
+                for label, probe in window['worst_stage_probes'].items():
+                    stages = probe['stages_ns']
+                    assert len(stages) == 5 and all(value >= 0 for value in stages)
+                    assert sum(stages) == probe['intended_ns']
+                    assert probe['id'] in identities and (probe['sequence'] - 1) // 4 == second
+                    observed = {'intended_to_receive': probe['intended_ns'],
+                                'pre_send_delay': sum(stages[:3]), 'after_send': stages[4]}[label]
+                    expected = (window['client_stages']['after_send'] if label == 'after_send' else window[label])['max_ms']
+                    assert abs(observed / 1e6 - expected) < 1e-9
+            record['latency_stages_windows_sha256'] = digest(timeline_path)
         if args.exact_fanout_latency:
             fanout_path = str(prefix) + '-fanout.csv'
             with open(fanout_path) as source:
