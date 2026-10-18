@@ -638,6 +638,17 @@ terminal shutdown from a reversible manual drain. The lifecycle uses one atomic
 value; stopping cannot be overwritten by a concurrent drain/resume transition.
 Create a new `Relay` when restarting an embedded service.
 
+The optional legacy bridge has its own shutdown policy. SIGINT/SIGTERM cancels
+its connection tasks and releases both TCP legs, including pending HTTP upgrades.
+Active clients can see transport termination without a WebSocket Close frame.
+Their upstream native sessions contribute to `war_transport_disconnects_total`;
+that expected cancellation count alone does not mean healthy forwarding failed.
+A direct native session can continue while the bridge stops. The
+[short bridge shutdown check](benchmarks/2026-10-18-bridge-shutdown/README.md)
+verifies this behavior and final resource retirement. Wait for an idle bridge
+before a local binary replacement when existing legacy sessions must be preserved;
+the guarded local update helpers enforce that precondition.
+
 An application host can restart and reclaim its fixed ID without restarting the
 relay or unrelated sessions. Restarting the relay itself ends its sessions and
 loses in-memory variables; clients must reconnect and rebuild application state.

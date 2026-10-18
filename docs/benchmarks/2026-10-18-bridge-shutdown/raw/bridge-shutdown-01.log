@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/artifacts/bridge-shutdown-probe.py", line 94, in <module>
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--server',type=Path,required=True);p.add_argument('--bridge',type=Path,required=True);p.add_argument('--users',type=int,default=32);p.add_argument('--output',type=Path,required=True);args=p.parse_args();assert args.users>0 and not args.output.exists();args.output.parent.mkdir(parents=True,exist_ok=True);r=run(args);print(json.dumps({k:r.get(k) for k in ['passed','error','bridge_exit_seconds','healthy_verified']}));assert r['passed']
+                                                                                                                                                                                                                                                                                                                                                                                      ~~~^^^^^^
+  File "/home/phil/dev/war_next/artifacts/bridge-shutdown-probe.py", line 77, in run
+    for k,v in expected.items():assert final[k]==v,(k,final[k],v)
+                                       ^^^^^^^^^^^
+AssertionError: ('war_incoming_bytes_total', 311980, 312012)
