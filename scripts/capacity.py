@@ -94,7 +94,7 @@ def machine():
                            if key in ("MemAvailable", "MemFree", "Slab", "SReclaimable", "SUnreclaim")}}
 
 
-def process(pid):
+def process(pid, socket_inodes=None):
     snapshot = runtime.snapshot(pid)
     stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
     ticks = os.sysconf("SC_CLK_TCK")
@@ -105,25 +105,33 @@ def process(pid):
     sockets = 0
     for fd in descriptors:
         try:
-            sockets += os.readlink(fd).startswith("socket:[")
+            target = os.readlink(fd)
+            if target.startswith("socket:["):
+                sockets += 1
+                if socket_inodes is not None:
+                    socket_inodes.add(target[8:-1])
         except FileNotFoundError:
             pass
     snapshot["socket_fd_count"] = sockets
     return snapshot
 
 
-def established(port):
-    count = 0
+def established(port, owned_inodes):
+    """Count distinct server-owned sockets, retaining host-wide alias diagnostics."""
+    rows = 0
+    matching = set()
     with open("/proc/net/tcp") as tcp:
         next(tcp)
         for row in tcp:
             columns = row.split()
-            # Source-bound clients may themselves receive the listener's port.
-            # Count the listener's address too, rather than both directions.
             address, local_port = columns[1].split(":")
             if address == "0100007F" and int(local_port, 16) == port and columns[3] == "01":
-                count += 1
-    return count
+                rows += 1
+                matching.add(columns[9])
+    return {"owned_established": len(matching & owned_inodes),
+            "raw_matching_rows": rows, "unique_matching_inodes": len(matching),
+            "foreign_matching_inodes": len(matching - owned_inodes),
+            "duplicate_rows": rows - len(matching)}
 
 
 def check(observed, event, args, pressure=None):
@@ -291,10 +299,13 @@ def run(args):
                         if time.monotonic() >= deadline:
                             raise
                         time.sleep(.02)
+                server_inodes = set()
                 event.update(metrics=observed, server_pid=server.pid, client_pid=client.pid,
-                             server=process(server.pid), client=process(client.pid),
-                             machine=machine(), seconds=time.monotonic() - started,
-                             established_server_sockets=established(port))
+                             server=process(server.pid, server_inodes), client=process(client.pid),
+                             machine=machine(), seconds=time.monotonic() - started)
+                census = established(port, server_inodes)
+                del server_inodes  # Release gate-only storage before traffic resumes.
+                event.update(tcp_census=census, established_server_sockets=census["owned_established"])
                 expected_population = 0 if event["event"] == "done" else args.users
                 result["events"].append(event)
                 assert event["established_server_sockets"] == expected_population, (
