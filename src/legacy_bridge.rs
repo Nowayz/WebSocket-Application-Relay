@@ -30,10 +30,18 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
         Message::Binary(bytes) => {
             let target = legacy::binary_target(&bytes)?;
             if target != 0 {
-                return Ok(Some(protocol::envelope(
-                    target,
-                    &protocol::byte_string(&bytes[8..]),
-                )));
+                // Write the envelope and value once, directly into their final storage.
+                let payload = &bytes[8..];
+                let capacity = 1
+                    + protocol::uint_len(target)
+                    + protocol::uint_len(payload.len() as u64)
+                    + payload.len();
+                let mut e = Encoder::new(Vec::with_capacity(capacity));
+                e.array(2)
+                    .and_then(|e| e.u64(target))
+                    .and_then(|e| e.bytes(payload))
+                    .expect("Vec encoding");
+                return Ok(Some(e.into_writer().into()));
             }
             Some(match legacy::command(&bytes[8..])? {
                 legacy::Command::Authenticate(secret) => {
@@ -378,4 +386,55 @@ async fn bridge(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn binary_envelopes_keep_canonical_headers_and_exact_owned_storage() {
+        let targets: &[(u64, &[u8])] = &[
+            (1, b"\x01"),
+            (23, b"\x17"),
+            (24, b"\x18\x18"),
+            (255, b"\x18\xff"),
+            (256, b"\x19\x01\x00"),
+            (65535, b"\x19\xff\xff"),
+            (65536, b"\x1a\x00\x01\x00\x00"),
+            (u32::MAX as u64, b"\x1a\xff\xff\xff\xff"),
+            (u32::MAX as u64 + 1, b"\x1b\x00\x00\x00\x01\x00\x00\x00\x00"),
+            (u64::MAX, b"\x1b\xff\xff\xff\xff\xff\xff\xff\xff"),
+        ];
+        let lengths: &[(usize, &[u8])] = &[
+            (1, b"\x41"),
+            (23, b"\x57"),
+            (24, b"\x58\x18"),
+            (255, b"\x58\xff"),
+            (256, b"\x59\x01\x00"),
+            (65535, b"\x59\xff\xff"),
+            (65536, b"\x5a\x00\x01\x00\x00"),
+        ];
+        for &(target, encoded_target) in targets {
+            for &(len, encoded_length) in lengths {
+                let payload: Vec<_> = (0..len).map(|i| i as u8).collect();
+                let mut input = target.to_le_bytes().to_vec();
+                input.extend_from_slice(&payload);
+                let input = Bytes::from(input);
+                let result = to_cbor(Message::Binary(input.clone())).unwrap().unwrap();
+                let mut expected = vec![0x82];
+                expected.extend_from_slice(encoded_target);
+                expected.extend_from_slice(encoded_length);
+                expected.extend_from_slice(&payload);
+                assert_eq!(result.as_ref(), expected);
+                assert_eq!(&input[8..], payload);
+                let owned = result.try_into_mut().expect("independently owned envelope");
+                assert_eq!(owned.capacity(), owned.len());
+            }
+        }
+        assert_eq!(
+            to_cbor(Message::Binary(Bytes::copy_from_slice(&1u64.to_le_bytes()))),
+            Err(Disconnect::PROTOCOL),
+        );
+    }
 }
