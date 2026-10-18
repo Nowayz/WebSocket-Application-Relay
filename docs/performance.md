@@ -6972,3 +6972,12 @@ runs do not establish a whole-client CPU or relay latency gain. The native relay
 is unchanged. The clean local legacy bridge adopts the helper after real JS and
 full-body delivery checks. No pool, allocator replacement or scheduling policy
 is added; the original payload copy during encoding remains explicit.
+
+Use `--latency-stages` with an exact capacity CSV to diagnose client delay.
+The [short stage study](benchmarks/2026-10-18-client-latency-stages/README.md)
+records complete stage partitions and correlated worst probes. A no-I/O timer
+check exposes a 1.04 ms median wake floor on this host, while loaded preparation
+and room-send waiting are much smaller. Post-send includes client receive
+scheduling, so it remains inappropriate to call it server-only latency.
+Instrumented runs add clocks and bounded storage; use them for diagnosis, and
+retain instrumentation-disabled results for ordinary performance comparisons.

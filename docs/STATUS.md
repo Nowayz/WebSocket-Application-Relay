@@ -1,5 +1,22 @@
 # Continuing goal status
 
+## 2026-10-18: client latency stages identify a timer floor
+
+Kept opt-in `--latency-stages` tooling separates wakeup, preparation, earlier
+room sends, send/flush and application receive, including paired worst probes.
+Two diagnostic and one disabled eight-second 100k-user runs pass all gates
+(9.6 million private probes). Preparation p99 is 8–14 us and room-send waiting
+111–153 us, versus wake p99 2.01–2.31 ms. A four-second no-I/O timer check
+already has 1.04 ms median / 1.93 ms p99 wake delay. Post-send p99 remains
+2.60–4.34 ms and includes client scheduling; its cause is not established.
+The disabled run's 22.59 ms maximum excursion remains in the record.
+
+Selected native and bridge services are unchanged. No latency reduction is
+claimed from diagnostic instrumentation. The next targeted distinction is
+client receive scheduling versus relay/kernel delay.
+[Definitions, full results and verifier](benchmarks/2026-10-18-client-latency-stages/README.md).
+
+
 ## 2026-10-18: exact CBOR storage; short client diagnosis
 
 Kept code `09f90fb` sizes CBOR byte-string storage exactly. This avoids eager

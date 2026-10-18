@@ -1,0 +1,813 @@
+{
+  "scope": "One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Ping counts are control frames encountered while reading probes in that cohort, not kernel arrival timestamps. Includes client scheduling and room batching.",
+  "stage_order": [
+    "wake_delay",
+    "prepare",
+    "room_send_delay",
+    "socket_send",
+    "after_send"
+  ],
+  "stage_scope": "Opt-in client clocks: wake_delay=due to ring entry; prepare=entry to all payloads ready; room_send_delay=ready to this sender's send call (includes earlier room sends); socket_send=send call through flush completion; after_send=flush completion to application read. Runtime preemption counts toward the interval it interrupts. after_send includes client receive scheduling, kernel and relay; it is not server-only latency. Component percentiles cannot be summed.",
+  "windows": [
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 5.370103,
+          "p50_ms": 0.485587,
+          "p95_ms": 1.977356,
+          "p99_ms": 2.602269,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.137727,
+          "p50_ms": 0.00246,
+          "p95_ms": 0.008949,
+          "p99_ms": 0.013929,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.523056,
+          "p50_ms": 0.052348,
+          "p95_ms": 0.102967,
+          "p99_ms": 0.131757,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.427548,
+          "p50_ms": 0.00625,
+          "p95_ms": 0.00901,
+          "p99_ms": 0.01293,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 2.996116,
+          "p50_ms": 0.903301,
+          "p95_ms": 1.721432,
+          "p99_ms": 2.082366,
+          "samples": 400000
+        }
+      },
+      "intended_second": 0,
+      "intended_to_receive": {
+        "max_ms": 6.692751,
+        "p50_ms": 1.53841,
+        "p95_ms": 3.043169,
+        "p99_ms": 3.712646,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.103163,
+        "p50_ms": 0.960247,
+        "p95_ms": 1.780035,
+        "p99_ms": 2.141595,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 5.375843,
+        "p50_ms": 0.492366,
+        "p95_ms": 1.983816,
+        "p99_ms": 2.609208,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 6118335706451769490,
+          "intended_ns": 6692751,
+          "sequence": 1,
+          "stages_ns": [
+            1249810,
+            3310,
+            63788,
+            5740,
+            5370103
+          ]
+        },
+        "intended_to_receive": {
+          "id": 6118335706451769490,
+          "intended_ns": 6692751,
+          "sequence": 1,
+          "stages_ns": [
+            1249810,
+            3310,
+            63788,
+            5740,
+            5370103
+          ]
+        },
+        "pre_send_delay": {
+          "id": 15421376358405224424,
+          "intended_ns": 4162384,
+          "sequence": 1,
+          "stages_ns": [
+            2996116,
+            11560,
+            95487,
+            4820,
+            1054401
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 8.310912,
+          "p50_ms": 0.480147,
+          "p95_ms": 2.150241,
+          "p99_ms": 2.9268,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.442788,
+          "p50_ms": 0.00239,
+          "p95_ms": 0.006,
+          "p99_ms": 0.010929,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.784038,
+          "p50_ms": 0.051039,
+          "p95_ms": 0.100457,
+          "p99_ms": 0.140926,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.705641,
+          "p50_ms": 0.00607,
+          "p95_ms": 0.00857,
+          "p99_ms": 0.012749,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 3.683253,
+          "p50_ms": 0.896719,
+          "p95_ms": 1.763577,
+          "p99_ms": 2.232458,
+          "samples": 400000
+        }
+      },
+      "intended_second": 1,
+      "intended_to_receive": {
+        "max_ms": 9.615803,
+        "p50_ms": 1.527938,
+        "p95_ms": 3.252095,
+        "p99_ms": 4.341479,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.773281,
+        "p50_ms": 0.952211,
+        "p95_ms": 1.815655,
+        "p99_ms": 2.279995,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 8.315892,
+        "p50_ms": 0.486786,
+        "p95_ms": 2.156041,
+        "p99_ms": 2.933269,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 17349291108229268258,
+          "intended_ns": 9045213,
+          "sequence": 7,
+          "stages_ns": [
+            707762,
+            2870,
+            18689,
+            4980,
+            8310912
+          ]
+        },
+        "intended_to_receive": {
+          "id": 16180086767426904232,
+          "intended_ns": 9615803,
+          "sequence": 7,
+          "stages_ns": [
+            1283082,
+            3249,
+            92388,
+            6410,
+            8230674
+          ]
+        },
+        "pre_send_delay": {
+          "id": 8835192928872088697,
+          "intended_ns": 5062715,
+          "sequence": 8,
+          "stages_ns": [
+            3683253,
+            2710,
+            87318,
+            5320,
+            1284114
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 7.426947,
+          "p50_ms": 0.521316,
+          "p95_ms": 2.303857,
+          "p99_ms": 3.162343,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 1.781601,
+          "p50_ms": 0.00248,
+          "p95_ms": 0.00619,
+          "p99_ms": 0.01094,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.558874,
+          "p50_ms": 0.053669,
+          "p95_ms": 0.105697,
+          "p99_ms": 0.145906,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.474987,
+          "p50_ms": 0.00638,
+          "p95_ms": 0.00897,
+          "p99_ms": 0.01339,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 5.217564,
+          "p50_ms": 0.891743,
+          "p95_ms": 1.720361,
+          "p99_ms": 2.249912,
+          "samples": 400000
+        }
+      },
+      "intended_second": 2,
+      "intended_to_receive": {
+        "max_ms": 10.302683,
+        "p50_ms": 1.563858,
+        "p95_ms": 3.334816,
+        "p99_ms": 4.39618,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 5.323571,
+        "p50_ms": 0.948574,
+        "p95_ms": 1.779619,
+        "p99_ms": 2.309954,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 7.433016,
+        "p50_ms": 0.528185,
+        "p95_ms": 2.310537,
+        "p99_ms": 3.168973,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 13886776324526513107,
+          "intended_ns": 8658623,
+          "sequence": 12,
+          "stages_ns": [
+            1159358,
+            3510,
+            62739,
+            6069,
+            7426947
+          ]
+        },
+        "intended_to_receive": {
+          "id": 3821951262194802548,
+          "intended_ns": 10302683,
+          "sequence": 10,
+          "stages_ns": [
+            4185231,
+            2680,
+            91257,
+            6920,
+            6016595
+          ]
+        },
+        "pre_send_delay": {
+          "id": 8007490388411554395,
+          "intended_ns": 6645634,
+          "sequence": 10,
+          "stages_ns": [
+            5217564,
+            5519,
+            100488,
+            5279,
+            1316784
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 7.503634,
+          "p50_ms": 0.561995,
+          "p95_ms": 2.448273,
+          "p99_ms": 3.363478,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.323781,
+          "p50_ms": 0.00269,
+          "p95_ms": 0.00648,
+          "p99_ms": 0.01316,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.568385,
+          "p50_ms": 0.055868,
+          "p95_ms": 0.109567,
+          "p99_ms": 0.146666,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.494967,
+          "p50_ms": 0.00663,
+          "p95_ms": 0.0094,
+          "p99_ms": 0.014179,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 4.955672,
+          "p50_ms": 0.89071,
+          "p95_ms": 1.692224,
+          "p99_ms": 2.121872,
+          "samples": 400000
+        }
+      },
+      "intended_second": 3,
+      "intended_to_receive": {
+        "max_ms": 8.747546,
+        "p50_ms": 1.611629,
+        "p95_ms": 3.522325,
+        "p99_ms": 4.610537,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 5.061729,
+        "p50_ms": 0.950866,
+        "p95_ms": 1.753128,
+        "p99_ms": 2.183076,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 7.512504,
+        "p50_ms": 0.569194,
+        "p95_ms": 2.455273,
+        "p99_ms": 3.370438,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 6563817166684996963,
+          "intended_ns": 8253595,
+          "sequence": 13,
+          "stages_ns": [
+            624334,
+            8630,
+            108127,
+            8870,
+            7503634
+          ]
+        },
+        "intended_to_receive": {
+          "id": 114528827557185556,
+          "intended_ns": 8747546,
+          "sequence": 13,
+          "stages_ns": [
+            1276331,
+            4010,
+            62538,
+            4520,
+            7400147
+          ]
+        },
+        "pre_send_delay": {
+          "id": 8728470149485369011,
+          "intended_ns": 6842221,
+          "sequence": 14,
+          "stages_ns": [
+            4955672,
+            2230,
+            103827,
+            7040,
+            1773452
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 9.080131,
+          "p50_ms": 0.546975,
+          "p95_ms": 2.392324,
+          "p99_ms": 3.331798,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.154235,
+          "p50_ms": 0.00261,
+          "p95_ms": 0.00648,
+          "p99_ms": 0.013029,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.279942,
+          "p50_ms": 0.055778,
+          "p95_ms": 0.109327,
+          "p99_ms": 0.148675,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.185055,
+          "p50_ms": 0.00661,
+          "p95_ms": 0.00942,
+          "p99_ms": 0.014019,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 2.872079,
+          "p50_ms": 0.883162,
+          "p95_ms": 1.668476,
+          "p99_ms": 2.044597,
+          "samples": 400000
+        }
+      },
+      "intended_second": 4,
+      "intended_to_receive": {
+        "max_ms": 10.168454,
+        "p50_ms": 1.591213,
+        "p95_ms": 3.379143,
+        "p99_ms": 4.399708,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.023355,
+        "p50_ms": 0.942209,
+        "p95_ms": 1.727828,
+        "p99_ms": 2.109289,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 9.086701,
+        "p50_ms": 0.554115,
+        "p95_ms": 2.398914,
+        "p99_ms": 3.338878,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 317529690473572270,
+          "intended_ns": 10168454,
+          "sequence": 19,
+          "stages_ns": [
+            1029655,
+            3429,
+            48669,
+            6570,
+            9080131
+          ]
+        },
+        "intended_to_receive": {
+          "id": 317529690473572270,
+          "intended_ns": 10168454,
+          "sequence": 19,
+          "stages_ns": [
+            1029655,
+            3429,
+            48669,
+            6570,
+            9080131
+          ]
+        },
+        "pre_send_delay": {
+          "id": 8833559406630356801,
+          "intended_ns": 3981829,
+          "sequence": 18,
+          "stages_ns": [
+            2872079,
+            1670,
+            149606,
+            6390,
+            952084
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 8.788819,
+          "p50_ms": 0.542945,
+          "p95_ms": 2.362275,
+          "p99_ms": 3.090845,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.150816,
+          "p50_ms": 0.00262,
+          "p95_ms": 0.006469,
+          "p99_ms": 0.01348,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.480426,
+          "p50_ms": 0.056018,
+          "p95_ms": 0.110177,
+          "p99_ms": 0.152846,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.405119,
+          "p50_ms": 0.00663,
+          "p95_ms": 0.00945,
+          "p99_ms": 0.0142,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 3.242774,
+          "p50_ms": 0.879606,
+          "p95_ms": 1.642613,
+          "p99_ms": 2.044208,
+          "samples": 400000
+        }
+      },
+      "intended_second": 5,
+      "intended_to_receive": {
+        "max_ms": 9.840375,
+        "p50_ms": 1.583064,
+        "p95_ms": 3.34929,
+        "p99_ms": 4.141342,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 3.35719,
+        "p50_ms": 0.938468,
+        "p95_ms": 1.705031,
+        "p99_ms": 2.111196,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 8.794099,
+        "p50_ms": 0.550105,
+        "p95_ms": 2.369176,
+        "p99_ms": 3.097055,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 376065695865997859,
+          "intended_ns": 9840375,
+          "sequence": 24,
+          "stages_ns": [
+            954708,
+            4100,
+            87468,
+            5280,
+            8788819
+          ]
+        },
+        "intended_to_receive": {
+          "id": 376065695865997859,
+          "intended_ns": 9840375,
+          "sequence": 24,
+          "stages_ns": [
+            954708,
+            4100,
+            87468,
+            5280,
+            8788819
+          ]
+        },
+        "pre_send_delay": {
+          "id": 15652007562620438121,
+          "intended_ns": 3602984,
+          "sequence": 24,
+          "stages_ns": [
+            3242774,
+            1930,
+            112486,
+            7450,
+            238344
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 5.378433,
+          "p50_ms": 0.563384,
+          "p95_ms": 2.479072,
+          "p99_ms": 3.493544,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.625893,
+          "p50_ms": 0.00264,
+          "p95_ms": 0.00627,
+          "p99_ms": 0.01168,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.267343,
+          "p50_ms": 0.055569,
+          "p95_ms": 0.109157,
+          "p99_ms": 0.143216,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.168905,
+          "p50_ms": 0.00664,
+          "p95_ms": 0.009429,
+          "p99_ms": 0.01366,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 4.349827,
+          "p50_ms": 0.917404,
+          "p95_ms": 1.736428,
+          "p99_ms": 2.13835,
+          "samples": 400000
+        }
+      },
+      "intended_second": 6,
+      "intended_to_receive": {
+        "max_ms": 7.020032,
+        "p50_ms": 1.628105,
+        "p95_ms": 3.546758,
+        "p99_ms": 4.666987,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 4.449644,
+        "p50_ms": 0.975895,
+        "p95_ms": 1.799408,
+        "p99_ms": 2.198345,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 5.387933,
+        "p50_ms": 0.570545,
+        "p95_ms": 2.485832,
+        "p99_ms": 3.500674,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 52040474530358477,
+          "intended_ns": 6200023,
+          "sequence": 26,
+          "stages_ns": [
+            760802,
+            2100,
+            49188,
+            9500,
+            5378433
+          ]
+        },
+        "intended_to_receive": {
+          "id": 13790418885729597138,
+          "intended_ns": 7020032,
+          "sequence": 26,
+          "stages_ns": [
+            1612950,
+            2740,
+            64918,
+            5980,
+            5333444
+          ]
+        },
+        "pre_send_delay": {
+          "id": 6286945010097604049,
+          "intended_ns": 5835936,
+          "sequence": 27,
+          "stages_ns": [
+            4349827,
+            2100,
+            97717,
+            7070,
+            1379222
+          ]
+        }
+      }
+    },
+    {
+      "client_stages": {
+        "after_send": {
+          "max_ms": 7.106325,
+          "p50_ms": 0.561565,
+          "p95_ms": 2.303337,
+          "p99_ms": 3.252891,
+          "samples": 400000
+        },
+        "prepare": {
+          "max_ms": 0.140836,
+          "p50_ms": 0.00272,
+          "p95_ms": 0.00647,
+          "p99_ms": 0.011549,
+          "samples": 400000
+        },
+        "room_send_delay": {
+          "max_ms": 0.834557,
+          "p50_ms": 0.055668,
+          "p95_ms": 0.109067,
+          "p99_ms": 0.138336,
+          "samples": 400000
+        },
+        "socket_send": {
+          "max_ms": 0.73453,
+          "p50_ms": 0.00669,
+          "p95_ms": 0.00954,
+          "p99_ms": 0.01341,
+          "samples": 400000
+        },
+        "wake_delay": {
+          "max_ms": 3.904144,
+          "p50_ms": 0.945224,
+          "p95_ms": 1.777979,
+          "p99_ms": 2.192471,
+          "samples": 400000
+        }
+      },
+      "intended_second": 7,
+      "intended_to_receive": {
+        "max_ms": 8.588666,
+        "p50_ms": 1.651341,
+        "p95_ms": 3.373431,
+        "p99_ms": 4.360282,
+        "samples": 400000
+      },
+      "pings_encountered": 0,
+      "pre_send_delay": {
+        "max_ms": 4.03439,
+        "p50_ms": 1.005359,
+        "p95_ms": 1.840281,
+        "p99_ms": 2.248508,
+        "samples": 400000
+      },
+      "send_to_receive": {
+        "max_ms": 7.113405,
+        "p50_ms": 0.568785,
+        "p95_ms": 2.310187,
+        "p99_ms": 3.25987,
+        "samples": 400000
+      },
+      "worst_stage_probes": {
+        "after_send": {
+          "id": 5964653159814964425,
+          "intended_ns": 8557419,
+          "sequence": 30,
+          "stages_ns": [
+            1431745,
+            4140,
+            8129,
+            7080,
+            7106325
+          ]
+        },
+        "intended_to_receive": {
+          "id": 8220759611838046807,
+          "intended_ns": 8588666,
+          "sequence": 30,
+          "stages_ns": [
+            1782093,
+            4010,
+            36219,
+            5180,
+            6761164
+          ]
+        },
+        "pre_send_delay": {
+          "id": 7307663702954572834,
+          "intended_ns": 4186576,
+          "sequence": 32,
+          "stages_ns": [
+            3904144,
+            2770,
+            127476,
+            7600,
+            144586
+          ]
+        }
+      }
+    }
+  ]
+}
