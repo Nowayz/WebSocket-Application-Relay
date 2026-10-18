@@ -9,6 +9,9 @@ at commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`, with the requested CBOR re
 The original C++ source, JavaScript clients, dependencies, history, and MIT license
 remain available. The original README is in [docs/upstream-README.md](docs/upstream-README.md).
 
+For the selected implementation, short test recipes, measurement limits and
+recent rejected alternatives, start with the [current performance guide](docs/performance-guide.md).
+
 ## Native Rust fanout
 
 Native multicast shares immutable payloads, sends on the sockets' owning workers,
