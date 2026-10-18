@@ -1,0 +1,49 @@
+{
+  "pids": [
+    966632,
+    1055440,
+    219427
+  ],
+  "commands": [
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-final/war-relay",
+      "--workers",
+      "4",
+      "--bind",
+      "127.0.0.1:1338",
+      "--admin-bind",
+      "127.0.0.1:1339",
+      "--max-connections",
+      "110000",
+      "--pin-workers"
+    ],
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/bridge-upstream-nodelay-selected/war-legacy-bridge",
+      "--bind",
+      "127.0.0.1:1337",
+      "--upstream",
+      "ws://127.0.0.1:1338"
+    ],
+    [
+      "python3",
+      "-m",
+      "http.server",
+      "4180",
+      "--bind",
+      "127.0.0.1",
+      "--directory",
+      "target/browser"
+    ]
+  ],
+  "native_sha256": "3db9ebeb0fff87636a1bf2fc5a6e0ae88d48d12aa7a52571cb4b28fa4d911fa9",
+  "bridge_sha256": "e8b0362e3ea5fb9b20605271ee90f3a58df58fa0bc1db5508e8812196e2dee83",
+  "base_revision": "7290017b46d7d90c1c6a5100f7a1d945916ad76e",
+  "runtime_patch_sha256": "93ca1822bf0151ed9e216f768d0206e7f0f769159d8d818b06019496874810ad",
+  "previous_pids": [
+    966632,
+    1021812,
+    219427
+  ],
+  "source_revision": "279c3c1836c806ecf3343a2f00a89fac7cead022",
+  "bridge_revision": "db798cee46055f1d6766d1d0e158c4f0e602fb41"
+}

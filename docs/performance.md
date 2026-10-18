@@ -7017,3 +7017,12 @@ requires explicit `--client-workers`), matching capacity's existing controls.
 Both use the same helper; actual singleton affinities and startup/harness methods
 are recorded and checked at gates. Defaults remain unchanged. OS worker pinning
 does not prevent async task migration and is not itself a latency guarantee.
+
+The [upstream NODELAY study](benchmarks/2026-10-18-bridge-upstream-nodelay/README.md)
+fixes the bridge's default-Nagle upstream connection. Under a controlled local
+delayed-ACK peer, the second small forwarded packet takes about 40 ms with the
+old connector and tens of microseconds with NODELAY. All bytes/FIFO/Close checks
+pass, including seven real JS compatibility/idle tests on the selected build.
+The local idle bridge adopts clean `db798ce`; native relay behavior and buffer/
+queue/message/ownership policies are unchanged. This is a conditional bridge
+latency fix, not a general throughput or population-scale guarantee.

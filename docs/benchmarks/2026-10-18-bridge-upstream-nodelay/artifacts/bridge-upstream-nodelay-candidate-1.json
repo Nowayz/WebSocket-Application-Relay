@@ -1,0 +1,65 @@
+{
+  "passed": true,
+  "bridge": "/home/phil/dev/war_next/artifacts/candidates/bridge-upstream-nodelay-candidate/war-legacy-bridge",
+  "bridge_sha256": "f8aa906244e37a21bf82fed1fd8f7e2fb50fb0a12ae3988aad7d761cf4c134c2",
+  "scope": "Controlled local delayed ACK, not native relay throughput. Client and fixture server TCP_NODELAY true. Upstream fixture disables QUICKACK before each pair and after first frame, withholds application response until both frames arrive. Parent sends second legacy frame1ms after observed first arrival. Full literal CBOR/legacy data and Close/EOF checked.",
+  "trials": [
+    {
+      "sequence": 0,
+      "first_forward_ms": 0.070688,
+      "second_forward_ms": 0.030479,
+      "arrival_gap_ms": 1.12156
+    },
+    {
+      "sequence": 1,
+      "first_forward_ms": 0.020169,
+      "second_forward_ms": 0.026289,
+      "arrival_gap_ms": 1.100811
+    },
+    {
+      "sequence": 2,
+      "first_forward_ms": 0.01567,
+      "second_forward_ms": 0.019699,
+      "arrival_gap_ms": 1.081461
+    },
+    {
+      "sequence": 3,
+      "first_forward_ms": 0.014579,
+      "second_forward_ms": 0.01526,
+      "arrival_gap_ms": 1.073662
+    },
+    {
+      "sequence": 4,
+      "first_forward_ms": 0.01412,
+      "second_forward_ms": 0.018409,
+      "arrival_gap_ms": 1.076021
+    },
+    {
+      "sequence": 5,
+      "first_forward_ms": 0.013499,
+      "second_forward_ms": 0.01793,
+      "arrival_gap_ms": 1.075172
+    },
+    {
+      "sequence": 6,
+      "first_forward_ms": 0.013439,
+      "second_forward_ms": 0.01713,
+      "arrival_gap_ms": 1.073892
+    },
+    {
+      "sequence": 7,
+      "first_forward_ms": 0.01314,
+      "second_forward_ms": 0.017469,
+      "arrival_gap_ms": 1.074731
+    }
+  ],
+  "command": [
+    "/home/phil/dev/war_next/artifacts/candidates/bridge-upstream-nodelay-candidate/war-legacy-bridge",
+    "--bind",
+    "127.0.0.1:52525",
+    "--upstream",
+    "ws://127.0.0.1:51931"
+  ],
+  "exit_code": 0,
+  "fixture_errors": []
+}

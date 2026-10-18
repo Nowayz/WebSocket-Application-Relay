@@ -1,5 +1,23 @@
 # Continuing goal status
 
+## 2026-10-18: upstream NODELAY removes a bridge forwarding stall
+
+Keep code `db798ce`: legacy bridge upstream now explicitly disables Nagle,
+matching its existing client-facing policy. A controlled delayed-ACK ABBA test
+reduces median second-packet forwarding from 39.65–39.73 ms to 0.017–0.018 ms;
+the final clean build separately measures 0.036 ms median. Full literal bytes,
+FIFO and Close/EOF pass. This is a bridge-hop condition, not native throughput
+or a 100k-user latency guarantee. No buffer/queue/wire/ownership change.
+
+Clean-source 78/workspace 81 library tests, strict library/bridge Clippy, formatting and
+all seven real JS compatibility/idle tests pass. Quiescent manual promotion and
+1 KiB private/broadcast/departure/Close/resource checks pass. Bridge PID 1055440
+runs clean `db798ce` / `e8b0362e…`; native 966632 / `3db9…` and static UI remain
+unchanged. The convenience executable and manual metadata match the selected
+process. Original user changes are preserved.
+[Exact results, source delta and verifier](benchmarks/2026-10-18-bridge-upstream-nodelay/README.md).
+
+
 ## 2026-10-18: notification candidate rejected; placement controls shared
 
 A four-second native profile identifies wake notification as a candidate.

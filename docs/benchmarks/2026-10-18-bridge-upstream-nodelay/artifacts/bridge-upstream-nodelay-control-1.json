@@ -1,0 +1,65 @@
+{
+  "passed": true,
+  "bridge": "/home/phil/dev/war_next/artifacts/candidates/bridge-upstream-nodelay-control/war-legacy-bridge",
+  "bridge_sha256": "dcb81c780dfede59a1fcb8c972a754fc282153a5c60a283e84a1cd06208a7f51",
+  "scope": "Controlled local delayed ACK, not native relay throughput. Client and fixture server TCP_NODELAY true. Upstream fixture disables QUICKACK before each pair and after first frame, withholds application response until both frames arrive. Parent sends second legacy frame1ms after observed first arrival. Full literal CBOR/legacy data and Close/EOF checked.",
+  "trials": [
+    {
+      "sequence": 0,
+      "first_forward_ms": 0.027799,
+      "second_forward_ms": 39.967029,
+      "arrival_gap_ms": 41.033291
+    },
+    {
+      "sequence": 1,
+      "first_forward_ms": 0.051838,
+      "second_forward_ms": 39.713646,
+      "arrival_gap_ms": 40.808967
+    },
+    {
+      "sequence": 2,
+      "first_forward_ms": 0.054488,
+      "second_forward_ms": 39.831472,
+      "arrival_gap_ms": 40.926173
+    },
+    {
+      "sequence": 3,
+      "first_forward_ms": 0.032589,
+      "second_forward_ms": 39.737155,
+      "arrival_gap_ms": 40.802196
+    },
+    {
+      "sequence": 4,
+      "first_forward_ms": 0.050529,
+      "second_forward_ms": 39.845441,
+      "arrival_gap_ms": 40.909623
+    },
+    {
+      "sequence": 5,
+      "first_forward_ms": 0.074718,
+      "second_forward_ms": 39.655147,
+      "arrival_gap_ms": 40.723159
+    },
+    {
+      "sequence": 6,
+      "first_forward_ms": 0.078868,
+      "second_forward_ms": 39.668996,
+      "arrival_gap_ms": 40.734378
+    },
+    {
+      "sequence": 7,
+      "first_forward_ms": 0.084068,
+      "second_forward_ms": 39.693615,
+      "arrival_gap_ms": 40.759447
+    }
+  ],
+  "command": [
+    "/home/phil/dev/war_next/artifacts/candidates/bridge-upstream-nodelay-control/war-legacy-bridge",
+    "--bind",
+    "127.0.0.1:38583",
+    "--upstream",
+    "ws://127.0.0.1:40303"
+  ],
+  "exit_code": 0,
+  "fixture_errors": []
+}
