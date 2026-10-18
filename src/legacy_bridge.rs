@@ -17,7 +17,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_tungstenite::{
-    accept_hdr_async_with_config, connect_async,
+    accept_hdr_async_with_config, connect_async_with_config,
     tungstenite::{
         Message,
         protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
@@ -321,7 +321,9 @@ async fn bridge(
         .await;
         return Ok(());
     }
-    let (mut upstream, _) = timeout(WAIT, connect_async(upstream)).await??;
+    // Disable Nagle's ACK-dependent delay for consecutive small relay packets.
+    let (mut upstream, _) =
+        timeout(WAIT, connect_async_with_config(upstream, None, true)).await??;
     upstream
         .send(Message::Binary(protocol::byte_string(&joined)))
         .await?;
