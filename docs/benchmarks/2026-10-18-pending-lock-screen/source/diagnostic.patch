@@ -1,0 +1,32 @@
+--- a/src/metrics.rs
++++ b/src/metrics.rs
+@@ -9,6 +9,7 @@
+ 
+ #[derive(Default)]
+ pub struct Metrics {
++    pub diagnostic_pending_contentions: AtomicU64,
+     pub read_budget: Option<Arc<ReadBudget>>,
+     pub accepted: AtomicU64,
+     pub accept_errors: AtomicU64,
+@@ -84,6 +85,7 @@
+             .expect("String write");
+         }
+         for (name, value, help) in [
++            ("diagnostic_pending_contentions_total", self.diagnostic_pending_contentions.load(Relaxed), "Diagnostic only: sender pending-queue try_lock failures."),
+             (
+                 "accept_errors_total",
+                 self.accept_errors.load(Relaxed),
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -113,7 +113,10 @@
+ 
+     fn notify(&self) {
+         if !self.notified.swap(true, Relaxed) {
+-            let mut pending = self.signal.pending.lock();
++            let mut pending = self.signal.pending.try_lock().unwrap_or_else(|| {
++                self.metrics.diagnostic_pending_contentions.fetch_add(1, Relaxed);
++                self.signal.pending.lock()
++            });
+             let wake = pending.is_empty();
+             pending.push_back(self.token);
+             drop(pending);
