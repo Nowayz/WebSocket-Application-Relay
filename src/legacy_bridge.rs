@@ -322,8 +322,13 @@ async fn bridge(
         return Ok(());
     }
     // Disable Nagle's ACK-dependent delay for consecutive small relay packets.
-    let (mut upstream, _) =
-        timeout(WAIT, connect_async_with_config(upstream, None, true)).await??;
+    // Match the frontend's small initial buffer without reducing upstream frame limits.
+    let upstream_config = WebSocketConfig::default().read_buffer_size(4096);
+    let (mut upstream, _) = timeout(
+        WAIT,
+        connect_async_with_config(upstream, Some(upstream_config), true),
+    )
+    .await??;
     upstream
         .send(Message::Binary(protocol::byte_string(&joined)))
         .await?;
