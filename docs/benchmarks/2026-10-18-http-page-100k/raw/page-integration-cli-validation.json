@@ -1,0 +1,38 @@
+[
+  {
+    "flags": [
+      "--http-page-size",
+      "0"
+    ],
+    "exit_code": 2,
+    "error": "mixed-capacity.py: error: --http-page-size requires Rust, limit 1..=1000, and no fanout membership churn"
+  },
+  {
+    "flags": [
+      "--http-page-size",
+      "1001"
+    ],
+    "exit_code": 2,
+    "error": "mixed-capacity.py: error: --http-page-size requires Rust, limit 1..=1000, and no fanout membership churn"
+  },
+  {
+    "flags": [
+      "--http-page-size",
+      "1000",
+      "--kind",
+      "cpp"
+    ],
+    "exit_code": 2,
+    "error": "mixed-capacity.py: error: --http-page-size requires Rust, limit 1..=1000, and no fanout membership churn"
+  },
+  {
+    "flags": [
+      "--http-page-size",
+      "1000",
+      "--fanout-churn-every",
+      "1"
+    ],
+    "exit_code": 2,
+    "error": "mixed-capacity.py: error: --http-page-size requires Rust, limit 1..=1000, and no fanout membership churn"
+  }
+]
