@@ -7008,3 +7008,12 @@ raw/foreign/duplicate counts. The temporary set is released before traffic.
 The real alias/descriptor regression and two two-second 100k-user integrations
 pass. This fixes a demonstrated counting flaw without claiming the cause of the
 older setup failure or a server performance improvement.
+
+The [notification screen](benchmarks/2026-10-18-notification-screen/README.md)
+rejects an atomic-swap replacement after eight four-second fanout comparisons;
+a hot sampled instruction did not establish a repeatable whole-relay win.
+Inspection now supports `--pin-workers` and `--pin-client-workers` (the latter
+requires explicit `--client-workers`), matching capacity's existing controls.
+Both use the same helper; actual singleton affinities and startup/harness methods
+are recorded and checked at gates. Defaults remain unchanged. OS worker pinning
+does not prevent async task migration and is not itself a latency guarantee.

@@ -1,0 +1,104 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 6K of event 'cycles:u'
+# Event count (approx.): 8670292498
+#
+# Overhead  Command    Shared Object     Symbol                                                                              
+# ........  .........  ................  ....................................................................................
+#
+    10.03%  war-io-1   war-relay         [.] war_relay::server::socket::Socket::notify
+            |
+            ---war_relay::server::socket::Socket::notify
+               |          
+                --7.13%--0x3f65
+
+     9.60%  war-io-1   war-relay         [.] war_relay::relay::Peer::enqueue_fanout
+            |
+            ---war_relay::relay::Peer::enqueue_fanout
+
+     9.06%  war-io-1   war-relay         [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout
+            |
+            ---<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout
+
+     5.99%  war-io-3   war-relay         [.] war_relay::server::Connection::drive_batched
+            |
+            ---war_relay::server::Connection::drive_batched
+
+     5.74%  war-io-0   war-relay         [.] war_relay::server::Connection::drive_batched
+            |
+            ---war_relay::server::Connection::drive_batched
+
+     5.64%  war-io-1   war-relay         [.] war_relay::server::Connection::drive_batched
+            |
+            ---war_relay::server::Connection::drive_batched
+
+     5.56%  war-io-2   war-relay         [.] war_relay::server::Connection::drive_batched
+            |
+            ---war_relay::server::Connection::drive_batched
+
+     3.46%  war-io-3   war-relay         [.] war_relay::server::socket::write_batch
+            |
+            ---war_relay::server::socket::write_batch
+
+     3.21%  war-io-1   war-relay         [.] war_relay::server::socket::write_batch
+            |
+            ---war_relay::server::socket::write_batch
+
+     2.82%  war-io-2   war-relay         [.] war_relay::server::socket::write_batch
+            |
+            ---war_relay::server::socket::write_batch
+
+     2.67%  war-io-3   war-relay         [.] war_relay::server::Worker::run
+            |
+            ---war_relay::server::Worker::run
+               |          
+                --2.28%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     2.58%  war-io-0   war-relay         [.] war_relay::server::socket::write_batch
+            |
+            ---war_relay::server::socket::write_batch
+
+     2.54%  war-io-1   war-relay         [.] war_relay::server::Worker::run
+            |
+            ---war_relay::server::Worker::run
+               |          
+                --2.01%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     2.54%  war-io-0   war-relay         [.] war_relay::server::Worker::run
+            |
+            ---war_relay::server::Worker::run
+               |          
+                --2.26%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     2.42%  war-io-2   war-relay         [.] war_relay::server::Worker::run
+            |
+            ---war_relay::server::Worker::run
+               |          
+                --2.03%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     1.49%  war-io-1   [vdso]            [.] __vdso_clock_gettime
+            |
+            ---__vdso_clock_gettime
+               clock_gettime
+               std::sys::pal::unix::time::Timespec::now
+
+     1.21%  war-io-1   war-relay         [.] bytes::bytes_mut::shared_v_clone
+            |
+            ---bytes::bytes_mut::shared_v_clone
+
+     1.10%  war-io-2   [vdso]            [.] __vdso_clock_gettime
+            |
+            ---__vdso_clock_gettime
+               clock_gettime
+               std::sys::pal::unix::time::Timespec::now
+               |          
+                --1.10%--war_relay::server::Connection::drive_batched
+
+
+
+#
+# (Tip: To analyze particular parallelism levels, try: perf report --latency --parallelism=32-64)
+#

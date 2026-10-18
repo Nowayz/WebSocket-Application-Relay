@@ -1,0 +1,114 @@
+ Percent |	Source code & Disassembly of war-relay for cycles:u (357 samples, percent: local period)
+--------------------------------------------------------------------------------------------------------
+         :
+         :
+         :
+         : 3      Disassembly of section .text:
+         :
+         : 5      000000000029ada0 <war_relay::server::socket::Socket::notify>:
+    0.31 :   29ada0: push   %r15
+    0.00 :   29ada2: push   %r14
+    0.00 :   29ada4: push   %r13
+    0.00 :   29ada6: push   %r12
+    0.00 :   29ada8: push   %rbx
+    0.00 :   29ada9: mov    $0x1,%cl
+    0.00 :   29adab: mov    $0x1,%al
+    0.00 :   29adad: xchg   %al,0xb1(%rdi)
+   72.82 :   29adb3: test   %al,%al
+    0.00 :   29adb5: jne    29ae50 <war_relay::server::socket::Socket::notify+0xb0>
+    0.00 :   29adbb: mov    %rdi,%rbx
+    0.00 :   29adbe: mov    0x18(%rdi),%r15
+    0.00 :   29adc2: lea    0x10(%r15),%r14
+    0.00 :   29adc6: xor    %eax,%eax
+    0.00 :   29adc8: lock cmpxchg %cl,0x10(%r15)
+   17.14 :   29adce: jne    29ae99 <war_relay::server::socket::Socket::notify+0xf9>
+    0.00 :   29add4: mov    0x18(%r15),%rax
+    0.00 :   29add8: mov    0x30(%r15),%r12
+    0.00 :   29addc: mov    0xa0(%rbx),%r13
+    0.00 :   29ade3: mov    %r12,%rcx
+    0.00 :   29ade6: cmp    %rax,%r12
+    0.00 :   29ade9: jne    29ae04 <war_relay::server::socket::Socket::notify+0x64>
+    0.00 :   29adeb: lea    0x18(%r15),%rdi
+    0.00 :   29adef: lea    0x6082a(%rip),%rsi        # 2fb620 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x248>
+    0.00 :   29adf6: call   *0x65d8c(%rip)        # 300b88 <_DYNAMIC+0x2098>
+    0.00 :   29adfc: mov    0x18(%r15),%rax
+    0.00 :   29ae00: mov    0x30(%r15),%rcx
+    0.00 :   29ae04: lea    0x1(%rcx),%rdx
+    0.00 :   29ae08: mov    %rdx,0x30(%r15)
+    0.00 :   29ae0c: add    0x28(%r15),%rcx
+    0.00 :   29ae10: xor    %edx,%edx
+    0.00 :   29ae12: cmp    %rax,%rcx
+    0.00 :   29ae15: mov    $0x0,%esi
+    0.00 :   29ae1a: cmovae %rax,%rsi
+    0.00 :   29ae1e: sub    %rsi,%rcx
+    0.00 :   29ae21: mov    0x20(%r15),%rax
+    0.00 :   29ae25: mov    %r13,(%rax,%rcx,8)
+    0.00 :   29ae29: mov    $0x1,%al
+    0.00 :   29ae2b: lock cmpxchg %dl,0x10(%r15)
+    9.73 :   29ae31: jne    29aeac <war_relay::server::socket::Socket::notify+0x10c>
+    0.00 :   29ae33: test   %r12,%r12
+    0.00 :   29ae36: jne    29ae50 <war_relay::server::socket::Socket::notify+0xb0>
+    0.00 :   29ae38: mov    0x18(%rbx),%rdi
+    0.00 :   29ae3c: add    $0x38,%rdi
+    0.00 :   29ae40: call   142530 <mio::sys::unix::waker::Waker::wake>
+    0.00 :   29ae45: mov    %rax,%rbx
+    0.00 :   29ae48: and    $0x3,%eax
+    0.00 :   29ae4b: cmp    $0x1,%eax
+    0.00 :   29ae4e: je     29ae5a <war_relay::server::socket::Socket::notify+0xba>
+    0.00 :   29ae50: pop    %rbx
+    0.00 :   29ae51: pop    %r12
+    0.00 :   29ae53: pop    %r13
+    0.00 :   29ae55: pop    %r14
+    0.00 :   29ae57: pop    %r15
+    0.00 :   29ae59: ret
+    0.00 :   29ae5a: mov    %rbx,%rax
+    0.00 :   29ae5d: dec    %rbx
+    0.00 :   29ae60: mov    -0x1(%rax),%r14
+    0.00 :   29ae64: mov    0x7(%rax),%r12
+    0.00 :   29ae68: mov    (%r12),%rax
+    0.00 :   29ae6c: test   %rax,%rax
+    0.00 :   29ae6f: je     29ae76 <war_relay::server::socket::Socket::notify+0xd6>
+    0.00 :   29ae71: mov    %r14,%rdi
+    0.00 :   29ae74: call   *%rax
+    0.00 :   29ae76: cmpq   $0x0,0x8(%r12)
+    0.00 :   29ae7c: je     29ae87 <war_relay::server::socket::Socket::notify+0xe7>
+    0.00 :   29ae7e: mov    %r14,%rdi
+    0.00 :   29ae81: call   *0x63ed9(%rip)        # 2fed60 <free@GLIBC_2.2.5>
+    0.00 :   29ae87: mov    %rbx,%rdi
+    0.00 :   29ae8a: pop    %rbx
+    0.00 :   29ae8b: pop    %r12
+    0.00 :   29ae8d: pop    %r13
+    0.00 :   29ae8f: pop    %r14
+    0.00 :   29ae91: pop    %r15
+    0.00 :   29ae93: jmp    *0x63ec7(%rip)        # 2fed60 <free@GLIBC_2.2.5>
+    0.00 :   29ae99: mov    %r14,%rdi
+    0.00 :   29ae9c: mov    $0x3b9aca00,%edx
+    0.00 :   29aea1: call   *0x64c19(%rip)        # 2ffac0 <_DYNAMIC+0xfd0>
+    0.00 :   29aea7: jmp    29add4 <war_relay::server::socket::Socket::notify+0x34>
+    0.00 :   29aeac: mov    %r14,%rdi
+    0.00 :   29aeaf: xor    %esi,%esi
+    0.00 :   29aeb1: call   *0x64c01(%rip)        # 2ffab8 <_DYNAMIC+0xfc8>
+    0.00 :   29aeb7: test   %r12,%r12
+    0.00 :   29aeba: jne    29ae50 <war_relay::server::socket::Socket::notify+0xb0>
+    0.00 :   29aebc: jmp    29ae38 <war_relay::server::socket::Socket::notify+0x98>
+    0.00 :   29aec1: mov    %rax,%r15
+    0.00 :   29aec4: cmpq   $0x0,0x8(%r12)
+    0.00 :   29aeca: je     29aed5 <war_relay::server::socket::Socket::notify+0x135>
+    0.00 :   29aecc: mov    %r14,%rdi
+    0.00 :   29aecf: call   *0x63e8b(%rip)        # 2fed60 <free@GLIBC_2.2.5>
+    0.00 :   29aed5: mov    %rbx,%rdi
+    0.00 :   29aed8: call   *0x63e82(%rip)        # 2fed60 <free@GLIBC_2.2.5>
+    0.00 :   29aede: mov    %r15,%rdi
+    0.00 :   29aee1: call   2e4fc0 <_Unwind_Resume@plt>
+    0.00 :   29aee6: mov    %rax,%r15
+    0.00 :   29aee9: xor    %ecx,%ecx
+    0.00 :   29aeeb: mov    $0x1,%al
+    0.00 :   29aeed: lock cmpxchg %cl,(%r14)
+    0.00 :   29aef2: jne    29aefc <war_relay::server::socket::Socket::notify+0x15c>
+    0.00 :   29aef4: mov    %r15,%rdi
+    0.00 :   29aef7: call   2e4fc0 <_Unwind_Resume@plt>
+    0.00 :   29aefc: mov    %r14,%rdi
+    0.00 :   29aeff: xor    %esi,%esi
+    0.00 :   29af01: call   *0x64bb1(%rip)        # 2ffab8 <_DYNAMIC+0xfc8>
+    0.00 :   29af07: jmp    29aef4 <war_relay::server::socket::Socket::notify+0x154>
+    0.00 :   29af09: call   *0x63fb9(%rip)        # 2feec8 <_DYNAMIC+0x3d8>

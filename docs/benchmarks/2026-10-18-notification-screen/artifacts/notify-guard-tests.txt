@@ -1,0 +1,47 @@
+    #[test]
+    fn locked_notifications_coalesce_until_the_owner_resets() {
+        let (_relay, socket, _reader, _poll) = connected();
+        let state = socket.state.lock();
+        socket.notify(&state);
+        socket.notify(&state);
+        assert_eq!(socket.signal.pending.lock().len(), 1);
+        assert_eq!(socket.signal.pending.lock().pop_front(), Some(socket.token));
+        socket.notified();
+        socket.notify(&state);
+        assert_eq!(socket.signal.pending.lock().len(), 1);
+    }
+
+    #[test]
+    fn owner_reset_before_or_after_notify_consumes_the_locked_submission() {
+        use std::sync::Barrier;
+        for reset_before in [false, true] {
+            let (_relay, socket, _reader, _poll) = connected();
+            let mut state = socket.state.lock();
+            socket.notify(&state);
+            assert_eq!(socket.signal.pending.lock().pop_front(), Some(socket.token));
+            state.requested = Some(Disconnect::OVERLOADED);
+            let allow_reset = Barrier::new(2);
+            let reset_done = Barrier::new(2);
+            std::thread::scope(|threads| {
+                let owner = threads.spawn(|| {
+                    allow_reset.wait();
+                    socket.notified();
+                    reset_done.wait();
+                    // The owner always drives under State after clearing.
+                    assert_eq!(socket.state.lock().requested, Some(Disconnect::OVERLOADED));
+                });
+                if reset_before {
+                    allow_reset.wait();
+                    reset_done.wait();
+                    socket.notify(&state);
+                } else {
+                    socket.notify(&state);
+                    allow_reset.wait();
+                    reset_done.wait();
+                }
+                drop(state);
+                owner.join().unwrap();
+            });
+            assert_eq!(socket.signal.pending.lock().len(), usize::from(reset_before));
+        }
+    }

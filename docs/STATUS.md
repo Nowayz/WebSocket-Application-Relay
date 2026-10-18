@@ -1,5 +1,22 @@
 # Continuing goal status
 
+## 2026-10-18: notification candidate rejected; placement controls shared
+
+A four-second native profile identifies wake notification as a candidate.
+Replacing its atomic swap under the existing state mutex passes 80 isolated
+library tests but does not establish repeatable CPU savings across eight
+four-second fanout phases. With explicit per-thread placement, control costs
+1.642–1.678 us/delivery versus candidate 1.650–1.662; latency bounds match.
+Keep the existing native wake algorithm and manual runtime.
+
+Keep code `1745b2a`: inspection now exposes existing native/client pin controls,
+records and verifies actual thread affinity, and shares the unchanged capacity
+helper through the existing benchmark utility. Defaults and old capacity imports
+are preserved. Three two-second integration smokes, the TCP census regression,
+parser validation and source checks pass. No 100k fairness claim is made here.
+[All timings, rejected source and verifier](benchmarks/2026-10-18-notification-screen/README.md).
+
+
 ## 2026-10-18: server-owned connection census
 
 Code `51f1402` corrects the capacity helper's connection ownership check. A real
