@@ -39,6 +39,17 @@ def snapshot(pid):
             'fds': len(list(Path(f'/proc/{pid}/fd').iterdir()))}
 
 
+def generator_lag(timeline, messages_per_second):
+    """Expose sender backlog using the workload's own period, not an arbitrary SLO."""
+    windows = timeline['windows']
+    period_ms = 1000 / messages_per_second
+    late = [w['intended_second'] for w in windows
+            if w['pre_send_delay']['max_ms'] > period_ms]
+    return {'available': True, 'period_ms': period_ms,
+            'maximum_pre_send_ms': max(w['pre_send_delay']['max_ms'] for w in windows),
+            'windows_over_one_period': late, 'exceeded_one_period': bool(late)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, required=True)
@@ -226,9 +237,18 @@ def main():
             values = sorted(float(row[column]) for row in rows)
             record['latency'][column] = {name: values[(len(values) - 1) * percentile // 100]
                                         for name, percentile in [('median', 50), ('p95', 95), ('p99', 99), ('max', 100)]}
-        if args.latency_stages:
-            timeline_path = str(prefix) + '.windows.json'
+        timeline_path = str(prefix) + '.windows.json'
+        timeline = None
+        record['generator_lag'] = {'available': False, 'reason': 'Client did not emit a latency timeline'}
+        if Path(timeline_path).is_file():
             timeline = json.loads(Path(timeline_path).read_text())
+            assert len(timeline['windows']) == args.seconds
+            assert all(w[clock]['samples'] == args.users * 4 for w in timeline['windows']
+                       for clock in ['pre_send_delay', 'send_to_receive', 'intended_to_receive'])
+            record['generator_lag'] = generator_lag(timeline, int(cc[cc.index('--messages-per-second') + 1]))
+            record['latency_windows_sha256'] = digest(timeline_path)
+        if args.latency_stages:
+            assert timeline is not None, 'Stage diagnostic requires a latency timeline'
             assert timeline['stage_order'] == ['wake_delay', 'prepare', 'room_send_delay', 'socket_send', 'after_send']
             assert len(timeline['windows']) == args.seconds
             identities = {int(row['id']) for row in rows}
@@ -281,7 +301,7 @@ def main():
         for handle in files:
             handle.close()
         args.output.write_text(json.dumps(record, indent=2) + '\n')
-    print(json.dumps({'passed': record['passed'], 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
+    print(json.dumps({'passed': record['passed'], 'generator_exceeded_one_period': record.get('generator_lag', {}).get('exceeded_one_period'), 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
     if not record['passed']:
         raise SystemExit(1)
 
