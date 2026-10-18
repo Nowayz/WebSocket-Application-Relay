@@ -1,0 +1,55 @@
+{
+  "source_revision": "bac263fab56b265b961cb6d8f4d23a326480eac8",
+  "decision": "Reject direct byte-string parse path; keep original runtime source",
+  "build_path": "artifacts/short-bytes-parse-work",
+  "target_path": "artifacts/capacity-client-build",
+  "release_build_options": [
+    "--example",
+    "parse_screen",
+    "--bin",
+    "war-relay"
+  ],
+  "runs": [
+    {
+      "trial": 1,
+      "variant": "control",
+      "checked_deliveries": 7032496,
+      "deliveries_per_second": 2343708.7421522583,
+      "server_cpu_seconds": 8.05,
+      "server_ns_per_delivery": 1144.6860403475525,
+      "p99_upper_ms": 1.048576,
+      "max_ms": 2.192332
+    },
+    {
+      "trial": 2,
+      "variant": "direct",
+      "checked_deliveries": 7015328,
+      "deliveries_per_second": 2337921.300085755,
+      "server_cpu_seconds": 8.07,
+      "server_ns_per_delivery": 1150.3382307997572,
+      "p99_upper_ms": 1.048576,
+      "max_ms": 1.246177
+    },
+    {
+      "trial": 3,
+      "variant": "direct",
+      "checked_deliveries": 7001008,
+      "deliveries_per_second": 2333228.9332612082,
+      "server_cpu_seconds": 8.01,
+      "server_ns_per_delivery": 1144.1209608673494,
+      "p99_upper_ms": 1.048576,
+      "max_ms": 1.370484
+    },
+    {
+      "trial": 4,
+      "variant": "control",
+      "checked_deliveries": 6962384,
+      "deliveries_per_second": 2320378.914321612,
+      "server_cpu_seconds": 8.03,
+      "server_ns_per_delivery": 1153.3405798933238,
+      "p99_upper_ms": 1.048576,
+      "max_ms": 1.50665
+    }
+  ],
+  "verified_timed_deliveries": 28011216
+}
