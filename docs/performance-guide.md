@@ -63,3 +63,5 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 A change earns selection through the required workload and invariants: low and consistent user latency, complete delivery, FIFO, shared payload ownership and bounded resource admission. Neither a microbenchmark win nor a shorter critical section establishes that by itself.
 
 The source now defers bounded management-page reservations until a channel qualifies. Empty pages avoid two unused allocations (80 KB at limit 1,000); the running native baseline above remains unchanged. See the [short allocation and concurrent HTTP checks](benchmarks/2026-10-18-empty-channel-page/README.md).
+
+Frequent management polling can compete with routing as channel count grows. The [two-second scaling and polling-cadence screen](benchmarks/2026-10-18-management-scaling/README.md) compares 1,024/8,192 rooms, private traffic and churn. A slower polling cadence recovered throughput in that fixture but did not consistently improve every latency bucket; measure the application freshness requirement before adding an index or cache.
