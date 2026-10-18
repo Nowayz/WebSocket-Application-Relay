@@ -1,5 +1,21 @@
 # Continuing goal status
 
+## 2026-10-17: matched original/current three-way comparison
+
+Completed all 54 planned six-second cases using the same checked client, four
+server cores, 8,192 idle rooms and rotated fresh processes. Original GitHub C++
+has 2.206M private deliveries/s at 0.918 CPU us/delivery, selected Rust 2.066M
+at 1.053 us, and accepted modern C++ 1.895M at 1.313 us. Modern C++ leads fanout
+at 1.883M/s versus original 0.836M and Rust 0.670M, with higher CPU per delivery.
+Private process RSS is 20.65/17.04/11.10 MiB respectively. Fifty-three cases pass
+fully; one Rust query case completes 1,199/1,200 paced queries and aborts before
+postchecks. Its timed data and failure are retained; only previously unstarted
+cases are continued, without retries or dropped observations. The exact sources,
+build records, every trace, ranges and chart are in the
+[verified archive](benchmarks/2026-10-17-threeway-current/README.md).
+No runtime, existing experiment or manual service changes. This is an 8K-user
+comparison, not new 100,000-user or long-duration evidence.
+
 ## 2026-10-17: C++ output-accounting follow-up
 
 The isolated no-op atomic-accounting prototype did not earn adoption: four

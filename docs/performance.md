@@ -6796,3 +6796,40 @@ instruction-cost decomposition. Global output-accounting contention/cache-line
 placement is a next investigation target. Prior no-op accounting guards and
 per-worker-counter experiments remain rejected, and their observations must
 be considered before proposing another accounting change.
+
+
+## Original GitHub C++ versus current implementations, 2026-10-17
+
+A [fresh three-way campaign](benchmarks/2026-10-17-threeway-current/README.md)
+compares upstream C++ rebuilt with four workers, selected Rust and accepted modern
+C++ using identical application work and one frozen checked native-protocol
+client. Six repeats per implementation/workload, four server cores, 8,192 idle
+rooms, 64 private pairs or 63 fanout readers, 1 KiB values and window 16. Setup
+and cleanup are outside the server CPU measurement; candidate/workload order
+rotate, and every observed repeat is retained.
+
+| Workload | Original C++ deliveries/s / CPU us | Selected Rust deliveries/s / CPU us | Modern C++ deliveries/s / CPU us |
+|---|---:|---:|---:|
+| Private | 2,205,873 / 0.918 | 2,065,901 / 1.053 | 1,895,091 / 1.313 |
+| Private + queries | 2,002,247 / 0.999 | 2,000,095 / 1.111 | 1,676,664 / 1.443 |
+| Fanout | 835,885 / 0.600 | 670,403 / 0.708 | 1,882,604 / 0.834 |
+
+These are medians of six timed process trials, not maximum capacity. Original
+C++ leads private throughput and CPU efficiency; modern C++ leads fanout
+throughput but uses more CPU per delivered fanout message. Private RSS is
+20.65/17.04/11.10 MiB respectively. Private p99 histogram-bound medians are
+2.097152 ms in all three; full per-trial ranges are archived.
+
+All 54 planned cases finish. Fifty-three pass every check; one Rust query case
+misses one pacing deadline (1,199/1,200 queries), aborting before postchecks.
+The retained timed data participates in the query median, explicitly qualified.
+Only remaining unstarted cases run afterward; no failed case is silently retried
+or omitted. Timed windows verify 515,344,704 deliveries and 21,599 queries;
+fully completed cases verify 439,895 normal Close/EOF exchanges. Source/build
+hashes, complete raw traces, preliminary harness diagnostics, all-repeat ranges,
+replay instructions and an independently checked chart are preserved. The
+archive verifier reports integrity separately from runtime-case success.
+
+This does not rerun 100,000-user capacity or the original's historical churn
+failures. The separate modern-C++/Rust 100,000-user study remains distinct.
+No runtime implementation, running service or prior experiment changes.

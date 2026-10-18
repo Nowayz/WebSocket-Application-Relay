@@ -85,12 +85,42 @@ def rebuild_cpp(workers):
     return binary, record
 
 
+def check_modern(event, stable_sessions, stable_channels, variable_bytes=6):
+    """Check the counters actually exported by modern C++, at quiescent gates."""
+    observed, counts = event["metrics"], event["details"]["counts"]
+    done = event["event"] == "done"
+    expected = {
+        "war_connections": 0 if done else stable_sessions,
+        "war_users": 0 if done else stable_sessions,
+        "war_channels": 1 if done else stable_channels,
+        "war_variable_bytes": 0 if done else variable_bytes,
+        "war_queued_bytes": 0,
+        "war_disconnected_total": counts["normal_closes"],
+        "war_sent_messages_total": counts["sent_messages"],
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+    }
+    # This metric includes control values; the client value counter covers data.
+    assert observed["war_value_bytes_total"] >= counts["value_bytes"]
+    if done:
+        expected.update(war_buffered_bytes=0, war_retained_output_bytes=0)
+    # Live uWS cork accounting is reconciled on subsequent owner-loop callbacks;
+    # only physical retirement guarantees these gauges have returned to zero.
+    # C++ also counts departure notifications as deliveries. Their identities
+    # and bytes are verified by the common client, separately from user data.
+    for key, value in expected.items():
+        assert observed[key] == value, (event["event"], key, observed[key], value)
+    event["exact_counter_checks"] = expected
+
+
 def trial(args):
     namespace = os.readlink("/proc/self/ns/net")
     assert namespace != args.host_netns, "refusing reference listeners in host network namespace"
     cpp = args.kind == "cpp" or args.kind.startswith("cpp-")
     preload = dict(args.cpp_preload).get(args.kind.removeprefix("cpp-")) if args.kind.startswith("cpp-") else None
-    rust_binary = args.control if args.kind == "control" else args.relay
+    modern = args.kind == "modern"
+    rust_binary = args.modern if modern else args.control if args.kind == "control" else args.relay
     port, admin = (1338, 19139) if cpp else (19138, 19139)
     env = {k: v for k, v in os.environ.items()
            if not k.startswith("WAR_") and k not in ("LD_PRELOAD", "LD_LIBRARY_PATH")}
@@ -103,6 +133,8 @@ def trial(args):
         server_command = [str(rust_binary), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
                           "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0",
                           "--ping-interval-secs", "0", "--idle-timeout-secs", "0"]
+        if modern:
+            server_command = [str(rust_binary), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}", "--workers", str(args.workers)]
         env.update(WAR_AUTH_PASSWORD=inspection.TOKEN, WAR_ADMIN_TOKEN=inspection.TOKEN)
     server_env = runtime.preload_environment(env, preload)
     if args.loader_bindings:
@@ -111,8 +143,10 @@ def trial(args):
     mode = ("binary" if cpp else "cbor") if args.case == "query" else "none"
     client_command = [str(args.client), "--url", f"ws://127.0.0.1:{port}", "--wire", "cpp" if cpp else "cbor",
                       "--protocol-only", "--mode", mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
-                      "--pairs", str(args.pairs), "--churn-workers", str(churn), "--inspectors", str(args.inspectors),
+                      "--pairs", str(0 if args.case == "fanout" else args.pairs), "--churn-workers", str(churn), "--inspectors", str(args.inspectors),
                       "--inspection-interval-ms", str(args.inspection_interval_ms)]
+    if args.case == "fanout":
+        client_command += ["--fanout-readers", str(args.fanout_readers)]
     if args.client_workers is not None:
         client_command += ["--client-workers", str(args.client_workers)]
     if args.server_cpus:
@@ -185,8 +219,19 @@ def trial(args):
                     if event["event"] == "ready":
                         stable_sessions = event["details"]["stable_sessions"]
                         stable_channels = event["details"]["stable_channels"]
-                    inspection.check(event, stable_sessions, stable_channels,
-                                     read_storage=args.control_read_storage if args.kind == "control" else "worker", workers=args.workers)
+                    if modern:
+                        if event["event"] == "done":
+                            deadline = time.monotonic() + 5
+                            while event["metrics"]["war_connections"]:
+                                assert time.monotonic() < deadline, "modern physical retirement timeout"
+                                time.sleep(.01)
+                                event["metrics"] = inspection.metrics(admin)
+                            event["server"] = runtime.snapshot(server.pid)
+                        check_modern(event, stable_sessions, stable_channels, variable_bytes=0 if args.case == "fanout" else 6)
+                    else:
+                        inspection.check(event, stable_sessions, stable_channels,
+                                         read_storage=args.control_read_storage if args.kind == "control" else "worker", workers=args.workers,
+                                         variable_bytes=0 if args.case == "fanout" else 6)
                 record["events"].append(event)
                 if event["event"] == "ready":
                     record["client_aocl_mapping_absent"] = "libaocl-libmem" not in Path(f"/proc/{client.pid}/maps").read_text()
@@ -198,7 +243,7 @@ def trial(args):
                     for side in ("server", "client"):
                         mixed[f"{side}_cpu_seconds"] = event[side]["cpu_seconds"] - ready[side]["cpu_seconds"]
                         mixed[f"{side}_cpu_per_wall_second"] = mixed[f"{side}_cpu_seconds"] / mixed["elapsed_seconds"]
-                    assert mixed["healthy"]["verified"] > 0
+                    assert mixed["fanout" if args.case == "fanout" else "healthy"]["verified"] > 0
                     assert (mixed["churn"]["verified"] > 0) == (churn > 0)
                     assert (mixed["inspection"]["verified"] > 0) == (args.case == "query")
                     if args.case == "query":
@@ -256,6 +301,7 @@ def main():
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
     parser.add_argument("--client-source-root", type=Path,
                         help="source snapshot root for a frozen client; defaults to adjacent examples when available")
+    parser.add_argument("--modern", type=Path, help="optional accepted native CBOR C++ executable")
     parser.add_argument("--control", type=Path, help="optional frozen Rust control, measured with the identical client and gates")
     parser.add_argument("--control-read-storage", choices=["worker", "connection"], default="connection",
                         help="receive-staging contract for --control; use worker for a native control")
@@ -265,6 +311,7 @@ def main():
     parser.add_argument("--pairs", type=int, default=2, help="Verified private pairs, up to 64 with the current client")
     parser.add_argument("--client-workers", type=int, choices=range(1, 33),
                         help="Client runtime threads; omitted for compatibility with frozen clients")
+    parser.add_argument("--fanout-readers", type=int, default=63)
     parser.add_argument("--churn-workers", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)
     parser.add_argument("--inspection-interval-ms", type=int, default=10)
@@ -275,13 +322,13 @@ def main():
     parser.add_argument("--cpp-preload", type=cpp_preload, action="append", default=[], metavar="LABEL=LIBRARY",
                         help="Add a C++ candidate with this server-only shared-library preload; repeat for independent variants")
     parser.add_argument("--audit-ids", action="store_true", help="diagnostic only: check welcome ID reuse before C++ GC")
-    parser.add_argument("--cases", nargs="+", choices=["private", "churn", "query"], default=["private", "churn", "query"])
+    parser.add_argument("--cases", nargs="+", choices=["private", "churn", "query", "fanout"], default=["private", "churn", "query"])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--isolated", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--host-netns", help=argparse.SUPPRESS)
     parser.add_argument("--kind", help=argparse.SUPPRESS)
     parser.add_argument("--loader-bindings", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--case", choices=["private", "churn", "query"], help=argparse.SUPPRESS)
+    parser.add_argument("--case", choices=["private", "churn", "query", "fanout"], help=argparse.SUPPRESS)
     parser.add_argument("--cpp-executable", type=Path, default=CACHE / "app", help=argparse.SUPPRESS)
     parser.add_argument("--cpp-system-libraries", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--cpp-loop-count", type=int, default=0, help=argparse.SUPPRESS)
@@ -290,9 +337,10 @@ def main():
     args.cpp_executable = args.cpp_executable.resolve()
     if args.client_source_root: args.client_source_root = args.client_source_root.resolve()
     if args.control: args.control = args.control.resolve()
+    if args.modern: args.modern = args.modern.resolve()
     if len(dict(args.cpp_preload)) != len(args.cpp_preload):
         parser.error("C++ preload labels must be unique")
-    kinds = ["cpp", *[f"cpp-{label}" for label, _ in args.cpp_preload], "rust"] + (["control"] if args.control else [])
+    kinds = ["cpp", *[f"cpp-{label}" for label, _ in args.cpp_preload], "rust"] + (["control"] if args.control else []) + (["modern"] if args.modern else [])
     if args.loader_bindings and not args.isolated:
         parser.error("loader binding diagnostics require a separate isolated trial")
     if args.isolated:
@@ -317,11 +365,12 @@ def main():
               "runner_sha256": sha(__file__), **client_sources(args),
               "client_sha256": sha(args.client), "rust_sha256": sha(args.relay), "cpp_sha256": sha(args.cpp_executable), "cpp_build": cpp_build,
               "cpp_preloads": {f"cpp-{label}": runtime.preload_metadata(library) for label, library in args.cpp_preload},
-              "scope": f"Common application work, native Rust CBOR versus C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, {args.pairs} private pairs and {args.rooms} idle rooms. C++ treats values as opaque; Rust validates CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
+              "scope": f"Common application work, native Rust and optional modern C++ CBOR versus original C++ binary protocol; no bridge. Same frozen client, 64 cyclic 1027-byte CBOR byte-string values (1024 application bytes), 16-message windows, {args.pairs} private pairs and {args.rooms} idle rooms. Original C++ treats values as opaque; both current implementations validate CBOR. Each case runs fresh in a private net namespace, sequentially, pinned to the same server CPU set with client cores separate. Worker/library/build configuration is recorded in cpp_build; active listeners/threads checked for rebuilt C++. Case fanout: no private pairs, one publisher and {args.fanout_readers} readers. Case private: only private traffic. Case churn: private traffic plus fixed-room reconnect workers; every welcome, self delivery, Close/EOF checked, and C++ retired member counts verified before its first 30s GC. Case query: private traffic plus authenticated channel inspectors at fixed intervals, no churn; names/counts and full replies verified, sorting normalized only for C++ which does not promise it. HTTP management has no C++ counterpart. Setup and cleanup gated outside timing, every normal close counted, Rust counters/bytes/reservations checked. Latencies include client validation and concurrent client tasks, logarithmic percentile bucket upper bounds. RSS sampled at gates, not continuous peak/allocated memory. Server/client CPU covers all mixed work. Plaintext loopback, no TLS, rates/heartbeats off, default Rust queues; not a language-only or production-capacity comparison.",
               "cases": [], "passed": False}
     for label, _ in args.cpp_preload:
         record[f"cpp-{label}_sha256"] = record["cpp_sha256"]
     if args.control: record["control_sha256"] = sha(args.control)
+    if args.modern: record["modern_sha256"] = sha(args.modern)
     for repetition in range(1, args.repetitions + 1):
         offset = (repetition - 1) % len(args.cases)
         for case in args.cases[offset:] + args.cases[:offset]:
@@ -335,10 +384,12 @@ def main():
                            os.readlink("/proc/self/ns/net"), "--kind", kind, "--case", case,
                            "--relay", str(args.relay), "--client", str(args.client), "--workers", str(args.workers),
                            "--rooms", str(args.rooms), "--seconds", str(args.seconds), "--pairs", str(args.pairs),
-                           "--churn-workers", str(args.churn_workers), "--inspectors", str(args.inspectors),
+                           "--churn-workers", str(args.churn_workers), "--fanout-readers", str(args.fanout_readers), "--inspectors", str(args.inspectors),
                            "--inspection-interval-ms", str(args.inspection_interval_ms),
                            "--cpp-executable", str(args.cpp_executable), "--cpp-loop-count", str(args.cpp_loop_count),
                            "--server-cpus", args.server_cpus, "--client-cpus", args.client_cpus, "--output", str(path)]
+                if args.modern:
+                    command += ["--modern", str(args.modern)]
                 if args.cpp_system_libraries:
                     command.append("--cpp-system-libraries")
                 for label, library in args.cpp_preload:
@@ -376,8 +427,8 @@ def main():
             rows = [r for r in record["cases"] if r["kind"] == kind and r["case"] == case]
             middle = {activity: {k: statistics.median(r["mixed"][activity][k] for r in rows)
                                 for k in ("per_second", "p50_upper_ms", "p99_upper_ms", "max_ms")}
-                      for activity in ("healthy", "churn", "inspection")}
-            for activity in ("healthy", "churn", "inspection"):
+                      for activity in ("healthy", "churn", "inspection", "fanout")}
+            for activity in ("healthy", "churn", "inspection", "fanout"):
                 middle[activity]["throughput_range"] = [min(r["mixed"][activity]["per_second"] for r in rows),
                                                         max(r["mixed"][activity]["per_second"] for r in rows)]
             for side in ("server", "client"):

@@ -2,6 +2,8 @@
 
 2026-10-17. The C++20 candidate is a separate static library and CLI. The selected Rust service/default remains unchanged. C++ has a strong populated-memory and multi-worker fanout result; it is not a universal replacement for the best Rust runtime.
 
+The [fresh three-way comparison with the original GitHub C++](../docs/benchmarks/2026-10-17-threeway-current/README.md) uses a separate matched workload and six repeats. Original C++ leads private throughput and CPU efficiency there; modern C++ leads fanout throughput and uses the least process memory. Those rows must not be mixed with the saturation table below.
+
 ## Exact implementations
 
 - Modern C++ executable SHA-256: `b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1`; static library: `237a499d0538c7ac3c46ce3af6c5fe3bc8c3e8c883cbdf96e591cbb99ecbb7d6`. clang version 23.1.3; `-O3 -march=native -flto=thin`, native epoll, plaintext, compression disabled.
