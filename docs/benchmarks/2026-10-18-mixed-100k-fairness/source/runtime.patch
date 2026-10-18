@@ -1,0 +1,960 @@
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/relay/continuation_tests.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/relay/continuation_tests.rs
+new file mode 100644
+index 0000000..c79fa44
+--- /dev/null
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/relay/continuation_tests.rs
+@@ -0,0 +1,157 @@
++use super::*;
++
++#[derive(Default)]
++struct Recording(parking_lot::Mutex<Vec<Frame>>);
++impl PeerOutput for Recording {
++    fn send(&self, packet: Submission<'_>) -> bool {
++        if protocol::parse(&packet.frame.to_vec()).is_ok_and(|(id, _)| id != 0 && id != BROADCAST) {
++            self.0.lock().push(packet.frame.clone());
++        }
++        true
++    }
++    fn close(&self, _: Disconnect) {}
++}
++
++#[test]
++fn a_room_continuation_owns_its_snapshot_borrows_the_body_and_releases_its_charge() {
++    let relay = Relay::new(Config {
++        ping_interval_secs: 0,
++        ..Config::default()
++    })
++    .unwrap();
++    let source = relay
++        .subscribe_with_output(b"continuation", Arc::new(Recording::default()))
++        .unwrap();
++    let mut targets = Vec::new();
++    let mut outputs = Vec::new();
++    for _ in 0..300 {
++        let output = Arc::new(Recording::default());
++        targets.push(Some(
++            relay
++                .subscribe_with_output(b"continuation", output.clone())
++                .unwrap(),
++        ));
++        outputs.push(output);
++    }
++    let input = protocol::envelope(BROADCAST, &protocol::byte_string(&[0x5a; 1024]));
++    let pointer = protocol::parse(&input).unwrap().1.as_ptr();
++    let mut slot = None;
++    let mut batch = relay.receive_batch();
++    assert_eq!(
++        batch
++            .receive_bounded(&source.peer, input, 0, &mut slot, 256)
++            .unwrap(),
++        256
++    );
++    let work = slot.as_mut().unwrap();
++    let allocation = &**work as *const RoomFanout;
++    assert!(work.active());
++    assert!(work.deadline().is_some());
++    let charge = work.packet.as_ref().unwrap().frame.len();
++    assert_eq!(
++        relay.metrics.queued_bytes.load(Relaxed),
++        charge + work.snapshot_bytes
++    );
++    assert_eq!(source.peer.budget.used.load(Relaxed), charge);
++    assert_eq!(
++        work.packet.as_ref().unwrap().frame.payload().as_ptr(),
++        pointer
++    );
++    let unvisited = outputs.iter().position(|o| o.0.lock().is_empty()).unwrap();
++    // Leave and join between chunks. Retained IDs cannot redirect a captured
++    // recipient, and a late join cannot receive the unfinished older frame.
++    drop(targets[unvisited].take());
++    let late = Arc::new(Recording::default());
++    let late_peer = relay
++        .subscribe_with_output(b"continuation", late.clone())
++        .unwrap();
++    work.resume(256).unwrap();
++    assert!(!work.active());
++    assert!(work.deadline().is_none());
++    assert!(work.recipients.is_none());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    assert_eq!(source.peer.budget.used.load(Relaxed), 0);
++    assert!(late.0.lock().is_empty());
++    for (index, output) in outputs.iter().enumerate() {
++        let sent = output.0.lock();
++        assert_eq!(sent.len(), usize::from(index != unvisited));
++        if let Some(frame) = sent.first() {
++            assert_eq!(frame.payload().as_ptr(), pointer);
++        }
++    }
++    let input = protocol::envelope(BROADCAST, &[0xf5]);
++    batch
++        .receive_bounded(&source.peer, input, 0, &mut slot, 256)
++        .unwrap();
++    let work = slot.as_mut().unwrap();
++    assert_eq!(
++        &**work as *const RoomFanout, allocation,
++        "publisher reuses its only continuation allocation"
++    );
++    assert!(work.active());
++    work.clear();
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    assert_eq!(source.peer.budget.used.load(Relaxed), 0);
++    drop(late_peer);
++    relay.begin_shutdown();
++    drop(targets);
++    drop(source);
++    assert_eq!(relay.counts(), (0, 1));
++}
++
++#[test]
++fn continuation_metadata_cannot_escape_the_global_queue_budget() {
++    let relay = Relay::new(Config {
++        max_message_bytes: 65536,
++        queue_bytes: 65546,
++        total_queue_bytes: 65546,
++        ping_interval_secs: 0,
++        ..Config::default()
++    })
++    .unwrap();
++    let source = relay
++        .subscribe_with_output(b"metadata", Arc::new(Recording::default()))
++        .unwrap();
++    let mut targets = Vec::new();
++    for _ in 0..1024 {
++        targets.push(
++            relay
++                .subscribe_with_output(b"metadata", Arc::new(Recording::default()))
++                .unwrap(),
++        );
++    }
++    let mut filler = relay.subscribe(b"fill").unwrap();
++    drop(filler.outgoing.try_recv().unwrap());
++    let held = Frame::envelope(
++        source.peer.id.load(Relaxed),
++        protocol::byte_string(&vec![0x5a; 60000]),
++    );
++    filler.registration.peer.enqueue_frame(&held).unwrap();
++    let charged = relay.metrics.queued_bytes.load(Relaxed);
++    assert_eq!(charged, held.len());
++    let mut slot = None;
++    let mut batch = relay.receive_batch();
++    assert_eq!(
++        batch.receive_bounded(
++            &source.peer,
++            protocol::envelope(BROADCAST, &[0xf5]),
++            0,
++            &mut slot,
++            256
++        ),
++        Err(Disconnect::OVERLOADED)
++    );
++    let work = slot.as_ref().unwrap();
++    assert!(!work.active());
++    assert_eq!(work.snapshot_bytes, 0);
++    assert_eq!(source.peer.budget.used.load(Relaxed), 0);
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), charged);
++    assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
++    drop(filler.outgoing.try_recv().unwrap());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    relay.begin_shutdown();
++    drop(targets);
++    drop(filler);
++    drop(source);
++    assert_eq!(relay.counts(), (0, 1));
++}
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/relay.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/relay.rs
+index 88f40fd..206948f 100644
+--- a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/relay.rs
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/relay.rs
+@@ -63,14 +63,46 @@ pub(crate) struct ReceiveBatch<'a> {
+ }
+ 
+ impl ReceiveBatch<'_> {
++    #[cfg(test)]
+     pub(crate) fn receive(
+         &mut self,
+         peer: &Peer,
+         bytes: Bytes,
+         storage_capacity: usize,
+     ) -> Result<usize, Disconnect> {
+-        self.relay
+-            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals)
++        self.relay.receive_with_totals(
++            peer,
++            bytes,
++            storage_capacity,
++            &mut self.totals,
++            deliver_room,
++        )
++    }
++
++    /// Native workers keep one reusable continuation slot per large publisher.
++    pub(crate) fn receive_bounded(
++        &mut self,
++        peer: &Peer,
++        bytes: Bytes,
++        storage_capacity: usize,
++        pending: &mut Option<Box<RoomFanout>>,
++        quantum: usize,
++    ) -> Result<usize, Disconnect> {
++        self.relay.receive_with_totals(
++            peer,
++            bytes,
++            storage_capacity,
++            &mut self.totals,
++            |source, recipients, frame| {
++                if recipients.len() <= quantum {
++                    return deliver_room(source, recipients, frame);
++                }
++                let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
++                work.begin(source, recipients, frame, self.relay.config.write_timeout())?;
++                work.resume(quantum)?;
++                Ok(quantum)
++            },
++        )
+     }
+ 
+     pub(crate) fn publish(&mut self) {
+@@ -200,6 +232,126 @@ pub(crate) struct Peer {
+     budget: Arc<Budget>,
+ }
+ 
++/// One immutable membership snapshot and one charged shared body. The box is
++/// allocated only on a publisher's first oversized room multicast and reused.
++/// Empty slots retain no payload or peer ownership; metadata is bounded by the
++/// admitted connection count and staged bodies share the normal queue budget.
++#[derive(Default)]
++pub(crate) struct RoomFanout {
++    recipients: Option<Arc<Vec<Arc<Peer>>>>,
++    packet: Option<Envelope>,
++    cursor: usize,
++    source: u64,
++    snapshot_bytes: usize,
++    deadline: Option<std::time::Instant>,
++}
++
++impl RoomFanout {
++    fn begin(
++        &mut self,
++        source: &Peer,
++        recipients: Arc<Vec<Arc<Peer>>>,
++        frame: Frame,
++        timeout: std::time::Duration,
++    ) -> Result<(), Disconnect> {
++        debug_assert!(!self.active());
++        let packet = source
++            .reserve(&frame)?
++            .ok_or(Disconnect::OVERLOADED)?
++            .into_owned();
++        // Account conservatively per active publisher, even if several share
++        // this view. Churn can otherwise pin many distinct old membership views
++        // outside the queue budget while workers advance their cursors.
++        let snapshot_bytes = recipients
++            .capacity()
++            .checked_mul(std::mem::size_of::<Arc<Peer>>())
++            .and_then(|n| {
++                n.checked_add(
++                    std::mem::size_of::<Vec<Arc<Peer>>>() + 2 * std::mem::size_of::<usize>(),
++                )
++            })
++            .ok_or(Disconnect::OVERLOADED)?;
++        if packet
++            .budget
++            .metrics
++            .queued_bytes
++            .fetch_update(Relaxed, Relaxed, |used| {
++                used.checked_add(snapshot_bytes)
++                    .filter(|&next| next <= packet.budget.global_limit)
++            })
++            .is_err()
++        {
++            packet.budget.metrics.global_pressure.fetch_add(1, Relaxed);
++            return Err(Disconnect::OVERLOADED);
++        }
++        self.snapshot_bytes = snapshot_bytes;
++        self.packet = Some(packet);
++        self.recipients = Some(recipients);
++        self.cursor = 0;
++        self.source = source.key;
++        self.deadline = Some(std::time::Instant::now() + timeout);
++        Ok(())
++    }
++
++    pub(crate) fn active(&self) -> bool {
++        self.packet.is_some()
++    }
++    pub(crate) fn deadline(&self) -> Option<std::time::Instant> {
++        self.deadline
++    }
++    pub(crate) fn clear(&mut self) {
++        if self.snapshot_bytes != 0 {
++            self.packet
++                .as_ref()
++                .expect("charged membership view")
++                .budget
++                .metrics
++                .queued_bytes
++                .fetch_sub(self.snapshot_bytes, Relaxed);
++            self.snapshot_bytes = 0;
++        }
++        self.packet = None;
++        self.recipients = None;
++        self.deadline = None;
++    }
++
++    pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
++        let recipients = self.recipients.as_ref().expect("live fanout snapshot");
++        let frame = &self.packet.as_ref().expect("charged fanout body").frame;
++        let end = self.cursor.saturating_add(quantum).min(recipients.len());
++        for recipient in &recipients[self.cursor..end] {
++            if recipient.key != self.source {
++                recipient.enqueue_fanout(frame)?;
++            }
++        }
++        self.cursor = end;
++        if end == recipients.len() {
++            self.clear();
++        }
++        Ok(())
++    }
++}
++
++impl Drop for RoomFanout {
++    fn drop(&mut self) {
++        self.clear();
++    }
++}
++
++fn deliver_room(
++    source: &Peer,
++    recipients: Arc<Vec<Arc<Peer>>>,
++    frame: Frame,
++) -> Result<usize, Disconnect> {
++    let work = recipients.len().max(1);
++    for recipient in recipients.iter() {
++        if recipient.key != source.key {
++            recipient.enqueue_fanout(&frame)?;
++        }
++    }
++    Ok(work)
++}
++
+ struct Budget {
+     used: AtomicUsize,
+     limit: usize,
+@@ -303,8 +455,24 @@ impl Peer {
+     // carry no multicast flag, extra branch or different frame representation.
+     #[inline(always)]
+     fn enqueue<const FANOUT: bool>(&self, frame: &Frame) -> Result<(), Disconnect> {
+-        if self.closing.load(Relaxed) {
++        let Some(packet) = self.reserve(frame)? else {
+             return Ok(());
++        };
++        let accepted = if FANOUT {
++            self.output.send_fanout(packet)
++        } else {
++            self.output.send(packet)
++        };
++        if !accepted {
++            self.overloaded();
++        }
++        Ok(())
++    }
++
++    #[inline(always)]
++    fn reserve<'a>(&'a self, frame: &'a Frame) -> Result<Option<Submission<'a>>, Disconnect> {
++        if self.closing.load(Relaxed) {
++            return Ok(None);
+         }
+         let size = frame.len();
+         if self
+@@ -317,7 +485,7 @@ impl Peer {
+             .is_err()
+         {
+             self.overloaded();
+-            return Ok(());
++            return Ok(None);
+         }
+         if self
+             .budget
+@@ -333,19 +501,10 @@ impl Peer {
+             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+             return Err(Disconnect::OVERLOADED);
+         }
+-        let packet = Submission {
++        Ok(Some(Submission {
+             frame,
+             budget: Some(&self.budget),
+-        };
+-        let accepted = if FANOUT {
+-            self.output.send_fanout(packet)
+-        } else {
+-            self.output.send(packet)
+-        };
+-        if !accepted {
+-            self.overloaded();
+-        }
+-        Ok(())
++        }))
+     }
+ 
+     fn overloaded(&self) {
+@@ -662,13 +821,17 @@ impl Relay {
+         self.receive_batch().receive(peer, bytes, storage_capacity)
+     }
+ 
+-    fn receive_with_totals(
++    fn receive_with_totals<F>(
+         &self,
+         peer: &Peer,
+         bytes: Bytes,
+         storage_capacity: usize,
+         totals: &mut InputTotals,
+-    ) -> Result<usize, Disconnect> {
++        room: F,
++    ) -> Result<usize, Disconnect>
++    where
++        F: FnOnce(&Peer, Arc<Vec<Arc<Peer>>>, Frame) -> Result<usize, Disconnect>,
++    {
+         if peer.closing.load(Relaxed) {
+             return Ok(1);
+         }
+@@ -730,14 +893,8 @@ impl Relay {
+                 .broadcast
+                 .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
+                 .clone();
+-            let work = recipients.len().max(1);
+             drop(state);
+-            for recipient in recipients.iter() {
+-                if recipient.key != peer.key {
+-                    recipient.enqueue_fanout(&frame)?;
+-                }
+-            }
+-            return Ok(work);
++            return room(peer, recipients, frame);
+         }
+         // Charge every fanout path by recipient visits, including global
+         // observers. One complete message remains atomic with respect to this
+@@ -935,7 +1092,7 @@ impl Relay {
+         let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
+         if let Some(frame) = &frame {
+             for recipient in channel.members.values() {
+-                let _ = recipient.enqueue_frame(frame);
++                let _ = recipient.enqueue_fanout(frame);
+             }
+         }
+         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
+@@ -954,7 +1111,7 @@ impl Relay {
+         }
+         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
+             for recipient in state.listeners(DISCONNECT_MESSAGE) {
+-                let _ = recipient.enqueue_frame(frame.as_ref().expect("notifications enabled"));
++                let _ = recipient.enqueue_fanout(frame.as_ref().expect("notifications enabled"));
+             }
+         }
+         // A displaced session must never erase the new owner of its previous ID.
+@@ -1831,3 +1988,6 @@ mod tests {
+         assert!(frame.has_unique_payload());
+     }
+ }
++
++#[cfg(test)]
++mod continuation_tests;
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/fairness_tests.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/fairness_tests.rs
+index e72010b..5a6bec1 100644
+--- a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/fairness_tests.rs
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/fairness_tests.rs
+@@ -25,23 +25,28 @@ impl PeerOutput for Sequence {
+ }
+ 
+ #[test]
+-fn a_large_broadcast_yields_before_the_next_buffered_message_without_splitting_fanout() {
+-    check_fanout_quantum(FanoutScope::Room);
++fn a_large_room_multicast_yields_within_a_message_and_preserves_source_fifo() {
++    check_fanout_quantum(FanoutScope::Room, false);
+ }
+ 
+ #[test]
+ fn a_large_global_broadcast_yields_without_splitting_fanout() {
+-    check_fanout_quantum(FanoutScope::Global);
++    check_fanout_quantum(FanoutScope::Global, false);
+ }
+ 
+ #[test]
+ fn channel_observer_fanout_yields_without_splitting_fanout() {
+-    check_fanout_quantum(FanoutScope::ChannelObservers);
++    check_fanout_quantum(FanoutScope::ChannelObservers, false);
+ }
+ 
+ #[test]
+ fn private_observer_fanout_yields_without_splitting_fanout() {
+-    check_fanout_quantum(FanoutScope::PrivateObservers);
++    check_fanout_quantum(FanoutScope::PrivateObservers, false);
++}
++
++#[test]
++fn cancelling_an_unfinished_room_multicast_releases_staging_without_more_deliveries() {
++    check_fanout_quantum(FanoutScope::Room, true);
+ }
+ 
+ enum FanoutScope {
+@@ -51,7 +56,7 @@ enum FanoutScope {
+     PrivateObservers,
+ }
+ 
+-fn check_fanout_quantum(scope: FanoutScope) {
++fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
+     let relay = Relay::new(crate::Config {
+         ping_interval_secs: 0,
+         total_read_buffer_bytes: 0,
+@@ -88,7 +93,12 @@ fn check_fanout_quantum(scope: FanoutScope) {
+     );
+     let mut targets = Vec::new();
+     let mut outputs = Vec::new();
+-    for _ in 0..300 {
++    let count = if matches!(scope, FanoutScope::Room) {
++        FANOUT_QUANTUM + 44
++    } else {
++        300
++    };
++    for _ in 0..count {
+         let output = Arc::new(Sequence::default());
+         let channel = if matches!(scope, FanoutScope::Room) {
+             source_channel
+@@ -165,15 +175,55 @@ fn check_fanout_quantum(scope: FanoutScope) {
+         relay.metrics.incoming_messages.load(Relaxed),
+         incoming_before + 1
+     );
+-    assert!(
+-        outputs.iter().all(|out| out.messages.load(Relaxed) == 1),
+-        "one complete broadcast must reach every recipient before yielding"
+-    );
++    if cancel {
++        assert!(connection.room_fanout.as_ref().unwrap().active());
++        assert!(connection.deadline(&relay).is_some());
++        let delivered: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
++        connection.start_close(Disconnect::SHUTDOWN, &relay, false, Instant::now());
++        assert!(!connection.room_fanout.as_ref().unwrap().active());
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++        assert_eq!(
++            outputs
++                .iter()
++                .map(|out| out.messages.load(Relaxed))
++                .sum::<usize>(),
++            delivered
++        );
++        relay.begin_shutdown();
++        drop(targets);
++        drop(connection);
++        drop(socket);
++        drop(client);
++        assert_eq!(relay.metrics.connections.load(Relaxed), 0);
++        return;
++    }
++    if matches!(scope, FanoutScope::Room) {
++        let visited: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
++        assert!((1..=FANOUT_QUANTUM).contains(&visited));
++        assert!(
++            visited < outputs.len(),
++            "large multicast must yield within the frame"
++        );
++        assert!(
++            relay.metrics.queued_bytes.load(Relaxed) > 0,
++            "unfinished payload must stay charged"
++        );
++        assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
++        assert_eq!(
++            relay.metrics.incoming_messages.load(Relaxed),
++            incoming_before + 1
++        );
++    }
++    assert!(outputs.iter().all(|out| out.messages.load(Relaxed) == 1));
+     assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
+     assert_eq!(
+         relay.metrics.incoming_messages.load(Relaxed),
+         incoming_before + 2
+     );
++    if matches!(scope, FanoutScope::Room) {
++        assert!(outputs.iter().any(|out| out.messages.load(Relaxed) == 1));
++        assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
++    }
+     assert!(outputs.iter().all(|out| out.messages.load(Relaxed) == 2));
+     assert!(connection.drive(&relay, &mut scratch, false) == Drive::Wait);
+     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/ownership_tests.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/ownership_tests.rs
+index ec4c115..27d979e 100644
+--- a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/ownership_tests.rs
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/ownership_tests.rs
+@@ -63,3 +63,77 @@ fn a_retained_routing_target_keeps_transport_capacity_until_the_descriptor_close
+     assert_eq!(client.get_mut().read(&mut byte).unwrap(), 0);
+     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+ }
++
++#[test]
++fn output_only_wake_does_not_consume_input_and_readiness_upgrades_a_queued_turn() {
++    let relay = Relay::new(crate::Config {
++        ping_interval_secs: 0,
++        idle_timeout_secs: 0,
++        ..crate::Config::default()
++    })
++    .unwrap();
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    let raw = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
++    raw.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let mut worker = Worker::new(listener, relay.clone()).unwrap();
++    worker.accept().unwrap();
++    let connection = &mut worker.connections[0];
++    let mut ws = WebSocket::from_raw_socket(
++        Stream {
++            socket: connection.socket.clone(),
++            remaining_upgrade: None,
++        },
++        Role::Server,
++        Some(
++            WebSocketConfig::default()
++                .read_buffer_size(4096)
++                .shared_read_buffer(true),
++        ),
++    );
++    ws.set_read_budget(connection.handshake_lease.take().unwrap())
++        .unwrap();
++    connection.stage = Stage::WebSocket(ws);
++    connection.registration = Some(
++        relay
++            .subscribe_with_output(b"output-only", connection.socket.clone())
++            .unwrap(),
++    );
++    let mut client = WebSocket::from_raw_socket(raw, Role::Client, None);
++    assert!(matches!(client.read().unwrap(), Message::Binary(_)));
++    struct Sink;
++    impl crate::relay::PeerOutput for Sink {
++        fn send(&self, _: crate::relay::Submission<'_>) -> bool {
++            true
++        }
++        fn close(&self, _: Disconnect) {}
++    }
++    let source = relay
++        .subscribe_with_output(b"output-only", Arc::new(Sink))
++        .unwrap();
++    let source_id = source.peer.id.load(Relaxed);
++    let input = protocol::envelope(source_id, &[0xf5]);
++    client.send(Message::Binary(input)).unwrap();
++    relay
++        .receive(
++            &source.peer,
++            protocol::envelope(protocol::BROADCAST, &[0xf6]),
++        )
++        .unwrap();
++    let before = relay.metrics.incoming_messages.load(Relaxed);
++    connection.output_only = true;
++    assert!(connection.drive(&relay, &mut worker.scratch, false) == Drive::Wait);
++    assert_eq!(relay.metrics.incoming_messages.load(Relaxed), before);
++    assert_eq!(
++        client.read().unwrap(),
++        Message::Binary(protocol::envelope(source_id, &[0xf6]))
++    );
++    let token = connection.token;
++    // schedule() must upgrade the reason even if the token is already queued.
++    connection.scheduled = true;
++    worker.schedule(token);
++    assert!(!worker.connections[0].output_only);
++    assert!(worker.connections[0].drive(&relay, &mut worker.scratch, false) == Drive::Wait);
++    assert_eq!(relay.metrics.incoming_messages.load(Relaxed), before + 1);
++    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
++}
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/socket.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/socket.rs
+index d15d925..c6f7898 100644
+--- a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server/socket.rs
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server/socket.rs
+@@ -183,6 +183,31 @@ impl Socket {
+         if state.control_pending {
+             return Ok(false);
+         }
++        self.flush_locked(&mut state)
++    }
++
++    /// A pending application-output wake need not enter the input decoder.
++    /// Check terminal/control/deadline policy under the same lock as the write;
++    /// uncertain cases return to the complete connection state machine.
++    pub fn flush_output_only(
++        &self,
++        now: Instant,
++        idle_timeout: Duration,
++    ) -> Option<io::Result<bool>> {
++        let mut state = self.state.lock();
++        if state.fatal
++            || state.requested.is_some()
++            || state.control_pending
++            || state.control_deadline.is_some_and(|d| d <= now)
++            || state.queue.front().is_some_and(|p| p.deadline <= now)
++            || (!idle_timeout.is_zero() && state.activity + idle_timeout <= now)
++        {
++            return None;
++        }
++        Some(self.flush_locked(&mut state))
++    }
++
++    fn flush_locked(&self, state: &mut State) -> io::Result<bool> {
+         let mut remaining = WRITE_QUANTUM;
+         while !state.queue.is_empty() {
+             let State { stream, queue, .. } = &mut *state;
+@@ -198,18 +223,18 @@ impl Socket {
+                     }
+                     if remaining == 0 {
+                         let queued = !state.queue.is_empty();
+-                        self.writable(&mut state, queued)?;
++                        self.writable(state, queued)?;
+                         return Ok(queued);
+                     }
+                 }
+                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+-                    self.writable(&mut state, true)?;
++                    self.writable(state, true)?;
+                     return Ok(false);
+                 }
+                 Err(error) => return Err(error),
+             }
+         }
+-        self.writable(&mut state, false)?;
++        self.writable(state, false)?;
+         Ok(false)
+     }
+ 
+@@ -635,6 +660,36 @@ mod tests {
+         (relay, socket, reader, poll)
+     }
+ 
++    #[test]
++    fn output_only_flush_defers_control_close_and_expired_policy_to_the_decoder() {
++        let (_relay, socket, _reader, _poll) = connected();
++        let now = Instant::now();
++        socket.state.lock().fatal = true;
++        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
++        socket.state.lock().fatal = false;
++        socket.state.lock().requested = Some(Disconnect::OVERLOADED);
++        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
++        socket.state.lock().requested = None;
++        socket.state.lock().control_pending = true;
++        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
++        socket.state.lock().control_pending = false;
++        socket.state.lock().control_deadline = Some(now);
++        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
++        socket.state.lock().control_deadline = None;
++        socket.state.lock().activity = now - Duration::from_secs(2);
++        assert!(
++            socket
++                .flush_output_only(now, Duration::from_secs(1))
++                .is_none()
++        );
++        assert!(
++            !socket
++                .flush_output_only(now, Duration::ZERO)
++                .unwrap()
++                .unwrap()
++        );
++    }
++
+     #[test]
+     fn multicast_waits_for_its_owner_while_private_output_stays_immediate() {
+         let (relay, socket, raw_reader, _poll) = connected();
+@@ -666,7 +721,12 @@ mod tests {
+             assert_eq!(state.queue[0].packet.frame.payload().as_ptr(), pointer);
+         }
+         assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
+-        assert!(!socket.flush().unwrap());
++        assert!(
++            !socket
++                .flush_output_only(Instant::now(), Duration::ZERO)
++                .unwrap()
++                .unwrap()
++        );
+         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+         assert_eq!(
+             reader.read().unwrap(),
+diff --git a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server.rs b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server.rs
+index 33c745f..cd39dae 100644
+--- a/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/before/src/server.rs
++++ b/home/phil/dev/war_next/docs/benchmarks/2026-10-18-mixed-100k-fairness/source/after/src/server.rs
+@@ -49,7 +49,7 @@ use tokio_util::sync::CancellationToken;
+ use crate::{
+     Relay,
+     protocol::{self, Disconnect},
+-    relay::{ReceiveBatch, Registration},
++    relay::{ReceiveBatch, Registration, RoomFanout},
+ };
+ use socket::{Signal, Socket, Stream};
+ use timers::Timers;
+@@ -57,6 +57,7 @@ use timers::Timers;
+ const LISTENER: Token = Token(0);
+ const WAKE: Token = Token(1);
+ const READ_QUANTUM: usize = 256;
++const FANOUT_QUANTUM: usize = 1024;
+ const ACCEPT_QUANTUM: usize = 16;
+ 
+ /// Run pre-bound listeners. Tokio services management and signals; native data
+@@ -284,10 +285,13 @@ impl Worker {
+         };
+         if let Some(connection) = self.connections.get_mut(slot)
+             && connection.token == token
+-            && !connection.scheduled
+         {
+-            connection.scheduled = true;
+-            self.ready.push_back(token);
++            // Input/timer readiness upgrades an already pending output wake.
++            connection.output_only = false;
++            if !connection.scheduled {
++                connection.scheduled = true;
++                self.ready.push_back(token);
++            }
+         }
+     }
+ 
+@@ -533,7 +537,10 @@ impl Worker {
+                         let deadline = self.connections[slot].deadline(&self.relay);
+                         self.timers.set(slot, deadline);
+                         if keep == Drive::Again {
+-                            self.schedule(token);
++                            // Retain the reason: a write-quantum continuation
++                            // still needs no speculative input read.
++                            self.connections[slot].scheduled = true;
++                            self.ready.push_back(token);
+                         }
+                     }
+                 }
+@@ -551,6 +558,7 @@ impl Worker {
+                         && !connection.scheduled
+                     {
+                         connection.scheduled = true;
++                        connection.output_only = true;
+                         self.ready.push_back(token);
+                     }
+                 }
+@@ -642,6 +650,8 @@ enum Stage {
+ struct Connection {
+     token: Token,
+     scheduled: bool,
++    output_only: bool,
++    room_fanout: Option<Box<RoomFanout>>,
+     socket: Arc<Socket>,
+     stage: Stage,
+     handshake_lease: Option<ReadLease>,
+@@ -693,6 +703,8 @@ impl Connection {
+         Self {
+             token,
+             scheduled: false,
++            output_only: false,
++            room_fanout: None,
+             socket,
+             stage: Stage::Upgrade(Some(handshake)),
+             handshake_lease: lease,
+@@ -714,6 +726,9 @@ impl Connection {
+             return Some(self.phase_deadline);
+         }
+         let mut deadline = self.socket.deadline();
++        if let Some(next) = self.room_fanout.as_ref().and_then(|f| f.deadline()) {
++            deadline = Some(deadline.map_or(next, |d| d.min(next)));
++        }
+         for next in [
+             self.pong_deadline,
+             self.reclaim_deadline,
+@@ -745,6 +760,28 @@ impl Connection {
+         incoming: &mut ReceiveBatch<'_>,
+     ) -> Drive {
+         let now = Instant::now();
++        if self.output_only
++            && !self.room_fanout.as_ref().is_some_and(|f| f.active())
++            && !stopping
++            && self.registration.is_some()
++            && self.closing.is_none()
++            && self.pong_deadline.is_none_or(|d| d > now)
++            && self.reclaim_deadline.is_none_or(|d| d > now)
++            && (relay.config.ping_interval_secs == 0 || self.next_ping > now)
++            && let Some(result) = self
++                .socket
++                .flush_output_only(now, Duration::from_secs(relay.config.idle_timeout_secs))
++        {
++            return match result {
++                Ok(true) => Drive::Again,
++                Ok(false) => Drive::Wait,
++                Err(_) => {
++                    relay.metrics.write_errors.fetch_add(1, Relaxed);
++                    Drive::Drop
++                }
++            };
++        }
++        self.output_only = false;
+         if let Stage::Upgrade(handshake) = &mut self.stage {
+             if stopping {
+                 return Drive::Drop;
+@@ -807,6 +844,9 @@ impl Connection {
+         if self.closing.is_some() {
+             return Drive::Wait;
+         }
++        if let Some(fanout) = &mut self.room_fanout {
++            fanout.clear();
++        }
+         if reason.code == 1002 && self.registration.is_some() {
+             relay.metrics.protocol_errors.fetch_add(1, Relaxed);
+         }
+@@ -907,7 +947,13 @@ impl Connection {
+                 }
+                 return self.start_close(reason, relay, false, now);
+             }
+-            if self.socket.deadline().is_some_and(|d| d <= now) {
++            if self.socket.deadline().is_some_and(|d| d <= now)
++                || self
++                    .room_fanout
++                    .as_ref()
++                    .and_then(|f| f.deadline())
++                    .is_some_and(|d| d <= now)
++            {
+                 relay.metrics.write_timeouts.fetch_add(1, Relaxed);
+                 return Drive::Drop;
+             }
+@@ -1030,6 +1076,12 @@ impl Connection {
+                     Some(now + Duration::from_secs(relay.config.read_buffer_idle_secs));
+             }
+         }
++        if let Some(fanout) = self.room_fanout.as_mut().filter(|f| f.active()) {
++            return match fanout.resume(FANOUT_QUANTUM) {
++                Ok(()) => Drive::Again,
++                Err(reason) => self.start_close(reason, relay, false, now),
++            };
++        }
+         let mut route_budget = READ_QUANTUM;
+         for _ in 0..READ_QUANTUM {
+             let Stage::WebSocket(ws) = &mut self.stage else {
+@@ -1062,13 +1114,18 @@ impl Connection {
+                                 let large = relay.config.read_buffer_idle_secs > 0
+                                     && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
+                                 let capacity = ws.read_storage_capacity().max(bytes.len());
+-                                let work =
+-                                    match incoming.receive(&registration.peer, bytes, capacity) {
+-                                        Ok(work) => work,
+-                                        Err(reason) => {
+-                                            return self.start_close(reason, relay, false, now);
+-                                        }
+-                                    };
++                                let work = match incoming.receive_bounded(
++                                    &registration.peer,
++                                    bytes,
++                                    capacity,
++                                    &mut self.room_fanout,
++                                    FANOUT_QUANTUM,
++                                ) {
++                                    Ok(work) => work,
++                                    Err(reason) => {
++                                        return self.start_close(reason, relay, false, now);
++                                    }
++                                };
+                                 route_budget = route_budget.saturating_sub(work);
+                                 if large {
+                                     self.reclaim_deadline = Some(
+@@ -1203,6 +1260,7 @@ impl Drop for Connection {
+         // This may be the last strong peer/socket reference. Disable output
+         // before retiring membership and releasing queued byte reservations.
+         self.socket.end_output();
++        self.room_fanout.take();
+         self.registration.take();
+     }
+ }

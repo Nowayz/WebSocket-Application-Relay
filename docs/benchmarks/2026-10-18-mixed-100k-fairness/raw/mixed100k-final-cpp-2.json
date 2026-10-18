@@ -1,0 +1,2189 @@
+{
+  "passed": true,
+  "args": {
+    "server": "artifacts/candidates/cpp-accounting-layout-control/war-relay-cpp",
+    "kind": "cpp",
+    "sidecar": "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-client-final/inspection",
+    "users": 100000,
+    "seconds": 30,
+    "readers": 8192,
+    "scope": "room",
+    "window": 4,
+    "inspectors": 2,
+    "pairs": 0,
+    "churn_cycles_per_second": 4,
+    "fanout_windows_per_second": 16,
+    "profile": false,
+    "output": "artifacts/mixed100k-final-cpp-2.json"
+  },
+  "server_command": [
+    "taskset",
+    "-c",
+    "0-7",
+    "/home/phil/dev/war_next/artifacts/candidates/cpp-accounting-layout-control/war-relay-cpp",
+    "--bind",
+    "127.0.0.1:34841",
+    "--admin-bind",
+    "127.0.0.1:40359",
+    "--workers",
+    "8",
+    "--pin-workers",
+    "--max-connections",
+    "109192",
+    "--max-channel-members",
+    "10000",
+    "--max-message-bytes",
+    "65536",
+    "--queue-bytes",
+    "262144",
+    "--tcp-send-buffer-bytes",
+    "16384",
+    "--tcp-receive-buffer-bytes",
+    "65536"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "8-11,24-27",
+    "/home/phil/dev/war_next/artifacts/candidates/latency-timeline-client/capacity",
+    "--url",
+    "ws://127.0.0.1:34841",
+    "--users",
+    "100000",
+    "--seconds",
+    "30",
+    "--messages-per-second",
+    "4",
+    "--client-workers",
+    "8",
+    "--user-latency-output",
+    "artifacts/mixed100k-final-cpp-2.csv"
+  ],
+  "sidecar_command": [
+    "taskset",
+    "-c",
+    "12-15,28-31",
+    "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-client-final/inspection",
+    "--url",
+    "ws://127.0.0.1:34841",
+    "--protocol-only",
+    "--mode",
+    "cbor",
+    "--rooms",
+    "0",
+    "--pairs",
+    "0",
+    "--seconds",
+    "30",
+    "--churn-workers",
+    "8",
+    "--churn-cycles-per-second",
+    "4",
+    "--inspectors",
+    "2",
+    "--client-workers",
+    "8",
+    "--fanout-readers",
+    "8192",
+    "--fanout-window",
+    "4",
+    "--external-capacity-rooms",
+    "6250",
+    "--fanout-close-window",
+    "32",
+    "--fanout-windows-per-second",
+    "16"
+  ],
+  "sha256": {
+    "server": "b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1",
+    "capacity_client": "888485f3b416a452ceae006d96eaa38f01696bb49af2e6187d4da3f65c528a82",
+    "sidecar": "c934e5a087bf7f8125724ab0ac57fee6e1feb4da8e6277212f582fd9fc8748ac",
+    "runner": "985a0702af970db96fbe3975778f447bc9cabeebd344b190bfccc81800a8e096"
+  },
+  "events": [
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 900000,
+        "deliveries": 100000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 0,
+        "sent_bytes": 0,
+        "sent_messages": 0,
+        "value_bytes": 0
+      },
+      "details": {
+        "rooms": 6250,
+        "setup_seconds": 0.781557085,
+        "users": 100000
+      },
+      "event": "connected",
+      "wave": 1,
+      "controller_monotonic_seconds": 200694.603463994
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 104600000,
+        "deliveries": 200000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 100000,
+        "sent_bytes": 103700000,
+        "sent_messages": 100000,
+        "value_bytes": 102700000
+      },
+      "details": {
+        "all_connections_routed": true,
+        "proof_round_trip": {
+          "max_ms": 3.425387,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "samples": 100000
+        },
+        "rooms": 6250,
+        "users": 100000
+      },
+      "event": "ready",
+      "wave": 1,
+      "controller_monotonic_seconds": 200694.778397945
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 12548600000,
+        "deliveries": 12200000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 12100000,
+        "sent_bytes": 12547700000,
+        "sent_messages": 12100000,
+        "value_bytes": 12426700000
+      },
+      "details": {
+        "active_users": 100000,
+        "churn_lifecycle": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "churn_round_trip": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "counts": {
+          "churn_cycles": 0,
+          "delivered_bytes": 12444000000,
+          "deliveries": 12000000,
+          "departure_checks": 0,
+          "joins": 0,
+          "normal_closes": 0,
+          "routing_checks": 12000000,
+          "sent_bytes": 12444000000,
+          "sent_messages": 12000000,
+          "value_bytes": 12324000000
+        },
+        "elapsed_seconds": 30.011419572,
+        "round_trip": {
+          "max_ms": 74.924458,
+          "p50_upper_ms": 4.194304,
+          "p99_upper_ms": 33.554432,
+          "samples": 12000000
+        },
+        "schedule_lag": {
+          "max_ms": 13.076869,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 4.194304,
+          "samples": 750000
+        },
+        "scheduled_seconds": 30
+      },
+      "event": "measured",
+      "wave": 1,
+      "controller_monotonic_seconds": 200725.860774338
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 12652300000,
+        "deliveries": 12300000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 12200000,
+        "sent_bytes": 12651400000,
+        "sent_messages": 12200000,
+        "value_bytes": 12529400000
+      },
+      "details": {
+        "all_connections_routed_again": true,
+        "proof_round_trip": {
+          "max_ms": 4.234427,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "samples": 100000
+        },
+        "users": 100000
+      },
+      "event": "postcheck",
+      "wave": 1,
+      "controller_monotonic_seconds": 200756.227186256
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 12666550000,
+        "deliveries": 13050000,
+        "departure_checks": 750000,
+        "joins": 100000,
+        "normal_closes": 100000,
+        "routing_checks": 12200000,
+        "sent_bytes": 12651400000,
+        "sent_messages": 12200000,
+        "value_bytes": 12529400000
+      },
+      "details": {
+        "retirement_seconds": 0.716585588
+      },
+      "event": "done",
+      "wave": 1,
+      "controller_monotonic_seconds": 200756.944501725
+    }
+  ],
+  "sidecar_events": [
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 248352,
+          "deliveries": 8202,
+          "joins": 8196,
+          "normal_closes": 0,
+          "sent_bytes": 90,
+          "sent_messages": 6,
+          "value_bytes": 0
+        },
+        "stable_channels": 6255,
+        "stable_sessions": 8196
+      },
+      "event": "ready",
+      "controller_monotonic_seconds": 200695.271128853
+    },
+    {
+      "details": {
+        "churn": {
+          "max_ms": 48.599775,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 67.108864,
+          "per_second": 31.986869482839214,
+          "verified": 960
+        },
+        "churn_lifecycles_per_worker": [
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120
+        ],
+        "counts": {
+          "delivered_bytes": 16659905187,
+          "deliveries": 15744760,
+          "joins": 9156,
+          "normal_closes": 960,
+          "sent_bytes": 2039360,
+          "sent_messages": 8884,
+          "value_bytes": 1980480
+        },
+        "elapsed_seconds": 30.012314913,
+        "fanout": {
+          "max_ms": 68.659798,
+          "p50_upper_ms": 33.554432,
+          "p99_upper_ms": 67.108864,
+          "per_second": 524072.8696068377,
+          "verified": 15728640
+        },
+        "fanout_membership": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        },
+        "healthy": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        },
+        "inspection": {
+          "max_ms": 22.642413,
+          "p50_upper_ms": 4.194304,
+          "p99_upper_ms": 16.777216,
+          "per_second": 199.8512949563225,
+          "verified": 5998
+        }
+      },
+      "event": "measured",
+      "controller_monotonic_seconds": 200726.202232339
+    },
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 17297691792,
+          "deliveries": 49303291,
+          "joins": 9156,
+          "normal_closes": 9156,
+          "sent_bytes": 2039375,
+          "sent_messages": 8887,
+          "value_bytes": 1980480
+        },
+        "inspections_verified": 6004,
+        "passed": true,
+        "retired_churn_members_verified": 0
+      },
+      "event": "done",
+      "controller_monotonic_seconds": 200755.456956572
+    }
+  ],
+  "monitoring": [
+    {
+      "seconds": 0.2503224660176784,
+      "response_ms": 0.5254759744275361,
+      "process": {
+        "cpu_seconds": 2.26,
+        "rss_kib": 61696,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 100080,
+        "war_deliveries_total": 339340,
+        "war_value_bytes_total": 102716732,
+        "war_disconnected_total": 8,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 102716504,
+        "war_copied_bytes_total": 90689798
+      }
+    },
+    {
+      "seconds": 0.7129576849984005,
+      "response_ms": 3.7246580177452415,
+      "process": {
+        "cpu_seconds": 3.78,
+        "rss_kib": 65468,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 7494399,
+        "war_retained_output_bytes": 7500692,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 284978,
+        "war_deliveries_total": 779137,
+        "war_value_bytes_total": 292495458,
+        "war_disconnected_total": 24,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 292494951,
+        "war_copied_bytes_total": 258270035
+      }
+    },
+    {
+      "seconds": 1.1846711359976325,
+      "response_ms": 0.5722049972973764,
+      "process": {
+        "cpu_seconds": 5.37,
+        "rss_kib": 66112,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 473672,
+        "war_deliveries_total": 1204423,
+        "war_value_bytes_total": 486171652,
+        "war_disconnected_total": 40,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 486170863,
+        "war_copied_bytes_total": 429249558
+      }
+    },
+    {
+      "seconds": 1.6944149210175965,
+      "response_ms": 0.5464549758471549,
+      "process": {
+        "cpu_seconds": 7.15,
+        "rss_kib": 65860,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 677821,
+        "war_deliveries_total": 1670701,
+        "war_value_bytes_total": 695711939,
+        "war_disconnected_total": 56,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 695710844,
+        "war_copied_bytes_total": 614253469
+      }
+    },
+    {
+      "seconds": 2.189954861998558,
+      "response_ms": 0.613203999819234,
+      "process": {
+        "cpu_seconds": 8.91,
+        "rss_kib": 66224,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3111,
+        "war_retained_output_bytes": 5216,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 876339,
+        "war_deliveries_total": 2131344,
+        "war_value_bytes_total": 899473285,
+        "war_disconnected_total": 72,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 899471896,
+        "war_copied_bytes_total": 794159488
+      }
+    },
+    {
+      "seconds": 2.678629791014828,
+      "response_ms": 0.5467349837999791,
+      "process": {
+        "cpu_seconds": 10.68,
+        "rss_kib": 66572,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 22814,
+        "war_retained_output_bytes": 25966,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 1071812,
+        "war_deliveries_total": 2588926,
+        "war_value_bytes_total": 1100107416,
+        "war_disconnected_total": 88,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 1100105733,
+        "war_copied_bytes_total": 971308124
+      }
+    },
+    {
+      "seconds": 3.158886479010107,
+      "response_ms": 4.692132002674043,
+      "process": {
+        "cpu_seconds": 12.39,
+        "rss_kib": 67116,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3007300,
+        "war_retained_output_bytes": 3013593,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 1264556,
+        "war_deliveries_total": 3040919,
+        "war_value_bytes_total": 1297940912,
+        "war_disconnected_total": 104,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 1297938941,
+        "war_copied_bytes_total": 1146020847
+      }
+    },
+    {
+      "seconds": 3.6764150309900288,
+      "response_ms": 0.6071440002415329,
+      "process": {
+        "cpu_seconds": 14.26,
+        "rss_kib": 67328,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2074,
+        "war_retained_output_bytes": 3132,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 1471219,
+        "war_deliveries_total": 3512608,
+        "war_value_bytes_total": 1510061029,
+        "war_disconnected_total": 120,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 1510058746,
+        "war_copied_bytes_total": 1333264678
+      }
+    },
+    {
+      "seconds": 4.178031087009003,
+      "response_ms": 0.6507420039270073,
+      "process": {
+        "cpu_seconds": 16.05,
+        "rss_kib": 67332,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 1671757,
+        "war_deliveries_total": 3975277,
+        "war_value_bytes_total": 1715894867,
+        "war_disconnected_total": 136,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 1715892284,
+        "war_copied_bytes_total": 1515005150
+      }
+    },
+    {
+      "seconds": 4.6723984309937805,
+      "response_ms": 0.6096730066929013,
+      "process": {
+        "cpu_seconds": 17.81,
+        "rss_kib": 67800,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 305915,
+        "war_retained_output_bytes": 312208,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 1869490,
+        "war_deliveries_total": 4434841,
+        "war_value_bytes_total": 1918848994,
+        "war_disconnected_total": 152,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 1918846114,
+        "war_copied_bytes_total": 1694212231
+      }
+    },
+    {
+      "seconds": 5.153777288011042,
+      "response_ms": 3.7219490041024983,
+      "process": {
+        "cpu_seconds": 19.48,
+        "rss_kib": 67664,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 7844905,
+        "war_retained_output_bytes": 7850151,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 2062309,
+        "war_deliveries_total": 4882518,
+        "war_value_bytes_total": 2116758491,
+        "war_disconnected_total": 168,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2116756347,
+        "war_copied_bytes_total": 1868952953
+      }
+    },
+    {
+      "seconds": 5.618346264003776,
+      "response_ms": 0.8829759899526834,
+      "process": {
+        "cpu_seconds": 21.08,
+        "rss_kib": 67452,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3111,
+        "war_retained_output_bytes": 5216,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 2248843,
+        "war_deliveries_total": 5305980,
+        "war_value_bytes_total": 2308218413,
+        "war_disconnected_total": 184,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2308217020,
+        "war_copied_bytes_total": 2037944547
+      }
+    },
+    {
+      "seconds": 6.139954204991227,
+      "response_ms": 4.559966007946059,
+      "process": {
+        "cpu_seconds": 22.9,
+        "rss_kib": 67608,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2211921,
+        "war_retained_output_bytes": 2218214,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 2457896,
+        "war_deliveries_total": 5787685,
+        "war_value_bytes_total": 2522791012,
+        "war_disconnected_total": 200,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2522787247,
+        "war_copied_bytes_total": 2227429335
+      }
+    },
+    {
+      "seconds": 6.6489847490156535,
+      "response_ms": 3.976840991526842,
+      "process": {
+        "cpu_seconds": 24.7,
+        "rss_kib": 67664,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6302886,
+        "war_retained_output_bytes": 6310226,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 2661047,
+        "war_deliveries_total": 6262988,
+        "war_value_bytes_total": 2731308401,
+        "war_disconnected_total": 216,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2731304336,
+        "war_copied_bytes_total": 2411565277
+      }
+    },
+    {
+      "seconds": 7.141633869003272,
+      "response_ms": 4.804769007023424,
+      "process": {
+        "cpu_seconds": 26.44,
+        "rss_kib": 67844,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2846565,
+        "war_retained_output_bytes": 2851811,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 2858780,
+        "war_deliveries_total": 6714845,
+        "war_value_bytes_total": 2934261504,
+        "war_disconnected_total": 232,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 2934258166,
+        "war_copied_bytes_total": 2590725693
+      }
+    },
+    {
+      "seconds": 7.633902549016057,
+      "response_ms": 0.740019982913509,
+      "process": {
+        "cpu_seconds": 28.2,
+        "rss_kib": 67600,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1037,
+        "war_retained_output_bytes": 3142,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 3055550,
+        "war_deliveries_total": 7161200,
+        "war_value_bytes_total": 3136227654,
+        "war_disconnected_total": 248,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 3136222995,
+        "war_copied_bytes_total": 2769026436
+      }
+    },
+    {
+      "seconds": 8.152954690012848,
+      "response_ms": 4.553206003038213,
+      "process": {
+        "cpu_seconds": 30.15,
+        "rss_kib": 68320,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 8824870,
+        "war_retained_output_bytes": 8831163,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 3263146,
+        "war_deliveries_total": 7655181,
+        "war_value_bytes_total": 3349305962,
+        "war_disconnected_total": 264,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 3349300991,
+        "war_copied_bytes_total": 2957193197
+      }
+    },
+    {
+      "seconds": 8.659889039990958,
+      "response_ms": 5.122031026985496,
+      "process": {
+        "cpu_seconds": 31.98,
+        "rss_kib": 68532,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1923635,
+        "war_retained_output_bytes": 1926787,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 3467316,
+        "war_deliveries_total": 8128132,
+        "war_value_bytes_total": 3558869864,
+        "war_disconnected_total": 280,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 3558865620,
+        "war_copied_bytes_total": 3142211626
+      }
+    },
+    {
+      "seconds": 9.158497458003694,
+      "response_ms": 3.8564649876207113,
+      "process": {
+        "cpu_seconds": 33.73,
+        "rss_kib": 68536,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3878380,
+        "war_retained_output_bytes": 3883626,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 3665923,
+        "war_deliveries_total": 8586983,
+        "war_value_bytes_total": 3762720565,
+        "war_disconnected_total": 296,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 3762714994,
+        "war_copied_bytes_total": 3322208901
+      }
+    },
+    {
+      "seconds": 9.647950475016842,
+      "response_ms": 4.706751991761848,
+      "process": {
+        "cpu_seconds": 35.47,
+        "rss_kib": 68572,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2778123,
+        "war_retained_output_bytes": 2784416,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 3861964,
+        "war_deliveries_total": 9036248,
+        "war_value_bytes_total": 3963938032,
+        "war_disconnected_total": 312,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 3963932167,
+        "war_copied_bytes_total": 3499869815
+      }
+    },
+    {
+      "seconds": 10.13073210400762,
+      "response_ms": 0.5847940046805888,
+      "process": {
+        "cpu_seconds": 37.14,
+        "rss_kib": 68080,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 4055119,
+        "war_deliveries_total": 9471411,
+        "war_value_bytes_total": 4162193625,
+        "war_disconnected_total": 328,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 4162187472,
+        "war_copied_bytes_total": 3674870824
+      }
+    },
+    {
+      "seconds": 10.63694930501515,
+      "response_ms": 4.359621001640335,
+      "process": {
+        "cpu_seconds": 38.96,
+        "rss_kib": 68304,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 511241,
+        "war_retained_output_bytes": 517534,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 4258275,
+        "war_deliveries_total": 9943644,
+        "war_value_bytes_total": 4370714101,
+        "war_disconnected_total": 344,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 4370707642,
+        "war_copied_bytes_total": 3858983952
+      }
+    },
+    {
+      "seconds": 11.136951504013268,
+      "response_ms": 0.6508319929707795,
+      "process": {
+        "cpu_seconds": 40.7,
+        "rss_kib": 68320,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 137921,
+        "war_retained_output_bytes": 143167,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 4457384,
+        "war_deliveries_total": 10399885,
+        "war_value_bytes_total": 4575080356,
+        "war_disconnected_total": 360,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 4575073597,
+        "war_copied_bytes_total": 4039412619
+      }
+    },
+    {
+      "seconds": 11.635237020993372,
+      "response_ms": 2.0001450029667467,
+      "process": {
+        "cpu_seconds": 42.52,
+        "rss_kib": 68080,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 259250,
+        "war_retained_output_bytes": 266590,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 4657229,
+        "war_deliveries_total": 10862148,
+        "war_value_bytes_total": 4780202483,
+        "war_disconnected_total": 376,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 4780195424,
+        "war_copied_bytes_total": 4220512225
+      }
+    },
+    {
+      "seconds": 12.111416199011728,
+      "response_ms": 0.6801819836255163,
+      "process": {
+        "cpu_seconds": 44.23,
+        "rss_kib": 68168,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 42517,
+        "war_retained_output_bytes": 45669,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 4846754,
+        "war_deliveries_total": 11311516,
+        "war_value_bytes_total": 4974730066,
+        "war_disconnected_total": 392,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 4974722719,
+        "war_copied_bytes_total": 4392204167
+      }
+    },
+    {
+      "seconds": 12.593882916989969,
+      "response_ms": 4.585675022099167,
+      "process": {
+        "cpu_seconds": 45.95,
+        "rss_kib": 68524,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3815123,
+        "war_retained_output_bytes": 3819322,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 5041264,
+        "war_deliveries_total": 11764515,
+        "war_value_bytes_total": 5174377244,
+        "war_disconnected_total": 408,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 5174369609,
+        "war_copied_bytes_total": 4568441280
+      }
+    },
+    {
+      "seconds": 13.088307019002968,
+      "response_ms": 4.385750013170764,
+      "process": {
+        "cpu_seconds": 47.65,
+        "rss_kib": 68360,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 7172929,
+        "war_retained_output_bytes": 7175044,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 5238644,
+        "war_deliveries_total": 12217544,
+        "war_value_bytes_total": 5376969864,
+        "war_disconnected_total": 424,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 5376961935,
+        "war_copied_bytes_total": 4747330002
+      }
+    },
+    {
+      "seconds": 13.593150166008854,
+      "response_ms": 3.777606994844973,
+      "process": {
+        "cpu_seconds": 49.45,
+        "rss_kib": 68552,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 5530321,
+        "war_retained_output_bytes": 5532426,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 5440505,
+        "war_deliveries_total": 12686358,
+        "war_value_bytes_total": 5584160375,
+        "war_disconnected_total": 440,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 5584152140,
+        "war_copied_bytes_total": 4930249543
+      }
+    },
+    {
+      "seconds": 14.08495577899157,
+      "response_ms": 4.675472999224439,
+      "process": {
+        "cpu_seconds": 51.17,
+        "rss_kib": 68308,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 5459805,
+        "war_retained_output_bytes": 5467145,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 5637969,
+        "war_deliveries_total": 13138308,
+        "war_value_bytes_total": 5786839263,
+        "war_disconnected_total": 456,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 5786830734,
+        "war_copied_bytes_total": 5109215003
+      }
+    },
+    {
+      "seconds": 14.575929334998364,
+      "response_ms": 4.817448003450409,
+      "process": {
+        "cpu_seconds": 52.93,
+        "rss_kib": 68576,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1299361,
+        "war_retained_output_bytes": 1304607,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 5835028,
+        "war_deliveries_total": 13586681,
+        "war_value_bytes_total": 5989102216,
+        "war_disconnected_total": 472,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 5989094420,
+        "war_copied_bytes_total": 5287822698
+      }
+    },
+    {
+      "seconds": 15.094790289993398,
+      "response_ms": 3.968511999119073,
+      "process": {
+        "cpu_seconds": 54.78,
+        "rss_kib": 68988,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 4516135,
+        "war_retained_output_bytes": 4522428,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 6041830,
+        "war_deliveries_total": 14075047,
+        "war_value_bytes_total": 6201365086,
+        "war_disconnected_total": 488,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 6201356978,
+        "war_copied_bytes_total": 5475179562
+      }
+    },
+    {
+      "seconds": 15.59971542499261,
+      "response_ms": 5.907829006901011,
+      "process": {
+        "cpu_seconds": 56.63,
+        "rss_kib": 68996,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1091961,
+        "war_retained_output_bytes": 1095113,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 6245434,
+        "war_deliveries_total": 14544080,
+        "war_value_bytes_total": 6410346682,
+        "war_disconnected_total": 504,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 6410337244,
+        "war_copied_bytes_total": 5659703342
+      }
+    },
+    {
+      "seconds": 16.103202919999603,
+      "response_ms": 3.2816700113471597,
+      "process": {
+        "cpu_seconds": 58.44,
+        "rss_kib": 68944,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 689605,
+        "war_retained_output_bytes": 691710,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 6445759,
+        "war_deliveries_total": 15006921,
+        "war_value_bytes_total": 6615961769,
+        "war_disconnected_total": 520,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 6615952031,
+        "war_copied_bytes_total": 5841240562
+      }
+    },
+    {
+      "seconds": 16.593822615017416,
+      "response_ms": 4.54183598048985,
+      "process": {
+        "cpu_seconds": 60.19,
+        "rss_kib": 68952,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 4505765,
+        "war_retained_output_bytes": 4509964,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 6642076,
+        "war_deliveries_total": 15461685,
+        "war_value_bytes_total": 6817461664,
+        "war_disconnected_total": 536,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 6817451629,
+        "war_copied_bytes_total": 6019138949
+      }
+    },
+    {
+      "seconds": 17.076775099005317,
+      "response_ms": 4.9294650088995695,
+      "process": {
+        "cpu_seconds": 61.87,
+        "rss_kib": 68528,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2826862,
+        "war_retained_output_bytes": 2831061,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 6836085,
+        "war_deliveries_total": 15899684,
+        "war_value_bytes_total": 7016594315,
+        "war_disconnected_total": 552,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 7016585019,
+        "war_copied_bytes_total": 6195001705
+      }
+    },
+    {
+      "seconds": 17.58626343900687,
+      "response_ms": 4.29159399936907,
+      "process": {
+        "cpu_seconds": 63.72,
+        "rss_kib": 68684,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6468806,
+        "war_retained_output_bytes": 6475099,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 7039312,
+        "war_deliveries_total": 16376035,
+        "war_value_bytes_total": 7225187708,
+        "war_disconnected_total": 568,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 7225177079,
+        "war_copied_bytes_total": 6379167720
+      }
+    },
+    {
+      "seconds": 18.081058531010058,
+      "response_ms": 4.264502989826724,
+      "process": {
+        "cpu_seconds": 65.47,
+        "rss_kib": 68860,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3771569,
+        "war_retained_output_bytes": 3778909,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 7237503,
+        "war_deliveries_total": 16830440,
+        "war_value_bytes_total": 7428611177,
+        "war_disconnected_total": 584,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 7428600248,
+        "war_copied_bytes_total": 6558764713
+      }
+    },
+    {
+      "seconds": 18.56685561701306,
+      "response_ms": 0.6722319812979549,
+      "process": {
+        "cpu_seconds": 67.14,
+        "rss_kib": 68772,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 7432019,
+        "war_deliveries_total": 17271723,
+        "war_value_bytes_total": 7628264517,
+        "war_disconnected_total": 600,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 7628253300,
+        "war_copied_bytes_total": 6735028788
+      }
+    },
+    {
+      "seconds": 19.05479619500693,
+      "response_ms": 0.6654819881077856,
+      "process": {
+        "cpu_seconds": 68.87,
+        "rss_kib": 68624,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 13481,
+        "war_retained_output_bytes": 16633,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 7627196,
+        "war_deliveries_total": 17729012,
+        "war_value_bytes_total": 7828594656,
+        "war_disconnected_total": 616,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 7828583145,
+        "war_copied_bytes_total": 6911914026
+      }
+    },
+    {
+      "seconds": 19.568070042994805,
+      "response_ms": 0.7978780195116997,
+      "process": {
+        "cpu_seconds": 70.7,
+        "rss_kib": 68624,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 10370,
+        "war_retained_output_bytes": 12475,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 7832542,
+        "war_deliveries_total": 18196492,
+        "war_value_bytes_total": 8039364262,
+        "war_disconnected_total": 632,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 8039352445,
+        "war_copied_bytes_total": 7097994343
+      }
+    },
+    {
+      "seconds": 20.06795098501607,
+      "response_ms": 0.5700649926438928,
+      "process": {
+        "cpu_seconds": 72.51,
+        "rss_kib": 68688,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 8032863,
+        "war_deliveries_total": 18658951,
+        "war_value_bytes_total": 8244975241,
+        "war_disconnected_total": 648,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 8244963124,
+        "war_copied_bytes_total": 7279534674
+      }
+    },
+    {
+      "seconds": 20.560686532990076,
+      "response_ms": 0.6567920208908617,
+      "process": {
+        "cpu_seconds": 74.28,
+        "rss_kib": 68908,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 8229809,
+        "war_deliveries_total": 19118025,
+        "war_value_bytes_total": 8447122143,
+        "war_disconnected_total": 664,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 8447109732,
+        "war_copied_bytes_total": 7458011707
+      }
+    },
+    {
+      "seconds": 21.053240725013893,
+      "response_ms": 1.1814679892268032,
+      "process": {
+        "cpu_seconds": 76.05,
+        "rss_kib": 68528,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 37332,
+        "war_retained_output_bytes": 37343,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 8426761,
+        "war_deliveries_total": 19577069,
+        "war_value_bytes_total": 8649273159,
+        "war_disconnected_total": 680,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 8649260448,
+        "war_copied_bytes_total": 7636509480
+      }
+    },
+    {
+      "seconds": 21.53322199001559,
+      "response_ms": 4.401589976623654,
+      "process": {
+        "cpu_seconds": 77.76,
+        "rss_kib": 69208,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 4163555,
+        "war_retained_output_bytes": 4169848,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 8619121,
+        "war_deliveries_total": 20027578,
+        "war_value_bytes_total": 8846712287,
+        "war_disconnected_total": 696,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 8846699288,
+        "war_copied_bytes_total": 7810862364
+      }
+    },
+    {
+      "seconds": 22.044964208995225,
+      "response_ms": 0.5622650205623358,
+      "process": {
+        "cpu_seconds": 79.57,
+        "rss_kib": 69340,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 798490,
+        "war_retained_output_bytes": 800595,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 8823473,
+        "war_deliveries_total": 20497303,
+        "war_value_bytes_total": 9056463103,
+        "war_disconnected_total": 712,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9056450831,
+        "war_copied_bytes_total": 7996024936
+      }
+    },
+    {
+      "seconds": 22.547812239994528,
+      "response_ms": 0.6215629982762039,
+      "process": {
+        "cpu_seconds": 81.38,
+        "rss_kib": 69428,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 725900,
+        "war_retained_output_bytes": 728005,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 9024862,
+        "war_deliveries_total": 20960889,
+        "war_value_bytes_total": 9263168870,
+        "war_disconnected_total": 728,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9263155265,
+        "war_copied_bytes_total": 8178537973
+      }
+    },
+    {
+      "seconds": 23.033954126993194,
+      "response_ms": 5.575018003582954,
+      "process": {
+        "cpu_seconds": 83.13,
+        "rss_kib": 69364,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3386842,
+        "war_retained_output_bytes": 3392088,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 9220339,
+        "war_deliveries_total": 21415928,
+        "war_value_bytes_total": 9463807109,
+        "war_disconnected_total": 744,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9463794237,
+        "war_copied_bytes_total": 8355701127
+      }
+    },
+    {
+      "seconds": 23.52281357999891,
+      "response_ms": 3.8490650185849518,
+      "process": {
+        "cpu_seconds": 84.9,
+        "rss_kib": 69008,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6133855,
+        "war_retained_output_bytes": 6141195,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 9415676,
+        "war_deliveries_total": 21860593,
+        "war_value_bytes_total": 9664302592,
+        "war_disconnected_total": 760,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9664288402,
+        "war_copied_bytes_total": 8532710805
+      }
+    },
+    {
+      "seconds": 24.04272422599024,
+      "response_ms": 3.2801310007926077,
+      "process": {
+        "cpu_seconds": 86.8,
+        "rss_kib": 69424,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1170773,
+        "war_retained_output_bytes": 1173925,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 9624238,
+        "war_deliveries_total": 22346220,
+        "war_value_bytes_total": 9878374006,
+        "war_disconnected_total": 776,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9878359507,
+        "war_copied_bytes_total": 8721698870
+      }
+    },
+    {
+      "seconds": 24.535222890001023,
+      "response_ms": 4.451218992471695,
+      "process": {
+        "cpu_seconds": 88.58,
+        "rss_kib": 69752,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 3608760,
+        "war_retained_output_bytes": 3616100,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 9821654,
+        "war_deliveries_total": 22803414,
+        "war_value_bytes_total": 10081002574,
+        "war_disconnected_total": 792,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 10080987778,
+        "war_copied_bytes_total": 8900620776
+      }
+    },
+    {
+      "seconds": 25.030744941002922,
+      "response_ms": 4.242883995175362,
+      "process": {
+        "cpu_seconds": 90.33,
+        "rss_kib": 69476,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 5457731,
+        "war_retained_output_bytes": 5464024,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 10019229,
+        "war_deliveries_total": 23261334,
+        "war_value_bytes_total": 10283793411,
+        "war_disconnected_total": 808,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 10283778315,
+        "war_copied_bytes_total": 9079689936
+      }
+    },
+    {
+      "seconds": 25.521862402005354,
+      "response_ms": 4.03628998901695,
+      "process": {
+        "cpu_seconds": 92.08,
+        "rss_kib": 69368,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6645096,
+        "war_retained_output_bytes": 6651389,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 10215902,
+        "war_deliveries_total": 23710103,
+        "war_value_bytes_total": 10485659942,
+        "war_disconnected_total": 824,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 10485644552,
+        "war_copied_bytes_total": 9257896312
+      }
+    },
+    {
+      "seconds": 26.007930680993013,
+      "response_ms": 0.5453750200103968,
+      "process": {
+        "cpu_seconds": 93.76,
+        "rss_kib": 69396,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 11,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 10410222,
+        "war_deliveries_total": 24149082,
+        "war_value_bytes_total": 10685111990,
+        "war_disconnected_total": 840,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 10685096312,
+        "war_copied_bytes_total": 9433972690
+      }
+    },
+    {
+      "seconds": 26.52296336001018,
+      "response_ms": 4.416899988427758,
+      "process": {
+        "cpu_seconds": 95.65,
+        "rss_kib": 69636,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 7002861,
+        "war_retained_output_bytes": 7008107,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 10616684,
+        "war_deliveries_total": 24637017,
+        "war_value_bytes_total": 10897025680,
+        "war_disconnected_total": 856,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 10897009690,
+        "war_copied_bytes_total": 9621098303
+      }
+    },
+    {
+      "seconds": 27.02586168999551,
+      "response_ms": 3.8861740031279624,
+      "process": {
+        "cpu_seconds": 97.43,
+        "rss_kib": 69536,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 7449808,
+        "war_retained_output_bytes": 7456101,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 10817788,
+        "war_deliveries_total": 25102788,
+        "war_value_bytes_total": 11103440800,
+        "war_disconnected_total": 872,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 11103424510,
+        "war_copied_bytes_total": 9803337572
+      }
+    },
+    {
+      "seconds": 27.519677358010085,
+      "response_ms": 5.029352993005887,
+      "process": {
+        "cpu_seconds": 99.22,
+        "rss_kib": 69416,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 4977600,
+        "war_retained_output_bytes": 4982846,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 11016101,
+        "war_deliveries_total": 25556574,
+        "war_value_bytes_total": 11306989563,
+        "war_disconnected_total": 888,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 11306972973,
+        "war_copied_bytes_total": 9983056931
+      }
+    },
+    {
+      "seconds": 28.015717875008704,
+      "response_ms": 4.752270004246384,
+      "process": {
+        "cpu_seconds": 101.03,
+        "rss_kib": 69196,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 2633980,
+        "war_retained_output_bytes": 2640273,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 11214869,
+        "war_deliveries_total": 26012631,
+        "war_value_bytes_total": 11511007659,
+        "war_disconnected_total": 904,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 11510990775,
+        "war_copied_bytes_total": 10163202497
+      }
+    },
+    {
+      "seconds": 28.50822885800153,
+      "response_ms": 0.6153529975563288,
+      "process": {
+        "cpu_seconds": 102.81,
+        "rss_kib": 69576,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 9333,
+        "war_retained_output_bytes": 15626,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 11411174,
+        "war_deliveries_total": 26460667,
+        "war_value_bytes_total": 11712496254,
+        "war_disconnected_total": 920,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 11712479076,
+        "war_copied_bytes_total": 10341063552
+      }
+    },
+    {
+      "seconds": 29.021964862011373,
+      "response_ms": 4.531037004198879,
+      "process": {
+        "cpu_seconds": 104.68,
+        "rss_kib": 69400,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6575617,
+        "war_retained_output_bytes": 6581910,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 11617213,
+        "war_deliveries_total": 26946553,
+        "war_value_bytes_total": 11923975523,
+        "war_disconnected_total": 936,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 11923958033,
+        "war_copied_bytes_total": 10527804438
+      }
+    },
+    {
+      "seconds": 29.52337172301486,
+      "response_ms": 4.515916982199997,
+      "process": {
+        "cpu_seconds": 106.47,
+        "rss_kib": 69400,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 6926123,
+        "war_retained_output_bytes": 6932416,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 11817951,
+        "war_deliveries_total": 27411782,
+        "war_value_bytes_total": 12130014761,
+        "war_disconnected_total": 952,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 12129997998,
+        "war_copied_bytes_total": 10709720163
+      }
+    },
+    {
+      "seconds": 30.013366533996304,
+      "response_ms": 0.9991630213335156,
+      "process": {
+        "cpu_seconds": 108.15,
+        "rss_kib": 69128,
+        "fds": 108248
+      },
+      "metrics": {
+        "war_connections": 108196,
+        "war_users": 108196,
+        "war_channels": 6255,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 1037,
+        "war_retained_output_bytes": 1048,
+        "war_buffered_bytes": 11,
+        "war_sent_messages_total": 12014194,
+        "war_deliveries_total": 27850069,
+        "war_value_bytes_total": 12331451922,
+        "war_disconnected_total": 960,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 12331433850,
+        "war_copied_bytes_total": 10887568774
+      }
+    }
+  ],
+  "cpu_topology": "# The following is the parsable format, which can be fed to other\n# programs. Each different item in every column has an unique ID\n# starting usually from zero.\n# CPU,Core,Socket,Node\n0,0,0,0\n1,1,0,0\n2,2,0,0\n3,3,0,0\n4,4,0,0\n5,5,0,0\n6,6,0,0\n7,7,0,0\n8,8,0,0\n9,9,0,0\n10,10,0,0\n11,11,0,0\n12,12,0,0\n13,13,0,0\n14,14,0,0\n15,15,0,0\n16,0,0,0\n17,1,0,0\n18,2,0,0\n19,3,0,0\n20,4,0,0\n21,5,0,0\n22,6,0,0\n23,7,0,0\n24,8,0,0\n25,9,0,0\n26,10,0,0\n27,11,0,0\n28,12,0,0\n29,13,0,0\n30,14,0,0\n31,15,0,0\n",
+  "baseline_metrics": {
+    "war_connections": 0,
+    "war_users": 0,
+    "war_channels": 1,
+    "war_variable_bytes": 0,
+    "war_queued_bytes": 0,
+    "war_retained_output_bytes": 0,
+    "war_buffered_bytes": 0,
+    "war_sent_messages_total": 0,
+    "war_deliveries_total": 0,
+    "war_value_bytes_total": 0,
+    "war_disconnected_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_slow_consumers_total": 0,
+    "war_rejected_total": 0,
+    "war_borrowed_value_bytes_total": 0,
+    "war_copied_bytes_total": 0
+  },
+  "baseline": {
+    "cpu_seconds": 0.0,
+    "rss_kib": 6124,
+    "fds": 52
+  },
+  "ready_metrics": {
+    "war_connections": 108196,
+    "war_users": 108196,
+    "war_channels": 6255,
+    "war_variable_bytes": 0,
+    "war_queued_bytes": 0,
+    "war_retained_output_bytes": 90123,
+    "war_buffered_bytes": 90123,
+    "war_sent_messages_total": 100006,
+    "war_deliveries_total": 208202,
+    "war_value_bytes_total": 102700078,
+    "war_disconnected_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_slow_consumers_total": 0,
+    "war_rejected_total": 0,
+    "war_borrowed_value_bytes_total": 102700000,
+    "war_copied_bytes_total": 90673206
+  },
+  "affinity": [
+    {
+      "name": "war-cpp-0",
+      "cpus": [
+        0
+      ]
+    },
+    {
+      "name": "war-cpp-1",
+      "cpus": [
+        1
+      ]
+    },
+    {
+      "name": "war-cpp-2",
+      "cpus": [
+        2
+      ]
+    },
+    {
+      "name": "war-cpp-3",
+      "cpus": [
+        3
+      ]
+    },
+    {
+      "name": "war-cpp-4",
+      "cpus": [
+        4
+      ]
+    },
+    {
+      "name": "war-cpp-5",
+      "cpus": [
+        5
+      ]
+    },
+    {
+      "name": "war-cpp-6",
+      "cpus": [
+        6
+      ]
+    },
+    {
+      "name": "war-cpp-7",
+      "cpus": [
+        7
+      ]
+    }
+  ],
+  "before": {
+    "cpu_seconds": 1.92,
+    "rss_kib": 61448,
+    "fds": 108248
+  },
+  "client_before": {
+    "capacity": {
+      "cpu_seconds": 3.4,
+      "rss_kib": 616504,
+      "fds": 100009
+    },
+    "sidecar": {
+      "cpu_seconds": 0.19,
+      "rss_kib": 47452,
+      "fds": 8205
+    }
+  },
+  "after": {
+    "cpu_seconds": 108.64,
+    "rss_kib": 69128,
+    "fds": 108248
+  },
+  "client_after": {
+    "capacity": {
+      "cpu_seconds": 142.75,
+      "rss_kib": 967796,
+      "fds": 100009
+    },
+    "sidecar": {
+      "cpu_seconds": 88.6,
+      "rss_kib": 101284,
+      "fds": 8205
+    }
+  },
+  "elapsed_seconds": 30.603063018003013,
+  "server_cpu_seconds": 106.72,
+  "fanout_windows": {
+    "completed": 480,
+    "offered": 480
+  },
+  "final_metrics": {
+    "war_connections": 0,
+    "war_users": 0,
+    "war_channels": 1,
+    "war_variable_bytes": 0,
+    "war_queued_bytes": 0,
+    "war_retained_output_bytes": 0,
+    "war_buffered_bytes": 0,
+    "war_sent_messages_total": 12208887,
+    "war_deliveries_total": 62353291,
+    "war_value_bytes_total": 12531398561,
+    "war_disconnected_total": 109156,
+    "war_protocol_errors_total": 0,
+    "war_slow_consumers_total": 0,
+    "war_rejected_total": 0,
+    "war_borrowed_value_bytes_total": 12531380480,
+    "war_copied_bytes_total": 11066042996
+  },
+  "csv_sha256": "6e632752f4222ea4cf92e794f0357635888ee95f00810762c23efcef2b9a6f4b",
+  "latency": {
+    "p99_ms": {
+      "median": 10.98851,
+      "p95": 41.410211,
+      "p99": 57.400866,
+      "max": 64.333147
+    },
+    "max_ms": {
+      "median": 14.636531,
+      "p95": 49.560639,
+      "p99": 64.895641,
+      "max": 74.924458
+    },
+    "schedule_p99_ms": {
+      "median": 12.222082,
+      "p95": 42.229406,
+      "p99": 58.268151,
+      "max": 65.721761
+    },
+    "schedule_max_ms": {
+      "median": 15.774212,
+      "p95": 50.60313,
+      "p99": 65.906815,
+      "max": 75.842109
+    }
+  },
+  "exit_codes": [
+    0,
+    0,
+    0
+  ]
+}

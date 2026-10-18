@@ -1,0 +1,16 @@
+{"client": "events", "event": "connected"}
+{"client": "events", "event": "ready"}
+{"client": "sidecar_events", "event": "ready"}
+{"client": "events", "event": "measured"}
+{"client": "sidecar_events", "event": "measured"}
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/mixed-capacity.py", line 197, in <module>
+    main()
+    ~~~~^^
+  File "/home/phil/dev/war_next/scripts/mixed-capacity.py", line 150, in main
+    assert event(sidecar, 'sidecar_events')['event'] == 'done'; resume(sidecar)
+           ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phil/dev/war_next/scripts/mixed-capacity.py", line 97, in event
+    assert select.select([proc.stdout], [], [], 1200)[0], 'client event deadline'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

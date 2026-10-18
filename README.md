@@ -13,9 +13,18 @@ remain available. The original README is in [docs/upstream-README.md](docs/upstr
 
 Native multicast shares immutable payloads, sends on the sockets' owning workers,
 and combines queued frames into bounded vectored writes. Ordinary private traffic
-keeps its immediate-send path. The [fanout performance report](docs/benchmarks/2026-10-17-rust-owner-fanout/README.md)
-records the comparison with modern C++, mixed-load responsiveness, 100,000-user
-latency distributions and the exact selected runtime.
+keeps its immediate-send path. Large ordinary rooms now submit at most 1,024
+recipient visits per source turn, retaining the same shared body and immutable
+membership view until that message finishes. Output-only wakes avoid entering
+the input decoder; departure notifications use the same owner-worker path.
+
+The [100,000-user mixed-load fairness report](docs/benchmarks/2026-10-18-mixed-100k-fairness/README.md)
+records the selected runtime, every user's latency, bounded-memory/FIFO checks
+and comparisons with previous Rust and modern C++. Median user p99 falls from
+11.99 to 2.03 ms under the measured competing load; fanout-window tails and the
+small quiet-path CPU cost are reported explicitly. The earlier
+[fanout throughput study](docs/benchmarks/2026-10-17-rust-owner-fanout/README.md)
+records the preceding owner-worker transport change.
 
 ## Modern C++ comparison candidate
 
@@ -67,8 +76,10 @@ A [ten-minute per-user soak](docs/performance.md#bounded-per-user-latency-and-te
 verifies 240 million application messages with bounded histogram retention;
 its finite loopback scope and histogram bounds are reported explicitly.
 [Global/observer fanout accounting](docs/performance.md#global-and-observer-fanout-work-quotas-2026-10-17)
-charges recipient visits to the native turn budget so a buffered publisher yields
-between complete messages; measured responsiveness and throughput costs are explicit.
+charges recipient visits to the native turn budget and retains complete-message
+permission barriers in those scopes. Ordinary large rooms without global channel
+observers instead use the [bounded within-message continuation](docs/benchmarks/2026-10-18-mixed-100k-fairness/README.md).
+Measured responsiveness, fanout costs and validation scope are explicit.
 Native `--tcp-send-buffer-bytes` and `--tcp-receive-buffer-bytes` configure kernel
 buffers independently of application queues; their default `0` retains OS policy.
 

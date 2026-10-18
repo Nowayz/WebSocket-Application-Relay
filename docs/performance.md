@@ -6891,3 +6891,51 @@ population CSVs are retained. The selected explicit-method version protects the
 private path structurally. Post-change profiling distributes work across all
 four workers. Archive verification distinguishes successful final cases from
 named preliminary profiler-controller and pressure-configuration setup failures.
+
+
+## Mixed-load fairness at 100,000 users (2026-10-18)
+
+Runtime `279c3c1836c806ecf3343a2f00a89fac7cead022`, executable
+`3db9ebeb0fff87636a1bf2fc5a6e0ae88d48d12aa7a52571cb4b28fa4d911fa9`,
+adds a charged reusable 1,024-visit ordinary-room continuation, output-only wake
+handling and owner-worker departure output. Frames, receive ownership, the
+vendored transport and dependencies are unchanged. Source FIFO, immutable
+membership views, deadlines and logical queue bounds are tested explicitly.
+
+Two fresh rotated 30-second trials per runtime combine 100,000 private users
+(400k checked probes/s), 8,192 room readers (524,288 offered deliveries/s in
+four-message windows), 32 full churn cycles/s and two CBOR inspectors. Eight
+server cores and the two generators occupy disjoint physical cores. Every
+stable user contributes 120 timed probes, with exact proof/Close/EOF/counter and
+resource checks. Primary results are medians of the two trial summaries:
+
+| Runtime | Median user p99, ms | p99 across users' p99, ms | CPU-s / 30 s | Sampled peak RSS, MiB |
+|---|---:|---:|---:|---:|
+| Previous Rust | 11.991 | 27.293 | 109.76 | 114.57 |
+| Selected Rust | 2.029 | 4.755 | 105.59 | 115.21 |
+| Modern C++ | 11.858 | 58.551 | 106.73 | 70.28 |
+
+Selected worst observed user p99 is 6.824 ms and worst private probe 15.055 ms;
+previous Rust is 33.625 / 37.038 ms. Sampled queued pressure is about 0.78 versus
+10.02 MiB. Checked notification-heavy cleanup falls from 131.54 to 28.45 seconds
+outside the data timing. All routing-copy counters remain zero.
+
+The change is a tradeoff. Selected fanout-window p99 upper buckets are
+134.218 / 67.109 ms versus previous 67.109 / 67.109; exact observed fanout maxima
+are 92.170 versus 83.293 ms. Previous Rust completes 480/479 offered windows and
+selected 479/479, with every submitted matrix checked. A separate four-run quiet
+100,000-user control verifies another 48 million probes but uses 1.34% more CPU;
+median user p99 moves from about 0.895 to 0.924 ms. A 4,096-visit alternative is
+rejected because its private population tail is substantially worse. No universal
+latency or throughput win is claimed.
+
+Selected source passes 77 library tests and strict all-target Clippy; the fresh
+working-tree build passes 80 with its preserved observer-index tests. The
+independent 776-case / 2,311-exchange wire corpus, ordinary unread isolation,
+gated 1,021-healthy-reader pressure and complete retirement pass. Native local
+adoption verifies the selected executable and real private/room/departure plus
+normal Close/EOF exchanges. The [archived report](benchmarks/2026-10-18-mixed-100k-fairness/README.md)
+contains all per-user CSV identities, every primary and preliminary trial,
+rejected variants, diagnostic limits, exact sources and a verifier. This is finite
+plaintext loopback evidence; global/observer continuation, WAN/TLS and longer
+production operation remain outside this new revision's acceptance scope.

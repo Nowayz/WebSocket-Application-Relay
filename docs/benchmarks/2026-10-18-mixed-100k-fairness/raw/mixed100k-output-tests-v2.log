@@ -1,0 +1,14 @@
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/rust-fanout-work)
+error[E0624]: method `subscribe` is private
+   --> src/server/ownership_tests.rs:89:24
+    |
+ 89 |     let source = relay.subscribe(b"output-only").unwrap();
+    |                        ^^^^^^^^^ private method
+    |
+   ::: src/relay.rs:584:5
+    |
+584 |     fn subscribe(self: &Arc<Self>, channel: &[u8]) -> Result<Subscription, Disconnect> {
+    |     ---------------------------------------------------------------------------------- private method defined here
+
+For more information about this error, try `rustc --explain E0624`.
+error: could not compile `war-relay` (lib test) due to 1 previous error

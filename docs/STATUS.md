@@ -1751,3 +1751,38 @@ it does not measure off-CPU latency or prove false sharing. The initial missing
 auth-fixture setup failure is preserved and excluded. [The archive](benchmarks/2026-10-17-cpp-array-handle/README.md)
 contains complete candidate sources, every observation, profile reports and
 annotations, exact build IDs and a verifier for the source-dependency chain.
+
+
+### Selected: 100,000-user mixed-load fairness (2026-10-18)
+
+Runtime commit `279c3c1` is selected and running locally. Ordinary large room
+multicast now submits at most 1,024 recipient visits per turn, retaining source
+FIFO and a charged immutable view/body. Output-only wakes bypass the decoder
+when policy permits, and departures use owner-worker batching. Forwarded body
+pointers, exact budgets, cancellation and readiness upgrades are tested. No
+unsafe code or dependency/Frame representation change is introduced.
+
+Two rotated mixed trials per implementation verify 72 million timed private
+probes across previous Rust, selected Rust and modern C++, plus full room
+fanout/churn/inspection/departure matrices. Median user p99 falls 11.99 -> 2.03 ms;
+p99 across the population's user-p99 values falls 27.29 -> 4.76 ms, versus C++
+58.55 ms. Every selected user's observed p99 is below 6.825 ms in these trials.
+CPU is about 3.8% lower in this mixed case and sampled RSS remains about 115 MiB.
+All relevant final resource gauges and descriptor counts retire.
+
+Fanout-window tails are mixed and the quiet four-run control costs 1.34% more
+CPU (48 million additional verified probes). Global/observer permission barriers
+retain complete-message dispatch. Alternative 256/4,096 quanta and observer-index
+variants remain unselected; all data and limits are retained in the
+[report/archive](benchmarks/2026-10-18-mixed-100k-fairness/README.md).
+
+Selected library tests (77), three inspection corruption oracles, strict Clippy,
+formatting and 776 corpus cases / 2,311 exchanges pass. A fresh separate-target
+working-tree build passes 80 library tests with preserved observer-index work.
+Eight unread peers are isolated in both ordinary pressure and a gated
+1,030-client case; 1,021 healthy readers verify 8.60 million messages. A corrected
+teardown oracle distinguishes eight real live-phase slow consumers from capacity
+markings during the subsequent closing-notice burst. Final queues/read/connection/
+variable gauges are zero. The native manual service is hash-pinned to the selected
+binary and real readiness/private/room/departure/Close/EOF acceptance passes.
+Existing C++ counter-layout and Rust observer-index edits are preserved.

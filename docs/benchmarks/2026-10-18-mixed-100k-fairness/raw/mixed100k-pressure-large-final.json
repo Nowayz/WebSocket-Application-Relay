@@ -1,0 +1,121 @@
+{
+  "server_command": [
+    "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-final/war-relay",
+    "--bind",
+    "127.0.0.1:60037",
+    "--admin-bind",
+    "127.0.0.1:51491",
+    "--workers",
+    "4",
+    "--messages-per-second",
+    "0",
+    "--bytes-per-second",
+    "0",
+    "--ping-interval-secs",
+    "0",
+    "--idle-timeout-secs",
+    "0",
+    "--max-message-bytes",
+    "1048576",
+    "--queue-bytes",
+    "1048586",
+    "--queue-messages",
+    "64",
+    "--total-queue-bytes",
+    "268435456",
+    "--tcp-send-buffer-bytes",
+    "16384"
+  ],
+  "passed": false,
+  "client_command": [
+    "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+    "--url",
+    "ws://127.0.0.1:60037",
+    "--mode",
+    "fanout",
+    "--clients",
+    "1030",
+    "--unread-clients",
+    "8",
+    "--duration-secs",
+    "5",
+    "--payload-bytes",
+    "1024",
+    "--window",
+    "1"
+  ],
+  "client_log": "{\"clients\":1030,\"event\":\"ready\",\"healthy_readers\":1021,\"mode\":\"fanout\",\"payload_sizes\":[1024],\"unread_clients\":8}\n{\"elapsed_seconds\":5.000449836,\"event\":\"traffic_finished\",\"mode\":\"fanout\",\"sent_messages\":8360,\"verified_deliveries\":8535560}\n{\"clients\":1030,\"deliveries_per_second\":1706958.429729561,\"disconnect_notifications\":8168,\"elapsed_seconds\":5.000449836,\"event\":\"result\",\"healthy_readers\":1021,\"joins\":1030,\"latency_max_ms\":1.793461,\"latency_p50_upper_ms\":0.524288,\"latency_p99_upper_ms\":1.048576,\"mode\":\"fanout\",\"payload_bytes\":null,\"payload_sizes\":[1024],\"reader_delay_ms\":0,\"sent_encoded_bytes\":8669320,\"sent_messages\":8360,\"sent_value_bytes\":8585720,\"setup_seconds\":0.119962258,\"slow_observation\":null,\"source_addresses\":0,\"teardown_capacity_closes\":0,\"unread_clients\":8,\"unread_observations\":[{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":104},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":104},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":97},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":104},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":97},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":104},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":97},{\"code\":1013,\"kind\":\"close\",\"verified_buffered_frames\":103}],\"validation\":\"64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram\",\"verified_deliveries\":8535560,\"window\":1}\n",
+  "client_exit_code": 0,
+  "result": {
+    "clients": 1030,
+    "deliveries_per_second": 1706958.429729561,
+    "disconnect_notifications": 8168,
+    "elapsed_seconds": 5.000449836,
+    "event": "result",
+    "healthy_readers": 1021,
+    "joins": 1030,
+    "latency_max_ms": 1.793461,
+    "latency_p50_upper_ms": 0.524288,
+    "latency_p99_upper_ms": 1.048576,
+    "mode": "fanout",
+    "payload_bytes": null,
+    "payload_sizes": [
+      1024
+    ],
+    "reader_delay_ms": 0,
+    "sent_encoded_bytes": 8669320,
+    "sent_messages": 8360,
+    "sent_value_bytes": 8585720,
+    "setup_seconds": 0.119962258,
+    "slow_observation": null,
+    "source_addresses": 0,
+    "teardown_capacity_closes": 0,
+    "unread_clients": 8,
+    "unread_observations": [
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 104
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 104
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 97
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 104
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 97
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 104
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 97
+      },
+      {
+        "code": 1013,
+        "kind": "close",
+        "verified_buffered_frames": 103
+      }
+    ],
+    "validation": "64 cyclic templates shared across readers; every full encoded frame and its order checked before next window; unique expected disconnect notifications; latency measured from window start; fixed histogram",
+    "verified_deliveries": 8535560,
+    "window": 1
+  },
+  "server_exit_code": 0
+}

@@ -171,3 +171,24 @@ annotations point toward global output-accounting updates as an investigation
 target. Those user-event samples do not measure off-CPU waits or prove a
 wall-time/latency cause. All sources, failed diagnostic setup, successful capture
 metadata, every ordinary trial and source-dependency hashes are preserved.
+
+
+## Population fairness under mixed load (2026-10-18)
+
+The accepted C++ executable `b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1`
+is unchanged. A fresh same-client eight-worker study combines 100,000 private
+users, 8,192 room readers, paced churn and CBOR inspection. Across two repeats,
+median user p99 is 11.858 ms for C++, 11.991 for previous Rust and 2.029 for
+selected Rust `279c3c1`. The 99th percentile across individual users' p99 values
+is 58.551 / 27.293 / 4.755 ms respectively. These are population-fairness results,
+not isolated relay-hop timings or standalone saturation throughput.
+
+C++ CPU is 106.73 seconds per nominal 30-second mixed run versus selected Rust
+105.59; C++ remains smaller in sampled process RSS (70.28 versus 115.21 MiB).
+C++ fanout-window p99 bounds are 67.109 ms in both trials; selected Rust's are
+134.218 / 67.109. The selected scheduling change favors the 100,000-user private
+population and inspection tail while retaining that explicit audience-window
+tradeoff. Every submitted sender/body/FIFO matrix and all normal population
+Close/EOF/resource checks pass. See the
+[full scope, individual trials and verifier](../docs/benchmarks/2026-10-18-mixed-100k-fairness/README.md).
+Historical standalone throughput tables above describe their own workloads.

@@ -1274,10 +1274,11 @@ Keep placement identical on both sides of a server optimization comparison.
 
 ## Checking responsiveness with global observers
 
-The native turn budget counts recipient visits for global broadcasts and
-channel/private fanout through global observers, as well as ordinary room
-broadcasts. It finishes one complete message before yielding; it does not split
-that message or impose a hard duration bound on a single large fanout.
+Global broadcasts and channel/private fanout through global observers count
+recipient visits and finish the selected message before yielding, preserving
+their permission barriers. They do not impose a hard duration bound on one
+large fanout. Ordinary rooms without global channel observers use a bounded
+within-message continuation, described below.
 
 The inspection client can place its verifying readers in the global channel as
 authenticated channel-message observers. The publisher stays in its ordinary
@@ -1311,3 +1312,73 @@ columns are upper bounds; maxima are observed durations. The
 improves stressed private/churn responsiveness at a fanout-throughput cost and
 has explicit adverse inspection and normal-traffic observations. It does not
 raise the 100,000-user operating recommendation or establish a hard latency SLO.
+
+
+## Mixed population fairness and bounded room work
+
+The selected ordinary-room path visits at most 1,024 recipients per publisher
+turn. It retains one immutable membership snapshot and shared body, completes
+that message before reading the publisher's next input, and yields after its
+last chunk as well. The quantum bounds delivery submission; creating or refreshing
+the existing cached membership view still traverses the room under the registry
+read guard. It does not provide a wall-clock scheduling guarantee. A late join does not receive the unfinished older message;
+retired peers cannot be redirected through reused IDs/tokens. Global/observer
+permission barriers retain their existing complete-message path.
+
+A publisher allocates its continuation box only when first needed and reuses it.
+An empty box holds no payload or membership view. The source body's reservation
+uses the existing per-peer/global queue budget. Retained view capacity is also
+charged conservatively per active publisher to the global budget, even when
+several publishers share the view. This prevents churn from pinning unaccounted
+old views. `--write-timeout-secs` covers unfinished submission, and cancellation,
+Close, timeout and connection teardown release its credits and references.
+
+`war_queued_bytes` therefore includes unfinished source-body/view credits as
+well as recipient delivery reservations. Shared payloads can have multiple
+logical reservations; this gauge is not unique physical memory or a process RSS
+cap. Reused empty continuation boxes are bounded by admitted connections.
+Existing queue/message counts and aggregate decoder staging limits still apply.
+
+Application-output-only wakes flush queued slices without entering the decoder.
+Input/timer/error readiness upgrades a queued turn, and terminal/control state,
+due maintenance, expired policy or shutdown uses the full state machine. This
+preserves Close/partial-write and heartbeat behavior while reducing speculative
+reads and repeated locking on fanout recipients.
+
+The [mixed-load report](benchmarks/2026-10-18-mixed-100k-fairness/README.md)
+combines 100,000 continuously active private users with 8,192 room readers,
+32 complete churn cycles/s and two authenticated inspectors. It includes every
+user's actual-send and intended-send latency, exact counters, source/binary
+hashes, full retirement, quiet controls and explicit fanout-window tradeoffs.
+The current-host frozen recipe is:
+
+```sh
+python3 scripts/mixed-capacity.py \
+  --server artifacts/candidates/mixed-capacity-final/war-relay \
+  --scope room --pairs 0 --churn-cycles-per-second 4 \
+  --fanout-windows-per-second 16 \
+  --output artifacts/mixed-population.json
+```
+
+Use a new output path for each fresh trial. The helper records topology and
+verifies that load clients do not share the server's physical cores; its numeric
+CPU sets are specific to this machine. The report pins the exact frozen clients
+and their sources. Missed sidecar timer ticks are skipped and counted by completed
+versus offered windows. Every submitted window must still reach every reader,
+and all scheduled private probes must complete.
+
+The inspection client supports `--external-capacity-rooms` and
+`--external-capacity-room-size` to verify the stable capacity-client census.
+`--fanout-close-window 32` batches departure draining outside measurement while
+checking every expected notification in order; default 1 retains serial cleanup.
+
+Departure notifications now use owner-worker multicast too. During a large
+simultaneous close, bounded notification queues can hit capacity for a peer
+whose normal Close is already arriving. The existing Close handling can honor
+that handshake and cancel untouched queued notifications. Consequently,
+`war_slow_consumers_total` counts overload intent and can rise during teardown
+without representing failed live delivery. For phase-specific pressure checks,
+`stress --teardown-gate` flushes `traffic_finished`, waits for a literal
+`continue` line, then closes readers. The gated 1,030-client case proves exactly
+eight live slow consumers before the deliberate closing-notice burst; its
+healthy matrices, all eight departures and final resource retirement are checked.
