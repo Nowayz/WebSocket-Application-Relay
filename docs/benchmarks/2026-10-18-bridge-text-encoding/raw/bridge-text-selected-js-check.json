@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "commands": [
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/mixed-capacity-final/war-relay",
+      "--bind",
+      "127.0.0.1:34121",
+      "--admin-bind",
+      "127.0.0.1:38649",
+      "--workers",
+      "4",
+      "--idle-timeout-secs",
+      "1"
+    ],
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/bridge-text-selected/war-legacy-bridge",
+      "--bind",
+      "127.0.0.1:59915",
+      "--upstream",
+      "ws://127.0.0.1:34121"
+    ]
+  ],
+  "server_sha256": "3db9ebeb0fff87636a1bf2fc5a6e0ae88d48d12aa7a52571cb4b28fa4d911fa9",
+  "bridge_sha256": "bb2392f53bd8fe1bdff47f0a8e790b366269400e259839565bdeb4573f9f8bf1",
+  "test_command": [
+    "node",
+    "--test",
+    "--test-timeout=10000",
+    "clients/js/relay.test.mjs"
+  ],
+  "test_exit_code": 0,
+  "test_output": "\u2714 CBOR client carries objects, bytes, text, uint64 IDs, and concurrent variable requests (24.655672ms)\n\u2714 the unchanged upstream relay.js works through the optional bridge (5.758217ms)\n\u2714 CBOR byte strings and text interoperate with legacy sessions through the bridge (2.164322ms)\n\u2714 legacy privileged commands preserve channel-list layout and fixed-ID takeover (2.411906ms)\n\u2714 native CBOR and legacy connections finish close handshakes before and after joining (3.327711ms)\n\u2714 an unsupported structured value closes a legacy recipient cleanly and leaves CBOR routing usable (1.88562ms)\n\u2714 application idle policy reaches native and legacy browser WebSockets cleanly (1003.09319ms)\n\u2139 tests 7\n\u2139 suites 0\n\u2139 pass 7\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 1084.485318\n",
+  "final_resource_gauges": {
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_queued_bytes": 0,
+    "war_variable_bytes": 0
+  },
+  "exit_codes": [
+    0,
+    0
+  ]
+}
