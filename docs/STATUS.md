@@ -1,5 +1,24 @@
 # Continuing goal status
 
+## 2026-10-18: exact CBOR storage; short client diagnosis
+
+Kept code `09f90fb` sizes CBOR byte-string storage exactly. This avoids eager
+shared-ownership metadata for unshared buffers in pinned `bytes` 1.12.1.
+The matched constructor benchmark reduces 1 KiB construction/destruction time
+from 29.85 to 21.92 ns (26.6%); large buffers and clone-heavy cases do not
+establish a gain. Ten eight-second 100,000-user mixed runs pass their gates,
+but client CPU ranges overlap and private tails remain unresolved. There is
+no relay throughput or latency improvement claim. Collection and scratch-buffer
+experiments are rejected.
+
+Selected native runtime `279c3c1` / executable `3db9ebeb…` remains unchanged.
+The quiescent local legacy bridge uses clean code `09f90fb` / `8e8b5c77…`,
+verified with real JavaScript compatibility and live full-body delivery/Close
+checks. Clean source passes 78 library tests; the workspace passes 81 library,
+three capacity and four inspection tests plus strict Clippy/formatting.
+[Results, limitations and reproducible evidence](benchmarks/2026-10-18-cbor-owned-storage/README.md).
+
+
 ## 2026-10-18: short multicast experiments; runtime retained
 
 Retain selected runtime `279c3c1` / executable `3db9ebeb…`; no experimental

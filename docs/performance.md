@@ -6963,3 +6963,12 @@ inconvenient windows. Profile that client scheduling/allocation question in a
 short diagnostic before drawing another server-only tail conclusion. Long
 soaks answer a different reliability question and were not used for this
 optimization decision.
+
+The [exact CBOR storage study](benchmarks/2026-10-18-cbor-owned-storage/README.md)
+keeps a single reservation-size change after a short client profile. Unshared
+1 KiB constructor time falls 26.6% in a matched focused benchmark. Clone-heavy
+and large-buffer cases do not establish a benefit, and ten eight-second 100k-user
+runs do not establish a whole-client CPU or relay latency gain. The native relay
+is unchanged. The clean local legacy bridge adopts the helper after real JS and
+full-body delivery checks. No pool, allocator replacement or scheduling policy
+is added; the original payload copy during encoding remains explicit.

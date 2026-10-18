@@ -1,0 +1,27 @@
+
+/usr/lib/libc.so.6:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+00000000000a62d0 <_int_free_chunk+0x10>:
+   a62d0:	80 3d c9 ad 17 00 00 	cmpb   $0x0,0x17adc9(%rip)        # 2210a0 <__libc_single_threaded>
+   a62d7:	0f 85 93 00 00 00    	jne    a6370 <_int_free_chunk+0xb0>
+   a62dd:	31 c0                	xor    %eax,%eax
+   a62df:	b9 01 00 00 00       	mov    $0x1,%ecx
+   a62e4:	f0 0f b1 0f          	lock cmpxchg %ecx,(%rdi)
+   a62e8:	0f 85 a2 00 00 00    	jne    a6390 <_int_free_chunk+0xd0>
+   a62ee:	48 89 7d f8          	mov    %rdi,-0x8(%rbp)
+   a62f2:	e8 59 fe ff ff       	call   a6150 <_int_free_merge_chunk>
+   a62f7:	48 8b 7d f8          	mov    -0x8(%rbp),%rdi
+   a62fb:	31 c0                	xor    %eax,%eax
+   a62fd:	87 07                	xchg   %eax,(%rdi)
+   a62ff:	83 f8 01             	cmp    $0x1,%eax
+   a6302:	7f 7c                	jg     a6380 <_int_free_chunk+0xc0>
+   a6304:	c9                   	leave
+   a6305:	c3                   	ret
+   a6306:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+   a630d:	00 00 00 
+   a6310:	48 8b 0d d9 29 17 00 	mov    0x1729d9(%rip),%rcx        # 218cf0 <_GLOBAL_OFFSET_TABLE_+0x180>
+   a6317:	64 8b 11             	mov    %fs:(%rcx),%edx
+   a631a:	8b 0d b0 2e 17 00    	mov    0x172eb0(%rip),%ecx        # 2191d0 <mp_+0x50>

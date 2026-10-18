@@ -1,0 +1,184 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 23K of event 'cycles:u'
+# Event count (approx.): 58336042656
+#
+# Children      Self  Command          Shared Object     Symbol                                                                                                                                                                           
+# ........  ........  ...............  ................  .................................................................................................................................................................................
+#
+    17.11%     0.00%  tokio-rt-worker  libc.so.6         [.] 0x00007fc4e6ca08f2
+            |
+            ---0x7fc4e6ca08f2
+               |          
+               |--13.01%--0xffffffff8ac0012f
+               |          |          
+               |           --11.55%--0xffffffff8c18eafa
+               |                     |          
+               |                      --9.33%--0xffffffff8be723b4
+               |                                |          
+               |                                 --5.46%--0xffffffff8be722ab
+               |                                           |          
+               |                                            --3.57%--0xffffffff8b40edd6
+               |          
+                --2.70%--0xffffffff8ac00080
+
+    14.14%     0.70%  tokio-rt-worker  libc.so.6         [.] recv
+            |
+            ---recv
+               |          
+                --13.85%--syscall_cancel (inlined)
+                          internal_syscall_cancel (inlined)
+                          |          
+                           --13.36%--0x7fc4e6ca08f2
+                                     |          
+                                      --11.18%--0xffffffff8ac0012f
+                                                |          
+                                                 --9.91%--0xffffffff8c18eafa
+                                                           |          
+                                                            --9.33%--0xffffffff8be723b4
+                                                                      |          
+                                                                       --5.46%--0xffffffff8be722ab
+                                                                                 |          
+                                                                                  --3.57%--0xffffffff8b40edd6
+
+    13.85%     0.00%  tokio-rt-worker  libc.so.6         [.] syscall_cancel (inlined)
+            |
+            ---syscall_cancel (inlined)
+               internal_syscall_cancel (inlined)
+               |          
+                --13.36%--0x7fc4e6ca08f2
+                          |          
+                           --11.18%--0xffffffff8ac0012f
+                                     |          
+                                      --9.91%--0xffffffff8c18eafa
+                                                |          
+                                                 --9.33%--0xffffffff8be723b4
+                                                           |          
+                                                            --5.46%--0xffffffff8be722ab
+                                                                      |          
+                                                                       --3.57%--0xffffffff8b40edd6
+
+    13.85%     0.00%  tokio-rt-worker  libc.so.6         [.] internal_syscall_cancel (inlined)
+            |
+            ---internal_syscall_cancel (inlined)
+               |          
+                --13.36%--0x7fc4e6ca08f2
+                          |          
+                           --11.18%--0xffffffff8ac0012f
+                                     |          
+                                      --9.91%--0xffffffff8c18eafa
+                                                |          
+                                                 --9.33%--0xffffffff8be723b4
+                                                           |          
+                                                            --5.46%--0xffffffff8be722ab
+                                                                      |          
+                                                                       --3.57%--0xffffffff8b40edd6
+
+    13.08%     0.00%  tokio-rt-worker  [unknown]         [.] 0xffffffff8ac0012f
+            |
+            ---0xffffffff8ac0012f
+               |          
+                --11.61%--0xffffffff8c18eafa
+                          |          
+                           --9.33%--0xffffffff8be723b4
+                                     |          
+                                      --5.46%--0xffffffff8be722ab
+                                                |          
+                                                 --3.57%--0xffffffff8b40edd6
+
+    11.61%     0.00%  tokio-rt-worker  [unknown]         [.] 0xffffffff8c18eafa
+            |
+            ---0xffffffff8c18eafa
+               |          
+                --9.33%--0xffffffff8be723b4
+                          |          
+                           --5.46%--0xffffffff8be722ab
+                                     |          
+                                      --3.57%--0xffffffff8b40edd6
+
+     9.33%     0.00%  tokio-rt-worker  [unknown]         [.] 0xffffffff8be723b4
+            |
+            ---0xffffffff8be723b4
+               |          
+                --5.46%--0xffffffff8be722ab
+                          |          
+                           --3.57%--0xffffffff8b40edd6
+
+     8.96%     8.96%  tokio-rt-worker  capacity          [.] capacity::ring::{{closure}}
+     7.24%     7.24%  tokio-rt-worker  capacity          [.] <futures_util::stream::stream::next::Next<St> as core::future::future::Future>::poll
+     5.46%     0.00%  tokio-rt-worker  [unknown]         [.] 0xffffffff8be722ab
+            |
+            ---0xffffffff8be722ab
+               |          
+                --3.57%--0xffffffff8b40edd6
+
+     5.05%     5.05%  tokio-rt-worker  capacity          [.] <tokio_tungstenite::WebSocketStream<T> as futures_sink::Sink<tungstenite::protocol::message::Message>>::poll_flush
+     4.42%     4.42%  tokio-rt-worker  libc.so.6         [.] 0x00000000000a62e8
+            |
+            ---0x7fc4e6ca62e8
+
+     4.42%     0.00%  tokio-rt-worker  libc.so.6         [.] 0x00007fc4e6ca62e8
+            |
+            ---0x7fc4e6ca62e8
+
+     4.38%     4.38%  tokio-rt-worker  capacity          [.] tungstenite::protocol::frame::frame::Frame::format_into_buf
+     4.24%     0.00%  tokio-rt-worker  libc.so.6         [.] 0x00007fc4e6ca79ad
+            |
+            ---0x7fc4e6ca79ad
+               |          
+                --2.46%--0x7fc4e6ca73a8
+
+     4.08%     4.08%  tokio-rt-worker  capacity          [.] futures_task::waker::clone_arc_raw
+     3.77%     0.05%  tokio-rt-worker  libc.so.6         [.] send
+            |
+            ---send
+               |          
+                --3.74%--syscall_cancel (inlined)
+                          internal_syscall_cancel (inlined)
+                          |          
+                           --3.68%--0x7fc4e6ca08f2
+
+     3.74%     0.00%  tokio-rt-worker  libc.so.6         [.] syscall_cancel (inlined)
+            |
+            ---syscall_cancel (inlined)
+               internal_syscall_cancel (inlined)
+               |          
+                --3.68%--0x7fc4e6ca08f2
+
+     3.74%     0.00%  tokio-rt-worker  libc.so.6         [.] internal_syscall_cancel (inlined)
+            |
+            ---internal_syscall_cancel (inlined)
+               |          
+                --3.68%--0x7fc4e6ca08f2
+
+     3.61%     3.61%  tokio-rt-worker  [unknown]         [k] 0xffffffff8b40edd6
+            |          
+             --3.57%--recv
+                       syscall_cancel (inlined)
+                       internal_syscall_cancel (inlined)
+                       0x7fc4e6ca08f2
+                       0xffffffff8ac0012f
+                       0xffffffff8c18eafa
+                       0xffffffff8be723b4
+                       0xffffffff8be722ab
+                       0xffffffff8b40edd6
+
+     3.29%     3.29%  tokio-rt-worker  capacity          [.] tokio::runtime::io::registration::Registration::poll_ready
+     2.80%     2.80%  tokio-rt-worker  [unknown]         [k] 0xffffffff8ac00080
+     2.46%     2.46%  tokio-rt-worker  libc.so.6         [.] 0x00000000000a73a8
+            |
+            ---0x7fc4e6ca79ad
+               0x7fc4e6ca73a8
+
+     2.46%     0.00%  tokio-rt-worker  libc.so.6         [.] 0x00007fc4e6ca73a8
+            |
+            ---0x7fc4e6ca73a8
+
+
+
+#
+# (Tip: To show time in nanoseconds in record/report add --ns)
+#
