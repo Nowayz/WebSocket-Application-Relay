@@ -183,6 +183,31 @@ impl Socket {
         if state.control_pending {
             return Ok(false);
         }
+        self.flush_locked(&mut state)
+    }
+
+    /// A pending application-output wake need not enter the input decoder.
+    /// Check terminal/control/deadline policy under the same lock as the write;
+    /// uncertain cases return to the complete connection state machine.
+    pub fn flush_output_only(
+        &self,
+        now: Instant,
+        idle_timeout: Duration,
+    ) -> Option<io::Result<bool>> {
+        let mut state = self.state.lock();
+        if state.fatal
+            || state.requested.is_some()
+            || state.control_pending
+            || state.control_deadline.is_some_and(|d| d <= now)
+            || state.queue.front().is_some_and(|p| p.deadline <= now)
+            || (!idle_timeout.is_zero() && state.activity + idle_timeout <= now)
+        {
+            return None;
+        }
+        Some(self.flush_locked(&mut state))
+    }
+
+    fn flush_locked(&self, state: &mut State) -> io::Result<bool> {
         let mut remaining = WRITE_QUANTUM;
         while !state.queue.is_empty() {
             let State { stream, queue, .. } = &mut *state;
@@ -198,18 +223,18 @@ impl Socket {
                     }
                     if remaining == 0 {
                         let queued = !state.queue.is_empty();
-                        self.writable(&mut state, queued)?;
+                        self.writable(state, queued)?;
                         return Ok(queued);
                     }
                 }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    self.writable(&mut state, true)?;
+                    self.writable(state, true)?;
                     return Ok(false);
                 }
                 Err(error) => return Err(error),
             }
         }
-        self.writable(&mut state, false)?;
+        self.writable(state, false)?;
         Ok(false)
     }
 
@@ -636,6 +661,36 @@ mod tests {
     }
 
     #[test]
+    fn output_only_flush_defers_control_close_and_expired_policy_to_the_decoder() {
+        let (_relay, socket, _reader, _poll) = connected();
+        let now = Instant::now();
+        socket.state.lock().fatal = true;
+        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
+        socket.state.lock().fatal = false;
+        socket.state.lock().requested = Some(Disconnect::OVERLOADED);
+        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
+        socket.state.lock().requested = None;
+        socket.state.lock().control_pending = true;
+        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
+        socket.state.lock().control_pending = false;
+        socket.state.lock().control_deadline = Some(now);
+        assert!(socket.flush_output_only(now, Duration::ZERO).is_none());
+        socket.state.lock().control_deadline = None;
+        socket.state.lock().activity = now - Duration::from_secs(2);
+        assert!(
+            socket
+                .flush_output_only(now, Duration::from_secs(1))
+                .is_none()
+        );
+        assert!(
+            !socket
+                .flush_output_only(now, Duration::ZERO)
+                .unwrap()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn multicast_waits_for_its_owner_while_private_output_stays_immediate() {
         let (relay, socket, raw_reader, _poll) = connected();
         let receiver = relay
@@ -666,7 +721,12 @@ mod tests {
             assert_eq!(state.queue[0].packet.frame.payload().as_ptr(), pointer);
         }
         assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
-        assert!(!socket.flush().unwrap());
+        assert!(
+            !socket
+                .flush_output_only(Instant::now(), Duration::ZERO)
+                .unwrap()
+                .unwrap()
+        );
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
         assert_eq!(
             reader.read().unwrap(),

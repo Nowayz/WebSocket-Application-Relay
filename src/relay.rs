@@ -63,14 +63,46 @@ pub(crate) struct ReceiveBatch<'a> {
 }
 
 impl ReceiveBatch<'_> {
+    #[cfg(test)]
     pub(crate) fn receive(
         &mut self,
         peer: &Peer,
         bytes: Bytes,
         storage_capacity: usize,
     ) -> Result<usize, Disconnect> {
-        self.relay
-            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals)
+        self.relay.receive_with_totals(
+            peer,
+            bytes,
+            storage_capacity,
+            &mut self.totals,
+            deliver_room,
+        )
+    }
+
+    /// Native workers keep one reusable continuation slot per large publisher.
+    pub(crate) fn receive_bounded(
+        &mut self,
+        peer: &Peer,
+        bytes: Bytes,
+        storage_capacity: usize,
+        pending: &mut Option<Box<RoomFanout>>,
+        quantum: usize,
+    ) -> Result<usize, Disconnect> {
+        self.relay.receive_with_totals(
+            peer,
+            bytes,
+            storage_capacity,
+            &mut self.totals,
+            |source, recipients, frame| {
+                if recipients.len() <= quantum {
+                    return deliver_room(source, recipients, frame);
+                }
+                let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
+                work.begin(source, recipients, frame, self.relay.config.write_timeout())?;
+                work.resume(quantum)?;
+                Ok(quantum)
+            },
+        )
     }
 
     pub(crate) fn publish(&mut self) {
@@ -200,6 +232,126 @@ pub(crate) struct Peer {
     budget: Arc<Budget>,
 }
 
+/// One immutable membership snapshot and one charged shared body. The box is
+/// allocated only on a publisher's first oversized room multicast and reused.
+/// Empty slots retain no payload or peer ownership; metadata is bounded by the
+/// admitted connection count and staged bodies share the normal queue budget.
+#[derive(Default)]
+pub(crate) struct RoomFanout {
+    recipients: Option<Arc<Vec<Arc<Peer>>>>,
+    packet: Option<Envelope>,
+    cursor: usize,
+    source: u64,
+    snapshot_bytes: usize,
+    deadline: Option<std::time::Instant>,
+}
+
+impl RoomFanout {
+    fn begin(
+        &mut self,
+        source: &Peer,
+        recipients: Arc<Vec<Arc<Peer>>>,
+        frame: Frame,
+        timeout: std::time::Duration,
+    ) -> Result<(), Disconnect> {
+        debug_assert!(!self.active());
+        let packet = source
+            .reserve(&frame)?
+            .ok_or(Disconnect::OVERLOADED)?
+            .into_owned();
+        // Account conservatively per active publisher, even if several share
+        // this view. Churn can otherwise pin many distinct old membership views
+        // outside the queue budget while workers advance their cursors.
+        let snapshot_bytes = recipients
+            .capacity()
+            .checked_mul(std::mem::size_of::<Arc<Peer>>())
+            .and_then(|n| {
+                n.checked_add(
+                    std::mem::size_of::<Vec<Arc<Peer>>>() + 2 * std::mem::size_of::<usize>(),
+                )
+            })
+            .ok_or(Disconnect::OVERLOADED)?;
+        if packet
+            .budget
+            .metrics
+            .queued_bytes
+            .fetch_update(Relaxed, Relaxed, |used| {
+                used.checked_add(snapshot_bytes)
+                    .filter(|&next| next <= packet.budget.global_limit)
+            })
+            .is_err()
+        {
+            packet.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+            return Err(Disconnect::OVERLOADED);
+        }
+        self.snapshot_bytes = snapshot_bytes;
+        self.packet = Some(packet);
+        self.recipients = Some(recipients);
+        self.cursor = 0;
+        self.source = source.key;
+        self.deadline = Some(std::time::Instant::now() + timeout);
+        Ok(())
+    }
+
+    pub(crate) fn active(&self) -> bool {
+        self.packet.is_some()
+    }
+    pub(crate) fn deadline(&self) -> Option<std::time::Instant> {
+        self.deadline
+    }
+    pub(crate) fn clear(&mut self) {
+        if self.snapshot_bytes != 0 {
+            self.packet
+                .as_ref()
+                .expect("charged membership view")
+                .budget
+                .metrics
+                .queued_bytes
+                .fetch_sub(self.snapshot_bytes, Relaxed);
+            self.snapshot_bytes = 0;
+        }
+        self.packet = None;
+        self.recipients = None;
+        self.deadline = None;
+    }
+
+    pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
+        let recipients = self.recipients.as_ref().expect("live fanout snapshot");
+        let frame = &self.packet.as_ref().expect("charged fanout body").frame;
+        let end = self.cursor.saturating_add(quantum).min(recipients.len());
+        for recipient in &recipients[self.cursor..end] {
+            if recipient.key != self.source {
+                recipient.enqueue_fanout(frame)?;
+            }
+        }
+        self.cursor = end;
+        if end == recipients.len() {
+            self.clear();
+        }
+        Ok(())
+    }
+}
+
+impl Drop for RoomFanout {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
+
+fn deliver_room(
+    source: &Peer,
+    recipients: Arc<Vec<Arc<Peer>>>,
+    frame: Frame,
+) -> Result<usize, Disconnect> {
+    let work = recipients.len().max(1);
+    for recipient in recipients.iter() {
+        if recipient.key != source.key {
+            recipient.enqueue_fanout(&frame)?;
+        }
+    }
+    Ok(work)
+}
+
 struct Budget {
     used: AtomicUsize,
     limit: usize,
@@ -303,8 +455,24 @@ impl Peer {
     // carry no multicast flag, extra branch or different frame representation.
     #[inline(always)]
     fn enqueue<const FANOUT: bool>(&self, frame: &Frame) -> Result<(), Disconnect> {
-        if self.closing.load(Relaxed) {
+        let Some(packet) = self.reserve(frame)? else {
             return Ok(());
+        };
+        let accepted = if FANOUT {
+            self.output.send_fanout(packet)
+        } else {
+            self.output.send(packet)
+        };
+        if !accepted {
+            self.overloaded();
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn reserve<'a>(&'a self, frame: &'a Frame) -> Result<Option<Submission<'a>>, Disconnect> {
+        if self.closing.load(Relaxed) {
+            return Ok(None);
         }
         let size = frame.len();
         if self
@@ -317,7 +485,7 @@ impl Peer {
             .is_err()
         {
             self.overloaded();
-            return Ok(());
+            return Ok(None);
         }
         if self
             .budget
@@ -333,19 +501,10 @@ impl Peer {
             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
             return Err(Disconnect::OVERLOADED);
         }
-        let packet = Submission {
+        Ok(Some(Submission {
             frame,
             budget: Some(&self.budget),
-        };
-        let accepted = if FANOUT {
-            self.output.send_fanout(packet)
-        } else {
-            self.output.send(packet)
-        };
-        if !accepted {
-            self.overloaded();
-        }
-        Ok(())
+        }))
     }
 
     fn overloaded(&self) {
@@ -662,13 +821,17 @@ impl Relay {
         self.receive_batch().receive(peer, bytes, storage_capacity)
     }
 
-    fn receive_with_totals(
+    fn receive_with_totals<F>(
         &self,
         peer: &Peer,
         bytes: Bytes,
         storage_capacity: usize,
         totals: &mut InputTotals,
-    ) -> Result<usize, Disconnect> {
+        room: F,
+    ) -> Result<usize, Disconnect>
+    where
+        F: FnOnce(&Peer, Arc<Vec<Arc<Peer>>>, Frame) -> Result<usize, Disconnect>,
+    {
         if peer.closing.load(Relaxed) {
             return Ok(1);
         }
@@ -730,14 +893,8 @@ impl Relay {
                 .broadcast
                 .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
                 .clone();
-            let work = recipients.len().max(1);
             drop(state);
-            for recipient in recipients.iter() {
-                if recipient.key != peer.key {
-                    recipient.enqueue_fanout(&frame)?;
-                }
-            }
-            return Ok(work);
+            return room(peer, recipients, frame);
         }
         // Charge every fanout path by recipient visits, including global
         // observers. One complete message remains atomic with respect to this
@@ -935,7 +1092,7 @@ impl Relay {
         let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
         if let Some(frame) = &frame {
             for recipient in channel.members.values() {
-                let _ = recipient.enqueue_frame(frame);
+                let _ = recipient.enqueue_fanout(frame);
             }
         }
         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
@@ -954,7 +1111,7 @@ impl Relay {
         }
         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
             for recipient in state.listeners(DISCONNECT_MESSAGE) {
-                let _ = recipient.enqueue_frame(frame.as_ref().expect("notifications enabled"));
+                let _ = recipient.enqueue_fanout(frame.as_ref().expect("notifications enabled"));
             }
         }
         // A displaced session must never erase the new owner of its previous ID.
@@ -1831,3 +1988,6 @@ mod tests {
         assert!(frame.has_unique_payload());
     }
 }
+
+#[cfg(test)]
+mod continuation_tests;

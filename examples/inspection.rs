@@ -96,6 +96,11 @@ struct Args {
     page_size: Option<usize>,
     #[arg(long, default_value_t = 8192)]
     rooms: usize,
+    /// Independently verified capacity-client rooms retained throughout this run.
+    #[arg(long, default_value_t = 0)]
+    external_capacity_rooms: usize,
+    #[arg(long, default_value_t = 16)]
+    external_capacity_room_size: u64,
     #[arg(long, default_value_t = 8)]
     seconds: u64,
     #[arg(long, default_value_t = 2)]
@@ -110,6 +115,9 @@ struct Args {
     client_workers: usize,
     #[arg(long, default_value_t = 8)]
     churn_workers: usize,
+    /// Zero saturates; otherwise pace each churn worker at this many cycles/s.
+    #[arg(long, default_value_t = 0)]
+    churn_cycles_per_second: u32,
     /// Add a stable broadcast room with this many fully verifying readers.
     #[arg(long, default_value_t = 0)]
     fanout_readers: usize,
@@ -122,6 +130,12 @@ struct Args {
     /// Broadcasts per verified window, independently of private traffic's window.
     #[arg(long, default_value_t = WINDOW)]
     fanout_window: usize,
+    /// Zero saturates; otherwise pace broadcast windows, skipping missed ticks.
+    #[arg(long, default_value_t = 0)]
+    fanout_windows_per_second: u32,
+    /// Departure-drain batch, outside the measured interval and below queue depth.
+    #[arg(long, default_value_t = 1)]
+    fanout_close_window: usize,
 }
 
 #[derive(Default, Serialize)]
@@ -600,11 +614,24 @@ async fn churn(
     name: Bytes,
     wire: Wire,
     until: Instant,
+    cycles_per_second: u32,
 ) -> Result<(Counts, Histogram)> {
     let mut counts = Counts::default();
     let mut stats = Histogram::new();
     let mut sequence = 0u64;
+    let mut pacing = (cycles_per_second != 0).then(|| {
+        let mut timer =
+            tokio::time::interval(Duration::from_secs_f64(1.0 / f64::from(cycles_per_second)));
+        timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        timer
+    });
     while Instant::now() < until {
+        if let Some(timer) = &mut pacing {
+            timer.tick().await;
+            if Instant::now() >= until {
+                break;
+            }
+        }
         let stamp = Instant::now();
         let (mut socket, id) = join(&url, &name, wire, &mut counts)
             .await
@@ -691,9 +718,10 @@ async fn run(args: Args) -> Result<()> {
             && args.pairs <= 64
             && (args.pairs > 0 || args.fanout_readers > 0)
             && args.churn_workers <= 64
-            && args.fanout_readers <= 1024
+            && args.fanout_readers <= 100_000
             && args.fanout_churn_every <= 65536
             && (1..=32).contains(&args.fanout_window)
+            && (1..=32).contains(&args.fanout_close_window)
             && args.inspectors <= 8
             && (1..=1000).contains(&args.inspection_interval_ms),
         "invalid workload bounds"
@@ -800,6 +828,12 @@ async fn run(args: Args) -> Result<()> {
         });
         stable.push((name, 2));
     }
+    for index in 0..args.external_capacity_rooms {
+        stable.push((
+            Bytes::from(format!("cap{index:x}")),
+            args.external_capacity_room_size,
+        ));
+    }
     let mut sockets = Vec::with_capacity(inspectors);
     for i in 0..inspectors {
         if matches!(args.mode, Mode::Cbor | Mode::Binary) {
@@ -874,6 +908,7 @@ async fn run(args: Args) -> Result<()> {
             args.url.clone(),
             args.fanout_churn_every,
             args.fanout_window,
+            args.fanout_windows_per_second,
         ))
     });
     let traffic: Vec<_> = pairs
@@ -887,6 +922,7 @@ async fn run(args: Args) -> Result<()> {
                 Bytes::from(format!("churn{i}")),
                 args.wire,
                 until,
+                args.churn_cycles_per_second,
             ))
         })
         .collect();
@@ -972,7 +1008,7 @@ async fn run(args: Args) -> Result<()> {
         inspections_verified += 1;
     }
     if let Some(group) = fanout {
-        group.close(&mut counts).await?;
+        group.close(&mut counts, args.fanout_close_window).await?;
     }
     for socket in &mut idle {
         close(socket, &mut counts).await?;

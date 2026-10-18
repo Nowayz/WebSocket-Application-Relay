@@ -58,6 +58,9 @@ struct Args {
     /// Fanout only: welcome these peers, then leave them unread during traffic.
     #[arg(long, default_value_t = 0)]
     unread_clients: usize,
+    /// Fanout: wait for controller acknowledgement after traffic, before closing readers.
+    #[arg(long)]
+    teardown_gate: bool,
     /// Fanout only: delay the first healthy reader by this much per window.
     #[arg(long, default_value_t = 0)]
     reader_delay_ms: u64,
@@ -675,6 +678,16 @@ async fn fanout(args: Args) -> Result<()> {
         serde_json::json!({"event":"traffic_finished", "mode":"fanout", "sent_messages":sent_messages,
         "verified_deliveries":sent_messages * healthy as u64, "elapsed_seconds":elapsed.as_secs_f64()})
     );
+    if args.teardown_gate {
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        let mut acknowledgement = String::new();
+        std::io::stdin().read_line(&mut acknowledgement)?;
+        ensure!(
+            acknowledgement == "continue\n",
+            "expected teardown continuation"
+        );
+    }
     drop(windows);
     let mut stats = Stats::new();
     stats.joins = args.clients as u64;

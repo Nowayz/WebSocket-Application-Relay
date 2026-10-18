@@ -49,7 +49,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     Relay,
     protocol::{self, Disconnect},
-    relay::{ReceiveBatch, Registration},
+    relay::{ReceiveBatch, Registration, RoomFanout},
 };
 use socket::{Signal, Socket, Stream};
 use timers::Timers;
@@ -57,6 +57,7 @@ use timers::Timers;
 const LISTENER: Token = Token(0);
 const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
+const FANOUT_QUANTUM: usize = 1024;
 const ACCEPT_QUANTUM: usize = 16;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
@@ -284,10 +285,13 @@ impl Worker {
         };
         if let Some(connection) = self.connections.get_mut(slot)
             && connection.token == token
-            && !connection.scheduled
         {
-            connection.scheduled = true;
-            self.ready.push_back(token);
+            // Input/timer readiness upgrades an already pending output wake.
+            connection.output_only = false;
+            if !connection.scheduled {
+                connection.scheduled = true;
+                self.ready.push_back(token);
+            }
         }
     }
 
@@ -533,7 +537,10 @@ impl Worker {
                         let deadline = self.connections[slot].deadline(&self.relay);
                         self.timers.set(slot, deadline);
                         if keep == Drive::Again {
-                            self.schedule(token);
+                            // Retain the reason: a write-quantum continuation
+                            // still needs no speculative input read.
+                            self.connections[slot].scheduled = true;
+                            self.ready.push_back(token);
                         }
                     }
                 }
@@ -551,6 +558,7 @@ impl Worker {
                         && !connection.scheduled
                     {
                         connection.scheduled = true;
+                        connection.output_only = true;
                         self.ready.push_back(token);
                     }
                 }
@@ -642,6 +650,8 @@ enum Stage {
 struct Connection {
     token: Token,
     scheduled: bool,
+    output_only: bool,
+    room_fanout: Option<Box<RoomFanout>>,
     socket: Arc<Socket>,
     stage: Stage,
     handshake_lease: Option<ReadLease>,
@@ -693,6 +703,8 @@ impl Connection {
         Self {
             token,
             scheduled: false,
+            output_only: false,
+            room_fanout: None,
             socket,
             stage: Stage::Upgrade(Some(handshake)),
             handshake_lease: lease,
@@ -714,6 +726,9 @@ impl Connection {
             return Some(self.phase_deadline);
         }
         let mut deadline = self.socket.deadline();
+        if let Some(next) = self.room_fanout.as_ref().and_then(|f| f.deadline()) {
+            deadline = Some(deadline.map_or(next, |d| d.min(next)));
+        }
         for next in [
             self.pong_deadline,
             self.reclaim_deadline,
@@ -745,6 +760,28 @@ impl Connection {
         incoming: &mut ReceiveBatch<'_>,
     ) -> Drive {
         let now = Instant::now();
+        if self.output_only
+            && !self.room_fanout.as_ref().is_some_and(|f| f.active())
+            && !stopping
+            && self.registration.is_some()
+            && self.closing.is_none()
+            && self.pong_deadline.is_none_or(|d| d > now)
+            && self.reclaim_deadline.is_none_or(|d| d > now)
+            && (relay.config.ping_interval_secs == 0 || self.next_ping > now)
+            && let Some(result) = self
+                .socket
+                .flush_output_only(now, Duration::from_secs(relay.config.idle_timeout_secs))
+        {
+            return match result {
+                Ok(true) => Drive::Again,
+                Ok(false) => Drive::Wait,
+                Err(_) => {
+                    relay.metrics.write_errors.fetch_add(1, Relaxed);
+                    Drive::Drop
+                }
+            };
+        }
+        self.output_only = false;
         if let Stage::Upgrade(handshake) = &mut self.stage {
             if stopping {
                 return Drive::Drop;
@@ -806,6 +843,9 @@ impl Connection {
     ) -> Drive {
         if self.closing.is_some() {
             return Drive::Wait;
+        }
+        if let Some(fanout) = &mut self.room_fanout {
+            fanout.clear();
         }
         if reason.code == 1002 && self.registration.is_some() {
             relay.metrics.protocol_errors.fetch_add(1, Relaxed);
@@ -907,7 +947,13 @@ impl Connection {
                 }
                 return self.start_close(reason, relay, false, now);
             }
-            if self.socket.deadline().is_some_and(|d| d <= now) {
+            if self.socket.deadline().is_some_and(|d| d <= now)
+                || self
+                    .room_fanout
+                    .as_ref()
+                    .and_then(|f| f.deadline())
+                    .is_some_and(|d| d <= now)
+            {
                 relay.metrics.write_timeouts.fetch_add(1, Relaxed);
                 return Drive::Drop;
             }
@@ -1030,6 +1076,12 @@ impl Connection {
                     Some(now + Duration::from_secs(relay.config.read_buffer_idle_secs));
             }
         }
+        if let Some(fanout) = self.room_fanout.as_mut().filter(|f| f.active()) {
+            return match fanout.resume(FANOUT_QUANTUM) {
+                Ok(()) => Drive::Again,
+                Err(reason) => self.start_close(reason, relay, false, now),
+            };
+        }
         let mut route_budget = READ_QUANTUM;
         for _ in 0..READ_QUANTUM {
             let Stage::WebSocket(ws) = &mut self.stage else {
@@ -1062,13 +1114,18 @@ impl Connection {
                                 let large = relay.config.read_buffer_idle_secs > 0
                                     && bytes.len() > relay.config.read_buffer_bytes.max(64 * 1024);
                                 let capacity = ws.read_storage_capacity().max(bytes.len());
-                                let work =
-                                    match incoming.receive(&registration.peer, bytes, capacity) {
-                                        Ok(work) => work,
-                                        Err(reason) => {
-                                            return self.start_close(reason, relay, false, now);
-                                        }
-                                    };
+                                let work = match incoming.receive_bounded(
+                                    &registration.peer,
+                                    bytes,
+                                    capacity,
+                                    &mut self.room_fanout,
+                                    FANOUT_QUANTUM,
+                                ) {
+                                    Ok(work) => work,
+                                    Err(reason) => {
+                                        return self.start_close(reason, relay, false, now);
+                                    }
+                                };
                                 route_budget = route_budget.saturating_sub(work);
                                 if large {
                                     self.reclaim_deadline = Some(
@@ -1203,6 +1260,7 @@ impl Drop for Connection {
         // This may be the last strong peer/socket reference. Disable output
         // before retiring membership and releasing queued byte reservations.
         self.socket.end_output();
+        self.room_fanout.take();
         self.registration.take();
     }
 }

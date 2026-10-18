@@ -156,6 +156,7 @@ mod tests {
                 url,
                 if bad_departure { 2 } else { 0 },
                 if bad_departure { 1 } else { WINDOW },
+                0,
             ),
         )
         .await
@@ -233,6 +234,7 @@ impl Fanout {
         url: String,
         churn_every: usize,
         window: usize,
+        windows_per_second: u32,
     ) -> Result<(Self, Counts, Histogram, Histogram)> {
         let Self {
             mut sender,
@@ -290,7 +292,19 @@ impl Fanout {
         let mut iteration = 0usize;
         let mut membership = Histogram::new();
         let mut seen = vec![false; readers_len];
+        let mut pacing = (windows_per_second != 0).then(|| {
+            let mut timer =
+                tokio::time::interval(Duration::from_secs_f64(1.0 / f64::from(windows_per_second)));
+            timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            timer
+        });
         while Instant::now() < until {
+            if let Some(timer) = &mut pacing {
+                timer.tick().await;
+                if Instant::now() >= until {
+                    break;
+                }
+            }
             let joined_at = Instant::now();
             let transient = if churn_every > 0 && iteration.is_multiple_of(churn_every) {
                 Some(join(&url, &Bytes::from_static(b"fanout"), wire, &mut counts).await?)
@@ -359,21 +373,39 @@ impl Fanout {
         ))
     }
 
-    pub(super) async fn close(mut self, counts: &mut Counts) -> Result<()> {
-        // One departure at a time, with every surviving peer reading its exact
-        // notification before the next close. Keep the normal queue limits.
-        while let Some((mut socket, id)) = self.readers.pop() {
-            close(&mut socket, counts).await?;
-            let expected = departure(self.wire, id);
+    pub(super) async fn close(mut self, counts: &mut Counts, window: usize) -> Result<()> {
+        // Close a bounded batch, draining earlier departures before closing its
+        // next member. Survivors then verify the exact same ordered sequence.
+        // This amortizes receive syscalls for large audiences without discarding
+        // a notification, bypassing quotas, or changing measured traffic.
+        while !self.readers.is_empty() {
+            let mut expected = Vec::with_capacity(window);
+            for _ in 0..window.min(self.readers.len()) {
+                let (mut socket, id) = self.readers.pop().expect("nonempty reader batch");
+                for departure in &expected {
+                    ensure!(
+                        data(&mut socket).await? == *departure,
+                        "fanout departure changed"
+                    );
+                    counts.received(departure);
+                }
+                close(&mut socket, counts).await?;
+                expected.push(departure(self.wire, id));
+            }
             for (peer, _) in &mut self.readers {
-                let actual = data(peer).await?;
-                ensure!(actual == expected, "fanout departure changed");
-                counts.received(&actual);
+                for departure in &expected {
+                    ensure!(data(peer).await? == *departure, "fanout departure changed");
+                    counts.received(departure);
+                }
             }
             if !self.global_observers {
-                let actual = data(&mut self.sender).await?;
-                ensure!(actual == expected, "fanout sender departure changed");
-                counts.received(&actual);
+                for departure in &expected {
+                    ensure!(
+                        data(&mut self.sender).await? == *departure,
+                        "fanout sender departure changed"
+                    );
+                    counts.received(departure);
+                }
             }
         }
         close(&mut self.sender, counts).await
