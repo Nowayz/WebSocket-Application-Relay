@@ -101,3 +101,22 @@ accepted executable/library hashes and the comparisons above remain unchanged.
 Future `cpp/compare.py` traces include a qualified C++ retained-copy proxy, so
 copy-path/connection-placement variation is visible instead of silently treated
 as an implementation effect.
+
+
+## Follow-up: single-allocation queued body rejected
+
+The [single-allocation study](../docs/benchmarks/2026-10-17-cpp-single-allocation/README.md)
+replaced queued `shared_ptr<const string>` bodies with shared immutable arrays
+while keeping the delivery record at 40 bytes. An escaped optimized allocation
+diagnostic confirms two allocations become one for a 1 KiB encoded message.
+The initial four-worker private cohort improved median throughput by 10.3% and
+CPU/delivery by 6.4%, but connection placement changes the retained-copy share.
+
+Eight fresh 100,000-user trials verified 96 million timed probes. Aggregate
+measured CPU fell from 201.66 to 198.59 seconds (-1.52%); one pair reversed both
+CPU and per-user latency results. Competing-traffic guards also showed worse
+latency buckets in the candidate. Given the responsiveness priority and mixed
+end-to-end evidence, the prototype was rejected. The accepted executable and
+static library above are restored exactly. All 36 smaller-population trials,
+eight population trials, full protocol corpus, both source trees and per-user
+plots are archived; the rejected change did not receive a new sanitizer campaign.

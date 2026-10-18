@@ -1,0 +1,932 @@
+{
+  "scope": "Single-allocation C++ control versus candidate. Same checked native CBOR client, plaintext loopback, no bridge. Fresh sequential processes, rotated order. Variable payload bytes recorded in client_command, window16. Traffic64clients/32pairs, fanout64clients/63readers, churn16workers. Server workers pinned individually inside allowed0..N-1, client allowed8..15. CPU includes setup, checked workload and client cleanup; not isolated forwarding CPU. C++ lacks some Rust operational protections: this is a workload comparison, not feature-equivalent production certification.",
+  "server_sha256": {
+    "control": "b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1",
+    "candidate": "a85e8c666ebfc58c4e8a71080599857e99c82df5540ba537a3d6423d5a668166"
+  },
+  "client_sha256": "8aa8270a97d98fde8f4878bb8798161c92539f7111fae86e50a54adaf0c8b1aa",
+  "runs": [
+    {
+      "kind": "control",
+      "workers": 4,
+      "mode": "traffic",
+      "payload_bytes": 8,
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:42029",
+        "--admin-bind",
+        "127.0.0.1:40131",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859471,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859472,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859473,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859474,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:42029",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1675703.9741891946,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000362925,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 4.581629,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "traffic",
+        "payload_bytes": 8,
+        "setup_seconds": 0.018104071,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 10054832,
+        "window": 16
+      },
+      "server_cpu_seconds": 14.5,
+      "rss_kib": 5228,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 10054832,
+        "war_deliveries_total": 10054910,
+        "war_value_bytes_total": 90493488,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 90493488,
+        "war_copied_bytes_total": 118242092
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 11.759728258015649,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 4,
+      "mode": "traffic",
+      "payload_bytes": 8,
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:40907",
+        "--admin-bind",
+        "127.0.0.1:50529",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859484,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859485,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859486,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859487,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:40907",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1587088.1661557518,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000372382,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 4.367025,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "traffic",
+        "payload_bytes": 8,
+        "setup_seconds": 0.027739877,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 9523120,
+        "window": 16
+      },
+      "server_cpu_seconds": 14.56,
+      "rss_kib": 5240,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 9523120,
+        "war_deliveries_total": 9523197,
+        "war_value_bytes_total": 85708080,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 85708080,
+        "war_copied_bytes_total": 140291003
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 14.731621884424433,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 4,
+      "mode": "traffic",
+      "payload_bytes": 8,
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:46237",
+        "--admin-bind",
+        "127.0.0.1:48205",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859495,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859496,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859497,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859498,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:46237",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1446098.4669010043,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000487656,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 4.88992,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 8,
+        "setup_seconds": 0.028981304,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 8677296,
+        "window": 16
+      },
+      "server_cpu_seconds": 14.13,
+      "rss_kib": 5228,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 8677296,
+        "war_deliveries_total": 8677383,
+        "war_value_bytes_total": 78095664,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 78095664,
+        "war_copied_bytes_total": 124122459
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 14.30427854483701,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "control",
+      "workers": 4,
+      "mode": "traffic",
+      "payload_bytes": 8,
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:38285",
+        "--admin-bind",
+        "127.0.0.1:60727",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859516,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859517,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859518,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859519,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:38285",
+        "--mode",
+        "traffic",
+        "--clients",
+        "64",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16"
+      ],
+      "result": {
+        "clients": 64,
+        "deliveries_per_second": 1311508.402993606,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000528843,
+        "event": "result",
+        "joins": 64,
+        "latency_max_ms": 17.352341,
+        "latency_p50_upper_ms": 0.524288,
+        "latency_p99_upper_ms": 2.097152,
+        "mode": "traffic",
+        "payload_bytes": 8,
+        "setup_seconds": 0.02950054,
+        "slow_observation": null,
+        "source_addresses": 0,
+        "validation": "64 distinct cyclic templates, window <=32, every delivered frame checked before next window; fixed 64-bucket latency histogram",
+        "verified_deliveries": 7869744,
+        "window": 16
+      },
+      "server_cpu_seconds": 12.9,
+      "rss_kib": 5236,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 7869744,
+        "war_deliveries_total": 7869820,
+        "war_value_bytes_total": 70827696,
+        "war_disconnected_total": 64,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 70827696,
+        "war_copied_bytes_total": 96752959
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 12.294295595892319,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "control",
+      "workers": 4,
+      "mode": "churn",
+      "payload_bytes": 8,
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:39381",
+        "--admin-bind",
+        "127.0.0.1:40669",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859527,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859528,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859529,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859530,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:39381",
+        "--mode",
+        "churn",
+        "--clients",
+        "16",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16",
+        "--source-addresses",
+        "64"
+      ],
+      "result": {
+        "clients": 16,
+        "deliveries_per_second": 97136.24853335625,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000118481,
+        "event": "result",
+        "joins": 582829,
+        "latency_max_ms": 3.159606,
+        "latency_p50_upper_ms": 0.262144,
+        "latency_p99_upper_ms": 0.524288,
+        "mode": "churn",
+        "payload_bytes": 16,
+        "setup_seconds": 0.0,
+        "slow_observation": null,
+        "source_addresses": 64,
+        "validation": "distinct worker ID plus monotonic counter; exact self-message, Close(None) acknowledgement and EOF; latency covers connect through TCP retirement; fixed histogram",
+        "verified_deliveries": 582829,
+        "window": 1
+      },
+      "server_cpu_seconds": 10.77,
+      "rss_kib": 5184,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 582829,
+        "war_deliveries_total": 1165658,
+        "war_value_bytes_total": 9908093,
+        "war_disconnected_total": 582829,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9908093,
+        "war_copied_bytes_total": 0
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 0.0,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 4,
+      "mode": "churn",
+      "payload_bytes": 8,
+      "repeat": 1,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:53395",
+        "--admin-bind",
+        "127.0.0.1:48695",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859548,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859549,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859550,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859551,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:53395",
+        "--mode",
+        "churn",
+        "--clients",
+        "16",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16",
+        "--source-addresses",
+        "64"
+      ],
+      "result": {
+        "clients": 16,
+        "deliveries_per_second": 96804.39694061053,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000130349,
+        "event": "result",
+        "joins": 580839,
+        "latency_max_ms": 3.449619,
+        "latency_p50_upper_ms": 0.262144,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "churn",
+        "payload_bytes": 16,
+        "setup_seconds": 0.0,
+        "slow_observation": null,
+        "source_addresses": 64,
+        "validation": "distinct worker ID plus monotonic counter; exact self-message, Close(None) acknowledgement and EOF; latency covers connect through TCP retirement; fixed histogram",
+        "verified_deliveries": 580839,
+        "window": 1
+      },
+      "server_cpu_seconds": 10.77,
+      "rss_kib": 5180,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 580839,
+        "war_deliveries_total": 1161678,
+        "war_value_bytes_total": 9874263,
+        "war_disconnected_total": 580839,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9874263,
+        "war_copied_bytes_total": 0
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 0.0,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "candidate",
+      "workers": 4,
+      "mode": "churn",
+      "payload_bytes": 8,
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-candidate/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:54539",
+        "--admin-bind",
+        "127.0.0.1:33081",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859563,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859564,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859565,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859566,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:54539",
+        "--mode",
+        "churn",
+        "--clients",
+        "16",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16",
+        "--source-addresses",
+        "64"
+      ],
+      "result": {
+        "clients": 16,
+        "deliveries_per_second": 95103.10605334397,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000119488,
+        "event": "result",
+        "joins": 570630,
+        "latency_max_ms": 3.76439,
+        "latency_p50_upper_ms": 0.262144,
+        "latency_p99_upper_ms": 1.048576,
+        "mode": "churn",
+        "payload_bytes": 16,
+        "setup_seconds": 0.0,
+        "slow_observation": null,
+        "source_addresses": 64,
+        "validation": "distinct worker ID plus monotonic counter; exact self-message, Close(None) acknowledgement and EOF; latency covers connect through TCP retirement; fixed histogram",
+        "verified_deliveries": 570630,
+        "window": 1
+      },
+      "server_cpu_seconds": 10.74,
+      "rss_kib": 5160,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 570630,
+        "war_deliveries_total": 1141260,
+        "war_value_bytes_total": 9700710,
+        "war_disconnected_total": 570630,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9700710,
+        "war_copied_bytes_total": 0
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 0.0,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    },
+    {
+      "kind": "control",
+      "workers": 4,
+      "mode": "churn",
+      "payload_bytes": 8,
+      "repeat": 2,
+      "server_command": [
+        "taskset",
+        "-c",
+        "0-3",
+        "/home/phil/dev/war_next/artifacts/candidates/cpp-single-allocation-control/war-relay-cpp",
+        "--bind",
+        "127.0.0.1:33607",
+        "--admin-bind",
+        "127.0.0.1:60631",
+        "--workers",
+        "4",
+        "--pin-workers"
+      ],
+      "passed": true,
+      "thread_affinity": [
+        {
+          "tid": 859579,
+          "name": "war-cpp-0",
+          "cpus": [
+            0
+          ]
+        },
+        {
+          "tid": 859580,
+          "name": "war-cpp-1",
+          "cpus": [
+            1
+          ]
+        },
+        {
+          "tid": 859581,
+          "name": "war-cpp-2",
+          "cpus": [
+            2
+          ]
+        },
+        {
+          "tid": 859582,
+          "name": "war-cpp-3",
+          "cpus": [
+            3
+          ]
+        }
+      ],
+      "client_command": [
+        "taskset",
+        "-c",
+        "8-15",
+        "/home/phil/dev/war_next/artifacts/baselines/capacity-final/stress",
+        "--url",
+        "ws://127.0.0.1:33607",
+        "--mode",
+        "churn",
+        "--clients",
+        "16",
+        "--duration-secs",
+        "6",
+        "--payload-bytes",
+        "8",
+        "--window",
+        "16",
+        "--source-addresses",
+        "64"
+      ],
+      "result": {
+        "clients": 16,
+        "deliveries_per_second": 97522.66322565325,
+        "disconnect_notifications": 0,
+        "elapsed_seconds": 6.000113006,
+        "event": "result",
+        "joins": 585147,
+        "latency_max_ms": 3.303913,
+        "latency_p50_upper_ms": 0.262144,
+        "latency_p99_upper_ms": 0.524288,
+        "mode": "churn",
+        "payload_bytes": 16,
+        "setup_seconds": 0.0,
+        "slow_observation": null,
+        "source_addresses": 64,
+        "validation": "distinct worker ID plus monotonic counter; exact self-message, Close(None) acknowledgement and EOF; latency covers connect through TCP retirement; fixed histogram",
+        "verified_deliveries": 585147,
+        "window": 1
+      },
+      "server_cpu_seconds": 10.84,
+      "rss_kib": 5188,
+      "final_metrics": {
+        "war_connections": 0,
+        "war_users": 0,
+        "war_channels": 1,
+        "war_variable_bytes": 0,
+        "war_queued_bytes": 0,
+        "war_retained_output_bytes": 0,
+        "war_buffered_bytes": 0,
+        "war_sent_messages_total": 585147,
+        "war_deliveries_total": 1170294,
+        "war_value_bytes_total": 9947499,
+        "war_disconnected_total": 585147,
+        "war_protocol_errors_total": 0,
+        "war_slow_consumers_total": 0,
+        "war_rejected_total": 0,
+        "war_borrowed_value_bytes_total": 9947499,
+        "war_copied_bytes_total": 0
+      },
+      "cpp_retained_copy_proxy": {
+        "bytes_per_verified_delivery": 0.0,
+        "estimated_owned_1k_frames_per_delivery": null,
+        "scope": "C++ retained copies only, including any prefix-growth fallback, local queued output and teardown notifications. For this 1KiB private workload an encoded full-width sender envelope is 1037 bytes. This is a diagnostic copy-path proxy, not a census of socket ownership and not comparable to Rust routing-copy counters."
+      },
+      "server_exit_code": 0
+    }
+  ],
+  "passed": true,
+  "runner_sha256": "8a0af23f6dad1116e6554e646a07ec54b891586946eeb4a52ddf10ffeba690bb"
+}

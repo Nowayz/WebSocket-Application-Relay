@@ -1645,3 +1645,25 @@ The continuing improvement goal remains active.
    ingresses; the existing global/private scopes intentionally match WAR.
 6. Design node ownership and cross-node routing only after single-node capacity
    and operational needs are established. No replicas are currently a cluster.
+
+
+### C++ single-allocation ownership trial rejected (2026-10-17)
+
+The queued-body array prototype passed the unchanged 776-case/2,311-exchange
+corpus. Allocation diagnostics confirm one allocation instead of two for a
+1,037-byte body, with the existing 40-byte delivery record retained. Thirty-six
+small-population trials and eight fresh 100,000-user trials all pass their
+correctness/retirement checks. Population trials verify 96 million timed probes.
+
+The private 1 KiB cohort improves, but the population CPU difference is only
+-1.52% in aggregate (201.66 versus 198.59 CPU-seconds), one pair reverses CPU
+and latency, and competing-traffic trials show worse latency buckets. This
+evidence does not justify adopting a new ownership representation for the
+latency-first relay. The accepted C++ source, executable and library are restored
+and their hashes verified; the selected Rust service/readiness is unchanged.
+The rejected candidate was not taken into a new sanitizer campaign. Full
+[evidence and per-user distributions](benchmarks/2026-10-17-cpp-single-allocation/README.md)
+include both source trees, all observations, compressed census CSVs and a
+hash verifier. Cache-line placement of ownership metadata and controlled
+worker-ownership measurement remain follow-up investigations, not diagnosed
+causes or claimed optimizations.

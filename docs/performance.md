@@ -6691,3 +6691,44 @@ private traces report retained-copy bytes per verified operation and a qualified
 1KiB-frame estimate. This diagnostic is not a worker-affinity census or a Rust
 copy metric; its observed variation makes ownership/workload placement a
 necessary consideration in subsequent optimization comparisons.
+
+
+## C++ queued-body single-allocation trial (2026-10-17)
+
+The [complete study](benchmarks/2026-10-17-cpp-single-allocation/README.md)
+tests replacing retained `shared_ptr<const string>` with
+`make_shared_for_overwrite<char[]>`. It keeps one retained-body copy, the
+borrowed local path, full `size_t` lengths and a 40-byte recipient record.
+The escaped optimized diagnostic confirms two allocations become one at a
+1,037-byte body, while requested bytes change only from 1,086 to 1,084. Bodies
+inside string small-storage capacity already used one allocation.
+
+The initial 1 KiB private cohort shows +10.3% median throughput and -6.4% median
+CPU/delivery. Single-worker CPU is unchanged; small-message/churn guards are
+slightly worse and large-message CPU is lower. Those private trials remain
+confounded by process-to-process changes in the retained-copy path. Eight
+fresh 100,000-user trials, 400k probes/s for 30 seconds each, verify 96 million
+timed probes with exact per-user census data and complete descriptor/resource
+retirement. Aggregate measured CPU is 201.66 versus 198.59 seconds (-1.52%),
+but the final pair reverses both CPU and latency. In that pair, p99 across
+users' p99 rises from 2.219 to 2.599 ms, and the worst packet from 6.628 to
+19.405 ms. Three other pairs favor the candidate on user-level tails; all
+observations are retained.
+
+The competing observer/private/churn/inspection guards do not supply enough
+responsiveness evidence either: candidate fanout p99 moves from the control's
+8.389 ms bucket to 16.777 ms in one trial, while inspection p99 is one bucket
+worse in the other. The single private pair is placement-sensitive, so these
+results are reasons to withhold selection, not proof of one specific cache or
+allocator cause. The candidate is rejected, and accepted C++ executable
+`b9dc20b92e7c09f2188d1780da8d691730112f442e60447de62ee6b98ae86da1` and static
+library `237a499d0538c7ac3c46ce3af6c5fe3bc8c3e8c883cbdf96e591cbb99ecbb7d6`
+are restored exactly, with build-source hashes checked. No Rust service is
+replaced. A fresh sanitizer campaign was not run for the rejected prototype;
+accepted-build sanitizer evidence remains separate.
+
+The local libstdc++16 array shared-ownership implementation places control
+metadata after payload storage. Cache-line sharing is a plausible investigation
+target, not a measured explanation of these runs. Future work should control
+worker placement and measure ownership/cache traffic before introducing another
+allocation or layout variant.

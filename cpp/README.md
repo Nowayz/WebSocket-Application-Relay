@@ -151,3 +151,10 @@ Detailed measured results and their limits are in [BENCHMARKS.md](BENCHMARKS.md)
 The comparison JSON also records a C++ retained-copy proxy after traffic. It
 helps expose workload/connection-placement differences without instrumenting the
 routing hot path; its scope and exclusions are carried in each JSON record.
+
+
+A follow-up [queued-body allocation experiment](../docs/benchmarks/2026-10-17-cpp-single-allocation/README.md)
+halved allocation count for retained 1 KiB bodies, but delivered mixed CPU and
+latency results across 44 benchmark trials, including 96 million timed probes
+at 100,000 users. It was rejected and the accepted runtime restored. The archive
+keeps the source, allocation diagnostic, every observation and per-user plots.
