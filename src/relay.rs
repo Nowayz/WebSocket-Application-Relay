@@ -251,6 +251,12 @@ impl Budget {
 pub(crate) trait PeerOutput: Send + Sync {
     fn send(&self, packet: Submission<'_>) -> bool;
     fn close(&self, reason: Disconnect);
+
+    /// Multicast may defer to recipient owners for parallel, batched output.
+    /// Simple/test transports retain their ordinary FIFO submission contract.
+    fn send_fanout(&self, packet: Submission<'_>) -> bool {
+        self.send(packet)
+    }
 }
 
 #[cfg(test)]
@@ -286,6 +292,17 @@ impl Peer {
     }
 
     fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {
+        self.enqueue::<false>(frame)
+    }
+
+    fn enqueue_fanout(&self, frame: &Frame) -> Result<(), Disconnect> {
+        self.enqueue::<true>(frame)
+    }
+
+    // Select the output method at compile time. Ordinary private submissions
+    // carry no multicast flag, extra branch or different frame representation.
+    #[inline(always)]
+    fn enqueue<const FANOUT: bool>(&self, frame: &Frame) -> Result<(), Disconnect> {
         if self.closing.load(Relaxed) {
             return Ok(());
         }
@@ -320,7 +337,12 @@ impl Peer {
             frame,
             budget: Some(&self.budget),
         };
-        if !self.output.send(packet) {
+        let accepted = if FANOUT {
+            self.output.send_fanout(packet)
+        } else {
+            self.output.send(packet)
+        };
+        if !accepted {
             self.overloaded();
         }
         Ok(())
@@ -712,7 +734,7 @@ impl Relay {
             drop(state);
             for recipient in recipients.iter() {
                 if recipient.key != peer.key {
-                    recipient.enqueue_frame(&frame)?;
+                    recipient.enqueue_fanout(&frame)?;
                 }
             }
             return Ok(work);
@@ -738,26 +760,26 @@ impl Relay {
             if peer.channel.as_ref() == GLOBAL_CHANNEL {
                 for recipient in state.users.values() {
                     if recipient.key != peer.key {
-                        recipient.enqueue_frame(&frame)?;
+                        recipient.enqueue_fanout(&frame)?;
                     }
                 }
             } else {
                 if let Some(channel) = state.channels.get(&peer.channel) {
                     for recipient in channel.members.values() {
                         if recipient.key != peer.key {
-                            recipient.enqueue_frame(&frame)?;
+                            recipient.enqueue_fanout(&frame)?;
                         }
                     }
                 }
                 for recipient in state.listeners(CHANNEL_MESSAGE) {
-                    recipient.enqueue_frame(&frame)?;
+                    recipient.enqueue_fanout(&frame)?;
                 }
             }
         } else if let Some(recipient) = private_recipient {
-            recipient.enqueue_frame(&frame)?;
+            recipient.enqueue_fanout(&frame)?;
             for listener in state.listeners(PRIVATE_MESSAGE) {
                 if listener.key != recipient.key {
-                    listener.enqueue_frame(&frame)?;
+                    listener.enqueue_fanout(&frame)?;
                 }
             }
         }
