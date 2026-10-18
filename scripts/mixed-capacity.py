@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gated population fairness with checked room multicast, churn and CBOR inspection.
+"""Gated population fairness with checked room multicast, churn and inspection.
 
 Two clients use disjoint CPU sets and disjoint rooms. Capacity is held connected
 until sidecar inspection and cleanup finish, preserving its exact expected census.
@@ -64,6 +64,7 @@ def main():
     parser.add_argument('--scope', choices=['room', 'observers'], default='observers')
     parser.add_argument('--window', type=int, default=4)
     parser.add_argument('--inspectors', type=int, default=2)
+    parser.add_argument('--http-page-size', type=int, help='Opt-in native HTTP first-page inspection, limit 1..=1000; full traversal checked outside timing')
     parser.add_argument('--pairs', type=int, default=1)
     parser.add_argument('--churn-cycles-per-second', type=int, default=0)
     parser.add_argument('--fanout-windows-per-second', type=int, default=0)
@@ -75,6 +76,9 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     assert args.users % 16 == 0 and args.seconds >= 2
+    if args.http_page_size is not None and not (
+            args.kind == 'rust' and 1 <= args.http_page_size <= 1000 and not args.fanout_churn_every):
+        parser.error('--http-page-size requires Rust, limit 1..=1000, and no fanout membership churn')
     prefix = args.output.with_suffix('')
     assert not args.output.exists() and not Path(str(prefix) + '.csv').exists()
     client_path = args.capacity_client.resolve()
@@ -82,7 +86,9 @@ def main():
     while admin == port:
         admin = free_port()
     env = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
-    env.update(WAR_ADMIN_TOKEN='mixed-capacity-fixture', WAR_AUTH_PASSWORD='inspection-benchmark')
+    # The HTTP inspection client uses this fixed token only for disposable fixtures.
+    admin_token = 'inspection-benchmark' if args.http_page_size is not None else 'mixed-capacity-fixture'
+    env.update(WAR_ADMIN_TOKEN=admin_token, WAR_AUTH_PASSWORD='inspection-benchmark')
     cmd = ['taskset', '-c', '0-7', str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
            '--admin-bind', f'127.0.0.1:{admin}', '--workers', '8', '--pin-workers',
            '--max-connections', str(args.users + args.readers + 1000),
@@ -105,6 +111,10 @@ def main():
           '--churn-workers', '8', '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
           '--fanout-readers', str(args.readers), '--fanout-window', str(args.window), '--fanout-global-observers',
           '--external-capacity-rooms', str(args.users // 16), '--fanout-close-window', '32', '--fanout-windows-per-second', str(args.fanout_windows_per_second)]
+    if args.http_page_size is not None:
+        sc.remove('--protocol-only')
+        sc[sc.index('--mode') + 1] = 'http'
+        sc += ['--admin', f'127.0.0.1:{admin}', '--page-size', str(args.http_page_size)]
     if args.fanout_churn_every:
         assert args.scope == 'room' and args.inspectors == 0
         sc[sc.index('--mode') + 1] = 'none'
@@ -129,7 +139,7 @@ def main():
         processes.append(proc)
         return proc
     def metrics():
-        request = urllib.request.Request(f'http://127.0.0.1:{admin}/metrics', headers={'Authorization': 'Bearer mixed-capacity-fixture'})
+        request = urllib.request.Request(f'http://127.0.0.1:{admin}/metrics', headers={'Authorization': f'Bearer {admin_token}'})
         with urllib.request.urlopen(request, timeout=5) as response:
             return {k: int(v) for k, v in (line.split() for line in response.read().decode().splitlines() if line.startswith('war_'))}
     def resume(proc):
@@ -176,7 +186,8 @@ def main():
                 for pinned in runtime.pin_child_workers(sidecar.pid, 8, False))
         verify_client_affinity()
         record['ready_metrics'] = metrics()
-        assert record['ready_metrics']['war_connections'] == args.users + args.readers + 2 + args.inspectors + 2 * args.pairs
+        inspection_sessions = 0 if args.http_page_size is not None else 1 + args.inspectors
+        assert record['ready_metrics']['war_connections'] == args.users + args.readers + 1 + inspection_sessions + 2 * args.pairs
         record['affinity'] = [{'name': (task / 'comm').read_text().strip(), 'cpus': sorted(os.sched_getaffinity(int(task.name)))}
                               for task in Path(f'/proc/{server.pid}/task').iterdir()
                               if (task / 'comm').read_text().startswith(('war-io-', 'war-cpp-'))]
@@ -212,6 +223,8 @@ def main():
         fanout = record['sidecar_events'][-1]['details']['fanout']
         record['fanout_windows'] = {'completed': fanout['verified'] // (args.readers * args.window),
                                     'offered': args.seconds * args.fanout_windows_per_second if args.fanout_windows_per_second else None}
+        offered = record['fanout_windows']['offered']
+        record['fanout_offered_load_met'] = None if offered is None else record['fanout_windows']['completed'] == offered
         resume(sidecar)
         assert event(sidecar, 'sidecar_events')['event'] == 'done'; resume(sidecar)
         assert sidecar.wait(timeout=10) == 0
@@ -329,7 +342,7 @@ def main():
         for handle in files:
             handle.close()
         args.output.write_text(json.dumps(record, indent=2) + '\n')
-    print(json.dumps({'passed': record['passed'], 'generator_exceeded_one_period': record.get('generator_lag', {}).get('exceeded_one_period'), 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
+    print(json.dumps({'passed': record['passed'], 'fanout_windows': record.get('fanout_windows'), 'fanout_offered_load_met': record.get('fanout_offered_load_met'), 'generator_exceeded_one_period': record.get('generator_lag', {}).get('exceeded_one_period'), 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
     if not record['passed']:
         raise SystemExit(1)
 
