@@ -1,0 +1,66 @@
+ Percent |	Source code & Disassembly of war-relay-cpp for cycles:u (365 samples, percent: local period)
+------------------------------------------------------------------------------------------------------------
+         :
+         :
+         :
+         : 3     Disassembly of section .text:
+         :
+         : 5     00000000000281c0 <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)>:
+    0.00 :   281c0:  push   %r15
+    0.72 :   281c2:  push   %r14
+    0.00 :   281c4:  push   %r12
+    0.00 :   281c6:  push   %rbx
+    0.00 :   281c7:  push   %rax
+    0.00 :   281c8:  mov    (%rsi),%rax
+    0.00 :   281cb:  mov    %rsi,%rbx
+    0.00 :   281ce:  mov    %rdi,%r14
+    0.00 :   281d1:  cmpq   $0x0,0x8(%rax)
+    0.00 :   281d6:  je     2825c <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)+0x9c>
+    0.00 :   281dc:  mov    0x10(%r14),%rdi
+    0.00 :   281e0:  call   e720 <us_loop_ext>
+    0.00 :   281e5:  mov    (%rbx),%rcx
+    0.00 :   281e8:  mov    %rax,%r15
+    0.00 :   281eb:  xor    %r12d,%r12d
+    0.00 :   281ee:  xor    %edi,%edi
+    0.00 :   281f0:  mov    0x8(%rcx),%rsi
+    0.00 :   281f4:  call   ecb0 <us_socket_ext>
+    0.00 :   281f9:  mov    0x8(%rax),%eax
+    0.00 :   281fc:  mov    (%rbx),%rcx
+    0.00 :   281ff:  mov    0x100(%r15),%rdx
+    0.00 :   28206:  cmp    0x8(%rcx),%rdx
+    0.00 :   2820a:  jne    28213 <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)+0x53>
+    0.00 :   2820c:  mov    0xf8(%r15),%r12d
+    0.00 :   28213:  add    %eax,%r12d
+    0.00 :   28216:  mov    0x40(%rcx),%rax
+    0.00 :   2821a:  mov    %r12,%rcx
+    0.00 :   2821d:  sub    %rax,%rcx
+    0.00 :   28220:  jbe    28263 <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)+0xa3>
+    0.00 :   28222:  mov    (%r14),%rax
+    0.00 :   28225:  lock add %rcx,0x1d8(%rax)
+    0.00 :   2822d:  mov    (%r14),%rax
+    0.00 :   28230:  lock add %rcx,0x1e0(%rax)
+    0.00 :   28238:  mov    (%r14),%rax
+    0.00 :   2823b:  mov    0x1e0(%rax),%rcx
+    0.00 :   28242:  cmp    0x40(%rax),%rcx
+    0.00 :   28246:  jbe    2827c <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)+0xbc>
+    0.00 :   28248:  mov    $0x3f5,%edx
+    0.00 :   2824d:  mov    %r14,%rdi
+    0.00 :   28250:  mov    %rbx,%rsi
+    0.00 :   28253:  xor    %ecx,%ecx
+    0.00 :   28255:  call   27160 <war::Worker::request_close(std::shared_ptr<war::Peer> const&, unsigned short, war::CloseReason)>
+    0.00 :   2825a:  jmp    2827c <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)+0xbc>
+    0.00 :   2825c:  mov    0x40(%rax),%rax
+    0.00 :   28260:  xor    %r12d,%r12d
+    0.00 :   28263:  mov    (%r14),%rcx
+    0.00 :   28266:  sub    %r12,%rax
+    0.00 :   28269:  lock sub %rax,0x1d8(%rcx)
+   49.53 :   28271:  mov    (%r14),%rcx
+    0.00 :   28274:  lock sub %rax,0x1e0(%rcx)
+   49.75 :   2827c:  mov    (%rbx),%rax
+    0.00 :   2827f:  mov    %r12,0x40(%rax)
+    0.00 :   28283:  add    $0x8,%rsp
+    0.00 :   28287:  pop    %rbx
+    0.00 :   28288:  pop    %r12
+    0.00 :   2828a:  pop    %r14
+    0.00 :   2828c:  pop    %r15
+    0.00 :   2828e:  ret

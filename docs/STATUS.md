@@ -1687,3 +1687,26 @@ is changed. The new client passes strict release Clippy. Both successful smoke
 topologies and all ordinary cases retire exact descriptor/resource baselines.
 [Sources, every trial, provenance, plot and verifier](benchmarks/2026-10-17-cpp-placement/README.md)
 are archived with an explicit dependency on the prior ownership source archive.
+
+
+### Compact queued-body handle trial rejected (2026-10-17)
+
+The 16-byte retained handle refinement passes 776 protocol cases / 2,311
+exchanges and 24 controlled eight-second private trials, verifying 295,498,880
+deliveries. The native layout diagnostic confirms 16 bytes versus the earlier
+24-byte wrapper, with the same 40-byte queued delivery. Local CPU cost is
+essentially unchanged (accepted/prior array/compact: 1.485/1.485/1.483 us per
+delivery); remote cost is 1.800/1.632/1.646. The refinement does not improve
+the already-unselected array prototype and is rejected. Accepted source,
+executable and library are restored and verified. Existing Rust edits and the
+selected ready manual service remain unchanged. No new sanitizer or population
+campaign was run for this rejected refinement.
+
+A separate successful accepted-build mixed profile records about 3,000
+cycles:u samples with zero lost samples. Write/reconciliation account for about
+34% of those event samples, concentrated immediately after atomic output-budget
+and buffered-byte updates. This motivates a contention/layout investigation;
+it does not measure off-CPU latency or prove false sharing. The initial missing
+auth-fixture setup failure is preserved and excluded. [The archive](benchmarks/2026-10-17-cpp-array-handle/README.md)
+contains complete candidate sources, every observation, profile reports and
+annotations, exact build IDs and a verifier for the source-dependency chain.

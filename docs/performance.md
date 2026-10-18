@@ -6764,3 +6764,35 @@ sequence, post-timing active pair and all 256 normal Close/EOF exchanges, and
 all server resource/descriptor gauges return to baseline. Release Clippy passes.
 Future ownership changes can now be evaluated against equivalent local and
 remote work rather than a changing copy-path fraction.
+
+
+## Compact retained-body handle follow-up (2026-10-17)
+
+The [controlled three-arm trial](benchmarks/2026-10-17-cpp-array-handle/README.md)
+replaces the earlier 24-byte transient array wrapper with a 16-byte shared
+pointer, storing full size_t lengths only in the existing 40-byte delivery
+record. Twenty-four fresh sequential eight-second trials verify 295,498,880
+deliveries, with balanced, externally verified all-local or all-remote pairs.
+Accepted/prior array/compact local medians are 1,610,616/1,609,567/1,620,109
+deliveries/s and 1.485/1.485/1.483 CPU us per delivery. Remote medians are
+1,344,854/1,515,356/1,500,371 deliveries/s and 1.800/1.632/1.646 CPU us per
+delivery. Copy deltas, postchecks, all 256 normal Close/EOF exchanges per case,
+and exact resource/descriptor retirement pass. The native layout/ownership
+diagnostic and the 776-case/2,311-exchange shared corpus pass too.
+
+The refinement does not materially improve the previous array prototype, and
+this cohort does not support attributing the earlier local gap to wrapper
+overhead. It is rejected before further sanitizer/population promotion. The
+accepted C++ source/executable/library are restored exactly and the selected
+Rust service is unchanged.
+
+A separate accepted-build mixed-load profile after ordinary timing records
+cycles:u at 199 Hz. Write, submit, drain and reconciliation account for
+24.75%, 13.04%, 11.18% and 9.63% of recorded event-cycle samples. Instruction
+annotations place many samples immediately after atomic output-accounting
+updates. Sampling skid, unresolved/kernel-looking addresses and absence of
+off-CPU capture limit interpretation; this is not a wall-time or precise
+instruction-cost decomposition. Global output-accounting contention/cache-line
+placement is a next investigation target. Prior no-op accounting guards and
+per-worker-counter experiments remain rejected, and their observations must
+be considered before proposing another accounting change.

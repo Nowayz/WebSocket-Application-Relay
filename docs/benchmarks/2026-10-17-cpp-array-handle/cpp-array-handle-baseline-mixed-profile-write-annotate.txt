@@ -1,0 +1,147 @@
+ Percent |	Source code & Disassembly of war-relay-cpp for cycles:u (950 samples, percent: local period)
+------------------------------------------------------------------------------------------------------------
+         :
+         :
+         :
+         : 3     Disassembly of section .text:
+         :
+         : 5     0000000000027e70 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)>:
+    0.00 :   27e70:  push   %rbp
+    0.00 :   27e71:  push   %r15
+    0.00 :   27e73:  push   %r14
+    0.00 :   27e75:  push   %r13
+    0.00 :   27e77:  push   %r12
+    0.00 :   27e79:  push   %rbx
+    0.00 :   27e7a:  push   %rax
+    0.00 :   27e7b:  mov    (%rsi),%rax
+    0.00 :   27e7e:  cmpq   $0x0,0x8(%rax)
+    0.10 :   27e83:  je     27e8d <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x1d>
+    0.00 :   27e85:  movzbl 0x48(%rax),%eax
+    0.00 :   27e89:  test   %al,%al
+    0.00 :   27e8b:  je     27e9c <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x2c>
+    0.00 :   27e8d:  add    $0x8,%rsp
+    0.00 :   27e91:  pop    %rbx
+    0.00 :   27e92:  pop    %r12
+    0.00 :   27e94:  pop    %r13
+    0.00 :   27e96:  pop    %r14
+    0.00 :   27e98:  pop    %r15
+    0.00 :   27e9a:  pop    %rbp
+    0.00 :   27e9b:  ret
+    0.00 :   27e9c:  mov    %rcx,%r15
+    0.00 :   27e9f:  mov    %rdi,%rbx
+    0.00 :   27ea2:  mov    %rsi,%r14
+    0.00 :   27ea5:  mov    %rdx,%r12
+    0.00 :   27ea8:  call   281c0 <war::Worker::reconcile_buffer(std::shared_ptr<war::Peer> const&)>
+    0.00 :   27ead:  mov    (%rbx),%r8
+    0.00 :   27eb0:  lea    0xa(%r12),%r13
+    0.00 :   27eb5:  mov    %rbx,%rdi
+    0.00 :   27eb8:  mov    %r14,%rsi
+    0.00 :   27ebb:  mov    0x30(%r8),%rax
+    0.00 :   27ebf:  cmp    %rax,%r13
+    0.00 :   27ec2:  ja     27f1f <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xaf>
+    0.00 :   27ec4:  mov    (%rsi),%rdx
+    0.00 :   27ec7:  mov    %r12,%rcx
+    0.00 :   27eca:  sub    %rcx,%rax
+    0.00 :   27ecd:  add    $0xfffffffffffffff6,%rax
+    0.00 :   27ed1:  mov    0x40(%rdx),%r12
+    0.00 :   27ed5:  cmp    %rax,%r12
+    0.00 :   27ed8:  ja     27f1f <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xaf>
+    0.00 :   27eda:  mov    0x40(%r8),%r9
+    0.00 :   27ede:  mov    0x1e0(%r8),%rax
+    0.22 :   27ee5:  mov    %r9,%rdx
+    0.00 :   27ee8:  sub    %rax,%rdx
+    0.00 :   27eeb:  setae  %r10b
+    0.00 :   27eef:  cmp    %rdx,%r13
+    0.00 :   27ef2:  setbe  %dl
+    0.10 :   27ef5:  and    %r10b,%dl
+    0.00 :   27ef8:  cmp    $0x1,%dl
+    0.00 :   27efb:  jne    27f1f <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xaf>
+    0.00 :   27efd:  mov    %r15,%rdx
+    0.00 :   27f00:  lea    (%rax,%r13,1),%r10
+    0.00 :   27f04:  lock cmpxchg %r10,0x1e0(%r8)
+   12.42 :   27f0d:  je     27f41 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xd1>
+    0.00 :   27f0f:  mov    %r9,%r10
+    0.00 :   27f12:  sub    %rax,%r10
+    0.00 :   27f15:  jb     27f1c <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xac>
+    0.00 :   27f17:  cmp    %r10,%r13
+    0.00 :   27f1a:  jbe    27f00 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x90>
+    0.00 :   27f1c:  mov    (%rdi),%r8
+    0.00 :   27f1f:  lock incq 0x218(%r8)
+    0.00 :   27f27:  mov    $0x3f5,%edx
+    0.00 :   27f2c:  xor    %ecx,%ecx
+    0.00 :   27f2e:  add    $0x8,%rsp
+    0.00 :   27f32:  pop    %rbx
+    0.00 :   27f33:  pop    %r12
+    0.00 :   27f35:  pop    %r13
+    0.00 :   27f37:  pop    %r14
+    0.00 :   27f39:  pop    %r15
+    0.00 :   27f3b:  pop    %rbp
+    0.00 :   27f3c:  jmp    27160 <war::Worker::request_close(std::shared_ptr<war::Peer> const&, unsigned short, war::CloseReason)>
+    0.00 :   27f41:  mov    (%rsi),%rax
+    0.00 :   27f44:  mov    %rcx,%rsi
+    0.00 :   27f47:  mov    $0x2,%ecx
+    0.00 :   27f4c:  mov    0x8(%rax),%rdi
+    0.00 :   27f50:  call   21dc0 <uWS::WebSocket<false, true, war::SocketData>::send(std::basic_string_view<char, std::char_traits<char> >, uWS::OpCode, int, bool)>
+    0.00 :   27f55:  mov    (%r14),%rcx
+    0.09 :   27f58:  cmpq   $0x0,0x8(%rcx)
+    0.23 :   27f5d:  je     27fdc <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x16c>
+    0.00 :   27f5f:  mov    0x10(%rbx),%rdi
+    0.00 :   27f63:  mov    %eax,0x4(%rsp)
+    0.00 :   27f67:  call   e720 <us_loop_ext>
+    0.00 :   27f6c:  mov    (%r14),%rcx
+    0.00 :   27f6f:  mov    %rax,%r15
+    0.00 :   27f72:  xor    %ebp,%ebp
+    0.00 :   27f74:  xor    %edi,%edi
+    0.00 :   27f76:  mov    0x8(%rcx),%rsi
+    0.00 :   27f7a:  call   ecb0 <us_socket_ext>
+    0.10 :   27f7f:  mov    0x8(%rax),%eax
+    0.11 :   27f82:  mov    (%r14),%rdx
+    0.00 :   27f85:  mov    0x100(%r15),%rcx
+    0.11 :   27f8c:  mov    %r14,%rsi
+    0.00 :   27f8f:  cmp    0x8(%rdx),%rcx
+    0.00 :   27f93:  jne    27f9c <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x12c>
+    0.00 :   27f95:  mov    0xf8(%r15),%ebp
+    0.00 :   27f9c:  add    %eax,%ebp
+    0.00 :   27f9e:  mov    0x4(%rsp),%eax
+    0.00 :   27fa2:  add    %r12,%r13
+    0.00 :   27fa5:  cmp    %rbp,%r13
+    0.00 :   27fa8:  jae    27fe4 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x174>
+    0.00 :   27faa:  mov    $0x10,%edi
+    0.00 :   27faf:  call   30df0 <__cxa_allocate_exception@plt>
+    0.00 :   27fb4:  mov    %rax,%rbx
+    0.00 :   27fb7:  lea    -0x24a1e(%rip),%rsi        # 35a0 <_IO_stdin_used+0xdc>
+    0.00 :   27fbe:  mov    %rax,%rdi
+    0.00 :   27fc1:  call   12030 <war::ProtocolError::runtime_error(char const*)>
+    0.00 :   27fc6:  mov    0xa893(%rip),%rdx        # 32860 <std::runtime_error::~runtime_error()@GLIBCXX_3.4>
+    0.00 :   27fcd:  lea    0xa4cc(%rip),%rsi        # 324a0 <vtable for __cxxabiv1::__si_class_type_info@CXXABI_1.3>
+    0.00 :   27fd4:  mov    %rbx,%rdi
+    0.00 :   27fd7:  call   30e20 <__cxa_throw@plt>
+    0.00 :   27fdc:  add    %r12,%r13
+    0.00 :   27fdf:  mov    %r14,%rsi
+    0.00 :   27fe2:  xor    %ebp,%ebp
+    0.10 :   27fe4:  mov    (%rbx),%rcx
+    0.12 :   27fe7:  sub    %rbp,%r13
+    0.00 :   27fea:  lock sub %r13,0x1e0(%rcx)
+   41.81 :   27ff2:  mov    %rbp,%rcx
+    0.00 :   27ff5:  sub    %r12,%rcx
+    0.00 :   27ff8:  mov    (%rbx),%rdx
+    0.00 :   27ffb:  jae    2800a <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x19a>
+    0.00 :   27ffd:  sub    %rbp,%r12
+    0.00 :   28000:  lock sub %r12,0x1d8(%rdx)
+    0.00 :   28008:  jmp    28012 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x1a2>
+    0.00 :   2800a:  lock add %rcx,0x1d8(%rdx)
+   36.08 :   28012:  mov    (%rsi),%rcx
+    0.00 :   28015:  mov    %rbp,0x40(%rcx)
+    0.00 :   28019:  mov    (%rbx),%rcx
+    0.00 :   2801c:  cmp    $0x2,%eax
+    0.00 :   2801f:  jne    28031 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x1c1>
+    0.00 :   28021:  lock incq 0x218(%rcx)
+    0.00 :   28029:  mov    %rbx,%rdi
+    0.00 :   2802c:  jmp    27f27 <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0xb7>
+    0.00 :   28031:  lock incq 0x1f0(%rcx)
+    8.40 :   28039:  jmp    27e8d <war::Worker::write(std::shared_ptr<war::Peer> const&, std::basic_string_view<char, std::char_traits<char> >)+0x1d>
+    0.00 :   2803e:  mov    %rbx,%rdi
+    0.00 :   28041:  mov    %rax,%r14
+    0.00 :   28044:  call   30e10 <__cxa_free_exception@plt>
+    0.00 :   28049:  mov    %r14,%rdi
+    0.00 :   2804c:  call   31410 <_Unwind_Resume@plt>

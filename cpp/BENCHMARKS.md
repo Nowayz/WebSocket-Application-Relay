@@ -145,3 +145,27 @@ previous 100,000-user and competing-traffic selection decision. The accepted
 runtime is unchanged. Use `examples/placement.rs` and `cpp/placement-compare.py`
 for subsequent local/remote guards instead of assuming random socket placement
 gives equivalent work.
+
+
+## Compact-handle refinement rejected
+
+A [three-arm controlled follow-up](../docs/benchmarks/2026-10-17-cpp-array-handle/README.md)
+compares accepted C++, the prior array prototype, and an array version with a
+16-byte transient shared-pointer handle instead of the 24-byte wrapper. The
+queued delivery stays 40 bytes and all ownership/quota behavior is preserved.
+Twenty-four eight-second trials verify 295,498,880 deliveries.
+
+| Topology | Accepted CPU us/delivery | Prior array CPU us/delivery | Compact handle CPU us/delivery |
+|---|---:|---:|---:|
+| Every pair local | 1.485 | 1.485 | 1.483 |
+| Every pair remote | 1.800 | 1.632 | 1.646 |
+
+Local cost is essentially unchanged, and the refinement is slightly worse than
+the prior array remotely. The earlier local gap does not establish wrapper
+overhead as its cause. The refinement is rejected; the accepted build is restored.
+The candidate passes the 776-case corpus, but was not promoted to new sanitizer
+or population campaigns. A separate accepted-build mixed profile and instruction
+annotations point toward global output-accounting updates as an investigation
+target. Those user-event samples do not measure off-CPU waits or prove a
+wall-time/latency cause. All sources, failed diagnostic setup, successful capture
+metadata, every ordinary trial and source-dependency hashes are preserved.
