@@ -13,6 +13,26 @@ pub(super) struct Fanout {
     global_observers: bool,
 }
 
+// Optional diagnostics only: one preallocated row per paced window, never per delivery.
+#[derive(Serialize)]
+pub(super) struct WindowTiming {
+    scheduled_ns: u64,
+    wake_ns: u64,
+    sent_ns: u64,
+    acknowledged_ns: u64,
+    completed_ns: u64,
+}
+
+#[derive(Serialize)]
+pub(super) struct ControllerTiming {
+    ready_ns: u64,
+    windows: Vec<WindowTiming>,
+}
+
+fn offset_ns(started: Instant, at: Instant) -> Result<u64> {
+    Ok(at.duration_since(started).as_nanos().try_into()?)
+}
+
 #[derive(Clone)]
 enum Step {
     Messages(usize, Instant, Instant, usize),
@@ -67,27 +87,37 @@ async fn acknowledge(
     acks: &mut mpsc::Receiver<usize>,
     jobs: &mut JoinSet<ReaderResult>,
     seen: &mut [bool],
+    ready: &mut Vec<usize>,
 ) -> Result<()> {
     seen.fill(false);
-    for _ in 0..seen.len() {
-        let index = timeout(Duration::from_secs(5), async {
-            tokio::select! {
-                index = acks.recv() => index.context("fanout readers stopped"),
+    // A single window deadline cannot be extended by trickling acknowledgements.
+    timeout(Duration::from_secs(5), async {
+        let mut remaining = seen.len();
+        while remaining > 0 {
+            ready.clear();
+            let received = tokio::select! {
+                received = acks.recv_many(ready, remaining) => {
+                    ensure!(received > 0, "fanout readers stopped");
+                    received
+                },
                 ended = jobs.join_next() => {
                     if let Some(job) = ended { job??; }
                     anyhow::bail!("fanout reader ended before final window")
                 }
+            };
+            for &index in ready.iter() {
+                ensure!(
+                    index < seen.len() && !seen[index],
+                    "invalid fanout acknowledgement"
+                );
+                seen[index] = true;
             }
-        })
-        .await
-        .context("fanout window timed out")??;
-        ensure!(
-            index < seen.len() && !seen[index],
-            "invalid fanout acknowledgement"
-        );
-        seen[index] = true;
-    }
-    Ok(())
+            remaining -= received;
+        }
+        Ok(())
+    })
+    .await
+    .context("fanout window timed out")?
 }
 
 fn departure(wire: Wire, id: u64) -> Bytes {
@@ -209,7 +239,7 @@ mod tests {
         let error = timeout(
             Duration::from_secs(2),
             group.run(
-                Instant::now() + Duration::from_secs(1),
+                Instant::now()..Instant::now() + Duration::from_secs(1),
                 url,
                 if bad_departure { 2 } else { 0 },
                 if bad_departure { 1 } else { WINDOW },
@@ -288,13 +318,17 @@ impl Fanout {
 
     pub(super) async fn run(
         self,
-        until: Instant,
+        measurement: std::ops::Range<Instant>,
         url: String,
         churn_every: usize,
         window: usize,
         windows_per_second: u32,
         latency_output: Option<std::path::PathBuf>,
-    ) -> Result<(Self, Counts, Histogram, Histogram)> {
+    ) -> Result<(Self, Counts, Histogram, Histogram, Option<ControllerTiming>)> {
+        let std::ops::Range {
+            start: started,
+            end: until,
+        } = measurement;
         let Self {
             mut sender,
             readers,
@@ -310,6 +344,10 @@ impl Fanout {
             .checked_mul(windows_per_second as usize)
             .and_then(|n| n.checked_mul(window))
             .context("exact fanout sample bound overflow")?;
+        let mut controller_timing = latency_output.as_ref().map(|_| ControllerTiming {
+            ready_ns: 0,
+            windows: Vec::with_capacity(sample_limit / window),
+        });
         let readers_len = readers.len();
         let (windows, initial) = watch::channel(None::<Step>);
         let (ack, mut acks) = mpsc::channel(readers_len);
@@ -368,12 +406,16 @@ impl Fanout {
         let mut iteration = 0usize;
         let mut membership = Histogram::new();
         let mut seen = vec![false; readers_len];
+        let mut ready = Vec::with_capacity(readers_len);
         let mut pacing = (windows_per_second != 0).then(|| {
             let mut timer =
                 tokio::time::interval(Duration::from_secs_f64(1.0 / f64::from(windows_per_second)));
             timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             timer
         });
+        if let Some(timing) = &mut controller_timing {
+            timing.ready_ns = offset_ns(started, Instant::now())?;
+        }
         while Instant::now() < until {
             let scheduled = if let Some(timer) = &mut pacing {
                 let scheduled = timer.tick().await.into_std();
@@ -384,7 +426,8 @@ impl Fanout {
             } else {
                 Instant::now()
             };
-            let joined_at = Instant::now();
+            let wake = Instant::now();
+            let joined_at = wake;
             let transient = if churn_every > 0 && iteration.is_multiple_of(churn_every) {
                 Some(join(&url, &Bytes::from_static(b"fanout"), wire, &mut counts).await?)
             } else {
@@ -402,7 +445,17 @@ impl Fanout {
                 counts.value_bytes += 1027;
                 sender.send(Message::Binary(packet)).await?;
             }
-            acknowledge(&mut acks, &mut jobs, &mut seen).await?;
+            let sent = if controller_timing.is_some() {
+                Instant::now()
+            } else {
+                wake
+            };
+            acknowledge(&mut acks, &mut jobs, &mut seen, &mut ready).await?;
+            let acknowledged = if controller_timing.is_some() {
+                Instant::now()
+            } else {
+                wake
+            };
             if let Some((mut socket, id)) = transient {
                 for offset in 0..window {
                     let bytes = data(&mut socket).await?;
@@ -418,8 +471,21 @@ impl Fanout {
                 let actual = data(&mut sender).await?;
                 ensure!(actual == expected, "fanout sender departure changed");
                 counts.received(&actual);
-                acknowledge(&mut acks, &mut jobs, &mut seen).await?;
+                acknowledge(&mut acks, &mut jobs, &mut seen, &mut ready).await?;
                 membership.record(joined_at.elapsed());
+            }
+            if let Some(timing) = &mut controller_timing {
+                ensure!(
+                    timing.windows.len() < timing.windows.capacity(),
+                    "fanout timing bound exceeded"
+                );
+                timing.windows.push(WindowTiming {
+                    scheduled_ns: offset_ns(started, scheduled)?,
+                    wake_ns: offset_ns(started, wake)?,
+                    sent_ns: offset_ns(started, sent)?,
+                    acknowledged_ns: offset_ns(started, acknowledged)?,
+                    completed_ns: offset_ns(started, Instant::now())?,
+                });
             }
             sequence = (sequence + window) % 64;
             iteration += 1;
@@ -475,6 +541,7 @@ impl Fanout {
             counts,
             stats,
             membership,
+            controller_timing,
         ))
     }
 
@@ -514,5 +581,84 @@ impl Fanout {
             }
         }
         close(&mut self.sender, counts).await
+    }
+}
+
+#[cfg(test)]
+mod acknowledgement_tests {
+    use super::*;
+
+    fn pending_reader() -> JoinSet<ReaderResult> {
+        let mut jobs = JoinSet::new();
+        jobs.spawn(std::future::pending::<ReaderResult>());
+        jobs
+    }
+
+    #[tokio::test]
+    async fn checks_each_reader_and_reuses_batch_storage() {
+        let (tx, mut rx) = mpsc::channel(4);
+        let mut jobs = pending_reader();
+        let mut seen = [false; 4];
+        let mut ready = Vec::with_capacity(4);
+        let allocation = ready.as_ptr();
+        for _ in 0..2 {
+            for index in [3, 1, 0, 2] {
+                tx.send(index).await.unwrap();
+            }
+            acknowledge(&mut rx, &mut jobs, &mut seen, &mut ready)
+                .await
+                .unwrap();
+            assert!(seen.into_iter().all(|value| value));
+            assert_eq!(ready.as_ptr(), allocation);
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_duplicate_out_of_range_and_closed_acknowledgements() {
+        for indices in [vec![0, 0], vec![2], vec![]] {
+            let (tx, mut rx) = mpsc::channel(2);
+            for index in indices {
+                tx.send(index).await.unwrap();
+            }
+            drop(tx);
+            let mut jobs = pending_reader();
+            assert!(
+                acknowledge(
+                    &mut rx,
+                    &mut jobs,
+                    &mut [false; 2],
+                    &mut Vec::with_capacity(2)
+                )
+                .await
+                .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn progress_does_not_extend_the_window_deadline() {
+        let (tx, mut rx) = mpsc::channel(3);
+        let producer = tokio::spawn(async move {
+            for index in 0..3 {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                if tx.send(index).await.is_err() {
+                    break;
+                }
+            }
+        });
+        let mut jobs = pending_reader();
+        let result = timeout(
+            Duration::from_secs(7),
+            acknowledge(
+                &mut rx,
+                &mut jobs,
+                &mut [false; 3],
+                &mut Vec::with_capacity(3),
+            ),
+        )
+        .await
+        .expect("window deadline was not enforced");
+        producer.abort();
+        assert_eq!(result.unwrap_err().to_string(), "fanout window timed out");
     }
 }

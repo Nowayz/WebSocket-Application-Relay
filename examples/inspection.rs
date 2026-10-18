@@ -918,7 +918,7 @@ async fn run(args: Args) -> Result<()> {
     let until = started + Duration::from_secs(args.seconds);
     let fanout = fanout.map(|group| {
         tokio::spawn(group.run(
-            until,
+            started..until,
             args.url.clone(),
             args.fanout_churn_every,
             args.fanout_window,
@@ -981,8 +981,10 @@ async fn run(args: Args) -> Result<()> {
         inspection_stats.merge(&stats);
         sockets.push(s);
     }
+    let mut fanout_controller_timing = None;
     let fanout = if let Some(task) = fanout {
-        let (group, n, stats, membership) = task.await??;
+        let (group, n, stats, membership, timing) = task.await??;
+        fanout_controller_timing = timing;
         counts.merge(&n);
         fanout_stats.merge(&stats);
         fanout_membership_stats.merge(&membership);
@@ -993,7 +995,7 @@ async fn run(args: Args) -> Result<()> {
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed)}),
+        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
     )?;
     // For short C++ churn runs, verify its delayed retirement explicitly. The
     // controller bounds the entire case to finish before the first 30-second GC.
