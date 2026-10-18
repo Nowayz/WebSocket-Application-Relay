@@ -403,6 +403,19 @@ the optional migration bridge has its own bounded connections/messages and
 separate process memory. Use connection and message limits alongside these
 reservations and measure actual RSS on the intended deployment.
 
+Native multicast submits shared frames to each socket's owning worker, which
+writes up to 16 frames / 32 iovecs per syscall within the existing 256 KiB
+per-flush write quantum. This is a scheduling batch, not a message-size limit or
+a wait-to-fill threshold. Worker notifications coalesce while work is pending.
+Ordinary private traffic without observers keeps its immediate vectored-send
+path and its original frame representation. Private routes with observers use
+the multicast method. Payload bytes stay shared; small headers are built on the
+writer's stack. Queue storage allocates on first use, reuses warm slots and
+retains the existing capacity reclamation and admission policies. Reservations
+survive partial writes until the frame completes or is cancelled. The
+[measured implementation record](benchmarks/2026-10-17-rust-owner-fanout/README.md)
+includes short writes, slow-reader isolation, latency and full-population checks.
+
 Ordinary channel broadcasts without global channel observers capture a shared
 view of recipient handles under the registry lock, then release that lock before
 submitting output. Stable membership reuses the view. A join or departure updates
@@ -424,8 +437,8 @@ view before yielding; the next buffered message waits for another turn. This
 keeps payloads shared and sender FIFO intact while allowing other connections,
 admission and timers to run. It is a work quota, not a time deadline: a single
 broadcast may visit more than 256 peers. Global broadcasts and routes with
-global observers retain their existing submission path and frame quota; these
-changes do not establish the same fairness improvement for those cases.
+global observers also charge recipient visits, preserving complete-message
+submission and per-source FIFO before yielding.
 See the [large-room measurements](performance.md#large-room-fanout-fairness-2026-10-16)
 for latency, throughput and metadata costs.
 
@@ -624,7 +637,8 @@ Native cumulative input counters (`war_incoming_messages_total`,
 boundary, before it polls again. An active worker can temporarily have unpublished
 input statistics; totals are exact once its batch finishes. Worker exit also
 publishes remaining totals. Admission, retained-byte gauges, pressure decisions
-and output completion accounting remain immediate. No quota depends on deferred
+and outstanding-byte accounting remain immediate. Completion counters publish
+at vectored-write boundaries. No quota depends on deferred
 statistics. See the [input-counter measurements](performance.md#worker-local-input-statistics-2026-10-17).
 
 `war_output_queue_capacity_bytes` reports allocated native output queue slots,

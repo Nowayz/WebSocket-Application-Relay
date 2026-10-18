@@ -6833,3 +6833,61 @@ archive verifier reports integrity separately from runtime-case success.
 This does not rerun 100,000-user capacity or the original's historical churn
 failures. The separate modern-C++/Rust 100,000-user study remains distinct.
 No runtime implementation, running service or prior experiment changes.
+
+
+## Rust output on socket owners and bounded vectored fanout, 2026-10-17
+
+[Runtime and complete evidence](benchmarks/2026-10-17-rust-owner-fanout/README.md)
+select commit `7290017`, executable
+`edb4a79d2259e1ccf6bd514d6b0fb59afa75b9a3af807dcfba2053040a5be312`.
+A separate fresh profile shows the previous publisher performing every recipient
+write: send/enqueue account for about 70% of sampled user cycles and one worker
+uses 4.18 CPU-seconds while the other three use effectively zero. New multicast
+submissions retain shared frames for recipient owners, coalesce notifications,
+and drain at most 16 frames / 32 iovecs per syscall within the existing 256 KiB
+flush quantum. Original Frame representation and private-send method remain;
+compile-time transport specialization introduces no per-frame multicast flag.
+The batch writer is kept out of the common empty-queue/private flush function.
+
+Final matched medians of two six-second processes per implementation and case:
+four server cores, one frozen checked client, 63 fanout readers or 64 private
+pairs, 8,192 idle rooms, 1 KiB values, window 16, native protocols, no bridge.
+CPU covers the ready-to-measured interval. All lower-rate repeats remain.
+
+| Implementation | Fanout deliveries/s | CPU us/delivery | Observed p99 upper bounds ms |
+|---|---:|---:|---:|
+| Previous Rust | 644,363 | 0.748 | 2.097–4.194 |
+| Accepted modern C++ | 1,576,514 | 0.937 | 1.049 |
+| New Rust | 2,494,487 | 0.604 | 0.524 |
+
+The final new Rust median is 3.87x previous Rust and 1.58x modern C++. A separate
+four-repeat broadcast-only cohort records 2.506M/0.828M/1.431M respectively;
+this supports the large architecture gain without suppressing placement variation.
+Private throughput remains 2.074M/s versus 2.072M/s. Under 512 observers, churn
+and CBOR inspection, new Rust reaches 2.154–2.169M fanout deliveries/s, modern
+C++ 0.960–1.000M and previous Rust about 0.379M. Private p99 upper bounds fall
+from previous Rust's 8.389 ms to 1.049 ms in both new runs.
+
+Two 100,000-user trials per Rust build at 400,000 private probes/s for 30 seconds
+verify 48M timed probes, including 24M on the selected new build. New/old total
+CPU is 104.25/104.11 seconds (+0.13%). New median users' p99 is 0.900/0.900 ms;
+p99 of users' p99 is 1.320/1.612 ms versus old 1.309/1.656 ms. Full-population
+CSVs and CDFs retain every user's 120 samples and show comparable distributions;
+this is no universal private-latency improvement or long-duration guarantee.
+Fanout is checked separately at 63 and 512 readers, not 100,000 broadcast readers.
+
+The selected 72-test library suite, strict all-target Clippy and full 776-case /
+2,311-exchange independent corpus pass. Focused short-write tests preserve body
+pointers, exact bytes, FIFO, partial offsets and outstanding charges. The selected
+pressure run evicts all eight unread peers while verifying healthy traffic and
+complete resource retirement. Integrated workspace tests pass (75 tests).
+Pre-existing observer-index and C++ layout edits remain unselected and preserved.
+The local native manual service is promoted after a zero-state check and verified
+through actual private/fanout delivery, departure, Close/EOF and resource cleanup.
+
+Earlier flag-based/all-inline and outlined-flag variants, their private-tail
+concerns, every raw repeat, exact source/build hashes and complete compressed
+population CSVs are retained. The selected explicit-method version protects the
+private path structurally. Post-change profiling distributes work across all
+four workers. Archive verification distinguishes successful final cases from
+named preliminary profiler-controller and pressure-configuration setup failures.

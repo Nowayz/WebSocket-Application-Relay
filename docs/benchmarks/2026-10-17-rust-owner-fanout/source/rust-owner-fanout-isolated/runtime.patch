@@ -1,0 +1,302 @@
+--- a/src/frame.rs
++++ b/src/frame.rs
+@@ -9,6 +9,7 @@
+ pub(crate) struct Frame {
+     prefix: [u8; 10],
+     prefix_len: u8,
++    owner_queued: bool,
+     payload: Bytes,
+ }
+ 
+@@ -17,8 +18,19 @@
+         Self {
+             prefix: [0; 10],
+             prefix_len: 0,
++            owner_queued: false,
+             payload,
+         }
++    }
++
++    /// Fanout is handed to each socket's owner instead of serializing writes
++    /// on the publisher. This changes scheduling, never the wire bytes.
++    pub(crate) fn queue_on_owner(&mut self) {
++        self.owner_queued = true;
++    }
++
++    pub(crate) fn owner_queued(&self) -> bool {
++        self.owner_queued
+     }
+ 
+     fn prefixed(payload: Bytes, encode: impl FnOnce(&mut Encoder<Cursor<&mut [u8]>>)) -> Self {
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -681,7 +681,7 @@
+         let compact = storage_capacity > self.config.read_buffer_bytes
+             && bytes.len().saturating_mul(8) < storage_capacity
+             && !bytes.is_unique();
+-        let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
++        let mut frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+         let counter = if compact {
+             &mut totals.copied
+         } else {
+@@ -697,6 +697,10 @@
+             drop(state);
+             return recipient.enqueue_frame(&frame).map(|_| 1);
+         }
++        // Every remaining path is a broadcast or has global observers. Hand
++        // its writes to recipient owners; ordinary private traffic returned
++        // above and keeps its allocation-free immediate-send path.
++        frame.queue_on_owner();
+         if target == BROADCAST
+             && peer.channel.as_ref() != GLOBAL_CHANNEL
+             && state.listeners(CHANNEL_MESSAGE).is_empty()
+@@ -1114,6 +1118,8 @@
+         relay.receive(&sender.registration.peer, input).unwrap();
+         let first_frame = first.outgoing.try_recv().unwrap();
+         let second_frame = second.outgoing.try_recv().unwrap();
++        assert!(first_frame.frame.owner_queued());
++        assert!(second_frame.frame.owner_queued());
+         assert_eq!(first_frame.frame.payload().as_ptr(), pointer);
+         assert_eq!(second_frame.frame.payload().as_ptr(), pointer);
+         assert_eq!(first_frame.frame.payload(), value.as_ref());
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -1,6 +1,6 @@
+ //! Socket output has one serialized owner at a time, including writes from a
+-//! different relay worker. The ordinary path writes borrowed slices immediately.
+-//! Only backpressure allocates queue storage or retains a message body.
++//! different relay worker. Private traffic writes borrowed slices immediately.
++//! Fanout is queued to its owner for bounded zero-copy vectored batches.
+ use std::{
+     collections::VecDeque,
+     io::{self, IoSlice, Read, Write},
+@@ -113,8 +113,13 @@
+ 
+     fn notify(&self) {
+         if !self.notified.swap(true, Relaxed) {
+-            self.signal.pending.lock().push_back(self.token);
+-            let _ = self.signal.waker.wake();
++            let mut pending = self.signal.pending.lock();
++            let wake = pending.is_empty();
++            pending.push_back(self.token);
++            drop(pending);
++            if wake {
++                let _ = self.signal.waker.wake();
++            }
+         }
+     }
+ 
+@@ -179,19 +184,17 @@
+             return Ok(false);
+         }
+         let mut remaining = WRITE_QUANTUM;
+-        while let Some(mut pending) = state.queue.pop_front() {
+-            match write_frame(
+-                &mut SocketWriter(&state.stream),
+-                &pending.packet.frame,
+-                &mut pending.offset,
+-                remaining,
+-            ) {
+-                Ok(written) => {
++        while !state.queue.is_empty() {
++            let State { stream, queue, .. } = &mut *state;
++            match write_batch(&mut SocketWriter(stream), queue, remaining) {
++                Ok((written, delivered, bytes)) => {
+                     remaining -= written;
+-                    if pending.offset == wire_len(&pending.packet.frame) {
+-                        self.delivered(&pending.packet.frame, &mut state);
+-                    } else {
+-                        state.queue.push_front(pending);
++                    if delivered != 0 {
++                        self.metrics.deliveries.fetch_add(delivered, Relaxed);
++                        self.metrics.delivered_bytes.fetch_add(bytes, Relaxed);
++                        if self.track_activity {
++                            state.activity = Instant::now();
++                        }
+                     }
+                     if remaining == 0 {
+                         let queued = !state.queue.is_empty();
+@@ -200,7 +203,6 @@
+                     }
+                 }
+                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+-                    state.queue.push_front(pending);
+                     self.writable(&mut state, true)?;
+                     return Ok(false);
+                 }
+@@ -249,7 +251,7 @@
+             return false;
+         }
+         let mut offset = 0;
+-        if state.queue.is_empty() && !state.control_pending {
++        if !packet.frame.owner_queued() && state.queue.is_empty() && !state.control_pending {
+             match write_frame(
+                 &mut SocketWriter(&state.stream),
+                 packet.frame,
+@@ -272,6 +274,7 @@
+         }
+         let first = state.queue.is_empty();
+         let old_capacity = state.queue.capacity();
++        let packet_owner_queued = packet.frame.owner_queued();
+         state.queue.push_back(Pending {
+             packet: packet.into_owned(),
+             offset,
+@@ -288,7 +291,7 @@
+                 .output_queue_peak_capacity_bytes
+                 .fetch_max(allocated, Relaxed);
+         }
+-        if self.writable(&mut state, true).is_err() {
++        if !packet_owner_queued && self.writable(&mut state, true).is_err() {
+             state.fatal = true;
+         }
+         if first {
+@@ -419,6 +422,75 @@
+     fn flush(&mut self) -> io::Result<()> {
+         Ok(())
+     }
++}
++
++// At most 16 frames / 32 iovecs and WRITE_QUANTUM bytes per call. Headers
++// live on the stack, bodies remain borrowed from the charged queue entries.
++// A short write retires only complete frames and advances one partial frame.
++// Keep the batching stack and code outside the ordinary empty-queue/private path.
++#[inline(never)]
++fn write_batch(
++    stream: &mut impl Write,
++    queue: &mut VecDeque<Pending>,
++    quantum: usize,
++) -> io::Result<(usize, u64, u64)> {
++    const FRAMES: usize = 16;
++    let mut headers = [[0; 20]; FRAMES];
++    let mut lengths = [0; FRAMES];
++    for (i, pending) in queue.iter().take(FRAMES).enumerate() {
++        lengths[i] = header(&pending.packet.frame, &mut headers[i]);
++    }
++    let written = {
++        let mut slices: [IoSlice<'_>; FRAMES * 2] = std::array::from_fn(|_| IoSlice::new(&[]));
++        let mut count = 0;
++        let mut remaining = quantum;
++        for (i, pending) in queue.iter().take(FRAMES).enumerate() {
++            let head_start = pending.offset.min(lengths[i]);
++            let head_end = lengths[i].min(head_start + remaining);
++            let head = &headers[i][head_start..head_end];
++            if !head.is_empty() {
++                slices[count] = IoSlice::new(head);
++                count += 1;
++                remaining -= head.len();
++            }
++            let body = pending.packet.frame.payload();
++            let start = pending.offset.saturating_sub(lengths[i]);
++            let end = body.len().min(start + remaining);
++            if end > start {
++                slices[count] = IoSlice::new(&body[start..end]);
++                count += 1;
++                remaining -= end - start;
++            }
++            if remaining == 0 {
++                break;
++            }
++        }
++        loop {
++            match stream.write_vectored(&slices[..count]) {
++                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
++                result => break result?,
++            }
++        }
++    };
++    if written == 0 {
++        return Err(io::ErrorKind::WriteZero.into());
++    }
++    let mut remaining = written;
++    let mut delivered = 0;
++    let mut bytes = 0;
++    while remaining != 0 {
++        let pending = queue.front_mut().expect("write bounded by queued slices");
++        let size = wire_len(&pending.packet.frame) - pending.offset;
++        let used = remaining.min(size);
++        pending.offset += used;
++        remaining -= used;
++        if used == size {
++            bytes += pending.packet.frame.len() as u64;
++            delivered += 1;
++            queue.pop_front();
++        }
++    }
++    Ok((written, delivered, bytes))
+ }
+ 
+ /// The body is never assembled into a new contiguous message. Short writes
+@@ -554,6 +626,73 @@
+         )
+         .unwrap();
+         (relay, socket, reader, poll)
++    }
++
++    #[test]
++    fn batched_output_preserves_fifo_bodies_and_charges_across_short_writes() {
++        for max_write in [1, 3, 17, 1037, 32768] {
++            let (relay, socket, raw_reader, _poll) = connected();
++            let registration = relay
++                .subscribe_with_output(b"batch", socket.clone())
++                .unwrap();
++            let id = registration.peer.id.load(Relaxed);
++            let mut reader = WebSocket::from_raw_socket(raw_reader, Role::Client, None);
++            assert_eq!(reader.read().unwrap(), Message::Binary(protocol::uint(id)));
++            socket.state.lock().control_pending = true;
++            let values: Vec<_> = (0..20)
++                .map(|i| {
++                    protocol::byte_string(&vec![i as u8; [0, 1, 115, 126, 1024, 65536][i % 6]])
++                })
++                .collect();
++            for value in &values {
++                relay
++                    .receive(&registration.peer, protocol::envelope(id, value))
++                    .unwrap();
++            }
++            let mut queue = std::mem::take(&mut socket.state.lock().queue);
++            let pointers: Vec<_> = queue
++                .iter()
++                .map(|p| p.packet.frame.payload().as_ptr())
++                .collect();
++            let mut probe = Probe {
++                wire: Vec::new(),
++                pointer: pointers[0] as usize,
++                borrowed: false,
++                max_write,
++                blocked: false,
++            };
++            let mut completed = 0;
++            while !queue.is_empty() {
++                assert_eq!(
++                    relay.metrics.queued_bytes.load(Relaxed),
++                    queue.iter().map(|p| p.packet.frame.len()).sum::<usize>()
++                );
++                assert_eq!(
++                    queue.front().unwrap().packet.frame.payload().as_ptr(),
++                    pointers[completed]
++                );
++                match write_batch(&mut probe, &mut queue, 4093) {
++                    Ok((n, done, _)) => {
++                        assert!(n <= 4093);
++                        completed += done as usize;
++                    }
++                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
++                    Err(e) => panic!("{e}"),
++                }
++            }
++            socket.state.lock().queue = queue;
++            assert_eq!(completed, values.len());
++            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++            assert!(probe.borrowed);
++            let mut decoded =
++                WebSocket::from_raw_socket(io::Cursor::new(probe.wire), Role::Client, None);
++            for value in values {
++                assert_eq!(
++                    decoded.read().unwrap(),
++                    Message::Binary(protocol::envelope(id, &value))
++                );
++            }
++        }
+     }
+ 
+     #[test]

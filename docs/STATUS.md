@@ -1,5 +1,30 @@
 # Continuing goal status
 
+## 2026-10-17: Rust multicast now uses socket owners
+
+Selected runtime `7290017`, executable
+`edb4a79d2259e1ccf6bd514d6b0fb59afa75b9a3af807dcfba2053040a5be312`.
+The publisher no longer performs every fanout write itself. Native owners drain
+bounded zero-copy vectored batches with coalesced wakeups. Ordinary private
+traffic retains its original frame and immediate send method. The batch writer
+stays out of line to protect the common empty-queue/private flush.
+
+Final fanout medians: new Rust 2.494M deliveries/s at 0.604 CPU us/delivery,
+modern C++ 1.577M at 0.937 us, previous Rust 0.644M at 0.748 us. New fanout p99
+upper bounds are 0.524 ms in both repeats. Under 512-observer competition,
+new Rust reaches 2.154–2.169M/s and private p99 1.049 ms, versus modern C++
+0.960–1.000M/s and previous Rust 0.379M/s. Ordinary private throughput remains
+2.074M/s versus 2.072M/s. Two 100,000-user runs per build verify 48M before/after
+probes; private CPU is +0.13% and user p99 distributions remain comparable.
+
+The selected library's 72 tests, strict Clippy, full 776-case corpus, short-write
+and FIFO checks, eight-unread-peer isolation and physical retirement checks pass.
+Workspace integration passes 75 tests and preserves the prior unselected Rust
+observer-index and C++ layout edits. The quiescent native manual service now runs
+the selected binary; bridge/static services retain their processes. Earlier
+flag-based variants and their private-tail concerns are retained in the
+[verified archive](benchmarks/2026-10-17-rust-owner-fanout/README.md).
+
 ## 2026-10-17: matched original/current three-way comparison
 
 Completed all 54 planned six-second cases using the same checked client, four

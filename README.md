@@ -9,6 +9,14 @@ at commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`, with the requested CBOR re
 The original C++ source, JavaScript clients, dependencies, history, and MIT license
 remain available. The original README is in [docs/upstream-README.md](docs/upstream-README.md).
 
+## Native Rust fanout
+
+Native multicast shares immutable payloads, sends on the sockets' owning workers,
+and combines queued frames into bounded vectored writes. Ordinary private traffic
+keeps its immediate-send path. The [fanout performance report](docs/benchmarks/2026-10-17-rust-owner-fanout/README.md)
+records the comparison with modern C++, mixed-load responsiveness, 100,000-user
+latency distributions and the exact selected runtime.
+
 ## Modern C++ comparison candidate
 
 A separate [C++20 static library and relay](cpp/README.md) now implements the
@@ -240,9 +248,11 @@ recorded results and local dependency setup.
   accept `--listen-backlog` / `WAR_LISTEN_BACKLOG` (default 1,024), applied
   consistently to native listeners and subject to the OS cap. See
   [pending TCP connections](docs/operations.md#pending-tcp-connections).
-  Routing submits bounded nonblocking writes directly. Only backpressure creates
-  a recipient queue. A per-socket lock serializes writes from different workers;
-  registry reads protect routing and writes protect membership/ID changes.
+  Ordinary private routing submits bounded nonblocking writes directly.
+  Multicast submits shared frames to socket owners, which drain bounded vectored
+  batches without waiting to fill them. Queues reuse their slots; private traffic
+  creates a queue only under backpressure. A per-socket lock serializes immediate
+  and owner writes; registry reads protect routing and writes protect membership/ID changes.
   Private routing with no eligible observers retains the target under the
   registry lock, then releases that lock before output. Global listener indexes
   visit opted-in sessions for channel, private and departure events.
