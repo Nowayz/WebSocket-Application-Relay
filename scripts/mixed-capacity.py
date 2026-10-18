@@ -18,6 +18,8 @@ import subprocess
 import time
 import urllib.request
 
+import benchmark as runtime
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -68,6 +70,7 @@ def main():
     parser.add_argument('--fanout-churn-every', type=int, default=0)
     parser.add_argument('--exact-fanout-latency', action='store_true')
     parser.add_argument('--latency-stages', action='store_true', help='Opt-in client clock decomposition; diagnostic timing only')
+    parser.add_argument('--pin-client-workers', action='store_true', help='Pin client I/O workers individually inside their existing CPU masks')
     parser.add_argument('--profile', action='store_true')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
@@ -112,7 +115,7 @@ def main():
         sc.remove('--fanout-global-observers')
     record = {'passed': False, 'args': vars(args).copy(), 'server_command': cmd, 'client_command': cc,
               'sidecar_command': sc, 'sha256': {'server': digest(args.server), 'capacity_client': digest(client_path),
-              'sidecar': digest(args.sidecar), 'runner': digest(__file__)}, 'events': [], 'sidecar_events': [], 'monitoring': []}
+              'sidecar': digest(args.sidecar), 'runner': digest(__file__), 'benchmark_helper': digest(runtime.__file__)}, 'events': [], 'sidecar_events': [], 'monitoring': [], 'client_thread_affinity': []}
     record['args'] = {k: str(v) if isinstance(v, Path) else v for k, v in record['args'].items()}
     record['cpu_topology'] = subprocess.check_output(['lscpu', '-p=CPU,CORE,SOCKET,NODE'], text=True)
     def cores(cpus):
@@ -141,6 +144,10 @@ def main():
         args.output.write_text(json.dumps(record, indent=2) + '\n')
         print(json.dumps({'client': collection, 'event': value['event']}), flush=True)
         return value
+    def verify_client_affinity():
+        for pinned in record['client_thread_affinity']:
+            assert os.sched_getaffinity(pinned['tid']) == {pinned['cpu']}, 'client worker affinity changed'
+
     perf = None
     try:
         server = launch(cmd, 'server')
@@ -154,10 +161,20 @@ def main():
             raise TimeoutError('startup')
         record['baseline'] = snapshot(server.pid)
         capacity = launch(cc, 'capacity')
-        assert event(capacity, 'events')['event'] == 'connected'; resume(capacity)
+        assert event(capacity, 'events')['event'] == 'connected'
+        if args.pin_client_workers:
+            record['client_thread_affinity'].extend(
+                dict(pinned, client='capacity')
+                for pinned in runtime.pin_child_workers(capacity.pid, 8, False))
+        resume(capacity)
         assert event(capacity, 'events')['event'] == 'ready'
         sidecar = launch(sc, 'sidecar')
         assert event(sidecar, 'sidecar_events')['event'] == 'ready'
+        if args.pin_client_workers:
+            record['client_thread_affinity'].extend(
+                dict(pinned, client='sidecar')
+                for pinned in runtime.pin_child_workers(sidecar.pid, 8, False))
+        verify_client_affinity()
         record['ready_metrics'] = metrics()
         assert record['ready_metrics']['war_connections'] == args.users + args.readers + 2 + args.inspectors + 2 * args.pairs
         record['affinity'] = [{'name': (task / 'comm').read_text().strip(), 'cpus': sorted(os.sched_getaffinity(int(task.name)))}
@@ -174,6 +191,7 @@ def main():
         began = time.monotonic(); resume(sidecar); resume(capacity)
         while not select.select([capacity.stdout], [], [], .25)[0]:
             assert time.monotonic() - began < args.seconds + 120
+            verify_client_affinity()
             start = time.monotonic(); current = metrics()
             record['monitoring'].append({'seconds': start - began, 'response_ms': (time.monotonic() - start) * 1000,
                                          'process': snapshot(server.pid), 'metrics': current})
@@ -183,6 +201,7 @@ def main():
                 assert current['war_read_buffer_reserved_bytes'] <= 256 * 1024**2
                 assert current['war_routing_copied_bytes_total'] == 0
         assert event(capacity, 'events')['event'] == 'measured'
+        verify_client_affinity()
         record['after'] = snapshot(server.pid)
         record['client_after'] = {'capacity': snapshot(capacity.pid), 'sidecar': snapshot(sidecar.pid)}
         record['elapsed_seconds'] = time.monotonic() - began

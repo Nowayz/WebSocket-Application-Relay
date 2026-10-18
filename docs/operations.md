@@ -1367,6 +1367,18 @@ and their sources. Missed sidecar timer ticks are skipped and counted by complet
 versus offered windows. Every submitted window must still reach every reader,
 and all scheduled private probes must complete.
 
+For short mixed-load screens, set `--seconds 6` explicitly; setup and checked
+cleanup remain outside that traffic phase. Add `--pin-client-workers` to pin
+each of the two clients' eight I/O workers to a distinct CPU within its existing
+mask. The helper uses the shared affinity implementation, records each thread
+and CPU in `client_thread_affinity`, and rechecks affinity before, during and
+after measurement. It leaves the default placement unchanged and does not pin
+individual Tokio tasks. A process CPU mask alone is not per-thread pinning.
+Compare both settings with otherwise identical commands: pinning can improve
+fanout window timing while costing CPU, and does not guarantee better private
+user tails. The [short placement comparison](benchmarks/2026-10-18-mixed-client-pinning/README.md)
+records the measured tradeoff.
+
 The inspection client supports `--external-capacity-rooms` and
 `--external-capacity-room-size` to verify the stable capacity-client census.
 `--fanout-close-window 32` batches departure draining outside measurement while
