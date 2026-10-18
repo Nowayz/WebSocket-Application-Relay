@@ -168,7 +168,10 @@ pub fn uint(value: u64) -> Bytes {
 }
 
 pub fn byte_string(value: &[u8]) -> Bytes {
-    let mut e = Encoder::new(Vec::with_capacity(9 + value.len()));
+    // Exact storage lets Bytes defer its shared-ownership allocation until cloning.
+    let mut e = Encoder::new(Vec::with_capacity(
+        uint_len(value.len() as u64) + value.len(),
+    ));
     e.bytes(value).expect("Vec encoding");
     e.into_writer().into()
 }
@@ -383,6 +386,42 @@ mod tests {
             array.extend_from_slice(&(count as u32).to_be_bytes());
             array.resize(array.len() + count as usize, 0xf6);
             assert_eq!(parse(&envelope(1, &array)).is_ok(), count < MAX_ITEMS);
+        }
+    }
+
+    #[test]
+    fn byte_strings_keep_exact_storage_and_shared_bytes_at_length_boundaries() {
+        let cases: &[(usize, &[u8])] = &[
+            (0, b"\x40"),
+            (1, b"\x41"),
+            (23, b"\x57"),
+            (24, b"\x58\x18"),
+            (255, b"\x58\xff"),
+            (256, b"\x59\x01\x00"),
+            (1024, b"\x59\x04\x00"),
+            (65535, b"\x59\xff\xff"),
+            (65536, b"\x5a\x00\x01\x00\x00"),
+        ];
+        for &(length, header) in cases {
+            let mut input = vec![0x5a; length];
+            let encoded = byte_string(&input);
+            input.fill(0x11);
+            assert_eq!(&encoded[..header.len()], header);
+            assert_eq!(encoded.len(), header.len() + length);
+            assert!(encoded[header.len()..].iter().all(|&byte| byte == 0x5a));
+            let pointer = encoded.as_ptr();
+            let shared = encoded.clone();
+            drop(encoded);
+            assert_eq!(shared.as_ptr(), pointer, "cloning copied the encoded body");
+            let owned = shared
+                .try_into_mut()
+                .expect("last owner can recover storage");
+            assert_eq!(owned.as_ptr(), pointer, "recovering ownership moved bytes");
+            assert_eq!(
+                owned.capacity(),
+                owned.len(),
+                "spare capacity forces eager ownership metadata"
+            );
         }
     }
 
