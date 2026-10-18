@@ -1,0 +1,16 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -374,7 +374,12 @@
+             Some(remaining) => remaining.min(bytes.len()),
+             None => bytes.len(),
+         };
+-        let read = self.socket.state.lock().stream.read(&mut bytes[..length])?;
++        let read = {
++            let state = self.socket.state.lock();
++            state.stream.try_io(|| {
++                (&*socket2::SockRef::from(&state.stream)).read(&mut bytes[..length])
++            })?
++        };
+         if let Some(remaining) = &mut self.remaining_upgrade {
+             *remaining -= read;
+         }
