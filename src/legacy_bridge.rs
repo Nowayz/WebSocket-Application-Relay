@@ -71,7 +71,18 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
             if target == 0 {
                 None
             } else {
-                Some(protocol::envelope(target, &protocol::text(&text[12..])))
+                // CBOR lengths count UTF-8 bytes; encode directly into final storage.
+                let payload = &text[12..];
+                let capacity = 1
+                    + protocol::uint_len(target)
+                    + protocol::uint_len(payload.len() as u64)
+                    + payload.len();
+                let mut e = Encoder::new(Vec::with_capacity(capacity));
+                e.array(2)
+                    .and_then(|e| e.u64(target))
+                    .and_then(|e| e.str(payload))
+                    .expect("Vec encoding");
+                Some(e.into_writer().into())
             }
         }
         _ => {
@@ -436,5 +447,59 @@ mod tests {
             to_cbor(Message::Binary(Bytes::copy_from_slice(&1u64.to_le_bytes()))),
             Err(Disconnect::PROTOCOL),
         );
+    }
+
+    #[test]
+    fn text_envelopes_preserve_utf8_byte_lengths_and_exact_owned_storage() {
+        let targets: &[(u64, &[u8])] = &[
+            (1, b"\x01"),
+            (256, b"\x19\x01\x00"),
+            (u64::MAX, b"\x1b\xff\xff\xff\xff\xff\xff\xff\xff"),
+        ];
+        let lengths: &[(usize, &[u8])] = &[
+            (1, b"\x61"),
+            (23, b"\x77"),
+            (24, b"\x78\x18"),
+            (255, b"\x78\xff"),
+            (256, b"\x79\x01\x00"),
+            (65535, b"\x79\xff\xff"),
+            (65536, b"\x7a\x00\x01\x00\x00"),
+        ];
+        for &(target, encoded_target) in targets {
+            for &(len, encoded_length) in lengths {
+                let payload = "λ".repeat(len / 2) + if len % 2 == 1 { "x" } else { "" };
+                assert_eq!(payload.len(), len);
+                let input: tokio_tungstenite::tungstenite::Utf8Bytes =
+                    (STANDARD.encode(target.to_le_bytes()) + &payload).into();
+                let result = to_cbor(Message::Text(input.clone())).unwrap().unwrap();
+                let mut expected = vec![0x82];
+                expected.extend_from_slice(encoded_target);
+                expected.extend_from_slice(encoded_length);
+                expected.extend_from_slice(payload.as_bytes());
+                assert_eq!(result.as_ref(), expected);
+                assert_eq!(&input[12..], payload);
+                let owned = result.try_into_mut().expect("independently owned envelope");
+                assert_eq!(owned.capacity(), owned.len());
+            }
+        }
+        let input = STANDARD.encode(1u64.to_le_bytes()) + "\0λ🦀e\u{301}";
+        assert_eq!(
+            to_cbor(Message::Text(input.into()))
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            b"\x82\x01\x6a\x00\xce\xbb\xf0\x9f\xa6\x80e\xcc\x81",
+        );
+        let empty = STANDARD.encode(1u64.to_le_bytes());
+        assert_eq!(
+            to_cbor(Message::Text(empty.into())),
+            Err(Disconnect::PROTOCOL)
+        );
+        assert_eq!(
+            to_cbor(Message::Text("!!!!!!!!!!!!x".into())),
+            Err(Disconnect::PROTOCOL)
+        );
+        let ignored = STANDARD.encode(0u64.to_le_bytes()) + "λ";
+        assert_eq!(to_cbor(Message::Text(ignored.into())).unwrap(), None);
     }
 }
