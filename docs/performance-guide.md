@@ -60,6 +60,7 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 | [Socket recv substitution](benchmarks/2026-10-18-socket-recv-screen/README.md) | Lower throughput and higher CPU per delivery in the short screen. |
 | [Inline cached WebSocket headers](benchmarks/2026-10-18-frame-header-cache/README.md) | Larger queued metadata; lower fanout rates and higher CPU per delivery in both short candidate runs. |
 | [Notification/counter-layout screen](benchmarks/2026-10-18-notify-metrics-screen/README.md) | Zero redundant notification swaps in the diagnostic; separating counter groups did not improve whole-workload results. |
+| [Completed-credit batching](benchmarks/2026-10-18-completion-credits/README.md) | Accounting and ownership checks pass, but mixed and fanout-only screens do not establish a repeatable gain. |
 | [Notification queue handoff](benchmarks/2026-10-18-pending-lock-screen/README.md) | Fewer measured lock collisions did not establish a repeatable application benefit. |
 
 A change earns selection through the required workload and invariants: low and consistent user latency, complete delivery, FIFO, shared payload ownership and bounded resource admission. Neither a microbenchmark win nor a shorter critical section establishes that by itself.
