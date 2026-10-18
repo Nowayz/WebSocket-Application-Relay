@@ -1,0 +1,241 @@
+{
+  "trials": [
+    {
+      "label": "fanout-timing-smoke",
+      "passed": true,
+      "windows": {
+        "completed": 32,
+        "offered": 32
+      },
+      "private": {
+        "median": 0.138986,
+        "p95": 0.272783,
+        "p99": 0.622392,
+        "max": 1.934466
+      },
+      "fanout": {
+        "p99_ms": {
+          "median": 1.415171,
+          "p95": 1.601266,
+          "p99": 1.770261,
+          "max": 1.773851
+        },
+        "max_ms": {
+          "median": 1.43115,
+          "p95": 1.602106,
+          "p99": 1.770551,
+          "max": 1.774451
+        },
+        "schedule_p99_ms": {
+          "median": 2.719459,
+          "p95": 2.873225,
+          "p99": 2.886475,
+          "max": 2.890365
+        },
+        "schedule_max_ms": {
+          "median": 2.781968,
+          "p95": 2.886955,
+          "p99": 2.892125,
+          "max": 2.893105
+        }
+      },
+      "sidecar_cpu_seconds": 0.21,
+      "server_cpu_seconds": 0.23,
+      "controller": {
+        "ready_ms": 0.685461,
+        "stages": {
+          "wake_delay": {
+            "median_ms": 0.7557525,
+            "max_ms": 1.579621,
+            "over_period": 0
+          },
+          "send": {
+            "median_ms": 0.0574935,
+            "max_ms": 0.231354,
+            "over_period": 0
+          },
+          "ack_wait": {
+            "median_ms": 1.217126,
+            "max_ms": 1.578176,
+            "over_period": 0
+          },
+          "whole_iteration": {
+            "median_ms": 1.317263,
+            "max_ms": 1.775531,
+            "over_period": 0
+          }
+        }
+      }
+    },
+    {
+      "label": "fanout-timing-100k",
+      "passed": true,
+      "windows": {
+        "completed": 96,
+        "offered": 96
+      },
+      "private": {
+        "median": 1.412511,
+        "p95": 5.319512,
+        "p99": 9.504836,
+        "max": 13.639362
+      },
+      "fanout": {
+        "p99_ms": {
+          "median": 65.010114,
+          "p95": 70.737255,
+          "p99": 71.076666,
+          "max": 71.526393
+        },
+        "max_ms": {
+          "median": 71.820275,
+          "p95": 80.062186,
+          "p99": 81.438208,
+          "max": 81.907355
+        },
+        "schedule_p99_ms": {
+          "median": 78.240194,
+          "p95": 83.595825,
+          "p99": 83.914096,
+          "max": 84.253997
+        },
+        "schedule_max_ms": {
+          "median": 91.245209,
+          "p95": 99.48712,
+          "p99": 100.863142,
+          "max": 101.332289
+        }
+      },
+      "sidecar_cpu_seconds": 18.71,
+      "server_cpu_seconds": 20.42,
+      "controller": {
+        "ready_ms": 9.827877,
+        "stages": {
+          "wake_delay": {
+            "median_ms": 1.0651045,
+            "max_ms": 38.834879,
+            "over_period": 0
+          },
+          "send": {
+            "median_ms": 2.2330885,
+            "max_ms": 2.540499,
+            "over_period": 0
+          },
+          "ack_wait": {
+            "median_ms": 47.256831500000004,
+            "max_ms": 79.945409,
+            "over_period": 8
+          },
+          "whole_iteration": {
+            "median_ms": 49.444921,
+            "max_ms": 81.908635,
+            "over_period": 11
+          }
+        }
+      }
+    },
+    {
+      "label": "fanout-batch-100k",
+      "passed": true,
+      "windows": {
+        "completed": 96,
+        "offered": 96
+      },
+      "private": {
+        "median": 2.209359,
+        "p95": 9.300953,
+        "p99": 13.608734,
+        "max": 16.205451
+      },
+      "fanout": {
+        "p99_ms": {
+          "median": 59.000908,
+          "p95": 64.517026,
+          "p99": 65.219976,
+          "max": 65.588256
+        },
+        "max_ms": {
+          "median": 73.093519,
+          "p95": 81.594244,
+          "p99": 82.329053,
+          "max": 82.698583
+        },
+        "schedule_p99_ms": {
+          "median": 95.80124,
+          "p95": 100.978397,
+          "p99": 102.464566,
+          "max": 106.394927
+        },
+        "schedule_max_ms": {
+          "median": 105.489727,
+          "p95": 113.977773,
+          "p99": 114.712582,
+          "max": 115.082112
+        }
+      },
+      "sidecar_cpu_seconds": 18.47,
+      "server_cpu_seconds": 20.88,
+      "controller": {
+        "ready_ms": 12.308539,
+        "stages": {
+          "wake_delay": {
+            "median_ms": 1.3692630000000001,
+            "max_ms": 52.585532,
+            "over_period": 0
+          },
+          "send": {
+            "median_ms": 2.2779565,
+            "max_ms": 2.474812,
+            "over_period": 0
+          },
+          "ack_wait": {
+            "median_ms": 47.0818275,
+            "max_ms": 80.697858,
+            "over_period": 4
+          },
+          "whole_iteration": {
+            "median_ms": 49.4035685,
+            "max_ms": 82.700493,
+            "over_period": 4
+          }
+        }
+      }
+    },
+    {
+      "label": "fanout-batch-off-smoke",
+      "passed": true,
+      "windows": {
+        "completed": 32,
+        "offered": 32
+      },
+      "private": {
+        "median": 0.180025,
+        "p95": 0.297212,
+        "p99": 0.751229,
+        "max": 2.849281
+      },
+      "fanout": null,
+      "sidecar_cpu_seconds": 0.22999999999999998,
+      "server_cpu_seconds": 0.23,
+      "controller": null
+    }
+  ],
+  "component": [
+    {
+      "variant": "old",
+      "median_us": 534.9774
+    },
+    {
+      "variant": "batch",
+      "median_us": 25.842299999999998
+    },
+    {
+      "variant": "batch",
+      "median_us": 25.7302
+    },
+    {
+      "variant": "old",
+      "median_us": 537.7877
+    }
+  ]
+}
