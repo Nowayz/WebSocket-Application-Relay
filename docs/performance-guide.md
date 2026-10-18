@@ -21,7 +21,7 @@ The primary mixed-load comparison has 100,000 private users plus 8,192 fanout re
 | Does a change hurt private users while a hot room broadcasts? | `scripts/mixed-capacity.py --seconds 6` with the full mixed-load options below | Six seconds; 24 observations/user at 4 Hz |
 | Do repeated population bursts retire correctly? | `scripts/capacity.py --users 16384 --room-size 2 --waves 4 --seconds 1 --active-percent 10` | Four one-second traffic phases, with checked joins/closes between |
 | Did input/control handling change? | `scripts/input-corpus.py --workers 4 --clients 8` | Finite 776-case independent corpus |
-| Do stalled upgrades or Ping-only prejoin peers release admission? | `scripts/handshake-pressure.py` and `scripts/join-pressure.py` | Fixed five-second HTTP / two-second join-deadline fixtures; [checked examples](benchmarks/2026-10-18-stalled-ingress/README.md) |
+| Do stalled upgrades or Ping-only prejoin peers release admission? | `scripts/handshake-pressure.py` and `scripts/join-pressure.py` | Fixed five-second HTTP / two-second join-deadline fixtures; [checked examples](benchmarks/2026-10-18-stalled-ingress/README.md) and [unacknowledged Close](benchmarks/2026-10-18-unacknowledged-close/README.md) |
 
 Setup, proof scans and exhaustive departure/Close checks add wall time outside the measured phase. In particular, six seconds of offered mixed traffic does not mean a six-second complete test. Extend a test only when the result needs it; a short screen can reject a clear regression without pretending to prove a long-term tail guarantee.
 

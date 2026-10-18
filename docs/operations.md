@@ -358,6 +358,14 @@ for silent/dripping HTTP peers and silent/Ping-active upgraded peers beside
 verified healthy traffic. The join fixture deliberately uses two seconds rather
 than the ten-second production default to keep the regression short.
 
+`join-pressure.py --withhold-close-ack` additionally uses a one-second fixture
+close budget. It receives the policy Close without replying, verifies that an
+extra TCP connection is refused while closing peers still hold the configured
+cap, then checks deadline EOF and a successful recovery join. The expected
+`war_close_failures_total` counts those deliberately missing acknowledgements;
+it is distinct from a write failure or failed healthy delivery. See the
+[unacknowledged-close check](benchmarks/2026-10-18-unacknowledged-close/README.md).
+
 Queue limits concern logical payload storage, not the complete process RSS. WebSocket
 read/write buffers, partially assembled incoming frames, metadata, allocator
 overhead, stacks, and kernel socket buffers also cost memory. In particular, a
