@@ -122,6 +122,8 @@ def run(args):
                                   HEAP_PROFILE_INUSE_INTERVAL=str(100 * 1024**3))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
                       "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
+    if getattr(args, "pin_workers", False):
+        server_command.append("--pin-workers")
     command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}", "--admin", f"127.0.0.1:{admin}",
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
@@ -155,7 +157,7 @@ def run(args):
               "client_sources_sha256": {str(p.relative_to(source_root)): digest(p) for p in
                                        [source_root / "examples/inspection.rs"] + sorted((source_root / "examples/inspection").glob("*.rs"))},
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
-              "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "passed": False,
+              "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "thread_affinity": [], "passed": False,
               "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic 1KiB templates and 16-message windows; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
     if args.heap_profile:
         result["heap_profiler"] = {"library": str(args.heap_library.resolve()),
@@ -197,6 +199,10 @@ def run(args):
                              client_process=runtime.snapshot(client.pid), seconds=time.monotonic() - started)
                 result["events"].append(event)
                 if event["event"] == "ready":
+                    if getattr(args, "pin_workers", False):
+                        result["thread_affinity"].extend(runtime.pin_child_workers(server.pid, args.workers, True, apply=False))
+                    if getattr(args, "pin_client_workers", False):
+                        result["thread_affinity"].extend(runtime.pin_child_workers(client.pid, args.client_workers, False))
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
                     check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     if args.profile:
@@ -237,6 +243,8 @@ def run(args):
                     assert event["details"]["counts"]["joins"] == event["details"]["counts"]["normal_closes"]
                 else:
                     raise RuntimeError("unknown phase gate")
+                for pinned in result["thread_affinity"]:
+                    assert os.sched_getaffinity(pinned["tid"]) == {pinned["cpu"]}, "thread affinity changed during workload"
                 if args.heap_profile:
                     event["heap"] = dump_heap(server.pid, args.heap_profile)
                 client.stdin.write("continue\n")
@@ -307,6 +315,10 @@ if __name__ == "__main__":
                         help="Broadcast window size in 1..=32; requires updated client when not16")
     parser.add_argument("--read-storage", choices=["worker", "connection", "completion"], default="worker",
                         help="staging contract: worker scratch, frozen async connection, or experimental completion header receives")
+    parser.add_argument("--pin-workers", action="store_true",
+                        help="Request and verify native --pin-workers startup policy")
+    parser.add_argument("--pin-client-workers", action="store_true",
+                        help="Pin each client I/O worker to one allowed CPU; requires --client-workers")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-7")
     profiles = parser.add_mutually_exclusive_group()
@@ -315,6 +327,8 @@ if __name__ == "__main__":
     parser.add_argument("--heap-library", type=Path, default=Path("/usr/lib/libtcmalloc.so"))
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
+    if arguments.pin_client_workers and arguments.client_workers is None:
+        parser.error("--pin-client-workers requires --client-workers")
     outcome = run(arguments)
     print(json.dumps({"passed": outcome["passed"], "error": outcome.get("error")}), flush=True)
     raise SystemExit(0 if outcome["passed"] else 1)

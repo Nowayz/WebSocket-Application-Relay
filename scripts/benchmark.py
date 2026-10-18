@@ -54,6 +54,31 @@ def free_port():
         return sock.getsockname()[1]
 
 
+def pin_child_workers(pid, count, native, apply=True):
+    """Pin or verify this fresh child's known I/O threads within its allowed mask."""
+    allowed = sorted(os.sched_getaffinity(pid))
+    if len(allowed) < count:
+        raise ValueError("one CPU per worker requires at least as many allowed CPUs as workers")
+    workers = []
+    for task in Path(f"/proc/{pid}/task").iterdir():
+        name = (task / "comm").read_text().strip()
+        if (native and name.startswith("war-io-")) or (not native and name == "tokio-rt-worker"):
+            workers.append((int(task.name), name))
+    workers.sort(key=lambda item: int(item[1].removeprefix("war-io-")) if native else item[0])
+    if len(workers) != count:
+        raise ValueError(f"expected {count} child I/O threads, found {len(workers)}")
+    if native and [name for _,name in workers] != [f"war-io-{i}" for i in range(count)]:
+        raise ValueError("native worker names do not match the configured worker set")
+    records = []
+    for (tid,name),cpu in zip(workers,allowed):
+        before = sorted(os.sched_getaffinity(tid))
+        if apply:
+            os.sched_setaffinity(tid, {cpu})
+        assert os.sched_getaffinity(tid) == {cpu}, "thread affinity was not applied"
+        records.append({"pid":pid,"tid":tid,"name":name,"before":before,"cpu":cpu,"method":"harness" if apply else "server_startup"})
+    return records
+
+
 def snapshot(pid):
     values = {}
     for line in Path(f"/proc/{pid}/status").read_text().splitlines():
