@@ -1,0 +1,97 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cycles:u'
+# Event count (approx.): 7112914636
+#
+# Overhead  Symbol                                                                                IPC   [IPC Coverage]
+# ........  ....................................................................................  ....................
+#
+    11.14%  [.] war_relay::server::Connection::drive_batched                                      -      -            
+            |          
+             --5.10%--war_relay::server::Connection::drive_batched
+                       |          
+                        --1.61%--war_relay::server::Worker::run
+
+     9.78%  [.] war_relay::relay::Peer::enqueue_fanout                                            -      -            
+            |          
+             --5.10%--war_relay::relay::Peer::enqueue_fanout
+
+     9.56%  [.] war_relay::server::Worker::run                                                    -      -            
+            |          
+             --4.63%--war_relay::server::Worker::run
+                       |          
+                        --3.88%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     8.02%  [.] war_relay::server::socket::Socket::notify                                         -      -            
+            |          
+             --4.23%--war_relay::server::socket::Socket::notify
+                       |          
+                        --3.65%--0x3f65
+
+     7.24%  [.] war_relay::relay::ReceiveBatch::receive_bounded                                   -      -            
+            |          
+             --3.73%--war_relay::relay::ReceiveBatch::receive_bounded
+
+     6.79%  [.] war_relay::server::socket::write_batch                                            -      -            
+            |          
+             --3.54%--war_relay::server::socket::write_batch
+
+     6.54%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send         -      -            
+            |          
+             --3.29%--<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send
+
+     5.06%  [.] __vdso_clock_gettime                                                              -      -            
+            |
+            ---clock_gettime
+               |          
+                --2.63%--std::sys::pal::unix::time::Timespec::now
+                          |          
+                           --2.32%--war_relay::server::Connection::drive_batched
+
+     4.64%  [.] tungstenite::protocol::WebSocketContext::read_bounded                             -      -            
+            |          
+             --2.45%--tungstenite::protocol::WebSocketContext::read_bounded
+                       |          
+                        --1.56%--war_relay::server::Connection::drive_batched
+                                  war_relay::server::Worker::run
+
+     3.58%  [.] core::hash::BuildHasher::hash_one                                                 -      -            
+            |          
+             --1.44%--core::hash::BuildHasher::hash_one
+
+     3.16%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout  -      -            
+            |          
+             --1.41%--<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout
+
+     2.19%  [.] war_relay::relay::Peer::enqueue_frame                                             -      -            
+            |          
+             --0.99%--war_relay::relay::Peer::enqueue_frame
+
+     2.11%  [.] bytes::bytes_mut::shared_v_drop                                                   -      -            
+            |          
+             --0.94%--bytes::bytes_mut::shared_v_drop
+
+     1.53%  [.] war_relay::server::socket::Socket::flush_locked                                   -      -            
+            |          
+             --0.82%--war_relay::server::socket::Socket::flush_locked
+
+     1.18%  [.] war_relay::server::Connection::deadline                                           -      -            
+     1.15%  [.] <core::hash::sip::Hasher<S> as core::hash::Hasher>::write                         -      -            
+     1.12%  [.] 0x000000000018fcb6                                                                -      -            
+     1.04%  [.] bytes::bytes_mut::shared_v_clone                                                  -      -            
+            |          
+             --0.71%--bytes::bytes_mut::shared_v_clone
+
+     0.89%  [.] bytes::bytes_mut::BytesMut::split_to                                              -      -            
+     0.88%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                        -      -            
+     0.87%  [.] war_relay::protocol::parse                                                        -      -            
+     0.79%  [.] 0x000000000018fc00                                                                -      -            
+     0.72%  [.] minicbor::decode::decoder::Decoder::array                                         -      -            
+
+
+#
+# (Tip: Search options using a keyword: perf report -h <keyword>)
+#

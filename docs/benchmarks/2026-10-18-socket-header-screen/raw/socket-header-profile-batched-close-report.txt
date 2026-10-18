@@ -1,0 +1,78 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cycles:u'
+# Event count (approx.): 7233177247
+#
+# Overhead  Symbol                                                                                IPC   [IPC Coverage]
+# ........  ....................................................................................  ....................
+#
+    11.49%  [.] war_relay::relay::Peer::enqueue_fanout                                            -      -            
+            |          
+             --2.22%--war_relay::relay::Peer::enqueue_fanout
+
+    11.39%  [.] war_relay::server::Connection::drive_batched                                      -      -            
+            |          
+             --2.29%--war_relay::server::Connection::drive_batched
+                       |          
+                        --0.79%--war_relay::server::Worker::run
+
+    10.02%  [.] war_relay::server::Worker::run                                                    -      -            
+            |          
+             --1.61%--war_relay::server::Worker::run
+                       |          
+                        --1.42%--std::sys::backtrace::__rust_begin_short_backtrace
+
+     9.52%  [.] war_relay::server::socket::write_batch                                            -      -            
+            |          
+             --2.03%--war_relay::server::socket::write_batch
+
+     6.61%  [.] war_relay::relay::ReceiveBatch::receive_bounded                                   -      -            
+            |          
+             --1.16%--war_relay::relay::ReceiveBatch::receive_bounded
+
+     6.29%  [.] __vdso_clock_gettime                                                              -      -            
+            |
+            ---clock_gettime
+               |          
+                --0.82%--std::sys::pal::unix::time::Timespec::now
+                          war_relay::server::Connection::drive_batched
+
+     5.80%  [.] war_relay::server::socket::Socket::notify                                         -      -            
+            |          
+             --1.01%--war_relay::server::socket::Socket::notify
+                       |          
+                        --0.89%--0x3f65
+
+     5.53%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send         -      -            
+            |          
+             --0.78%--<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send
+
+     4.55%  [.] tungstenite::protocol::WebSocketContext::read_bounded                             -      -            
+            |          
+             --0.84%--tungstenite::protocol::WebSocketContext::read_bounded
+
+     4.35%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout  -      -            
+            |          
+             --0.92%--<war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout
+
+     3.42%  [.] core::hash::BuildHasher::hash_one                                                 -      -            
+            |          
+             --0.98%--core::hash::BuildHasher::hash_one
+
+     1.73%  [.] war_relay::relay::Peer::enqueue_frame                                             -      -            
+     1.63%  [.] war_relay::server::socket::Socket::flush_locked                                   -      -            
+     1.60%  [.] bytes::bytes_mut::shared_v_drop                                                   -      -            
+     0.95%  [.] war_relay::server::Connection::deadline                                           -      -            
+     0.93%  [.] <core::hash::sip::Hasher<S> as core::hash::Hasher>::write                         -      -            
+     0.93%  [.] bytes::bytes_mut::BytesMut::split_to                                              -      -            
+     0.92%  [.] minicbor::decode::decoder::Decoder::unsigned                                      -      -            
+     0.90%  [.] 0x000000000018fcb6                                                                -      -            
+     0.87%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                        -      -            
+
+
+#
+# (Tip: Limit to show entries above 5% only: perf report --percent-limit 5)
+#
