@@ -59,6 +59,7 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 | [Direct CBOR byte-string parsing](benchmarks/2026-10-18-direct-bytes-screen/README.md) | Faster isolated parsing did not improve measured relay performance. |
 | [Socket recv substitution](benchmarks/2026-10-18-socket-recv-screen/README.md) | Lower throughput and higher CPU per delivery in the short screen. |
 | [Inline cached WebSocket headers](benchmarks/2026-10-18-frame-header-cache/README.md) | Larger queued metadata; lower fanout rates and higher CPU per delivery in both short candidate runs. |
+| [Notification/counter-layout screen](benchmarks/2026-10-18-notify-metrics-screen/README.md) | Zero redundant notification swaps in the diagnostic; separating counter groups did not improve whole-workload results. |
 | [Notification queue handoff](benchmarks/2026-10-18-pending-lock-screen/README.md) | Fewer measured lock collisions did not establish a repeatable application benefit. |
 
 A change earns selection through the required workload and invariants: low and consistent user latency, complete delivery, FIFO, shared payload ownership and bounded resource admission. Neither a microbenchmark win nor a shorter critical section establishes that by itself.
@@ -72,3 +73,5 @@ For full-population HTTP page acceptance, the mixed runner now supports `--http-
 Exact fanout diagnostics now include bounded controller-stage records, and acknowledgement collection uses a single five-second deadline with reusable batch storage (`57ba85c`). The [short controller screen and 100,000-user checks](benchmarks/2026-10-18-fanout-controller/README.md) show less queued-index overhead but no established whole-relay latency win. The verified client is also the default inspection benchmark executable.
 
 For short inspection/fanout screens, `scripts/inspection.py --fanout-close-window 32` exposes the existing checked departure batch outside timing; default one remains unchanged. The [outbound-header screen](benchmarks/2026-10-18-socket-header-screen/README.md) records the cleanup deadline failure, successful bounded teardown and rejected one-pass native candidate.
+
+`war_queued_bytes` is exact global admission accounting, including charged fanout membership snapshots as well as in-flight messages. It is a logical reservation gauge, not resident payload memory. Source `c4ba653` clarifies its HELP text; the manual running native baseline retains the older description until a later selected deployment.
