@@ -30,6 +30,8 @@ pub struct Metrics {
     pub read_buffer_reclaims: AtomicU64,
     pub read_buffer_reclaim_header_bytes: AtomicU64,
     pub read_buffer_reclaims_deferred: AtomicU64,
+    /// Exact global admission reservations, also exposed as a gauge. Includes
+    /// in-flight messages and charged fanout membership snapshots.
     pub queued_bytes: AtomicUsize,
     pub connections: AtomicUsize,
     pub variable_bytes: AtomicUsize,
@@ -265,7 +267,7 @@ impl Metrics {
             (
                 "queued_bytes",
                 self.queued_bytes.load(Relaxed),
-                "Reserved output payload bytes, including an in-flight write.",
+                "Logical output reservations used for global admission, including in-flight messages and active fanout membership snapshots; shared bodies may be charged per recipient.",
             ),
             (
                 "draining",
