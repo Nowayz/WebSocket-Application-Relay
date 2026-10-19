@@ -1,0 +1,54 @@
+✖ text welcome is rejected before typed-array length coercion (13.75527ms)
+✖ text reply is rejected before typed-array length coercion (2.343933ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 56.797459
+
+✖ failing tests:
+
+test at clients/js/connect.test.mjs:462:3
+✖ text welcome is rejected before typed-array length coercion (13.75527ms)
+  AssertionError [ERR_ASSERTION]: text must not select the typed-array length overload
+  + actual - expected
+  
+  + [
+  +   '1048576'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/connect.test.mjs:493:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ '1048576' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at clients/js/connect.test.mjs:462:3
+✖ text reply is rejected before typed-array length coercion (2.343933ms)
+  AssertionError [ERR_ASSERTION]: text must not select the typed-array length overload
+  + actual - expected
+  
+  + [
+  +   '1048576'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/connect.test.mjs:493:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ '1048576' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

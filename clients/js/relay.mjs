@@ -15,6 +15,11 @@ function encode(value) {
   try { return encoder.encode(value); }
   finally { encoding--; }
 }
+function decodeMessage(data) {
+  // A numeric string selects Uint8Array's length overload, not a byte view.
+  if (typeof data === 'string') throw new TypeError('Relay requires binary CBOR messages');
+  return decoder.decode(new Uint8Array(data));
+}
 // WebSocket.close() permits 1000 or application codes in 3000..4999.
 const CLIENT_PROTOCOL_ERROR = 4002;
 
@@ -68,7 +73,7 @@ export class Relay extends EventTarget {
     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
     const message = event => {
       try {
-        const envelope = decoder.decode(new Uint8Array(event.data));
+        const envelope = decodeMessage(event.data);
         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
         const [rawSender, value] = envelope;
         const sender = wireId(rawSender);
@@ -137,7 +142,7 @@ export class Relay extends EventTarget {
       const welcome = event => {
         cleanup();
         try {
-          const id = decoder.decode(new Uint8Array(event.data));
+          const id = decodeMessage(event.data);
           resolve(new Relay(ws, id, requestTimeoutMs));
         } catch (error) { fail(error, CLIENT_PROTOCOL_ERROR, 'Invalid Subscription'); }
       };

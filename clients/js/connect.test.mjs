@@ -457,3 +457,49 @@ test('a command send exception before forwarding also stops the command queue', 
   assert.equal(socket.closeCalls, 1);
   noSetupListeners(socket);
 });
+
+for (const phase of ['welcome', 'reply']) {
+  test(`text ${phase} is rejected before typed-array length coercion`, async () => {
+    let socket, outcomes;
+    if (phase === 'welcome') {
+      const pending = Relay.connect('ws://fixture', 'text-frame', { WebSocketClass: Socket });
+      socket = Socket.instance;
+      outcomes = Promise.allSettled([pending]);
+    } else {
+      socket = new CommandSocket();
+      const relay = new Relay(socket, 42);
+      outcomes = Promise.allSettled([relay.listen(1), relay.listen(2)]);
+      await commandTurn();
+      assert.equal(socket.sends, 1);
+    }
+    const original = globalThis.Uint8Array;
+    const textArguments = [];
+    // Intercept the dangerous overload without allocating the requested buffer.
+    globalThis.Uint8Array = new Proxy(original, {
+      construct(target, args, newTarget) {
+        if (typeof args[0] === 'string') {
+          textArguments.push(args[0]);
+          throw new Error('text reached typed-array allocation');
+        }
+        return Reflect.construct(target, args, newTarget);
+      },
+    });
+    try {
+      socket.dispatchEvent(new MessageEvent('message', { data: '1048576' }));
+    } finally {
+      globalThis.Uint8Array = original;
+    }
+    const results = await outcomes;
+    assert.deepEqual(textArguments, [], 'text must not select the typed-array length overload');
+    assert.equal(results[0].status, 'rejected');
+    assert.match(results[0].reason.message, /binary CBOR/);
+    assert.equal(socket.closeCalls, 1);
+    if (phase === 'reply') {
+      assert.equal(results[1].status, 'rejected');
+      assert.match(results[1].reason.message, /Relay is closed/);
+      assert.equal(socket.sends, 1, 'queued control must not reach the wire');
+    } else {
+      noSetupListeners(socket);
+    }
+  });
+}

@@ -133,6 +133,11 @@ Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports
 modern browsers through an ES module bundler and Node 22+. IDs are `BigInt`.
 Received IDs are checked for exact integer representation and uint64 range;
 welcome, departure and assigned session IDs also exclude reserved values.
+WebSocket welcome and data frames must be binary. Text frames are rejected before
+byte-view construction, avoiding numeric-string allocation coercion; the
+[binary-wire regressions](docs/benchmarks/2026-10-19-js-binary-wire/README.md) cover
+welcome, pending controls and queued commands. Application string values travel
+as CBOR inside binary frames.
 Wire envelopes and control reply bodies must be two-element arrays; arbitrary
 application values retain their CBOR types. The [response-shape check](docs/benchmarks/2026-10-18-js-response-shapes/README.md)
 covers byte-string lookalikes and missing/extra fields.

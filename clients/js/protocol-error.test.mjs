@@ -37,10 +37,13 @@ async function peer(t, mode) {
           if (mode !== 'server-close') frame(8, payload);
           socket.end();
         } else if (opcode === 2) {
-          if (++messages === 1) frame(2, mode === 'welcome' ? [0xf5] : [1]);
-          else {
+          if (++messages === 1) {
+            if (mode === 'text-welcome') frame(1, Buffer.from('1048576'));
+            else frame(2, mode === 'welcome' ? [0xf5] : [1]);
+          } else {
             commands++;
-            if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
+            if (mode === 'text-reply') frame(1, Buffer.from('1048576'));
+            else if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
             else if (mode === 'server-close') frame(8, [3, 234]); // 1002
           }
         }
@@ -51,11 +54,18 @@ async function peer(t, mode) {
   return { url: `ws://127.0.0.1:${server.address().port}`, closeCode, get commands() { return commands; } };
 }
 
-for (const mode of ['welcome', 'reply', 'timeout']) {
+for (const [mode, expectedError] of [
+  ['welcome', /Invalid/],
+  ['reply', /Invalid listener response/],
+  ['timeout', /request timeout/i],
+  ['text-welcome', /binary CBOR/],
+  ['text-reply', /binary CBOR/],
+]) {
   test(`real WebSocket closes with application code 4002 for invalid ${mode}`, { timeout: 2000 }, async t => {
     const remote = await peer(t, mode);
-    if (mode === 'welcome') {
-      await assert.rejects(Relay.connect(remote.url, 'fault-peer'), /Invalid/);
+    const welcome = mode.endsWith('welcome');
+    if (welcome) {
+      await assert.rejects(Relay.connect(remote.url, 'fault-peer'), expectedError);
     } else {
       const relay = await Relay.connect(remote.url, 'fault-peer');
       t.after(() => relay.close());
@@ -63,12 +73,12 @@ for (const mode of ['welcome', 'reply', 'timeout']) {
       const pending = relay.listen(1);
       const queued = relay.listen(2);
       await Promise.all([
-        assert.rejects(pending, mode === 'reply' ? /Invalid listener response/ : /request timeout/i),
+        assert.rejects(pending, expectedError),
         assert.rejects(queued, /Relay is closed/),
       ]);
     }
     assert.equal(await remote.closeCode, 4002);
-    assert.equal(remote.commands, mode === 'welcome' ? 0 : 1, 'queued command must not reach the wire');
+    assert.equal(remote.commands, welcome ? 0 : 1, 'queued command must not reach the wire');
   });
 }
 

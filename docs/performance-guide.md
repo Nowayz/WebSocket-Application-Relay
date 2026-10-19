@@ -168,3 +168,5 @@ Malformed upstream WebSocket frames now produce a bounded error-specific legacy 
 Both legacy bridge legs now apply the existing 256-frame asynchronous poll quota. The [upstream fragmentation regression](benchmarks/2026-10-19-bridge-upstream-fragments/README.md) checks cooperative yields during welcome and forwarding, exact payloads, coalesced release traffic and clean retirement. The fix is one existing API call; it adds no byte budget or native scheduler change.
 
 Unavailable legacy-bridge upstream connections now produce a bounded `1013 / Upstream Unavailable` Close. The [short refusal, recovery and real-deadline checks](benchmarks/2026-10-19-bridge-upstream-unavailable/README.md) cover single-slot reuse and later healthy traffic without adding retries or changing normal forwarding.
+
+The JavaScript client rejects WebSocket text before constructing a typed-array byte view. The [binary-wire allocation guard](benchmarks/2026-10-19-js-binary-wire/README.md) reproduces numeric-string length coercion safely, verifies pending/queued control retirement and checks the rebuilt browser bundle. Valid binary payload ownership is unchanged.
