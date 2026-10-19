@@ -6,6 +6,7 @@ population setup/teardown from the mixed workload. Profiles are diagnostic only.
 """
 import argparse
 import datetime
+import errno
 import hashlib
 import json
 import os
@@ -105,6 +106,9 @@ def check(event, stable_sessions, stable_channels, read_storage="worker", worker
 
 
 def run(args):
+    profile = args.output.with_suffix(".perf.data") if args.profile else None
+    if profile is not None and os.path.lexists(profile):
+        raise FileExistsError(errno.EEXIST, "profile output already exists", str(profile))
     port, admin = runtime.free_port(), runtime.free_port()
     while admin == port:
         admin = runtime.free_port()
@@ -208,7 +212,6 @@ def run(args):
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
                     check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     if args.profile:
-                        profile = args.output.with_suffix(".perf.data")
                         perf_log = tempfile.TemporaryFile()
                         perf = subprocess.Popen(["perf", "record", "-e", "cycles:u", "-F", "499", "--call-graph", "dwarf,8192",
                                                  "-p", str(server.pid), "-o", str(profile)], stdout=perf_log, stderr=perf_log)
@@ -335,7 +338,7 @@ if __name__ == "__main__":
         parser.error("--pin-client-workers requires --client-workers")
     try:
         outcome = run(arguments)
-    except FileExistsError:
-        parser.error(f"output already exists; choose a fresh receipt path: {arguments.output}")
+    except FileExistsError as error:
+        parser.error(f"output already exists; choose a fresh artifact path: {error.filename}")
     print(json.dumps({"passed": outcome["passed"], "error": outcome.get("error")}), flush=True)
     raise SystemExit(0 if outcome["passed"] else 1)

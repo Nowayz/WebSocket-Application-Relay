@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReceiptTest(unittest.TestCase):
-    def invoke(self, directory, output):
+    def invoke(self, directory, output, profile=False):
         marker = directory / 'server-started'
         server = directory / 'server'
         server.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
@@ -20,7 +20,8 @@ class ReceiptTest(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(ROOT / 'scripts/inspection.py'),
              '--server', str(server), '--client', '/bin/false',
-             '--server-cpus', '', '--client-cpus', '', '--output', str(output)],
+             '--server-cpus', '', '--client-cpus', '', '--output', str(output)]
+            + (['--profile'] if profile else []),
             cwd=ROOT, capture_output=True, text=True, timeout=10)
         return result, marker
 
@@ -46,6 +47,34 @@ class ReceiptTest(unittest.TestCase):
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertTrue(output.is_symlink())
             self.assertFalse(target.exists())
+            self.assertFalse(marker.exists())
+
+    def test_existing_profile_blocks_fresh_receipt_before_server_start(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            output = directory / 'run.new-extension'
+            profile = output.with_suffix('.perf.data')
+            evidence = b'previous raw profile evidence'
+            profile.write_bytes(evidence)
+            result, marker = self.invoke(directory, output, profile=True)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn(str(profile), result.stderr)
+            self.assertEqual(profile.read_bytes(), evidence)
+            self.assertFalse(output.exists())
+            self.assertFalse(marker.exists())
+
+    def test_dangling_profile_symlink_blocks_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            output = directory / 'run.json'
+            profile = output.with_suffix('.perf.data')
+            target = directory / 'absent-profile'
+            profile.symlink_to(target)
+            result, marker = self.invoke(directory, output, profile=True)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertTrue(profile.is_symlink())
+            self.assertFalse(target.exists())
+            self.assertFalse(output.exists())
             self.assertFalse(marker.exists())
 
     def test_fresh_path_records_startup_failure(self):
