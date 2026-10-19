@@ -1421,7 +1421,12 @@ For a separate two-second attribution run, add `--seconds 2 --profile`.
 The default profile target is the server. Add `--profile-target sidecar` to sample
 the fanout/inspection client, or `--profile-target capacity` for the private-load
 client. Nondefault targets require `--profile`. The receipt records the exact
-PID and perf command in `profile`; output prefixes remain exclusive. User-cycle
+PID and perf command in `profile`; output prefixes remain exclusive. The
+profiler must still be running after setup and immediately before the controller
+stops it. An early exit fails the run even with status zero. Controlled shutdown
+must produce a nonempty profile file; its byte count and SHA-256 are recorded
+alongside the profiler exit code. These structural checks do not establish sample
+coverage or make a profiled latency result suitable for ordinary comparisons. User-cycle
 sampling changes the measured workload, so exclude profiled runs from ordinary
 latency comparisons. Samples identify CPU work, not server-hop delay or the
 fraction of end-to-end latency caused by each component.

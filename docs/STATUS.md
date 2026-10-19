@@ -50,6 +50,14 @@ and one candidate completes 31/32 offered windows. Correctness remains true,
 but overall success correctly fails. All three profile targets are checked live;
 relay/client runtimes remain unchanged.
 
+The [profile-integrity fix](benchmarks/2026-10-18-profile-integrity/README.md)
+rejects a profiler that exits early with status zero or leaves missing/empty data.
+Before the fix, two injected early-success cases incorrectly returned overall
+success without a profile. Four failure fixtures now fail clearly and reap the
+target; real perf still succeeds and records exit code, data bytes and SHA-256.
+The ordinary paced/missed-load/unpaced gates remain unchanged. This is a
+measurement correctness fix; relay and client runtimes are untouched.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues

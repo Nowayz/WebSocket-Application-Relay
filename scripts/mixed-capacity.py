@@ -257,6 +257,10 @@ def main():
                                  'scope': 'Diagnostic user-cycle samples; exclude from ordinary timing comparisons'}
             perf = subprocess.Popen(command, stdout=log, stderr=log)
             time.sleep(.2)
+            code = perf.poll()
+            if code is not None:
+                record['profile']['exit_code'] = code
+                raise RuntimeError(f'profiler exited before measurement (status {code}); see {prefix}-perf.log')
         record['before'] = snapshot(server.pid)
         record['client_before'] = {'capacity': snapshot(capacity.pid), 'sidecar': snapshot(sidecar.pid)}
         began = time.monotonic(); resume(sidecar); resume(capacity)
@@ -278,7 +282,21 @@ def main():
         record['elapsed_seconds'] = time.monotonic() - began
         record['server_cpu_seconds'] = record['after']['cpu_seconds'] - record['before']['cpu_seconds']
         if perf:
-            perf.send_signal(signal.SIGINT); assert perf.wait(timeout=10) in (0, 130, -signal.SIGINT); perf = None
+            code = perf.poll()
+            if code is not None:
+                record['profile']['exit_code'] = code
+                raise RuntimeError(f'profiler exited before controller stop (status {code}); see {prefix}-perf.log')
+            perf.send_signal(signal.SIGINT)
+            code = perf.wait(timeout=10)
+            record['profile']['exit_code'] = code
+            perf = None
+            if code not in (0, 130, -signal.SIGINT):
+                raise RuntimeError(f'profiler stop failed (status {code}); see {prefix}-perf.log')
+            data_path = Path(str(prefix) + '.perf.data')
+            if not data_path.is_file() or data_path.stat().st_size == 0:
+                raise RuntimeError(f'profiler produced no data: {data_path}')
+            record['profile']['data_bytes'] = data_path.stat().st_size
+            record['profile']['data_sha256'] = digest(data_path)
         assert event(sidecar, 'sidecar_events')['event'] == 'measured'
         details = record['sidecar_events'][-1]['details']
         fanout = details['fanout']
