@@ -44,6 +44,7 @@ async function peer(t, mode) {
             commands++;
             if (mode === 'text-reply') frame(1, Buffer.from('1048576'));
             else if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
+            else if (mode === 'missing-variable') frame(2, [0x82, 0, 0x82, 0x18, 0xc8, 0x82, 0xf4, 0]);
             else if (mode === 'server-close') frame(8, [3, 234]); // 1002
           }
         }
@@ -57,6 +58,7 @@ async function peer(t, mode) {
 for (const [mode, expectedError] of [
   ['welcome', /Invalid/],
   ['reply', /Invalid listener response/],
+  ['missing-variable', /Invalid variable response/],
   ['timeout', /request timeout/i],
   ['text-welcome', /binary CBOR/],
   ['text-reply', /binary CBOR/],
@@ -70,7 +72,7 @@ for (const [mode, expectedError] of [
       const relay = await Relay.connect(remote.url, 'fault-peer');
       t.after(() => relay.close());
       if (mode === 'timeout') relay.requestTimeoutMs = 1;
-      const pending = relay.listen(1);
+      const pending = mode === 'missing-variable' ? relay.getVariable('missing') : relay.listen(1);
       const queued = relay.listen(2);
       await Promise.all([
         assert.rejects(pending, expectedError),

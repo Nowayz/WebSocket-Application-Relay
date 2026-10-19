@@ -89,7 +89,8 @@ export class Relay extends EventTarget {
             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
             throw new Error('Invalid listener response');
           }
-          if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean')) {
+          if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean'
+            || (result[0] === false && result[1] !== null))) {
             throw new Error('Invalid variable response');
           }
           this.#pending.resolve(result);

@@ -1,0 +1,90 @@
+--- a/clients/js/relay.mjs
++++ b/clients/js/relay.mjs
+@@ -89,7 +89,8 @@
+             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
+             throw new Error('Invalid listener response');
+           }
+-          if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean')) {
++          if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean'
++            || (result[0] === false && result[1] !== null))) {
+             throw new Error('Invalid variable response');
+           }
+           this.#pending.resolve(result);
+--- a/clients/js/connect.test.mjs
++++ b/clients/js/connect.test.mjs
+@@ -503,3 +503,48 @@
+     }
+   });
+ }
++
++test('missing-variable replies require null and retire pending and queued commands', async () => {
++  for (const invalid of [undefined, false, 0, '', [], {}, new Uint8Array()]) {
++    class ClosingSocket extends CommandSocket {
++      close(code, reason) { super.close(); this.lastClose = { code, reason }; }
++    }
++    const socket = new ClosingSocket();
++    const relay = new Relay(socket, 42n, 1000);
++    let value, firstError, queuedError;
++    const first = relay.getVariable('missing').then(result => { value = result; }, error => { firstError = error; });
++    const queued = relay.listen(1).catch(error => { queuedError = error; });
++    try {
++      await commandTurn();
++      socket.reply(200, [false, invalid]);
++      await commandTurn();
++      assert.match(firstError?.message ?? '', /Invalid variable response/);
++      assert.equal(value, undefined);
++      assert.match(queuedError?.message ?? '', /Relay is closed/);
++      assert.equal(socket.packets.length, 1, 'queued command must not reach the wire');
++      assert.equal(socket.lastClose.code, 4002);
++      assert.equal(socket.readyState, 2, 'rejection must not wait for peer Close acknowledgement');
++    } finally {
++      relay.close();
++      socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
++      await Promise.all([first, queued]);
++    }
++  }
++});
++
++test('missing null and stored null remain distinct variable results', async () => {
++  const socket = new CommandSocket();
++  const relay = new Relay(socket, 42n, 1000);
++  try {
++    for (const [found, value] of [[false, null], [true, null], [true, false], [true, 0], [true, ''], [true, [1, 'x']], [true, { nested: true }]]) {
++      const pending = relay.getVariable('key');
++      await commandTurn();
++      socket.reply(200, [found, value]);
++      assert.deepEqual(await pending, { found, value });
++      assert.equal(socket.closeCalls, 0);
++    }
++  } finally {
++    relay.close();
++    socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
++  }
++});
+--- a/clients/js/protocol-error.test.mjs
++++ b/clients/js/protocol-error.test.mjs
+@@ -44,6 +44,7 @@
+             commands++;
+             if (mode === 'text-reply') frame(1, Buffer.from('1048576'));
+             else if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
++            else if (mode === 'missing-variable') frame(2, [0x82, 0, 0x82, 0x18, 0xc8, 0x82, 0xf4, 0]);
+             else if (mode === 'server-close') frame(8, [3, 234]); // 1002
+           }
+         }
+@@ -57,6 +58,7 @@
+ for (const [mode, expectedError] of [
+   ['welcome', /Invalid/],
+   ['reply', /Invalid listener response/],
++  ['missing-variable', /Invalid variable response/],
+   ['timeout', /request timeout/i],
+   ['text-welcome', /binary CBOR/],
+   ['text-reply', /binary CBOR/],
+@@ -70,7 +72,7 @@
+       const relay = await Relay.connect(remote.url, 'fault-peer');
+       t.after(() => relay.close());
+       if (mode === 'timeout') relay.requestTimeoutMs = 1;
+-      const pending = relay.listen(1);
++      const pending = mode === 'missing-variable' ? relay.getVariable('missing') : relay.listen(1);
+       const queued = relay.listen(2);
+       await Promise.all([
+         assert.rejects(pending, expectedError),
