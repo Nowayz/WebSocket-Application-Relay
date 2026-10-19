@@ -1,0 +1,918 @@
+
+artifacts/candidates/single-write-control/war-relay:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000029d3f0 <war_relay::server::socket::write_batch>:
+  29d3f0:	55                   	push   %rbp
+  29d3f1:	41 57                	push   %r15
+  29d3f3:	41 56                	push   %r14
+  29d3f5:	41 55                	push   %r13
+  29d3f7:	41 54                	push   %r12
+  29d3f9:	53                   	push   %rbx
+  29d3fa:	48 81 ec 58 04 00 00 	sub    $0x458,%rsp
+  29d401:	49 89 cc             	mov    %rcx,%r12
+  29d404:	49 89 d7             	mov    %rdx,%r15
+  29d407:	48 89 74 24 48       	mov    %rsi,0x48(%rsp)
+  29d40c:	49 89 fe             	mov    %rdi,%r14
+  29d40f:	48 8d bc 24 18 03 00 	lea    0x318(%rsp),%rdi
+  29d416:	00 
+  29d417:	31 db                	xor    %ebx,%ebx
+  29d419:	ba 40 01 00 00       	mov    $0x140,%edx
+  29d41e:	31 f6                	xor    %esi,%esi
+  29d420:	ff 15 92 57 06 00    	call   *0x65792(%rip)        # 302bb8 <memset@GLIBC_2.2.5>
+  29d426:	0f 57 c0             	xorps  %xmm0,%xmm0
+  29d429:	0f 29 84 24 00 03 00 	movaps %xmm0,0x300(%rsp)
+  29d430:	00 
+  29d431:	0f 29 84 24 f0 02 00 	movaps %xmm0,0x2f0(%rsp)
+  29d438:	00 
+  29d439:	0f 29 84 24 e0 02 00 	movaps %xmm0,0x2e0(%rsp)
+  29d440:	00 
+  29d441:	0f 29 84 24 d0 02 00 	movaps %xmm0,0x2d0(%rsp)
+  29d448:	00 
+  29d449:	0f 29 84 24 c0 02 00 	movaps %xmm0,0x2c0(%rsp)
+  29d450:	00 
+  29d451:	0f 29 84 24 b0 02 00 	movaps %xmm0,0x2b0(%rsp)
+  29d458:	00 
+  29d459:	0f 29 84 24 a0 02 00 	movaps %xmm0,0x2a0(%rsp)
+  29d460:	00 
+  29d461:	0f 29 84 24 90 02 00 	movaps %xmm0,0x290(%rsp)
+  29d468:	00 
+  29d469:	49 8b 17             	mov    (%r15),%rdx
+  29d46c:	49 8b 77 18          	mov    0x18(%r15),%rsi
+  29d470:	48 85 f6             	test   %rsi,%rsi
+  29d473:	4c 89 7c 24 10       	mov    %r15,0x10(%rsp)
+  29d478:	48 89 54 24 28       	mov    %rdx,0x28(%rsp)
+  29d47d:	4c 89 74 24 18       	mov    %r14,0x18(%rsp)
+  29d482:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+  29d487:	48 89 74 24 40       	mov    %rsi,0x40(%rsp)
+  29d48c:	74 23                	je     29d4b1 <war_relay::server::socket::write_batch+0xc1>
+  29d48e:	49 8b 5f 10          	mov    0x10(%r15),%rbx
+  29d492:	31 c0                	xor    %eax,%eax
+  29d494:	48 39 d3             	cmp    %rdx,%rbx
+  29d497:	48 0f 43 c2          	cmovae %rdx,%rax
+  29d49b:	48 29 c3             	sub    %rax,%rbx
+  29d49e:	48 89 d0             	mov    %rdx,%rax
+  29d4a1:	48 29 d8             	sub    %rbx,%rax
+  29d4a4:	48 89 f1             	mov    %rsi,%rcx
+  29d4a7:	48 29 c1             	sub    %rax,%rcx
+  29d4aa:	76 09                	jbe    29d4b5 <war_relay::server::socket::write_batch+0xc5>
+  29d4ac:	48 89 d0             	mov    %rdx,%rax
+  29d4af:	eb 0a                	jmp    29d4bb <war_relay::server::socket::write_batch+0xcb>
+  29d4b1:	31 c0                	xor    %eax,%eax
+  29d4b3:	eb 04                	jmp    29d4b9 <war_relay::server::socket::write_batch+0xc9>
+  29d4b5:	48 8d 04 33          	lea    (%rbx,%rsi,1),%rax
+  29d4b9:	31 c9                	xor    %ecx,%ecx
+  29d4bb:	48 8b 54 24 10       	mov    0x10(%rsp),%rdx
+  29d4c0:	48 8b 52 08          	mov    0x8(%rdx),%rdx
+  29d4c4:	48 8d 34 9b          	lea    (%rbx,%rbx,4),%rsi
+  29d4c8:	48 c1 e6 04          	shl    $0x4,%rsi
+  29d4cc:	48 01 d6             	add    %rdx,%rsi
+  29d4cf:	48 8d 04 80          	lea    (%rax,%rax,4),%rax
+  29d4d3:	48 c1 e0 04          	shl    $0x4,%rax
+  29d4d7:	48 01 d0             	add    %rdx,%rax
+  29d4da:	48 8d 0c 89          	lea    (%rcx,%rcx,4),%rcx
+  29d4de:	48 c1 e1 04          	shl    $0x4,%rcx
+  29d4e2:	48 01 d1             	add    %rdx,%rcx
+  29d4e5:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+  29d4ea:	48 8d 9c 24 1a 03 00 	lea    0x31a(%rsp),%rbx
+  29d4f1:	00 
+  29d4f2:	45 31 e4             	xor    %r12d,%r12d
+  29d4f5:	48 89 54 24 20       	mov    %rdx,0x20(%rsp)
+  29d4fa:	48 89 54 24 38       	mov    %rdx,0x38(%rsp)
+  29d4ff:	90                   	nop
+  29d500:	48 39 c6             	cmp    %rax,%rsi
+  29d503:	74 0b                	je     29d510 <war_relay::server::socket::write_batch+0x120>
+  29d505:	49 89 c7             	mov    %rax,%r15
+  29d508:	eb 23                	jmp    29d52d <war_relay::server::socket::write_batch+0x13d>
+  29d50a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+  29d510:	4c 8b 7c 24 08       	mov    0x8(%rsp),%r15
+  29d515:	48 8b 74 24 38       	mov    0x38(%rsp),%rsi
+  29d51a:	4c 39 fe             	cmp    %r15,%rsi
+  29d51d:	48 89 44 24 08       	mov    %rax,0x8(%rsp)
+  29d522:	48 89 44 24 38       	mov    %rax,0x38(%rsp)
+  29d527:	0f 84 a2 00 00 00    	je     29d5cf <war_relay::server::socket::write_batch+0x1df>
+  29d52d:	c6 43 fe 82          	movb   $0x82,-0x2(%rbx)
+  29d531:	0f b6 56 32          	movzbl 0x32(%rsi),%edx
+  29d535:	48 8b 46 18          	mov    0x18(%rsi),%rax
+  29d539:	48 01 d0             	add    %rdx,%rax
+  29d53c:	48 83 f8 7e          	cmp    $0x7e,%rax
+  29d540:	73 0e                	jae    29d550 <war_relay::server::socket::write_batch+0x160>
+  29d542:	88 43 ff             	mov    %al,-0x1(%rbx)
+  29d545:	bf 02 00 00 00       	mov    $0x2,%edi
+  29d54a:	eb 33                	jmp    29d57f <war_relay::server::socket::write_batch+0x18f>
+  29d54c:	0f 1f 40 00          	nopl   0x0(%rax)
+  29d550:	48 3d 00 00 01 00    	cmp    $0x10000,%rax
+  29d556:	73 18                	jae    29d570 <war_relay::server::socket::write_batch+0x180>
+  29d558:	c6 43 ff 7e          	movb   $0x7e,-0x1(%rbx)
+  29d55c:	66 c1 c0 08          	rol    $0x8,%ax
+  29d560:	66 89 03             	mov    %ax,(%rbx)
+  29d563:	bf 04 00 00 00       	mov    $0x4,%edi
+  29d568:	eb 15                	jmp    29d57f <war_relay::server::socket::write_batch+0x18f>
+  29d56a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+  29d570:	c6 43 ff 7f          	movb   $0x7f,-0x1(%rbx)
+  29d574:	48 0f c8             	bswap  %rax
+  29d577:	48 89 03             	mov    %rax,(%rbx)
+  29d57a:	bf 0a 00 00 00       	mov    $0xa,%edi
+  29d57f:	80 fa 0b             	cmp    $0xb,%dl
+  29d582:	0f 83 5f 07 00 00    	jae    29dce7 <war_relay::server::socket::write_batch+0x8f7>
+  29d588:	48 8d 2c 17          	lea    (%rdi,%rdx,1),%rbp
+  29d58c:	48 83 fd 15          	cmp    $0x15,%rbp
+  29d590:	0f 83 7a 07 00 00    	jae    29dd10 <war_relay::server::socket::write_batch+0x920>
+  29d596:	4c 8d 6e 50          	lea    0x50(%rsi),%r13
+  29d59a:	4d 8d 74 24 01       	lea    0x1(%r12),%r14
+  29d59f:	48 83 c6 28          	add    $0x28,%rsi
+  29d5a3:	48 01 df             	add    %rbx,%rdi
+  29d5a6:	48 83 c7 fe          	add    $0xfffffffffffffffe,%rdi
+  29d5aa:	ff 15 60 53 06 00    	call   *0x65360(%rip)        # 302910 <memcpy@GLIBC_2.14>
+  29d5b0:	4a 89 ac e4 90 02 00 	mov    %rbp,0x290(%rsp,%r12,8)
+  29d5b7:	00 
+  29d5b8:	48 83 c3 14          	add    $0x14,%rbx
+  29d5bc:	4c 89 f8             	mov    %r15,%rax
+  29d5bf:	4c 89 ee             	mov    %r13,%rsi
+  29d5c2:	4d 89 f4             	mov    %r14,%r12
+  29d5c5:	49 83 fe 10          	cmp    $0x10,%r14
+  29d5c9:	0f 85 31 ff ff ff    	jne    29d500 <war_relay::server::socket::write_batch+0x110>
+  29d5cf:	48 c7 44 24 50 01 00 	movq   $0x1,0x50(%rsp)
+  29d5d6:	00 00 
+  29d5d8:	48 c7 44 24 58 00 00 	movq   $0x0,0x58(%rsp)
+  29d5df:	00 00 
+  29d5e1:	48 c7 44 24 60 01 00 	movq   $0x1,0x60(%rsp)
+  29d5e8:	00 00 
+  29d5ea:	48 c7 44 24 68 00 00 	movq   $0x0,0x68(%rsp)
+  29d5f1:	00 00 
+  29d5f3:	48 c7 44 24 70 01 00 	movq   $0x1,0x70(%rsp)
+  29d5fa:	00 00 
+  29d5fc:	48 c7 44 24 78 00 00 	movq   $0x0,0x78(%rsp)
+  29d603:	00 00 
+  29d605:	48 c7 84 24 80 00 00 	movq   $0x1,0x80(%rsp)
+  29d60c:	00 01 00 00 00 
+  29d611:	48 c7 84 24 88 00 00 	movq   $0x0,0x88(%rsp)
+  29d618:	00 00 00 00 00 
+  29d61d:	48 c7 84 24 90 00 00 	movq   $0x1,0x90(%rsp)
+  29d624:	00 01 00 00 00 
+  29d629:	48 c7 84 24 98 00 00 	movq   $0x0,0x98(%rsp)
+  29d630:	00 00 00 00 00 
+  29d635:	48 c7 84 24 a0 00 00 	movq   $0x1,0xa0(%rsp)
+  29d63c:	00 01 00 00 00 
+  29d641:	48 c7 84 24 a8 00 00 	movq   $0x0,0xa8(%rsp)
+  29d648:	00 00 00 00 00 
+  29d64d:	48 c7 84 24 b0 00 00 	movq   $0x1,0xb0(%rsp)
+  29d654:	00 01 00 00 00 
+  29d659:	48 c7 84 24 b8 00 00 	movq   $0x0,0xb8(%rsp)
+  29d660:	00 00 00 00 00 
+  29d665:	48 c7 84 24 c0 00 00 	movq   $0x1,0xc0(%rsp)
+  29d66c:	00 01 00 00 00 
+  29d671:	48 c7 84 24 c8 00 00 	movq   $0x0,0xc8(%rsp)
+  29d678:	00 00 00 00 00 
+  29d67d:	48 c7 84 24 d0 00 00 	movq   $0x1,0xd0(%rsp)
+  29d684:	00 01 00 00 00 
+  29d689:	48 c7 84 24 d8 00 00 	movq   $0x0,0xd8(%rsp)
+  29d690:	00 00 00 00 00 
+  29d695:	48 c7 84 24 e0 00 00 	movq   $0x1,0xe0(%rsp)
+  29d69c:	00 01 00 00 00 
+  29d6a1:	48 c7 84 24 e8 00 00 	movq   $0x0,0xe8(%rsp)
+  29d6a8:	00 00 00 00 00 
+  29d6ad:	48 c7 84 24 f0 00 00 	movq   $0x1,0xf0(%rsp)
+  29d6b4:	00 01 00 00 00 
+  29d6b9:	48 c7 84 24 f8 00 00 	movq   $0x0,0xf8(%rsp)
+  29d6c0:	00 00 00 00 00 
+  29d6c5:	48 c7 84 24 00 01 00 	movq   $0x1,0x100(%rsp)
+  29d6cc:	00 01 00 00 00 
+  29d6d1:	48 c7 84 24 08 01 00 	movq   $0x0,0x108(%rsp)
+  29d6d8:	00 00 00 00 00 
+  29d6dd:	48 c7 84 24 10 01 00 	movq   $0x1,0x110(%rsp)
+  29d6e4:	00 01 00 00 00 
+  29d6e9:	48 c7 84 24 18 01 00 	movq   $0x0,0x118(%rsp)
+  29d6f0:	00 00 00 00 00 
+  29d6f5:	48 c7 84 24 20 01 00 	movq   $0x1,0x120(%rsp)
+  29d6fc:	00 01 00 00 00 
+  29d701:	48 c7 84 24 28 01 00 	movq   $0x0,0x128(%rsp)
+  29d708:	00 00 00 00 00 
+  29d70d:	48 c7 84 24 30 01 00 	movq   $0x1,0x130(%rsp)
+  29d714:	00 01 00 00 00 
+  29d719:	48 c7 84 24 38 01 00 	movq   $0x0,0x138(%rsp)
+  29d720:	00 00 00 00 00 
+  29d725:	48 c7 84 24 40 01 00 	movq   $0x1,0x140(%rsp)
+  29d72c:	00 01 00 00 00 
+  29d731:	48 c7 84 24 48 01 00 	movq   $0x0,0x148(%rsp)
+  29d738:	00 00 00 00 00 
+  29d73d:	48 c7 84 24 50 01 00 	movq   $0x1,0x150(%rsp)
+  29d744:	00 01 00 00 00 
+  29d749:	48 c7 84 24 58 01 00 	movq   $0x0,0x158(%rsp)
+  29d750:	00 00 00 00 00 
+  29d755:	48 c7 84 24 60 01 00 	movq   $0x1,0x160(%rsp)
+  29d75c:	00 01 00 00 00 
+  29d761:	48 c7 84 24 68 01 00 	movq   $0x0,0x168(%rsp)
+  29d768:	00 00 00 00 00 
+  29d76d:	48 c7 84 24 70 01 00 	movq   $0x1,0x170(%rsp)
+  29d774:	00 01 00 00 00 
+  29d779:	48 c7 84 24 78 01 00 	movq   $0x0,0x178(%rsp)
+  29d780:	00 00 00 00 00 
+  29d785:	48 c7 84 24 80 01 00 	movq   $0x1,0x180(%rsp)
+  29d78c:	00 01 00 00 00 
+  29d791:	48 c7 84 24 88 01 00 	movq   $0x0,0x188(%rsp)
+  29d798:	00 00 00 00 00 
+  29d79d:	48 c7 84 24 90 01 00 	movq   $0x1,0x190(%rsp)
+  29d7a4:	00 01 00 00 00 
+  29d7a9:	48 c7 84 24 98 01 00 	movq   $0x0,0x198(%rsp)
+  29d7b0:	00 00 00 00 00 
+  29d7b5:	48 c7 84 24 a0 01 00 	movq   $0x1,0x1a0(%rsp)
+  29d7bc:	00 01 00 00 00 
+  29d7c1:	48 c7 84 24 a8 01 00 	movq   $0x0,0x1a8(%rsp)
+  29d7c8:	00 00 00 00 00 
+  29d7cd:	48 c7 84 24 b0 01 00 	movq   $0x1,0x1b0(%rsp)
+  29d7d4:	00 01 00 00 00 
+  29d7d9:	48 c7 84 24 b8 01 00 	movq   $0x0,0x1b8(%rsp)
+  29d7e0:	00 00 00 00 00 
+  29d7e5:	48 c7 84 24 c0 01 00 	movq   $0x1,0x1c0(%rsp)
+  29d7ec:	00 01 00 00 00 
+  29d7f1:	48 c7 84 24 c8 01 00 	movq   $0x0,0x1c8(%rsp)
+  29d7f8:	00 00 00 00 00 
+  29d7fd:	48 c7 84 24 d0 01 00 	movq   $0x1,0x1d0(%rsp)
+  29d804:	00 01 00 00 00 
+  29d809:	48 c7 84 24 d8 01 00 	movq   $0x0,0x1d8(%rsp)
+  29d810:	00 00 00 00 00 
+  29d815:	48 c7 84 24 e0 01 00 	movq   $0x1,0x1e0(%rsp)
+  29d81c:	00 01 00 00 00 
+  29d821:	48 c7 84 24 e8 01 00 	movq   $0x0,0x1e8(%rsp)
+  29d828:	00 00 00 00 00 
+  29d82d:	48 c7 84 24 f0 01 00 	movq   $0x1,0x1f0(%rsp)
+  29d834:	00 01 00 00 00 
+  29d839:	48 c7 84 24 f8 01 00 	movq   $0x0,0x1f8(%rsp)
+  29d840:	00 00 00 00 00 
+  29d845:	48 c7 84 24 00 02 00 	movq   $0x1,0x200(%rsp)
+  29d84c:	00 01 00 00 00 
+  29d851:	48 c7 84 24 08 02 00 	movq   $0x0,0x208(%rsp)
+  29d858:	00 00 00 00 00 
+  29d85d:	48 c7 84 24 10 02 00 	movq   $0x1,0x210(%rsp)
+  29d864:	00 01 00 00 00 
+  29d869:	48 c7 84 24 18 02 00 	movq   $0x0,0x218(%rsp)
+  29d870:	00 00 00 00 00 
+  29d875:	48 c7 84 24 20 02 00 	movq   $0x1,0x220(%rsp)
+  29d87c:	00 01 00 00 00 
+  29d881:	48 c7 84 24 28 02 00 	movq   $0x0,0x228(%rsp)
+  29d888:	00 00 00 00 00 
+  29d88d:	48 c7 84 24 30 02 00 	movq   $0x1,0x230(%rsp)
+  29d894:	00 01 00 00 00 
+  29d899:	48 c7 84 24 38 02 00 	movq   $0x0,0x238(%rsp)
+  29d8a0:	00 00 00 00 00 
+  29d8a5:	48 c7 84 24 40 02 00 	movq   $0x1,0x240(%rsp)
+  29d8ac:	00 01 00 00 00 
+  29d8b1:	48 c7 84 24 48 02 00 	movq   $0x0,0x248(%rsp)
+  29d8b8:	00 00 00 00 00 
+  29d8bd:	48 8b 74 24 40       	mov    0x40(%rsp),%rsi
+  29d8c2:	48 85 f6             	test   %rsi,%rsi
+  29d8c5:	74 3e                	je     29d905 <war_relay::server::socket::write_batch+0x515>
+  29d8c7:	48 8b 44 24 10       	mov    0x10(%rsp),%rax
+  29d8cc:	48 8b 40 10          	mov    0x10(%rax),%rax
+  29d8d0:	31 c9                	xor    %ecx,%ecx
+  29d8d2:	48 8b 54 24 28       	mov    0x28(%rsp),%rdx
+  29d8d7:	48 39 d0             	cmp    %rdx,%rax
+  29d8da:	48 0f 43 ca          	cmovae %rdx,%rcx
+  29d8de:	48 29 c8             	sub    %rcx,%rax
+  29d8e1:	48 29 c2             	sub    %rax,%rdx
+  29d8e4:	48 89 f1             	mov    %rsi,%rcx
+  29d8e7:	48 29 d1             	sub    %rdx,%rcx
+  29d8ea:	48 8b 5c 24 30       	mov    0x30(%rsp),%rbx
+  29d8ef:	4c 8d b4 24 18 03 00 	lea    0x318(%rsp),%r14
+  29d8f6:	00 
+  29d8f7:	76 21                	jbe    29d91a <war_relay::server::socket::write_batch+0x52a>
+  29d8f9:	4c 8b 7c 24 20       	mov    0x20(%rsp),%r15
+  29d8fe:	48 8b 54 24 28       	mov    0x28(%rsp),%rdx
+  29d903:	eb 22                	jmp    29d927 <war_relay::server::socket::write_batch+0x537>
+  29d905:	31 c0                	xor    %eax,%eax
+  29d907:	31 d2                	xor    %edx,%edx
+  29d909:	31 c9                	xor    %ecx,%ecx
+  29d90b:	48 8b 5c 24 30       	mov    0x30(%rsp),%rbx
+  29d910:	4c 8d b4 24 18 03 00 	lea    0x318(%rsp),%r14
+  29d917:	00 
+  29d918:	eb 08                	jmp    29d922 <war_relay::server::socket::write_batch+0x532>
+  29d91a:	48 01 c6             	add    %rax,%rsi
+  29d91d:	31 c9                	xor    %ecx,%ecx
+  29d91f:	48 89 f2             	mov    %rsi,%rdx
+  29d922:	4c 8b 7c 24 20       	mov    0x20(%rsp),%r15
+  29d927:	48 8d 34 80          	lea    (%rax,%rax,4),%rsi
+  29d92b:	48 c1 e6 04          	shl    $0x4,%rsi
+  29d92f:	4c 01 fe             	add    %r15,%rsi
+  29d932:	48 8d 04 92          	lea    (%rdx,%rdx,4),%rax
+  29d936:	48 c1 e0 04          	shl    $0x4,%rax
+  29d93a:	4c 01 f8             	add    %r15,%rax
+  29d93d:	48 8d 0c 89          	lea    (%rcx,%rcx,4),%rcx
+  29d941:	48 c1 e1 04          	shl    $0x4,%rcx
+  29d945:	4c 01 f9             	add    %r15,%rcx
+  29d948:	31 d2                	xor    %edx,%edx
+  29d94a:	31 ed                	xor    %ebp,%ebp
+  29d94c:	eb 19                	jmp    29d967 <war_relay::server::socket::write_batch+0x577>
+  29d94e:	66 90                	xchg   %ax,%ax
+  29d950:	49 83 c0 50          	add    $0x50,%r8
+  29d954:	49 83 c6 14          	add    $0x14,%r14
+  29d958:	48 ff c2             	inc    %rdx
+  29d95b:	4c 89 c6             	mov    %r8,%rsi
+  29d95e:	48 85 db             	test   %rbx,%rbx
+  29d961:	0f 84 e7 00 00 00    	je     29da4e <war_relay::server::socket::write_batch+0x65e>
+  29d967:	48 83 fa 10          	cmp    $0x10,%rdx
+  29d96b:	0f 84 dd 00 00 00    	je     29da4e <war_relay::server::socket::write_batch+0x65e>
+  29d971:	48 39 c6             	cmp    %rax,%rsi
+  29d974:	74 0a                	je     29d980 <war_relay::server::socket::write_batch+0x590>
+  29d976:	49 89 f0             	mov    %rsi,%r8
+  29d979:	eb 1a                	jmp    29d995 <war_relay::server::socket::write_batch+0x5a5>
+  29d97b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+  29d980:	49 39 cf             	cmp    %rcx,%r15
+  29d983:	4d 89 f8             	mov    %r15,%r8
+  29d986:	48 89 c8             	mov    %rcx,%rax
+  29d989:	48 89 f1             	mov    %rsi,%rcx
+  29d98c:	49 89 f7             	mov    %rsi,%r15
+  29d98f:	0f 84 b9 00 00 00    	je     29da4e <war_relay::server::socket::write_batch+0x65e>
+  29d995:	4d 8b 10             	mov    (%r8),%r10
+  29d998:	4c 8b 8c d4 90 02 00 	mov    0x290(%rsp,%rdx,8),%r9
+  29d99f:	00 
+  29d9a0:	4d 39 d1             	cmp    %r10,%r9
+  29d9a3:	4c 89 d7             	mov    %r10,%rdi
+  29d9a6:	49 0f 42 f9          	cmovb  %r9,%rdi
+  29d9aa:	48 8d 34 1f          	lea    (%rdi,%rbx,1),%rsi
+  29d9ae:	4c 39 ce             	cmp    %r9,%rsi
+  29d9b1:	72 03                	jb     29d9b6 <war_relay::server::socket::write_batch+0x5c6>
+  29d9b3:	4c 89 ce             	mov    %r9,%rsi
+  29d9b6:	49 89 fb             	mov    %rdi,%r11
+  29d9b9:	49 01 db             	add    %rbx,%r11
+  29d9bc:	0f 82 3c 03 00 00    	jb     29dcfe <war_relay::server::socket::write_batch+0x90e>
+  29d9c2:	48 83 fe 15          	cmp    $0x15,%rsi
+  29d9c6:	0f 83 32 03 00 00    	jae    29dcfe <war_relay::server::socket::write_batch+0x90e>
+  29d9cc:	48 39 fe             	cmp    %rdi,%rsi
+  29d9cf:	74 2a                	je     29d9fb <war_relay::server::socket::write_batch+0x60b>
+  29d9d1:	48 83 fd 1f          	cmp    $0x1f,%rbp
+  29d9d5:	0f 87 93 03 00 00    	ja     29dd6e <war_relay::server::socket::write_batch+0x97e>
+  29d9db:	48 29 fe             	sub    %rdi,%rsi
+  29d9de:	4c 01 f7             	add    %r14,%rdi
+  29d9e1:	49 89 ea             	mov    %rbp,%r10
+  29d9e4:	49 c1 e2 04          	shl    $0x4,%r10
+  29d9e8:	4a 89 7c 14 50       	mov    %rdi,0x50(%rsp,%r10,1)
+  29d9ed:	4a 89 74 14 58       	mov    %rsi,0x58(%rsp,%r10,1)
+  29d9f2:	48 ff c5             	inc    %rbp
+  29d9f5:	48 29 f3             	sub    %rsi,%rbx
+  29d9f8:	4d 8b 10             	mov    (%r8),%r10
+  29d9fb:	49 8b 70 10          	mov    0x10(%r8),%rsi
+  29d9ff:	4d 8b 58 18          	mov    0x18(%r8),%r11
+  29da03:	4d 29 ca             	sub    %r9,%r10
+  29da06:	41 b9 00 00 00 00    	mov    $0x0,%r9d
+  29da0c:	4d 0f 43 ca          	cmovae %r10,%r9
+  29da10:	49 8d 3c 19          	lea    (%r9,%rbx,1),%rdi
+  29da14:	4c 39 df             	cmp    %r11,%rdi
+  29da17:	72 03                	jb     29da1c <war_relay::server::socket::write_batch+0x62c>
+  29da19:	4c 89 df             	mov    %r11,%rdi
+  29da1c:	4c 29 cf             	sub    %r9,%rdi
+  29da1f:	0f 86 2b ff ff ff    	jbe    29d950 <war_relay::server::socket::write_batch+0x560>
+  29da25:	48 83 fd 1f          	cmp    $0x1f,%rbp
+  29da29:	0f 87 54 03 00 00    	ja     29dd83 <war_relay::server::socket::write_batch+0x993>
+  29da2f:	4c 01 ce             	add    %r9,%rsi
+  29da32:	49 89 e9             	mov    %rbp,%r9
+  29da35:	49 c1 e1 04          	shl    $0x4,%r9
+  29da39:	4a 89 74 0c 50       	mov    %rsi,0x50(%rsp,%r9,1)
+  29da3e:	4a 89 7c 0c 58       	mov    %rdi,0x58(%rsp,%r9,1)
+  29da43:	48 ff c5             	inc    %rbp
+  29da46:	48 29 fb             	sub    %rdi,%rbx
+  29da49:	e9 02 ff ff ff       	jmp    29d950 <war_relay::server::socket::write_batch+0x560>
+  29da4e:	48 83 fd 20          	cmp    $0x20,%rbp
+  29da52:	0f 87 e6 02 00 00    	ja     29dd3e <war_relay::server::socket::write_batch+0x94e>
+  29da58:	48 8d 9c 24 70 02 00 	lea    0x270(%rsp),%rbx
+  29da5f:	00 
+  29da60:	4c 8d a4 24 50 02 00 	lea    0x250(%rsp),%r12
+  29da67:	00 
+  29da68:	4c 8b 3d c1 60 06 00 	mov    0x660c1(%rip),%r15        # 303b30 <sendmsg@GLIBC_2.2.5>
+  29da6f:	4c 8b 35 c2 56 06 00 	mov    0x656c2(%rip),%r14        # 303138 <__errno_location@GLIBC_2.2.5>
+  29da76:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+  29da7d:	00 00 00 
+  29da80:	48 8b 44 24 48       	mov    0x48(%rsp),%rax
+  29da85:	8b 38                	mov    (%rax),%edi
+  29da87:	85 ff                	test   %edi,%edi
+  29da89:	0f 88 96 02 00 00    	js     29dd25 <war_relay::server::socket::write_batch+0x935>
+  29da8f:	0f 57 c0             	xorps  %xmm0,%xmm0
+  29da92:	0f 29 84 24 50 02 00 	movaps %xmm0,0x250(%rsp)
+  29da99:	00 
+  29da9a:	0f 11 03             	movups %xmm0,(%rbx)
+  29da9d:	48 c7 43 10 00 00 00 	movq   $0x0,0x10(%rbx)
+  29daa4:	00 
+  29daa5:	48 8d 44 24 50       	lea    0x50(%rsp),%rax
+  29daaa:	48 89 84 24 60 02 00 	mov    %rax,0x260(%rsp)
+  29dab1:	00 
+  29dab2:	48 89 ac 24 68 02 00 	mov    %rbp,0x268(%rsp)
+  29dab9:	00 
+  29daba:	4c 89 e6             	mov    %r12,%rsi
+  29dabd:	31 d2                	xor    %edx,%edx
+  29dabf:	41 ff d7             	call   *%r15
+  29dac2:	48 83 f8 ff          	cmp    $0xffffffffffffffff,%rax
+  29dac6:	75 2f                	jne    29daf7 <war_relay::server::socket::write_batch+0x707>
+  29dac8:	41 ff d6             	call   *%r14
+  29dacb:	44 8b 28             	mov    (%rax),%r13d
+  29dace:	49 c1 e5 20          	shl    $0x20,%r13
+  29dad2:	49 83 cd 02          	or     $0x2,%r13
+  29dad6:	4c 89 ef             	mov    %r13,%rdi
+  29dad9:	e8 92 2d fa ff       	call   240870 <std::io::error::Error::kind>
+  29dade:	3c 23                	cmp    $0x23,%al
+  29dae0:	74 9e                	je     29da80 <war_relay::server::socket::write_batch+0x690>
+  29dae2:	48 8b 44 24 18       	mov    0x18(%rsp),%rax
+  29dae7:	4c 89 68 08          	mov    %r13,0x8(%rax)
+  29daeb:	48 c7 00 01 00 00 00 	movq   $0x1,(%rax)
+  29daf2:	e9 de 01 00 00       	jmp    29dcd5 <war_relay::server::socket::write_batch+0x8e5>
+  29daf7:	48 85 c0             	test   %rax,%rax
+  29dafa:	0f 84 bb 01 00 00    	je     29dcbb <war_relay::server::socket::write_batch+0x8cb>
+  29db00:	45 31 ed             	xor    %r13d,%r13d
+  29db03:	bd 04 00 00 00       	mov    $0x4,%ebp
+  29db08:	48 c7 44 24 08 00 00 	movq   $0x0,0x8(%rsp)
+  29db0f:	00 00 
+  29db11:	49 89 c7             	mov    %rax,%r15
+  29db14:	48 8b 5c 24 10       	mov    0x10(%rsp),%rbx
+  29db19:	eb 1e                	jmp    29db39 <war_relay::server::socket::write_batch+0x749>
+  29db1b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+  29db20:	49 89 ed             	mov    %rbp,%r13
+  29db23:	4d 01 f5             	add    %r14,%r13
+  29db26:	48 ff 44 24 08       	incq   0x8(%rsp)
+  29db2b:	bd 04 00 00 00       	mov    $0x4,%ebp
+  29db30:	4d 29 e7             	sub    %r12,%r15
+  29db33:	0f 84 63 01 00 00    	je     29dc9c <war_relay::server::socket::write_batch+0x8ac>
+  29db39:	48 8b 4b 18          	mov    0x18(%rbx),%rcx
+  29db3d:	48 85 c9             	test   %rcx,%rcx
+  29db40:	0f 84 0f 02 00 00    	je     29dd55 <war_relay::server::socket::write_batch+0x965>
+  29db46:	48 8b 73 10          	mov    0x10(%rbx),%rsi
+  29db4a:	48 8b 3b             	mov    (%rbx),%rdi
+  29db4d:	48 39 fe             	cmp    %rdi,%rsi
+  29db50:	41 b8 00 00 00 00    	mov    $0x0,%r8d
+  29db56:	4c 0f 43 c7          	cmovae %rdi,%r8
+  29db5a:	48 8b 53 08          	mov    0x8(%rbx),%rdx
+  29db5e:	49 89 f1             	mov    %rsi,%r9
+  29db61:	4d 29 c1             	sub    %r8,%r9
+  29db64:	4f 8d 04 89          	lea    (%r9,%r9,4),%r8
+  29db68:	49 c1 e0 04          	shl    $0x4,%r8
+  29db6c:	46 0f b6 74 02 32    	movzbl 0x32(%rdx,%r8,1),%r14d
+  29db72:	4e 03 74 02 18       	add    0x18(%rdx,%r8,1),%r14
+  29db77:	49 81 fe 00 00 01 00 	cmp    $0x10000,%r14
+  29db7e:	41 b9 0a 00 00 00    	mov    $0xa,%r9d
+  29db84:	4c 0f 42 cd          	cmovb  %rbp,%r9
+  29db88:	49 83 fe 7e          	cmp    $0x7e,%r14
+  29db8c:	41 ba 02 00 00 00    	mov    $0x2,%r10d
+  29db92:	4d 0f 42 ca          	cmovb  %r10,%r9
+  29db96:	4e 8b 14 02          	mov    (%rdx,%r8,1),%r10
+  29db9a:	4d 89 f3             	mov    %r14,%r11
+  29db9d:	4d 29 d3             	sub    %r10,%r11
+  29dba0:	4d 01 cb             	add    %r9,%r11
+  29dba3:	4d 39 fb             	cmp    %r15,%r11
+  29dba6:	4d 89 fc             	mov    %r15,%r12
+  29dba9:	4d 0f 42 e3          	cmovb  %r11,%r12
+  29dbad:	4d 01 e2             	add    %r12,%r10
+  29dbb0:	4e 89 14 02          	mov    %r10,(%rdx,%r8,1)
+  29dbb4:	4d 39 fb             	cmp    %r15,%r11
+  29dbb7:	0f 87 73 ff ff ff    	ja     29db30 <war_relay::server::socket::write_batch+0x740>
+  29dbbd:	4c 89 ed             	mov    %r13,%rbp
+  29dbc0:	4c 8d 46 01          	lea    0x1(%rsi),%r8
+  29dbc4:	49 39 f8             	cmp    %rdi,%r8
+  29dbc7:	41 b8 00 00 00 00    	mov    $0x0,%r8d
+  29dbcd:	4c 0f 43 c7          	cmovae %rdi,%r8
+  29dbd1:	49 f7 d8             	neg    %r8
+  29dbd4:	4a 8d 3c 06          	lea    (%rsi,%r8,1),%rdi
+  29dbd8:	48 ff c7             	inc    %rdi
+  29dbdb:	48 89 7b 10          	mov    %rdi,0x10(%rbx)
+  29dbdf:	48 ff c9             	dec    %rcx
+  29dbe2:	48 89 4b 18          	mov    %rcx,0x18(%rbx)
+  29dbe6:	48 8d 0c b6          	lea    (%rsi,%rsi,4),%rcx
+  29dbea:	48 c1 e1 04          	shl    $0x4,%rcx
+  29dbee:	0f 10 44 0a 40       	movups 0x40(%rdx,%rcx,1),%xmm0
+  29dbf3:	0f 29 84 24 90 00 00 	movaps %xmm0,0x90(%rsp)
+  29dbfa:	00 
+  29dbfb:	0f 10 04 0a          	movups (%rdx,%rcx,1),%xmm0
+  29dbff:	0f 10 4c 0a 10       	movups 0x10(%rdx,%rcx,1),%xmm1
+  29dc04:	0f 10 54 0a 20       	movups 0x20(%rdx,%rcx,1),%xmm2
+  29dc09:	0f 10 5c 0a 30       	movups 0x30(%rdx,%rcx,1),%xmm3
+  29dc0e:	0f 29 9c 24 80 00 00 	movaps %xmm3,0x80(%rsp)
+  29dc15:	00 
+  29dc16:	0f 29 54 24 70       	movaps %xmm2,0x70(%rsp)
+  29dc1b:	0f 29 4c 24 60       	movaps %xmm1,0x60(%rsp)
+  29dc20:	0f 29 44 24 50       	movaps %xmm0,0x50(%rsp)
+  29dc25:	81 bc 24 98 00 00 00 	cmpl   $0x3b9aca00,0x98(%rsp)
+  29dc2c:	00 ca 9a 3b 
+  29dc30:	0f 84 ea fe ff ff    	je     29db20 <war_relay::server::socket::write_batch+0x730>
+  29dc36:	49 89 c5             	mov    %rax,%r13
+  29dc39:	48 8b 54 24 68       	mov    0x68(%rsp),%rdx
+  29dc3e:	48 8b 9c 24 88 00 00 	mov    0x88(%rsp),%rbx
+  29dc45:	00 
+  29dc46:	0f b6 84 24 82 00 00 	movzbl 0x82(%rsp),%eax
+  29dc4d:	00 
+  29dc4e:	48 01 d0             	add    %rdx,%rax
+  29dc51:	f0 48 29 43 18       	lock sub %rax,0x18(%rbx)
+  29dc56:	48 8b 4b 10          	mov    0x10(%rbx),%rcx
+  29dc5a:	f0 48 29 81 b8 00 00 	lock sub %rax,0xb8(%rcx)
+  29dc61:	00 
+  29dc62:	48 8b 7c 24 70       	mov    0x70(%rsp),%rdi
+  29dc67:	48 8b 44 24 58       	mov    0x58(%rsp),%rax
+  29dc6c:	48 8b 74 24 60       	mov    0x60(%rsp),%rsi
+  29dc71:	ff 50 20             	call   *0x20(%rax)
+  29dc74:	f0 48 ff 0b          	lock decq (%rbx)
+  29dc78:	4c 89 e8             	mov    %r13,%rax
+  29dc7b:	48 8b 5c 24 10       	mov    0x10(%rsp),%rbx
+  29dc80:	0f 85 9a fe ff ff    	jne    29db20 <war_relay::server::socket::write_batch+0x730>
+  29dc86:	48 8d bc 24 88 00 00 	lea    0x88(%rsp),%rdi
+  29dc8d:	00 
+  29dc8e:	ff 15 6c 6a 06 00    	call   *0x66a6c(%rip)        # 304700 <_DYNAMIC+0x2000>
+  29dc94:	4c 89 e8             	mov    %r13,%rax
+  29dc97:	e9 84 fe ff ff       	jmp    29db20 <war_relay::server::socket::write_batch+0x730>
+  29dc9c:	48 8b 4c 24 18       	mov    0x18(%rsp),%rcx
+  29dca1:	48 89 41 08          	mov    %rax,0x8(%rcx)
+  29dca5:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+  29dcaa:	48 89 41 10          	mov    %rax,0x10(%rcx)
+  29dcae:	4c 89 69 18          	mov    %r13,0x18(%rcx)
+  29dcb2:	48 c7 01 00 00 00 00 	movq   $0x0,(%rcx)
+  29dcb9:	eb 1a                	jmp    29dcd5 <war_relay::server::socket::write_batch+0x8e5>
+  29dcbb:	48 b8 03 00 00 00 17 	movabs $0x1700000003,%rax
+  29dcc2:	00 00 00 
+  29dcc5:	48 8b 4c 24 18       	mov    0x18(%rsp),%rcx
+  29dcca:	48 89 41 08          	mov    %rax,0x8(%rcx)
+  29dcce:	48 c7 01 01 00 00 00 	movq   $0x1,(%rcx)
+  29dcd5:	48 81 c4 58 04 00 00 	add    $0x458,%rsp
+  29dcdc:	5b                   	pop    %rbx
+  29dcdd:	41 5c                	pop    %r12
+  29dcdf:	41 5d                	pop    %r13
+  29dce1:	41 5e                	pop    %r14
+  29dce3:	41 5f                	pop    %r15
+  29dce5:	5d                   	pop    %rbp
+  29dce6:	c3                   	ret
+  29dce7:	48 8d 0d 02 09 06 00 	lea    0x60902(%rip),%rcx        # 2fe5f0 <war_relay::admin::set_drain::__CALLSITE::META+0xa8>
+  29dcee:	48 89 d6             	mov    %rdx,%rsi
+  29dcf1:	ba 0a 00 00 00       	mov    $0xa,%edx
+  29dcf6:	31 ff                	xor    %edi,%edi
+  29dcf8:	ff 15 52 4d 06 00    	call   *0x64d52(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29dcfe:	48 8d 0d 53 14 06 00 	lea    0x61453(%rip),%rcx        # 2ff158 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x218>
+  29dd05:	ba 14 00 00 00       	mov    $0x14,%edx
+  29dd0a:	ff 15 40 4d 06 00    	call   *0x64d40(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29dd10:	48 8d 0d b9 14 06 00 	lea    0x614b9(%rip),%rcx        # 2ff1d0 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x290>
+  29dd17:	ba 14 00 00 00       	mov    $0x14,%edx
+  29dd1c:	48 89 ee             	mov    %rbp,%rsi
+  29dd1f:	ff 15 2b 4d 06 00    	call   *0x64d2b(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29dd25:	48 8d 3d 43 e3 da ff 	lea    -0x251cbd(%rip),%rdi        # 4c06f <anon.27b2063a31928d9007bc497c67c84f18.462.llvm.11158727082986339532+0x2014>
+  29dd2c:	48 8d 15 5d 01 06 00 	lea    0x6015d(%rip),%rdx        # 2fde90 <anon.27b2063a31928d9007bc497c67c84f18.465.llvm.11158727082986339532+0x2800>
+  29dd33:	be 19 00 00 00       	mov    $0x19,%esi
+  29dd38:	ff 15 32 4d 06 00    	call   *0x64d32(%rip)        # 302a70 <_DYNAMIC+0x370>
+  29dd3e:	48 8d 0d fb 13 06 00 	lea    0x613fb(%rip),%rcx        # 2ff140 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x200>
+  29dd45:	ba 20 00 00 00       	mov    $0x20,%edx
+  29dd4a:	31 ff                	xor    %edi,%edi
+  29dd4c:	48 89 ee             	mov    %rbp,%rsi
+  29dd4f:	ff 15 fb 4c 06 00    	call   *0x64cfb(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29dd55:	48 8d 3d c2 f9 da ff 	lea    -0x25063e(%rip),%rdi        # 4d71e <anon.80418fe5d6e686531d944f4e4a4ce634.1155.llvm.13350310170425112742+0x7f0>
+  29dd5c:	48 8d 15 c5 13 06 00 	lea    0x613c5(%rip),%rdx        # 2ff128 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x1e8>
+  29dd63:	be 1e 00 00 00       	mov    $0x1e,%esi
+  29dd68:	ff 15 b2 4c 06 00    	call   *0x64cb2(%rip)        # 302a20 <_DYNAMIC+0x320>
+  29dd6e:	48 8d 15 83 13 06 00 	lea    0x61383(%rip),%rdx        # 2ff0f8 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x1b8>
+  29dd75:	be 20 00 00 00       	mov    $0x20,%esi
+  29dd7a:	48 89 ef             	mov    %rbp,%rdi
+  29dd7d:	ff 15 bd 4b 06 00    	call   *0x64bbd(%rip)        # 302940 <_DYNAMIC+0x240>
+  29dd83:	48 8d 15 86 13 06 00 	lea    0x61386(%rip),%rdx        # 2ff110 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x1d0>
+  29dd8a:	be 20 00 00 00       	mov    $0x20,%esi
+  29dd8f:	48 89 ef             	mov    %rbp,%rdi
+  29dd92:	ff 15 a8 4b 06 00    	call   *0x64ba8(%rip)        # 302940 <_DYNAMIC+0x240>
+  29dd98:	49 89 c6             	mov    %rax,%r14
+  29dd9b:	f0 48 ff 0b          	lock decq (%rbx)
+  29dd9f:	75 0e                	jne    29ddaf <war_relay::server::socket::write_batch+0x9bf>
+  29dda1:	48 8d bc 24 88 00 00 	lea    0x88(%rsp),%rdi
+  29dda8:	00 
+  29dda9:	ff 15 51 69 06 00    	call   *0x66951(%rip)        # 304700 <_DYNAMIC+0x2000>
+  29ddaf:	4c 89 f7             	mov    %r14,%rdi
+  29ddb2:	e8 69 ab 04 00       	call   2e8920 <_Unwind_Resume@plt>
+  29ddb7:	ff 15 1b 4d 06 00    	call   *0x64d1b(%rip)        # 302ad8 <_DYNAMIC+0x3d8>
+
+
+artifacts/candidates/single-write-control/war-relay:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000029ddc0 <war_relay::server::socket::write_frame>:
+  29ddc0:	55                   	push   %rbp
+  29ddc1:	41 57                	push   %r15
+  29ddc3:	41 56                	push   %r14
+  29ddc5:	41 55                	push   %r13
+  29ddc7:	41 54                	push   %r12
+  29ddc9:	53                   	push   %rbx
+  29ddca:	48 81 ec 88 00 00 00 	sub    $0x88,%rsp
+  29ddd1:	48 89 d3             	mov    %rdx,%rbx
+  29ddd4:	49 89 f7             	mov    %rsi,%r15
+  29ddd7:	49 89 fe             	mov    %rdi,%r14
+  29ddda:	0f 57 c0             	xorps  %xmm0,%xmm0
+  29dddd:	0f 11 44 24 0d       	movups %xmm0,0xd(%rsp)
+  29dde2:	c7 44 24 1c 00 00 00 	movl   $0x0,0x1c(%rsp)
+  29dde9:	00 
+  29ddea:	c6 44 24 0c 82       	movb   $0x82,0xc(%rsp)
+  29ddef:	0f b6 56 2a          	movzbl 0x2a(%rsi),%edx
+  29ddf3:	4c 8b 66 10          	mov    0x10(%rsi),%r12
+  29ddf7:	49 8d 04 14          	lea    (%r12,%rdx,1),%rax
+  29ddfb:	48 83 f8 7e          	cmp    $0x7e,%rax
+  29ddff:	73 10                	jae    29de11 <war_relay::server::socket::write_frame+0x51>
+  29de01:	48 8d 7c 24 0e       	lea    0xe(%rsp),%rdi
+  29de06:	88 44 24 0d          	mov    %al,0xd(%rsp)
+  29de0a:	b8 02 00 00 00       	mov    $0x2,%eax
+  29de0f:	eb 39                	jmp    29de4a <war_relay::server::socket::write_frame+0x8a>
+  29de11:	48 3d 00 00 01 00    	cmp    $0x10000,%rax
+  29de17:	73 1a                	jae    29de33 <war_relay::server::socket::write_frame+0x73>
+  29de19:	48 8d 7c 24 10       	lea    0x10(%rsp),%rdi
+  29de1e:	c6 44 24 0d 7e       	movb   $0x7e,0xd(%rsp)
+  29de23:	66 c1 c0 08          	rol    $0x8,%ax
+  29de27:	66 89 44 24 0e       	mov    %ax,0xe(%rsp)
+  29de2c:	b8 04 00 00 00       	mov    $0x4,%eax
+  29de31:	eb 17                	jmp    29de4a <war_relay::server::socket::write_frame+0x8a>
+  29de33:	48 8d 7c 24 16       	lea    0x16(%rsp),%rdi
+  29de38:	c6 44 24 0d 7f       	movb   $0x7f,0xd(%rsp)
+  29de3d:	48 0f c8             	bswap  %rax
+  29de40:	48 89 44 24 0e       	mov    %rax,0xe(%rsp)
+  29de45:	b8 0a 00 00 00       	mov    $0xa,%eax
+  29de4a:	80 fa 0b             	cmp    $0xb,%dl
+  29de4d:	0f 83 c5 01 00 00    	jae    29e018 <war_relay::server::socket::write_frame+0x258>
+  29de53:	4c 8d 2c 10          	lea    (%rax,%rdx,1),%r13
+  29de57:	49 83 fd 15          	cmp    $0x15,%r13
+  29de5b:	0f 83 de 01 00 00    	jae    29e03f <war_relay::server::socket::write_frame+0x27f>
+  29de61:	49 8d 77 20          	lea    0x20(%r15),%rsi
+  29de65:	ff 15 a5 4a 06 00    	call   *0x64aa5(%rip)        # 302910 <memcpy@GLIBC_2.14>
+  29de6b:	4c 8b 03             	mov    (%rbx),%r8
+  29de6e:	4d 39 c5             	cmp    %r8,%r13
+  29de71:	4c 89 c1             	mov    %r8,%rcx
+  29de74:	49 0f 42 cd          	cmovb  %r13,%rcx
+  29de78:	4c 89 e8             	mov    %r13,%rax
+  29de7b:	48 29 c8             	sub    %rcx,%rax
+  29de7e:	31 ff                	xor    %edi,%edi
+  29de80:	4c 89 c2             	mov    %r8,%rdx
+  29de83:	4c 29 ea             	sub    %r13,%rdx
+  29de86:	48 0f 43 fa          	cmovae %rdx,%rdi
+  29de8a:	48 89 fe             	mov    %rdi,%rsi
+  29de8d:	48 29 c6             	sub    %rax,%rsi
+  29de90:	48 81 c6 00 00 04 00 	add    $0x40000,%rsi
+  29de97:	4c 39 e6             	cmp    %r12,%rsi
+  29de9a:	49 0f 43 f4          	cmovae %r12,%rsi
+  29de9e:	48 89 f2             	mov    %rsi,%rdx
+  29dea1:	48 29 fa             	sub    %rdi,%rdx
+  29dea4:	0f 82 85 01 00 00    	jb     29e02f <war_relay::server::socket::write_frame+0x26f>
+  29deaa:	48 89 5c 24 28       	mov    %rbx,0x28(%rsp)
+  29deaf:	48 01 e1             	add    %rsp,%rcx
+  29deb2:	48 83 c1 0c          	add    $0xc,%rcx
+  29deb6:	49 03 7f 08          	add    0x8(%r15),%rdi
+  29deba:	48 89 4c 24 30       	mov    %rcx,0x30(%rsp)
+  29debf:	48 89 44 24 38       	mov    %rax,0x38(%rsp)
+  29dec4:	48 89 7c 24 40       	mov    %rdi,0x40(%rsp)
+  29dec9:	48 89 54 24 48       	mov    %rdx,0x48(%rsp)
+  29dece:	4c 89 44 24 20       	mov    %r8,0x20(%rsp)
+  29ded3:	48 8d 5c 24 70       	lea    0x70(%rsp),%rbx
+  29ded8:	4c 8d 64 24 50       	lea    0x50(%rsp),%r12
+  29dedd:	48 8b 2d 4c 5c 06 00 	mov    0x65c4c(%rip),%rbp        # 303b30 <sendmsg@GLIBC_2.2.5>
+  29dee4:	4d 39 c5             	cmp    %r8,%r13
+  29dee7:	76 65                	jbe    29df4e <war_relay::server::socket::write_frame+0x18e>
+  29dee9:	4c 8b 2d 48 52 06 00 	mov    0x65248(%rip),%r13        # 303138 <__errno_location@GLIBC_2.2.5>
+  29def0:	41 8b 3e             	mov    (%r14),%edi
+  29def3:	85 ff                	test   %edi,%edi
+  29def5:	0f 88 04 01 00 00    	js     29dfff <war_relay::server::socket::write_frame+0x23f>
+  29defb:	0f 57 c0             	xorps  %xmm0,%xmm0
+  29defe:	0f 29 44 24 50       	movaps %xmm0,0x50(%rsp)
+  29df03:	0f 11 03             	movups %xmm0,(%rbx)
+  29df06:	48 c7 43 10 00 00 00 	movq   $0x0,0x10(%rbx)
+  29df0d:	00 
+  29df0e:	48 8d 44 24 30       	lea    0x30(%rsp),%rax
+  29df13:	48 89 44 24 60       	mov    %rax,0x60(%rsp)
+  29df18:	48 c7 44 24 68 02 00 	movq   $0x2,0x68(%rsp)
+  29df1f:	00 00 
+  29df21:	4c 89 e6             	mov    %r12,%rsi
+  29df24:	31 d2                	xor    %edx,%edx
+  29df26:	ff d5                	call   *%rbp
+  29df28:	48 83 f8 ff          	cmp    $0xffffffffffffffff,%rax
+  29df2c:	0f 85 8d 00 00 00    	jne    29dfbf <war_relay::server::socket::write_frame+0x1ff>
+  29df32:	41 ff d5             	call   *%r13
+  29df35:	44 8b 38             	mov    (%rax),%r15d
+  29df38:	49 c1 e7 20          	shl    $0x20,%r15
+  29df3c:	49 83 cf 02          	or     $0x2,%r15
+  29df40:	4c 89 ff             	mov    %r15,%rdi
+  29df43:	e8 28 29 fa ff       	call   240870 <std::io::error::Error::kind>
+  29df48:	3c 23                	cmp    $0x23,%al
+  29df4a:	74 a4                	je     29def0 <war_relay::server::socket::write_frame+0x130>
+  29df4c:	eb 6a                	jmp    29dfb8 <war_relay::server::socket::write_frame+0x1f8>
+  29df4e:	4c 8b 2d e3 51 06 00 	mov    0x651e3(%rip),%r13        # 303138 <__errno_location@GLIBC_2.2.5>
+  29df55:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  29df5c:	00 00 00 00 
+  29df60:	41 8b 3e             	mov    (%r14),%edi
+  29df63:	85 ff                	test   %edi,%edi
+  29df65:	0f 88 94 00 00 00    	js     29dfff <war_relay::server::socket::write_frame+0x23f>
+  29df6b:	0f 57 c0             	xorps  %xmm0,%xmm0
+  29df6e:	0f 29 44 24 50       	movaps %xmm0,0x50(%rsp)
+  29df73:	0f 11 03             	movups %xmm0,(%rbx)
+  29df76:	48 c7 43 10 00 00 00 	movq   $0x0,0x10(%rbx)
+  29df7d:	00 
+  29df7e:	48 8d 44 24 40       	lea    0x40(%rsp),%rax
+  29df83:	48 89 44 24 60       	mov    %rax,0x60(%rsp)
+  29df88:	48 c7 44 24 68 01 00 	movq   $0x1,0x68(%rsp)
+  29df8f:	00 00 
+  29df91:	4c 89 e6             	mov    %r12,%rsi
+  29df94:	31 d2                	xor    %edx,%edx
+  29df96:	ff d5                	call   *%rbp
+  29df98:	48 83 f8 ff          	cmp    $0xffffffffffffffff,%rax
+  29df9c:	75 21                	jne    29dfbf <war_relay::server::socket::write_frame+0x1ff>
+  29df9e:	41 ff d5             	call   *%r13
+  29dfa1:	44 8b 38             	mov    (%rax),%r15d
+  29dfa4:	49 c1 e7 20          	shl    $0x20,%r15
+  29dfa8:	49 83 cf 02          	or     $0x2,%r15
+  29dfac:	4c 89 ff             	mov    %r15,%rdi
+  29dfaf:	e8 bc 28 fa ff       	call   240870 <std::io::error::Error::kind>
+  29dfb4:	3c 23                	cmp    $0x23,%al
+  29dfb6:	74 a8                	je     29df60 <war_relay::server::socket::write_frame+0x1a0>
+  29dfb8:	b8 01 00 00 00       	mov    $0x1,%eax
+  29dfbd:	eb 2b                	jmp    29dfea <war_relay::server::socket::write_frame+0x22a>
+  29dfbf:	49 89 c7             	mov    %rax,%r15
+  29dfc2:	48 85 c0             	test   %rax,%rax
+  29dfc5:	48 8b 44 24 28       	mov    0x28(%rsp),%rax
+  29dfca:	48 8b 4c 24 20       	mov    0x20(%rsp),%rcx
+  29dfcf:	74 0a                	je     29dfdb <war_relay::server::socket::write_frame+0x21b>
+  29dfd1:	4c 01 f9             	add    %r15,%rcx
+  29dfd4:	48 89 08             	mov    %rcx,(%rax)
+  29dfd7:	31 c0                	xor    %eax,%eax
+  29dfd9:	eb 0f                	jmp    29dfea <war_relay::server::socket::write_frame+0x22a>
+  29dfdb:	b8 01 00 00 00       	mov    $0x1,%eax
+  29dfe0:	49 bf 03 00 00 00 17 	movabs $0x1700000003,%r15
+  29dfe7:	00 00 00 
+  29dfea:	4c 89 fa             	mov    %r15,%rdx
+  29dfed:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+  29dff4:	5b                   	pop    %rbx
+  29dff5:	41 5c                	pop    %r12
+  29dff7:	41 5d                	pop    %r13
+  29dff9:	41 5e                	pop    %r14
+  29dffb:	41 5f                	pop    %r15
+  29dffd:	5d                   	pop    %rbp
+  29dffe:	c3                   	ret
+  29dfff:	48 8d 3d 69 e0 da ff 	lea    -0x251f97(%rip),%rdi        # 4c06f <anon.27b2063a31928d9007bc497c67c84f18.462.llvm.11158727082986339532+0x2014>
+  29e006:	48 8d 15 83 fe 05 00 	lea    0x5fe83(%rip),%rdx        # 2fde90 <anon.27b2063a31928d9007bc497c67c84f18.465.llvm.11158727082986339532+0x2800>
+  29e00d:	be 19 00 00 00       	mov    $0x19,%esi
+  29e012:	ff 15 58 4a 06 00    	call   *0x64a58(%rip)        # 302a70 <_DYNAMIC+0x370>
+  29e018:	48 8d 0d d1 05 06 00 	lea    0x605d1(%rip),%rcx        # 2fe5f0 <war_relay::admin::set_drain::__CALLSITE::META+0xa8>
+  29e01f:	48 89 d6             	mov    %rdx,%rsi
+  29e022:	ba 0a 00 00 00       	mov    $0xa,%edx
+  29e027:	31 ff                	xor    %edi,%edi
+  29e029:	ff 15 21 4a 06 00    	call   *0x64a21(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29e02f:	48 8d 0d 3a 11 06 00 	lea    0x6113a(%rip),%rcx        # 2ff170 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x230>
+  29e036:	4c 89 e2             	mov    %r12,%rdx
+  29e039:	ff 15 11 4a 06 00    	call   *0x64a11(%rip)        # 302a50 <_DYNAMIC+0x350>
+  29e03f:	48 8d 0d 8a 11 06 00 	lea    0x6118a(%rip),%rcx        # 2ff1d0 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x290>
+  29e046:	ba 14 00 00 00       	mov    $0x14,%edx
+  29e04b:	48 89 c7             	mov    %rax,%rdi
+  29e04e:	4c 89 ee             	mov    %r13,%rsi
+  29e051:	ff 15 f9 49 06 00    	call   *0x649f9(%rip)        # 302a50 <_DYNAMIC+0x350>
+
+
+artifacts/candidates/single-write-control/war-relay:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000029e1a0 <war_relay::server::socket::Socket::flush_locked>:
+  29e1a0:	55                   	push   %rbp
+  29e1a1:	41 57                	push   %r15
+  29e1a3:	41 56                	push   %r14
+  29e1a5:	41 55                	push   %r13
+  29e1a7:	41 54                	push   %r12
+  29e1a9:	53                   	push   %rbx
+  29e1aa:	48 83 ec 38          	sub    $0x38,%rsp
+  29e1ae:	49 89 d6             	mov    %rdx,%r14
+  29e1b1:	49 89 f7             	mov    %rsi,%r15
+  29e1b4:	48 89 7c 24 08       	mov    %rdi,0x8(%rsp)
+  29e1b9:	48 8b 5a 18          	mov    0x18(%rdx),%rbx
+  29e1bd:	48 85 db             	test   %rbx,%rbx
+  29e1c0:	0f 84 bb 00 00 00    	je     29e281 <war_relay::server::socket::Socket::flush_locked+0xe1>
+  29e1c6:	4d 8d 66 58          	lea    0x58(%r14),%r12
+  29e1ca:	41 bd 00 00 04 00    	mov    $0x40000,%r13d
+  29e1d0:	48 8d 6c 24 18       	lea    0x18(%rsp),%rbp
+  29e1d5:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  29e1dc:	00 00 00 00 
+  29e1e0:	48 83 fb 10          	cmp    $0x10,%rbx
+  29e1e4:	b8 10 00 00 00       	mov    $0x10,%eax
+  29e1e9:	48 0f 43 d8          	cmovae %rax,%rbx
+  29e1ed:	48 89 ef             	mov    %rbp,%rdi
+  29e1f0:	4c 89 e6             	mov    %r12,%rsi
+  29e1f3:	4c 89 f2             	mov    %r14,%rdx
+  29e1f6:	4c 89 e9             	mov    %r13,%rcx
+  29e1f9:	e8 f2 f1 ff ff       	call   29d3f0 <war_relay::server::socket::write_batch>
+  29e1fe:	80 7c 24 18 00       	cmpb   $0x0,0x18(%rsp)
+  29e203:	0f 85 96 00 00 00    	jne    29e29f <war_relay::server::socket::Socket::flush_locked+0xff>
+  29e209:	48 8b 7c 24 28       	mov    0x28(%rsp),%rdi
+  29e20e:	48 83 ff 11          	cmp    $0x11,%rdi
+  29e212:	0f 83 61 01 00 00    	jae    29e379 <war_relay::server::socket::Socket::flush_locked+0x1d9>
+  29e218:	48 8b 44 24 30       	mov    0x30(%rsp),%rax
+  29e21d:	49 8b 4f 20          	mov    0x20(%r15),%rcx
+  29e221:	4c 2b 6c 24 20       	sub    0x20(%rsp),%r13
+  29e226:	f0 48 ff 84 f9 30 01 	lock incq 0x130(%rcx,%rdi,8)
+  29e22d:	00 00 
+  29e22f:	49 8b 4f 20          	mov    0x20(%r15),%rcx
+  29e233:	f0 48 ff 84 d9 b8 01 	lock incq 0x1b8(%rcx,%rbx,8)
+  29e23a:	00 00 
+  29e23c:	48 85 ff             	test   %rdi,%rdi
+  29e23f:	74 2e                	je     29e26f <war_relay::server::socket::Socket::flush_locked+0xcf>
+  29e241:	49 8b 4f 20          	mov    0x20(%r15),%rcx
+  29e245:	f0 48 01 79 70       	lock add %rdi,0x70(%rcx)
+  29e24a:	49 8b 4f 20          	mov    0x20(%r15),%rcx
+  29e24e:	f0 48 01 41 78       	lock add %rax,0x78(%rcx)
+  29e253:	41 80 bf b0 00 00 00 	cmpb   $0x1,0xb0(%r15)
+  29e25a:	01 
+  29e25b:	75 12                	jne    29e26f <war_relay::server::socket::Socket::flush_locked+0xcf>
+  29e25d:	bf 01 00 00 00       	mov    $0x1,%edi
+  29e262:	e8 19 29 f2 ff       	call   1c0b80 <std::sys::pal::unix::time::Timespec::now>
+  29e267:	49 89 46 20          	mov    %rax,0x20(%r14)
+  29e26b:	41 89 56 28          	mov    %edx,0x28(%r14)
+  29e26f:	4d 85 ed             	test   %r13,%r13
+  29e272:	74 63                	je     29e2d7 <war_relay::server::socket::Socket::flush_locked+0x137>
+  29e274:	49 8b 5e 18          	mov    0x18(%r14),%rbx
+  29e278:	48 85 db             	test   %rbx,%rbx
+  29e27b:	0f 85 5f ff ff ff    	jne    29e1e0 <war_relay::server::socket::Socket::flush_locked+0x40>
+  29e281:	4c 89 ff             	mov    %r15,%rdi
+  29e284:	4c 89 f6             	mov    %r14,%rsi
+  29e287:	31 d2                	xor    %edx,%edx
+  29e289:	e8 c2 04 00 00       	call   29e750 <war_relay::server::socket::Socket::writable>
+  29e28e:	48 85 c0             	test   %rax,%rax
+  29e291:	75 60                	jne    29e2f3 <war_relay::server::socket::Socket::flush_locked+0x153>
+  29e293:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+  29e298:	66 c7 00 00 00       	movw   $0x0,(%rax)
+  29e29d:	eb 60                	jmp    29e2ff <war_relay::server::socket::Socket::flush_locked+0x15f>
+  29e29f:	4c 8b 64 24 20       	mov    0x20(%rsp),%r12
+  29e2a4:	4c 89 e7             	mov    %r12,%rdi
+  29e2a7:	e8 c4 25 fa ff       	call   240870 <std::io::error::Error::kind>
+  29e2ac:	3c 0d                	cmp    $0xd,%al
+  29e2ae:	75 5e                	jne    29e30e <war_relay::server::socket::Socket::flush_locked+0x16e>
+  29e2b0:	4c 89 64 24 10       	mov    %r12,0x10(%rsp)
+  29e2b5:	4c 89 ff             	mov    %r15,%rdi
+  29e2b8:	4c 89 f6             	mov    %r14,%rsi
+  29e2bb:	ba 01 00 00 00       	mov    $0x1,%edx
+  29e2c0:	e8 8b 04 00 00       	call   29e750 <war_relay::server::socket::Socket::writable>
+  29e2c5:	48 85 c0             	test   %rax,%rax
+  29e2c8:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+  29e2cd:	74 5e                	je     29e32d <war_relay::server::socket::Socket::flush_locked+0x18d>
+  29e2cf:	48 89 41 08          	mov    %rax,0x8(%rcx)
+  29e2d3:	b0 01                	mov    $0x1,%al
+  29e2d5:	eb 5c                	jmp    29e333 <war_relay::server::socket::Socket::flush_locked+0x193>
+  29e2d7:	49 8b 5e 18          	mov    0x18(%r14),%rbx
+  29e2db:	31 d2                	xor    %edx,%edx
+  29e2dd:	48 85 db             	test   %rbx,%rbx
+  29e2e0:	0f 95 c2             	setne  %dl
+  29e2e3:	4c 89 ff             	mov    %r15,%rdi
+  29e2e6:	4c 89 f6             	mov    %r14,%rsi
+  29e2e9:	e8 62 04 00 00       	call   29e750 <war_relay::server::socket::Socket::writable>
+  29e2ee:	48 85 c0             	test   %rax,%rax
+  29e2f1:	74 29                	je     29e31c <war_relay::server::socket::Socket::flush_locked+0x17c>
+  29e2f3:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+  29e2f8:	48 89 41 08          	mov    %rax,0x8(%rcx)
+  29e2fc:	c6 01 01             	movb   $0x1,(%rcx)
+  29e2ff:	48 83 c4 38          	add    $0x38,%rsp
+  29e303:	5b                   	pop    %rbx
+  29e304:	41 5c                	pop    %r12
+  29e306:	41 5d                	pop    %r13
+  29e308:	41 5e                	pop    %r14
+  29e30a:	41 5f                	pop    %r15
+  29e30c:	5d                   	pop    %rbp
+  29e30d:	c3                   	ret
+  29e30e:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+  29e313:	4c 89 60 08          	mov    %r12,0x8(%rax)
+  29e317:	c6 00 01             	movb   $0x1,(%rax)
+  29e31a:	eb e3                	jmp    29e2ff <war_relay::server::socket::Socket::flush_locked+0x15f>
+  29e31c:	48 85 db             	test   %rbx,%rbx
+  29e31f:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+  29e324:	0f 95 40 01          	setne  0x1(%rax)
+  29e328:	c6 00 00             	movb   $0x0,(%rax)
+  29e32b:	eb d2                	jmp    29e2ff <war_relay::server::socket::Socket::flush_locked+0x15f>
+  29e32d:	c6 41 01 00          	movb   $0x0,0x1(%rcx)
+  29e331:	31 c0                	xor    %eax,%eax
+  29e333:	88 01                	mov    %al,(%rcx)
+  29e335:	44 89 e0             	mov    %r12d,%eax
+  29e338:	83 e0 03             	and    $0x3,%eax
+  29e33b:	83 f8 01             	cmp    $0x1,%eax
+  29e33e:	75 bf                	jne    29e2ff <war_relay::server::socket::Socket::flush_locked+0x15f>
+  29e340:	49 8d 5c 24 ff       	lea    -0x1(%r12),%rbx
+  29e345:	4d 8b 7c 24 ff       	mov    -0x1(%r12),%r15
+  29e34a:	4d 8b 64 24 07       	mov    0x7(%r12),%r12
+  29e34f:	49 8b 04 24          	mov    (%r12),%rax
+  29e353:	48 85 c0             	test   %rax,%rax
+  29e356:	74 05                	je     29e35d <war_relay::server::socket::Socket::flush_locked+0x1bd>
+  29e358:	4c 89 ff             	mov    %r15,%rdi
+  29e35b:	ff d0                	call   *%rax
+  29e35d:	49 83 7c 24 08 00    	cmpq   $0x0,0x8(%r12)
+  29e363:	74 09                	je     29e36e <war_relay::server::socket::Socket::flush_locked+0x1ce>
+  29e365:	4c 89 ff             	mov    %r15,%rdi
+  29e368:	ff 15 02 46 06 00    	call   *0x64602(%rip)        # 302970 <free@GLIBC_2.2.5>
+  29e36e:	48 89 df             	mov    %rbx,%rdi
+  29e371:	ff 15 f9 45 06 00    	call   *0x645f9(%rip)        # 302970 <free@GLIBC_2.2.5>
+  29e377:	eb 86                	jmp    29e2ff <war_relay::server::socket::Socket::flush_locked+0x15f>
+  29e379:	48 8d 15 08 0e 06 00 	lea    0x60e08(%rip),%rdx        # 2ff188 <war_relay::server::Worker::pause_accept::__CALLSITE::META+0x248>
+  29e380:	be 11 00 00 00       	mov    $0x11,%esi
+  29e385:	ff 15 b5 45 06 00    	call   *0x645b5(%rip)        # 302940 <_DYNAMIC+0x240>
+  29e38b:	49 89 c6             	mov    %rax,%r14
+  29e38e:	49 83 7c 24 08 00    	cmpq   $0x0,0x8(%r12)
+  29e394:	74 09                	je     29e39f <war_relay::server::socket::Socket::flush_locked+0x1ff>
+  29e396:	4c 89 ff             	mov    %r15,%rdi
+  29e399:	ff 15 d1 45 06 00    	call   *0x645d1(%rip)        # 302970 <free@GLIBC_2.2.5>
+  29e39f:	48 89 df             	mov    %rbx,%rdi
+  29e3a2:	ff 15 c8 45 06 00    	call   *0x645c8(%rip)        # 302970 <free@GLIBC_2.2.5>
+  29e3a8:	4c 89 f7             	mov    %r14,%rdi
+  29e3ab:	e8 70 a5 04 00       	call   2e8920 <_Unwind_Resume@plt>
+  29e3b0:	49 89 c6             	mov    %rax,%r14
+  29e3b3:	48 8d 7c 24 10       	lea    0x10(%rsp),%rdi
+  29e3b8:	e8 43 f9 fa ff       	call   24dd00 <core::ptr::drop_in_place<std::io::error::Error>>
+  29e3bd:	4c 89 f7             	mov    %r14,%rdi
+  29e3c0:	e8 5b a5 04 00       	call   2e8920 <_Unwind_Resume@plt>
+  29e3c5:	ff 15 0d 47 06 00    	call   *0x6470d(%rip)        # 302ad8 <_DYNAMIC+0x3d8>

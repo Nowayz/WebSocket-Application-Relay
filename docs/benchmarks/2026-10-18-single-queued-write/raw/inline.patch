@@ -1,0 +1,36 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -456,12 +456,32 @@
+     }
+ }
+ 
++// Avoid the large batching stack for the common single-entry deferred queue.
++#[inline]
++fn write_batch(
++    stream: &mut impl Write,
++    queue: &mut VecDeque<Pending>,
++    quantum: usize,
++) -> io::Result<(usize, u64, u64)> {
++    if queue.len() == 1 {
++        let pending = queue.front_mut().expect("single queued frame");
++        let written = write_frame(stream, &pending.packet.frame, &mut pending.offset, quantum)?;
++        if pending.offset == wire_len(&pending.packet.frame) {
++            let bytes = pending.packet.frame.len() as u64;
++            queue.pop_front();
++            return Ok((written, 1, bytes));
++        }
++        return Ok((written, 0, 0));
++    }
++    write_many(stream, queue, quantum)
++}
++
+ // At most 16 frames / 32 iovecs and WRITE_QUANTUM bytes per call. Headers
+ // live on the stack, bodies remain borrowed from the charged queue entries.
+ // A short write retires only complete frames and advances one partial frame.
+ // Keep the batching stack and code outside the ordinary empty-queue/private path.
+ #[inline(never)]
+-fn write_batch(
++fn write_many(
+     stream: &mut impl Write,
+     queue: &mut VecDeque<Pending>,
+     quantum: usize,

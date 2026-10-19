@@ -1,0 +1,36 @@
+--- a/src/metrics.rs
++++ b/src/metrics.rs
+@@ -47,11 +47,19 @@
+     pub output_queue_capacity_bytes: AtomicUsize,
+     pub output_queue_peak_capacity_bytes: AtomicUsize,
+     pub ip_rejected: AtomicU64,
++    pub write_shapes: [AtomicU64; 17],
++    pub queue_shapes: [AtomicU64; 17],
+ }
+ 
+ impl Metrics {
+     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
+         let mut text = String::with_capacity(2500);
++        for (n, value) in self.write_shapes.iter().enumerate() {
++            writeln!(text, "war_write_shape_{n}_total {}", value.load(Relaxed)).unwrap();
++        }
++        for (n, value) in self.queue_shapes.iter().enumerate() {
++            writeln!(text, "war_queue_shape_{n}_total {}", value.load(Relaxed)).unwrap();
++        }
+         let budget = self.read_budget.as_deref();
+         for (name, kind, value, help) in [
+             (
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -211,8 +211,11 @@
+         let mut remaining = WRITE_QUANTUM;
+         while !state.queue.is_empty() {
+             let State { stream, queue, .. } = &mut *state;
++            let queue_shape = queue.len().min(16);
+             match write_batch(&mut SocketWriter(stream), queue, remaining) {
+                 Ok((written, delivered, bytes)) => {
++                    self.metrics.write_shapes[delivered as usize].fetch_add(1, Relaxed);
++                    self.metrics.queue_shapes[queue_shape].fetch_add(1, Relaxed);
+                     remaining -= written;
+                     if delivered != 0 {
+                         self.metrics.deliveries.fetch_add(delivered, Relaxed);
