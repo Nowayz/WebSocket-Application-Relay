@@ -52,6 +52,12 @@ Unknown destinations are dropped. A connection's messages retain order;
 concurrent senders have no global total-order guarantee. A new connection's first
 received item is its ID. A socket remains tied to its channel until disconnection.
 
+Disconnect events obey the configured queue budget. Exhausted global credit can
+drop a notice even when the departing peer completes Close; that handshake is
+not an acknowledgment from other recipients. See the
+[departure queue-headroom guidance](operations.md#queue-headroom-for-departure-work)
+for the measured pressure limit and diagnostic.
+
 `re_globl` broadcasts reach all sessions, while privileged listeners in that
 channel can receive selected traffic. `--disable-global-broadcast` requires
 authentication for global sends. This does not change listener authorization.

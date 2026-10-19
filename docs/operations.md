@@ -64,6 +64,46 @@ the WebSocket header, CBOR sender prefix and body. Kernel socket storage, TLS
 proxy buffers and allocator overhead add to relay RSS. Kernel TCP memory and
 cgroup memory accounting must be observed alongside process memory.
 
+### Queue headroom for departure work
+
+`--total-queue-bytes` / `WAR_TOTAL_QUEUE_BYTES` is logical admission credit for
+pending frames and charged fanout/retirement metadata. It is not RSS. A shared
+payload can have several recipient reservations; registry storage, kernel socket
+buffers and allocator overhead are separate costs.
+
+The selected large-departure FIFO charges a recipient view for every active job,
+conservatively even when jobs share a view. On a 64-bit host, 100,000 recipient
+handles alone need about 800,000 bytes per job; actual charging follows view
+capacity, plus job/frame overhead. Account for the largest permitted room and
+concurrent departures as well as application payload queues. For scale, 100
+such active views can consume about 80 MB of logical metadata credit before
+recipient frame reservations. This is a planning example, not a sufficient
+queue size or a physical-memory estimate.
+
+Watch `war_queued_bytes` and changes in `war_global_pressure_total`. A nonzero
+pressure count can include metadata refusal even if synchronous fallback later
+succeeds; it is not a count of missing messages. Under exhausted global credit,
+departure delivery is best-effort: notices can be dropped while the departing
+connection still completes Close. A stable session count or a Close ACK alone
+does not prove the recipient notification matrix completed.
+
+The [short retirement-pressure screen](benchmarks/2026-10-19-retirement-cursor-screen/README.md)
+reproduces an actual missing notice with a deliberately constrained 256 KiB
+queue budget and a 100,000-member room. That diagnostic raises the normal
+profile's 1,024-member ceiling; the published profile uses 256 MiB shared credit.
+It therefore does not show that the ordinary 100k deployment profile fails.
+Its constant-metadata cursor prototype remains unselected because the combined
+normal-load performance result was not sufficient to adopt a new index.
+
+Use `scripts/departure-fairness.py --queue-budget-bytes 262144` with explicit
+`--server`, `--audience 100000` and a fresh `--output` path for this **expected
+failing negative control**. Omit the option for default-budget acceptance.
+The fixture's pressure preset uses 64 KiB maximum messages and the requested
+local/shared credit; it saves failure-time metrics before owned-process cleanup.
+No deployment setting is changed by running it.
+
+### Socket buffers and population checks
+
 Native `--tcp-send-buffer-bytes` / `WAR_TCP_SEND_BUFFER_BYTES` and
 `--tcp-receive-buffer-bytes` / `WAR_TCP_RECEIVE_BUFFER_BYTES` request kernel
 buffers on each accepted socket, before HTTP upgrade. `0` preserves OS defaults;

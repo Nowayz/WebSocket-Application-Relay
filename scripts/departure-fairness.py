@@ -56,9 +56,10 @@ class Peer(wire.Wire):
 
 
 def run(args):
-    result = {'passed': False, 'audience': args.audience, 'samples': [], 'events': [],
+    result = {'passed': False, 'server_forced_kill': False, 'audience': args.audience, 'samples': [], 'events': [],
               'client_affinity': sorted(os.sched_getaffinity(0)),
               'clock': 'time.monotonic_ns',
+              'queue_budget_bytes': getattr(args, 'queue_budget_bytes', None),
               'sampling': 'one outstanding request per probe; 1ms wait after each reply',
               'server_sha256': hashlib.sha256(args.server.read_bytes()).hexdigest(),
               'fixture_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -70,6 +71,11 @@ def run(args):
                '--messages-per-second', '0', '--bytes-per-second', '0', '--ping-interval-secs', '0',
                '--idle-timeout-secs', '0', '--shutdown-timeout-secs', '2',
                '--tcp-send-buffer-bytes', '16384', '--tcp-receive-buffer-bytes', '65536']
+    if getattr(args, 'queue_budget_bytes', None) is not None:
+        # This fixture's values fit within 64 KiB. Constrain both local and
+        # shared queue allowances without changing the normal/default profile.
+        command += ['--max-message-bytes', '65536', '--queue-bytes', str(args.queue_budget_bytes),
+                    '--total-queue-bytes', str(args.queue_budget_bytes)]
     command = ['taskset', '-c', args.server_cpus] + command
     result['server_command'] = command
     stop = threading.Event()
@@ -173,6 +179,12 @@ def run(args):
             result['passed'] = True
         except Exception:
             result['error'] = traceback.format_exc()
+            # Capture the cause before owned-process cleanup erases the live
+            # metrics. This is outside an accepted timing window.
+            try:
+                result['failure_metrics'] = wire.runtime.metrics(admin)
+            except OSError:
+                pass
         finally:
             stop.set()
             if server.poll() is None:
@@ -180,8 +192,10 @@ def run(args):
                 try:
                     server.wait(timeout=6)
                 except subprocess.TimeoutExpired:
+                    result['server_forced_kill'] = True
                     server.kill()
                     server.wait(timeout=3)
+            result['server_exit'] = server.returncode
             for peer in peers:
                 peer.socket.close()
             for thread in threads:
@@ -197,9 +211,13 @@ def main():
     parser.add_argument('--audience', type=int, default=8192)
     parser.add_argument('--server-cpus', default='0-7')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--queue-budget-bytes', type=int,
+                        help='Opt-in pressure profile: use this shared/local queue allowance and 64 KiB messages')
     args = parser.parse_args()
     if not 1 <= args.audience <= 100000:
         parser.error('audience must be 1..100000 for this bounded diagnostic')
+    if args.queue_budget_bytes is not None and args.queue_budget_bytes < 65546:
+        parser.error('queue budget must fit the pressure profile 65536-byte message plus 10-byte envelope')
     # Reserve output before launching any process; preserve existing evidence.
     with args.output.open('x') as output:
         result = run(args)

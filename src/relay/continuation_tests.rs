@@ -250,3 +250,41 @@ fn check_retirement_sequence(pressure: bool) {
     drop(targets);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+#[test]
+fn a_pending_departure_cannot_notify_a_recreated_room() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let source = relay
+        .subscribe_with_output(b"recreated", Arc::new(NativeRetirement))
+        .unwrap();
+    let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| {
+            relay
+                .subscribe_with_output(b"recreated", Arc::new(NativeRetirement))
+                .unwrap()
+        })
+        .collect();
+    drop(source);
+    assert!(relay.has_retirements());
+    drop(targets);
+    assert_eq!(relay.counts(), (0, 1));
+    assert!(relay.has_retirements());
+    let output = Arc::new(Departures::default());
+    let replacement = relay
+        .subscribe_with_output(b"recreated", output.clone())
+        .unwrap();
+    // One two-turn initial job plus at most 1,024 single-turn departures.
+    // A broken cursor/retirement flag must fail this check rather than spin.
+    for _ in 0..FANOUT_QUANTUM + 2 {
+        if !relay.has_retirements() {
+            break;
+        }
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert!(output.0.lock().is_empty());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(replacement);
+    assert_eq!(relay.counts(), (0, 1));
+}

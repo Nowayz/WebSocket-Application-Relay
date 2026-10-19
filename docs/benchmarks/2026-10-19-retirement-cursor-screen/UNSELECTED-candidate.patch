@@ -1,0 +1,428 @@
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -1,6 +1,7 @@
+ use std::{
+-    collections::{HashMap, VecDeque},
++    collections::{BTreeMap, HashMap, VecDeque},
+     hash::Hash,
++    ops::Bound::Excluded,
+     sync::{
+         Arc, OnceLock,
+         atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed},
+@@ -46,7 +47,7 @@
+     pub metrics: Arc<Metrics>,
+     admission: AtomicU8,
+     state: RwLock<Registry>,
+-    retirements: Mutex<VecDeque<Box<RoomFanout>>>,
++    retirements: Mutex<VecDeque<Box<Retirement>>>,
+     retirement_pending: AtomicBool,
+     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
+ }
+@@ -176,7 +177,7 @@
+ 
+ fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
+     // HashMap iteration scans spare buckets too. After substantial retirement,
+-    // release excess slots in ownership, membership and channel-name indexes.
++    // release excess slots in ownership and channel-name hash indexes.
+     // Keep small maps and 2x headroom to avoid churn. Rehashing moves metadata;
+     // peers, queues, name/variable bytes and shared bodies keep their storage.
+     let remaining = map.len();
+@@ -188,7 +189,9 @@
+ 
+ #[derive(Default)]
+ struct Channel {
+-    members: HashMap<u64, Arc<Peer>>,
++    // Stable admission order supports bounded retirement ranges. Empty tree
++    // nodes are released on removal instead of retaining hash-table buckets.
++    members: BTreeMap<u64, Arc<Peer>>,
+     // Membership metadata only. Uncaptured views update in place; a membership
+     // change invalidates a captured view while its routing owners finish.
+     broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
+@@ -285,7 +288,8 @@
+                     std::mem::size_of::<Vec<Arc<Peer>>>()
+                         + 2 * std::mem::size_of::<usize>()
+                         + if retirement {
+-                            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
++                            std::mem::size_of::<Retirement>()
++                                + 2 * std::mem::size_of::<Box<Retirement>>()
+                         } else {
+                             0
+                         },
+@@ -368,6 +372,86 @@
+ impl Drop for RoomFanout {
+     fn drop(&mut self) {
+         self.clear();
++    }
++}
++
++/// Room retirement uses stable admission keys, not a population-sized snapshot.
++/// Members leaving before delivery are already ineligible; later joins have keys
++/// beyond the captured cutoff. A recreated room therefore cannot inherit work.
++enum Retirement {
++    Room(RoomRetirement),
++    Observers(RoomFanout),
++}
++
++struct RoomRetirement {
++    packet: Envelope,
++    channel: Bytes,
++    cursor: u64,
++    before: u64,
++    metadata_bytes: usize,
++}
++
++impl RoomRetirement {
++    fn new(source: &Peer, before: u64, frame: &Frame) -> Result<Self, Disconnect> {
++        let packet = source
++            .charge(frame)?
++            .ok_or(Disconnect::OVERLOADED)?
++            .into_owned();
++        let metadata_bytes =
++            std::mem::size_of::<Retirement>() + 2 * std::mem::size_of::<Box<Retirement>>();
++        if packet
++            .budget
++            .metrics
++            .queued_bytes
++            .fetch_update(Relaxed, Relaxed, |used| {
++                used.checked_add(metadata_bytes)
++                    .filter(|&next| next <= packet.budget.global_limit)
++            })
++            .is_err()
++        {
++            packet.budget.metrics.global_pressure.fetch_add(1, Relaxed);
++            return Err(Disconnect::OVERLOADED);
++        }
++        Ok(Self {
++            packet,
++            channel: source.channel.clone(),
++            cursor: 0,
++            before,
++            metadata_bytes,
++        })
++    }
++
++    fn capture(&mut self, state: &Registry, targets: &mut [Option<Arc<Peer>>]) -> bool {
++        let Some(channel) = state.channels.get(&self.channel) else {
++            return true;
++        };
++        let mut members = channel
++            .members
++            .range((Excluded(self.cursor), Excluded(self.before)));
++        for slot in targets {
++            let Some((&key, peer)) = members.next() else {
++                return true;
++            };
++            self.cursor = key;
++            *slot = Some(peer.clone());
++        }
++        members.next().is_none()
++    }
++
++    fn deliver(&self, targets: &mut [Option<Arc<Peer>>]) {
++        for target in targets.iter_mut().filter_map(Option::take) {
++            let _ = target.enqueue_fanout(&self.packet.frame);
++        }
++    }
++}
++
++impl Drop for RoomRetirement {
++    fn drop(&mut self) {
++        self.packet
++            .budget
++            .metrics
++            .queued_bytes
++            .fetch_sub(self.metadata_bytes, Relaxed);
+     }
+ }
+ 
+@@ -1132,16 +1216,31 @@
+     }
+ 
+     pub(crate) fn progress_retirements(&self) {
+-        // Serialize the retirement sequence, but never make another worker wait
+-        // for this turn. No registry lock is acquired during output submission.
++        // Match removal's registry -> retirement lock order. Only capture holds
++        // the registry; output runs with the queue's nonblocking turn ownership.
++        let state = self.state.read();
+         let Some(mut pending) = self.retirements.try_lock() else {
+             return;
+         };
+-        if let Some(work) = pending.front_mut() {
+-            let _ = work.resume(FANOUT_QUANTUM);
+-            if !work.active() {
+-                pending.pop_front();
+-            }
++        let mut targets: [Option<Arc<Peer>>; FANOUT_QUANTUM] = std::array::from_fn(|_| None);
++        let complete = match pending.front_mut() {
++            Some(work) => match work.as_mut() {
++                Retirement::Room(room) => {
++                    let complete = room.capture(&state, &mut targets);
++                    drop(state);
++                    room.deliver(&mut targets);
++                    complete
++                }
++                Retirement::Observers(work) => {
++                    drop(state);
++                    let _ = work.resume(FANOUT_QUANTUM);
++                    !work.active()
++                }
++            },
++            None => false,
++        };
++        if complete {
++            pending.pop_front();
+         }
+         if pending.is_empty() && pending.capacity() > 32 {
+             *pending = VecDeque::new();
+@@ -1149,20 +1248,53 @@
+         self.retirement_pending.store(!pending.is_empty(), Relaxed);
+     }
+ 
+-    fn flush_retirements(&self) {
++    fn flush_retirements(&self, state: &Registry) {
+         if !self.has_retirements() {
+             return;
+         }
+-        // Budget refusal may require synchronous best-effort delivery. Finish
+-        // preceding retirements first so this fallback cannot overtake them.
++        // Budget refusal still finishes older work before synchronous fallback.
+         let mut pending = self.retirements.lock();
+-        for mut work in pending.drain(..) {
+-            let _ = work.resume(usize::MAX);
++        let mut targets: [Option<Arc<Peer>>; FANOUT_QUANTUM] = std::array::from_fn(|_| None);
++        for work in pending.drain(..) {
++            match *work {
++                Retirement::Room(mut room) => loop {
++                    let complete = room.capture(state, &mut targets);
++                    room.deliver(&mut targets);
++                    if complete {
++                        break;
++                    }
++                },
++                Retirement::Observers(mut work) => {
++                    let _ = work.resume(usize::MAX);
++                }
++            }
+         }
+         if pending.capacity() > 32 {
+             *pending = VecDeque::new();
+         }
+         self.retirement_pending.store(false, Relaxed);
++    }
++
++    fn publish_retirement(&self, source: &Peer, work: Retirement) {
++        let mut pending = self.retirements.lock();
++        if self.is_stopping() {
++            return;
++        }
++        pending.push_back(Box::new(work));
++        self.retirement_pending.store(true, Relaxed);
++        drop(pending);
++        source.output.wake_retirement();
++    }
++
++    fn defer_room_retirement(&self, source: &Peer, before: u64, frame: &Frame) -> bool {
++        if !source.output.supports_retirement() {
++            return false;
++        }
++        let Ok(work) = RoomRetirement::new(source, before, frame) else {
++            return false;
++        };
++        self.publish_retirement(source, Retirement::Room(work));
++        true
+     }
+ 
+     fn defer_retirement(
+@@ -1174,7 +1306,7 @@
+         if !source.output.supports_retirement() {
+             return false;
+         }
+-        let mut work = Box::<RoomFanout>::default();
++        let mut work = RoomFanout::default();
+         if work
+             .begin(
+                 source,
+@@ -1187,21 +1319,13 @@
+         {
+             return false;
+         }
+-        // Registry removal serializes publication. One queue preserves that
+-        // sequence across workers, including causally ordered client closes.
+-        let mut pending = self.retirements.lock();
+-        if self.is_stopping() {
+-            return true;
+-        }
+-        pending.push_back(work);
+-        self.retirement_pending.store(true, Relaxed);
+-        drop(pending);
+-        source.output.wake_retirement();
++        self.publish_retirement(source, Retirement::Observers(work));
+         true
+     }
+ 
+     fn remove(&self, peer: &Peer) {
+         let mut state = self.state.write();
++        let before = state.next_key;
+         let Some(channel) = state.channels.get_mut(&peer.channel) else {
+             return;
+         };
+@@ -1217,29 +1341,25 @@
+             if !channel.members.is_empty()
+                 && (channel.members.len() > FANOUT_QUANTUM || self.has_retirements())
+             {
+-                let recipients = channel
+-                    .broadcast
+-                    .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
+-                    .clone();
+-                deferred = self.defer_retirement(peer, recipients, frame);
++                deferred = self.defer_room_retirement(peer, before, frame);
+             }
+             if !deferred && !channel.members.is_empty() {
+-                self.flush_retirements();
+-                for recipient in channel.members.values() {
++                self.flush_retirements(&state);
++                for recipient in state.channels[&peer.channel].members.values() {
+                     let _ = recipient.enqueue_fanout(frame);
+                 }
+             }
+         }
++        let channel = state
++            .channels
++            .get_mut(&peer.channel)
++            .expect("departing channel exists");
+         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
+             self.metrics
+                 .variable_bytes
+                 .fetch_sub(channel.variable_bytes, Relaxed);
+             state.channels.remove(&peer.channel);
+             shrink_sparse_map(&mut state.channels);
+-        } else {
+-            // Empty ordinary rooms drop the complete map; retained rooms and
+-            // the persistent global room can release spare membership slots.
+-            shrink_sparse_map(&mut channel.members);
+         }
+         if peer.channel.as_ref() == GLOBAL_CHANNEL {
+             state.set_listener_flags(peer, 0);
+@@ -1251,7 +1371,7 @@
+                 && (listeners.len() > FANOUT_QUANTUM || self.has_retirements())
+                 && self.defer_retirement(peer, Arc::new(listeners.to_vec()), frame);
+             if !deferred && !listeners.is_empty() {
+-                self.flush_retirements();
++                self.flush_retirements(&state);
+                 for recipient in listeners {
+                     let _ = recipient.enqueue_fanout(frame);
+                 }
+@@ -1702,8 +1822,11 @@
+                     sub
+                 })
+                 .collect();
+-            let peak_capacity = relay.state.read().channels[room].members.capacity();
+-            assert!(peak_capacity >= 1026);
++            assert_eq!(relay.state.read().channels[room].members.len(), 1026);
++            let retired: Vec<_> = fillers
++                .iter()
++                .map(|s| Arc::downgrade(&s.registration.peer))
++                .collect();
+             // Exercise real administrative close signals. Registrations remain
+             // until cleanup, while healthy peers keep their output queues.
+             for sub in &fillers {
+@@ -1728,8 +1851,7 @@
+                 let state = relay.state.read();
+                 let channel = &state.channels[room];
+                 assert_eq!(channel.members.len(), 2);
+-                assert!(channel.members.capacity() <= 256);
+-                assert!(channel.members.capacity() < peak_capacity / 4);
++                assert!(retired.iter().all(|peer| peer.upgrade().is_none()));
+                 assert!(Arc::ptr_eq(
+                     &channel.members[&source.registration.peer.key],
+                     &source.registration.peer
+--- a/src/relay/continuation_tests.rs
++++ b/src/relay/continuation_tests.rs
+@@ -191,8 +191,8 @@
+ 
+ fn check_retirement_sequence(pressure: bool) {
+     let relay = Relay::new(Config {
+-        max_message_bytes: 1024,
+-        queue_bytes: 2048,
++        max_message_bytes: 11900,
++        queue_bytes: 12000,
+         total_queue_bytes: if pressure { 12000 } else { 256 * 1024 * 1024 },
+         ping_interval_secs: 0,
+         ..Config::default()
+@@ -219,6 +219,16 @@
+     }
+     drop(first);
+     assert!(relay.has_retirements());
++    let mut filler = if pressure {
++        let mut filler = relay.subscribe(b"pressure").unwrap();
++        drop(filler.outgoing.try_recv().unwrap());
++        let used = relay.metrics.queued_bytes.load(Relaxed);
++        let frame = Frame::envelope(1, protocol::byte_string(&vec![0x5a; 12000 - used - 128]));
++        filler.registration.peer.enqueue_frame(&frame).unwrap();
++        Some(filler)
++    } else {
++        None
++    };
+     // The second departure crosses back to the synchronous-size threshold.
+     // It must still follow the unfinished first job, including on budget refusal.
+     drop(second);
+@@ -226,7 +236,6 @@
+         assert!(!relay.has_retirements());
+         assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
+     } else {
+-        relay.progress_retirements();
+         relay.progress_retirements();
+         assert!(relay.has_retirements());
+         assert!(outputs.iter().all(|o| o.0.lock().len() == 1));
+@@ -245,8 +254,51 @@
+             protocol::envelope(BROADCAST, &protocol::uint(second_id))
+         );
+     }
++    if let Some(mut filler) = filler.take() {
++        drop(filler.outgoing.try_recv().unwrap());
++        drop(filler);
++    }
+     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+     relay.begin_shutdown();
+     drop(targets);
+     assert_eq!(relay.counts(), (0, 1));
+ }
++
++#[test]
++fn a_room_retirement_cursor_cannot_notify_a_recreated_room() {
++    let relay = Relay::new(Config::default()).unwrap();
++    let source = relay
++        .subscribe_with_output(b"recreated", Arc::new(NativeRetirement))
++        .unwrap();
++    let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
++        .map(|_| {
++            relay
++                .subscribe_with_output(b"recreated", Arc::new(NativeRetirement))
++                .unwrap()
++        })
++        .collect();
++    drop(source);
++    assert!(relay.has_retirements());
++    // The room cursor must not create or retain a population-sized view.
++    assert!(
++        relay.state.read().channels[b"recreated".as_slice()]
++            .broadcast
++            .get()
++            .is_none()
++    );
++    drop(targets);
++    assert_eq!(relay.counts(), (0, 1));
++    assert!(relay.has_retirements());
++    let output = Arc::new(Departures::default());
++    let replacement = relay
++        .subscribe_with_output(b"recreated", output.clone())
++        .unwrap();
++    while relay.has_retirements() {
++        relay.progress_retirements();
++    }
++    assert!(output.0.lock().is_empty());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    relay.begin_shutdown();
++    drop(replacement);
++    assert_eq!(relay.counts(), (0, 1));
++}
