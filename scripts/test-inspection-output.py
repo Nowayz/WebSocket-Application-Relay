@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReceiptTest(unittest.TestCase):
-    def invoke(self, directory, output, profile=False):
+    def invoke(self, directory, output, profile=False, runner="inspection.py"):
         marker = directory / 'server-started'
         server = directory / 'server'
         server.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
                           f'Path({str(marker)!r}).touch()\nraise SystemExit(1)\n')
         server.chmod(0o755)
         result = subprocess.run(
-            [sys.executable, str(ROOT / 'scripts/inspection.py'),
+            [sys.executable, str(ROOT / 'scripts' / runner),
              '--server', str(server), '--client', '/bin/false',
              '--server-cpus', '', '--client-cpus', '', '--output', str(output)]
             + (['--profile'] if profile else []),
@@ -76,6 +76,27 @@ class ReceiptTest(unittest.TestCase):
             self.assertFalse(target.exists())
             self.assertFalse(output.exists())
             self.assertFalse(marker.exists())
+
+    def test_capacity_receipts_and_symlinks_block_launch(self):
+        for symlink in [False, True]:
+            with self.subTest(symlink=symlink), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                output = directory / 'capacity.json'
+                target = directory / 'absent-target'
+                evidence = b'previous capacity evidence\n'
+                if symlink:
+                    output.symlink_to(target)
+                else:
+                    output.write_bytes(evidence)
+                result, marker = self.invoke(directory, output, runner="capacity.py")
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(str(output), result.stderr)
+                self.assertFalse(marker.exists())
+                if symlink:
+                    self.assertTrue(output.is_symlink())
+                    self.assertFalse(target.exists())
+                else:
+                    self.assertEqual(output.read_bytes(), evidence)
 
     def test_fresh_path_records_startup_failure(self):
         with tempfile.TemporaryDirectory() as temporary:

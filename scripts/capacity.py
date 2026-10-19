@@ -187,7 +187,7 @@ def run(args):
               "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
               "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
+    with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
         server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
         client = None
         pressure = pressure_result = None
@@ -402,7 +402,7 @@ def run(args):
             client_errors.seek(0)
             result["server_log"] = logs.read().decode(errors="replace")[-12000:]
             result["client_log"] = client_errors.read().decode(errors="replace")[-12000:]
-            args.output.write_text(json.dumps(result, indent=2) + "\n")
+            receipt.write(json.dumps(result, indent=2) + "\n")
 
 
 if __name__ == "__main__":
@@ -450,7 +450,7 @@ if __name__ == "__main__":
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-11")
     parser.add_argument("--timeout", type=int, default=240)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True, help="Fresh receipt path; existing files are never overwritten")
     args = parser.parse_args()
     if not 2 <= args.room_size <= 64 or not 2 <= args.users <= 200_000 or args.users % args.room_size:
         parser.error("users must be in 2..=200000 and divisible by room-size in 2..=64")
@@ -481,4 +481,7 @@ if __name__ == "__main__":
     if any(value != 0 and not 4096 <= value <= 16*1024**2
            for value in (args.tcp_send_buffer_bytes, args.tcp_receive_buffer_bytes)):
         parser.error("TCP buffer requests must be zero or in 4096..=16777216")
-    run(args)
+    try:
+        run(args)
+    except FileExistsError as error:
+        parser.error(f"output already exists; choose a fresh artifact path: {error.filename}")
