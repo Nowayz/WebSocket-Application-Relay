@@ -19,7 +19,7 @@ The initial allocation fixture accidentally used its randomly generated welcome 
 
 ## Short traffic checks
 
-All ordinary traffic runs used freshly frozen control/candidate releases, sequential control/candidate/candidate/control order and two-second measured traffic intervals, plus setup and verified teardown. No builds or profiling overlapped ordinary traffic. Four server workers and eight client workers use separate pinned CPU sets.
+All ordinary traffic runs used freshly frozen control/candidate releases, sequential control/candidate/candidate/control order and two-second measured traffic intervals, plus setup and verified teardown. No builds or profiling overlapped ordinary traffic. The saturation screen uses four server workers and eight client workers on separate pinned CPU sets. The fixed-rate follow-up uses eight server workers and two separate eight-worker clients, with all three CPU sets disjoint.
 
 The first, unpaced saturation screen used 2,048 fanout readers, four messages/window, 64 private pairs and 1 KiB byte-string values. CPU seconds per million deliveries were 1.285/1.278 for controls and 1.246/1.270 for candidates. One candidate produced more fanout traffic and had a worse private tail (5.988 ms versus control 3.130–3.234 ms). Because traffic mix was unpaced and varied, this screen alone did not resolve the latency question.
 

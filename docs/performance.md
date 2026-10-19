@@ -7166,3 +7166,17 @@ Close 1002 / Invalid Upstream Message instead of dropping the legacy socket.
 A one-slot fault fixture reproduces the original unclean disconnect and verifies
 Close acknowledgement, EOF and reuse after the fix. See the
 [protocol and cleanup evidence](benchmarks/2026-10-19-bridge-upstream-text/README.md).
+
+### Short full-population check of the current native frame (2026-10-19)
+
+Four fixed-rate two-second runs retain 100,000 private users and 8,192 global
+fanout observers, with eight pinned server workers. Every run verifies 800,000
+private observations and 1,048,576 fanout observations, meets the offered fanout
+rate, and retires all connections and accounted resources. Pre/post-inline-u64
+latency distributions and CPU ranges overlap across reversed-order repeats.
+Private worst samples are 16.514–19.793 ms and fanout worst samples
+32.324–36.401 ms. Eight samples per private user establish neither a long-term
+p99 nor uniform sub-5-ms responsiveness. The
+[full-population report and fairness curves](benchmarks/2026-10-19-current-100k-short/README.md)
+retain commands, exact CSV identities and cleanup evidence. No runtime tuning
+or manual service promotion is part of this check.
