@@ -360,3 +360,83 @@ fn retirement_publications_share_one_wake_until_the_queue_drains() {
     drop(targets);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+#[test]
+fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let source = relay
+        .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
+        .unwrap();
+    let source_id = source.peer.id.load(Relaxed);
+    let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| {
+            relay
+                .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
+                .unwrap()
+        })
+        .collect();
+    let mut observer = relay.subscribe(GLOBAL_CHANNEL).unwrap();
+    drop(observer.outgoing.try_recv().unwrap());
+    relay
+        .receive(
+            &observer.registration.peer,
+            protocol::request(0, &protocol::text("observer-ack")),
+        )
+        .unwrap();
+    drop(observer.outgoing.try_recv().unwrap());
+    relay
+        .receive(
+            &observer.registration.peer,
+            protocol::request(1, &protocol::uint(u64::from(DISCONNECT_MESSAGE))),
+        )
+        .unwrap();
+    drop(observer.outgoing.try_recv().unwrap());
+    drop(source);
+    assert!(relay.has_retirements());
+    relay
+        .receive(
+            &observer.registration.peer,
+            protocol::request(1, &protocol::uint(0)),
+        )
+        .unwrap();
+    let notice = protocol::envelope(BROADCAST, &protocol::uint(source_id));
+    let ack = protocol::reply(1, &protocol::uint(0));
+    let mut acknowledged = false;
+    let mut notices = 0;
+    while let Ok(packet) = observer.outgoing.try_recv() {
+        let bytes = packet.frame.to_vec();
+        if bytes == ack {
+            assert!(!acknowledged);
+            acknowledged = true;
+        } else {
+            assert_eq!(bytes, notice);
+            notices += 1;
+            assert!(
+                !acknowledged,
+                "a notice must precede the revocation acknowledgment"
+            );
+        }
+    }
+    assert!(acknowledged);
+    for _ in 0..3 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert!(
+        observer.outgoing.try_recv().is_err(),
+        "revoked listener received an old departure after its acknowledgment"
+    );
+    assert_eq!(
+        notices, 1,
+        "an already-authorized notice must precede revocation, not disappear"
+    );
+    relay.begin_shutdown();
+    drop(observer);
+    drop(targets);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.counts(), (0, 1));
+}

@@ -339,19 +339,26 @@ impl RoomFanout {
 
     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
         if self.retirement {
-            self.resume_with::<true>(quantum)
+            self.resume_with::<true, false>(quantum)
         } else {
-            self.resume_with::<false>(quantum)
+            self.resume_with::<false, false>(quantum)
         }
     }
 
-    fn resume_with<const RETIREMENT: bool>(&mut self, quantum: usize) -> Result<(), Disconnect> {
+    fn resume_with<const RETIREMENT: bool, const BARRIER: bool>(
+        &mut self,
+        quantum: usize,
+    ) -> Result<(), Disconnect> {
         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
         let end = self.cursor.saturating_add(quantum).min(recipients.len());
         for recipient in &recipients[self.cursor..end] {
             if recipient.key != self.source {
-                let result = recipient.enqueue_fanout(frame);
+                let result = if BARRIER {
+                    recipient.enqueue_barrier(frame)
+                } else {
+                    recipient.enqueue_fanout(frame)
+                };
                 if !RETIREMENT {
                     result?;
                 }
@@ -437,6 +444,11 @@ pub(crate) trait PeerOutput: Send + Sync {
     fn send(&self, packet: Submission<'_>) -> bool;
     fn close(&self, reason: Disconnect);
 
+    /// Ordered control barriers may drain ready output before reserving a slot.
+    fn send_barrier(&self, packet: Submission<'_>) -> bool {
+        self.send(packet)
+    }
+
     /// Native workers can advance retirement work independently of the source.
     fn supports_retirement(&self) -> bool {
         false
@@ -483,21 +495,30 @@ impl Peer {
     }
 
     fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {
-        self.enqueue::<false>(frame)
+        self.enqueue::<false, false>(frame)
     }
 
     fn enqueue_fanout(&self, frame: &Frame) -> Result<(), Disconnect> {
-        self.enqueue::<true>(frame)
+        self.enqueue::<true, false>(frame)
+    }
+
+    fn enqueue_barrier(&self, frame: &Frame) -> Result<(), Disconnect> {
+        self.enqueue::<false, true>(frame)
     }
 
     // Select the output method at compile time. Ordinary private submissions
     // carry no multicast flag, extra branch or different frame representation.
     #[inline(always)]
-    fn enqueue<const FANOUT: bool>(&self, frame: &Frame) -> Result<(), Disconnect> {
+    fn enqueue<const FANOUT: bool, const BARRIER: bool>(
+        &self,
+        frame: &Frame,
+    ) -> Result<(), Disconnect> {
         let Some(packet) = self.reserve(frame)? else {
             return Ok(());
         };
-        let accepted = if FANOUT {
+        let accepted = if BARRIER {
+            self.output.send_barrier(packet)
+        } else if FANOUT {
             self.output.send_fanout(packet)
         } else {
             self.output.send(packet)
@@ -1009,6 +1030,14 @@ impl Relay {
                     if peer.closing.load(Relaxed) {
                         return Ok(());
                     }
+                    if peer.listener.load(Relaxed) & DISCONNECT_MESSAGE != 0
+                        && flags & DISCONNECT_MESSAGE == 0
+                    {
+                        // Older deferred notices must precede revocation's ACK.
+                        // Match the registry -> retirement lock order used by
+                        // removal; retirement output never reacquires registry.
+                        self.flush_retirements_with::<true>();
+                    }
                     state.set_listener_flags(peer, flags & 7);
                 } else {
                     peer.listener.store(flags & 7, Relaxed);
@@ -1150,6 +1179,10 @@ impl Relay {
     }
 
     fn flush_retirements(&self) {
+        self.flush_retirements_with::<false>();
+    }
+
+    fn flush_retirements_with<const BARRIER: bool>(&self) {
         if !self.has_retirements() {
             return;
         }
@@ -1157,7 +1190,7 @@ impl Relay {
         // preceding retirements first so this fallback cannot overtake them.
         let mut pending = self.retirements.lock();
         for mut work in pending.drain(..) {
-            let _ = work.resume(usize::MAX);
+            let _ = work.resume_with::<true, BARRIER>(usize::MAX);
         }
         if pending.capacity() > 32 {
             *pending = VecDeque::new();

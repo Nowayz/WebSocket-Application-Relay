@@ -283,9 +283,23 @@ impl Socket {
         self.writable(&mut state, queued)
     }
     #[inline(always)]
-    fn submit<const DEFER: bool>(&self, packet: Submission<'_>) -> bool {
+    fn submit<const DEFER: bool, const BARRIER: bool>(&self, packet: Submission<'_>) -> bool {
         let mut state = self.state.lock();
         if state.closed || state.fatal || state.requested.is_some() {
+            return true;
+        }
+        if BARRIER
+            && state.queue.len() >= self.queue_limit
+            && !state.control_pending
+            && state
+                .queue
+                .front()
+                .is_some_and(|p| p.deadline > Instant::now())
+            && self.flush_locked(&mut state).is_err()
+        {
+            state.fatal = true;
+            self.metrics.write_errors.fetch_add(1, Relaxed);
+            self.notify();
             return true;
         }
         if state.queue.len() >= self.queue_limit {
@@ -350,11 +364,15 @@ impl PeerOutput for Socket {
     }
 
     fn send(&self, packet: Submission<'_>) -> bool {
-        self.submit::<false>(packet)
+        self.submit::<false, false>(packet)
+    }
+
+    fn send_barrier(&self, packet: Submission<'_>) -> bool {
+        self.submit::<false, true>(packet)
     }
 
     fn send_fanout(&self, packet: Submission<'_>) -> bool {
-        self.submit::<true>(packet)
+        self.submit::<true, false>(packet)
     }
 
     fn close(&self, reason: Disconnect) {

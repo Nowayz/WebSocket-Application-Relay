@@ -80,6 +80,13 @@ such active views can consume about 80 MB of logical metadata credit before
 recipient frame reservations. This is a planning example, not a sufficient
 queue size or a physical-memory estimate.
 
+Clearing a global listener's disconnect flag synchronously drains pending
+departure work before acknowledging the change. This preserves the permission
+and FIFO boundary, but holds the registry write lock during that drain; its
+control latency is not bounded to the ordinary 1,024-recipient quantum. A short
+100,000-recipient check measured this cost in the hundreds of milliseconds.
+See the [observer revocation report](benchmarks/2026-10-19-observer-revocation/README.md).
+
 Watch `war_queued_bytes` and changes in `war_global_pressure_total`. A nonzero
 pressure count can include metadata refusal even if synchronous fallback later
 succeeds; it is not a count of missing messages. Under exhausted global credit,

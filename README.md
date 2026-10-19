@@ -32,6 +32,9 @@ its ordering and memory limits are covered separately in that report.
 Overlapping retirement publications now share one worker wake; refilling a
 drained queue wakes again. The [release component and short 100k checks](docs/benchmarks/2026-10-19-retirement-wake-coalescing/README.md)
 record the reduced publication cost and ordinary-workload limits.
+Disconnect-listener revocation now orders captured notices before its reply;
+the [short correctness check](docs/benchmarks/2026-10-19-observer-revocation/README.md)
+also records the synchronous barrier cost under a 100,000-recipient departure.
 
 Workers also discover at most 1,024 expired timers per turn before returning to
 ready processing and socket polling. The [expiry-burst report](docs/benchmarks/2026-10-19-expiry-fairness/README.md)
