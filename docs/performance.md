@@ -7125,3 +7125,13 @@ changes from unexplained 1006 to clean 1013 / Try Again Later. Two one-slot
 rejections and subsequent admission/routing verify resource reuse; 104 library
 and 61 client integration tests pass. Post-welcome routing is unchanged.
 See the [before/after protocol evidence](benchmarks/2026-10-19-bridge-upstream-welcome/README.md).
+
+
+### Complete bridge welcome validation (2026-10-19)
+
+The bridge requires one complete nonreserved CBOR uint64 welcome and rejects
+wrong WebSocket types or trailing data with a clean protocol Close on both
+peers. Validation borrows bytes and releases the local welcome owner before
+continuing; only the scalar ID remains. Ten valid and ten invalid socket cases,
+106 library tests and 61 compatibility tests pass. No performance claim is
+made. See the [validation evidence](benchmarks/2026-10-19-bridge-welcome-validation/README.md).

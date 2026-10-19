@@ -298,6 +298,9 @@ While awaiting the upstream welcome, Ping/Pong control frames are handled within
 the same ten-second deadline. An upstream Close is relayed with its original code
 and reason even before a legacy ID is assigned, so a full native room reports a
 clean `1013 / Try Again Later` instead of an unexplained `1006` disconnect.
+A welcome must contain exactly one CBOR unsigned uint64 ID other than zero or
+the broadcast sentinel. Invalid welcomes close both peers with `1002 / Invalid
+Upstream Welcome`; valid noncanonical integer widths remain accepted.
 Oversized frontend messages receive Close `1009` before or after joining; the
 bridge retains its 16 MiB incoming message limit. Malformed framing receives
 `1002`, and invalid UTF-8 receives `1007`; decoder-error Close output is bounded

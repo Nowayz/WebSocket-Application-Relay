@@ -1,0 +1,188 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -397,7 +397,6 @@
+                 .await
+                 .context("upstream closed before welcome")??
+             {
+-                Message::Binary(bytes) => break Ok::<_, anyhow::Error>(Some(bytes)),
+                 Message::Ping(_) => upstream.flush().await?,
+                 Message::Pong(_) => {}
+                 Message::Close(frame) => {
+@@ -405,7 +404,7 @@
+                     transport::initiate_close(&mut legacy, frame, WAIT, None).await;
+                     break Ok(None);
+                 }
+-                _ => bail!("invalid upstream welcome"),
++                message => break Ok::<_, anyhow::Error>(Some(message)),
+             }
+         }
+     })
+@@ -414,7 +413,31 @@
+     let Some(welcome) = welcome else {
+         return Ok(());
+     };
+-    let id = Decoder::new(&welcome).u64()?;
++    let id = match &welcome {
++        Message::Binary(bytes) => {
++            let mut decoder = Decoder::new(bytes);
++            match decoder.u64() {
++                Ok(id) if id != 0 && id != BROADCAST && decoder.position() == bytes.len() => {
++                    Some(id)
++                }
++                _ => None,
++            }
++        }
++        _ => None,
++    };
++    // Only the scalar ID survives validation, including during error cleanup.
++    drop(welcome);
++    let Some(id) = id else {
++        let frame = Some(CloseFrame {
++            code: CloseCode::Protocol,
++            reason: "Invalid Upstream Welcome".into(),
++        });
++        tokio::join!(
++            transport::initiate_close(&mut upstream, frame.clone(), WAIT, None),
++            transport::initiate_close(&mut legacy, frame, WAIT, None),
++        );
++        return Ok(());
++    };
+     legacy
+         .send(Message::Binary(Bytes::copy_from_slice(&id.to_le_bytes())))
+         .await?;
+@@ -598,6 +621,135 @@
+         .expect("pre-welcome control frames must not prevent routing");
+     }
+ 
++    async fn welcome_validation_cases(cases: Vec<(Message, Option<u64>)>) {
++        timeout(Duration::from_secs(2), async {
++            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let shutdown = CancellationToken::new();
++            let mut tasks = JoinSet::new();
++            let expected_cases = cases.clone();
++            tasks.spawn(async move {
++                for (message, id) in expected_cases {
++                    let (stream, _) = upstream.accept().await.unwrap();
++                    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                    ws.send(message).await.unwrap();
++                    let Some(Ok(Message::Close(Some(frame)))) = ws.next().await else {
++                        panic!("upstream did not receive clean Close");
++                    };
++                    assert_eq!(
++                        frame.code,
++                        if id.is_some() {
++                            CloseCode::Normal
++                        } else {
++                            CloseCode::Protocol
++                        }
++                    );
++                    assert_eq!(
++                        frame.reason,
++                        if id.is_some() {
++                            "done"
++                        } else {
++                            "Invalid Upstream Welcome"
++                        }
++                    );
++                    assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++                    assert!(ws.next().await.is_none());
++                }
++            });
++            let token = shutdown.clone();
++            tasks.spawn(async move {
++                serve(listener, upstream_url, 1, token).await.unwrap();
++            });
++            for (_, id) in cases {
++                let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++                ws.send(Message::Binary(Bytes::from_static(b"validation")))
++                    .await
++                    .unwrap();
++                if let Some(id) = id {
++                    assert_eq!(
++                        ws.next().await.unwrap().unwrap(),
++                        Message::Binary(Bytes::copy_from_slice(&id.to_le_bytes()))
++                    );
++                    assert!(
++                        transport::initiate_close(
++                            &mut ws,
++                            Some(CloseFrame {
++                                code: CloseCode::Normal,
++                                reason: "done".into()
++                            }),
++                            Duration::from_secs(1),
++                            None
++                        )
++                        .await
++                    );
++                    assert!(ws.next().await.is_none());
++                } else {
++                    let received = ws.next().await;
++                    let Some(Ok(Message::Close(Some(frame)))) = received else {
++                        panic!("invalid welcome was exposed as a legacy ID: {received:?}");
++                    };
++                    assert_eq!(frame.code, CloseCode::Protocol);
++                    assert_eq!(frame.reason, "Invalid Upstream Welcome");
++                    assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++                    assert!(ws.next().await.is_none());
++                }
++            }
++            shutdown.cancel();
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap();
++            }
++        })
++        .await
++        .expect("welcome validation and one-slot reuse must be prompt");
++    }
++
++    #[tokio::test]
++    async fn invalid_upstream_welcome_ids_and_trailing_values_close_both_peers() {
++        let cases = vec![
++            protocol::uint(0),
++            Bytes::new(),
++            protocol::uint(u64::MAX),
++            Bytes::from_static(&[0x18]),
++            Bytes::from_static(&[0x20]),
++            Bytes::from_static(&[0x61, b'x']),
++            Bytes::from_static(&[0xf6]),
++            Bytes::from_static(&[0x82, 1, 2]),
++            Bytes::from_static(&[0x18, 42, 0]),
++        ];
++        let mut cases: Vec<_> = cases
++            .into_iter()
++            .map(|bytes| (Message::Binary(bytes), None))
++            .collect();
++        cases.push((Message::Text("42".into()), None));
++        welcome_validation_cases(cases).await;
++    }
++
++    #[tokio::test]
++    async fn complete_uint64_welcomes_keep_all_widths_and_noncanonical_encoding() {
++        let mut cases: Vec<_> = [
++            1,
++            23,
++            24,
++            255,
++            256,
++            65535,
++            65536,
++            u32::MAX as u64,
++            u64::MAX - 1,
++        ]
++        .into_iter()
++        .map(|id| (Message::Binary(protocol::uint(id)), Some(id)))
++        .collect();
++        cases.push((
++            Message::Binary(Bytes::from_static(&[0x1b, 0, 0, 0, 0, 0, 0, 0, 42])),
++            Some(42),
++        ));
++        welcome_validation_cases(cases).await;
++    }
++
+     #[tokio::test]
+     async fn invalid_frames_send_policy_close_before_and_after_join() {
+         use tokio::io::AsyncWriteExt;
