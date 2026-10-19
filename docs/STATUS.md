@@ -32,6 +32,14 @@ versus 8.51–10.06 ms, and fanout maxima 50.51–56.17 ms versus 58.97–61.89 
 This fixes observer interference, not relay runtime performance. Phase-gate
 descriptor checks, exact counters, FIFO and complete resource retirement remain.
 
+A follow-up [fanout lock-scope screen](benchmarks/2026-10-18-fanout-unlock-screen/README.md)
+rejects releasing socket state before the common queued-output notification.
+A separate two-second profile motivates the test, but control/candidate/candidate/
+control two-second full-population trials show overlapping CPU/private tails and
+no compelling fanout gain: candidate maxima 51.64–53.07 ms versus control
+51.32–51.92 ms. All meet 32/32 offered windows and exact retirement; 92 library
+tests and Clippy pass. The current runtime stays selected.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues
