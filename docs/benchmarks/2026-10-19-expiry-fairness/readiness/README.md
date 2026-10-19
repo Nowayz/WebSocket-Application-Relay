@@ -1,0 +1,11 @@
+# Readable late upgrades behind an expiry batch
+
+The expiry scheduler's new batch boundary must not let incoming HTTP activity renew an expired handshake, and shutdown must still take priority. The runtime already enforces these rules. This follow-up adds one focused regression with two cases; no production code or policy changes.
+
+A real TCP pair supplies a complete valid WebSocket upgrade request. Earlier synthetic timer entries consume the worker's 1,024-entry expiry-discovery allowance, leaving the live connection's expired timer queued. The native poller confirms that connection is readable, then the test takes the normal scheduling and connection-drive path. Without shutdown, it must drop the expired upgrade, retain the Upgrade stage and increment the handshake error counter exactly once. With shutdown and expiry both pending, it must drop the upgrade through shutdown priority without counting a handshake error. In both cases the client receives no HTTP response (EOF or TCP reset after unread request bytes), connection ownership retires, no session is registered and no output bytes remain reserved.
+
+This uses controlled Instant values, no sleeps and one-second failure bounds on poll/read. Synthetic earlier timers avoid opening thousands of sockets; it tests the specific queued-timer/readiness interaction, not a full traffic workload. The previous report retains the real 100,000-connection expiry stress and mixed-load evidence.
+
+All 122 library tests pass in 0.55 seconds; strict bins/lib/tests Clippy passes. Only the cfg(test) fairness module and documentation change, so the selected runtime source and previous performance evidence remain unchanged. No additional capacity campaign or performance claim is made. Existing services and unrelated worktree edits are preserved.
+
+From a clean checkout, run `cargo test --locked --lib readable_upgrades_cannot_bypass_deadlines_or_shutdown_behind_an_expiry_batch`. Recorded checks used a clean copied snapshot at `artifacts/expiry-readiness-20261019-check-work` and refreshed source timestamps before sharing the debug cache. Source, patch, logs and hashes are retained; `python docs/benchmarks/2026-10-19-expiry-fairness/readiness/verify.py` audits them offline.

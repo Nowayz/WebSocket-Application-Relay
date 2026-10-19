@@ -408,3 +408,84 @@ fn expired_timer_discovery_yields_and_preserves_the_remaining_deadlines() {
     assert_eq!(worker.timers.pop_due(future), Some(due));
     assert_eq!(worker.timers.next(), None);
 }
+
+#[test]
+fn readable_upgrades_cannot_bypass_deadlines_or_shutdown_behind_an_expiry_batch() {
+    use std::io::Read;
+
+    for stopping in [false, true] {
+        let relay = Relay::new(crate::Config {
+            total_read_buffer_bytes: 0,
+            ..crate::Config::default()
+        })
+        .unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        stream.set_nonblocking(true).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let mut worker = Worker::new(listener, relay.clone()).unwrap();
+        relay.metrics.connections.fetch_add(1, Relaxed);
+        let token = Token(2);
+        let socket = Socket::new(
+            mio::net::TcpStream::from_std(stream),
+            token,
+            worker.registry.clone(),
+            worker.signal.clone(),
+            ConnectionGuard(relay.metrics.clone(), None),
+            &relay,
+        )
+        .unwrap();
+        let mut connection = Connection::new(socket.clone(), token, None, &relay);
+        let now = Instant::now();
+        let deadline = now - Duration::from_millis(1);
+        connection.phase_deadline = deadline;
+        let slot = worker.connections.insert(connection);
+        worker.tokens.insert(token, slot);
+        worker.timers.set(slot, Some(deadline));
+        // Earlier entries consume the discovery batch. This live connection's
+        // timer remains in the heap when its socket becomes readable.
+        for other in 1..=READY_QUANTUM {
+            worker.timers.set(other, Some(now - Duration::from_secs(1)));
+        }
+        client.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n").unwrap();
+        worker.schedule_timers(now);
+        assert_eq!(worker.timers.next(), Some(deadline));
+        let mut events = Events::with_capacity(4);
+        worker
+            .poll
+            .poll(&mut events, Some(Duration::from_secs(1)))
+            .unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.token() == token && event.is_readable())
+        );
+        worker.schedule(token); // The normal readable-event scheduling path.
+        assert_eq!(worker.ready.pop_front(), Some(token));
+        let mut connection = worker.connections.remove(slot);
+        assert!(matches!(
+            connection.drive(&relay, &mut worker.scratch, stopping),
+            Drive::Drop
+        ));
+        assert!(matches!(connection.stage, Stage::Upgrade(_)));
+        assert_eq!(
+            relay.metrics.handshake_errors.load(Relaxed),
+            u64::from(!stopping)
+        );
+        drop(connection);
+        drop(socket);
+        let mut response = [0; 1];
+        match client.read(&mut response) {
+            Ok(0) => {}
+            Err(error) if error.kind() == io::ErrorKind::ConnectionReset => {}
+            result => panic!("late upgrade produced HTTP output or did not retire: {result:?}"),
+        }
+        assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+}
