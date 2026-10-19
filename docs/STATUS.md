@@ -91,6 +91,16 @@ the fix; 44 final client tests pass in 1.104 seconds. The browser bundle is
 rebuilt and checked against native with the codec's browser allocation path.
 The existing single encoding is moved earlier; no extra payload copy is added.
 
+The [queued command ownership fix](benchmarks/2026-10-18-js-command-snapshot/README.md)
+captures normal JavaScript command values at invocation instead of retaining
+mutable references until dispatch. Four before-fix regressions cover mutation,
+transfer, nested writes and native variable contents. The selected client keeps
+FIFO/error/timeout/Close behavior, protects reentrant codec use and passes all
+52 tests in 1.117 seconds. Ordinary commands reuse one encoded frame; reentrant
+calls use a documented clone fallback. The browser artifact passes native
+mutation/transfer acceptance. A short SDK serialization screen has overlapping
+ranges, with no speed claim or native relay change.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues

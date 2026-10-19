@@ -185,6 +185,15 @@ The existing CBOR subscription frame is prepared once, with no extra payload cop
 expose privileged commands. `disconnect` events carry `{ userId }`; `close` events
 carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
+Command values are captured when the method is called, so ordinary byte buffers
+and object fields can be reused while replies are pending. The prepared CBOR
+frame still waits for its FIFO turn; local encoding failures reject in that turn
+without sending a packet. Ordinary calls encode once without another payload
+copy. A command invoked reentrantly from a value getter uses `structuredClone`
+and deferred encoding to avoid reentering the shared codec, so such values must
+be cloneable. Shared-memory buffers remain shared under that API; keep their
+contents synchronized and stable until the request settles.
+
 Calling `close()` immediately rejects an outstanding command and prevents queued
 commands from sending; it does not wait for the peer's Close acknowledgement.
 `requestTimeoutMs` defaults to 10,000 and must be positive, finite, and at most

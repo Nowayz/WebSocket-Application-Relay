@@ -242,3 +242,16 @@ test('native subscription retains the byte channel supplied before the socket op
   assert.ok(row, 'subscription joined the originally supplied binary channel');
   assert.equal(row[1], 1);
 });
+
+test('native variable writes retain the value supplied before command dispatch', async t => {
+  const relay = await Relay.connect(url, 'js-cmd-snapshot');
+  t.after(() => relay.close());
+  const value = { bytes: new Uint8Array([1, 2]), label: 'before' };
+  const pending = relay.setVariable('snapshot', value);
+  value.bytes.fill(9);
+  value.label = 'after';
+  assert.equal(await pending, true);
+  assert.deepEqual(await relay.getVariable('snapshot'), {
+    found: true, value: { bytes: new Uint8Array([1, 2]), label: 'before' },
+  });
+});

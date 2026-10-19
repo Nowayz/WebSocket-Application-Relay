@@ -7,6 +7,13 @@ export const LISTEN = Object.freeze({ CHANNEL: 1, PRIVATE: 2, DISCONNECT: 4 });
 // Standard CBOR only: record-extension tags would bind the server to this codec.
 const encoder = new Encoder({ useRecords: false, mapsAsObjects: true, tagUint8Array: false });
 const decoder = new Decoder({ mapsAsObjects: true });
+// cbor-x shares output state: nested command capture must not reenter it.
+let encoding = 0;
+function encode(value) {
+  encoding++;
+  try { return encoder.encode(value); }
+  finally { encoding--; }
+}
 // WebSocket.close() permits 1000 or application codes in 3000..4999.
 const CLIENT_PROTOCOL_ERROR = 4002;
 
@@ -102,7 +109,7 @@ export class Relay extends EventTarget {
     const channelBytes = typeof channel === 'string' ? new TextEncoder().encode(channel) : channel;
     if (!(channelBytes instanceof Uint8Array) || channelBytes.length > 16) throw new RangeError('Channel must contain at most 16 bytes');
     // Capture the channel before asynchronous socket setup lets its owner reuse it.
-    const subscription = encoder.encode(channel);
+    const subscription = encode(channel);
     const ws = new WebSocketClass(url, 'war.cbor.v1');
     ws.binaryType = 'arraybuffer';
     return new Promise((resolve, reject) => {
@@ -143,7 +150,7 @@ export class Relay extends EventTarget {
     if (!this.ready) throw new Error('Relay is closed');
     // Number inputs larger than the safe-integer range have already lost precision.
     target = asUserId(target);
-    this.ws.send(encoder.encode([target, value]));
+    this.ws.send(encode([target, value]));
   }
 
   broadcast(value) { this.send(BROADCAST, value); }
@@ -154,8 +161,12 @@ export class Relay extends EventTarget {
 
   /** Serialize commands: the deliberately small wire protocol has no request IDs. */
   request(op, value) {
+    const deferred = encoding;
+    let packet, captured, encodingFailure;
     const result = this.#controls.then(() => new Promise((resolve, reject) => {
       const delay = requestTimeout(this.requestTimeoutMs);
+      if (encodingFailure) { reject(encodingFailure.error); return; }
+      if (deferred) packet = encode(captured);
       const finish = callback => value => { clearTimeout(timer); this.#pending = null; callback(value); };
       const timer = setTimeout(() => {
         this.#pending = null;
@@ -164,9 +175,18 @@ export class Relay extends EventTarget {
         this.ws.close(CLIENT_PROTOCOL_ERROR, 'Relay Request Timeout');
       }, delay);
       this.#pending = { op: op === 5 ? 200 : op, resolve: finish(resolve), reject: finish(reject) };
-      try { this.send(RELAY, [op, value]); } catch (error) { this.#pending.reject(error); }
+      try {
+        if (!this.ready) throw new Error('Relay is closed');
+        this.ws.send(packet);
+      } catch (error) { this.#pending.reject(error); }
     }));
     this.#controls = result.catch(() => {});
+    // Reserve FIFO position before evaluating getters that may enqueue commands.
+    try {
+      if (!this.ready) throw new Error('Relay is closed');
+      if (deferred) captured = structuredClone([RELAY, [op, value]]);
+      else packet = encode([RELAY, [op, value]]);
+    } catch (error) { encodingFailure = { error }; }
     return result;
   }
 
