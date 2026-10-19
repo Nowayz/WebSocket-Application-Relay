@@ -19,6 +19,10 @@ class Socket extends EventTarget {
   }
 }
 
+class CaptureSocket extends Socket {
+  send(bytes) { super.send(); this.subscription = Uint8Array.from(bytes); }
+}
+
 function noSetupListeners(socket) {
   for (const type of ['open', 'message', 'close', 'error']) {
     assert.equal(getEventListeners(socket, type).length, 0, type);
@@ -130,4 +134,50 @@ test('timer ceiling is inclusive and direct construction uses the standard defau
     assert.equal(relay.requestTimeoutMs, requestTimeoutMs);
     relay.close();
   }
+});
+
+test('connect captures a byte channel before the delayed socket open', async () => {
+  const backing = new Uint8Array([99, 97, 98, 99, 99]);
+  const channel = backing.subarray(1, 4);
+  const pending = Relay.connect('ws://fixture', channel, { WebSocketClass: CaptureSocket });
+  const socket = Socket.instance;
+  channel.fill(120);
+  socket.dispatchEvent(new Event('open'));
+  socket.welcome();
+  const relay = await pending;
+  try {
+    assert.deepEqual(socket.subscription, new Uint8Array([0x43, 97, 98, 99]));
+  } finally { relay.close(); }
+});
+
+test('connect does not depend on the channel buffer remaining attached', async () => {
+  const channel = new Uint8Array([97, 98, 99]);
+  const pending = Relay.connect('ws://fixture', channel, { WebSocketClass: CaptureSocket });
+  const socket = Socket.instance;
+  structuredClone(channel.buffer, { transfer: [channel.buffer] });
+  socket.dispatchEvent(new Event('open'));
+  socket.welcome();
+  const relay = await pending;
+  try {
+    assert.deepEqual(socket.subscription, new Uint8Array([0x43, 97, 98, 99]));
+  } finally { relay.close(); }
+});
+
+test('prepared subscriptions survive concurrent joins and encoder buffer growth', async () => {
+  const first = Relay.connect('ws://fixture', new Uint8Array([1, 2]), { WebSocketClass: CaptureSocket });
+  const a = Socket.instance;
+  const second = Relay.connect('ws://fixture', new Uint8Array([3, 4]), { WebSocketClass: CaptureSocket });
+  const b = Socket.instance;
+  const unrelated = new Relay(new Socket(), 50n);
+  unrelated.send(51n, new Uint8Array(65536));
+  unrelated.close();
+  for (const socket of [b, a]) {
+    socket.dispatchEvent(new Event('open'));
+    socket.welcome();
+  }
+  const relays = await Promise.all([first, second]);
+  try {
+    assert.deepEqual(a.subscription, new Uint8Array([0x42, 1, 2]));
+    assert.deepEqual(b.subscription, new Uint8Array([0x42, 3, 4]));
+  } finally { for (const relay of relays) relay.close(); }
 });

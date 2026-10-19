@@ -176,6 +176,11 @@ a.close();
 b.close();
 ```
 
+`Relay.connect()` captures the supplied channel before asynchronous socket setup.
+A byte-array channel can be reused or its buffer transferred after the call;
+the subscription retains the original bytes, including a subarray's exact range.
+The existing CBOR subscription frame is prepared once, with no extra payload copy.
+
 `authenticate(password)`, `listen(flags)`, `channels()`, and `assignId(bigint)`
 expose privileged commands. `disconnect` events carry `{ userId }`; `close` events
 carry `{ code, reason }`. The client serializes control requests, including

@@ -227,3 +227,18 @@ test('native pipelined assignment and self-message expose the acknowledged ident
   assert.equal(assigned, id);
   assert.deepEqual(observed, { userId: id, detail: { sender: id, value: { afterAssignment: true } } });
 });
+
+test('native subscription retains the byte channel supplied before the socket opens', async t => {
+  const expected = new Uint8Array([0, 255, 83, 78, 65, 80]);
+  const channel = expected.slice();
+  const pending = Relay.connect(url, channel);
+  channel.fill(120);
+  const relay = await pending;
+  t.after(() => relay.close());
+  assert.equal(await relay.authenticate('js-test-host'), true);
+  const rows = await relay.channels();
+  const row = rows.find(([name]) => name.length === expected.length
+    && name.every((byte, index) => byte === expected[index]));
+  assert.ok(row, 'subscription joined the originally supplied binary channel');
+  assert.equal(row[1], 1);
+});

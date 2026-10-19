@@ -101,6 +101,8 @@ export class Relay extends EventTarget {
     requestTimeout(requestTimeoutMs);
     const channelBytes = typeof channel === 'string' ? new TextEncoder().encode(channel) : channel;
     if (!(channelBytes instanceof Uint8Array) || channelBytes.length > 16) throw new RangeError('Channel must contain at most 16 bytes');
+    // Capture the channel before asynchronous socket setup lets its owner reuse it.
+    const subscription = encoder.encode(channel);
     const ws = new WebSocketClass(url, 'war.cbor.v1');
     ws.binaryType = 'arraybuffer';
     return new Promise((resolve, reject) => {
@@ -118,7 +120,7 @@ export class Relay extends EventTarget {
       };
       const closed = () => fail(new Error('Relay closed before subscription'));
       const open = () => {
-        try { ws.send(encoder.encode(channel)); } catch (error) { fail(error); }
+        try { ws.send(subscription); } catch (error) { fail(error); }
       };
       const welcome = event => {
         cleanup();

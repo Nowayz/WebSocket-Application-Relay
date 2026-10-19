@@ -83,6 +83,14 @@ control deliveries. Descriptors return to 26/26 and final resource gauges are
 zero. Both probes' collision/failure-cleanup tests pass; no runtime change is
 needed for this finite case.
 
+The [JavaScript subscription snapshot fix](benchmarks/2026-10-18-js-join-snapshot/README.md)
+captures a byte-array channel before asynchronous socket setup. Mutation or
+buffer transfer after connect() previously changed the joined room or failed
+encoding. Two mock regressions and a native wrong-room regression fail before
+the fix; 44 final client tests pass in 1.104 seconds. The browser bundle is
+rebuilt and checked against native with the codec's browser allocation path.
+The existing single encoding is moved earlier; no extra payload copy is added.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues
