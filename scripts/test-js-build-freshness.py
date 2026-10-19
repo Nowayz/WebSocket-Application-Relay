@@ -4,6 +4,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
+import signal
+import time
 import subprocess
 import tempfile
 import unittest
@@ -36,11 +39,14 @@ def tree(root, label, dependency):
             ' std::process::exit(1);\n}\n')
 
 
-def environment(root):
+def environment(root, network=False):
     commands = root / 'commands'
     commands.mkdir()
     executable(commands / 'npm', '#!/bin/sh\nexit 0\n')
-    executable(commands / 'curl', '#!/bin/sh\nexit 1\n')
+    if not network:
+        executable(commands / 'curl', '#!/bin/sh\nexit 1\n')
+        node = shutil.which('node')
+        executable(commands / 'node', '#!/bin/sh\nif [ "$#" -gt 1 ]; then exec ' + shlex.quote(node) + ' "$@"; fi\nexit 1\n')
     markers = root / 'markers'
     markers.mkdir()
     env = os.environ.copy()
@@ -73,6 +79,60 @@ class BuildFreshnessTests(unittest.TestCase):
                 observed = [p.read_text() for p in markers.iterdir()]
                 self.assertTrue(observed, done.stdout + done.stderr)
                 self.assertEqual(set(observed), {second_label + '-B'}, done.stdout + done.stderr)
+
+    @unittest.skipUnless(os.name == 'posix', 'Bash process groups and loopback sockets')
+    def test_stalled_readiness_http_is_bounded_and_fixture_processes_retire(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env, commands, markers = environment(root, network=True)
+            source = root / 'source'
+            tree(source, 'unused', 'unused')
+            (source / 'Cargo.lock').write_text('# fixture\n')
+            entries = []
+            for name, port in [('war-relay', 19139), ('war-legacy-bridge', 19137)]:
+                binary = root / name
+                code = ('#!/usr/bin/env python3\nimport os, socket, time\nfrom pathlib import Path\n'
+                        'root=Path(os.environ["CHECK_JS_CACHE_MARKERS"])\n'
+                        'listener=socket.socket()\nlistener.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)\n'
+                        f'listener.bind(("127.0.0.1",{port}))\nlistener.listen()\n'
+                        f'(root/"{name}.pid").write_text(str(os.getpid()))\n')
+                if name == 'war-relay':
+                    code += ('peer,_=listener.accept()\nrequest=peer.recv(4096)\n'
+                             'assert b"GET /readyz " in request\n'
+                             '(root/"http-request").write_bytes(request)\n'
+                             'while True: time.sleep(1)\n')
+                else:
+                    code += 'while True:\n peer,_=listener.accept()\n peer.close()\n'
+                executable(binary, code)
+                entries.append({'reason': 'compiler-artifact', 'target': {'name': name, 'kind': ['bin']},
+                                'manifest_path': str(source / 'Cargo.toml'), 'executable': str(binary), 'fresh': False})
+            fixture = root / 'artifacts.jsonl'
+            fixture.write_text(''.join(json.dumps(row) + '\n' for row in entries))
+            executable(commands / 'cargo', '#!/bin/sh\ncat "' + str(fixture) + '"\n')
+            started = time.monotonic()
+            process = subprocess.Popen(['bash', 'scripts/check-js.sh'], cwd=source, env=env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                       start_new_session=True)
+            bounded = True
+            try:
+                stdout, stderr = process.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                bounded = False
+                os.killpg(process.pid, signal.SIGTERM)
+                stdout, stderr = process.communicate(timeout=2)
+            finally:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            self.assertTrue((markers / 'http-request').exists(), stdout + stderr)
+            self.assertTrue(bounded, 'checker remained blocked on a real stalled HTTP request for eight seconds')
+            self.assertNotEqual(process.returncode, 0)
+            self.assertLess(time.monotonic() - started, 8)
+            for name in ['war-relay', 'war-legacy-bridge']:
+                pid = int((markers / (name + '.pid')).read_text())
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(pid, 0)
 
     def test_deployment_environment_does_not_leak_into_fixture_processes(self):
         with tempfile.TemporaryDirectory() as temporary:
