@@ -45,9 +45,7 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
                 return Ok(Some(e.into_writer().into()));
             }
             Some(match legacy::command(&bytes[8..])? {
-                legacy::Command::Authenticate(secret) => {
-                    protocol::request(0, &protocol::byte_string(secret))
-                }
+                legacy::Command::Authenticate(secret) => byte_request(0, secret),
                 legacy::Command::Listen(flags) => {
                     protocol::request(1, &protocol::uint(u64::from(flags)))
                 }
@@ -70,9 +68,7 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
                         .expect("Vec encoding");
                     e.into_writer().into()
                 }
-                legacy::Command::GetVariable(key) => {
-                    protocol::request(5, &protocol::byte_string(key))
-                }
+                legacy::Command::GetVariable(key) => byte_request(5, key),
                 legacy::Command::Ignore => return Ok(None),
             })
         }
@@ -102,6 +98,22 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
             });
         }
     })
+}
+
+// Encode byte-valued commands directly into their one owned request buffer.
+fn byte_request(op: u8, value: &[u8]) -> Bytes {
+    let capacity = 3
+        + protocol::uint_len(u64::from(op))
+        + protocol::uint_len(value.len() as u64)
+        + value.len();
+    let mut e = Encoder::new(Vec::with_capacity(capacity));
+    e.array(2)
+        .and_then(|e| e.u8(0))
+        .and_then(|e| e.array(2))
+        .and_then(|e| e.u8(op))
+        .and_then(|e| e.bytes(value))
+        .expect("Vec encoding");
+    e.into_writer().into()
 }
 
 pub fn from_cbor(bytes: &[u8]) -> Result<Option<Message>> {
@@ -918,6 +930,30 @@ mod tests {
             "wss://relay.example.invalid:443/path",
         ] {
             validate_upstream(upstream).unwrap();
+        }
+    }
+
+    #[test]
+    fn byte_commands_preserve_length_boundaries_and_empty_key_behavior() {
+        for op in [0, 5] {
+            for length in [0, 1, 23, 24, 255, 256, 4096] {
+                if op == 5 && length > 255 {
+                    continue;
+                }
+                let value = vec![b'a'; length];
+                let mut input = vec![0; 8];
+                input.push(op);
+                input.extend_from_slice(&value);
+                let actual = to_cbor(Message::Binary(input.into())).unwrap();
+                if op == 5 && length == 0 {
+                    assert_eq!(actual, None);
+                } else {
+                    assert_eq!(
+                        actual.unwrap(),
+                        protocol::request(op, &protocol::byte_string(&value))
+                    );
+                }
+            }
         }
     }
 
