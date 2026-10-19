@@ -1,0 +1,113 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -424,6 +424,7 @@
+         connect_async_with_config(upstream, Some(upstream_config), true),
+     )
+     .await??;
++    upstream.set_read_frame_limit(Some(transport::READ_FRAMES_PER_POLL));
+     let subscription = protocol::byte_string(&joined);
+     // The encoded subscription owns its bytes; release the frontend join view.
+     drop(joined);
+@@ -793,6 +794,102 @@
+         }).await.expect("eight upstream frame faults and one-slot reuse must be prompt");
+     }
+ 
++    #[tokio::test]
++    async fn upstream_fragment_trains_yield_before_welcome_and_forwarding_complete() {
++        use std::{
++            future::Future,
++            sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed},
++        };
++        use tokio::io::AsyncWriteExt;
++
++        timeout(Duration::from_secs(2), async {
++            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let counting = Arc::new(AtomicBool::new(false));
++            let polls = Arc::new(AtomicUsize::new(0));
++            let (continue_send, continue_receive) = tokio::sync::oneshot::channel();
++            let mut tasks = JoinSet::new();
++            let enabled = counting.clone();
++            tasks.spawn(async move {
++                let (stream, _) = upstream.accept().await.unwrap();
++                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                let fragment = |packet: &[u8]| {
++                    let mut train = Vec::new();
++                    for frame in 0..transport::READ_FRAMES_PER_POLL.get() * 2 {
++                        train.extend_from_slice(&[if frame == 0 { 2 } else { 0 }, 0]);
++                    }
++                    train.extend_from_slice(&[0x80, packet.len() as u8]);
++                    train.extend_from_slice(packet);
++                    train
++                };
++                // Each train is completely written before counting begins.
++                // Empty continuations consume no application bytes.
++                ws.get_mut()
++                    .write_all(&fragment(&protocol::uint(42)))
++                    .await
++                    .unwrap();
++                enabled.store(true, Relaxed);
++                continue_receive.await.unwrap();
++                let packet = protocol::envelope(42, &protocol::byte_string(&[17, 34]));
++                ws.get_mut().write_all(&fragment(&packet)).await.unwrap();
++                enabled.store(true, Relaxed);
++                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
++                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++            });
++            let enabled = counting.clone();
++            let observed = polls.clone();
++            tasks.spawn(async move {
++                let (socket, _) = listener.accept().await.unwrap();
++                let policy = crate::origin::OriginPolicy::default();
++                let mut connection = Box::pin(bridge(
++                    transport::HandshakeStream::new(socket, None),
++                    upstream_url,
++                    &policy,
++                ));
++                futures_util::future::poll_fn(|cx| {
++                    if enabled.load(Relaxed) {
++                        observed.fetch_add(1, Relaxed);
++                    }
++                    connection.as_mut().poll(cx)
++                })
++                .await
++                .unwrap();
++            });
++            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            ws.send(Message::Binary(Bytes::from_static(b"fragments")))
++                .await
++                .unwrap();
++            assert_eq!(
++                ws.next().await.unwrap().unwrap(),
++                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
++            );
++            counting.store(false, Relaxed);
++            let welcome_polls = polls.swap(0, Relaxed);
++            assert!(welcome_polls >= 3, "upstream welcome parsed the fragment train without yielding: {welcome_polls} polls");
++            continue_send.send(()).unwrap();
++            let mut expected = 42u64.to_le_bytes().to_vec();
++            expected.extend_from_slice(&[17, 34]);
++            assert_eq!(
++                ws.next().await.unwrap().unwrap(),
++                Message::Binary(expected.into())
++            );
++            counting.store(false, Relaxed);
++            let forwarding_polls = polls.load(Relaxed);
++            assert!(forwarding_polls >= 3, "upstream forwarding parsed the fragment train without yielding: {forwarding_polls} polls");
++            eprintln!("fragment_poll_counts welcome={welcome_polls} forwarding={forwarding_polls}");
++            assert!(transport::initiate_close(&mut ws, None, Duration::from_secs(1), None).await);
++            assert!(ws.next().await.is_none());
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap();
++            }
++        })
++        .await
++        .expect("fragment scheduling and exact output must complete promptly");
++    }
++
+     async fn welcome_validation_cases(cases: Vec<(Message, Option<u64>)>) {
+         timeout(Duration::from_secs(2), async {
+             let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();

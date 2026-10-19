@@ -305,6 +305,10 @@ Oversized frontend messages receive Close `1009` before or after joining; the
 bridge retains its 16 MiB incoming message limit. Malformed framing receives
 `1002`, and invalid UTF-8 receives `1007`; decoder-error Close output is bounded
 and does not resume the invalid input stream. See the [frame-error checks](docs/benchmarks/2026-10-18-bridge-frame-errors/README.md).
+Both bridge legs limit fragment parsing to 256 frames per stream poll, preserving
+partial messages while yielding between long continuation trains. The
+[upstream fragmentation checks](docs/benchmarks/2026-10-19-bridge-upstream-fragments/README.md)
+cover both welcome and forwarding.
 Malformed upstream frames also produce the mapped legacy Close before or after
 welcome; the [upstream fault checks](docs/benchmarks/2026-10-19-bridge-upstream-frame-errors/README.md)
 verify acknowledgement, retirement and single-slot reuse.
