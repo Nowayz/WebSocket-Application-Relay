@@ -51,7 +51,9 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
-        let mut text = String::with_capacity(2500);
+        // Current exposition fits within 8 KiB even with 20-digit values.
+        // This is a capacity hint, not a limit if metrics are added later.
+        let mut text = String::with_capacity(8192);
         let budget = self.read_budget.as_deref();
         for (name, kind, value, help) in [
             (
