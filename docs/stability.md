@@ -37,6 +37,9 @@ Observer-barrier regressions cover partially visited jobs, independent observers
 re-subscription before completion, publication after an emptied queue, counter
 exhaustion and a ready full one-slot output queue. The native event fixture checks
 old notices before acknowledgments and all audience departure/Close receipts.
+Shared snapshot checks also cover reuse across pending jobs, membership
+invalidation, release on the last owning job, refusal when a view cannot fit,
+and multiple departures fitting one shared view within a fixed byte budget.
 
 Known limits include synchronous queue-pressure fallback and pending global-view
 scans during observer revocation. Faults and failed gates belong in the evidence. Source and

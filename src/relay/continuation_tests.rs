@@ -546,6 +546,205 @@ fn recorded_disconnect_observer(relay: &Arc<Relay>) -> (Registration, Arc<Depart
 }
 
 #[test]
+fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
+    fn snapshot(job: &RoomFanout) -> &Arc<RetirementSnapshot> {
+        match job.recipients.as_ref().unwrap() {
+            FanoutRecipients::Disconnect(snapshot) => snapshot,
+            FanoutRecipients::Room(_) => panic!("expected disconnect snapshot"),
+        }
+    }
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"snapshot-source", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let first = depart();
+    let second = depart();
+    let old_view = {
+        let pending = relay.retirements.lock();
+        assert_eq!(pending.jobs.len(), 2);
+        let a = snapshot(&pending.jobs[0]);
+        let b = snapshot(&pending.jobs[1]);
+        assert!(
+            Arc::ptr_eq(a, b),
+            "unchanged disconnect membership should be captured once"
+        );
+        Arc::downgrade(a)
+    };
+    // Other observation classes do not change disconnect membership.
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(5)),
+        )
+        .unwrap();
+    let third = depart();
+    {
+        let pending = relay.retirements.lock();
+        assert!(std::sync::Weak::ptr_eq(
+            &old_view,
+            &Arc::downgrade(snapshot(&pending.jobs[2]))
+        ));
+    }
+    // A newly authorized observer gets only subsequent departures. Captured
+    // jobs retain their old membership while the next job takes a fresh view.
+    let (late, late_output) = recorded_disconnect_observer(&relay);
+    let fourth = depart();
+    let new_view = {
+        let pending = relay.retirements.lock();
+        let view = Arc::downgrade(snapshot(&pending.jobs[3]));
+        assert!(!std::sync::Weak::ptr_eq(&old_view, &view));
+        view
+    };
+    for _ in 0..2 {
+        relay.progress_retirements();
+    }
+    assert!(
+        old_view.upgrade().is_some(),
+        "other jobs still own the old view and its credit"
+    );
+    for _ in 0..4 {
+        relay.progress_retirements();
+    }
+    assert!(
+        old_view.upgrade().is_none(),
+        "the final old-view job releases its view"
+    );
+    {
+        let pending = relay.retirements.lock();
+        assert_eq!(pending.jobs.len(), 1);
+        let job = &pending.jobs[0];
+        assert_eq!(
+            relay.metrics.queued_bytes.load(Relaxed),
+            snapshot(job).bytes + job.snapshot_bytes + job.packet.as_ref().unwrap().frame.len(),
+            "only the remaining job, its body and its shared view retain credit"
+        );
+    }
+    for _ in 0..2 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert!(
+        old_view.upgrade().is_none() && new_view.upgrade().is_none(),
+        "the cache must not retain recipient storage or peers after jobs drain"
+    );
+    for (_, output) in &observers {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 4);
+        for (packet, id) in packets.iter().zip([first, second, third, fourth]) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(late_output.0.lock().len(), 1);
+    assert_eq!(
+        late_output.0.lock()[0].to_vec(),
+        protocol::envelope(BROADCAST, &protocol::uint(fourth))
+    );
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(late);
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn shared_disconnect_views_preserve_the_queue_budget_without_per_job_overcharging() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        max_message_bytes: 1024,
+        queue_bytes: 2048,
+        total_queue_bytes: 12000,
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let mut departed = Vec::new();
+    for _ in 0..8 {
+        let source = relay
+            .subscribe_with_output(b"shared-credit", Arc::new(NativeRetirement))
+            .unwrap();
+        departed.push(source.peer.id.load(Relaxed));
+        drop(source);
+    }
+    assert_eq!(
+        relay.retirements.lock().jobs.len(),
+        8,
+        "one charged view and eight small jobs fit without synchronous fallback"
+    );
+    assert!(relay.metrics.queued_bytes.load(Relaxed) <= 12000);
+    assert_eq!(relay.metrics.global_pressure.load(Relaxed), 0);
+    for _ in 0..16 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    for (_, output) in &observers {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), departed.len());
+        for (packet, &id) in packets.iter().zip(&departed) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn an_unfunded_disconnect_view_falls_back_without_retaining_unaccounted_storage() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        max_message_bytes: 1024,
+        queue_bytes: 2048,
+        total_queue_bytes: 4096,
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let source = relay
+        .subscribe_with_output(b"view-refusal", Arc::new(NativeRetirement))
+        .unwrap();
+    let id = source.peer.id.load(Relaxed);
+    drop(source);
+    assert!(!relay.has_retirements());
+    assert!(relay.state.read().disconnect_snapshot.upgrade().is_none());
+    assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    for (_, output) in &observers {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 1);
+        assert_eq!(
+            packets[0].to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(id))
+        );
+    }
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
 fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue() {
     let relay = Relay::new(Config {
         auth_password: Some("observer-ack".into()),

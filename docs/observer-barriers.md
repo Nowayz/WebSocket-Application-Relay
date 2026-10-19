@@ -145,3 +145,7 @@ for bounded-message correctness. A portable small CI check uses `--audience 2048
 warnings denied, formatting, all 66 JavaScript tests, vendor provenance and the
 maintained-product audit passed. The CI fixture also checks all 2,048 shutdown
 Close receipts. No legacy or C/C++ implementation is reintroduced.
+
+The [subsequent snapshot ownership change](retirement-snapshots.md) reuses and
+charges overlapping disconnect views once. The footprint and comparison numbers
+above describe this report's `28e97de` revision.

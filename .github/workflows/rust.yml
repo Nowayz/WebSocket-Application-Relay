@@ -30,6 +30,7 @@ jobs:
       - run: python3 scripts/handshake-pressure.py --server target/debug/war-relay --client target/debug/examples/admission --workers 1 --connections 16 --rounds 4 --quiet --seconds 1 --server-cpus '' --client-cpus '' --controller-cpus '' --output artifacts/handshake-pressure-ci.json
       - run: python3 scripts/accept-pressure.py --server target/debug/war-relay --output artifacts/accept-pressure-ci.json
       - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --output artifacts/observer-barrier-ci.json
+      - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --departures 8 --queue-budget-bytes 65546 --output artifacts/observer-burst-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
       - run: npm run check:types --prefix clients/js
       - run: npm run build:browser --prefix clients/js

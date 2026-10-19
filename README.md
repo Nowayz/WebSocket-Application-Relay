@@ -116,6 +116,8 @@ notices before its acknowledgment. Other recipients retain their bounded turns;
 a sequence watermark prevents replay after re-subscription. The
 [observer-barrier report](docs/observer-barriers.md) describes the measured benefit
 and remaining queue-pressure and pending-view scan costs.
+Pending disconnect jobs also [share charged observer snapshots](docs/retirement-snapshots.md),
+avoiding repeated list copies and repeated reservations for the same storage.
 
 ## Provenance
 

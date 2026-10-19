@@ -26,17 +26,23 @@ def main():
     parser.add_argument('--server', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--audience', type=int, default=1024)
+    parser.add_argument('--departures', type=int, default=1,
+                        help='Distinct singleton sources closed before revocation')
+    parser.add_argument('--queue-budget-bytes', type=int,
+                        help='Diagnostic shared/local queue credit with 64 KiB message limit')
     parser.add_argument('--queue-messages', type=int)
     parser.add_argument('--server-cpus', default='')
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--burst-teardown', action='store_true', help='Diagnostic: publish two final departures before draining recipients')
     args = parser.parse_args()
-    if args.audience < 1 or args.workers < 1:
-        parser.error('audience and workers must be positive')
+    if args.audience < 1 or args.workers < 1 or args.departures < 1:
+        parser.error('audience, workers and departures must be positive')
     port, admin = (wire.runtime.free_port(), wire.runtime.free_port())
+    while admin == port:
+        admin = wire.runtime.free_port()
     command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
                '--admin-bind', f'127.0.0.1:{admin}', '--workers', str(args.workers),
-               '--max-connections', str(args.audience + 3),
+               '--max-connections', str(args.audience + args.departures + 2),
                '--max-channel-members', str(args.audience + 1),
                '--ping-interval-secs', '0', '--idle-timeout-secs', '0',
                '--messages-per-second', '0', '--bytes-per-second', '0',
@@ -46,6 +52,10 @@ def main():
         command = ['taskset', '-c', args.server_cpus] + command + ['--pin-workers']
     if args.queue_messages is not None:
         command += ['--queue-messages', str(args.queue_messages)]
+    if args.queue_budget_bytes is not None:
+        command += ['--max-message-bytes', '65536',
+                    '--queue-bytes', str(args.queue_budget_bytes),
+                    '--total-queue-bytes', str(args.queue_budget_bytes)]
     env = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
     env['WAR_AUTH_PASSWORD'] = 'observer-barrier'
     helpers = [Path(fixture.__file__), Path(wire.__file__), Path(wire.runtime.__file__)]
@@ -56,6 +66,7 @@ def main():
         'helper_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in helpers},
         'audience': args.audience, 'burst_teardown': args.burst_teardown,
+        'departures': args.departures, 'queue_budget_bytes': args.queue_budget_bytes,
         'client_affinity': sorted(os.sched_getaffinity(0)),
         'mode': 'global_observers', 'sequence': [], 'server_forced_kill': False,
     }
@@ -88,7 +99,10 @@ def main():
         assert body[0] == 0x82
         sender, offset = wire.uint(body, 1)
         value, end = wire.uint(body, offset)
-        assert sender == 2 ** 64 - 1 and value == source and (end == len(body))
+        assert sender == 2 ** 64 - 1 and value == source and (end == len(body)), {
+            'sender': sender, 'expected_departure': source,
+            'received_departure': value, 'encoded': body.hex(),
+        }
     with args.output.open('x') as output, tempfile.TemporaryFile() as log:
         server = subprocess.Popen(command, env=env, stdout=log, stderr=log)
         try:
@@ -103,7 +117,8 @@ def main():
             else:
                 raise TimeoutError('server startup')
             began = time.monotonic()
-            source = join(b'revocation')
+            sources = [join(f'revoke{i:08x}'.encode()) for i in range(args.departures)]
+            result['source_ids'] = [str(source.id) for source in sources]
             for _ in range(args.audience):
                 if time.monotonic() - began > 60:
                     raise TimeoutError('setup budget')
@@ -116,6 +131,8 @@ def main():
             request(observer, b'\x82\x00\x82\x00pobserver-barrier', b'\x82\x00\x82\x00\xf5')
             request(observer, b'\x82\x00\x82\x01\x04', b'\x82\x00\x82\x01\x04')
             probe = join(b'barrier-probe')
+            result['before'] = wire.runtime.metrics(admin)
+            result['process_before'] = wire.runtime.snapshot(server.pid)
 
             def probe_loop():
                 counter = 0
@@ -135,24 +152,29 @@ def main():
             probe_thread = threading.Thread(target=probe_loop)
             probe_thread.start()
             assert probe_started.wait(2) and (not probe_errors)
-            source.close()
+            result['departure_start_ns'] = time.monotonic_ns()
+            for source in sources:
+                source.close()
+            result['departure_end_ns'] = time.monotonic_ns()
             began = time.monotonic_ns()
             result['barrier_start_ns'] = began
             observer.socket.sendall(wire.frame(0x82, b'\x82\x00\x82\x01\x00'))
             notices = 0
-            for _ in range(2):
+            for _ in range(args.departures + 1):
                 opcode, body = observer.receive()
                 assert opcode == 2, (opcode, body.hex())
                 if body == b'\x82\x00\x82\x01\x00':
                     result['sequence'].append('unsubscribe_ack')
                     break
-                notice(body, source.id)
+                notice(body, sources[notices].id)
                 notices += 1
                 result['sequence'].append('departure')
             else:
                 raise AssertionError('missing unsubscribe acknowledgment')
             result['barrier_end_ns'] = time.monotonic_ns()
             result['unsubscribe_ack_ms'] = (result['barrier_end_ns'] - began) / 1000000.0
+            result['post_barrier'] = wire.runtime.metrics(admin)
+            result['process_post_barrier'] = wire.runtime.snapshot(server.pid)
             # Witness timing excludes exhaustive audience verification/teardown.
             time.sleep(0.01)
             probe_stop.set()
@@ -164,18 +186,18 @@ def main():
             result['probe_max_ms'] = max(((x['received_ns'] - x['sent_ns']) / 1000000.0 for x in probe_samples))
             result['probe_overlap_max_ms'] = max(((x['received_ns'] - x['sent_ns']) / 1000000.0 for x in overlap), default=None)
             for peer in audience:
-                departure(peer, source.id)
+                for source in sources:
+                    departure(peer, source.id)
             observer.socket.settimeout(0.1)
             try:
                 opcode, body = observer.receive()
                 assert opcode == 2, (opcode, body.hex())
-                notice(body, source.id)
                 notices += 1
                 result['sequence'].append('late_departure')
             except TimeoutError:
                 pass
             observer.socket.settimeout(5)
-            assert notices == 1, 'original notice missing or duplicated'
+            assert notices == args.departures, 'original notice missing or duplicated'
             request(observer, b'\x82\x00\x82\x01\x04', b'\x82\x00\x82\x01\x04')
             fresh = join(b'revocation')
             fresh.close()
@@ -197,22 +219,35 @@ def main():
                 departure(peer, probe.id)
             for _ in range(100):
                 metrics = wire.runtime.metrics(admin)
-                if int(metrics['war_sessions']) == args.audience and int(metrics['war_queued_bytes']) == 0:
+                if (int(metrics['war_sessions']) == args.audience
+                    and int(metrics['war_connections']) == args.audience
+                    and int(metrics['war_queued_bytes']) == 0):
                     break
                 time.sleep(0.01)
             result['after'] = metrics
             assert int(metrics['war_sessions']) == args.audience and int(metrics['war_queued_bytes']) == 0
+            assert int(metrics['war_connections']) == args.audience
             assert int(metrics['war_routing_copied_bytes_total']) == 0
             for key in wire.ZERO_ERRORS:
+                if key == 'war_global_pressure_total' and args.queue_budget_bytes is not None:
+                    # A refused metadata reservation is the intended stimulus;
+                    # every actual notification must still pass the wire matrix.
+                    continue
                 assert int(metrics[key]) == 0, (key, metrics[key])
-            result['passed'] = result['sequence'] == ['departure', 'unsubscribe_ack']
-            result['departure_checks'] = 4 * args.audience + 2
+            result['queue_pressure_observed'] = int(metrics['war_global_pressure_total']) > 0
+            result['passed'] = result['sequence'] == ['departure'] * args.departures + ['unsubscribe_ack']
+            result['departure_checks'] = (args.departures + 3) * args.audience + args.departures + 1
         except Exception:
             result['error'] = traceback.format_exc()
+            try:
+                result['failure_metrics'] = wire.runtime.metrics(admin)
+            except Exception:
+                result['failure_metrics_error'] = traceback.format_exc()
         finally:
             probe_stop.set()
             if probe_thread is not None:
                 probe_thread.join(timeout=6)
+            result.setdefault('probe_samples', probe_samples)
             if server.poll() is None:
                 shutdown_began = time.monotonic_ns()
                 server.terminate()

@@ -16,6 +16,11 @@ charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
 control replies fit the inline frame prefix. No alternative allocator or native
 numerical library is selected by default.
 
+Pending disconnect jobs reuse an immutable observer snapshot. Its ownership
+reserves membership storage once, and a weak registry cache retains no recipient
+storage after the last job finishes. Ordinary room views retain their conservative
+per-publisher charge. See the [snapshot ownership measurements](retirement-snapshots.md).
+
 The observer-revocation barrier now submits only the requesting observer's
 notices. A publication sequence and per-peer watermark prevent deferred replay;
 other recipients keep their normal turns. It still scans pending global views
@@ -85,6 +90,10 @@ messages, departures, all process exits and final resource gauges.
   Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client
   pinned to separate physical cores. Default teardown serializes follow-up
   departures; `--burst-teardown` separately probes queue-pressure behavior.
+  `--departures 8` queues distinct singleton-source departures before revocation.
+  `--queue-budget-bytes 2097152` explicitly constrains credit without relaxing
+  the full wire matrix; its pressure-counter flag reports refusals, not lost
+  message counts. Successful delivery at that limit is the acceptance check.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
 - `scripts/stability.py`, `scripts/retention.py` and `scripts/queue-waves.py`

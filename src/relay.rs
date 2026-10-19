@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
     sync::{
-        Arc, OnceLock,
+        Arc, OnceLock, Weak,
         atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed},
     },
 };
@@ -104,7 +104,7 @@ impl ReceiveBatch<'_> {
                 let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
                 work.begin(
                     source,
-                    recipients,
+                    FanoutRecipients::Room(recipients),
                     frame,
                     self.relay.config.write_timeout(),
                     0,
@@ -143,6 +143,9 @@ struct Registry {
     // Only authenticated global members opting into each class belong here.
     // Routing visits eligible listeners, independent of the idle population.
     listeners: [Vec<Arc<Peer>>; 3],
+    // Overlapping disconnect jobs can share immutable membership. A weak cache
+    // retains neither recipient handles nor sockets after the jobs drain.
+    disconnect_snapshot: Weak<RetirementSnapshot>,
     next_key: u64,
     sessions: usize,
 }
@@ -151,6 +154,9 @@ impl Registry {
     fn set_listener_flags(&mut self, peer: &Peer, flags: u8) {
         let previous = peer.listener.load(Relaxed);
         peer.listener.store(flags, Relaxed);
+        if (previous ^ flags) & DISCONNECT_MESSAGE != 0 {
+            self.disconnect_snapshot = Weak::new();
+        }
         for (bit, listeners) in self.listeners.iter_mut().enumerate() {
             let mask = 1 << bit;
             if (previous ^ flags) & mask == 0 {
@@ -171,6 +177,42 @@ impl Registry {
 
     fn listeners(&self, flag: u8) -> &[Arc<Peer>] {
         &self.listeners[flag.trailing_zeros() as usize]
+    }
+
+    fn disconnect_recipients(
+        &mut self,
+        metrics: &Arc<Metrics>,
+        limit: usize,
+    ) -> Option<Arc<RetirementSnapshot>> {
+        if let Some(snapshot) = self.disconnect_snapshot.upgrade() {
+            return Some(snapshot);
+        }
+        let members = self.listeners(DISCONNECT_MESSAGE).to_vec();
+        let bytes = members
+            .capacity()
+            .checked_mul(std::mem::size_of::<Arc<Peer>>())
+            .and_then(|n| {
+                n.checked_add(
+                    std::mem::size_of::<RetirementSnapshot>() + 2 * std::mem::size_of::<usize>(),
+                )
+            })?;
+        if metrics
+            .queued_bytes
+            .fetch_update(Relaxed, Relaxed, |used| {
+                used.checked_add(bytes).filter(|&next| next <= limit)
+            })
+            .is_err()
+        {
+            metrics.global_pressure.fetch_add(1, Relaxed);
+            return None;
+        }
+        let snapshot = Arc::new(RetirementSnapshot {
+            members,
+            bytes,
+            metrics: metrics.clone(),
+        });
+        self.disconnect_snapshot = Arc::downgrade(&snapshot);
+        Some(snapshot)
     }
 }
 
@@ -252,13 +294,46 @@ struct Retirements {
     sequence: u64,
 }
 
+/// Shared disconnect membership is charged once while any departure retains it.
+/// The registry holds only a weak cache; the last job releases both handles and
+/// credit. Jobs and recipient output retain their independent reservations.
+struct RetirementSnapshot {
+    members: Vec<Arc<Peer>>,
+    metrics: Arc<Metrics>,
+    bytes: usize,
+}
+
+impl Drop for RetirementSnapshot {
+    fn drop(&mut self) {
+        // Release the actual handle buffer before making its credit reusable.
+        drop(std::mem::take(&mut self.members));
+        self.metrics.queued_bytes.fetch_sub(self.bytes, Relaxed);
+    }
+}
+
+enum FanoutRecipients {
+    Room(Arc<Vec<Arc<Peer>>>),
+    Disconnect(Arc<RetirementSnapshot>),
+}
+
+impl std::ops::Deref for FanoutRecipients {
+    type Target = Vec<Arc<Peer>>;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Room(members) => members,
+            Self::Disconnect(snapshot) => &snapshot.members,
+        }
+    }
+}
+
 /// One immutable membership snapshot and one charged shared body. Publisher
 /// slots reuse their box; retirement jobs belong to the shared work queue.
 /// Empty slots retain no payload or peer ownership; metadata is bounded by the
 /// admitted connection count and staged bodies share the normal queue budget.
 #[derive(Default)]
 pub(crate) struct RoomFanout {
-    recipients: Option<Arc<Vec<Arc<Peer>>>>,
+    recipients: Option<FanoutRecipients>,
     packet: Option<Envelope>,
     cursor: usize,
     source: u64,
@@ -272,7 +347,7 @@ impl RoomFanout {
     fn begin(
         &mut self,
         source: &Peer,
-        recipients: Arc<Vec<Arc<Peer>>>,
+        recipients: FanoutRecipients,
         frame: Frame,
         timeout: std::time::Duration,
         retirement_sequence: u64,
@@ -285,24 +360,27 @@ impl RoomFanout {
         }
         .ok_or(Disconnect::OVERLOADED)?
         .into_owned();
-        // Account conservatively per active publisher, even if several share
-        // this view. Churn can otherwise pin many distinct old membership views
-        // outside the queue budget while workers advance their cursors.
-        let snapshot_bytes = recipients
-            .capacity()
-            .checked_mul(std::mem::size_of::<Arc<Peer>>())
-            .and_then(|n| {
-                n.checked_add(
-                    std::mem::size_of::<Vec<Arc<Peer>>>()
-                        + 2 * std::mem::size_of::<usize>()
-                        + if retirement_sequence != 0 {
-                            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
-                        } else {
-                            0
-                        },
-                )
-            })
-            .ok_or(Disconnect::OVERLOADED)?;
+        let job_bytes = if retirement_sequence != 0 {
+            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
+        } else {
+            0
+        };
+        // Room views remain conservatively charged per publisher. Disconnect
+        // snapshots own one shared charge, so jobs reserve only their metadata.
+        let snapshot_bytes = match &recipients {
+            FanoutRecipients::Room(members) => members
+                .capacity()
+                .checked_mul(std::mem::size_of::<Arc<Peer>>())
+                .and_then(|n| {
+                    n.checked_add(
+                        std::mem::size_of::<Vec<Arc<Peer>>>()
+                            + 2 * std::mem::size_of::<usize>()
+                            + job_bytes,
+                    )
+                })
+                .ok_or(Disconnect::OVERLOADED)?,
+            FanoutRecipients::Disconnect(_) => job_bytes,
+        };
         if packet
             .budget
             .metrics
@@ -695,6 +773,7 @@ impl Relay {
                 users: HashMap::new(),
                 channels,
                 listeners: Default::default(),
+                disconnect_snapshot: Weak::new(),
                 next_key: 1,
                 sessions: 0,
             }),
@@ -739,7 +818,11 @@ impl Relay {
         // Terminal shutdown sends no departure notices. Release listener views
         // once instead of searching them for every retiring global session.
         // Drop the registry guard before taking the retirement queue lock.
-        self.state.write().listeners = Default::default();
+        {
+            let mut state = self.state.write();
+            state.listeners = Default::default();
+            state.disconnect_snapshot = Weak::new();
+        }
         let mut pending = self.retirements.lock();
         pending.jobs.clear();
         self.retirement_pending.store(false, Relaxed);
@@ -1240,12 +1323,7 @@ impl Relay {
         self.retirement_pending.store(false, Relaxed);
     }
 
-    fn defer_retirement(
-        &self,
-        source: &Peer,
-        recipients: Arc<Vec<Arc<Peer>>>,
-        frame: &Frame,
-    ) -> bool {
+    fn defer_retirement(&self, source: &Peer, recipients: FanoutRecipients, frame: &Frame) -> bool {
         if !source.output.supports_retirement() {
             return false;
         }
@@ -1305,7 +1383,7 @@ impl Relay {
                     .broadcast
                     .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
                     .clone();
-                deferred = self.defer_retirement(peer, recipients, frame);
+                deferred = self.defer_retirement(peer, FanoutRecipients::Room(recipients), frame);
             }
             if !deferred && !channel.members.is_empty() {
                 self.flush_retirements();
@@ -1330,13 +1408,18 @@ impl Relay {
         }
         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
             let frame = frame.as_ref().expect("notifications enabled");
-            let listeners = state.listeners(DISCONNECT_MESSAGE);
-            let deferred = !listeners.is_empty()
-                && (listeners.len() > FANOUT_QUANTUM || self.has_retirements())
-                && self.defer_retirement(peer, Arc::new(listeners.to_vec()), frame);
-            if !deferred && !listeners.is_empty() {
+            let count = state.listeners(DISCONNECT_MESSAGE).len();
+            let deferred = count != 0
+                && (count > FANOUT_QUANTUM || self.has_retirements())
+                && peer.output.supports_retirement()
+                && state
+                    .disconnect_recipients(&self.metrics, self.config.total_queue_bytes)
+                    .is_some_and(|recipients| {
+                        self.defer_retirement(peer, FanoutRecipients::Disconnect(recipients), frame)
+                    });
+            if !deferred && count != 0 {
                 self.flush_retirements();
-                for recipient in listeners {
+                for recipient in state.listeners(DISCONNECT_MESSAGE) {
                     let _ = recipient.enqueue_fanout(frame);
                 }
             }

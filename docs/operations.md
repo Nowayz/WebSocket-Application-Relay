@@ -78,8 +78,11 @@ some recipients may have received output before a later reservation fails.
 ### Queue headroom for departure work
 
 A 100,000-recipient view needs about 800,000 bytes of handles on a 64-bit host,
-plus capacity and job/frame overhead. Each active job is conservatively charged
-even when it shares a view. Allow for concurrent departures as well as payloads.
+plus capacity and job/frame overhead. Ordinary room views remain conservatively
+charged per active publisher/job. Disconnect-observer jobs share one charged
+immutable view while membership is unchanged. A membership change creates a
+separately charged generation if older jobs still retain their view. Allow for
+concurrent generations, individual job metadata and output as well as payloads.
 A constrained 256 KiB queue cannot stage such a view: synchronous fallback can
 occur, and exhausted credit can drop notices. That diagnostic is outside the
 normal profile's 1,024-member ceiling and does not show that the profile fails.
@@ -88,6 +91,8 @@ Watch queue occupancy and changes in `war_global_pressure_total`. The pressure
 counter can include refused metadata even when fallback delivery succeeds; it is
 not a missing-message count. Verify the expected recipient matrix. A departing
 source's normal Close does not prove its recipients received departure events.
+The [snapshot ownership report](retirement-snapshots.md) checks an eight-departure
+burst against 100,000 observers with the same constrained shared credit.
 
 Ordinary room/departure work advances in 1,024-recipient turns. Clearing a global
 listener's disconnect flag orders captured notices before its acknowledgment.
