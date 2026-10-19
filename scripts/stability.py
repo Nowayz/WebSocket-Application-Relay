@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import platform
 import selectors
+import select
 import subprocess
 import tempfile
 import time
@@ -30,12 +31,22 @@ def sample(pid, admin, started):
             "process": runtime.snapshot(pid), "metrics": observed}
 
 
+def live_fanout_pressure_valid(metrics, clients, unread_clients):
+    # Retired unread peers can still await Close; membership must already be gone.
+    healthy = clients - unread_clients
+    return (int(metrics["war_slow_consumers_total"]) == unread_clients
+            and int(metrics["war_sessions"]) == healthy
+            and healthy <= int(metrics["war_connections"]) <= clients)
+
+
 def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
              server_cpus=None, client_cpus=None, payload_bytes=None,
              payload_sizes=None, unread_clients=0, reader_delay_ms=0, window=16, server_args=(), origin=None,
-             source_addresses=0, server_preload=None, server_workers=4):
+             source_addresses=0, server_preload=None, server_workers=4, fanout_teardown_gate=False):
     if not 0 <= source_addresses <= 65534 or (source_addresses and mode != "churn"):
         raise ValueError("source-addresses requires churn mode and a value in 0..=65534")
+    if fanout_teardown_gate and mode != "fanout":
+        raise ValueError("fanout teardown gate requires fanout mode")
     if not 1 <= server_workers <= 256:
         raise ValueError("server workers must be in 1..=256")
     port, admin = runtime.free_port(), runtime.free_port()
@@ -84,16 +95,23 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                     command += ["--payload-sizes", ",".join(map(str, payload_sizes))]
             if client_cpus:
                 command = ["taskset", "-c", client_cpus] + command
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            if fanout_teardown_gate:
+                command.append("--teardown-gate")
+            # Unbuffered binary lines keep selector readiness consistent with
+            # unread events; a TextIOWrapper can hide the next line internally.
+            process = subprocess.Popen(command, stdin=subprocess.PIPE if fanout_teardown_gate else None,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, env=env)
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
                 if not selector.select(timeout=10):
                     raise TimeoutError("stress workload did not become ready")
-                ready = process.stdout.readline()
+                ready = process.stdout.readline().decode()
             if not ready:
-                raise RuntimeError(process.stderr.read())
+                raise RuntimeError(process.stderr.read().decode())
             print(json.dumps({"event": "case_started", "mode": mode, "seconds": seconds, "clients": clients}), flush=True)
             observations, errors = [], []
+            traffic_finished = None
+            gate_output = ""
             while process.poll() is None:
                 if time.monotonic() - started > seconds + 40:
                     raise TimeoutError("stress workload exceeded its outer deadline")
@@ -101,9 +119,19 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                     observations.append(sample(server.pid, admin, started))
                 except OSError as error:
                     errors.append({"seconds": time.monotonic() - started, "error": str(error)})
+                if fanout_teardown_gate and traffic_finished is None:
+                    if select.select([process.stdout], [], [], 0)[0]:
+                        line = process.stdout.readline().decode()
+                        event = json.loads(line)
+                        assert event["event"] == "traffic_finished", event
+                        gate_output += line
+                        traffic_finished = sample(server.pid, admin, started)
+                        process.stdin.write(b"continue\n")
+                        process.stdin.flush()
                 time.sleep(0.25)
             stdout, stderr = process.communicate(timeout=2)
-            output = [json.loads(line) for line in (ready + stdout).splitlines() if line]
+            stdout, stderr = stdout.decode(), stderr.decode()
+            output = [json.loads(line) for line in (ready + gate_output + stdout).splitlines() if line]
             cleanup_start = time.monotonic()
             while True:
                 final = sample(server.pid, admin, started)
@@ -134,7 +162,12 @@ def run_case(mode, seconds, clients, *, server_binary=None, stress_binary=None,
                 # departure-notification queues. Record those extra signals;
                 # every healthy Close must still complete in the client.
                 pressure_valid = result_output is not None and int(metrics["war_slow_consumers_total"]) >= unread_clients and result_output["disconnect_notifications"] == unread_clients * result_output["healthy_readers"]
+            if fanout_teardown_gate:
+                assert traffic_finished is not None, "missing live-traffic checkpoint"
+                pressure_valid = pressure_valid and live_fanout_pressure_valid(
+                    traffic_finished["metrics"], clients, unread_clients)
             result = {"mode": mode, "duration_seconds": seconds, "clients": clients,
+                      "traffic_finished": traffic_finished,
                       "command": command, "server_command": server_command,
                       "server_preload": preload,
                       "server_cpus": server_cpus, "client_cpus": client_cpus,
@@ -193,12 +226,16 @@ def main():
     parser.add_argument("--payload-sizes", type=lambda value: [int(item) for item in value.split(",")])
     parser.add_argument("--unread-clients", type=int, default=0)
     parser.add_argument("--reader-delay-ms", type=int, default=0)
+    parser.add_argument("--fanout-teardown-gate", action="store_true",
+                        help="Fanout only: require exact overload/healthy census before closing readers")
     parser.add_argument("--window", type=int, default=16)
     parser.add_argument("--source-addresses", type=int, default=0,
                         help="Churn only: rotate loopback source IPs with an updated stress client")
     parser.add_argument("--max-connections-per-ip", type=int,
                         help="Optional native TCP peer quota; omit for the server's default")
     args = parser.parse_args()
+    if args.fanout_teardown_gate and args.modes != ["fanout"]:
+        parser.error("fanout-teardown-gate requires --modes fanout")
     if not 0 <= args.source_addresses <= 65534 or (args.source_addresses and args.modes != ["churn"]):
         parser.error("source-addresses requires --modes churn and a value in 0..=65534")
     if args.max_connections_per_ip is not None and not 0 <= args.max_connections_per_ip <= 4294967295:
@@ -223,7 +260,8 @@ def main():
                                        reader_delay_ms=args.reader_delay_ms, window=args.window,
                                        origin=args.origin, source_addresses=args.source_addresses,
                                        server_args=server_args, server_preload=args.server_preload,
-                                       server_workers=args.workers))
+                                       server_workers=args.workers,
+                                       fanout_teardown_gate=args.fanout_teardown_gate))
         args.output.write_text(json.dumps(output, indent=2) + "\n")
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)

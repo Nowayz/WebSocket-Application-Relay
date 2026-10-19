@@ -1472,6 +1472,24 @@ that handshake and cancel untouched queued notifications. Consequently,
 `war_slow_consumers_total` counts overload intent and can rise during teardown
 without representing failed live delivery. For phase-specific pressure checks,
 `stress --teardown-gate` flushes `traffic_finished`, waits for a literal
-`continue` line, then closes readers. The gated 1,030-client case proves exactly
+`continue` line, then closes readers. For a short automated check using that existing client gate:
+
+```sh
+python3 scripts/stability.py --modes fanout \
+  --fanout-secs 2 --clients 66 --unread-clients 4 --window 4 \
+  --payload-sizes 64,1024,65536 --fanout-teardown-gate --output FRESH.json
+```
+
+Build a stress client supporting `--teardown-gate`
+first, or pass its frozen path with `--stress`. The new flag is opt-in and requires
+fanout mode. The receipt's `traffic_finished` sample must show exactly the
+requested unread-peer overload count and all healthy peers still in membership.
+Retired unread transports may still be awaiting Close; they need not disappear
+before their protocol deadline. The runner releases the gate and retains all
+existing payload/FIFO, teardown and final-retirement checks. This finite test
+checks pressure isolation, not a large-population latency SLA. See the
+[short pressure evidence](benchmarks/2026-10-18-live-pressure-gate/README.md).
+
+The gated 1,030-client case proves exactly
 eight live slow consumers before the deliberate closing-notice burst; its
 healthy matrices, all eight departures and final resource retirement are checked.

@@ -64,6 +64,16 @@ earlier deadlines but has mixed results for other patterns, including a slower
 postponement repeat. Two timer reference-model tests pass; no full-population
 campaign follows an inconclusive local screen. No runtime code changes.
 
+The [short live-pressure checkpoint](benchmarks/2026-10-18-live-pressure-gate/README.md)
+adds opt-in `stability.py --fanout-teardown-gate`. Exact unread-peer overloads
+and surviving healthy membership are now checked before teardown, separately
+from final counters. Mixed-size and 1 KiB cases retain all 61 healthy readers
+while four unread peers retire; the zero-unread control retains all 66 sessions.
+Four focused tests and existing traffic/churn/slow modes pass. The selected
+runner's final two-second mixed-size confirmation verifies 1,355,420 healthy
+deliveries, with 4.274 ms observed maximum. This is pressure-isolation evidence,
+not a relay performance change or a 100,000-user latency guarantee.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues
