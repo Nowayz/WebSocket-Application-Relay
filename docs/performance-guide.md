@@ -95,6 +95,8 @@ The inspection and capacity runners reserve their receipts with exclusive creati
 
 If the OS refuses to execute a server after receipt reservation, inspection and capacity now save the failed JSON outcome instead of leaving an empty file; null `server_exit_code` means no server handle was created. The [bounded exec-failure regressions](benchmarks/2026-10-19-benchmark-exec-failure/README.md) cover missing execute permission/interpreters and confirm that no load client starts.
 
+Inspection profiler shutdown now handles a SIGINT timeout with one bounded kill/reap step, records forced termination as failure, and continues client/server cleanup and receipt writing. The [controlled and real-child checks](benchmarks/2026-10-19-inspection-perf-cleanup/README.md) take one traffic second each; `python3 scripts/test-inspection-cleanup.py` exercises the timeout without sleeping.
+
 The mixed-capacity runner also rejects existing receipt, private CSV, timeline and process-log paths before launching its children, plus fanout CSV/profile paths when those modes are enabled. This is a preflight guard for sequential runs, not a cross-process artifact lock. `python3 scripts/test-mixed-output.py` checks regular-file and dangling-symlink collisions for all nine artifact kinds.
 
 `scripts/mixed-capacity.py --workers N` selects 1–8 native/C++ I/O workers within this recorded-host fixture's fixed server CPU pool 0–7; default eight preserves previous commands. The gate verifies the requested number of distinct pinned workers. This is a fixture constraint, not a production relay limit. Client masks stay unchanged. Compare counts using one frozen executable and reversed-order repeats.

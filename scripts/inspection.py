@@ -105,6 +105,20 @@ def check(event, stable_sessions, stable_channels, read_storage="worker", worker
     event["exact_counter_checks"] = expected
 
 
+
+def _stop_perf(perf):
+    forced = False
+    if perf.poll() is None:
+        perf.send_signal(signal.SIGINT)
+        try:
+            perf.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            forced = True
+            perf.kill()
+            perf.wait(timeout=5)
+    return perf.returncode, forced
+
+
 def run(args):
     profile = args.output.with_suffix(".perf.data") if args.profile else None
     if profile is not None and os.path.lexists(profile):
@@ -227,13 +241,12 @@ def run(args):
                 elif event["event"] == "measured":
                     check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
                     if perf is not None:
-                        perf.send_signal(signal.SIGINT)
-                        result["perf_exit_code"] = perf.wait(timeout=10)
+                        result["perf_exit_code"], result["perf_forced_kill"] = _stop_perf(perf)
                         perf_log.seek(0)
                         result["perf_log"] = perf_log.read().decode(errors="replace")
                         perf_log.close()
                         perf = perf_log = None
-                        assert result["perf_exit_code"] in (0, -signal.SIGINT), "perf failed"
+                        assert not result["perf_forced_kill"] and result["perf_exit_code"] in (0, -signal.SIGINT), "perf failed"
                     mixed = dict(event["details"])
                     mixed["server_cpu_seconds"] = event["process"]["cpu_seconds"] - ready["process"]["cpu_seconds"]
                     mixed["server_cpu_seconds_per_wall_second"] = mixed["server_cpu_seconds"] / mixed["elapsed_seconds"]
@@ -266,8 +279,10 @@ def run(args):
             result["error"] = repr(error)
         finally:
             if perf is not None:
-                perf.send_signal(signal.SIGINT)
-                perf.wait(timeout=10)
+                result["perf_exit_code"], result["perf_forced_kill"] = _stop_perf(perf)
+                if result["perf_forced_kill"] or result["perf_exit_code"] not in (0, -signal.SIGINT):
+                    result["passed"] = False
+                    result.setdefault("error", "perf failed during cleanup")
             if perf_log is not None:
                 perf_log.seek(0)
                 result["perf_log"] = perf_log.read().decode(errors="replace")
