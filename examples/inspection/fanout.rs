@@ -304,7 +304,7 @@ impl Fanout {
             }
             peers.push((socket, id));
         }
-        let mut payload = value_kind.payload();
+        let mut payload = value_kind.payload(1024);
         let packets = (0u64..64)
             .map(|n| {
                 payload[..8].copy_from_slice(&n.to_le_bytes());

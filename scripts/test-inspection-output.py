@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReceiptTest(unittest.TestCase):
-    def invoke(self, directory, output, profile=False, runner="inspection.py"):
+    def invoke(self, directory, output, profile=False, runner="inspection.py", extra=()):
         marker = directory / 'server-started'
         server = directory / 'server'
         server.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
@@ -21,9 +21,21 @@ class ReceiptTest(unittest.TestCase):
             [sys.executable, str(ROOT / 'scripts' / runner),
              '--server', str(server), '--client', '/bin/false',
              '--server-cpus', '', '--client-cpus', '', '--output', str(output)]
-            + (['--profile'] if profile else []),
+            + (['--profile'] if profile else []) + list(extra),
             cwd=ROOT, capture_output=True, text=True, timeout=10)
         return result, marker
+
+    def test_private_payload_must_fit_sequence_marker_before_launch(self):
+        for size in [-1, 0, 7]:
+            with self.subTest(size=size), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                output = directory / 'receipt.json'
+                result, marker = self.invoke(directory, output,
+                                             extra=['--private-payload-bytes', str(size)])
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('sequence marker', result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
 
     def test_existing_receipt_is_preserved_without_starting_server(self):
         with tempfile.TemporaryDirectory() as temporary:

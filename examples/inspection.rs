@@ -77,7 +77,7 @@ impl Wire {
     }
 }
 
-/// Prepared application values; every mode keeps the same 1 KiB content size.
+/// Prepared application values; templates are allocated before measurement.
 #[derive(Clone, Copy, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum ValueKind {
@@ -87,8 +87,8 @@ enum ValueKind {
 }
 
 impl ValueKind {
-    fn payload(self) -> [u8; 1024] {
-        let mut payload = [0x5a; 1024];
+    fn payload(self, bytes: usize) -> Vec<u8> {
+        let mut payload = vec![0x5a; bytes];
         if self == Self::Utf8 {
             for pair in payload[8..].chunks_exact_mut(2) {
                 pair.copy_from_slice("é".as_bytes());
@@ -127,6 +127,9 @@ struct Args {
     /// Application values: byte string, ASCII text, or multibyte UTF-8 text.
     #[arg(long, value_enum, default_value = "bytes")]
     value_kind: ValueKind,
+    /// Private content bytes, including the eight-byte sequence marker; fanout stays 1 KiB.
+    #[arg(long, default_value_t = 1024)]
+    private_payload_bytes: usize,
     /// Inspect the first bounded HTTP page during traffic; traverse all pages at gates.
     #[arg(long)]
     page_size: Option<usize>,
@@ -619,6 +622,7 @@ struct Pair {
     target: Socket,
     id: u64,
     packets: Vec<(Bytes, Bytes)>,
+    value_bytes: u64,
 }
 async fn healthy(mut pair: Pair, until: Instant) -> Result<(Pair, Counts, Histogram)> {
     let mut counts = Counts::default();
@@ -630,7 +634,7 @@ async fn healthy(mut pair: Pair, until: Instant) -> Result<(Pair, Counts, Histog
             *stamp = Instant::now();
             let packet = pair.packets[sent % 64].0.clone();
             counts.sent(&packet);
-            counts.value_bytes += 1027;
+            counts.value_bytes += pair.value_bytes;
             pair.source.send(Message::Binary(packet)).await?;
             sent += 1;
         }
@@ -731,6 +735,10 @@ async fn inspect(
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    ensure!(
+        args.private_payload_bytes >= 8,
+        "private-payload-bytes must include the eight-byte sequence marker"
+    );
     ensure!(
         (1..=32).contains(&args.client_workers),
         "client-workers must be in 1..=32"
@@ -863,7 +871,8 @@ async fn run(args: Args) -> Result<()> {
                 );
             }
         }
-        let mut payload = args.value_kind.payload();
+        let mut payload = args.value_kind.payload(args.private_payload_bytes);
+        let value_bytes = args.value_kind.encode(&payload).len() as u64;
         let packets = (0u64..64)
             .map(|n| {
                 payload[..8].copy_from_slice(&n.to_le_bytes());
@@ -879,6 +888,7 @@ async fn run(args: Args) -> Result<()> {
             target,
             id,
             packets,
+            value_bytes,
         });
         stable.push((name, 2));
     }
@@ -953,7 +963,7 @@ async fn run(args: Args) -> Result<()> {
     }
     gate(
         "ready",
-        serde_json::json!({"value_kind":args.value_kind,"counts":counts,"stable_channels":stable.len(),"stable_sessions":counts.joins}),
+        serde_json::json!({"value_kind":args.value_kind,"private_payload_bytes":args.private_payload_bytes,"counts":counts,"stable_channels":stable.len(),"stable_sessions":counts.joins}),
     )?;
     let started = Instant::now();
     let until = started + Duration::from_secs(args.seconds);
@@ -1036,7 +1046,7 @@ async fn run(args: Args) -> Result<()> {
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"value_kind":args.value_kind,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
+        serde_json::json!({"value_kind":args.value_kind,"private_payload_bytes":args.private_payload_bytes,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
     )?;
     // For short C++ churn runs, verify its delayed retirement explicitly. The
     // controller bounds the entire case to finish before the first 30-second GC.

@@ -132,6 +132,8 @@ def run(args):
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
+    if getattr(args, "private_payload_bytes", 1024) != 1024:
+        command += ["--private-payload-bytes", str(args.private_payload_bytes)]
     if getattr(args, "value_kind", "bytes") != "bytes":
         command += ["--value-kind", args.value_kind]
     if getattr(args, "client_workers", None) is not None:
@@ -166,7 +168,7 @@ def run(args):
                                        [source_root / "examples/inspection.rs"] + sorted((source_root / "examples/inspection").glob("*.rs"))},
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
               "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "thread_affinity": [], "passed": False,
-              "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic 1KiB templates and 16-message windows; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
+              "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic private templates at args.private_payload_bytes (default 1 KiB) and 16-message windows; fanout remains 1 KiB; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
     if args.heap_profile:
         result["heap_profiler"] = {"library": str(args.heap_library.resolve()),
                                    "library_sha256": digest(args.heap_library),
@@ -304,7 +306,9 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["none", "cbor", "http"], default="http")
     parser.add_argument("--page-size", type=int, help="HTTP first-page size during traffic; complete traversal verified at quiescent gates")
     parser.add_argument("--value-kind", choices=["bytes", "ascii", "utf8"], default="bytes",
-                        help="Prepared 1 KiB application value type; default preserves frozen-client commands")
+                        help="Prepared application value type; default preserves frozen-client commands")
+    parser.add_argument("--private-payload-bytes", type=int, default=1024,
+                        help="Private content bytes, minimum 8 for sequence marker; fanout stays 1 KiB")
     parser.add_argument("--rooms", type=int, default=8192)
     parser.add_argument("--seconds", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)
@@ -338,6 +342,8 @@ if __name__ == "__main__":
     parser.add_argument("--heap-library", type=Path, default=Path("/usr/lib/libtcmalloc.so"))
     parser.add_argument("--output", type=Path, required=True, help="Fresh receipt path; existing files are never overwritten")
     arguments = parser.parse_args()
+    if arguments.private_payload_bytes < 8:
+        parser.error("--private-payload-bytes must be at least 8 for the sequence marker")
     if arguments.pin_client_workers and arguments.client_workers is None:
         parser.error("--pin-client-workers requires --client-workers")
     try:
