@@ -111,10 +111,11 @@ npm run build:browser --prefix clients/js
 The [consolidation record](docs/consolidation.md) lists this migration's local
 acceptance checks and the next performance milestone.
 
-The outstanding performance issue is disconnect-listener revocation with many
-global observers: it still synchronously submits other global recipients' pending
-departures. The next change must narrow that barrier while preserving old-notice
-ordering, re-subscription, one-slot queues and shared payload ownership.
+Disconnect-listener revocation submits only the affected observer's pending
+notices before its acknowledgment. Other recipients retain their bounded turns;
+a sequence watermark prevents replay after re-subscription. The
+[observer-barrier report](docs/observer-barriers.md) describes the measured benefit
+and remaining queue-pressure and pending-view scan costs.
 
 ## Provenance
 

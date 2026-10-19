@@ -85,7 +85,8 @@ barrier: previously captured disconnect-observer notices are submitted before
 the listener-flags reply. They cannot arrive after that reply. Re-enabling the
 bit admits future departures again. Ordinary room membership still receives its
 own room's departure events independently of listener flags. Existing queue
-budgets and slow-recipient policy continue to apply.
+budgets and slow-recipient policy continue to apply. The barrier advances only
+that observer's output; unrelated recipients keep their asynchronous turns.
 
 Variable keys contain 1–255 decoded bytes; text/byte keys with identical bytes
 address the same entry. Values retain their exact CBOR bytes. Missing entries

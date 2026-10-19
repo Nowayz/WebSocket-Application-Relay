@@ -380,6 +380,19 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         .subscribe_with_output(GLOBAL_CHANNEL, Arc::new(NativeRetirement))
         .unwrap();
     let global_id = global.peer.id.load(Relaxed);
+    let bystander_output = Arc::new(Departures::default());
+    let bystander = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, bystander_output.clone())
+        .unwrap();
+    relay
+        .receive(
+            &bystander.peer,
+            protocol::request(0, &protocol::text("observer-ack")),
+        )
+        .unwrap();
+    relay
+        .receive(&bystander.peer, protocol::request(1, &protocol::uint(4)))
+        .unwrap();
     let output = Arc::new(Departures::default());
     let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
         .map(|_| {
@@ -424,6 +437,10 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         output.0.lock().is_empty(),
         "revocation must not pump room output"
     );
+    assert!(
+        bystander_output.0.lock().is_empty(),
+        "revocation must not pump another global recipient"
+    );
     let expected = [source_id, global_id, second_id];
     let ack = protocol::reply(1, &protocol::uint(0));
     let mut acknowledged = false;
@@ -446,10 +463,30 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         }
     }
     assert!(acknowledged);
-    for _ in 0..4 {
+    relay
+        .receive(
+            &observer.registration.peer,
+            protocol::request(1, &protocol::uint(4)),
+        )
+        .unwrap();
+    assert_eq!(
+        observer.outgoing.try_recv().unwrap().frame.to_vec(),
+        protocol::reply(1, &protocol::uint(4))
+    );
+    let fresh = relay
+        .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
+        .unwrap();
+    let fresh_id = fresh.peer.id.load(Relaxed);
+    drop(fresh);
+    // Three two-turn room jobs and four single-turn global jobs.
+    for _ in 0..10 {
         relay.progress_retirements();
     }
     assert!(!relay.has_retirements());
+    assert_eq!(
+        observer.outgoing.try_recv().unwrap().frame.to_vec(),
+        protocol::envelope(BROADCAST, &protocol::uint(fresh_id))
+    );
     assert!(
         observer.outgoing.try_recv().is_err(),
         "revoked listener received an old departure after its acknowledgment"
@@ -459,8 +496,11 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         "an already-authorized notice must precede revocation, not disappear"
     );
     let packets = output.0.lock();
-    assert_eq!(packets.len(), targets.len() * 2);
-    for (packets, id) in packets.chunks(targets.len()).zip([source_id, second_id]) {
+    assert_eq!(packets.len(), targets.len() * 3);
+    for (packets, id) in packets
+        .chunks(targets.len())
+        .zip([source_id, second_id, fresh_id])
+    {
         assert!(
             packets
                 .iter()
@@ -468,10 +508,192 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         );
     }
     drop(packets);
+    let bystander_packets = bystander_output.0.lock();
+    assert_eq!(bystander_packets.len(), 4);
+    for (packet, id) in bystander_packets
+        .iter()
+        .zip([source_id, global_id, second_id, fresh_id])
+    {
+        assert_eq!(
+            packet.to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(id))
+        );
+    }
+    drop(bystander_packets);
     relay.begin_shutdown();
     drop(observer);
+    drop(bystander);
     drop(targets);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+fn recorded_disconnect_observer(relay: &Arc<Relay>) -> (Registration, Arc<Departures>) {
+    let output = Arc::new(Departures::default());
+    let observer = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, output.clone())
+        .unwrap();
+    relay
+        .receive(
+            &observer.peer,
+            protocol::request(0, &protocol::text("observer-ack")),
+        )
+        .unwrap();
+    relay
+        .receive(&observer.peer, protocol::request(1, &protocol::uint(4)))
+        .unwrap();
+    (observer, output)
+}
+
+#[test]
+fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"barrier-source", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let first = depart();
+    let second = depart();
+    // The first observer has already seen the first notice, but the last has not.
+    relay.progress_retirements();
+    assert_eq!(observers[0].1.0.lock().len(), 1);
+    assert!(observers[FANOUT_QUANTUM].1.0.lock().is_empty());
+    for index in [0, FANOUT_QUANTUM] {
+        relay
+            .receive(
+                &observers[index].0.peer,
+                protocol::request(1, &protocol::uint(0)),
+            )
+            .unwrap();
+        let packets = observers[index].1.0.lock();
+        assert_eq!(
+            packets.len(),
+            2,
+            "each observer must receive each old notice exactly once"
+        );
+        for (packet, id) in packets.iter().zip([first, second]) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(
+        observers[1].1.0.lock().len(),
+        1,
+        "barriers must not advance another recipient"
+    );
+    // Re-enable the first observer before the old jobs finish; the last stays off.
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(4)),
+        )
+        .unwrap();
+    let third = depart();
+    for _ in 0..6 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert_eq!(observers[0].1.0.lock().len(), 3);
+    assert_eq!(observers[FANOUT_QUANTUM].1.0.lock().len(), 2);
+    // Publication numbering must continue after an empty queue: the old watermark
+    // cannot suppress or duplicate a newly published departure.
+    let fourth = depart();
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(0)),
+        )
+        .unwrap();
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(4)),
+        )
+        .unwrap();
+    for _ in 0..2 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    let packets = observers[0].1.0.lock();
+    assert_eq!(packets.len(), 4);
+    for (packet, id) in packets.iter().zip([first, second, third, fourth]) {
+        assert_eq!(
+            packet.to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(id))
+        );
+    }
+    drop(packets);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermarks() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    relay.retirements.lock().sequence = u64::MAX - 1;
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"barrier-source", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let first = depart();
+    assert!(relay.has_retirements());
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(0)),
+        )
+        .unwrap();
+    relay
+        .receive(
+            &observers[0].0.peer,
+            protocol::request(1, &protocol::uint(4)),
+        )
+        .unwrap();
+    let second = depart();
+    assert!(
+        !relay.has_retirements(),
+        "exhaustion must finish preceding work before direct delivery"
+    );
+    assert_eq!(relay.retirements.lock().sequence, u64::MAX);
+    for (_, output) in &observers {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 2);
+        for (packet, id) in packets.iter().zip([first, second]) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
     assert_eq!(relay.counts(), (0, 1));
 }
 

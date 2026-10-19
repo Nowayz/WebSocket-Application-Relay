@@ -91,10 +91,13 @@ source's normal Close does not prove its recipients received departure events.
 
 Ordinary room/departure work advances in 1,024-recipient turns. Clearing a global
 listener's disconnect flag orders captured notices before its acknowledgment.
-Its current barrier still submits pending global-channel jobs synchronously;
-a large global-observer population can block unrelated routing for hundreds of
-milliseconds. Queue-budget fallback is also synchronous. These are known limits,
-not fixed control-turn guarantees.
+The barrier submits only that observer's still-pending notices and records a
+sequence watermark so deferred jobs cannot replay them after re-subscription.
+Other recipients retain their bounded turns. The barrier still scans pending
+global recipient views under the registry lock; many such views can make the
+control turn longer. Queue-budget fallback is also synchronous. These are known
+limits, not fixed control-turn guarantees. See the
+[observer-barrier report](observer-barriers.md).
 
 ## Lifecycle and deadlines
 

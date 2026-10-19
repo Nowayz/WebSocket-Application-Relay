@@ -43,11 +43,13 @@ campaign or a measured throughput improvement. The registration test replaces
 one useful retired fault-injection case; it does not intercept every failing
 socket-option syscall. See [stability checks](stability.md) for those limits.
 
-## Next measurable milestone
+## Follow-up milestone
 
-Narrow disconnect-listener revocation to the relevant observer. Pending global
-departure work still makes that barrier synchronously submit other observers'
-output; the prior 100,000-observer screen showed roughly 338–350 ms stalls.
+The next milestone was to narrow disconnect-listener revocation to the relevant
+observer. At consolidation, pending global departure work made that barrier
+synchronously submit other observers' output; the prior 100,000-observer screen
+showed roughly 338–350 ms stalls. The
+[follow-up report](observer-barriers.md) records its implementation and checks.
 Preserve old-notice-before-ack ordering, prevent replay after re-subscription,
 leave unrelated recipients deferred, and handle a ready full one-slot output
 queue before acknowledging the command.

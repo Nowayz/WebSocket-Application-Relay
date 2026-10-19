@@ -47,7 +47,8 @@ had left one publisher doing nearly all output work.
 The short-grace shutdown negative control verified only 72,846 normal Closes
 with a two-second setting, despite exit status 0. Successful process exit is not
 a substitute for checking the client matrix. The global-observer revocation
-screen still showed roughly 338–350 ms stalls; that live-control problem remains.
+screen still showed roughly 338–350 ms stalls at that revision. The subsequent
+[observer-specific barrier](observer-barriers.md) addresses that measured problem.
 
 ## Rejected approaches and measurement lessons
 

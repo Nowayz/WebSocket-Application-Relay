@@ -33,8 +33,13 @@ exit status alone does not prove clean client closure. A final RSS value alone
 does not prove a logical leak. Report decoder/output/variable gauges and native
 arena capacity alongside process memory, accounting for intentional warm storage.
 
-Known limits include synchronous queue-pressure fallback and large global-observer
-unsubscribe barriers. Faults and failed gates belong in the evidence. Source and
+Observer-barrier regressions cover partially visited jobs, independent observers,
+re-subscription before completion, publication after an emptied queue, counter
+exhaustion and a ready full one-slot output queue. The native event fixture checks
+old notices before acknowledgments and all audience departure/Close receipts.
+
+Known limits include synchronous queue-pressure fallback and pending global-view
+scans during observer revocation. Faults and failed gates belong in the evidence. Source and
 client digests, commands, affinity, measurement windows and cleanup semantics
 must accompany performance claims. See [the guide](performance-guide.md) and
 [historical findings](performance-history.md).

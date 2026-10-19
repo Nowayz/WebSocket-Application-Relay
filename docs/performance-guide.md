@@ -16,11 +16,11 @@ charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
 control replies fit the inline frame prefix. No alternative allocator or native
 numerical library is selected by default.
 
-The current observer-revocation barrier still drains pending global-channel jobs.
-It avoids disjoint ordinary-room output, but a large global-observer population
-still causes a roughly 350 ms stall in the prior event screen. The next change
-must deliver only the relevant observer's pending notices, prevent replay after
-re-subscription, keep other output asynchronous and retain one-slot queue behavior.
+The observer-revocation barrier now submits only the requesting observer's
+notices. A publication sequence and per-peer watermark prevent deferred replay;
+other recipients keep their normal turns. It still scans pending global views
+under the registry lock and retains synchronous queue-pressure fallback. See the
+[measured event screen](observer-barriers.md) before choosing the next bottleneck.
 
 ## Small checks before timing
 
@@ -80,6 +80,11 @@ messages, departures, all process exits and final resource gauges.
   `scripts/handshake-pressure.py` probe decoder/timer fairness.
 - `scripts/accept-pressure.py` uses a child-only descriptor limit to check accept
   recovery, existing-client responsiveness, queued-flow recovery and shutdown.
+- `scripts/observer-barrier.py` checks native unsubscribe ordering, re-subscription,
+  an independent echo witness and every audience member's departure/Close matrix.
+  Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client
+  pinned to separate physical cores. Default teardown serializes follow-up
+  departures; `--burst-teardown` separately probes queue-pressure behavior.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
 - `scripts/stability.py`, `scripts/retention.py` and `scripts/queue-waves.py`

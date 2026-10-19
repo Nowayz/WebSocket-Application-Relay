@@ -46,7 +46,7 @@ pub struct Relay {
     pub metrics: Arc<Metrics>,
     admission: AtomicU8,
     state: RwLock<Registry>,
-    retirements: Mutex<VecDeque<Box<RoomFanout>>>,
+    retirements: Mutex<Retirements>,
     retirement_pending: AtomicBool,
     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
@@ -107,7 +107,7 @@ impl ReceiveBatch<'_> {
                     recipients,
                     frame,
                     self.relay.config.write_timeout(),
-                    false,
+                    0,
                 )?;
                 work.resume(quantum)?;
                 Ok(quantum)
@@ -238,8 +238,18 @@ pub(crate) struct Peer {
     authenticated: AtomicBool,
     listener: AtomicU8,
     closing: AtomicBool,
+    // Accessed only under the retirement mutex. A barrier can submit this
+    // observer's pending notices without advancing everyone else's cursors.
+    retirement_barrier: AtomicU64,
     output: Arc<dyn PeerOutput>,
     budget: Arc<Budget>,
+}
+
+#[derive(Default)]
+struct Retirements {
+    jobs: VecDeque<Box<RoomFanout>>,
+    // Never reset when the queue empties: peers retain their barrier watermark.
+    sequence: u64,
 }
 
 /// One immutable membership snapshot and one charged shared body. Publisher
@@ -254,7 +264,8 @@ pub(crate) struct RoomFanout {
     source: u64,
     snapshot_bytes: usize,
     deadline: Option<std::time::Instant>,
-    retirement: bool,
+    // Zero denotes a live publisher; positive values order departure jobs.
+    retirement_sequence: u64,
 }
 
 impl RoomFanout {
@@ -264,10 +275,10 @@ impl RoomFanout {
         recipients: Arc<Vec<Arc<Peer>>>,
         frame: Frame,
         timeout: std::time::Duration,
-        retirement: bool,
+        retirement_sequence: u64,
     ) -> Result<(), Disconnect> {
         debug_assert!(!self.active());
-        let packet = if retirement {
+        let packet = if retirement_sequence != 0 {
             source.charge(&frame)?
         } else {
             source.reserve(&frame)?
@@ -284,7 +295,7 @@ impl RoomFanout {
                 n.checked_add(
                     std::mem::size_of::<Vec<Arc<Peer>>>()
                         + 2 * std::mem::size_of::<usize>()
-                        + if retirement {
+                        + if retirement_sequence != 0 {
                             std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
                         } else {
                             0
@@ -305,7 +316,7 @@ impl RoomFanout {
             packet.budget.metrics.global_pressure.fetch_add(1, Relaxed);
             return Err(Disconnect::OVERLOADED);
         }
-        self.retirement = retirement;
+        self.retirement_sequence = retirement_sequence;
         self.snapshot_bytes = snapshot_bytes;
         self.packet = Some(packet);
         self.recipients = Some(recipients);
@@ -338,27 +349,23 @@ impl RoomFanout {
     }
 
     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
-        if self.retirement {
-            self.resume_with::<true, false>(quantum)
+        if self.retirement_sequence != 0 {
+            self.resume_with::<true>(quantum)
         } else {
-            self.resume_with::<false, false>(quantum)
+            self.resume_with::<false>(quantum)
         }
     }
 
-    fn resume_with<const RETIREMENT: bool, const BARRIER: bool>(
-        &mut self,
-        quantum: usize,
-    ) -> Result<(), Disconnect> {
+    fn resume_with<const RETIREMENT: bool>(&mut self, quantum: usize) -> Result<(), Disconnect> {
         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
         let end = self.cursor.saturating_add(quantum).min(recipients.len());
         for recipient in &recipients[self.cursor..end] {
-            if recipient.key != self.source {
-                let result = if BARRIER {
-                    recipient.enqueue_barrier(frame)
-                } else {
-                    recipient.enqueue_fanout(frame)
-                };
+            if recipient.key != self.source
+                && (!RETIREMENT
+                    || recipient.retirement_barrier.load(Relaxed) < self.retirement_sequence)
+            {
+                let result = recipient.enqueue_fanout(frame);
                 if !RETIREMENT {
                     result?;
                 }
@@ -682,7 +689,7 @@ impl Relay {
                 ..Metrics::default()
             }),
             admission: AtomicU8::new(Admission::Open as u8),
-            retirements: Mutex::new(VecDeque::new()),
+            retirements: Mutex::new(Retirements::default()),
             retirement_pending: AtomicBool::new(false),
             state: RwLock::new(Registry {
                 users: HashMap::new(),
@@ -734,7 +741,7 @@ impl Relay {
         // Drop the registry guard before taking the retirement queue lock.
         self.state.write().listeners = Default::default();
         let mut pending = self.retirements.lock();
-        pending.clear();
+        pending.jobs.clear();
         self.retirement_pending.store(false, Relaxed);
     }
 
@@ -848,6 +855,7 @@ impl Relay {
             authenticated: AtomicBool::new(false),
             listener: AtomicU8::new(0),
             closing: AtomicBool::new(false),
+            retirement_barrier: AtomicU64::new(0),
             output,
             budget: Arc::new(Budget {
                 used: AtomicUsize::new(0),
@@ -1026,6 +1034,7 @@ impl Relay {
                 if !peer.authenticated.load(Relaxed) {
                     return self.unauthorized();
                 }
+                let mut barrier = false;
                 if peer.channel.as_ref() == GLOBAL_CHANNEL {
                     let mut state = self.state.write();
                     if peer.closing.load(Relaxed) {
@@ -1037,13 +1046,19 @@ impl Relay {
                         // Older deferred notices must precede revocation's ACK.
                         // Match the registry -> retirement lock order used by
                         // removal; retirement output never reacquires registry.
-                        self.flush_global_retirements();
+                        self.flush_observer_retirements(peer);
+                        barrier = true;
                     }
                     state.set_listener_flags(peer, flags & 7);
                 } else {
                     peer.listener.store(flags & 7, Relaxed);
                 }
-                peer.enqueue_frame(&Frame::reply_uint(1, u64::from(flags & 7)))?;
+                let reply = Frame::reply_uint(1, u64::from(flags & 7));
+                if barrier {
+                    peer.enqueue_barrier(&reply)?;
+                } else {
+                    peer.enqueue_frame(&reply)?;
+                }
             }
             Command::Channels => {
                 if !peer.authenticated.load(Relaxed) {
@@ -1167,43 +1182,46 @@ impl Relay {
         let Some(mut pending) = self.retirements.try_lock() else {
             return;
         };
-        if let Some(work) = pending.front_mut() {
+        if let Some(work) = pending.jobs.front_mut() {
             let _ = work.resume(FANOUT_QUANTUM);
             if !work.active() {
-                pending.pop_front();
+                pending.jobs.pop_front();
             }
         }
-        if pending.is_empty() && pending.capacity() > 32 {
-            *pending = VecDeque::new();
+        if pending.jobs.is_empty() && pending.jobs.capacity() > 32 {
+            pending.jobs = VecDeque::new();
         }
-        self.retirement_pending.store(!pending.is_empty(), Relaxed);
+        self.retirement_pending
+            .store(!pending.jobs.is_empty(), Relaxed);
     }
 
-    fn flush_global_retirements(&self) {
+    fn flush_observer_retirements(&self, observer: &Peer) {
         if !self.has_retirements() {
             return;
         }
-        let mut pending = self.retirements.lock();
-        // Every retirement view belongs to one channel: the departing peer's
-        // room, or global disconnect observers. Only global views can precede
-        // this observer's ACK. Removing them in order cannot reorder delivery
-        // to ordinary rooms, whose disjoint views stay queued for bounded turns.
-        pending.retain_mut(|work| {
-            let global = work
-                .recipients
-                .as_ref()
-                .expect("live retirement view")
-                .first()
-                .is_some_and(|peer| peer.channel.as_ref() == GLOBAL_CHANNEL);
-            if global {
-                let _ = work.resume_with::<true, true>(usize::MAX);
+        let pending = self.retirements.lock();
+        let previous = observer.retirement_barrier.load(Relaxed);
+        // Publication holds the registry write lock too, so the queue tail is
+        // this revocation's boundary. Send only still-unvisited notices for this
+        // exact peer, in FIFO order. Pointer comparisons scan the immutable view
+        // without touching every peer's output or allocating a recipient index.
+        for work in &pending.jobs {
+            let recipients = work.recipients.as_ref().expect("live retirement view");
+            if work.retirement_sequence > previous
+                && recipients
+                    .first()
+                    .is_some_and(|peer| peer.channel.as_ref() == GLOBAL_CHANNEL)
+                && recipients[work.cursor..]
+                    .iter()
+                    .any(|peer| std::ptr::eq(Arc::as_ptr(peer), observer))
+            {
+                let _ = observer
+                    .enqueue_barrier(&work.packet.as_ref().expect("charged retirement body").frame);
             }
-            !global
-        });
-        if pending.is_empty() && pending.capacity() > 32 {
-            *pending = VecDeque::new();
         }
-        self.retirement_pending.store(!pending.is_empty(), Relaxed);
+        // Deferred visits skip notices already submitted by this barrier, even
+        // if the observer re-enables the bit before those jobs finish.
+        observer.retirement_barrier.store(pending.sequence, Relaxed);
     }
 
     fn flush_retirements(&self) {
@@ -1213,11 +1231,11 @@ impl Relay {
         // Budget refusal may require synchronous best-effort delivery. Finish
         // preceding retirements first so this fallback cannot overtake them.
         let mut pending = self.retirements.lock();
-        for mut work in pending.drain(..) {
+        for mut work in pending.jobs.drain(..) {
             let _ = work.resume(usize::MAX);
         }
-        if pending.capacity() > 32 {
-            *pending = VecDeque::new();
+        if pending.jobs.capacity() > 32 {
+            pending.jobs = VecDeque::new();
         }
         self.retirement_pending.store(false, Relaxed);
     }
@@ -1231,6 +1249,15 @@ impl Relay {
         if !source.output.supports_retirement() {
             return false;
         }
+        let mut pending = self.retirements.lock();
+        if self.is_stopping() {
+            return true;
+        }
+        // Exhaustion falls back to ordered synchronous delivery rather than
+        // wrapping and making older observer watermarks suppress new notices.
+        let Some(sequence) = pending.sequence.checked_add(1) else {
+            return false;
+        };
         let mut work = Box::<RoomFanout>::default();
         if work
             .begin(
@@ -1238,7 +1265,7 @@ impl Relay {
                 recipients,
                 frame.clone(),
                 self.config.write_timeout(),
-                true,
+                sequence,
             )
             .is_err()
         {
@@ -1246,12 +1273,9 @@ impl Relay {
         }
         // Registry removal serializes publication. One queue preserves that
         // sequence across workers, including causally ordered client closes.
-        let mut pending = self.retirements.lock();
-        if self.is_stopping() {
-            return true;
-        }
-        let wake = pending.is_empty();
-        pending.push_back(work);
+        let wake = pending.jobs.is_empty();
+        pending.sequence = sequence;
+        pending.jobs.push_back(work);
         self.retirement_pending.store(true, Relaxed);
         drop(pending);
         if wake {

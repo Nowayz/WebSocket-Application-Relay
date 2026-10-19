@@ -759,11 +759,16 @@ mod tests {
     }
 
     fn connected() -> (Arc<Relay>, Arc<Socket>, std::net::TcpStream, Poll) {
-        let relay = Relay::new(Config {
+        connected_with_config(Config {
             ping_interval_secs: 0,
             ..Config::default()
         })
-        .unwrap();
+    }
+
+    fn connected_with_config(
+        config: Config,
+    ) -> (Arc<Relay>, Arc<Socket>, std::net::TcpStream, Poll) {
+        let relay = Relay::new(config).unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let reader = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (stream, _) = listener.accept().unwrap();
@@ -786,6 +791,64 @@ mod tests {
         )
         .unwrap();
         (relay, socket, reader, poll)
+    }
+
+    #[test]
+    fn listener_revocation_pumps_a_ready_one_slot_queue_before_its_ack() {
+        let (relay, socket, raw_reader, _poll) = connected_with_config(Config {
+            auth_password: Some("socket-barrier".into()),
+            queue_messages: 1,
+            ping_interval_secs: 0,
+            ..Config::default()
+        });
+        raw_reader
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let peer = relay
+            .subscribe_with_output(b"re_globl", socket.clone())
+            .unwrap();
+        let id = peer.peer.id.load(Relaxed);
+        let mut reader = WebSocket::from_raw_socket(raw_reader, Role::Client, None);
+        assert_eq!(reader.read().unwrap(), Message::Binary(protocol::uint(id)));
+        relay
+            .receive(
+                &peer.peer,
+                protocol::request(0, &protocol::text("socket-barrier")),
+            )
+            .unwrap();
+        assert_eq!(
+            reader.read().unwrap(),
+            Message::Binary(protocol::reply(0, &[0xf5]))
+        );
+        relay
+            .receive(&peer.peer, protocol::request(1, &protocol::uint(4)))
+            .unwrap();
+        assert_eq!(
+            reader.read().unwrap(),
+            Message::Binary(protocol::reply(1, &protocol::uint(4)))
+        );
+        // Stage one untouched application frame without running its owner.
+        socket.state.lock().control_pending = true;
+        let data = protocol::envelope(id, &protocol::uint(42));
+        relay.receive(&peer.peer, data.clone()).unwrap();
+        assert_eq!(socket.state.lock().queue.len(), 1);
+        socket.state.lock().control_pending = false;
+        relay
+            .receive(&peer.peer, protocol::request(1, &protocol::uint(0)))
+            .unwrap();
+        assert!(
+            socket.state.lock().requested.is_none(),
+            "revocation must pump ready output before reserving its ACK slot"
+        );
+        assert_eq!(reader.read().unwrap(), Message::Binary(data));
+        assert_eq!(
+            reader.read().unwrap(),
+            Message::Binary(protocol::reply(1, &protocol::uint(0)))
+        );
+        assert!(socket.state.lock().queue.is_empty());
+        assert!(socket.state.lock().requested.is_none());
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 0);
     }
 
     #[test]
