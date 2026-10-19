@@ -1,0 +1,48 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cycles:u'
+# Event count (approx.): 5499038910
+#
+# Overhead  Symbol                                                                                IPC   [IPC Coverage]
+# ........  ....................................................................................  ....................
+#
+    16.57%  [.] war_relay::server::Connection::drive_batched                                      -      -            
+    12.12%  [.] war_relay::server::socket::Socket::notify                                         -      -            
+     9.98%  [.] __vdso_clock_gettime                                                              -      -            
+            |
+            ---clock_gettime
+
+     9.36%  [.] war_relay::server::socket::write_batch                                            -      -            
+     6.05%  [.] war_relay::server::Worker::run                                                    -      -            
+     5.28%  [.] bytes::bytes_mut::shared_v_drop                                                   -      -            
+     5.08%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout  -      -            
+     4.97%  [k] 0xffffffff8ac00080                                                                -      -            
+            |
+            ---0x7f01984a08f2
+               |          
+                --4.92%--internal_syscall_cancel (inlined)
+                          syscall_cancel (inlined)
+                          |          
+                           --4.85%--sendmsg
+
+     4.76%  [.] war_relay::server::Connection::deadline                                           -      -            
+     4.72%  [.] war_relay::relay::Peer::enqueue_fanout                                            -      -            
+     4.59%  [.] war_relay::server::socket::Socket::flush_locked                                   -      -            
+     3.46%  [.] war_relay::server::socket::write_frame                                            -      -            
+     3.10%  [.] core::hash::BuildHasher::hash_one                                                 -      -            
+     1.70%  [.] <core::hash::sip::Hasher<S> as core::hash::Hasher>::write                         -      -            
+     1.58%  [.] bytes::bytes_mut::shared_v_clone                                                  -      -            
+     0.91%  [.] sendmsg                                                                           -      -            
+            |          
+             --0.76%--internal_syscall_cancel (inlined)
+                       syscall_cancel (inlined)
+                       sendmsg
+
+
+
+#
+# (Tip: To measure approximate function latency with Processor Trace use perf record -e intel_pt// ... ; perf script --call-ret-trace)
+#
