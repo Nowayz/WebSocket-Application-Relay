@@ -409,3 +409,51 @@ test('final close preserves caller socket listeners and stops relay dispatch', (
     externalMessages: 1, externalCloses: 2, messages: 0, closes: 1,
   });
 });
+
+test('a command send exception stops queued commands even when the first frame was forwarded', async () => {
+  const failure = new Error('controlled post-forward failure');
+  class FailingSocket extends CommandSocket {
+    failNext = true;
+    send(bytes) {
+      super.send(bytes);
+      if (this.failNext) { this.failNext = false; throw failure; }
+    }
+    close(code, reason) { super.close(); this.closeReason = { code, reason }; }
+  }
+  const socket = new FailingSocket();
+  const relay = new Relay(socket, 42n);
+  const result = Promise.allSettled([relay.authenticate('first'), relay.authenticate('second')]);
+  await commandTurn();
+  // An open fixture can still deliver the first command's reply.
+  if (socket.readyState === 1) socket.reply(0, false);
+  const settled = await result;
+  socket.readyState = 3;
+  socket.dispatchEvent(Object.assign(new Event('close'), { code: 4002, reason: 'fixture cleanup' }));
+  assert.equal(settled[0].status, 'rejected');
+  assert.equal(settled[0].reason, failure);
+  assert.equal(settled[1].status, 'rejected', 'late reply was assigned to the next command');
+  assert.match(settled[1].reason.message, /Relay is closed/);
+  assert.equal(socket.packets.length, 1);
+  assert.deepEqual(socket.closeReason, { code: 4002, reason: 'Relay Command Send Failed' });
+  noSetupListeners(socket);
+});
+
+test('a command send exception before forwarding also stops the command queue', async () => {
+  const failure = new Error('controlled pre-forward failure');
+  class FailingSocket extends Socket {
+    attempts = 0;
+    send() { this.attempts++; throw failure; }
+  }
+  const socket = new FailingSocket();
+  const relay = new Relay(socket, 42n);
+  const settled = await Promise.allSettled([relay.listen(1), relay.listen(2)]);
+  socket.readyState = 3;
+  socket.dispatchEvent(Object.assign(new Event('close'), { code: 4002, reason: 'fixture cleanup' }));
+  assert.equal(settled[0].status, 'rejected');
+  assert.equal(settled[0].reason, failure);
+  assert.equal(settled[1].status, 'rejected');
+  assert.match(settled[1].reason.message, /Relay is closed/);
+  assert.equal(socket.attempts, 1);
+  assert.equal(socket.closeCalls, 1);
+  noSetupListeners(socket);
+});

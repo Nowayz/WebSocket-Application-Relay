@@ -7105,3 +7105,13 @@ An externally retained closed socket no longer retains Relay through those
 callbacks. Message/command code is unchanged. Two mock regressions and a real
 socket regression fail before the fix; all 58 source-suite and four generated
 browser-module checks pass after it. See the [cleanup evidence](benchmarks/2026-10-19-js-final-close-cleanup/README.md).
+
+
+### JavaScript command-send failure isolation (2026-10-19)
+
+A send wrapper that forwards then throws can leave an uncorrelated reply.
+The client now closes an otherwise-open command connection on send exception,
+preserving the first error and refusing queued commands. Controlled real-socket
+evidence shows the original client assigning a false authentication reply to
+the next command. Local encoding failures remain recoverable. All 61 source
+and five generated-module tests pass. See the [fault-injection evidence](benchmarks/2026-10-19-js-command-send-failure/README.md).

@@ -1,0 +1,52 @@
+✔ failed connection removes setup listeners before delayed socket events (13.118012ms)
+✔ join timeout removes listeners and closes without a peer Close event (2.032335ms)
+✔ join send failure rejects immediately with its original error (0.257273ms)
+✔ successful welcome replaces setup listeners with the live relay listeners (0.608574ms)
+✔ overflowing join timeout is rejected before creating a socket (0.153096ms)
+✔ constructor rejects unsafe timeout configuration before installing listeners (0.136636ms)
+✔ changed timeout configuration rejects a command before sending and can recover (0.401849ms)
+✔ timer ceiling is inclusive and direct construction uses the standard default (0.580854ms)
+✔ connect captures a byte channel before the delayed socket open (0.517026ms)
+✔ connect does not depend on the channel buffer remaining attached (0.282742ms)
+✔ prepared subscriptions survive concurrent joins and encoder buffer growth (0.315901ms)
+✔ commands capture nested values before the next microtask sends them (2.256808ms)
+✔ a queued command survives transfer of its original value buffer (0.39236ms)
+✔ reentrant value getters preserve outer command order and encode once (0.340551ms)
+✔ encoding failure retains its queue position and allows the next command (0.451748ms)
+✔ a reentrant queued write captures its buffer without corrupting the outer encoder (0.37135ms)
+✔ a closed client rejects commands without evaluating their values (0.138417ms)
+✔ a command invoked from an application-value getter waits for that encoding (0.449158ms)
+✔ reentrant application sends fail locally before either packet reaches the socket (0.216655ms)
+✔ a reentrant connect rejects before creating a socket without corrupting the outer packet (0.214364ms)
+✔ final close removes live handlers before notifying and rejects outstanding controls (0.646112ms)
+✔ final close preserves caller socket listeners and stops relay dispatch (0.193575ms)
+✖ a command send exception stops queued commands even when the first frame was forwarded (0.989203ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 22
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67.391973
+
+✖ failing tests:
+
+test at clients/js/connect.test.mjs:413:1
+✖ a command send exception stops queued commands even when the first frame was forwarded (0.989203ms)
+  AssertionError [ERR_ASSERTION]: late reply was assigned to the next command
+  + actual - expected
+  
+  + 'fulfilled'
+  - 'rejected'
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/connect.test.mjs:434:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'fulfilled',
+    expected: 'rejected',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

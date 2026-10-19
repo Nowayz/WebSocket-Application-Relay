@@ -1,0 +1,39 @@
+{
+  "client_sha256": "d68bab39c5e91c23d4d4b760773ed660520c3bf569a1402f9d271409dbb316fe",
+  "passed": false,
+  "commands": [
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/idle-snapshot/war-relay",
+      "--bind",
+      "127.0.0.1:59883",
+      "--admin-bind",
+      "127.0.0.1:46795",
+      "--workers",
+      "4",
+      "--idle-timeout-secs",
+      "1"
+    ],
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/bridge-frame-errors-selected/war-legacy-bridge",
+      "--bind",
+      "127.0.0.1:52407",
+      "--upstream",
+      "ws://127.0.0.1:59883"
+    ]
+  ],
+  "server_sha256": "343c60dafd239a7c6d21027404d653024069ee2b4f66ee70b0e7496426ef1339",
+  "bridge_sha256": "21a2f8affd62b6dbff99e625c6f78376f96ad86471d27158e9950d0d90bd6c88",
+  "test_command": [
+    "node",
+    "--test",
+    "--test-timeout=10000",
+    "--test-name-pattern=native command send failure",
+    "clients/js/relay.test.mjs"
+  ],
+  "test_exit_code": 1,
+  "test_output": "\u2716 native command send failure cannot misassign a late authentication reply (31.56627ms)\n\u2139 tests 1\n\u2139 suites 0\n\u2139 pass 0\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 77.688092\n\n\u2716 failing tests:\n\ntest at clients/js/relay.test.mjs:285:1\n\u2716 native command send failure cannot misassign a late authentication reply (31.56627ms)\n  AssertionError [ERR_ASSERTION]: late false reply resolved the next authentication\n  + actual - expected\n  \n  + 'fulfilled'\n  - 'rejected'\n  \n      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/relay.test.mjs:305:10)\n      at async Test.run (node:internal/test_runner/test:1409:7)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 'fulfilled',\n    expected: 'rejected',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n",
+  "exit_codes": [
+    0,
+    0
+  ]
+}

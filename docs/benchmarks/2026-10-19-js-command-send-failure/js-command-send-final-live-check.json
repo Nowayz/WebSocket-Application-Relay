@@ -1,0 +1,49 @@
+{
+  "client_sha256": "bf8e8758367ea0250855d54d628d8b800982878527a249235e25119ddae59d48",
+  "passed": true,
+  "commands": [
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/idle-snapshot/war-relay",
+      "--bind",
+      "127.0.0.1:39039",
+      "--admin-bind",
+      "127.0.0.1:42355",
+      "--workers",
+      "4",
+      "--idle-timeout-secs",
+      "1"
+    ],
+    [
+      "/home/phil/dev/war_next/artifacts/candidates/bridge-frame-errors-selected/war-legacy-bridge",
+      "--bind",
+      "127.0.0.1:51063",
+      "--upstream",
+      "ws://127.0.0.1:39039"
+    ]
+  ],
+  "server_sha256": "343c60dafd239a7c6d21027404d653024069ee2b4f66ee70b0e7496426ef1339",
+  "bridge_sha256": "21a2f8affd62b6dbff99e625c6f78376f96ad86471d27158e9950d0d90bd6c88",
+  "test_command": [
+    "node",
+    "--test",
+    "--test-timeout=10000",
+    "clients/js/connect.test.mjs",
+    "clients/js/ids.test.mjs",
+    "clients/js/protocol-error.test.mjs",
+    "clients/js/relay.test.mjs"
+  ],
+  "test_exit_code": 0,
+  "test_output": "\u2714 failed connection removes setup listeners before delayed socket events (18.373119ms)\n\u2714 join timeout removes listeners and closes without a peer Close event (2.178651ms)\n\u2714 join send failure rejects immediately with its original error (0.315352ms)\n\u2714 successful welcome replaces setup listeners with the live relay listeners (0.758379ms)\n\u2714 overflowing join timeout is rejected before creating a socket (0.181935ms)\n\u2714 constructor rejects unsafe timeout configuration before installing listeners (0.163026ms)\n\u2714 changed timeout configuration rejects a command before sending and can recover (0.496646ms)\n\u2714 timer ceiling is inclusive and direct construction uses the standard default (0.323311ms)\n\u2714 connect captures a byte channel before the delayed socket open (0.637853ms)\n\u2714 connect does not depend on the channel buffer remaining attached (0.34464ms)\n\u2714 prepared subscriptions survive concurrent joins and encoder buffer growth (0.549205ms)\n\u2714 commands capture nested values before the next microtask sends them (2.446883ms)\n\u2714 a queued command survives transfer of its original value buffer (0.543225ms)\n\u2714 reentrant value getters preserve outer command order and encode once (0.513076ms)\n\u2714 encoding failure retains its queue position and allows the next command (0.555015ms)\n\u2714 a reentrant queued write captures its buffer without corrupting the outer encoder (0.434169ms)\n\u2714 a closed client rejects commands without evaluating their values (0.162085ms)\n\u2714 a command invoked from an application-value getter waits for that encoding (0.481467ms)\n\u2714 reentrant application sends fail locally before either packet reaches the socket (0.233204ms)\n\u2714 a reentrant connect rejects before creating a socket without corrupting the outer packet (0.251583ms)\n\u2714 final close removes live handlers before notifying and rejects outstanding controls (0.7234ms)\n\u2714 final close preserves caller socket listeners and stops relay dispatch (0.227104ms)\n\u2714 a command send exception stops queued commands even when the first frame was forwarded (0.515476ms)\n\u2714 a command send exception before forwarding also stops the command queue (0.275272ms)\n\u2714 welcome IDs must be exact, nonreserved uint64 integers (15.538226ms)\n\u2714 malformed sender and disconnect IDs close without dispatching application events (1.532459ms)\n\u2714 valid large sender and disconnect IDs retain exact BigInt values (0.640372ms)\n\u2714 invalid assignment acknowledgements reject the command and close the connection (1.924457ms)\n\u2714 valid assignment acknowledgement keeps the BigInt API (0.218384ms)\n\u2714 local close rejects pending and queued commands before a peer Close event (2.22526ms)\n\u2714 malformed replies reject pending commands before the close handshake completes (0.487687ms)\n\u2714 envelopes require exactly two array elements, not iterable byte strings (0.592634ms)\n\u2714 control replies require exactly two array elements before resolving a command (0.410849ms)\n\u2714 valid envelopes preserve arbitrary application values including undefined (0.37051ms)\n\u2714 malformed variable results reject before being exposed as found/value (1.018662ms)\n\u2714 boolean command replies reject nonboolean results (0.869416ms)\n\u2714 valid command results preserve false and arbitrary stored CBOR values (0.354701ms)\n\u2714 listener flags accept only effective integers in 0 through 7 (0.868036ms)\n\u2714 channel listing rejects malformed rows and populations (1.161878ms)\n\u2714 channel listing preserves empty/binary names and exact numeric types (0.208475ms)\n\u2714 assignment acknowledgement updates identity before the next message callback (0.198565ms)\n\u2714 low-level assignment acknowledgements update identity without changing result types (0.113427ms)\n\u2714 real WebSocket closes with application code 4002 for invalid welcome (18.370629ms)\n\u2714 real WebSocket closes with application code 4002 for invalid reply (5.420572ms)\n\u2714 real WebSocket closes with application code 4002 for invalid timeout (3.500165ms)\n\u2714 real WebSocket preserves a server-sent protocol Close 1002 (2.254549ms)\n\u2714 native listener acknowledgements return effective flags and private observation stays usable (29.961303ms)\n\u2714 CBOR client carries objects, bytes, text, uint64 IDs, and concurrent variable requests (5.001424ms)\n\u2714 the unchanged upstream relay.js works through the optional bridge (4.4047ms)\n\u2714 CBOR byte strings and text interoperate with legacy sessions through the bridge (2.087563ms)\n\u2714 legacy privileged commands preserve channel-list layout and fixed-ID takeover (2.694487ms)\n\u2714 native CBOR and legacy connections finish close handshakes before and after joining (2.620678ms)\n\u2714 an unsupported structured value closes a legacy recipient cleanly and leaves CBOR routing usable (1.569727ms)\n\u2714 application idle policy reaches native and legacy browser WebSockets cleanly (1003.625804ms)\n\u2714 native channel listing returns sorted byte names and current populations (3.563652ms)\n\u2714 native pipelined assignment and self-message expose the acknowledged identity (1.555028ms)\n\u2714 native subscription retains the byte channel supplied before the socket opens (1.026222ms)\n\u2714 native variable writes retain the value supplied before command dispatch (1.013463ms)\n\u2714 native connection remains usable after locally rejected reentrant serialization (1.193998ms)\n\u2714 native final close detaches the live client socket handlers (0.813428ms)\n\u2714 native command send failure cannot misassign a late authentication reply (1.192097ms)\n\u2139 tests 61\n\u2139 suites 0\n\u2139 pass 61\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 1108.839535\n",
+  "final_resource_gauges": {
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_queued_bytes": 0,
+    "war_variable_bytes": 0,
+    "war_read_buffer_reserved_bytes": 0,
+    "war_output_queue_capacity_bytes": 0
+  },
+  "exit_codes": [
+    0,
+    0
+  ]
+}

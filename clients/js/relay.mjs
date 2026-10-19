@@ -183,7 +183,11 @@ export class Relay extends EventTarget {
       try {
         if (!this.ready) throw new Error('Relay is closed');
         this.ws.send(packet);
-      } catch (error) { this.#pending.reject(error); }
+      } catch (error) {
+        this.#pending.reject(error);
+        // A forwarded command may still reply; do not reuse its response slot.
+        if (this.ready) this.ws.close(CLIENT_PROTOCOL_ERROR, 'Relay Command Send Failed');
+      }
     }));
     this.#controls = result.catch(() => {});
     // Reserve FIFO position before evaluating getters that may enqueue commands.

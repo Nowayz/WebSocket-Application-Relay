@@ -281,3 +281,30 @@ test('native final close detaches the live client socket handlers', async () => 
   assert.equal(getEventListeners(relay.ws, 'message').length, 0);
   assert.equal(getEventListeners(relay.ws, 'close').length, 0);
 });
+
+test('native command send failure cannot misassign a late authentication reply', async t => {
+  const failure = new Error('controlled native post-forward failure');
+  class FailingSocket extends WebSocket {
+    failNext = false;
+    sends = 0;
+    send(bytes) {
+      super.send(bytes);
+      this.sends++;
+      if (this.failNext) { this.failNext = false; throw failure; }
+    }
+  }
+  const relay = await Relay.connect(url, 'js-send-failure', { WebSocketClass: FailingSocket });
+  t.after(() => relay.close());
+  const closed = once(relay, 'close');
+  const before = relay.ws.sends;
+  relay.ws.failNext = true;
+  const settled = await Promise.allSettled([relay.authenticate('wrong'), relay.authenticate('js-test-host')]);
+  const [event] = await closed;
+  assert.equal(event.detail.code, 4002);
+  assert.equal(event.detail.reason, 'Relay Command Send Failed');
+  assert.equal(settled[0].status, 'rejected');
+  assert.equal(settled[0].reason, failure);
+  assert.equal(settled[1].status, 'rejected', 'late false reply resolved the next authentication');
+  assert.match(settled[1].reason.message, /Relay is closed/);
+  assert.equal(relay.ws.sends - before, 1, 'queued authentication reached the wire');
+});

@@ -205,6 +205,12 @@ commands from sending; it does not wait for the peer's Close acknowledgement.
 When the socket's final close event arrives, the client removes its own socket
 handlers before notifying Relay close listeners. Caller-installed socket listeners
 remain attached.
+If a command's `WebSocket.send()` throws, that command keeps the original
+thrown error and an otherwise-open connection closes with code 4002 and reason
+`Relay Command Send Failed`. Queued commands are not sent; reconnect before
+retrying. This prevents an already-forwarded command's late reply from being
+assigned to the next command. Encoding failures before sending remain local
+and do not force a reconnect.
 `requestTimeoutMs` defaults to 10,000 and must be positive, finite, and at most
 2,147,483,647 ms, the native timer delay ceiling. It is checked before connecting
 and before each queued command starts, including after changing the property.
