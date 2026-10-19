@@ -258,7 +258,10 @@ The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
 Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
 the check. Reachability and TLS availability are checked when forwarding a client.
 Oversized frontend messages receive Close `1009` before or after joining; the
-bridge retains its 16 MiB incoming message limit. The [short oversized-header
+bridge retains its 16 MiB incoming message limit. Malformed framing receives
+`1002`, and invalid UTF-8 receives `1007`; decoder-error Close output is bounded
+and does not resume the invalid input stream. See the [frame-error checks](docs/benchmarks/2026-10-18-bridge-frame-errors/README.md).
+The [short oversized-header
 check](docs/benchmarks/2026-10-18-bridge-oversize/README.md) verifies rejection
 without allocating a large payload and confirms independent native routing.
 
