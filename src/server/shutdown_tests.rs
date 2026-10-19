@@ -201,3 +201,28 @@ async fn shutdown_releases_blocked_output_and_pending_upgrades_with_live_clients
     assert_eq!(relay.metrics.write_timeouts.load(Relaxed), 0);
     drop((slow, idle, responsive, upgrading));
 }
+
+#[tokio::test]
+async fn impossible_worker_reservations_return_errors_and_release_listeners() {
+    let listener = AsyncListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let relay = Relay::new(crate::Config {
+        workers: Some(usize::MAX),
+        ..crate::Config::default()
+    })
+    .unwrap();
+    let error = serve(listener, None, relay, CancellationToken::new())
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("cannot reserve native worker storage")
+    );
+    drop(std::net::TcpListener::bind(address).unwrap());
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    assert!(worker_listeners(listener, usize::MAX, 128).is_err());
+    drop(std::net::TcpListener::bind(address).unwrap());
+}

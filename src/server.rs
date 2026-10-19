@@ -93,7 +93,10 @@ pub async fn serve(
     } else {
         None
     };
-    let mut prepared = Vec::with_capacity(workers);
+    let mut prepared = Vec::new();
+    prepared
+        .try_reserve_exact(workers)
+        .context("cannot reserve native worker storage")?;
     for listener in worker_listeners(listener, workers, relay.config.listen_backlog)? {
         prepared.push(Worker::new(listener, relay.clone())?);
     }
@@ -194,7 +197,10 @@ fn worker_listeners(
     backlog: u16,
 ) -> io::Result<Vec<std::net::TcpListener>> {
     socket2::SockRef::from(&listener).listen(i32::from(backlog))?;
-    let mut listeners = Vec::with_capacity(workers);
+    let mut listeners = Vec::new();
+    listeners
+        .try_reserve_exact(workers)
+        .map_err(io::Error::other)?;
     // Linux distributes new flows across independent accept queues. Cloning one
     // listen socket lets a single ready worker consume all arrivals instead.
     #[cfg(target_os = "linux")]
