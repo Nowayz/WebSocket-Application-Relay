@@ -1,0 +1,137 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -419,11 +419,29 @@
+     // Disable Nagle's ACK-dependent delay for consecutive small relay packets.
+     // Match the frontend's small initial buffer without reducing upstream frame limits.
+     let upstream_config = WebSocketConfig::default().read_buffer_size(4096);
+-    let (mut upstream, _) = timeout(
++    let connection = timeout(
+         WAIT,
+         connect_async_with_config(upstream, Some(upstream_config), true),
+     )
+-    .await??;
++    .await
++    .context("upstream connection timeout")
++    .and_then(|result| result.map_err(anyhow::Error::from));
++    let (mut upstream, _) = match connection {
++        Ok(connection) => connection,
++        Err(error) => {
++            transport::initiate_close(
++                &mut legacy,
++                Some(CloseFrame {
++                    code: CloseCode::Again,
++                    reason: "Upstream Unavailable".into(),
++                }),
++                WAIT,
++                None,
++            )
++            .await;
++            return Err(error);
++        }
++    };
+     upstream.set_read_frame_limit(Some(transport::READ_FRAMES_PER_POLL));
+     let subscription = protocol::byte_string(&joined);
+     // The encoded subscription owns its bytes; release the frontend join view.
+@@ -890,6 +908,102 @@
+         .expect("fragment scheduling and exact output must complete promptly");
+     }
+ 
++    #[tokio::test]
++    async fn unavailable_upstream_closes_cleanly_and_single_slot_recovers() {
++        timeout(Duration::from_secs(2), async {
++            // Reserve a port without listening: connection refusal is real,
++            // and another test cannot claim the endpoint before recovery.
++            let unavailable = socket2::Socket::new(
++                socket2::Domain::IPV4,
++                socket2::Type::STREAM,
++                Some(socket2::Protocol::TCP),
++            )
++            .unwrap();
++            unavailable
++                .bind(
++                    &"127.0.0.1:0"
++                        .parse::<std::net::SocketAddr>()
++                        .unwrap()
++                        .into(),
++                )
++                .unwrap();
++            let upstream_url = format!(
++                "ws://{}",
++                unavailable.local_addr().unwrap().as_socket().unwrap()
++            );
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let shutdown = CancellationToken::new();
++            let token = shutdown.clone();
++            let mut tasks = JoinSet::new();
++            tasks.spawn(async move {
++                serve(listener, upstream_url, 1, token).await.unwrap();
++            });
++            for _ in 0..2 {
++                let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++                ws.send(Message::Binary(Bytes::from_static(b"recover")))
++                    .await
++                    .unwrap();
++                let received = ws.next().await;
++                let Some(Ok(Message::Close(Some(frame)))) = received else {
++                    panic!(
++                        "upstream connection failure caused unclean legacy retirement: {received:?}"
++                    );
++                };
++                assert_eq!(frame.code, CloseCode::Again);
++                assert_eq!(frame.reason, "Upstream Unavailable");
++                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++                assert!(ws.next().await.is_none());
++            }
++            // Bring the same endpoint online, with no bridge restart or retry state.
++            unavailable.listen(16).unwrap();
++            unavailable.set_nonblocking(true).unwrap();
++            let upstream = TcpListener::from_std(unavailable.into()).unwrap();
++            tasks.spawn(async move {
++                let (stream, _) = upstream.accept().await.unwrap();
++                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                let Some(Ok(Message::Binary(join))) = ws.next().await else {
++                    panic!("missing recovered join");
++                };
++                assert_eq!(protocol::join(&join).unwrap(), b"recover");
++                ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
++                let expected = protocol::envelope(42, &protocol::byte_string(&[17, 34]));
++                assert_eq!(
++                    ws.next().await.unwrap().unwrap(),
++                    Message::Binary(expected.clone())
++                );
++                ws.send(Message::Binary(expected)).await.unwrap();
++                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
++                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++            });
++            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            ws.send(Message::Binary(Bytes::from_static(b"recover")))
++                .await
++                .unwrap();
++            assert_eq!(
++                ws.next().await.unwrap().unwrap(),
++                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
++            );
++            let mut packet = 42u64.to_le_bytes().to_vec();
++            packet.extend_from_slice(&[17, 34]);
++            ws.send(Message::Binary(packet.clone().into()))
++                .await
++                .unwrap();
++            assert_eq!(
++                ws.next().await.unwrap().unwrap(),
++                Message::Binary(packet.into())
++            );
++            assert!(transport::initiate_close(&mut ws, None, Duration::from_secs(1), None).await);
++            assert!(ws.next().await.is_none());
++            shutdown.cancel();
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap();
++            }
++        })
++        .await
++        .expect("two refused upstream connections and recovery must be prompt");
++    }
++
+     async fn welcome_validation_cases(cases: Vec<(Message, Option<u64>)>) {
+         timeout(Duration::from_secs(2), async {
+             let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();

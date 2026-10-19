@@ -294,6 +294,9 @@ The optional migration bridge translates the original binary/text wire format:
 The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
 Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
 the check. Reachability and TLS availability are checked when forwarding a client.
+If that connection fails or exceeds its ten-second deadline, the legacy client
+receives a bounded `1013 / Upstream Unavailable` Close. A later connection attempt
+can succeed once the upstream returns; see the [failure and recovery checks](docs/benchmarks/2026-10-19-bridge-upstream-unavailable/README.md).
 While awaiting the upstream welcome, Ping/Pong control frames are handled within
 the same ten-second deadline. An upstream Close is relayed with its original code
 and reason even before a legacy ID is assigned, so a full native room reports a
