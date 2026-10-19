@@ -74,7 +74,7 @@ def summarize(values, samples, maxima, thresholds, histogram_bounds=False, stati
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--case', action='append', required=True, metavar='LABEL=CSV')
-    parser.add_argument('--output', type=Path, required=True, help='Output stem for PNG, PDF and JSON')
+    parser.add_argument('--output', type=Path, required=True, help='Fresh output stem for PNG, PDF and JSON; existing outputs are preserved')
     parser.add_argument('--subtitle', default='')
     parser.add_argument('--statistic', choices=['p99', 'max'], default='p99',
                         help='Compare per-user p99s or observed maxima; defaults to p99')
@@ -87,6 +87,10 @@ def main():
         parser.error('--histogram-bounds applies to p99; observed maxima are exact')
     if any(not math.isfinite(v) or v <= 0 for v in args.threshold_ms):
         parser.error('thresholds must be positive finite milliseconds')
+    outputs = {suffix: args.output.with_suffix(suffix) for suffix in ['.png', '.pdf', '.json']}
+    for output in outputs.values():
+        if output.exists() or output.is_symlink():
+            parser.error(f'output already exists: {output}')
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -138,8 +142,8 @@ def main():
         ax.legend(fontsize=8)
     fig.suptitle(args.subtitle or f'Per-user {statistic_label} comparison')
     for suffix in ['.png', '.pdf']:
-        fig.savefig(args.output.with_suffix(suffix), dpi=180)
-    args.output.with_suffix('.json').write_text(json.dumps(summary, indent=2) + '\n')
+        fig.savefig(outputs[suffix], dpi=180)
+    outputs['.json'].write_text(json.dumps(summary, indent=2) + '\n')
 
 
 if __name__ == '__main__':

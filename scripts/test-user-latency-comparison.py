@@ -19,6 +19,34 @@ class ComparisonTest(unittest.TestCase):
             path.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n' + body)
             return comparison.load(path)
 
+    def test_cli_preserves_existing_outputs_and_dangling_symlinks(self):
+        for suffix in ['.png', '.pdf', '.json']:
+            for symlink in [False, True]:
+                with self.subTest(suffix=suffix, symlink=symlink), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    source = root / 'users.csv'
+                    source.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n'
+                                      '1,8,2,2,3,3\n')
+                    output = root / 'plot'
+                    protected = output.with_suffix(suffix)
+                    target = root / 'missing-target'
+                    if symlink:
+                        protected.symlink_to(target)
+                    else:
+                        protected.write_bytes(b'previous-evidence')
+                    result = subprocess.run([sys.executable, comparison.__file__, '--case',
+                                             f'fixture={source}', '--output', str(output)],
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn('already exists', result.stderr)
+                    if symlink:
+                        self.assertTrue(protected.is_symlink())
+                        self.assertEqual(protected.readlink(), target)
+                        self.assertFalse(target.exists())
+                    else:
+                        self.assertEqual(protected.read_bytes(), b'previous-evidence')
+                    self.assertEqual(set(root.iterdir()), {source, protected})
+
     def test_short_exact_p99_must_select_the_observed_maximum(self):
         for unit, scale in [('ms', 1), ('ns', 1000000)]:
             with tempfile.TemporaryDirectory() as directory:

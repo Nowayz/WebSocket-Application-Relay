@@ -1,0 +1,11 @@
+# Preserve existing latency comparison outputs — 2026-10-19
+
+The comparison CLI wrote PNG, PDF and JSON to the requested stem without checking whether those paths already existed. An accidental repeat could overwrite previous evidence, including through symlinks. This change checks all three derived paths before importing plotting code, loading inputs or saving output, and returns argparse status 2 if any exists. Dangling symlinks also count as existing output. The same precomputed paths are used for saving, retaining the existing Path.with_suffix stem behavior.
+
+The previous CLI completed successfully in all six collision cases in the new regression: an existing regular file or dangling symlink at each PNG/PDF/JSON path. The failed-before 13-method suite reports six failures in 4.201 seconds. The selected suite passes all 13 methods in 0.527 seconds, verifying error status/message, unchanged file bytes, unchanged symlink targets, no created referent and no partial sibling outputs. Only temporary test files are used.
+
+A fresh actual CLI run uses the saved 100,000-user CSV in maximum mode with a 10 ms threshold. It generates valid PNG/PDF signatures and a 100,000-user JSON summary. Repeating the same command returns status 2 and leaves all three SHA256 hashes unchanged; repeat.json retains the command, refusal and hashes. valid-summary.json retains the report. Numerical analysis, finite-sample validation and chart rendering are unchanged; no new relay traffic, runtime change, dependency or workload limit is introduced.
+
+This is a sequential preflight check, consistent with the project's sequential benchmark workflow. It is not an atomic cross-process output reservation: concurrent writers can race after preflight. It also does not promise rollback if a later filesystem write fails. The change prevents accidental reuse of already-present evidence without adding a locking or transaction system.
+
+Run `python scripts/test-user-latency-comparison.py` for focused checks, or `python docs/benchmarks/2026-10-19-latency-output-preservation/verify.py` to audit saved evidence. Use a fresh --output stem for a new comparison; existing artifacts are preserved rather than requiring overwrite permission. Existing manual services and three unrelated dirty runtime sources remain untouched.
