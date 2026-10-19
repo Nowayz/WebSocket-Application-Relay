@@ -7095,3 +7095,13 @@ deliveries. Two focused checks now protect no self-echo, membership changes
 and observer enable/disable behavior; an isolated bad shortcut fails the
 observer-delivery assertion. No runtime branch is added. See the
 [contract checks and mutation evidence](benchmarks/2026-10-19-singleton-observer-contract/README.md).
+
+
+### JavaScript final-close cleanup (2026-10-19)
+
+The client now detaches its two owned WebSocket handlers on final close,
+before notifying application close listeners, while preserving caller handlers.
+An externally retained closed socket no longer retains Relay through those
+callbacks. Message/command code is unchanged. Two mock regressions and a real
+socket regression fail before the fix; all 58 source-suite and four generated
+browser-module checks pass after it. See the [cleanup evidence](benchmarks/2026-10-19-js-final-close-cleanup/README.md).

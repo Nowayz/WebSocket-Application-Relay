@@ -66,7 +66,7 @@ export class Relay extends EventTarget {
     this.ws = ws;
     this.userId = wireId(userId, true);
     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
-    ws.addEventListener('message', event => {
+    const message = event => {
       try {
         const envelope = decoder.decode(new Uint8Array(event.data));
         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
@@ -98,11 +98,15 @@ export class Relay extends EventTarget {
         this.dispatchEvent(new CustomEvent('error', { detail: error }));
         ws.close(CLIENT_PROTOCOL_ERROR, 'Invalid Relay Response');
       }
-    });
-    ws.addEventListener('close', event => {
+    };
+    const closed = event => {
+      ws.removeEventListener('message', message);
+      ws.removeEventListener('close', closed);
       this.#pending?.reject(new Error(`Relay closed (${event.code}): ${event.reason}`));
       this.dispatchEvent(new CustomEvent('close', { detail: { code: event.code, reason: event.reason } }));
-    });
+    };
+    ws.addEventListener('message', message);
+    ws.addEventListener('close', closed);
   }
 
   static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass = globalThis.WebSocket } = {}) {

@@ -364,3 +364,48 @@ test('a reentrant connect rejects before creating a socket without corrupting th
     await Promise.allSettled([pending]);
   }
 });
+
+test('final close removes live handlers before notifying and rejects outstanding controls', async () => {
+  const socket = new CommandSocket();
+  const relay = new Relay(socket, 42n);
+  const states = [];
+  relay.addEventListener('close', event => states.push({
+    detail: event.detail,
+    messages: getEventListeners(socket, 'message').length,
+    closes: getEventListeners(socket, 'close').length,
+  }));
+  const results = Promise.allSettled([relay.authenticate('pending'), relay.channels()]);
+  await commandTurn();
+  assert.equal(socket.sends, 1);
+  socket.readyState = 3;
+  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'done' }));
+  const settled = await results;
+  assert.ok(settled.every(result => result.status === 'rejected'));
+  assert.match(settled[0].reason.message, /Relay closed \(1000\): done/);
+  assert.match(settled[1].reason.message, /Relay is closed/);
+  assert.equal(socket.sends, 1, 'queued command must not be sent after closure');
+  assert.deepEqual(states, [{ detail: { code: 1000, reason: 'done' }, messages: 0, closes: 0 }]);
+  noSetupListeners(socket);
+});
+
+test('final close preserves caller socket listeners and stops relay dispatch', () => {
+  const socket = new Socket();
+  let externalMessages = 0, externalCloses = 0, messages = 0, closes = 0;
+  const onMessage = () => externalMessages++;
+  const onClose = () => externalCloses++;
+  socket.addEventListener('message', onMessage);
+  socket.addEventListener('close', onClose);
+  const relay = new Relay(socket, 42n);
+  relay.addEventListener('message', () => messages++);
+  relay.addEventListener('close', () => closes++);
+  socket.readyState = 3;
+  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: '' }));
+  assert.deepEqual(getEventListeners(socket, 'message'), [onMessage]);
+  assert.deepEqual(getEventListeners(socket, 'close'), [onClose]);
+  const encoded = new Encoder({ useRecords: false }).encode([99, 'late fixture']);
+  socket.dispatchEvent(new MessageEvent('message', { data: Uint8Array.from(encoded).buffer }));
+  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: '' }));
+  assert.deepEqual({ externalMessages, externalCloses, messages, closes }, {
+    externalMessages: 1, externalCloses: 2, messages: 0, closes: 1,
+  });
+});

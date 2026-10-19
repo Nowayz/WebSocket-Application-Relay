@@ -1,0 +1,114 @@
+--- a/clients/js/relay.mjs
++++ b/clients/js/relay.mjs
+@@ -66,7 +66,7 @@
+     this.ws = ws;
+     this.userId = wireId(userId, true);
+     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
+-    ws.addEventListener('message', event => {
++    const message = event => {
+       try {
+         const envelope = decoder.decode(new Uint8Array(event.data));
+         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
+@@ -98,11 +98,15 @@
+         this.dispatchEvent(new CustomEvent('error', { detail: error }));
+         ws.close(CLIENT_PROTOCOL_ERROR, 'Invalid Relay Response');
+       }
+-    });
+-    ws.addEventListener('close', event => {
++    };
++    const closed = event => {
++      ws.removeEventListener('message', message);
++      ws.removeEventListener('close', closed);
+       this.#pending?.reject(new Error(`Relay closed (${event.code}): ${event.reason}`));
+       this.dispatchEvent(new CustomEvent('close', { detail: { code: event.code, reason: event.reason } }));
+-    });
++    };
++    ws.addEventListener('message', message);
++    ws.addEventListener('close', closed);
+   }
+ 
+   static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass = globalThis.WebSocket } = {}) {
+--- a/clients/js/connect.test.mjs
++++ b/clients/js/connect.test.mjs
+@@ -364,3 +364,48 @@
+     await Promise.allSettled([pending]);
+   }
+ });
++
++test('final close removes live handlers before notifying and rejects outstanding controls', async () => {
++  const socket = new CommandSocket();
++  const relay = new Relay(socket, 42n);
++  const states = [];
++  relay.addEventListener('close', event => states.push({
++    detail: event.detail,
++    messages: getEventListeners(socket, 'message').length,
++    closes: getEventListeners(socket, 'close').length,
++  }));
++  const results = Promise.allSettled([relay.authenticate('pending'), relay.channels()]);
++  await commandTurn();
++  assert.equal(socket.sends, 1);
++  socket.readyState = 3;
++  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'done' }));
++  const settled = await results;
++  assert.ok(settled.every(result => result.status === 'rejected'));
++  assert.match(settled[0].reason.message, /Relay closed \(1000\): done/);
++  assert.match(settled[1].reason.message, /Relay is closed/);
++  assert.equal(socket.sends, 1, 'queued command must not be sent after closure');
++  assert.deepEqual(states, [{ detail: { code: 1000, reason: 'done' }, messages: 0, closes: 0 }]);
++  noSetupListeners(socket);
++});
++
++test('final close preserves caller socket listeners and stops relay dispatch', () => {
++  const socket = new Socket();
++  let externalMessages = 0, externalCloses = 0, messages = 0, closes = 0;
++  const onMessage = () => externalMessages++;
++  const onClose = () => externalCloses++;
++  socket.addEventListener('message', onMessage);
++  socket.addEventListener('close', onClose);
++  const relay = new Relay(socket, 42n);
++  relay.addEventListener('message', () => messages++);
++  relay.addEventListener('close', () => closes++);
++  socket.readyState = 3;
++  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: '' }));
++  assert.deepEqual(getEventListeners(socket, 'message'), [onMessage]);
++  assert.deepEqual(getEventListeners(socket, 'close'), [onClose]);
++  const encoded = new Encoder({ useRecords: false }).encode([99, 'late fixture']);
++  socket.dispatchEvent(new MessageEvent('message', { data: Uint8Array.from(encoded).buffer }));
++  socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: '' }));
++  assert.deepEqual({ externalMessages, externalCloses, messages, closes }, {
++    externalMessages: 1, externalCloses: 2, messages: 0, closes: 1,
++  });
++});
+--- a/clients/js/relay.test.mjs
++++ b/clients/js/relay.test.mjs
+@@ -1,5 +1,5 @@
+ import assert from 'node:assert/strict';
+-import { once } from 'node:events';
++import { once, getEventListeners } from 'node:events';
+ import { readFile } from 'node:fs/promises';
+ import test from 'node:test';
+ import vm from 'node:vm';
+@@ -189,6 +189,8 @@
+     assert.equal(event.reason, 'Application Idle');
+     assert.equal(event.wasClean, true);
+   }
++  assert.equal(getEventListeners(native.ws, 'message').length, 0);
++  assert.equal(getEventListeners(native.ws, 'close').length, 0);
+ });
+ 
+ test('native channel listing returns sorted byte names and current populations', async t => {
+@@ -268,3 +270,14 @@
+   assert.deepEqual((await received)[0].detail, { sender: relay.userId, value: 'recovered' });
+   assert.equal(relay.ready, true);
+ });
++
++
++test('native final close detaches the live client socket handlers', async () => {
++  const relay = await Relay.connect(url, 'js-final-close');
++  const closed = once(relay, 'close');
++  relay.close();
++  const [event] = await closed;
++  assert.equal(event.detail.code, 1000);
++  assert.equal(getEventListeners(relay.ws, 'message').length, 0);
++  assert.equal(getEventListeners(relay.ws, 'close').length, 0);
++});

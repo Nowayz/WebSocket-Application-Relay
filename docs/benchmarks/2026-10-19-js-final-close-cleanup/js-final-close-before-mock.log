@@ -1,0 +1,86 @@
+✔ failed connection removes setup listeners before delayed socket events (15.982934ms)
+✔ join timeout removes listeners and closes without a peer Close event (2.107872ms)
+✔ join send failure rejects immediately with its original error (0.281932ms)
+✔ successful welcome replaces setup listeners with the live relay listeners (0.811037ms)
+✔ overflowing join timeout is rejected before creating a socket (0.173996ms)
+✔ constructor rejects unsafe timeout configuration before installing listeners (0.180925ms)
+✔ changed timeout configuration rejects a command before sending and can recover (0.515806ms)
+✔ timer ceiling is inclusive and direct construction uses the standard default (0.343211ms)
+✔ connect captures a byte channel before the delayed socket open (0.652382ms)
+✔ connect does not depend on the channel buffer remaining attached (0.3646ms)
+✔ prepared subscriptions survive concurrent joins and encoder buffer growth (0.501937ms)
+✔ commands capture nested values before the next microtask sends them (2.537031ms)
+✔ a queued command survives transfer of its original value buffer (0.414129ms)
+✔ reentrant value getters preserve outer command order and encode once (0.400909ms)
+✔ encoding failure retains its queue position and allows the next command (0.514656ms)
+✔ a reentrant queued write captures its buffer without corrupting the outer encoder (0.405699ms)
+✔ a closed client rejects commands without evaluating their values (0.154296ms)
+✔ a command invoked from an application-value getter waits for that encoding (0.429228ms)
+✔ reentrant application sends fail locally before either packet reaches the socket (0.247853ms)
+✔ a reentrant connect rejects before creating a socket without corrupting the outer packet (0.277103ms)
+✖ final close removes live handlers before notifying and rejects outstanding controls (1.452251ms)
+✖ final close preserves caller socket listeners and stops relay dispatch (0.283562ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 20
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 72.546334
+
+✖ failing tests:
+
+test at clients/js/connect.test.mjs:368:1
+✖ final close removes live handlers before notifying and rejects outstanding controls (1.452251ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      {
+  +     closes: 1,
+  -     closes: 0,
+        detail: {
+          code: 1000,
+          reason: 'done'
+        },
+  +     messages: 1
+  -     messages: 0
+      }
+    ]
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/connect.test.mjs:387:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { detail: [Object], messages: 1, closes: 1 } ],
+    expected: [ { detail: [Object], messages: 0, closes: 0 } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at clients/js/connect.test.mjs:391:1
+✖ final close preserves caller socket listeners and stops relay dispatch (0.283562ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      [Function: onMessage],
+  +   [Function (anonymous)]
+    ]
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/connect.test.mjs:403:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [Array],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

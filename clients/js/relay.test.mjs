@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
+import { once, getEventListeners } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -189,6 +189,8 @@ test('application idle policy reaches native and legacy browser WebSockets clean
     assert.equal(event.reason, 'Application Idle');
     assert.equal(event.wasClean, true);
   }
+  assert.equal(getEventListeners(native.ws, 'message').length, 0);
+  assert.equal(getEventListeners(native.ws, 'close').length, 0);
 });
 
 test('native channel listing returns sorted byte names and current populations', async t => {
@@ -267,4 +269,15 @@ test('native connection remains usable after locally rejected reentrant serializ
   relay.send(relay.userId, 'recovered');
   assert.deepEqual((await received)[0].detail, { sender: relay.userId, value: 'recovered' });
   assert.equal(relay.ready, true);
+});
+
+
+test('native final close detaches the live client socket handlers', async () => {
+  const relay = await Relay.connect(url, 'js-final-close');
+  const closed = once(relay, 'close');
+  relay.close();
+  const [event] = await closed;
+  assert.equal(event.detail.code, 1000);
+  assert.equal(getEventListeners(relay.ws, 'message').length, 0);
+  assert.equal(getEventListeners(relay.ws, 'close').length, 0);
 });
