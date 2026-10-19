@@ -26,6 +26,7 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
     args.origin_policy.validate()?;
+    war_relay::legacy_bridge::validate_upstream(&args.upstream)?;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),

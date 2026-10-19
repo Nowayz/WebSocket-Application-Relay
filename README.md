@@ -244,6 +244,10 @@ The optional migration bridge translates the original binary/text wire format:
   --bind 127.0.0.1:1337 --upstream ws://127.0.0.1:1338
 ```
 
+The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
+Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
+the check. Reachability and TLS availability are checked when forwarding a client.
+
 Existing `relay.js` clients connect to `ws://127.0.0.1:1337`. Their binary/text
 payloads become CBOR byte/text strings and interoperate with native CBOR clients.
 Other structured CBOR values require a CBOR client: an incompatible legacy

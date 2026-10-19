@@ -20,6 +20,7 @@ use tokio_tungstenite::{
     accept_hdr_async_with_config, connect_async_with_config,
     tungstenite::{
         Message,
+        client::{IntoClientRequest, uri_mode},
         protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
     },
 };
@@ -202,6 +203,16 @@ pub async fn serve_with_origin_policy(
     .await
 }
 
+/// Check upstream URL syntax and WebSocket scheme without opening a connection.
+/// Reachability and TLS availability are checked when a client connects.
+pub fn validate_upstream(upstream: &str) -> Result<()> {
+    let request = upstream
+        .into_client_request()
+        .context("invalid legacy upstream URL")?;
+    uri_mode(request.uri()).context("invalid legacy upstream URL")?;
+    Ok(())
+}
+
 /// Optional direct-peer admission at the public legacy ingress. Forwarding
 /// headers do not change the address observed on the accepted TCP connection.
 pub async fn serve_with_limits(
@@ -213,6 +224,7 @@ pub async fn serve_with_limits(
     shutdown: CancellationToken,
 ) -> Result<()> {
     origin_policy.validate()?;
+    validate_upstream(&upstream)?;
     anyhow::ensure!(
         max_connections_per_ip <= u32::MAX as usize,
         "max-connections-per-ip must be in 0..=4294967295"
@@ -402,6 +414,36 @@ async fn bridge(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn invalid_upstream_is_rejected_before_the_accept_loop() {
+        for upstream in ["not a URL", "http://localhost/", "ws://", "/relative"] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let shutdown = CancellationToken::new();
+            shutdown.cancel();
+            let result = serve_with_limits(
+                listener,
+                upstream.into(),
+                1,
+                0,
+                crate::origin::OriginPolicy::default(),
+                shutdown,
+            )
+            .await;
+            assert!(result.is_err(), "invalid upstream accepted: {upstream}");
+        }
+    }
+
+    #[test]
+    fn upstream_validation_accepts_websocket_urls_without_connecting() {
+        for upstream in [
+            "ws://127.0.0.1:1338",
+            "ws://[::1]:1338/path?mode=cbor",
+            "wss://relay.example.invalid:443/path",
+        ] {
+            validate_upstream(upstream).unwrap();
+        }
+    }
 
     #[test]
     fn binary_envelopes_keep_canonical_headers_and_exact_owned_storage() {
