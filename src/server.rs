@@ -15,6 +15,9 @@ mod fairness_tests;
 #[cfg(test)]
 mod ownership_tests;
 
+#[cfg(test)]
+mod rate_tests;
+
 pub use crate::admin::admin_router;
 
 use std::{

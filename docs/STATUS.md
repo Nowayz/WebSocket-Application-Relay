@@ -109,6 +109,14 @@ and a native connection remains usable afterward. All 55 tests pass in 1.113
 seconds; rebuilt-module recovery and prior queued capture tests pass too. No
 extra copy, lock, protocol field or native/C++ runtime change is introduced.
 
+A [shared rate-configuration screen](benchmarks/2026-10-18-shared-rate-screen/README.md)
+rejects removing the two cached limits from every native connection. Test-build
+layout shrinks 520 -> 504 bytes, but population-gate RSS rises and both candidate
+private maxima exceed both controls in four two-second 100k-user runs. Every
+case still meets 32/32 windows and exact retirement. Four hand-calculated quota
+tests are retained; the unchanged runtime plus those tests passes 96 library
+tests in 0.50 seconds and Clippy. No runtime change or promotion follows.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues
