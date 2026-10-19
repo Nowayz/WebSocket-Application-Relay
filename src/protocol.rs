@@ -17,7 +17,10 @@ fn bad<T>(_: T) -> Disconnect {
     Disconnect::PROTOCOL
 }
 
-/// Validate exactly one value without recursion or heap allocations.
+/// Validate the next value without recursion or heap allocations.
+///
+/// Advances `decoder` past that value; following bytes are left for the caller.
+/// [`parse`] additionally rejects bytes after its complete routing envelope.
 pub fn validate_value(decoder: &mut Decoder<'_>) -> Result<(), Disconnect> {
     let mut pending = [0u64; MAX_DEPTH + 1];
     pending[0] = 1;
@@ -105,6 +108,10 @@ pub fn validate_value(decoder: &mut Decoder<'_>) -> Result<(), Disconnect> {
     }
 }
 
+/// Validate a complete join message and borrow its channel-name bytes.
+///
+/// Accepts a CBOR text or byte string of at most 16 bytes, without trailing data.
+/// The returned slice shares the input's lifetime; no channel buffer is allocated.
 pub fn join(bytes: &[u8]) -> Result<&[u8], Disconnect> {
     let mut d = Decoder::new(bytes);
     let channel = string_bytes(&mut d)?;
@@ -117,6 +124,11 @@ pub fn join(bytes: &[u8]) -> Result<&[u8], Disconnect> {
     Ok(channel)
 }
 
+/// Validate a complete `[target, value]` envelope and borrow its encoded value.
+///
+/// The returned value slice includes its original CBOR header and shares the
+/// input's lifetime. Validation does not allocate, materialize application
+/// objects or reencode their bytes; trailing data is rejected.
 pub fn parse(bytes: &[u8]) -> Result<(u64, &[u8]), Disconnect> {
     let mut d = Decoder::new(bytes);
     if d.array().map_err(bad)? != Some(2) {
@@ -139,7 +151,12 @@ fn string_bytes<'a>(d: &mut Decoder<'a>) -> Result<&'a [u8], Disconnect> {
     }
 }
 
-/// Encode a validated value. No decode/re-encode occurs in its application payload.
+/// Build a contiguous owned envelope containing `sender` and an encoded value.
+///
+/// `value` must contain exactly one valid definite-length CBOR value. This helper
+/// copies those encoded bytes into the result without validating or transcoding
+/// them. Cloning the returned [`Bytes`] shares its buffer. Native relay forwarding
+/// instead keeps the routing prefix separate and borrows the shared value body.
 pub fn envelope(sender: u64, value: &[u8]) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(1 + uint_len(sender) + value.len()));
     e.array(2)
@@ -161,12 +178,17 @@ pub(crate) fn uint_len(value: u64) -> usize {
     }
 }
 
+/// Encode an unsigned integer into an owned CBOR value.
 pub fn uint(value: u64) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(9));
     e.u64(value).expect("Vec encoding");
     e.into_writer().into()
 }
 
+/// Copy raw bytes into an owned definite-length CBOR byte string.
+///
+/// The input is the string's contents, not a preencoded CBOR value. The result
+/// owns its storage; later clones share the encoded buffer.
 pub fn byte_string(value: &[u8]) -> Bytes {
     // Exact storage lets Bytes defer its shared-ownership allocation until cloning.
     let mut e = Encoder::new(Vec::with_capacity(
@@ -176,6 +198,10 @@ pub fn byte_string(value: &[u8]) -> Bytes {
     e.into_writer().into()
 }
 
+/// Copy UTF-8 text into an owned definite-length CBOR text string.
+///
+/// The CBOR length counts UTF-8 bytes. The result does not borrow `value`;
+/// later clones share the encoded buffer.
 pub fn text(value: &str) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(
         uint_len(value.len() as u64) + value.len(),
@@ -184,6 +210,11 @@ pub fn text(value: &str) -> Bytes {
     e.into_writer().into()
 }
 
+/// Build an owned control reply, `[0, [op, value]]`.
+///
+/// `value` must already contain exactly one valid definite-length CBOR value.
+/// Its bytes are copied verbatim, without validation or transcoding, into the
+/// contiguous result. Cloning the result shares its buffer.
 pub fn reply(op: u8, value: &[u8]) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(
         3 + uint_len(u64::from(op)) + value.len(),
@@ -198,6 +229,7 @@ pub fn reply(op: u8, value: &[u8]) -> Bytes {
     bytes.into()
 }
 
+/// Build an owned relay command with the same encoding contract as [`reply`].
 pub fn request(op: u8, value: &[u8]) -> Bytes {
     reply(op, value)
 }
