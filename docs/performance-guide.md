@@ -18,6 +18,8 @@ The frozen native baseline is runtime revision `279c3c1`, SHA-256 `3db9ebeb0fff8
 
 The primary mixed-load comparison has 100,000 private users plus 8,192 fanout readers, churn and inspection. Selected Rust's median user p99 is 2.03 ms, versus 11.86 ms for the accepted modern C++ reference; sampled native RSS is about 115 MiB versus 70 MiB. Those are finite loopback observations under that report's exact workload, not universal language rankings or total machine memory requirements. Kernel sockets and generators consume additional memory. The original upstream C++ implementation is a separate reference with its original protocol; follow [the C++ comparisons](../cpp/BENCHMARKS.md) rather than assigning modern C++ results to it.
 
+The [latest-source consolidated 100,000-user acceptance](benchmarks/2026-10-18-current-100k-acceptance/README.md) completes all 96 offered fanout windows in a six-second phase. It records 2.4 million private observations, per-user plots, exact fanout samples and full retirement. Private user maxima have population p99 4.92 ms and worst 7.76 ms; fanout recipient maxima reach 64.84 ms. This is finite acceptance, not a paired speed comparison or equally low latency across traffic classes.
+
 ## Choose the smallest test that answers the question
 
 | Question | Test | Measured phase |
