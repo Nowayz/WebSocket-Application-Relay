@@ -1,0 +1,21 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -498,6 +498,7 @@
+         let mut shutdown_deadline = None;
+         let relay = self.relay.clone();
+         let mut incoming = relay.receive_batch();
++        let mut pending_batch = VecDeque::new();
+         loop {
+             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
+                 if self.accept_retry.take().is_none() {
+@@ -585,8 +586,8 @@
+             // Publish before polling, even when no more input will arrive.
+             incoming.publish();
+             {
+-                let mut pending = self.signal.pending.lock();
+-                while let Some(token) = pending.pop_front() {
++                std::mem::swap(&mut *self.signal.pending.lock(), &mut pending_batch);
++                while let Some(token) = pending_batch.pop_front() {
+                     let Some(&slot) = self.tokens.get(&token) else {
+                         continue;
+                     };
