@@ -324,6 +324,10 @@ Management uses a separate HTTP listener:
 | `POST /v1/resume` | Resume a manual drain; `409` after shutdown starts | Bearer token required |
 | `POST /v1/sessions/{decimal_id}/disconnect` | Close session with `4000` | Bearer token required |
 
+On a matched session-disconnect route, missing or invalid credentials return
+`401` even when the ID is malformed. Authorized malformed IDs retain `400`;
+valid IDs without a live session return `404`.
+
 Manual drain preserves existing sessions and can be resumed. Shutdown is terminal:
 readiness and admission remain drained even if a management request races with
 worker shutdown. Rust embedders use `Relay::is_draining()` and

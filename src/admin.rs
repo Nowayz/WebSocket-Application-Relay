@@ -3,7 +3,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use axum::{
     Router,
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, rejection::PathRejection},
     http::{HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -152,17 +152,22 @@ fn set_drain(relay: Arc<Relay>, headers: HeaderMap, draining: bool) -> StatusCod
 async fn disconnect(
     State(relay): State<Arc<Relay>>,
     headers: HeaderMap,
-    Path(id): Path<u64>,
-) -> StatusCode {
+    id: Result<Path<u64>, PathRejection>,
+) -> Response {
     if !authorized(&relay, &headers, false) {
-        return StatusCode::UNAUTHORIZED;
+        return StatusCode::UNAUTHORIZED.into_response();
     }
-    if relay.disconnect(id) {
+    let Path(id) = match id {
+        Ok(id) => id,
+        Err(error) => return error.into_response(),
+    };
+    let status = if relay.disconnect(id) {
         info!(id, "administrator disconnected session");
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
-    }
+    };
+    status.into_response()
 }
 
 #[cfg(test)]
@@ -260,6 +265,65 @@ mod tests {
             .unwrap()
             .unwrap();
         String::from_utf8(bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn disconnect_authorizes_before_rejecting_malformed_session_ids() {
+        let relay = Relay::new(Config {
+            admin_token: Some("shutdown-test".into()),
+            ..Config::default()
+        })
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let stop = CancellationToken::new();
+        let stopped = stop.clone();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, admin_router(relay))
+                .with_graceful_shutdown(stopped.cancelled_owned())
+                .await
+                .unwrap();
+        });
+        for id in ["bad", "-1", "18446744073709551616", "%FF"] {
+            let path = format!("/v1/sessions/{id}/disconnect");
+            assert!(
+                http(address, "POST", &path, false)
+                    .await
+                    .starts_with("HTTP/1.1 401"),
+                "{id}"
+            );
+            assert!(
+                http(address, "POST", &path, true)
+                    .await
+                    .starts_with("HTTP/1.1 400"),
+                "{id}"
+            );
+        }
+        for id in ["0", "1", "18446744073709551615"] {
+            let path = format!("/v1/sessions/{id}/disconnect");
+            assert!(
+                http(address, "POST", &path, false)
+                    .await
+                    .starts_with("HTTP/1.1 401"),
+                "{id}"
+            );
+            assert!(
+                http(address, "POST", &path, true)
+                    .await
+                    .starts_with("HTTP/1.1 404"),
+                "{id}"
+            );
+        }
+        assert!(
+            http(address, "GET", "/healthz", false)
+                .await
+                .starts_with("HTTP/1.1 200")
+        );
+        stop.cancel();
+        timeout(Duration::from_secs(1), server)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[tokio::test]
