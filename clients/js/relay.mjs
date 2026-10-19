@@ -8,6 +8,14 @@ export const LISTEN = Object.freeze({ CHANNEL: 1, PRIVATE: 2, DISCONNECT: 4 });
 const encoder = new Encoder({ useRecords: false, mapsAsObjects: true, tagUint8Array: false });
 const decoder = new Decoder({ mapsAsObjects: true });
 
+function requestTimeout(value) {
+  // Both supported timer APIs use a signed 32-bit millisecond delay.
+  if (!(value > 0 && Number.isFinite(value) && value <= 2147483647)) {
+    throw new RangeError('requestTimeoutMs must be positive, finite, and at most 2147483647');
+  }
+  return value;
+}
+
 function asUserId(value) {
   if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new RangeError('Use BigInt for uint64 IDs');
   const id = BigInt(value);
@@ -28,11 +36,11 @@ export class Relay extends EventTarget {
   #pending = null;
   #controls = Promise.resolve();
 
-  constructor(ws, userId, requestTimeoutMs) {
+  constructor(ws, userId, requestTimeoutMs = 10_000) {
     super();
     this.ws = ws;
     this.userId = wireId(userId, true);
-    this.requestTimeoutMs = requestTimeoutMs;
+    this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
     ws.addEventListener('message', event => {
       try {
         const envelope = decoder.decode(new Uint8Array(event.data));
@@ -67,7 +75,7 @@ export class Relay extends EventTarget {
   }
 
   static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass = globalThis.WebSocket } = {}) {
-    if (!(requestTimeoutMs > 0 && Number.isFinite(requestTimeoutMs))) throw new RangeError('requestTimeoutMs must be positive');
+    requestTimeout(requestTimeoutMs);
     const channelBytes = typeof channel === 'string' ? new TextEncoder().encode(channel) : channel;
     if (!(channelBytes instanceof Uint8Array) || channelBytes.length > 16) throw new RangeError('Channel must contain at most 16 bytes');
     const ws = new WebSocketClass(url, 'war.cbor.v1');
@@ -122,13 +130,14 @@ export class Relay extends EventTarget {
   /** Serialize commands: the deliberately small wire protocol has no request IDs. */
   request(op, value) {
     const result = this.#controls.then(() => new Promise((resolve, reject) => {
+      const delay = requestTimeout(this.requestTimeoutMs);
       const finish = callback => value => { clearTimeout(timer); this.#pending = null; callback(value); };
       const timer = setTimeout(() => {
         this.#pending = null;
         reject(new Error('Relay request timeout'));
         // A late reply cannot be assigned to another request after a timeout.
         this.ws.close(1002, 'Relay Request Timeout');
-      }, this.requestTimeoutMs);
+      }, delay);
       this.#pending = { op: op === 5 ? 200 : op, resolve: finish(resolve), reject: finish(reject) };
       try { this.send(RELAY, [op, value]); } catch (error) { this.#pending.reject(error); }
     }));

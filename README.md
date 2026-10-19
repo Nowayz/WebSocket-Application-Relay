@@ -170,6 +170,9 @@ carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
 Calling `close()` immediately rejects an outstanding command and prevents queued
 commands from sending; it does not wait for the peer's Close acknowledgement.
+`requestTimeoutMs` defaults to 10,000 and must be positive, finite, and at most
+2,147,483,647 ms, the native timer delay ceiling. It is checked before connecting
+and before each queued command starts, including after changing the property.
 
 To build a standalone browser ES module and open its acceptance page:
 
