@@ -305,6 +305,9 @@ Oversized frontend messages receive Close `1009` before or after joining; the
 bridge retains its 16 MiB incoming message limit. Malformed framing receives
 `1002`, and invalid UTF-8 receives `1007`; decoder-error Close output is bounded
 and does not resume the invalid input stream. See the [frame-error checks](docs/benchmarks/2026-10-18-bridge-frame-errors/README.md).
+Malformed upstream frames also produce the mapped legacy Close before or after
+welcome; the [upstream fault checks](docs/benchmarks/2026-10-19-bridge-upstream-frame-errors/README.md)
+verify acknowledgement, retirement and single-slot reuse.
 The [short oversized-header
 check](docs/benchmarks/2026-10-18-bridge-oversize/README.md) verifies rejection
 without allocating a large payload and confirms independent native routing.

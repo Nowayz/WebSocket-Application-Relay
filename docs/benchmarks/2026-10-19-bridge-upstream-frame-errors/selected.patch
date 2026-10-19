@@ -1,0 +1,111 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -433,16 +433,23 @@
+             match upstream
+                 .next()
+                 .await
+-                .context("upstream closed before welcome")??
++                .context("upstream closed before welcome")?
+             {
+-                Message::Ping(_) => upstream.flush().await?,
+-                Message::Pong(_) => {}
+-                Message::Close(frame) => {
++                Ok(Message::Ping(_)) => upstream.flush().await?,
++                Ok(Message::Pong(_)) => {}
++                Ok(Message::Close(frame)) => {
+                     transport::acknowledge_close(&mut upstream, WAIT).await;
+                     transport::initiate_close(&mut legacy, frame, WAIT, None).await;
+                     break Ok(None);
+                 }
+-                message => break Ok::<_, anyhow::Error>(Some(message)),
++                Ok(message) => break Ok::<_, anyhow::Error>(Some(message)),
++                Err(error) => {
++                    if let Some(frame) = frame_error_close(&error) {
++                        transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
++                        break Ok(None);
++                    }
++                    return Err(error.into());
++                }
+             }
+         }
+     })
+@@ -507,6 +514,12 @@
+                     Ok(Some(message)) => timeout(WAIT, legacy.send(message)).await??,
+                     Ok(None) => {},
+                     Err(_) => { transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
++                }
++                Some(Err(error)) => {
++                    if let Some(frame) = frame_error_close(&error) {
++                        transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
++                    }
++                    break;
+                 }
+                 Some(Ok(Message::Text(_))) => {
+                     transport::initiate_close(&mut legacy, Some(CloseFrame {
+@@ -720,6 +733,66 @@
+         .expect("upstream text rejection and single-slot reuse must be prompt");
+     }
+ 
++    #[tokio::test]
++    async fn upstream_frame_errors_close_legacy_cleanly_before_and_after_welcome() {
++        use tokio::io::AsyncWriteExt;
++
++        timeout(Duration::from_secs(2), async {
++            // Invalid opcode, invalid text, masked server frame, oversized frame
++            // declaration. No large body is needed to exercise capacity rejection.
++            let faults: &[(&[u8], CloseCode, &str)] = &[
++                (&[0x83, 0], CloseCode::Protocol, "Protocol Error"),
++                (&[0x81, 1, 0xff], CloseCode::Invalid, "Invalid UTF-8"),
++                (&[0x82, 0x80, 0, 0, 0, 0], CloseCode::Protocol, "Protocol Error"),
++                (&[0x82, 0x7f, 0, 0, 0, 0, 1, 0, 0, 1], CloseCode::Size, "Message Too Large"),
++            ];
++            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let shutdown = CancellationToken::new();
++            let mut tasks = JoinSet::new();
++            tasks.spawn(async move {
++                for welcomed in [false, true] {
++                    for &(wire, _, _) in faults {
++                        let (stream, _) = upstream.accept().await.unwrap();
++                        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                        assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                        if welcomed {
++                            ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
++                        }
++                        ws.get_mut().write_all(wire).await.unwrap();
++                        // The faulty transport stays open until the bridge retires it.
++                        while let Some(message) = ws.next().await {
++                            if message.is_err() { break; }
++                        }
++                    }
++                }
++            });
++            let token = shutdown.clone();
++            tasks.spawn(async move { serve(listener, upstream_url, 1, token).await.unwrap(); });
++            for welcomed in [false, true] {
++                for &(_, code, reason) in faults {
++                    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++                    ws.send(Message::Binary(Bytes::from_static(b"fault"))).await.unwrap();
++                    if welcomed {
++                        assert_eq!(ws.next().await.unwrap().unwrap(), Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes())));
++                    }
++                    let received = ws.next().await;
++                    let Some(Ok(Message::Close(Some(frame)))) = received else {
++                        panic!("upstream framing failure caused unclean legacy retirement: welcomed={welcomed}, code={code:?}, received={received:?}");
++                    };
++                    assert_eq!(frame.code, code);
++                    assert_eq!(frame.reason, reason);
++                    assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++                    assert!(ws.next().await.is_none(), "bridge did not retire after Close acknowledgement");
++                }
++            }
++            shutdown.cancel();
++            while let Some(result) = tasks.join_next().await { result.unwrap(); }
++        }).await.expect("eight upstream frame faults and one-slot reuse must be prompt");
++    }
++
+     async fn welcome_validation_cases(cases: Vec<(Message, Option<u64>)>) {
+         timeout(Duration::from_secs(2), async {
+             let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
