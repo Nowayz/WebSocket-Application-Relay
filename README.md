@@ -133,6 +133,9 @@ Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports
 modern browsers through an ES module bundler and Node 22+. IDs are `BigInt`.
 Received IDs are checked for exact integer representation and uint64 range;
 welcome, departure and assigned session IDs also exclude reserved values.
+Wire envelopes and control reply bodies must be two-element arrays; arbitrary
+application values retain their CBOR types. The [response-shape check](docs/benchmarks/2026-10-18-js-response-shapes/README.md)
+covers byte-string lookalikes and missing/extra fields.
 Malformed responses immediately reject any pending command, then close with
 protocol error `1002`; rejection does not wait for the peer’s Close acknowledgement. The [short validation
 and compatibility check](docs/benchmarks/2026-10-18-js-wire-id/README.md) records

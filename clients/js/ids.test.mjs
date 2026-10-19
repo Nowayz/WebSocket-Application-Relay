@@ -135,3 +135,50 @@ test('malformed replies reject pending commands before the close handshake compl
     await settled;
   }
 });
+
+test('envelopes require exactly two array elements, not iterable byte strings', async () => {
+  for (const malformed of [new Uint8Array([1, 2]), [1], [1, 'payload', 'extra'], [], null, 1, {}]) {
+    const WebSocketClass = socketClass(1);
+    const relay = await Relay.connect('ws://fixture', 'shape-check', { WebSocketClass });
+    let delivered = 0, errors = 0;
+    relay.addEventListener('message', () => delivered++);
+    relay.addEventListener('error', () => errors++);
+    try {
+      WebSocketClass.instance.receive(malformed);
+      assert.equal(delivered, 0);
+      assert.equal(errors, 1);
+      assert.equal(WebSocketClass.instance.closed.code, 1002);
+    } finally { relay.close(); }
+  }
+});
+
+test('control replies require exactly two array elements before resolving a command', async () => {
+  for (const malformed of [new Uint8Array([1, 1]), [1], [1, 1, 'extra'], null, 1, {}]) {
+    const WebSocketClass = socketClass(1);
+    const relay = await Relay.connect('ws://fixture', 'shape-check', { WebSocketClass });
+    const pending = relay.listen(1);
+    await Promise.resolve();
+    try {
+      WebSocketClass.instance.receive([0, malformed]);
+      await assert.rejects(pending);
+      assert.equal(WebSocketClass.instance.closed.code, 1002);
+    } finally { relay.close(); }
+  }
+});
+
+test('valid envelopes preserve arbitrary application values including undefined', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'shape-check', { WebSocketClass });
+  try {
+    for (const value of [[], [1, 2, 3], {}, { nested: [true, null] }, new Uint8Array([0, 255]), undefined, null, 'text']) {
+      let received = false;
+      relay.addEventListener('message', event => {
+        assert.deepEqual(event.detail, { sender: 2n, value });
+        received = true;
+      }, { once: true });
+      WebSocketClass.instance.receive([2, value]);
+      assert.ok(received);
+      assert.equal(relay.ready, true);
+    }
+  } finally { relay.close(); }
+});

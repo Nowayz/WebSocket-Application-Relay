@@ -35,9 +35,12 @@ export class Relay extends EventTarget {
     this.requestTimeoutMs = requestTimeoutMs;
     ws.addEventListener('message', event => {
       try {
-        const [rawSender, value] = decoder.decode(new Uint8Array(event.data));
+        const envelope = decoder.decode(new Uint8Array(event.data));
+        if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
+        const [rawSender, value] = envelope;
         const sender = wireId(rawSender);
         if (sender === RELAY) {
+          if (!Array.isArray(value) || value.length !== 2) throw new Error('Invalid relay response');
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
           if (op === 3) wireId(result, true);

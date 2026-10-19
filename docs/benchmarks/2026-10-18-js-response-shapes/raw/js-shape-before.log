@@ -1,0 +1,50 @@
+✔ welcome IDs must be exact, nonreserved uint64 integers (14.647484ms)
+✔ malformed sender and disconnect IDs close without dispatching application events (1.456881ms)
+✔ valid large sender and disconnect IDs retain exact BigInt values (0.656702ms)
+✔ invalid assignment acknowledgements reject the command and close the connection (2.231789ms)
+✔ valid assignment acknowledgement keeps the BigInt API (0.204014ms)
+✔ malformed replies reject pending commands before the close handshake completes (2.032316ms)
+✖ envelopes require exactly two array elements, not iterable byte strings (0.73305ms)
+✖ control replies require exactly two array elements before resolving a command (0.219544ms)
+✔ valid envelopes preserve arbitrary application values including undefined (0.407869ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 7
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 62.361296
+
+✖ failing tests:
+
+test at clients/js/ids.test.mjs:139:1
+✖ envelopes require exactly two array elements, not iterable byte strings (0.73305ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/ids.test.mjs:148:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at clients/js/ids.test.mjs:155:1
+✖ control replies require exactly two array elements before resolving a command (0.219544ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/ids.test.mjs:163:7)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
