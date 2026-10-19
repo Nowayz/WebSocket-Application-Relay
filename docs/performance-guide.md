@@ -133,6 +133,7 @@ Search these decisions and the detailed history before building another prototyp
 
 | Experiment | Decision and reason |
 | --- | --- |
+| [Consolidated socket-status read](benchmarks/2026-10-19-socket-status-screen/README.md) | Removes one connection-drive mutex acquisition, but four two-second 100k mixed-load trials show drift and overlapping CPU/tails. No repeatable benefit established; retain current runtime. |
 | [Cached ready-slot hints](benchmarks/2026-10-18-ready-slot-screen/README.md) | Token checks and compaction/reuse tests pass, but larger ready entries and fallback logic do not establish a full-population win: CPU/intended fanout delays increase while private tails vary. |
 | [Skip discarded poll-timeout calculations](benchmarks/2026-10-18-ready-poll-timeout/README.md) | Overlapping CPU costs; no consistent joint latency/throughput improvement. |
 | [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |

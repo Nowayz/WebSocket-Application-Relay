@@ -1,0 +1,25 @@
+diff --git a/src/server.rs b/artifacts/socket-status-20261019-candidate-source/src/server.rs
+index 6c1130d..1dd52e0 100644
+--- a/src/server.rs
++++ b/artifacts/socket-status-20261019-candidate-source/src/server.rs
+@@ -986,9 +986,9 @@ impl Connection {
+         stopping: bool,
+         incoming: &mut ReceiveBatch<'_>,
+     ) -> Drive {
+-        let (fatal, requested) = {
++        let (fatal, requested, write_deadline) = {
+             let state = self.socket.state.lock();
+-            (state.fatal, state.requested)
++            (state.fatal, state.requested, state.deadline())
+         };
+         if fatal {
+             return Drive::Drop;
+@@ -1022,7 +1022,7 @@ impl Connection {
+                 }
+                 return self.start_close(reason, relay, false, now);
+             }
+-            if self.socket.deadline().is_some_and(|d| d <= now)
++            if write_deadline.is_some_and(|d| d <= now)
+                 || self
+                     .room_fanout
+                     .as_ref()

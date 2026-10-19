@@ -1,0 +1,1450 @@
+{
+  "passed": true,
+  "correctness_passed": true,
+  "args": {
+    "server": "artifacts/candidates/socket-status-20261019-candidate/war-relay",
+    "kind": "rust",
+    "sidecar": "artifacts/candidates/private-payload-20261019-client/inspection",
+    "capacity_client": "artifacts/candidates/latency-timeline-client/capacity",
+    "workers": 8,
+    "users": 100000,
+    "seconds": 2,
+    "readers": 8192,
+    "value_kind": "bytes",
+    "scope": "observers",
+    "window": 4,
+    "inspectors": 0,
+    "http_page_size": null,
+    "pairs": 0,
+    "churn_workers": 8,
+    "churn_cycles_per_second": 16,
+    "fanout_windows_per_second": 16,
+    "fanout_churn_every": 0,
+    "exact_fanout_latency": true,
+    "latency_stages": false,
+    "pin_client_workers": false,
+    "profile": false,
+    "profile_target": "server",
+    "output": "artifacts/socket-status-20261019-candidate-2.json"
+  },
+  "server_command": [
+    "taskset",
+    "-c",
+    "0-7",
+    "/home/phil/dev/war_next/artifacts/candidates/socket-status-20261019-candidate/war-relay",
+    "--bind",
+    "127.0.0.1:45005",
+    "--admin-bind",
+    "127.0.0.1:38197",
+    "--workers",
+    "8",
+    "--pin-workers",
+    "--max-connections",
+    "109192",
+    "--max-channel-members",
+    "10000",
+    "--max-message-bytes",
+    "65536",
+    "--queue-bytes",
+    "262144",
+    "--total-read-buffer-bytes",
+    "268435456",
+    "--messages-per-second",
+    "0",
+    "--bytes-per-second",
+    "0",
+    "--ping-interval-secs",
+    "0",
+    "--idle-timeout-secs",
+    "0",
+    "--tcp-send-buffer-bytes",
+    "16384",
+    "--tcp-receive-buffer-bytes",
+    "65536"
+  ],
+  "client_command": [
+    "taskset",
+    "-c",
+    "8-11,24-27",
+    "/home/phil/dev/war_next/artifacts/candidates/latency-timeline-client/capacity",
+    "--url",
+    "ws://127.0.0.1:45005",
+    "--users",
+    "100000",
+    "--seconds",
+    "2",
+    "--messages-per-second",
+    "4",
+    "--client-workers",
+    "8",
+    "--user-latency-output",
+    "artifacts/socket-status-20261019-candidate-2.csv"
+  ],
+  "sidecar_command": [
+    "taskset",
+    "-c",
+    "12-15,28-31",
+    "/home/phil/dev/war_next/artifacts/candidates/private-payload-20261019-client/inspection",
+    "--url",
+    "ws://127.0.0.1:45005",
+    "--protocol-only",
+    "--mode",
+    "cbor",
+    "--rooms",
+    "0",
+    "--pairs",
+    "0",
+    "--seconds",
+    "2",
+    "--churn-workers",
+    "8",
+    "--churn-cycles-per-second",
+    "16",
+    "--inspectors",
+    "0",
+    "--client-workers",
+    "8",
+    "--fanout-readers",
+    "8192",
+    "--fanout-window",
+    "4",
+    "--fanout-global-observers",
+    "--external-capacity-rooms",
+    "6250",
+    "--fanout-close-window",
+    "32",
+    "--fanout-windows-per-second",
+    "16",
+    "--fanout-latency-output",
+    "artifacts/socket-status-20261019-candidate-2-fanout.csv"
+  ],
+  "sha256": {
+    "server": "6d0be33aa83d66608be5dcf1e9ef3b60f5aca772f1d7229460fb1bb058ccbcdb",
+    "capacity_client": "888485f3b416a452ceae006d96eaa38f01696bb49af2e6187d4da3f65c528a82",
+    "sidecar": "5adb73751b2dacc12d4878050a3aab2c0f159346bf3d17908454953d7737a201",
+    "runner": "38ff1e24f246460330c28507e39cf45f6966f23be6afcd04aa1b4b0e7340b43e",
+    "benchmark_helper": "61a8078572d18c36a011afdd1d57f3b17f019389f89202632748ffb23f52780b"
+  },
+  "events": [
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 900000,
+        "deliveries": 100000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 0,
+        "sent_bytes": 0,
+        "sent_messages": 0,
+        "value_bytes": 0
+      },
+      "details": {
+        "rooms": 6250,
+        "setup_seconds": 0.782080607,
+        "users": 100000
+      },
+      "event": "connected",
+      "wave": 1,
+      "controller_monotonic_seconds": 267620.219186066
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 104600000,
+        "deliveries": 200000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 100000,
+        "sent_bytes": 103700000,
+        "sent_messages": 100000,
+        "value_bytes": 102700000
+      },
+      "details": {
+        "all_connections_routed": true,
+        "proof_round_trip": {
+          "max_ms": 3.31017,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "samples": 100000
+        },
+        "rooms": 6250,
+        "users": 100000
+      },
+      "event": "ready",
+      "wave": 1,
+      "controller_monotonic_seconds": 267620.383698897
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 934200000,
+        "deliveries": 1000000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 900000,
+        "sent_bytes": 933300000,
+        "sent_messages": 900000,
+        "value_bytes": 924300000
+      },
+      "details": {
+        "active_users": 100000,
+        "churn_lifecycle": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "churn_round_trip": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "samples": 0
+        },
+        "counts": {
+          "churn_cycles": 0,
+          "delivered_bytes": 829600000,
+          "deliveries": 800000,
+          "departure_checks": 0,
+          "joins": 0,
+          "normal_closes": 0,
+          "routing_checks": 800000,
+          "sent_bytes": 829600000,
+          "sent_messages": 800000,
+          "value_bytes": 821600000
+        },
+        "elapsed_seconds": 2.010812079,
+        "round_trip": {
+          "max_ms": 21.48539,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 16.777216,
+          "samples": 800000
+        },
+        "schedule_lag": {
+          "max_ms": 6.985618,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "samples": 50000
+        },
+        "scheduled_seconds": 2
+      },
+      "event": "measured",
+      "wave": 1,
+      "controller_monotonic_seconds": 267623.661090481
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 1037900000,
+        "deliveries": 1100000,
+        "departure_checks": 0,
+        "joins": 100000,
+        "normal_closes": 0,
+        "routing_checks": 1000000,
+        "sent_bytes": 1037000000,
+        "sent_messages": 1000000,
+        "value_bytes": 1027000000
+      },
+      "details": {
+        "all_connections_routed_again": true,
+        "proof_round_trip": {
+          "max_ms": 3.322409,
+          "p50_upper_ms": 2.097152,
+          "p99_upper_ms": 4.194304,
+          "samples": 100000
+        },
+        "users": 100000
+      },
+      "event": "postcheck",
+      "wave": 1,
+      "controller_monotonic_seconds": 267653.267034921
+    },
+    {
+      "counts": {
+        "churn_cycles": 0,
+        "delivered_bytes": 1052150000,
+        "deliveries": 1850000,
+        "departure_checks": 750000,
+        "joins": 100000,
+        "normal_closes": 100000,
+        "routing_checks": 1000000,
+        "sent_bytes": 1037000000,
+        "sent_messages": 1000000,
+        "value_bytes": 1027000000
+      },
+      "details": {
+        "retirement_seconds": 0.726969368
+      },
+      "event": "done",
+      "wave": 1,
+      "controller_monotonic_seconds": 267653.994713389
+    }
+  ],
+  "sidecar_events": [
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 213840,
+          "deliveries": 24580,
+          "joins": 8194,
+          "normal_closes": 0,
+          "sent_bytes": 245790,
+          "sent_messages": 16386,
+          "value_bytes": 0
+        },
+        "private_payload_bytes": 1024,
+        "stable_channels": 6253,
+        "stable_sessions": 8194,
+        "value_kind": "bytes"
+      },
+      "event": "ready",
+      "controller_monotonic_seconds": 267621.060490486
+    },
+    {
+      "details": {
+        "churn": {
+          "max_ms": 0.715881,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "per_second": 125.49823983889885,
+          "verified": 256
+        },
+        "churn_lifecycles_per_worker": [
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32
+        ],
+        "counts": {
+          "delivered_bytes": 1087594320,
+          "deliveries": 1073668,
+          "joins": 8450,
+          "normal_closes": 256,
+          "sent_bytes": 383390,
+          "sent_messages": 16770,
+          "value_bytes": 133760
+        },
+        "elapsed_seconds": 2.039869247,
+        "fanout": {
+          "max_ms": 34.337906,
+          "p50_upper_ms": 33.554432,
+          "p99_upper_ms": 33.554432,
+          "per_second": 514040.7903801297,
+          "verified": 1048576
+        },
+        "fanout_controller_timing": {
+          "ready_ns": 8496457,
+          "windows": [
+            {
+              "acknowledged_ns": 31729918,
+              "completed_ns": 31730328,
+              "scheduled_ns": 8495637,
+              "sent_ns": 10962759,
+              "wake_ns": 9556797
+            },
+            {
+              "acknowledged_ns": 95142437,
+              "completed_ns": 95142967,
+              "scheduled_ns": 70995637,
+              "sent_ns": 75172765,
+              "wake_ns": 72780071
+            },
+            {
+              "acknowledged_ns": 157260350,
+              "completed_ns": 157260540,
+              "scheduled_ns": 133495637,
+              "sent_ns": 136747234,
+              "wake_ns": 134254412
+            },
+            {
+              "acknowledged_ns": 219283587,
+              "completed_ns": 219284127,
+              "scheduled_ns": 195995637,
+              "sent_ns": 199632246,
+              "wake_ns": 197188223
+            },
+            {
+              "acknowledged_ns": 290085562,
+              "completed_ns": 290085832,
+              "scheduled_ns": 258495637,
+              "sent_ns": 262037922,
+              "wake_ns": 259483452
+            },
+            {
+              "acknowledged_ns": 352601534,
+              "completed_ns": 352602074,
+              "scheduled_ns": 320995637,
+              "sent_ns": 325110630,
+              "wake_ns": 322734385
+            },
+            {
+              "acknowledged_ns": 414174133,
+              "completed_ns": 414174523,
+              "scheduled_ns": 383495637,
+              "sent_ns": 386546252,
+              "wake_ns": 384161908
+            },
+            {
+              "acknowledged_ns": 482015839,
+              "completed_ns": 482016129,
+              "scheduled_ns": 445995637,
+              "sent_ns": 450037218,
+              "wake_ns": 447677163
+            },
+            {
+              "acknowledged_ns": 540124923,
+              "completed_ns": 540125303,
+              "scheduled_ns": 508495637,
+              "sent_ns": 511910938,
+              "wake_ns": 509632031
+            },
+            {
+              "acknowledged_ns": 604905184,
+              "completed_ns": 604905654,
+              "scheduled_ns": 570995637,
+              "sent_ns": 575091533,
+              "wake_ns": 572705538
+            },
+            {
+              "acknowledged_ns": 665385302,
+              "completed_ns": 665385722,
+              "scheduled_ns": 633495637,
+              "sent_ns": 636748909,
+              "wake_ns": 634477812
+            },
+            {
+              "acknowledged_ns": 730386767,
+              "completed_ns": 730387107,
+              "scheduled_ns": 695995637,
+              "sent_ns": 700171687,
+              "wake_ns": 697860991
+            },
+            {
+              "acknowledged_ns": 790486126,
+              "completed_ns": 790486606,
+              "scheduled_ns": 758495637,
+              "sent_ns": 761554071,
+              "wake_ns": 759191866
+            },
+            {
+              "acknowledged_ns": 854228855,
+              "completed_ns": 854229445,
+              "scheduled_ns": 820995637,
+              "sent_ns": 824703156,
+              "wake_ns": 822291433
+            },
+            {
+              "acknowledged_ns": 916052117,
+              "completed_ns": 916052617,
+              "scheduled_ns": 883495637,
+              "sent_ns": 887115842,
+              "wake_ns": 884796176
+            },
+            {
+              "acknowledged_ns": 979365768,
+              "completed_ns": 979366278,
+              "scheduled_ns": 945995637,
+              "sent_ns": 949922537,
+              "wake_ns": 947573691
+            },
+            {
+              "acknowledged_ns": 1040807480,
+              "completed_ns": 1040807760,
+              "scheduled_ns": 1008495637,
+              "sent_ns": 1012202276,
+              "wake_ns": 1009845911
+            },
+            {
+              "acknowledged_ns": 1105341857,
+              "completed_ns": 1105342257,
+              "scheduled_ns": 1070995637,
+              "sent_ns": 1074740318,
+              "wake_ns": 1072303415
+            },
+            {
+              "acknowledged_ns": 1167580518,
+              "completed_ns": 1167580748,
+              "scheduled_ns": 1133495637,
+              "sent_ns": 1137235072,
+              "wake_ns": 1134828638
+            },
+            {
+              "acknowledged_ns": 1229793679,
+              "completed_ns": 1229794269,
+              "scheduled_ns": 1195995637,
+              "sent_ns": 1199556360,
+              "wake_ns": 1197096747
+            },
+            {
+              "acknowledged_ns": 1293671374,
+              "completed_ns": 1293671714,
+              "scheduled_ns": 1258495637,
+              "sent_ns": 1261851718,
+              "wake_ns": 1259456374
+            },
+            {
+              "acknowledged_ns": 1355762879,
+              "completed_ns": 1355763489,
+              "scheduled_ns": 1320995637,
+              "sent_ns": 1324690942,
+              "wake_ns": 1322288658
+            },
+            {
+              "acknowledged_ns": 1415972125,
+              "completed_ns": 1415972355,
+              "scheduled_ns": 1383495637,
+              "sent_ns": 1386895434,
+              "wake_ns": 1384494409
+            },
+            {
+              "acknowledged_ns": 1480094074,
+              "completed_ns": 1480094184,
+              "scheduled_ns": 1445995637,
+              "sent_ns": 1449903863,
+              "wake_ns": 1447498049
+            },
+            {
+              "acknowledged_ns": 1543231919,
+              "completed_ns": 1543232369,
+              "scheduled_ns": 1508495637,
+              "sent_ns": 1512090505,
+              "wake_ns": 1509792078
+            },
+            {
+              "acknowledged_ns": 1606879491,
+              "completed_ns": 1606879981,
+              "scheduled_ns": 1570995637,
+              "sent_ns": 1575254380,
+              "wake_ns": 1572832276
+            },
+            {
+              "acknowledged_ns": 1668662224,
+              "completed_ns": 1668662744,
+              "scheduled_ns": 1633495637,
+              "sent_ns": 1636786589,
+              "wake_ns": 1634516802
+            },
+            {
+              "acknowledged_ns": 1730193764,
+              "completed_ns": 1730194224,
+              "scheduled_ns": 1695995637,
+              "sent_ns": 1699876776,
+              "wake_ns": 1697596749
+            },
+            {
+              "acknowledged_ns": 1792791034,
+              "completed_ns": 1792791534,
+              "scheduled_ns": 1758495637,
+              "sent_ns": 1762325221,
+              "wake_ns": 1759901938
+            },
+            {
+              "acknowledged_ns": 1855288668,
+              "completed_ns": 1855289348,
+              "scheduled_ns": 1820995637,
+              "sent_ns": 1824885713,
+              "wake_ns": 1822494628
+            },
+            {
+              "acknowledged_ns": 1915846764,
+              "completed_ns": 1915847084,
+              "scheduled_ns": 1883495637,
+              "sent_ns": 1886458811,
+              "wake_ns": 1884137205
+            },
+            {
+              "acknowledged_ns": 1979644742,
+              "completed_ns": 1979645552,
+              "scheduled_ns": 1945995637,
+              "sent_ns": 1949976007,
+              "wake_ns": 1947679860
+            }
+          ]
+        },
+        "fanout_membership": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        },
+        "healthy": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        },
+        "inspection": {
+          "max_ms": 0.0,
+          "p50_upper_ms": 0.0,
+          "p99_upper_ms": 0.0,
+          "per_second": 0.0,
+          "verified": 0
+        },
+        "private_payload_bytes": 1024,
+        "value_kind": "bytes"
+      },
+      "event": "measured",
+      "controller_monotonic_seconds": 267623.978866952
+    },
+    {
+      "details": {
+        "counts": {
+          "delivered_bytes": 1725108873,
+          "deliveries": 34624005,
+          "joins": 8450,
+          "normal_closes": 8450,
+          "sent_bytes": 383395,
+          "sent_messages": 16771,
+          "value_bytes": 133760
+        },
+        "inspections_verified": 2,
+        "passed": true,
+        "retired_churn_members_verified": 0
+      },
+      "event": "done",
+      "controller_monotonic_seconds": 267653.016065922
+    }
+  ],
+  "monitoring": [
+    {
+      "seconds": 0.2501970279845409,
+      "response_ms": 0.6358420359902084,
+      "process": {
+        "cpu_seconds": 2.27,
+        "rss_kib": 117520,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 102716720,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108226,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108226,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 32,
+        "war_incoming_messages_total": 116434,
+        "war_incoming_bytes_total": 103962990,
+        "war_deliveries_total": 355716,
+        "war_delivered_bytes_total": 240736400,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 0.5012007129844278,
+      "response_ms": 0.7040100172162056,
+      "process": {
+        "cpu_seconds": 3.05,
+        "rss_kib": 117648,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 205338956,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108266,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108263,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 64,
+        "war_incoming_messages_total": 216390,
+        "war_incoming_bytes_total": 207584786,
+        "war_deliveries_total": 586770,
+        "war_delivered_bytes_total": 480268786,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108202,
+        "war_sessions": 108199,
+        "war_channels": 6258,
+        "war_queued_bytes": 9,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 0.7521932880044915,
+      "response_ms": 0.6376630044542253,
+      "process": {
+        "cpu_seconds": 3.86,
+        "rss_kib": 117668,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 308605193,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108298,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108298,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 104,
+        "war_incoming_messages_total": 316981,
+        "war_incoming_bytes_total": 311856933,
+        "war_deliveries_total": 818460,
+        "war_delivered_bytes_total": 720454616,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 2074,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 1.0031929240212776,
+      "response_ms": 0.6411519716493785,
+      "process": {
+        "cpu_seconds": 4.67,
+        "rss_kib": 117684,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 411832332,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108330,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108330,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 136,
+        "war_incoming_messages_total": 417526,
+        "war_incoming_bytes_total": 416089522,
+        "war_deliveries_total": 1050088,
+        "war_delivered_bytes_total": 960587380,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 6222,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 1.2541974490159191,
+      "response_ms": 0.626352964900434,
+      "process": {
+        "cpu_seconds": 5.51,
+        "rss_kib": 117684,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 514842774,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108362,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108362,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 168,
+        "war_incoming_messages_total": 517860,
+        "war_incoming_bytes_total": 520103304,
+        "war_deliveries_total": 1281511,
+        "war_delivered_bytes_total": 1200507559,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 1037,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 1.505193174991291,
+      "response_ms": 0.7065000245347619,
+      "process": {
+        "cpu_seconds": 6.37,
+        "rss_kib": 117684,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 617969267,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108394,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108394,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 200,
+        "war_incoming_messages_total": 618307,
+        "war_incoming_bytes_total": 624234267,
+        "war_deliveries_total": 1513040,
+        "war_delivered_bytes_total": 1440537660,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 4148,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 1.75638571503805,
+      "response_ms": 0.5963629810139537,
+      "process": {
+        "cpu_seconds": 7.22,
+        "rss_kib": 117688,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 721350456,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108426,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108426,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 232,
+        "war_incoming_messages_total": 719002,
+        "war_incoming_bytes_total": 728622406,
+        "war_deliveries_total": 1744820,
+        "war_delivered_bytes_total": 1680828048,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 2.0071931349812075,
+      "response_ms": 0.6122140330262482,
+      "process": {
+        "cpu_seconds": 8.05,
+        "rss_kib": 117692,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 824477904,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108450,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108450,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 256,
+        "war_incoming_messages_total": 819442,
+        "war_incoming_bytes_total": 832754254,
+        "war_deliveries_total": 1976340,
+        "war_delivered_bytes_total": 1920865184,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    },
+    {
+      "seconds": 2.2581928609870374,
+      "response_ms": 0.5692740087397397,
+      "process": {
+        "cpu_seconds": 8.53,
+        "rss_kib": 117692,
+        "fds": null
+      },
+      "metrics": {
+        "war_read_buffer_reserved_bytes": 65536,
+        "war_read_buffer_peak_reserved_bytes": 2621440,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 924433760,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 108450,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 108450,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 256,
+        "war_incoming_messages_total": 916770,
+        "war_incoming_bytes_total": 933683390,
+        "war_deliveries_total": 2073668,
+        "war_delivered_bytes_total": 2021794320,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 108194,
+        "war_sessions": 108194,
+        "war_channels": 6253,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 131072,
+        "war_output_queue_capacity_bytes": 2621760,
+        "war_output_queue_peak_capacity_bytes": 2621760
+      }
+    }
+  ],
+  "client_thread_affinity": [],
+  "cpu_topology": "# The following is the parsable format, which can be fed to other\n# programs. Each different item in every column has an unique ID\n# starting usually from zero.\n# CPU,Core,Socket,Node\n0,0,0,0\n1,1,0,0\n2,2,0,0\n3,3,0,0\n4,4,0,0\n5,5,0,0\n6,6,0,0\n7,7,0,0\n8,8,0,0\n9,9,0,0\n10,10,0,0\n11,11,0,0\n12,12,0,0\n13,13,0,0\n14,14,0,0\n15,15,0,0\n16,0,0,0\n17,1,0,0\n18,2,0,0\n19,3,0,0\n20,4,0,0\n21,5,0,0\n22,6,0,0\n23,7,0,0\n24,8,0,0\n25,9,0,0\n26,10,0,0\n27,11,0,0\n28,12,0,0\n29,13,0,0\n30,14,0,0\n31,15,0,0\n",
+  "baseline_metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 0,
+    "war_read_buffer_limit_bytes": 268435456,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 0,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 0,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 0,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 0,
+    "war_incoming_messages_total": 0,
+    "war_incoming_bytes_total": 0,
+    "war_deliveries_total": 0,
+    "war_delivered_bytes_total": 0,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_native_connection_slots": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 0
+  },
+  "baseline": {
+    "cpu_seconds": 0.0,
+    "rss_kib": 5728,
+    "fds": 42
+  },
+  "ready_metrics": {
+    "war_read_buffer_reserved_bytes": 65536,
+    "war_read_buffer_peak_reserved_bytes": 2621440,
+    "war_read_buffer_limit_bytes": 268435456,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 102700000,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 108194,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 108194,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 0,
+    "war_incoming_messages_total": 116386,
+    "war_incoming_bytes_total": 103945790,
+    "war_deliveries_total": 224580,
+    "war_delivered_bytes_total": 104813840,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 108194,
+    "war_sessions": 108194,
+    "war_channels": 6253,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_native_connection_slots": 131072,
+    "war_output_queue_capacity_bytes": 320,
+    "war_output_queue_peak_capacity_bytes": 320
+  },
+  "affinity": [
+    {
+      "name": "war-io-0",
+      "cpus": [
+        0
+      ]
+    },
+    {
+      "name": "war-io-1",
+      "cpus": [
+        1
+      ]
+    },
+    {
+      "name": "war-io-2",
+      "cpus": [
+        2
+      ]
+    },
+    {
+      "name": "war-io-3",
+      "cpus": [
+        3
+      ]
+    },
+    {
+      "name": "war-io-4",
+      "cpus": [
+        4
+      ]
+    },
+    {
+      "name": "war-io-5",
+      "cpus": [
+        5
+      ]
+    },
+    {
+      "name": "war-io-6",
+      "cpus": [
+        6
+      ]
+    },
+    {
+      "name": "war-io-7",
+      "cpus": [
+        7
+      ]
+    }
+  ],
+  "before": {
+    "cpu_seconds": 2.01,
+    "rss_kib": 114636,
+    "fds": 108236
+  },
+  "client_before": {
+    "capacity": {
+      "cpu_seconds": 3.23,
+      "rss_kib": 616540,
+      "fds": 100009
+    },
+    "sidecar": {
+      "cpu_seconds": 0.28,
+      "rss_kib": 47504,
+      "fds": 8203
+    }
+  },
+  "after": {
+    "cpu_seconds": 8.53,
+    "rss_kib": 117692,
+    "fds": 108236
+  },
+  "client_after": {
+    "capacity": {
+      "cpu_seconds": 11.4,
+      "rss_kib": 697372,
+      "fds": 100009
+    },
+    "sidecar": {
+      "cpu_seconds": 5.48,
+      "rss_kib": 85320,
+      "fds": 8203
+    }
+  },
+  "elapsed_seconds": 2.578942289983388,
+  "server_cpu_seconds": 6.52,
+  "fanout_window_timing": {
+    "available": true,
+    "windows": 32,
+    "controller_ready_ms": 8.496457,
+    "scope": "Controller clocks. After-last-send includes relay, kernel, readers and acknowledgement processing; not server-hop latency.",
+    "median_method": "nearest rank",
+    "stages": {
+      "wake_lag": {
+        "first_ms": 1.06116,
+        "median_ms": 1.296441,
+        "max_ms": 1.865354,
+        "max_window_index": 11
+      },
+      "publisher_work": {
+        "first_ms": 1.405962,
+        "median_ms": 2.384344,
+        "max_ms": 2.55447,
+        "max_window_index": 4
+      },
+      "after_last_send_to_all_acks": {
+        "first_ms": 20.767159,
+        "median_ms": 29.525699,
+        "max_ms": 31.978621,
+        "max_window_index": 7
+      },
+      "membership_cleanup": {
+        "first_ms": 0.00041,
+        "median_ms": 0.00045,
+        "max_ms": 0.00081,
+        "max_window_index": 31
+      },
+      "scheduled_to_complete": {
+        "first_ms": 23.234691,
+        "median_ms": 33.370641,
+        "max_ms": 36.020492,
+        "max_window_index": 7
+      }
+    }
+  },
+  "fanout_windows": {
+    "completed": 32,
+    "offered": 32
+  },
+  "fanout_offered_load_met": true,
+  "final_metrics": {
+    "war_read_buffer_reserved_bytes": 0,
+    "war_read_buffer_peak_reserved_bytes": 2621440,
+    "war_read_buffer_limit_bytes": 268435456,
+    "war_read_buffer_reservations_rejected_total": 0,
+    "war_accept_errors_total": 0,
+    "war_setup_errors_total": 0,
+    "war_ip_rejected_total": 0,
+    "war_read_buffer_reclaims_total": 0,
+    "war_read_buffer_reclaim_header_bytes_total": 0,
+    "war_read_buffer_reclaims_deferred_total": 0,
+    "war_idle_timeouts_total": 0,
+    "war_unstarted_writes_cancelled_total": 0,
+    "war_routing_reused_bytes_total": 1027133760,
+    "war_routing_copied_bytes_total": 0,
+    "war_write_timeouts_total": 0,
+    "war_write_errors_total": 0,
+    "war_aborted_writes_total": 0,
+    "war_close_failures_total": 0,
+    "war_transport_disconnects_total": 0,
+    "war_global_pressure_total": 0,
+    "war_accepted_total": 108450,
+    "war_rejected_total": 0,
+    "war_origin_rejected_total": 0,
+    "war_handshake_errors_total": 0,
+    "war_joined_total": 108450,
+    "war_join_rejected_total": 0,
+    "war_disconnected_total": 108450,
+    "war_incoming_messages_total": 1016771,
+    "war_incoming_bytes_total": 1037383395,
+    "war_deliveries_total": 36474005,
+    "war_delivered_bytes_total": 2777258873,
+    "war_slow_consumers_total": 0,
+    "war_protocol_errors_total": 0,
+    "war_rate_limited_total": 0,
+    "war_variable_bytes": 0,
+    "war_connections": 0,
+    "war_sessions": 0,
+    "war_channels": 1,
+    "war_queued_bytes": 0,
+    "war_draining": 0,
+    "war_native_connection_slots": 0,
+    "war_output_queue_capacity_bytes": 0,
+    "war_output_queue_peak_capacity_bytes": 2621760
+  },
+  "latency_sampling": {
+    "users": 100000,
+    "observations_per_user": 8,
+    "total_private_observations": 800000,
+    "all_user_p99_equal_observed_max": true,
+    "scope": "Finite per-user observations; not a latency deadline or long-term p99 guarantee"
+  },
+  "csv_sha256": "b5f4dd9049bb6942b4e03857ded33003a57bb233f59128d26faf648a38ce3d4e",
+  "latency": {
+    "p99_ms": {
+      "median": 4.186025,
+      "p95": 12.441249,
+      "p99": 17.038232,
+      "max": 21.48539
+    },
+    "max_ms": {
+      "median": 4.186025,
+      "p95": 12.441249,
+      "p99": 17.038232,
+      "max": 21.48539
+    },
+    "schedule_p99_ms": {
+      "median": 6.036037,
+      "p95": 13.38582,
+      "p99": 18.216109,
+      "max": 22.793143
+    },
+    "schedule_max_ms": {
+      "median": 6.036037,
+      "p95": 13.38582,
+      "p99": 18.216109,
+      "max": 22.793143
+    }
+  },
+  "generator_lag": {
+    "available": true,
+    "period_ms": 250.0,
+    "maximum_pre_send_ms": 7.119954,
+    "windows_over_one_period": [],
+    "exceeded_one_period": false
+  },
+  "latency_windows_sha256": "f0c8ad40c14b70e517a23bd0f737316acd4ba53c75998615287ddf5f8d3a44ae",
+  "fanout_csv_sha256": "0dc46ca7b188073c40ab9584b22a47c777cbed7ce4dbcc162ddd2f93dda3be94",
+  "fanout_exact_ms": {
+    "p99_ms": {
+      "median": 31.523144,
+      "p95": 33.770683,
+      "p99": 34.039445,
+      "max": 34.335587
+    },
+    "max_ms": {
+      "median": 32.38431,
+      "p95": 34.050115,
+      "p99": 34.176391,
+      "max": 34.337906
+    },
+    "schedule_p99_ms": {
+      "median": 33.045772,
+      "p95": 35.021901,
+      "p99": 35.353101,
+      "max": 36.017263
+    },
+    "schedule_max_ms": {
+      "median": 33.754906,
+      "p95": 35.647701,
+      "p99": 35.840595,
+      "max": 36.019582
+    }
+  },
+  "exit_codes": [
+    0,
+    0,
+    0
+  ]
+}
