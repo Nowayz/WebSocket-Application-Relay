@@ -15,6 +15,14 @@ function asUserId(value) {
   return id;
 }
 
+// Wire IDs must be integers, never values accepted only through BigInt coercion.
+function wireId(value, session = false) {
+  if (typeof value !== 'number' && typeof value !== 'bigint') throw new TypeError('Invalid session ID');
+  const id = asUserId(value);
+  if (session && (id === RELAY || id === BROADCAST)) throw new RangeError('Reserved session ID');
+  return id;
+}
+
 /** Browser/Node 22+ client. All IDs stay BigInt, including small fixed IDs. */
 export class Relay extends EventTarget {
   #pending = null;
@@ -23,18 +31,19 @@ export class Relay extends EventTarget {
   constructor(ws, userId, requestTimeoutMs) {
     super();
     this.ws = ws;
-    this.userId = BigInt(userId);
+    this.userId = wireId(userId, true);
     this.requestTimeoutMs = requestTimeoutMs;
     ws.addEventListener('message', event => {
       try {
         const [rawSender, value] = decoder.decode(new Uint8Array(event.data));
-        const sender = BigInt(rawSender);
+        const sender = wireId(rawSender);
         if (sender === RELAY) {
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
+          if (op === 3) wireId(result, true);
           this.#pending.resolve(result);
         } else if (sender === BROADCAST) {
-          this.dispatchEvent(new CustomEvent('disconnect', { detail: { userId: BigInt(value) } }));
+          this.dispatchEvent(new CustomEvent('disconnect', { detail: { userId: wireId(value, true) } }));
         } else {
           this.dispatchEvent(new CustomEvent('message', { detail: { sender, value } }));
         }
@@ -65,7 +74,6 @@ export class Relay extends EventTarget {
         clearTimeout(timer); ws.removeEventListener('close', fail); ws.removeEventListener('error', fail);
         try {
           const id = decoder.decode(new Uint8Array(event.data));
-          if ((typeof id !== 'number' && typeof id !== 'bigint') || BigInt(id) === RELAY || BigInt(id) === BROADCAST) throw new Error('Invalid session ID');
           resolve(new Relay(ws, id, requestTimeoutMs));
         } catch (error) { reject(error); ws.close(1002, 'Invalid Subscription'); }
       }, { once: true });
