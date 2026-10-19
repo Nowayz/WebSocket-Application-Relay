@@ -156,7 +156,8 @@ pub fn from_cbor(bytes: &[u8]) -> Result<Option<Message>> {
         }
         Type::String => {
             let payload = d.str()?;
-            let mut text = STANDARD.encode(sender.to_le_bytes());
+            let mut text = String::with_capacity(12 + payload.len());
+            STANDARD.encode_string(sender.to_le_bytes(), &mut text);
             text.push_str(payload);
             Ok(Some(Message::Text(text.into())))
         }
