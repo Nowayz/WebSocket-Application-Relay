@@ -1,0 +1,95 @@
+diff --git a/scripts/plot-user-latency-comparison.py b/scripts/plot-user-latency-comparison.py
+index 6587178..4748248 100644
+--- a/scripts/plot-user-latency-comparison.py
++++ b/scripts/plot-user-latency-comparison.py
+@@ -36,6 +36,11 @@ def load(path, histogram_bounds=False, statistic="p99"):
+             observed, top = float(row[column]) / scale, float(row[maximum]) / scale
+             if not all(math.isfinite(v) and v >= 0 for v in [observed, top]) or (not histogram_bounds and observed > top):
+                 raise ValueError(f'{path}: invalid latency values')
++            # ceil(0.99 * n) selects the maximum for 1..99 observations.
++            if statistic == 'p99' and count < 100:
++                inconsistent = observed < top if histogram_bounds else observed != top
++                if inconsistent:
++                    raise ValueError(f'{path}: nearest-rank p99 must select the maximum with fewer than 100 samples')
+             values[key].append(observed)
+             maxima[key] = max(maxima[key], top)
+         if (values['intended_send_to_receive'][-1] < values['send_to_receive'][-1]
+@@ -53,6 +58,9 @@ def summarize(values, samples, maxima, thresholds, histogram_bounds=False, stati
+     metric = 'max' if statistic == 'max' else ('p99_upper' if histogram_bounds else 'p99')
+     return {'users': len(samples), 'total_packet_samples': sum(samples),
+             'samples_per_user': {'minimum': min(samples), 'maximum': max(samples)},
++            'p99_sample_scope': {
++                'users_whose_p99_rank_selects_maximum': sum(count < 100 for count in samples),
++                'note': 'Nearest-rank p99 selects the observed maximum with 1..99 samples; histogram p99 bounds must cover that maximum. Finite observations do not establish a long-term percentile.'},
+             'metrics': {key: {
+                 f'user_{metric}_ms': {'minimum': v[0], 'median': nearest(v, 50),
+                                 'p95': nearest(v, 95), 'p99': nearest(v, 99), 'maximum': v[-1]},
+diff --git a/scripts/test-user-latency-comparison.py b/scripts/test-user-latency-comparison.py
+index 4e1e69d..6163526 100644
+--- a/scripts/test-user-latency-comparison.py
++++ b/scripts/test-user-latency-comparison.py
+@@ -19,10 +19,54 @@ class ComparisonTest(unittest.TestCase):
+             path.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n' + body)
+             return comparison.load(path)
+ 
++    def test_short_exact_p99_must_select_the_observed_maximum(self):
++        for unit, scale in [('ms', 1), ('ns', 1000000)]:
++            with tempfile.TemporaryDirectory() as directory:
++                path = Path(directory) / 'short.csv'
++                for count in [1, 8, 99, 100]:
++                    for actual, intended in [(1, 3), (2, 2), (2, 3)]:
++                        path.write_text(f'id,samples,p99_{unit},max_{unit},schedule_p99_{unit},schedule_max_{unit}\n'
++                                        f'1,{count},{actual*scale},{2*scale},{intended*scale},{3*scale}\n')
++                        with self.subTest(unit=unit, count=count, actual=actual, intended=intended):
++                            if count < 100 and (actual != 2 or intended != 3):
++                                with self.assertRaisesRegex(ValueError, 'nearest-rank p99'):
++                                    comparison.load(path)
++                            else:
++                                comparison.load(path)
++                            # Maximum-only analysis does not depend on p99 columns.
++                            comparison.load(path, statistic='max')
++
++    def test_cli_rejects_impossible_short_p99_before_saving_artifacts(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            source = root / 'invalid.csv'
++            source.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n'
++                              '1,8,1,2,3,3\n')
++            result = subprocess.run([sys.executable, comparison.__file__, '--case',
++                                     f'invalid={source}', '--output', str(root / 'plot')],
++                                    capture_output=True, text=True)
++            self.assertEqual(result.returncode, 2)
++            self.assertIn('nearest-rank p99', result.stderr)
++            self.assertEqual(list(root.iterdir()), [source])
++
++    def test_short_histogram_p99_bound_cannot_be_below_the_maximum(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / 'bounded.csv'
++            for count in [1, 8, 99, 100]:
++                for actual, intended in [(1, 4), (2, 2), (2, 4)]:
++                    path.write_text('id,samples,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms\n'
++                                    f'1,{count},{actual},1.5,{intended},3\n')
++                    with self.subTest(count=count, actual=actual, intended=intended):
++                        if count < 100 and (actual < 1.5 or intended < 3):
++                            with self.assertRaisesRegex(ValueError, 'nearest-rank p99'):
++                                comparison.load(path, histogram_bounds=True)
++                        else:
++                            comparison.load(path, histogram_bounds=True)
++
+     def test_nearest_rank_and_separate_backlog(self):
+-        values, samples, maxima = self.fixture('1,10,1,2,4,5\n2,10,2,3,8,9\n3,10,100,101,1000,1001\n')
++        values, samples, maxima = self.fixture('1,100,1,2,4,5\n2,100,2,3,8,9\n3,100,100,101,1000,1001\n')
+         result = comparison.summarize(values, samples, maxima, [2])
+-        self.assertEqual(result['total_packet_samples'], 30)
++        self.assertEqual(result['total_packet_samples'], 300)
+         actual = result['metrics']['send_to_receive']
+         self.assertEqual(actual['user_p99_ms']['median'], 2)
+         self.assertEqual(actual['user_p99_ms']['p99'], 100)
+@@ -35,6 +79,7 @@ class ComparisonTest(unittest.TestCase):
+             path.write_text('id,samples,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms\n1,4,2,1.5,4,3\n')
+             values, samples, maxima = comparison.load(path, histogram_bounds=True)
+             result = comparison.summarize(values, samples, maxima, [2], histogram_bounds=True)
++            self.assertEqual(result['p99_sample_scope']['users_whose_p99_rank_selects_maximum'], 1)
+             metric = result['metrics']['send_to_receive']
+             self.assertEqual(metric['user_p99_upper_ms']['p99'], 2)
+             self.assertNotIn('user_p99_ms', metric)

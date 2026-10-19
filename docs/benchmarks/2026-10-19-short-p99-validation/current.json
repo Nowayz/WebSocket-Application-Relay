@@ -1,0 +1,51 @@
+{
+  "scope": "CDFs of user-level p99s, not pooled packet percentiles. Intended-send latency includes generator backlog. Finite workload observations, not latency bounds.",
+  "percentile_method": "nearest rank",
+  "cases": {
+    "current": {
+      "users": 100000,
+      "total_packet_samples": 800000,
+      "samples_per_user": {
+        "minimum": 8,
+        "maximum": 8
+      },
+      "p99_sample_scope": {
+        "users_whose_p99_rank_selects_maximum": 100000,
+        "note": "Nearest-rank p99 selects the observed maximum with 1..99 samples; histogram p99 bounds must cover that maximum. Finite observations do not establish a long-term percentile."
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 0.402569,
+            "median": 2.19206,
+            "p95": 10.971037,
+            "p99": 14.326695,
+            "maximum": 19.171012
+          },
+          "worst_packet_ms": 19.171012,
+          "users_with_p99_at_or_below_ms_percent": {
+            "10.0": 93.227
+          }
+        },
+        "intended_send_to_receive": {
+          "user_p99_ms": {
+            "minimum": 1.264079,
+            "median": 4.230634,
+            "p95": 11.869118,
+            "p99": 15.516246,
+            "maximum": 20.747871
+          },
+          "worst_packet_ms": 20.747871,
+          "users_with_p99_at_or_below_ms_percent": {
+            "10.0": 88.98
+          }
+        }
+      },
+      "csv": "artifacts/fairness-short-20261019-current.csv",
+      "csv_sha256": "feaed232eda571a4941cb7ad84a1f9cec0bc86fac99301f50cdc80a7c754682e"
+    }
+  },
+  "histogram_bounds": false,
+  "statistic": "p99",
+  "measurement_start": "The legacy send_to_receive field starts at the source client timestamp, which can precede socket send; it is not an isolated server-hop duration."
+}

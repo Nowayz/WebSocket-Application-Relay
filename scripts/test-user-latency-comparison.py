@@ -19,10 +19,54 @@ class ComparisonTest(unittest.TestCase):
             path.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n' + body)
             return comparison.load(path)
 
+    def test_short_exact_p99_must_select_the_observed_maximum(self):
+        for unit, scale in [('ms', 1), ('ns', 1000000)]:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'short.csv'
+                for count in [1, 8, 99, 100]:
+                    for actual, intended in [(1, 3), (2, 2), (2, 3)]:
+                        path.write_text(f'id,samples,p99_{unit},max_{unit},schedule_p99_{unit},schedule_max_{unit}\n'
+                                        f'1,{count},{actual*scale},{2*scale},{intended*scale},{3*scale}\n')
+                        with self.subTest(unit=unit, count=count, actual=actual, intended=intended):
+                            if count < 100 and (actual != 2 or intended != 3):
+                                with self.assertRaisesRegex(ValueError, 'nearest-rank p99'):
+                                    comparison.load(path)
+                            else:
+                                comparison.load(path)
+                            # Maximum-only analysis does not depend on p99 columns.
+                            comparison.load(path, statistic='max')
+
+    def test_cli_rejects_impossible_short_p99_before_saving_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'invalid.csv'
+            source.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n'
+                              '1,8,1,2,3,3\n')
+            result = subprocess.run([sys.executable, comparison.__file__, '--case',
+                                     f'invalid={source}', '--output', str(root / 'plot')],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('nearest-rank p99', result.stderr)
+            self.assertEqual(list(root.iterdir()), [source])
+
+    def test_short_histogram_p99_bound_cannot_be_below_the_maximum(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'bounded.csv'
+            for count in [1, 8, 99, 100]:
+                for actual, intended in [(1, 4), (2, 2), (2, 4)]:
+                    path.write_text('id,samples,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms\n'
+                                    f'1,{count},{actual},1.5,{intended},3\n')
+                    with self.subTest(count=count, actual=actual, intended=intended):
+                        if count < 100 and (actual < 1.5 or intended < 3):
+                            with self.assertRaisesRegex(ValueError, 'nearest-rank p99'):
+                                comparison.load(path, histogram_bounds=True)
+                        else:
+                            comparison.load(path, histogram_bounds=True)
+
     def test_nearest_rank_and_separate_backlog(self):
-        values, samples, maxima = self.fixture('1,10,1,2,4,5\n2,10,2,3,8,9\n3,10,100,101,1000,1001\n')
+        values, samples, maxima = self.fixture('1,100,1,2,4,5\n2,100,2,3,8,9\n3,100,100,101,1000,1001\n')
         result = comparison.summarize(values, samples, maxima, [2])
-        self.assertEqual(result['total_packet_samples'], 30)
+        self.assertEqual(result['total_packet_samples'], 300)
         actual = result['metrics']['send_to_receive']
         self.assertEqual(actual['user_p99_ms']['median'], 2)
         self.assertEqual(actual['user_p99_ms']['p99'], 100)
@@ -35,6 +79,7 @@ class ComparisonTest(unittest.TestCase):
             path.write_text('id,samples,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms\n1,4,2,1.5,4,3\n')
             values, samples, maxima = comparison.load(path, histogram_bounds=True)
             result = comparison.summarize(values, samples, maxima, [2], histogram_bounds=True)
+            self.assertEqual(result['p99_sample_scope']['users_whose_p99_rank_selects_maximum'], 1)
             metric = result['metrics']['send_to_receive']
             self.assertEqual(metric['user_p99_upper_ms']['p99'], 2)
             self.assertNotIn('user_p99_ms', metric)

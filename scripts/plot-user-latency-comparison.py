@@ -36,6 +36,11 @@ def load(path, histogram_bounds=False, statistic="p99"):
             observed, top = float(row[column]) / scale, float(row[maximum]) / scale
             if not all(math.isfinite(v) and v >= 0 for v in [observed, top]) or (not histogram_bounds and observed > top):
                 raise ValueError(f'{path}: invalid latency values')
+            # ceil(0.99 * n) selects the maximum for 1..99 observations.
+            if statistic == 'p99' and count < 100:
+                inconsistent = observed < top if histogram_bounds else observed != top
+                if inconsistent:
+                    raise ValueError(f'{path}: nearest-rank p99 must select the maximum with fewer than 100 samples')
             values[key].append(observed)
             maxima[key] = max(maxima[key], top)
         if (values['intended_send_to_receive'][-1] < values['send_to_receive'][-1]
@@ -53,6 +58,9 @@ def summarize(values, samples, maxima, thresholds, histogram_bounds=False, stati
     metric = 'max' if statistic == 'max' else ('p99_upper' if histogram_bounds else 'p99')
     return {'users': len(samples), 'total_packet_samples': sum(samples),
             'samples_per_user': {'minimum': min(samples), 'maximum': max(samples)},
+            'p99_sample_scope': {
+                'users_whose_p99_rank_selects_maximum': sum(count < 100 for count in samples),
+                'note': 'Nearest-rank p99 selects the observed maximum with 1..99 samples; histogram p99 bounds must cover that maximum. Finite observations do not establish a long-term percentile.'},
             'metrics': {key: {
                 f'user_{metric}_ms': {'minimum': v[0], 'median': nearest(v, 50),
                                 'p95': nearest(v, 95), 'p99': nearest(v, 99), 'maximum': v[-1]},
