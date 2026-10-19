@@ -1042,3 +1042,20 @@ setup faults, active-flood shutdown, four mixed socket cases, C++ compatibility,
 JavaScript, management and real Chrome checks pass. The small pending-header
 CI command passes locally without CPU affinity. Hosted execution/deployment
 and production capacity are outside these finite checks.
+
+## Bounded service cleanup after task failure, 2026-10-18
+
+Service teardown now keeps joining remaining tasks after an error or panic,
+retaining the first failure within the existing outer shutdown deadline. The
+previous early-return loop could drop the other join futures before native
+worker retirement completed. Controlled regressions fail with the old loop and
+pass with the selected drain helper; a never-finishing task still reaches the
+outer deadline. This does not change routing, admission or packet ownership.
+
+The [short shutdown evidence](benchmarks/2026-10-18-shutdown-drain/README.md)
+records 89 working-tree library tests, strict Clippy, formatting, a release build
+and a disposable two-worker SIGTERM check with four joined peers and an incomplete
+upgrade. All joined peers receive `1001`, all transports reach EOF and the process
+exits zero. Process shutdown flushes Close and retires TCP without waiting for a
+peer acknowledgement; that existing policy is unchanged. Error/panic injection
+targets the production task-drain helper, not a crashing native I/O thread.

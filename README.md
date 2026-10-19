@@ -296,6 +296,10 @@ recorded results and local dependency setup.
   receive their exact acknowledgement. Dropping the service signals its workers
   to retire. Untouched queued writes permit a normal close handshake; a partly
   transmitted frame requires dropping its transport.
+  Process shutdown flushes its `1001` Close before TCP retirement and does not
+  wait for a peer acknowledgement. Service cleanup keeps joining remaining
+  workers after a task failure, preserving the first error within the existing
+  shutdown deadline.
 - OS resource pressure during accept, including an exhausted descriptor limit,
   suspends new admission for one second while established sessions continue. Both ingresses
   retry and recover queued connections. Native failures are exposed through

@@ -156,19 +156,32 @@ pub async fn serve(
     admin_stop.cancel();
     shutdown.cancel();
     let deadline = Duration::from_secs(relay.config.shutdown_timeout_secs);
-    let cleanup = async {
-        while let Some(worker) = tasks.join_next().await {
-            worker.context("service worker panicked")??;
-        }
-        Ok::<_, anyhow::Error>(())
-    };
+    let cleanup = drain_service_workers(&mut tasks, result);
     // Workers have their own bounded shutdown deadline. Give cleanup one extra
     // second to return those results rather than detaching an active data loop.
     tokio::time::timeout(deadline + Duration::from_secs(1), cleanup)
         .await
-        .context("service shutdown exceeded its deadline")??;
+        .context("service shutdown exceeded its deadline")?
+}
+
+async fn drain_service_workers(
+    tasks: &mut JoinSet<Result<()>>,
+    mut result: Result<()>,
+) -> Result<()> {
+    // A failed task must not abandon the joins for workers still retiring
+    // sockets. Keep the first failure; the caller bounds the complete drain.
+    while let Some(worker) = tasks.join_next().await {
+        if result.is_ok() {
+            result = worker
+                .context("service worker panicked")
+                .and_then(|worker| worker);
+        }
+    }
     result
 }
+
+#[cfg(test)]
+mod shutdown_tests;
 
 fn worker_listeners(
     listener: std::net::TcpListener,
