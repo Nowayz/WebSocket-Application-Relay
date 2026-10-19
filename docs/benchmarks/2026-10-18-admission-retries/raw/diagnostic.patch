@@ -1,0 +1,110 @@
+--- a/src/metrics.rs
++++ b/src/metrics.rs
+@@ -7,9 +7,31 @@
+ };
+ use tokio_tungstenite::tungstenite::protocol::ReadBudget;
+ 
++#[doc(hidden)]
++#[derive(Default)]
++#[repr(align(64))]
++pub struct AdmitStats {
++    pub local_calls: AtomicU64,
++    pub local_retries: AtomicU64,
++    pub global_calls: AtomicU64,
++    pub global_retries: AtomicU64,
++}
++impl AdmitStats {
++    pub(crate) fn local(&self, attempts: u64) {
++        self.local_calls.store(self.local_calls.load(Relaxed).wrapping_add(1), Relaxed);
++        self.local_retries.store(self.local_retries.load(Relaxed).wrapping_add(attempts - 1), Relaxed);
++    }
++    pub(crate) fn global(&self, attempts: u64) {
++        self.global_calls.store(self.global_calls.load(Relaxed).wrapping_add(1), Relaxed);
++        self.global_retries.store(self.global_retries.load(Relaxed).wrapping_add(attempts - 1), Relaxed);
++    }
++}
++
+ #[derive(Default)]
+ pub struct Metrics {
+     pub read_budget: Option<Arc<ReadBudget>>,
++    pub admit_stats: [AdmitStats; 4],
++    pub admit_untracked: AtomicU64,
+     pub accepted: AtomicU64,
+     pub accept_errors: AtomicU64,
+     pub setup_errors: AtomicU64,
+@@ -52,6 +74,15 @@
+ impl Metrics {
+     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
+         let mut text = String::with_capacity(2500);
++        for (name, value) in [
++            ("local_calls", self.admit_stats.iter().map(|s|s.local_calls.load(Relaxed)).sum::<u64>()),
++            ("local_retries", self.admit_stats.iter().map(|s|s.local_retries.load(Relaxed)).sum::<u64>()),
++            ("global_calls", self.admit_stats.iter().map(|s|s.global_calls.load(Relaxed)).sum::<u64>()),
++            ("global_retries", self.admit_stats.iter().map(|s|s.global_retries.load(Relaxed)).sum::<u64>()),
++            ("untracked", self.admit_untracked.load(Relaxed)),
++        ] {
++            writeln!(text, "war_admit_probe_{name}_total {value}").unwrap();
++        }
+         let budget = self.read_budget.as_deref();
+         for (name, kind, value, help) in [
+             (
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -352,6 +352,12 @@
+     Ok(work)
+ }
+ 
++thread_local! {
++    static ADMIT_SLOT: Option<usize> = std::thread::current().name()
++        .and_then(|name| name.strip_prefix("war-io-"))
++        .and_then(|index| index.parse().ok());
++}
++
+ struct Budget {
+     used: AtomicUsize,
+     limit: usize,
+@@ -475,28 +481,25 @@
+             return Ok(None);
+         }
+         let size = frame.len();
+-        if self
+-            .budget
+-            .used
+-            .fetch_update(Relaxed, Relaxed, |used| {
+-                used.checked_add(size)
+-                    .filter(|&next| next <= self.budget.limit)
+-            })
+-            .is_err()
+-        {
++        let stats = ADMIT_SLOT.with(|slot| slot.and_then(|i| self.budget.metrics.admit_stats.get(i)));
++        if stats.is_none() { self.budget.metrics.admit_untracked.fetch_add(1, Relaxed); }
++        let mut attempts = 0u64;
++        let admitted = self.budget.used.fetch_update(Relaxed, Relaxed, |used| {
++            attempts += 1;
++            used.checked_add(size).filter(|&next| next <= self.budget.limit)
++        });
++        if let Some(stats) = stats { stats.local(attempts); }
++        if admitted.is_err() {
+             self.overloaded();
+             return Ok(None);
+         }
+-        if self
+-            .budget
+-            .metrics
+-            .queued_bytes
+-            .fetch_update(Relaxed, Relaxed, |used| {
+-                used.checked_add(size)
+-                    .filter(|&next| next <= self.budget.global_limit)
+-            })
+-            .is_err()
+-        {
++        attempts = 0;
++        let admitted = self.budget.metrics.queued_bytes.fetch_update(Relaxed, Relaxed, |used| {
++            attempts += 1;
++            used.checked_add(size).filter(|&next| next <= self.budget.global_limit)
++        });
++        if let Some(stats) = stats { stats.global(attempts); }
++        if admitted.is_err() {
+             self.budget.used.fetch_sub(size, Relaxed);
+             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+             return Err(Disconnect::OVERLOADED);
