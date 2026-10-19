@@ -326,7 +326,9 @@ During that wait, frontend Ping/Pong and Close/EOF are also serviced while no
 application message is retained. At most one pipelined message is kept without
 copying its payload; further frontend reads pause until welcome to preserve FIFO
 and bounded buffering. A later Close behind that message can still wait for the
-welcome deadline. See [frontend retirement and FIFO checks](docs/benchmarks/2026-10-19-bridge-frontend-welcome/README.md).
+welcome deadline. Terminal cleanup releases this retained message before waiting
+for Close acknowledgement; see the [requested-heap check](docs/benchmarks/2026-10-19-bridge-pending-retention/README.md).
+See [frontend retirement and FIFO checks](docs/benchmarks/2026-10-19-bridge-frontend-welcome/README.md).
 A welcome must contain exactly one CBOR unsigned uint64 ID other than zero or
 the broadcast sentinel. Invalid welcomes close both peers with `1002 / Invalid
 Upstream Welcome`; valid noncanonical integer widths remain accepted.

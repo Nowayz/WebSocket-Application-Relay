@@ -521,6 +521,7 @@ async fn bridge(
                     Ok(Message::Ping(_)) => upstream.flush().await?,
                     Ok(Message::Pong(_)) => {}
                     Ok(Message::Close(frame)) => {
+                        drop(pending.take());
                         transport::acknowledge_close(&mut upstream, WAIT).await;
                         transport::initiate_close(&mut legacy, frame, WAIT, None).await;
                         break Ok(None);
@@ -528,6 +529,7 @@ async fn bridge(
                     Ok(message) => break Ok::<_, anyhow::Error>(Some(message)),
                     Err(error) => {
                         if let Some(frame) = frame_error_close(&error) {
+                            drop(pending.take());
                             transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
                             break Ok(None);
                         }
@@ -543,6 +545,7 @@ async fn bridge(
     let welcome = match welcome {
         Ok(welcome) => welcome,
         Err(error) => {
+            drop(pending.take());
             transport::initiate_close(
                 &mut legacy,
                 Some(CloseFrame {
@@ -574,6 +577,7 @@ async fn bridge(
     // Only the scalar ID survives validation, including during error cleanup.
     drop(welcome);
     let Some(id) = id else {
+        drop(pending.take());
         let frame = Some(CloseFrame {
             code: CloseCode::Protocol,
             reason: "Invalid Upstream Welcome".into(),
@@ -619,15 +623,17 @@ async fn bridge(
                 Some(Ok(Message::Binary(bytes))) => match from_cbor(&bytes) {
                     Ok(Some(message)) => timeout(WAIT, legacy.send(message)).await??,
                     Ok(None) => {},
-                    Err(_) => { transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
+                    Err(_) => { drop(pending.take()); transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
                 }
                 Some(Err(error)) => {
                     if let Some(frame) = frame_error_close(&error) {
+                        drop(pending.take());
                         transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
                     }
                     break;
                 }
                 Some(Ok(Message::Text(_))) => {
+                    drop(pending.take());
                     transport::initiate_close(&mut legacy, Some(CloseFrame {
                         code: CloseCode::Protocol,
                         reason: "Invalid Upstream Message".into(),
@@ -637,6 +643,7 @@ async fn bridge(
                 Some(Ok(Message::Ping(_))) => { timeout(WAIT, upstream.flush()).await??; }
                 Some(Ok(Message::Pong(_))) => {},
                 Some(Ok(Message::Close(frame))) => {
+                    drop(pending.take());
                     transport::acknowledge_close(&mut upstream, WAIT).await;
                     transport::initiate_close(&mut legacy, frame, WAIT, None).await;
                     break;
