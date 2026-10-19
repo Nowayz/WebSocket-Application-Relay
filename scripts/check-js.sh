@@ -10,20 +10,27 @@ cleanup() {
   rm -rf "$task_logs"
 }
 trap cleanup EXIT
+# Archived inputs may predate a shared Cargo cache. Rebuild in-tree crates,
+# including patched dependencies, before accepting the fixture executables.
+find src vendor -type f -exec touch -c {} +
+touch -c Cargo.toml Cargo.lock
 # Ask Cargo where it put these binaries, including custom target directories.
-cargo build --bins --message-format=json-render-diagnostics >"$task_logs/build.jsonl"
+cargo build --locked --bins --message-format=json-render-diagnostics >"$task_logs/build.jsonl"
 node - "$task_logs/build.jsonl" >"$task_logs/binaries" <<'JS'
 const fs = require('node:fs');
+const manifest = fs.realpathSync('Cargo.toml');
 const paths = new Map();
 for (const line of fs.readFileSync(process.argv[2], 'utf8').trim().split('\n')) {
   const artifact = JSON.parse(line);
-  if (artifact.reason === 'compiler-artifact' && artifact.target.kind.includes('bin') && artifact.executable) {
-    paths.set(artifact.target.name, artifact.executable);
+  if (artifact.reason === 'compiler-artifact' && artifact.manifest_path === manifest && artifact.target.kind.includes('bin') && artifact.executable) {
+    paths.set(artifact.target.name, artifact);
   }
 }
 for (const name of ['war-relay', 'war-legacy-bridge']) {
   if (!paths.has(name)) throw new Error(`Cargo did not report ${name}`);
-  console.log(paths.get(name));
+  const artifact = paths.get(name);
+  if (artifact.fresh !== false) throw new Error(`Cargo did not confirm recompilation of ${name}`);
+  console.log(artifact.executable);
 }
 JS
 mapfile -t binaries <"$task_logs/binaries"

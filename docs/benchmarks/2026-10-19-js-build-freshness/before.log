@@ -1,0 +1,65 @@
+FFFF
+======================================================================
+FAIL: test_fresh_or_foreign_artifacts_are_rejected_before_launch (__main__.BuildFreshnessTests.test_fresh_or_foreign_artifacts_are_rejected_before_launch) (foreign=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-js-build-freshness.py", line 98, in test_fresh_or_foreign_artifacts_are_rejected_before_launch
+    self.assertEqual(list(markers.iterdir()), [], done.stdout + done.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [PosixPath('/tmp/tmp22v0vgcq/markers/war-l[59 chars]ay')] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+PosixPath('/tmp/tmp22v0vgcq/markers/war-legacy-bridge')
+
++ []
+- [PosixPath('/tmp/tmp22v0vgcq/markers/war-legacy-bridge'),
+-  PosixPath('/tmp/tmp22v0vgcq/markers/war-relay')] : 
+
+======================================================================
+FAIL: test_fresh_or_foreign_artifacts_are_rejected_before_launch (__main__.BuildFreshnessTests.test_fresh_or_foreign_artifacts_are_rejected_before_launch) (foreign=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-js-build-freshness.py", line 98, in test_fresh_or_foreign_artifacts_are_rejected_before_launch
+    self.assertEqual(list(markers.iterdir()), [], done.stdout + done.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [PosixPath('/tmp/tmpxcm2wg3q/markers/war-l[59 chars]ay')] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+PosixPath('/tmp/tmpxcm2wg3q/markers/war-legacy-bridge')
+
++ []
+- [PosixPath('/tmp/tmpxcm2wg3q/markers/war-legacy-bridge'),
+-  PosixPath('/tmp/tmpxcm2wg3q/markers/war-relay')] : 
+
+======================================================================
+FAIL: test_shared_cache_builds_current_root_and_vendored_sources (__main__.BuildFreshnessTests.test_shared_cache_builds_current_root_and_vendored_sources) (root_label='B')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-js-build-freshness.py", line 75, in test_shared_cache_builds_current_root_and_vendored_sources
+    self.assertEqual(set(observed), {second_label + '-B'}, done.stdout + done.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the first set but not the second:
+'A-A'
+Items in the second set but not the first:
+'B-B' :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+
+
+======================================================================
+FAIL: test_shared_cache_builds_current_root_and_vendored_sources (__main__.BuildFreshnessTests.test_shared_cache_builds_current_root_and_vendored_sources) (root_label='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-js-build-freshness.py", line 75, in test_shared_cache_builds_current_root_and_vendored_sources
+    self.assertEqual(set(observed), {second_label + '-B'}, done.stdout + done.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the first set but not the second:
+'same-A'
+Items in the second set but not the first:
+'same-B' :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.683s
+
+FAILED (failures=4)
