@@ -1059,3 +1059,14 @@ upgrade. All joined peers receive `1001`, all transports reach EOF and the proce
 exits zero. Process shutdown flushes Close and retires TCP without waiting for a
 peer acknowledgement; that existing policy is unchanged. Error/panic injection
 targets the production task-drain helper, not a crashing native I/O thread.
+
+## Shutdown with blocked output and still-open clients — 2026-10-18
+
+A focused integrated regression now exercises the real four-worker library
+service with queued private output, an unacknowledging joined peer, a responsive
+peer and an unfinished upgrade. It verifies shutdown Close output and zero
+server-side connection, queue, slot and read-staging reservations after `serve`
+returns while client descriptors remain open. Shutdown flushes Close and retires;
+it does not require waiting for a peer acknowledgement. Runtime policy is unchanged.
+The [fixture, limits and results](benchmarks/2026-10-18-shutdown-live-clients/README.md)
+distinguish this short lifecycle check from a full-population shutdown campaign.

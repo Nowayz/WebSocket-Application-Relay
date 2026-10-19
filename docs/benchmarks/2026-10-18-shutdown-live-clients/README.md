@@ -1,0 +1,15 @@
+# Shutdown with blocked output and live clients
+
+Selected: one integrated native library regression test; runtime behavior is unchanged. The test uses the real four-worker `serve` entry point and keeps client sockets alive through library shutdown. It covers a blocked private recipient with deferred output, a joined peer that never acknowledges Close, a responsive sender and an unfinished HTTP upgrade.
+
+The fixture uses 4 KiB server send buffers and a 4 KiB receive buffer at the unread recipient. Thirty-two private 64 KiB values are submitted. A checked self-delivery FIFO barrier proves all input has been parsed before cancellation; this avoids conflating unread-input TCP reset behavior with the responsive peer's shutdown Close. The fixture must observe a positive logical output reservation no larger than the submitted frames or global budget.
+
+With a one-second configured worker shutdown deadline and five-second write timeout, cancellation sends `1001 / Server Shutdown` to the responsive peer, retires the unfinished upgrade, and completes the service join inside a three-second test watchdog. The unpolled joined peer receives its `1001` without acknowledging before `serve` returns. After return, while all client descriptors and the Relay Arc remain alive, connections, logical output bytes, variable bytes, queue slot capacity and read-staging reservations are all zero; only the persistent global channel remains. No write timeout is needed to force that release.
+
+An initial fixture incorrectly required shutdown to spend at least one second waiting for a peer acknowledgement. It fails immediately because the selected policy deliberately flushes Close and retires during service shutdown. The corrected test checks completion and reservation release, not a minimum delay. That failure was a fixture assumption, not a runtime defect. An unfinished upgrade may end with EOF or TCP reset; no WebSocket Close is required before upgrading.
+
+The focused corrected check completes in about 0.01 seconds. All 92 clean library tests pass in 0.56 seconds, and Clippy passes all targets with warnings denied. Existing partial-write/body-ownership tests run in that suite. This establishes the tested lifecycle combination; it is not a throughput, 100,000-user shutdown or latency-SLA claim. No timed load campaign or release rebuild is needed for a test-only change.
+
+The clean snapshot is based on 7b18ab2, with only `src/server/shutdown_tests.rs` changed. source.json pins every snapshot file; the full selected test module, patch, initial fixture failure and final validation logs are retained. The three pre-existing dirty overlays were excluded and preserved. Existing native/bridge processes and convenience binaries were unchanged.
+
+Run the focused regression with `cargo test --locked --lib shutdown_releases_blocked_output_and_pending_upgrades_with_live_clients`. Run `python docs/benchmarks/2026-10-18-shutdown-live-clients/verify.py` to audit retained source and validation evidence without running a server.
