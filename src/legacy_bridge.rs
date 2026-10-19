@@ -472,6 +472,13 @@ async fn bridge(
                     Ok(None) => {},
                     Err(_) => { transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
                 }
+                Some(Ok(Message::Text(_))) => {
+                    transport::initiate_close(&mut legacy, Some(CloseFrame {
+                        code: CloseCode::Protocol,
+                        reason: "Invalid Upstream Message".into(),
+                    }), WAIT, None).await;
+                    break;
+                }
                 Some(Ok(Message::Ping(_))) => { timeout(WAIT, upstream.flush()).await??; }
                 Some(Ok(Message::Pong(_))) => {},
                 Some(Ok(Message::Close(frame))) => {
@@ -621,6 +628,60 @@ mod tests {
         })
         .await
         .expect("pre-welcome control frames must not prevent routing");
+    }
+
+    #[tokio::test]
+    async fn upstream_text_after_welcome_closes_cleanly_and_releases_the_slot() {
+        timeout(Duration::from_secs(2), async {
+            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", listener.local_addr().unwrap());
+            let shutdown = CancellationToken::new();
+            let mut tasks = JoinSet::new();
+            tasks.spawn(async move {
+                for _ in 0..2 {
+                    let (stream, _) = upstream.accept().await.unwrap();
+                    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+                    ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
+                    ws.send(Message::Text("unexpected".into())).await.unwrap();
+                    // Keep the upstream open until the bridge retires it.
+                    while let Some(message) = ws.next().await {
+                        if message.is_err() {
+                            break;
+                        }
+                    }
+                }
+            });
+            let token = shutdown.clone();
+            tasks.spawn(async move {
+                serve(listener, upstream_url, 1, token).await.unwrap();
+            });
+            for _ in 0..2 {
+                let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+                ws.send(Message::Binary(Bytes::from_static(b"fault")))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    ws.next().await.unwrap().unwrap(),
+                    Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
+                );
+                let Some(Ok(Message::Close(Some(frame)))) = ws.next().await else {
+                    panic!("unexpected upstream text caused an unclean legacy disconnect");
+                };
+                assert_eq!(frame.code, CloseCode::Protocol);
+                assert_eq!(frame.reason, "Invalid Upstream Message");
+                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
+                assert!(ws.next().await.is_none());
+            }
+            shutdown.cancel();
+            while let Some(result) = tasks.join_next().await {
+                result.unwrap();
+            }
+        })
+        .await
+        .expect("upstream text rejection and single-slot reuse must be prompt");
     }
 
     async fn welcome_validation_cases(cases: Vec<(Message, Option<u64>)>) {

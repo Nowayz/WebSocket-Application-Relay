@@ -7158,3 +7158,11 @@ allocation per full-width reply; small replies are unchanged. Fixed-rate short
 mixed checks do not show a consistent latency or CPU regression, but establish
 no general throughput or capacity improvement. See the
 [allocation, layout and traffic evidence](benchmarks/2026-10-19-inline-u64-control/README.md).
+
+### Unexpected upstream text closes legacy clients cleanly (2026-10-19)
+
+After a valid welcome, unexpected upstream text now produces a bounded frontend
+Close 1002 / Invalid Upstream Message instead of dropping the legacy socket.
+A one-slot fault fixture reproduces the original unclean disconnect and verifies
+Close acknowledgement, EOF and reuse after the fix. See the
+[protocol and cleanup evidence](benchmarks/2026-10-19-bridge-upstream-text/README.md).
