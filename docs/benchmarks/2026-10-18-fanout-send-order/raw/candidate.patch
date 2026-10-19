@@ -1,0 +1,24 @@
+--- a/examples/inspection/fanout.rs
++++ b/examples/inspection/fanout.rs
+@@ -441,12 +441,7 @@
+             } else {
+                 None
+             };
+-            windows.send_replace(Some(Step::Messages(
+-                sequence,
+-                Instant::now(),
+-                scheduled,
+-                window,
+-            )));
++            let stamp = Instant::now();
+             for offset in 0..window {
+                 let packet = packets[(sequence + offset) % 64].0.clone();
+                 counts.sent(&packet);
+@@ -458,6 +453,7 @@
+             } else {
+                 wake
+             };
++            windows.send_replace(Some(Step::Messages(sequence, stamp, scheduled, window)));
+             acknowledge(&mut acks, &mut jobs, &mut seen, &mut ready).await?;
+             let acknowledged = if controller_timing.is_some() {
+                 Instant::now()
