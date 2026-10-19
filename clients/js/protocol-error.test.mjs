@@ -7,6 +7,7 @@ import { Relay } from './relay.mjs';
 // Exercise the actual WebSocket close API, which mocks cannot validate.
 async function peer(t, mode) {
   const sockets = new Set();
+  let commands = 0;
   let closed;
   const closeCode = new Promise(resolve => { closed = resolve; });
   const server = createServer();
@@ -37,14 +38,17 @@ async function peer(t, mode) {
           socket.end();
         } else if (opcode === 2) {
           if (++messages === 1) frame(2, mode === 'welcome' ? [0xf5] : [1]);
-          else if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
-          else if (mode === 'server-close') frame(8, [3, 234]); // 1002
+          else {
+            commands++;
+            if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
+            else if (mode === 'server-close') frame(8, [3, 234]); // 1002
+          }
         }
       }
     });
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { url: `ws://127.0.0.1:${server.address().port}`, closeCode };
+  return { url: `ws://127.0.0.1:${server.address().port}`, closeCode, get commands() { return commands; } };
 }
 
 for (const mode of ['welcome', 'reply', 'timeout']) {
@@ -56,9 +60,15 @@ for (const mode of ['welcome', 'reply', 'timeout']) {
       const relay = await Relay.connect(remote.url, 'fault-peer');
       t.after(() => relay.close());
       if (mode === 'timeout') relay.requestTimeoutMs = 1;
-      await assert.rejects(relay.listen(1), mode === 'reply' ? /Invalid listener response/ : /request timeout/i);
+      const pending = relay.listen(1);
+      const queued = relay.listen(2);
+      await Promise.all([
+        assert.rejects(pending, mode === 'reply' ? /Invalid listener response/ : /request timeout/i),
+        assert.rejects(queued, /Relay is closed/),
+      ]);
     }
     assert.equal(await remote.closeCode, 4002);
+    assert.equal(remote.commands, mode === 'welcome' ? 0 : 1, 'queued command must not reach the wire');
   });
 }
 

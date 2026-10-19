@@ -14,3 +14,8 @@ assert 'pass 34' in final['test_output'] and 'fail 0' in final['test_output']
 assert final['exit_codes'] == [0, 0]
 assert all(v == 0 for v in final['final_resource_gauges'].values())
 print('Source hashes, original failure, 34 passing tests and resource retirement verified.')
+queue = json.loads(gzip.decompress((root / 'raw/js-queue-boundary-check.json.gz').read_bytes()))
+assert queue['passed'] and queue['test_exit_code'] == 0 and queue['exit_codes'] == [0, 0]
+assert 'pass 34' in queue['test_output'] and 'fail 0' in queue['test_output']
+assert all(v == 0 for v in queue['final_resource_gauges'].values())
+print('Real-transport queued command failure boundary verified.')
