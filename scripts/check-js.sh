@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-cargo build --bins
-npm ci --prefix clients/js --ignore-scripts --no-audit --no-fund
 task_logs=$(mktemp -d)
 relay_pid=''
 bridge_pid=''
@@ -12,9 +10,27 @@ cleanup() {
   rm -rf "$task_logs"
 }
 trap cleanup EXIT
+# Ask Cargo where it put these binaries, including custom target directories.
+cargo build --bins --message-format=json-render-diagnostics >"$task_logs/build.jsonl"
+node - "$task_logs/build.jsonl" >"$task_logs/binaries" <<'JS'
+const fs = require('node:fs');
+const paths = new Map();
+for (const line of fs.readFileSync(process.argv[2], 'utf8').trim().split('\n')) {
+  const artifact = JSON.parse(line);
+  if (artifact.reason === 'compiler-artifact' && artifact.target.kind.includes('bin') && artifact.executable) {
+    paths.set(artifact.target.name, artifact.executable);
+  }
+}
+for (const name of ['war-relay', 'war-legacy-bridge']) {
+  if (!paths.has(name)) throw new Error(`Cargo did not report ${name}`);
+  console.log(paths.get(name));
+}
+JS
+mapfile -t binaries <"$task_logs/binaries"
+npm ci --prefix clients/js --ignore-scripts --no-audit --no-fund
 start_relay() {
-  WAR_AUTH_PASSWORD=js-test-host WAR_ADMIN_TOKEN='' target/debug/war-relay \
-    --bind 127.0.0.1:19138 --admin-bind 127.0.0.1:19139 --idle-timeout-secs "$1" >>"$task_logs/relay.log" 2>&1 &
+  WAR_AUTH_PASSWORD=js-test-host WAR_ADMIN_TOKEN='' "${binaries[0]}" \
+    --bind 127.0.0.1:19138 --admin-bind 127.0.0.1:19139 --workers 4 --idle-timeout-secs 1 >>"$task_logs/relay.log" 2>&1 &
   relay_pid=$!
 }
 wait_services() {
@@ -23,21 +39,27 @@ wait_services() {
       cat "$task_logs/relay.log" "$task_logs/bridge.log"
       return 1
     fi
-    if curl --fail --silent http://127.0.0.1:19139/healthz >/dev/null; then return 0; fi
+    if curl --fail --silent http://127.0.0.1:19139/readyz >/dev/null \
+      && (exec 3<>/dev/tcp/127.0.0.1/19137) 2>/dev/null; then return 0; fi
     sleep 0.05
   done
   cat "$task_logs/relay.log" "$task_logs/bridge.log"
   return 1
 }
-start_relay 0
-target/debug/war-legacy-bridge --bind 127.0.0.1:19137 --upstream ws://127.0.0.1:19138 >"$task_logs/bridge.log" 2>&1 &
+start_relay
+TOKIO_WORKER_THREADS=4 "${binaries[1]}" --bind 127.0.0.1:19137 --upstream ws://127.0.0.1:19138 >"$task_logs/bridge.log" 2>&1 &
 bridge_pid=$!
 wait_services
-WAR_TEST_IDLE_ENABLED='' WAR_TEST_URL=ws://127.0.0.1:19138 WAR_TEST_BRIDGE_URL=ws://127.0.0.1:19137 npm test --prefix clients/js
-kill "$relay_pid"
-wait "$relay_pid"
-relay_pid=''
-start_relay 1
-wait_services
-WAR_TEST_IDLE_ENABLED=1 WAR_TEST_URL=ws://127.0.0.1:19138 WAR_TEST_BRIDGE_URL=ws://127.0.0.1:19137 \
-  node --test --test-timeout=10000 --test-name-pattern='application idle policy' clients/js/relay.test.mjs
+WAR_TEST_IDLE_ENABLED=1 WAR_TEST_URL=ws://127.0.0.1:19138 WAR_TEST_BRIDGE_URL=ws://127.0.0.1:19137 npm test --prefix clients/js
+# The suite must retire its sockets and accounted memory before fixture shutdown.
+for attempt in {1..100}; do
+  if curl --fail --silent --max-time 1 http://127.0.0.1:19139/metrics >"$task_logs/final-metrics" \
+    && awk '$1 ~ /^(war_connections|war_sessions|war_queued_bytes|war_variable_bytes|war_read_buffer_reserved_bytes|war_output_queue_capacity_bytes)$/ { count++; busy += ($2 != 0) } END { exit !(count == 6 && busy == 0) }' "$task_logs/final-metrics"; then
+    echo 'JavaScript fixture resources retired: all six checked gauges are zero.'
+    exit 0
+  fi
+  sleep 0.05
+done
+cat "$task_logs/final-metrics"
+echo 'JavaScript fixture resources did not retire.' >&2
+exit 1

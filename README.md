@@ -436,10 +436,15 @@ npm run build:browser --prefix clients/js
 The codec source audit uses Python 3.12+ and Git, caching two checksum-pinned
 published archives on its first run. Rust builds use the included codec sources.
 
-The JavaScript script builds temporary loopback services, runs the CBOR and
-original-client checks with idle expiry disabled, then restarts the relay to
-verify idle Close propagation through native and legacy WebSockets. It removes
-the temporary services afterward.
+The JavaScript script launches the executable paths reported by Cargo, including
+when `CARGO_TARGET_DIR` points outside the checkout. It runs the full CBOR and
+original-client suite, including idle Close propagation, against one disposable
+native/bridge fixture. Before shutdown it requires connections, sessions, queued
+bytes, variable bytes, read-buffer reservation and output-queue capacity to return
+to zero. Its exit trap removes both services on success or failure. The fixture
+uses loopback ports 19137–19139, four native I/O workers and four bridge runtime
+workers; those ports must be available. Test execution takes about a second on the measured host; compilation
+and dependency installation add time.
 CI also builds the browser bundle; browser execution is a separate acceptance
 step using the page above.
 
