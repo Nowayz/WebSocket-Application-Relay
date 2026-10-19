@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "server_command": [
+    "taskset",
+    "-c",
+    "4-7",
+    "/home/phil/dev/war_next/artifacts/candidates/bridge-static-list-20261019-control/list_request_conversion",
+    "2",
+    "0",
+    "heap"
+  ],
+  "server_sha256": "d017e2bd7a2e4b2e71c4823097e09677532439292648b461361f3f80340206e6",
+  "library": "/usr/lib/libtcmalloc.so.4.6.5",
+  "library_sha256": "ccbb0396626ef87993ee197e42baae2a408fa04cab6ad4f04abf98f6381be56a",
+  "probes": [
+    {
+      "name": "command-conversion",
+      "operations": 1000,
+      "before": {
+        "path": "/home/phil/dev/war_next/artifacts/bridge-static-list-20261019-control-heap_1714701.0001.heap",
+        "sha256": "a1bb4a9aaa27b85044eb06db09ff5f7f25faa90efb9966ebcc148629344f4bc1",
+        "header": "heap profile:     13:     9943 [    23:    12124] @ heapprofile"
+      },
+      "after": {
+        "path": "/home/phil/dev/war_next/artifacts/bridge-static-list-20261019-control-heap_1714701.0002.heap",
+        "sha256": "c34398ebd72580a6037b08424456968ae87fa35bfc4dc1606dcf120334aadb33",
+        "header": "heap profile:     13:     9943 [  1023:    17124] @ heapprofile"
+      }
+    }
+  ],
+  "exit_code": 0,
+  "log": "Using signal 12 as heap profiling switch\nStarting tracking the heap\nUsing signal 12 as heap profiling switch\nStarting tracking the heap\nDumping heap profile to /home/phil/dev/war_next/artifacts/bridge-static-list-20261019-control-heap_1714701.0001.heap (signal)\nDumping heap profile to /home/phil/dev/war_next/artifacts/bridge-static-list-20261019-control-heap_1714701.0002.heap (signal)\nDumping heap profile to /home/phil/dev/war_next/artifacts/bridge-static-list-20261019-control-heap_1714701.0003.heap (Exiting, 8 kB in use)\n"
+}

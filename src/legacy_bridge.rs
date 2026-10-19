@@ -47,7 +47,8 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
             Some(match legacy::command(&bytes[8..])? {
                 legacy::Command::Authenticate(secret) => byte_request(0, secret),
                 legacy::Command::Listen(flags) => uint_request(1, u64::from(flags)),
-                legacy::Command::Channels => protocol::request(2, &[0xf6]),
+                // The complete request is always [0, [2, null]].
+                legacy::Command::Channels => Bytes::from_static(b"\x82\x00\x82\x02\xf6"),
                 legacy::Command::Assign(id) => uint_request(3, id),
                 legacy::Command::SetVariable { key, value } => {
                     let capacity = 5
@@ -1996,6 +1997,28 @@ mod tests {
         ] {
             validate_upstream(upstream).unwrap();
         }
+    }
+
+    #[test]
+    fn channel_list_request_preserves_wire_and_ignored_arguments() {
+        let mut packet = vec![0; 8];
+        packet.push(2);
+        assert_eq!(
+            to_cbor(Message::Binary(packet.clone().into()))
+                .unwrap()
+                .unwrap(),
+            protocol::request(2, &[0xf6])
+        );
+        for suffix in [b"\0".as_slice(), b"ignored"] {
+            let mut malformed = packet.clone();
+            malformed.extend_from_slice(suffix);
+            assert_eq!(to_cbor(Message::Binary(malformed.into())).unwrap(), None);
+        }
+        packet[..8].copy_from_slice(&7u64.to_le_bytes());
+        assert_eq!(
+            to_cbor(Message::Binary(packet.into())).unwrap().unwrap(),
+            protocol::envelope(7, &protocol::byte_string(&[2]))
+        );
     }
 
     #[test]
