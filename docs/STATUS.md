@@ -9,7 +9,7 @@ Selected source and locally running executables are distinct:
 | --- | --- | --- |
 | Native relay | `b92da66` metrics-buffer sizing; `ab6b343` coherent idle checks; unchanged queue/wake policies | PID `966632`, earlier `279c3c1` native binary, SHA-256 `3db9ebeb…` |
 | Legacy bridge | `0b531f9` bounded protocol/UTF-8 error Close handling, retaining `69e62d1` size-error behavior | PID `1106809`, `4c9113a` bridge binary, SHA-256 `bb2392f5…` |
-| JavaScript client | `d253758` correct integer listener acknowledgements and browser-permitted client error Close `4002`; queue-boundary coverage in `2692f3a` | Browser bundle rebuilt after that client correction; no native/bridge promotion implied |
+| JavaScript client | Current channel-listing shape checks; `d253758` integer listener acknowledgements and client error Close `4002`; queue-boundary coverage in `2692f3a` | Browser bundle rebuilt after the listing correction; no native/bridge promotion implied |
 | Measurement tooling | `5e6d5d0` requires offered fanout rate for overall success; `a61fa5c` clarifies client timestamp origin | Separate disposable test processes only |
 
 The latest [short 100,000-user mixed check](benchmarks/2026-10-18-short-current-100k/README.md)

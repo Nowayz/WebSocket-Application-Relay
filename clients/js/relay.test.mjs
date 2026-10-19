@@ -190,3 +190,23 @@ test('application idle policy reaches native and legacy browser WebSockets clean
     assert.equal(event.wasClean, true);
   }
 });
+
+test('native channel listing returns sorted byte names and current populations', async t => {
+  const binaryName = new Uint8Array([255, 0, 43, 47]);
+  const host = await Relay.connect(url, binaryName);
+  const member = await Relay.connect(url, binaryName);
+  const empty = await Relay.connect(url, new Uint8Array());
+  t.after(() => { host.close(); member.close(); empty.close(); });
+  assert.equal(await host.authenticate('js-test-host'), true);
+  const rows = await host.channels();
+  const find = name => rows.find(([bytes]) => Buffer.from(bytes).equals(Buffer.from(name)));
+  assert.equal(BigInt(find(binaryName)[1]), 2n);
+  assert.equal(BigInt(find(new Uint8Array())[1]), 1n);
+  assert.ok(find(new TextEncoder().encode('re_globl')));
+  for (let i = 1; i < rows.length; i++) {
+    assert.ok(Buffer.compare(rows[i - 1][0], rows[i][0]) < 0);
+  }
+  const received = once(host, 'message');
+  host.send(host.userId, { afterListing: true });
+  assert.deepEqual((await received)[0].detail.value, { afterListing: true });
+});

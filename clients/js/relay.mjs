@@ -33,6 +33,21 @@ function wireId(value, session = false) {
   return id;
 }
 
+function validateChannelListing(rows) {
+  if (!Array.isArray(rows)) throw new Error('Invalid channel listing response');
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length !== 2
+      || !(row[0] instanceof Uint8Array) || row[0].length > 16) {
+      throw new Error('Invalid channel listing response');
+    }
+    const population = row[1];
+    if (!((Number.isSafeInteger(population) && population >= 0)
+      || (typeof population === 'bigint' && population >= 0n && population <= BROADCAST))) {
+      throw new Error('Invalid channel listing response');
+    }
+  }
+}
+
 /** Browser/Node 22+ client. All IDs stay BigInt, including small fixed IDs. */
 export class Relay extends EventTarget {
   #pending = null;
@@ -53,6 +68,7 @@ export class Relay extends EventTarget {
           if (!Array.isArray(value) || value.length !== 2) throw new Error('Invalid relay response');
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
+          if (op === 2) validateChannelListing(result);
           if (op === 3) wireId(result, true);
           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)

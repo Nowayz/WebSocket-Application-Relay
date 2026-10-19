@@ -1,0 +1,104 @@
+diff --git a/clients/js/ids.test.mjs b/clients/js/ids.test.mjs
+index 112b0fd..42432da 100644
+--- a/clients/js/ids.test.mjs
++++ b/clients/js/ids.test.mjs
+@@ -288,3 +288,37 @@ test('listener flags accept only effective integers in 0 through 7', async () =>
+     } finally { client.close(); }
+   }
+ });
++
++test('channel listing rejects malformed rows and populations', async () => {
++  const name = new Uint8Array([0, 255]);
++  for (const value of ['list', {}, name, [1], [[name]], [[name, 1, 2]],
++    [['text', 1]], [[new Uint8Array(17), 1]], [[name, -1]], [[name, 1.5]],
++    [[name, NaN]], [[name, Infinity]], [[name, Number.MAX_SAFE_INTEGER + 1]],
++    [[name, -1n]], [[name, BROADCAST + 1n]], [[name, '1']], [[name, true]],
++    [[name, null]], [[name, undefined]], [[name, []]]]) {
++    const WebSocketClass = socketClass(1);
++    const relay = await Relay.connect('ws://fixture', 'listing-check', { WebSocketClass });
++    try {
++      const pending = relay.channels();
++      await Promise.resolve();
++      WebSocketClass.instance.receive([0, [2, value]]);
++      await assert.rejects(pending, /Invalid channel listing response/);
++      assert.equal(WebSocketClass.instance.closed.code, 4002);
++    } finally { relay.close(); }
++  }
++});
++
++test('channel listing preserves empty/binary names and exact numeric types', async () => {
++  const WebSocketClass = socketClass(1);
++  const relay = await Relay.connect('ws://fixture', 'listing-check', { WebSocketClass });
++  try {
++    for (const rows of [[], [[new Uint8Array(), 0]], [[new Uint8Array([255, 0]), 1n]],
++      [[new Uint8Array(16), Number.MAX_SAFE_INTEGER]], [[new Uint8Array([1]), BROADCAST]]]) {
++      const pending = relay.channels();
++      await Promise.resolve();
++      WebSocketClass.instance.receive([0, [2, rows]]);
++      assert.deepEqual(await pending, rows);
++      assert.equal(relay.ready, true);
++    }
++  } finally { relay.close(); }
++});
+diff --git a/clients/js/relay.mjs b/clients/js/relay.mjs
+index 746901a..0a48318 100644
+--- a/clients/js/relay.mjs
++++ b/clients/js/relay.mjs
+@@ -33,6 +33,21 @@ function wireId(value, session = false) {
+   return id;
+ }
+ 
++function validateChannelListing(rows) {
++  if (!Array.isArray(rows)) throw new Error('Invalid channel listing response');
++  for (const row of rows) {
++    if (!Array.isArray(row) || row.length !== 2
++      || !(row[0] instanceof Uint8Array) || row[0].length > 16) {
++      throw new Error('Invalid channel listing response');
++    }
++    const population = row[1];
++    if (!((Number.isSafeInteger(population) && population >= 0)
++      || (typeof population === 'bigint' && population >= 0n && population <= BROADCAST))) {
++      throw new Error('Invalid channel listing response');
++    }
++  }
++}
++
+ /** Browser/Node 22+ client. All IDs stay BigInt, including small fixed IDs. */
+ export class Relay extends EventTarget {
+   #pending = null;
+@@ -53,6 +68,7 @@ export class Relay extends EventTarget {
+           if (!Array.isArray(value) || value.length !== 2) throw new Error('Invalid relay response');
+           const [op, result] = value;
+           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
++          if (op === 2) validateChannelListing(result);
+           if (op === 3) wireId(result, true);
+           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
+diff --git a/clients/js/relay.test.mjs b/clients/js/relay.test.mjs
+index c63878d..120ce60 100644
+--- a/clients/js/relay.test.mjs
++++ b/clients/js/relay.test.mjs
+@@ -190,3 +190,23 @@ test('application idle policy reaches native and legacy browser WebSockets clean
+     assert.equal(event.wasClean, true);
+   }
+ });
++
++test('native channel listing returns sorted byte names and current populations', async t => {
++  const binaryName = new Uint8Array([255, 0, 43, 47]);
++  const host = await Relay.connect(url, binaryName);
++  const member = await Relay.connect(url, binaryName);
++  const empty = await Relay.connect(url, new Uint8Array());
++  t.after(() => { host.close(); member.close(); empty.close(); });
++  assert.equal(await host.authenticate('js-test-host'), true);
++  const rows = await host.channels();
++  const find = name => rows.find(([bytes]) => Buffer.from(bytes).equals(Buffer.from(name)));
++  assert.equal(BigInt(find(binaryName)[1]), 2n);
++  assert.equal(BigInt(find(new Uint8Array())[1]), 1n);
++  assert.ok(find(new TextEncoder().encode('re_globl')));
++  for (let i = 1; i < rows.length; i++) {
++    assert.ok(Buffer.compare(rows[i - 1][0], rows[i][0]) < 0);
++  }
++  const received = once(host, 'message');
++  host.send(host.userId, { afterListing: true });
++  assert.deepEqual((await received)[0].detail.value, { afterListing: true });
++});

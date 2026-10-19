@@ -288,3 +288,37 @@ test('listener flags accept only effective integers in 0 through 7', async () =>
     } finally { client.close(); }
   }
 });
+
+test('channel listing rejects malformed rows and populations', async () => {
+  const name = new Uint8Array([0, 255]);
+  for (const value of ['list', {}, name, [1], [[name]], [[name, 1, 2]],
+    [['text', 1]], [[new Uint8Array(17), 1]], [[name, -1]], [[name, 1.5]],
+    [[name, NaN]], [[name, Infinity]], [[name, Number.MAX_SAFE_INTEGER + 1]],
+    [[name, -1n]], [[name, BROADCAST + 1n]], [[name, '1']], [[name, true]],
+    [[name, null]], [[name, undefined]], [[name, []]]]) {
+    const WebSocketClass = socketClass(1);
+    const relay = await Relay.connect('ws://fixture', 'listing-check', { WebSocketClass });
+    try {
+      const pending = relay.channels();
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [2, value]]);
+      await assert.rejects(pending, /Invalid channel listing response/);
+      assert.equal(WebSocketClass.instance.closed.code, 4002);
+    } finally { relay.close(); }
+  }
+});
+
+test('channel listing preserves empty/binary names and exact numeric types', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'listing-check', { WebSocketClass });
+  try {
+    for (const rows of [[], [[new Uint8Array(), 0]], [[new Uint8Array([255, 0]), 1n]],
+      [[new Uint8Array(16), Number.MAX_SAFE_INTEGER]], [[new Uint8Array([1]), BROADCAST]]]) {
+      const pending = relay.channels();
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [2, rows]]);
+      assert.deepEqual(await pending, rows);
+      assert.equal(relay.ready, true);
+    }
+  } finally { relay.close(); }
+});

@@ -140,6 +140,10 @@ Variable results require `[found: boolean, value]`; authenticate and
 set-variable results require booleans. Listener results are effective integer flags
 in the range 0 through 7. The [command-result checks](docs/benchmarks/2026-10-18-js-command-results/README.md)
 preserve valid false replies and arbitrary stored CBOR values.
+Channel listings require `[name_bytes, population]` rows with 0–16-byte names
+and exact nonnegative uint64 populations; valid Number/BigInt values are preserved.
+The [listing checks](docs/benchmarks/2026-10-18-js-channel-listing/README.md)
+include binary/empty names and a real native management query.
 Malformed responses immediately reject any pending command, then close with
 application error `4002` (permitted by the browser WebSocket API); rejection does not wait for the peer’s Close acknowledgement. The [short validation
 and compatibility check](docs/benchmarks/2026-10-18-js-wire-id/README.md) records
