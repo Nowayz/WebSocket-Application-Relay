@@ -1,0 +1,69 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -27,6 +27,51 @@
+ 
+ pub(super) const WRITE_QUANTUM: usize = 256 * 1024;
+ const RETAIN_QUEUE_SLOTS: usize = 32;
++
++// Diagnostic only: owner-thread aggregates for deferred output flushing.
++struct WriteTurnProfile {
++    counts: [u64; 65],
++    nanos: [u64; 65],
++    max_nanos: [u64; 65],
++    max_bytes: usize,
++    max_frames: u64,
++}
++thread_local! {
++    static WRITE_TURNS: std::cell::RefCell<WriteTurnProfile> = const {
++        std::cell::RefCell::new(WriteTurnProfile {
++            counts: [0; 65], nanos: [0; 65], max_nanos: [0; 65],
++            max_bytes: 0, max_frames: 0,
++        })
++    };
++}
++impl Drop for WriteTurnProfile {
++    fn drop(&mut self) {
++        eprintln!("WRITE_TURN_PROFILE {}", serde_json::json!({
++            "counts": self.counts.as_slice(), "nanos": self.nanos.as_slice(),
++            "max_nanos": self.max_nanos.as_slice(), "max_bytes": self.max_bytes,
++            "max_frames": self.max_frames,
++        }));
++    }
++}
++struct WriteTurn {
++    started: Instant,
++    bytes: usize,
++    frames: u64,
++}
++impl Drop for WriteTurn {
++    fn drop(&mut self) {
++        let nanos = self.started.elapsed().as_nanos() as u64;
++        let bucket = if self.bytes == 0 { 0 } else { self.bytes.ilog2() as usize + 1 };
++        WRITE_TURNS.with(|profile| {
++            let mut profile = profile.borrow_mut();
++            profile.counts[bucket] += 1;
++            profile.nanos[bucket] += nanos;
++            profile.max_nanos[bucket] = profile.max_nanos[bucket].max(nanos);
++            profile.max_bytes = profile.max_bytes.max(self.bytes);
++            profile.max_frames = profile.max_frames.max(self.frames);
++        });
++    }
++}
+ 
+ pub(super) struct Signal {
+     pub waker: Waker,
+@@ -226,11 +271,14 @@
+     }
+ 
+     fn flush_locked(&self, state: &mut State) -> io::Result<bool> {
++        let mut turn = WriteTurn { started: Instant::now(), bytes: 0, frames: 0 };
+         let mut remaining = WRITE_QUANTUM;
+         while !state.queue.is_empty() {
+             let State { stream, queue, .. } = &mut *state;
+             match write_batch(&mut SocketWriter(stream), queue, remaining) {
+                 Ok((written, delivered, bytes)) => {
++                    turn.bytes += written;
++                    turn.frames += delivered;
+                     remaining -= written;
+                     if delivered != 0 {
+                         self.metrics.deliveries.fetch_add(delivered, Relaxed);

@@ -124,6 +124,8 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 
 The timeline plotter also [preserves existing PNG, PDF and JSON outputs](benchmarks/2026-10-19-timeline-output-preservation/README.md), including dangling symlinks, before reading inputs or importing plotting packages. Choose a fresh output stem. `python scripts/test-timeline-output.py` checks all six collision cases without relay traffic.
 
+The [queued-write turn census](benchmarks/2026-10-19-queued-write-turns/README.md) finds no 256 KiB quantum exhaustion in two short instrumented mixed workloads (1 KiB and 64 KiB private payloads). Retain the current limit; the census excludes immediate sends and is not ordinary latency/throughput evidence. An existing exact-quantum test serves as a positive control.
+
 ## Read the result correctly
 
 - Treat each user equally. A percentile across users' individual latency statistics is different from a pooled packet percentile. With eight observations (two seconds) or 24 (six seconds), nearest-rank per-user p99 equals its observed maximum. The runner reports this explicitly in `latency_sampling`.
