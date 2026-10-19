@@ -7135,3 +7135,15 @@ peers. Validation borrows bytes and releases the local welcome owner before
 continuing; only the scalar ID remains. Ten valid and ten invalid socket cases,
 106 library tests and 61 compatibility tests pass. No performance claim is
 made. See the [validation evidence](benchmarks/2026-10-19-bridge-welcome-validation/README.md).
+
+
+### Bridge join-owner release (2026-10-19)
+
+The bridge drops the original legacy join view as soon as its owned CBOR
+subscription is encoded. In a matched 256-binary-client / 2,048-probe screen,
+requested live heap after traffic falls by 1,058,816 bytes (4,136/client),
+removing one extra receive allocation and split bookkeeping per client. Four
+ordinary processes show warmed bridge RSS 10,908–10,952 KiB before versus
+9,876–9,980 KiB after. No data forwarding change or new allocation is added.
+106 library and 61 compatibility tests pass. See the
+[heap attribution and ordinary memory checks](benchmarks/2026-10-19-bridge-join-owner/README.md).

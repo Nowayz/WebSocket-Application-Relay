@@ -20,6 +20,11 @@ Keep it on a trusted network or behind TLS termination as well. Its upstream URL
 currently supports plain `ws://`; connect locally to the relay. Native CBOR clients
 avoid the translation, second socket, and extra memory/CPU entirely.
 
+The bridge releases its frontend join view once the independent CBOR subscription
+is encoded. For binary joins this allows the receive slab to be reclaimed during
+later traffic rather than pinned by a tiny, no-longer-needed channel view. See the
+[matched buffer-ownership measurements](benchmarks/2026-10-19-bridge-join-owner/README.md).
+
 ## 100,000 native connections
 
 The [100,000-user environment example](../deploy/war-relay-100k.env.example)

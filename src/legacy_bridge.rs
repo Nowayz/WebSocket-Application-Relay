@@ -387,9 +387,10 @@ async fn bridge(
         connect_async_with_config(upstream, Some(upstream_config), true),
     )
     .await??;
-    upstream
-        .send(Message::Binary(protocol::byte_string(&joined)))
-        .await?;
+    let subscription = protocol::byte_string(&joined);
+    // The encoded subscription owns its bytes; release the frontend join view.
+    drop(joined);
+    upstream.send(Message::Binary(subscription)).await?;
     let welcome = timeout(WAIT, async {
         loop {
             match upstream
