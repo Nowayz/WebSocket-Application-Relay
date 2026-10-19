@@ -322,13 +322,16 @@ While awaiting the upstream welcome, Ping/Pong control frames are handled within
 the same ten-second deadline. An upstream Close is relayed with its original code
 and reason even before a legacy ID is assigned, so a full native room reports a
 clean `1013 / Try Again Later` instead of an unexplained `1006` disconnect.
-During that wait, frontend Ping/Pong and Close/EOF are also serviced while no
-application message is retained. At most one pipelined message is kept without
-copying its payload; further frontend reads pause until welcome to preserve FIFO
-and bounded buffering. A later Close behind that message can still wait for the
-welcome deadline. Terminal cleanup releases this retained message before waiting
-for Close acknowledgement; see the [requested-heap check](docs/benchmarks/2026-10-19-bridge-pending-retention/README.md).
-See [frontend retirement and FIFO checks](docs/benchmarks/2026-10-19-bridge-frontend-welcome/README.md).
+Frontend Ping/Pong and Close/EOF are serviced while establishing the upstream
+connection and awaiting its welcome, while no application message is retained.
+Leaving during a stalled upstream HTTP upgrade cancels that connection attempt
+and releases admission; see the [upgrade cancellation and recovery checks](docs/benchmarks/2026-10-19-bridge-connect-cancellation/README.md).
+One pipelined message may be kept across both setup phases without copying its
+payload; further frontend reads pause until welcome to preserve FIFO and bounded
+buffering. A later Close behind that message can still wait through the connection
+and welcome deadlines. Terminal cleanup releases this retained message before
+waiting for Close acknowledgement; see the [requested-heap check](docs/benchmarks/2026-10-19-bridge-pending-retention/README.md).
+See also [frontend retirement and FIFO checks](docs/benchmarks/2026-10-19-bridge-frontend-welcome/README.md).
 A welcome must contain exactly one CBOR unsigned uint64 ID other than zero or
 the broadcast sentinel. Invalid welcomes close both peers with `1002 / Invalid
 Upstream Welcome`; valid noncanonical integer widths remain accepted.

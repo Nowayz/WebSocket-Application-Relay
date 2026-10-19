@@ -1,0 +1,203 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -471,16 +471,42 @@
+     // Disable Nagle's ACK-dependent delay for consecutive small relay packets.
+     // Match the frontend's small initial buffer without reducing upstream frame limits.
+     let upstream_config = WebSocketConfig::default().read_buffer_size(4096);
+-    let connection = timeout(
+-        WAIT,
+-        connect_async_with_config(upstream, Some(upstream_config), true),
+-    )
++    // Reuse the one setup-message slot across connection and welcome waits.
++    // Reading stops once occupied, preserving FIFO and bounded retention.
++    let mut pending = None;
++    let connection = timeout(WAIT, async {
++        let connection = connect_async_with_config(upstream, Some(upstream_config), true);
++        tokio::pin!(connection);
++        loop {
++            tokio::select! {
++                result = &mut connection => break result.map(Some).map_err(anyhow::Error::from),
++                incoming = legacy.next(), if pending.is_none() => match incoming {
++                    Some(Ok(Message::Ping(_))) => legacy.flush().await?,
++                    Some(Ok(Message::Pong(_))) => {},
++                    Some(Ok(Message::Close(_))) => {
++                        transport::acknowledge_close(&mut legacy, WAIT).await;
++                        break Ok(None);
++                    }
++                    Some(Ok(message)) => pending = Some(message),
++                    Some(Err(error)) => {
++                        if let Some(frame) = frame_error_close(&error) {
++                            let _ = timeout(WAIT, legacy.close(Some(frame))).await;
++                        }
++                        break Ok(None);
++                    }
++                    None => break Ok(None),
++                },
++            }
++        }
++    })
+     .await
+     .context("upstream connection timeout")
+-    .and_then(|result| result.map_err(anyhow::Error::from));
++    .and_then(|result| result);
+     let (mut upstream, _) = match connection {
+-        Ok(connection) => connection,
++        Ok(Some(connection)) => connection,
++        Ok(None) => return Ok(()),
+         Err(error) => {
++            drop(pending.take());
+             transport::initiate_close(
+                 &mut legacy,
+                 Some(CloseFrame {
+@@ -498,9 +524,6 @@
+     let subscription = protocol::byte_string(&joined);
+     // The encoded subscription owns its bytes; release the frontend join view.
+     drop(joined);
+-    // Keep one owned application frame if it arrives before the welcome. Stop
+-    // frontend reads then, preserving FIFO without an unbounded setup queue.
+-    let mut pending = None;
+     let welcome = timeout(WAIT, async {
+         upstream.send(Message::Binary(subscription)).await?;
+         loop {
+@@ -1197,8 +1220,7 @@
+         .expect("fragment scheduling and exact output must complete promptly");
+     }
+ 
+-    #[tokio::test]
+-    async fn frontend_ping_and_pipelined_packets_preserve_welcome_and_fifo() {
++    async fn frontend_pipeline_before_welcome(before_upgrade: bool) {
+         timeout(Duration::from_secs(2), async {
+             for text in [false, true] {
+                 let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+@@ -1211,10 +1233,21 @@
+                 let mut tasks = JoinSet::new();
+                 tasks.spawn(async move {
+                     let (stream, _) = upstream.accept().await.unwrap();
+-                    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+-                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+-                    joined.send(()).unwrap();
+-                    wait_welcome.await.unwrap();
++                    let mut ws = if before_upgrade {
++                        // The request has reached TCP, but no HTTP response is sent.
++                        assert_eq!(stream.peek(&mut [0; 1]).await.unwrap(), 1);
++                        joined.send(()).unwrap();
++                        wait_welcome.await.unwrap();
++                        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                        assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                        ws
++                    } else {
++                        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                        assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                        joined.send(()).unwrap();
++                        wait_welcome.await.unwrap();
++                        ws
++                    };
+                     ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
+                     for value in ["first-π", "second-π"] {
+                         let encoded = if text {
+@@ -1286,6 +1319,105 @@
+         .expect("pre-welcome Ping and pipelined binary/text FIFO must complete promptly");
+     }
+ 
++    #[tokio::test]
++    async fn frontend_ping_and_pipelined_packets_preserve_welcome_and_fifo() {
++        frontend_pipeline_before_welcome(false).await;
++    }
++
++    #[tokio::test]
++    async fn frontend_ping_and_pipeline_during_upstream_upgrade_preserve_fifo() {
++        frontend_pipeline_before_welcome(true).await;
++    }
++
++    async fn frontend_retirement_during_upstream_upgrade_recovers(abrupt: bool) {
++        use tokio::io::AsyncReadExt;
++
++        timeout(Duration::from_secs(2), async {
++            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let shutdown = CancellationToken::new();
++            let (started, wait_started) = tokio::sync::oneshot::channel();
++            let (retired, wait_retired) = tokio::sync::oneshot::channel();
++            let mut tasks = JoinSet::new();
++            tasks.spawn(async move {
++                let (mut stream, _) = upstream.accept().await.unwrap();
++                let mut request = Vec::new();
++                while !request.ends_with(b"\r\n\r\n") {
++                    request.push(stream.read_u8().await.unwrap());
++                }
++                assert!(request.starts_with(b"GET / HTTP/1.1\r\n"));
++                started.send(()).unwrap();
++                assert_eq!(stream.read(&mut [0; 1]).await.unwrap(), 0);
++                retired.send(()).unwrap();
++                let (stream, _) = upstream.accept().await.unwrap();
++                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
++                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
++                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++            });
++            let token = shutdown.clone();
++            tasks.spawn(async move {
++                serve(listener, upstream_url, 1, token).await.unwrap();
++            });
++            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            ws.send(Message::Binary(Bytes::from_static(b"upgrade-cancel")))
++                .await
++                .unwrap();
++            wait_started.await.unwrap();
++            if abrupt {
++                drop(ws);
++            } else {
++                assert!(
++                    transport::initiate_close(
++                        &mut ws,
++                        Some(CloseFrame {
++                            code: CloseCode::Normal,
++                            reason: "cancel upgrade".into(),
++                        }),
++                        Duration::from_secs(1),
++                        None
++                    )
++                    .await
++                );
++                drop(ws);
++            }
++            wait_retired.await.unwrap();
++            let (mut recovered, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            recovered
++                .send(Message::Binary(Bytes::from_static(b"upgrade-cancel")))
++                .await
++                .unwrap();
++            assert_eq!(
++                recovered.next().await.unwrap().unwrap(),
++                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
++            );
++            assert!(
++                transport::initiate_close(&mut recovered, None, Duration::from_secs(1), None).await
++            );
++            shutdown.cancel();
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap();
++            }
++        })
++        .await
++        .expect(
++            "frontend retirement must cancel a stalled upstream upgrade and recover the only slot",
++        );
++    }
++
++    #[tokio::test]
++    async fn frontend_close_during_upstream_upgrade_releases_the_only_slot() {
++        frontend_retirement_during_upstream_upgrade_recovers(false).await;
++    }
++
++    #[tokio::test]
++    async fn frontend_eof_during_upstream_upgrade_releases_the_only_slot() {
++        frontend_retirement_during_upstream_upgrade_recovers(true).await;
++    }
++
+     async fn frontend_retirement_before_welcome_recovers(abrupt: bool) {
+         timeout(Duration::from_secs(2), async {
+             let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
