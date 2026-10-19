@@ -1,0 +1,15 @@
+diff --git a/scripts/input-corpus.py b/scripts/input-corpus.py
+index ebd425f..fd0956f 100644
+--- a/scripts/input-corpus.py
++++ b/scripts/input-corpus.py
+@@ -37,8 +37,8 @@ EMPTY = wire.frame(0, b"") * 257
+ 
+ 
+ class Peer(wire.Wire):
+-    def __init__(self, port):
+-        self.socket = socket.create_connection(("127.0.0.1", port), timeout=5)
++    def __init__(self, port, *, source_address=None):
++        self.socket = socket.create_connection(("127.0.0.1", port), timeout=5, source_address=source_address)
+         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+         self.id = None
+         self.data_frames = self.received_data_bytes = 0

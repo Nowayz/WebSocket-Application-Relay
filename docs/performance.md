@@ -1,5 +1,13 @@
 # Measured performance and resource decisions
 
+The latest target-scale qualification is the
+[short 100,000-user mixed check](benchmarks/2026-10-18-short-current-100k/README.md):
+one current-source run misses the offered fanout target, and observed tails vary
+substantially. It establishes neither a universal speedup nor consistently low
+latency. Comparisons below preserve their dated builds; references to “current”
+inside a historical section do not mean today's source. The [goal status](STATUS.md)
+separates selected source from manually running executables.
+
 The native runtime was replaced with readiness workers on 2026-10-16. The
 [readiness rewrite](#readiness-runtime-rewrite-2026-10-16) records its architecture,
 direct C++/old-Rust comparison, heap evidence and verification. Earlier sections

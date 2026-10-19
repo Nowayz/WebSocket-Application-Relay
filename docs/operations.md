@@ -228,6 +228,21 @@ WebSocket Close frame. Existing socket owners retain their address lease through
 queued output, retirement and captured routing targets. EOF, handshake/join
 failure, timeout, normal close and service cancellation release the lease.
 
+A short Linux loopback probe checks native lease reuse with four workers, a
+three-connection global cap and one connection per IP:
+
+```sh
+python3 scripts/admission-reuse.py --server target/release/war-relay \
+  --output artifacts/admission-reuse.json
+```
+
+It keeps a healthy user on `127.0.0.1` while malformed HTTP, early EOF and
+one-second upgrade timeouts exercise `127.0.0.2`. Each case checks an overlapping
+IP refusal, same-IP replacement routing, normal Close/EOF and final resource
+release. The two timeout waits make the successful probe about two seconds;
+this is a lifecycle check, not a connection-rate or latency benchmark. Existing
+output files are refused. See the [recorded probe](benchmarks/2026-10-18-admission-reuse/README.md).
+
 Addresses come from the accepted TCP connection. IPv4-mapped IPv6 addresses use
 the same quota as their IPv4 form; other IPv6 addresses each have their own
 quota. HTTP `Forwarded`, `X-Forwarded-For` and similar headers do not change this

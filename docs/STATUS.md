@@ -1,5 +1,42 @@
 # Continuing goal status
 
+## Latest verified state — 2026-10-18
+
+The entries below are historical work records, not current process assertions.
+Selected source and locally running executables are distinct:
+
+| Component | Latest relevant selected source | Local manual process at this check |
+| --- | --- | --- |
+| Native relay | `b92da66` metrics-buffer sizing; `ab6b343` coherent idle checks; unchanged queue/wake policies | PID `966632`, earlier `279c3c1` native binary, SHA-256 `3db9ebeb…` |
+| Legacy bridge | `0b531f9` bounded protocol/UTF-8 error Close handling, retaining `69e62d1` size-error behavior | PID `1106809`, `4c9113a` bridge binary, SHA-256 `bb2392f5…` |
+| JavaScript client | `d253758` correct integer listener acknowledgements and browser-permitted client error Close `4002`; queue-boundary coverage in `2692f3a` | Browser bundle rebuilt after that client correction; no native/bridge promotion implied |
+| Measurement tooling | `5e6d5d0` requires offered fanout rate for overall success; `a61fa5c` clarifies client timestamp origin | Separate disposable test processes only |
+
+The latest [short 100,000-user mixed check](benchmarks/2026-10-18-short-current-100k/README.md)
+measures two seconds per run in baseline/current/current/baseline order. Every
+user contributes eight checked private probes. One current-source trial misses
+the fanout target (31/32 windows); the other three meet it. Fanout maxima vary
+from 61.7 to 99.3 ms for current source. This proves neither a consistent speedup
+nor a latency SLA. Figures include client/kernel/relay scheduling, and their
+measurement origin is explicitly documented. The unresolved target is reducing
+that variation while meeting the offered load, preserving FIFO and memory bounds.
+
+The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
+checks six failed upgrades across four native workers in about two seconds.
+All same-IP replacements route successfully; a separate healthy user continues
+through timeout waits. Exact lifecycle counters and final resource gauges pass.
+No admission-runtime change is needed. The shared raw-client helper also passes
+its 776-case / 2,311-exchange input corpus in under a second.
+
+Recent smaller initial queue, on-demand header, notification-load and client
+send-order experiments remain unselected. Their memory or local-function appeal
+did not establish the required latency/performance result. The current source
+keeps existing queue, notification and reader ordering. The three pre-existing
+working-tree edits in `src/relay.rs`, `src/relay/listener_tests.rs` and
+`cpp/relay.cpp` remain preserved and excluded from clean benchmark snapshots.
+
+---
+
 ## 2026-10-18: upstream NODELAY removes a bridge forwarding stall
 
 Keep code `db798ce`: legacy bridge upstream now explicitly disables Nagle,
