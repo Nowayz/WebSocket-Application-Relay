@@ -11,6 +11,8 @@ mod arena_tests;
 #[cfg(all(test, target_os = "linux"))]
 mod close_tests;
 #[cfg(test)]
+mod codec_tests;
+#[cfg(test)]
 mod fairness_tests;
 #[cfg(test)]
 mod ownership_tests;

@@ -1,0 +1,132 @@
+--- a/vendor/tungstenite/src/protocol/mod.rs
++++ b/vendor/tungstenite/src/protocol/mod.rs
+@@ -462,10 +462,8 @@
+         Self::_new(role, frame, conf)
+     }
+ 
+-    fn _new(role: Role, mut frame: FrameCodec, config: WebSocketConfig) -> Self {
++    fn _new(role: Role, frame: FrameCodec, config: WebSocketConfig) -> Self {
+         config.assert_valid();
+-        frame.set_max_out_buffer_len(config.max_write_buffer_size);
+-        frame.set_out_buffer_write_len(config.write_buffer_size);
+         Self {
+             role,
+             frame,
+@@ -487,8 +485,6 @@
+     pub fn set_config(&mut self, set_func: impl FnOnce(&mut WebSocketConfig)) {
+         set_func(&mut self.config);
+         self.config.assert_valid();
+-        self.frame.set_max_out_buffer_len(self.config.max_write_buffer_size);
+-        self.frame.set_out_buffer_write_len(self.config.write_buffer_size);
+     }
+ 
+     /// Read the configuration.
+@@ -886,7 +882,9 @@
+         }
+ 
+         trace!("Sending frame: {frame:?}");
+-        self.frame.buffer_frame(stream, frame).check_connection_reset(self.state)
++        self.frame
++            .buffer_frame(stream, frame, self.config.max_write_buffer_size, self.config.write_buffer_size)
++            .check_connection_reset(self.state)
+     }
+ 
+     /// Replace `additional_send` if it is currently a `Pong` message.
+--- a/vendor/tungstenite/src/protocol/frame/mod.rs
++++ b/vendor/tungstenite/src/protocol/frame/mod.rs
+@@ -109,7 +109,7 @@
+     /// is returned.
+     /// In order to handle WouldBlock or Incomplete, call [`flush`](Self::flush) afterwards.
+     pub fn write(&mut self, frame: Frame) -> Result<()> {
+-        self.codec.buffer_frame(&mut self.stream, frame)
++        self.codec.buffer_frame(&mut self.stream, frame, usize::MAX, 0)
+     }
+ 
+     /// Flush writes.
+@@ -130,14 +130,6 @@
+     in_buf_max_read: usize,
+     /// Buffer to send packets to the network.
+     out_buffer: Vec<u8>,
+-    /// Capacity limit for `out_buffer`.
+-    max_out_buffer_len: usize,
+-    /// Buffer target length to reach before writing to the stream
+-    /// on calls to `buffer_frame`.
+-    ///
+-    /// Setting this to non-zero will buffer small writes from hitting
+-    /// the stream.
+-    out_buffer_write_len: usize,
+     /// Header and remaining size of the incoming packet being processed.
+     header: Option<(FrameHeader, u64)>,
+ }
+@@ -180,8 +172,6 @@
+             read_lease: None,
+             in_buf_max_read: in_buf_len.max(FrameHeader::MAX_SIZE),
+             out_buffer: <_>::default(),
+-            max_out_buffer_len: usize::MAX,
+-            out_buffer_write_len: 0,
+             header: None,
+         }
+     }
+@@ -197,8 +187,6 @@
+             read_lease: None,
+             in_buf_max_read: min_in_buf_len.max(FrameHeader::MAX_SIZE),
+             out_buffer: <_>::default(),
+-            max_out_buffer_len: usize::MAX,
+-            out_buffer_write_len: 0,
+             header: None,
+         }
+     }
+@@ -274,17 +262,6 @@
+         Ok(())
+     }
+ 
+-    /// Sets a maximum size for the out buffer.
+-    pub(super) fn set_max_out_buffer_len(&mut self, max: usize) {
+-        self.max_out_buffer_len = max;
+-    }
+-
+-    /// Sets [`Self::buffer_frame`] buffer target length to reach before
+-    /// writing to the stream.
+-    pub(super) fn set_out_buffer_write_len(&mut self, len: usize) {
+-        self.out_buffer_write_len = len;
+-    }
+-
+     /// Read a frame from the provided stream.
+     pub(super) fn read_frame(
+         &mut self,
+@@ -369,17 +346,23 @@
+     }
+ 
+     /// Writes a frame into the `out_buffer`.
+-    /// If the out buffer size is over the `out_buffer_write_len` will also write
++    /// If the out buffer size is over `out_buffer_write_len`, also write
+     /// the out buffer into the provided `stream`.
+     ///
+     /// To ensure buffered frames are written call [`Self::write_out_buffer`].
+     ///
+     /// May write to the stream, will **not** flush.
+-    pub(super) fn buffer_frame<Stream>(&mut self, stream: &mut Stream, frame: Frame) -> Result<()>
++    pub(super) fn buffer_frame<Stream>(
++        &mut self,
++        stream: &mut Stream,
++        frame: Frame,
++        max_out_buffer_len: usize,
++        out_buffer_write_len: usize,
++    ) -> Result<()>
+     where
+         Stream: Write,
+     {
+-        if frame.len() + self.out_buffer.len() > self.max_out_buffer_len {
++        if frame.len() + self.out_buffer.len() > max_out_buffer_len {
+             return Err(Error::WriteBufferFull(Message::Frame(frame).into()));
+         }
+ 
+@@ -388,7 +371,7 @@
+         self.out_buffer.reserve(frame.len());
+         frame.format_into_buf(&mut self.out_buffer).expect("Bug: can't write to vector");
+ 
+-        if self.out_buffer.len() > self.out_buffer_write_len {
++        if self.out_buffer.len() > out_buffer_write_len {
+             self.write_out_buffer(stream)
+         } else {
+             Ok(())

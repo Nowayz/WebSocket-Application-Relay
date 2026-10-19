@@ -7065,3 +7065,13 @@ The selected `war_native_connection_slots` gauge exposes retained arena
 capacity without per-packet updates. A separate ordinary population check
 reports 131,072 slots for 108,194 sessions, then zero after full retirement.
 See the [raw heaps, release layouts and selected gauge checks](benchmarks/2026-10-18-population-heap-and-slots/README.md).
+
+
+### Cached codec write-limit screen (2026-10-19)
+
+Removing two duplicated FrameCodec limits reduces the measured connection
+record from 520 to 504 bytes, but four matched two-second population runs
+show overlapping RSS/CPU/latency ranges. The candidate RSS average is lower;
+this short set does not establish a reliable performance improvement. Keep
+the existing runtime and retain three public buffer-policy tests instead.
+See the [screen, complete user observations and selected coverage](benchmarks/2026-10-19-codec-limit-screen/README.md).
