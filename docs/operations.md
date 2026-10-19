@@ -648,6 +648,10 @@ privileges when its environment variable is absent. Operators should use a priva
 admin listener or an authenticated TLS/allowlisted proxy. A token is required to
 bind admin HTTP to a non-loopback address; health/readiness remain intentionally
 public on that listener.
+Both environment secrets must be valid UTF-8. A malformed encoding stops startup
+before listeners bind; diagnostics name the variable and omit its contents. Empty
+values keep the existing absent-secret behavior. Embedders loading environment
+secrets now handle `Config::load_secrets() -> Result<()>` before validation.
 
 ## Drain and restart
 

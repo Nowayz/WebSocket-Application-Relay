@@ -7,7 +7,7 @@ use war_relay::{Config, Relay, serve};
 
 fn main() -> Result<()> {
     let mut config = Config::parse();
-    config.load_secrets();
+    config.load_secrets()?;
     config.validate()?;
     tracing_subscriber::fmt()
         .with_env_filter(

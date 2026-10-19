@@ -58,6 +58,10 @@ management. `--help` lists all limits and environment variables. Set
 `WAR_AUTH_PASSWORD` to enable privileged relay commands and `WAR_ADMIN_TOKEN` to
 enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
+Secret values must be valid UTF-8; invalid encoding stops startup with the variable
+name, without echoing its value. Empty values retain the absent-secret behavior.
+Rust embedders should propagate `config.load_secrets()?` before validation. See
+the [startup encoding checks](docs/benchmarks/2026-10-19-config-secret-encoding/README.md).
 
 Optional `--max-connections-per-ip 32` admission bounds concurrent TCP sockets
 from each direct peer address, including unfinished upgrades. Both native and
