@@ -85,6 +85,7 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 
 | Experiment | Decision and reason |
 | --- | --- |
+| [Cached ready-slot hints](benchmarks/2026-10-18-ready-slot-screen/README.md) | Token checks and compaction/reuse tests pass, but larger ready entries and fallback logic do not establish a full-population win: CPU/intended fanout delays increase while private tails vary. |
 | [Inline large integer replies](benchmarks/2026-10-18-inline-u64-screen/README.md) | Same Frame size on the measured 64-bit host and cheaper large-reply clones, but slower unshared construction and higher mixed CPU per delivery. Lower observed maxima do not establish a fixed-load fairness gain. |
 | [Skip discarded poll-timeout calculations](benchmarks/2026-10-18-ready-poll-timeout/README.md) | Overlapping CPU costs; no consistent joint latency/throughput improvement. |
 | [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |

@@ -1,0 +1,141 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -225,6 +225,14 @@
+     }
+ }
+ 
++// The stable token protects against retirement/reuse; the slot is a hint that
++// avoids a second map lookup unless arena compaction moved the connection.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Ready {
++    token: Token,
++    slot: usize,
++}
++
+ struct Worker {
+     poll: Poll,
+     registry: Arc<Registry>,
+@@ -234,7 +242,7 @@
+     connections: Slab<Connection>,
+     tokens: HashMap<Token, usize>,
+     next_token: usize,
+-    ready: VecDeque<Token>,
++    ready: VecDeque<Ready>,
+     timers: Timers,
+     scratch: ReadStorage,
+     compacted: bool,
+@@ -290,8 +298,16 @@
+             connection.output_only = false;
+             if !connection.scheduled {
+                 connection.scheduled = true;
+-                self.ready.push_back(token);
+-            }
++                self.ready.push_back(Ready { token, slot });
++            }
++        }
++    }
++
++    fn ready_slot(&self, ready: Ready) -> Option<usize> {
++        if self.connections.get(ready.slot).is_some_and(|c| c.token == ready.token) {
++            Some(ready.slot)
++        } else {
++            self.tokens.get(&ready.token).copied()
+         }
+     }
+ 
+@@ -300,7 +316,7 @@
+         // Keep one queued turn, as data sockets do with their scheduled flag.
+         if !self.accept_queued {
+             self.accept_queued = true;
+-            self.ready.push_back(LISTENER);
++            self.ready.push_back(Ready { token: LISTENER, slot: 0 });
+         }
+     }
+ 
+@@ -469,10 +485,10 @@
+                 shutdown_deadline = Some(
+                     Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
+                 );
+-                for (_, connection) in self.connections.iter_mut() {
++                for (slot, connection) in self.connections.iter_mut() {
+                     if !connection.scheduled {
+                         connection.scheduled = true;
+-                        self.ready.push_back(connection.token);
++                        self.ready.push_back(Ready { token: connection.token, slot });
+                     }
+                 }
+             }
+@@ -498,7 +514,8 @@
+             // without starving new socket events, timers, or shutdown signals.
+             let batch = self.ready.len().min(1024);
+             for _ in 0..batch {
+-                let token = self.ready.pop_front().expect("ready batch");
++                let ready = self.ready.pop_front().expect("ready batch");
++                let token = ready.token;
+                 if token == LISTENER {
+                     self.accept_queued = false;
+                     if shutdown_deadline.is_none() {
+@@ -506,7 +523,7 @@
+                     }
+                     continue;
+                 }
+-                let Some(&slot) = self.tokens.get(&token) else {
++                let Some(slot) = self.ready_slot(ready) else {
+                     continue;
+                 };
+                 let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
+@@ -540,7 +557,7 @@
+                             // Retain the reason: a write-quantum continuation
+                             // still needs no speculative input read.
+                             self.connections[slot].scheduled = true;
+-                            self.ready.push_back(token);
++                            self.ready.push_back(Ready { token, slot });
+                         }
+                     }
+                 }
+@@ -559,7 +576,7 @@
+                     {
+                         connection.scheduled = true;
+                         connection.output_only = true;
+-                        self.ready.push_back(token);
++                        self.ready.push_back(Ready { token, slot });
+                     }
+                 }
+             }
+--- a/src/server/arena_tests.rs
++++ b/src/server/arena_tests.rs
+@@ -179,6 +179,12 @@
+     assert!(worker.connections.capacity() < original_capacity / 8);
+     assert_eq!(worker.connections.len(), survivors.len());
+     assert_eq!(worker.ready.iter().copied().collect::<Vec<_>>(), ready);
++    for &entry in &ready {
++        assert_eq!(worker.ready_slot(entry), worker.tokens.get(&entry.token).copied());
++    }
++    assert!(ready.iter().any(|&entry| worker.ready_slot(entry).is_some_and(|slot| slot != entry.slot)));
++    assert!(ready.iter().any(|&entry| entry.token != LISTENER && worker.ready_slot(entry).is_none()));
++
+     assert_eq!(
+         worker
+             .signal
+@@ -314,8 +320,8 @@
+     assert!(
+         ready
+             .iter()
+-            .filter_map(|token| worker.tokens.get(token))
+-            .all(|&slot| worker.connections[slot].token != Token(514))
++            .filter_map(|&entry| worker.ready_slot(entry))
++            .all(|slot| worker.connections[slot].token != Token(514))
+     );
+     drop(new_client);
+     worker.connections.clear();
+--- a/src/server/accept_tests.rs
++++ b/src/server/accept_tests.rs
+@@ -60,7 +60,7 @@
+         worker
+             .ready
+             .iter()
+-            .filter(|&&token| token == LISTENER)
++            .filter(|ready| ready.token == LISTENER)
+             .count(),
+         1,
+         "listener readiness must not accumulate duplicate accept continuations"
