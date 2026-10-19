@@ -1,0 +1,11 @@
+# Admin token HTTP transport validation — 2026-10-19
+
+Configuration previously accepted admin tokens that HTTP cannot carry unchanged. Control bytes can invalidate a header; HTTP/1 parsing strips trailing ASCII spaces and tabs, making the configured credential impossible to match. Validation now rejects these tokens before binding and reports the variable name without its contents. The validator scans borrowed bytes without allocating a replacement token. This is a startup correctness fix, with no data-path performance claim.
+
+Relay passwords retain their existing CBOR-compatible rules. Valid UTF-8 admin tokens, interior spaces/tabs, leading token whitespace after the exact Bearer prefix, and a trailing Unicode nonbreaking space remain accepted. Clients and intermediaries must still preserve the bytes. Tests establish direct HTTP/1 behavior, not compatibility with every proxy.
+
+The two added library regressions and the new CLI regression failed on the previous implementation. After the fix, 119 library tests passed in 0.48 seconds, three secret-startup test methods passed in 0.03 seconds, strict Clippy passed, and 65 JavaScript tests passed in about 1.12 seconds with all six checked resource gauges retired. The ASCII-byte table also verifies that relay-password validation stays unchanged.
+
+The frozen release probe exercised seven token fixtures against each of the previous and selected binaries (14 cases). Five valid fixtures authenticated with HTTP 200 and rejected missing credentials with 401. The previous binary started with trailing-space/tab tokens but could never authenticate them (401); the selected binary rejected both before listening with exit 1 and a redacted diagnostic. All started children shut down normally. No manually running service was replaced.
+
+Run `python docs/benchmarks/2026-10-19-admin-token-transport/verify.py` to check saved source hashes, build provenance, regression logs and release receipts. The probe preserves its exact commands and binary hashes; rebuilding uses the recorded clean snapshot inputs and the repository build-snapshot script. Original sources are gzip-compressed alongside selected sources and their patch. These are focused correctness checks, not a capacity or latency benchmark.

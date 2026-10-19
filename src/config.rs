@@ -237,6 +237,18 @@ impl Config {
                 .is_none_or(|s| !s.is_empty() && s.len() <= 4096),
             "WAR_ADMIN_TOKEN must contain 1..=4096 bytes"
         );
+        ensure!(
+            self.admin_token.as_ref().is_none_or(|token| {
+                // HTTP field values permit HTAB, visible bytes and obs-text.
+                // HTTP/1 strips trailing optional whitespace before comparison.
+                token
+                    .bytes()
+                    .all(|byte| byte == b'\t' || !byte.is_ascii_control())
+                    && !token.ends_with(' ')
+                    && !token.ends_with('\t')
+            }),
+            "WAR_ADMIN_TOKEN must be an HTTP header value without trailing space or tab"
+        );
         Ok(())
     }
 
@@ -254,6 +266,58 @@ impl Config {
 #[cfg(test)]
 mod backlog_tests {
     use super::*;
+
+    #[test]
+    fn admin_token_bytes_follow_http_field_rules_without_restricting_relay_passwords() {
+        for byte in 0u8..=127 {
+            let value = format!("left{}right", char::from(byte));
+            let representable = axum::http::HeaderValue::from_bytes(value.as_bytes()).is_ok();
+            let config = Config {
+                admin_token: Some(value.clone()),
+                ..Config::default()
+            };
+            assert_eq!(
+                config.validate().is_ok(),
+                representable,
+                "HTTP field byte {byte}"
+            );
+            Config {
+                auth_password: Some(value),
+                ..Config::default()
+            }
+            .validate()
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn admin_tokens_cannot_end_in_http_optional_whitespace() {
+        for value in ["fixture ", "fixture\t"] {
+            let error = Config {
+                admin_token: Some(value.into()),
+                ..Config::default()
+            }
+            .validate()
+            .unwrap_err();
+            assert!(error.to_string().contains("WAR_ADMIN_TOKEN"));
+            assert!(!error.to_string().contains("fixture"));
+        }
+        for value in [
+            "fixture",
+            "two words",
+            "inside\ttab",
+            " \tleading",
+            "unicode-π-世界",
+            "trailing-\u{a0}",
+        ] {
+            Config {
+                admin_token: Some(value.into()),
+                ..Config::default()
+            }
+            .validate()
+            .unwrap();
+        }
+    }
 
     #[test]
     fn listen_backlog_is_bounded_for_cli_and_embedding() {

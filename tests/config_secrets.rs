@@ -79,3 +79,22 @@ fn absent_empty_ascii_and_unicode_secrets_still_pass_configuration() {
         assert!(!diagnostic.contains("valid-π-世界"));
     }
 }
+
+#[test]
+fn unusable_admin_token_is_rejected_before_binding_without_echoing_contents() {
+    for value in [
+        "redaction-fixture\n",
+        "redaction-fixture\r",
+        "redaction-fixture\u{7f}",
+        "redaction-fixture ",
+        "redaction-fixture\t",
+    ] {
+        let output = startup(&[("WAR_ADMIN_TOKEN", OsString::from(value))]);
+        assert_eq!(output.status.code(), Some(1));
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains("WAR_ADMIN_TOKEN"));
+        assert!(diagnostic.contains("HTTP"));
+        assert!(!diagnostic.contains("redaction-fixture"));
+        assert!(!diagnostic.contains("cannot bind relay listener"));
+    }
+}

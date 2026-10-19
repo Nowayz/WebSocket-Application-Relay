@@ -60,6 +60,7 @@ enable management operations. Both are disabled when absent; the original
 hardcoded password is removed. Secrets are environment-only and never logged.
 Secret values must be valid UTF-8; invalid encoding stops startup with the variable
 name, without echoing its value. Empty values retain the absent-secret behavior.
+Admin tokens must also be valid HTTP field values without trailing ASCII spaces or tabs; unusable values fail validation before binding without echoing the token. Relay passwords retain their existing rules. See the [HTTP transport checks](docs/benchmarks/2026-10-19-admin-token-transport/README.md).
 Rust embedders should propagate `config.load_secrets()?` before validation. See
 the [startup encoding checks](docs/benchmarks/2026-10-19-config-secret-encoding/README.md).
 

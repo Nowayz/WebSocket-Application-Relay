@@ -652,6 +652,7 @@ Both environment secrets must be valid UTF-8. A malformed encoding stops startup
 before listeners bind; diagnostics name the variable and omit its contents. Empty
 values keep the existing absent-secret behavior. Embedders loading environment
 secrets now handle `Config::load_secrets() -> Result<()>` before validation.
+Admin tokens must also be valid HTTP field values without trailing ASCII spaces or tabs; unusable values fail validation before binding without echoing the token. Relay passwords retain their existing rules. See the [HTTP transport checks](benchmarks/2026-10-19-admin-token-transport/README.md).
 Management authentication compares the token bytes following the exact `Bearer `
 prefix directly with the configured UTF-8 bytes. The HTTP client and any
 intermediary must preserve those bytes; see the [direct HTTP checks](benchmarks/2026-10-19-admin-token-bytes/README.md).
