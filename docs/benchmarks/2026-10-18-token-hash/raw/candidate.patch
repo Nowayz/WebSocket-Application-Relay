@@ -1,0 +1,57 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -225,6 +225,27 @@
+     }
+ }
+ 
++// Only server-generated, monotonically increasing readiness tokens use this
++// map. Client-controlled names retain their randomized hashers.
++#[derive(Default)]
++struct TokenHasher(u64);
++
++impl std::hash::Hasher for TokenHasher {
++    fn finish(&self) -> u64 {
++        self.0
++    }
++
++    fn write(&mut self, bytes: &[u8]) {
++        for &byte in bytes {
++            self.0 = self.0.rotate_left(5) ^ u64::from(byte);
++        }
++    }
++
++    fn write_usize(&mut self, value: usize) {
++        self.0 = (value as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
++    }
++}
++
+ struct Worker {
+     poll: Poll,
+     registry: Arc<Registry>,
+@@ -232,7 +253,7 @@
+     signal: Arc<Signal>,
+     relay: Arc<Relay>,
+     connections: Slab<Connection>,
+-    tokens: HashMap<Token, usize>,
++    tokens: HashMap<Token, usize, std::hash::BuildHasherDefault<TokenHasher>>,
+     next_token: usize,
+     ready: VecDeque<Token>,
+     timers: Timers,
+@@ -268,7 +289,7 @@
+             signal,
+             relay,
+             connections: Slab::new(),
+-            tokens: HashMap::new(),
++            tokens: HashMap::default(),
+             next_token: 2,
+             ready: VecDeque::new(),
+             timers: Timers::default(),
+@@ -436,7 +457,7 @@
+             // Keep small arenas warm for ordinary reconnect traffic.
+             if self.connections.capacity() > 256 || self.compacted {
+                 self.connections = Slab::new();
+-                self.tokens = HashMap::new();
++                self.tokens = HashMap::default();
+                 self.timers = Timers::default();
+                 self.compacted = false;
+             }
