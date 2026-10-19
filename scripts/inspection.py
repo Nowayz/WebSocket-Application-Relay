@@ -132,6 +132,8 @@ def run(args):
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
+    if getattr(args, "value_kind", "bytes") != "bytes":
+        command += ["--value-kind", args.value_kind]
     if getattr(args, "client_workers", None) is not None:
         command += ["--client-workers", str(args.client_workers)]
     if getattr(args, "page_size", None) is not None:
@@ -301,6 +303,8 @@ if __name__ == "__main__":
                         help="Source snapshot root; defaults to sources beside a frozen client, then checkout context")
     parser.add_argument("--mode", choices=["none", "cbor", "http"], default="http")
     parser.add_argument("--page-size", type=int, help="HTTP first-page size during traffic; complete traversal verified at quiescent gates")
+    parser.add_argument("--value-kind", choices=["bytes", "ascii", "utf8"], default="bytes",
+                        help="Prepared 1 KiB application value type; default preserves frozen-client commands")
     parser.add_argument("--rooms", type=int, default=8192)
     parser.add_argument("--seconds", type=int, default=8)
     parser.add_argument("--inspectors", type=int, default=2)

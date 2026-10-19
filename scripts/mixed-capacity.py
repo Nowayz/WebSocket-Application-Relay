@@ -61,6 +61,8 @@ def main():
     parser.add_argument('--users', type=int, default=100000)
     parser.add_argument('--seconds', type=int, default=30)
     parser.add_argument('--readers', type=int, default=8192)
+    parser.add_argument('--value-kind', choices=['bytes', 'ascii', 'utf8'], default='bytes',
+                        help='Sidecar private/fanout value type; capacity probes remain byte strings')
     parser.add_argument('--scope', choices=['room', 'observers'], default='observers')
     parser.add_argument('--window', type=int, default=4)
     parser.add_argument('--inspectors', type=int, default=2)
@@ -119,6 +121,8 @@ def main():
           '--churn-workers', '8', '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
           '--fanout-readers', str(args.readers), '--fanout-window', str(args.window), '--fanout-global-observers',
           '--external-capacity-rooms', str(args.users // 16), '--fanout-close-window', '32', '--fanout-windows-per-second', str(args.fanout_windows_per_second)]
+    if args.value_kind != 'bytes':
+        sc += ['--value-kind', args.value_kind]
     if args.http_page_size is not None:
         sc.remove('--protocol-only')
         sc[sc.index('--mode') + 1] = 'http'

@@ -233,9 +233,16 @@ mod tests {
             std::future::pending::<Result<()>>().await
         });
         let mut counts = Counts::default();
-        let group = Fanout::new(&url, 2, Wire::Cbor, global_observers, &mut counts)
-            .await
-            .unwrap();
+        let group = Fanout::new(
+            &url,
+            2,
+            Wire::Cbor,
+            ValueKind::Bytes,
+            global_observers,
+            &mut counts,
+        )
+        .await
+        .unwrap();
         let error = timeout(
             Duration::from_secs(2),
             group.run(
@@ -267,6 +274,7 @@ impl Fanout {
         url: &str,
         readers: usize,
         wire: Wire,
+        value_kind: ValueKind,
         global_observers: bool,
         counts: &mut Counts,
     ) -> Result<Self> {
@@ -296,11 +304,11 @@ impl Fanout {
             }
             peers.push((socket, id));
         }
-        let mut payload = [0x5a; 1024];
+        let mut payload = value_kind.payload();
         let packets = (0u64..64)
             .map(|n| {
                 payload[..8].copy_from_slice(&n.to_le_bytes());
-                let value = protocol::byte_string(&payload);
+                let value = value_kind.encode(&payload);
                 (
                     wire.envelope(protocol::BROADCAST, &value),
                     wire.envelope(id, &value),

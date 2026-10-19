@@ -2,6 +2,9 @@
 //! The controller gates setup, measurement and cleanup; every output is checked.
 #[path = "inspection/fanout.rs"]
 mod fanout;
+#[cfg(test)]
+#[path = "inspection/value_tests.rs"]
+mod value_tests;
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
@@ -74,6 +77,36 @@ impl Wire {
     }
 }
 
+/// Prepared application values; every mode keeps the same 1 KiB content size.
+#[derive(Clone, Copy, PartialEq, ValueEnum, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ValueKind {
+    Bytes,
+    Ascii,
+    Utf8,
+}
+
+impl ValueKind {
+    fn payload(self) -> [u8; 1024] {
+        let mut payload = [0x5a; 1024];
+        if self == Self::Utf8 {
+            for pair in payload[8..].chunks_exact_mut(2) {
+                pair.copy_from_slice("é".as_bytes());
+            }
+        }
+        payload
+    }
+
+    fn encode(self, payload: &[u8]) -> Bytes {
+        match self {
+            Self::Bytes => protocol::byte_string(payload),
+            Self::Ascii | Self::Utf8 => protocol::text(
+                std::str::from_utf8(payload).expect("prepared template is valid UTF-8"),
+            ),
+        }
+    }
+}
+
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
@@ -91,6 +124,9 @@ struct Args {
     audit_ids: bool,
     #[arg(long, value_enum, default_value = "http")]
     mode: Mode,
+    /// Application values: byte string, ASCII text, or multibyte UTF-8 text.
+    #[arg(long, value_enum, default_value = "bytes")]
+    value_kind: ValueKind,
     /// Inspect the first bounded HTTP page during traffic; traverse all pages at gates.
     #[arg(long)]
     page_size: Option<usize>,
@@ -716,6 +752,10 @@ async fn run(args: Args) -> Result<()> {
         );
     }
     ensure!(
+        args.wire == Wire::Cbor || args.value_kind == ValueKind::Bytes,
+        "text value kinds require CBOR wire"
+    );
+    ensure!(
         args.rooms <= 8192
             && (1..=60).contains(&args.seconds)
             && args.pairs <= 64
@@ -823,11 +863,11 @@ async fn run(args: Args) -> Result<()> {
                 );
             }
         }
-        let mut payload = [0x5a; 1024];
+        let mut payload = args.value_kind.payload();
         let packets = (0u64..64)
             .map(|n| {
                 payload[..8].copy_from_slice(&n.to_le_bytes());
-                let value = protocol::byte_string(&payload);
+                let value = args.value_kind.encode(&payload);
                 (
                     args.wire.envelope(target_id, &value),
                     args.wire.envelope(id, &value),
@@ -874,6 +914,7 @@ async fn run(args: Args) -> Result<()> {
             &args.url,
             args.fanout_readers,
             args.wire,
+            args.value_kind,
             args.fanout_global_observers,
             &mut counts,
         )
@@ -912,7 +953,7 @@ async fn run(args: Args) -> Result<()> {
     }
     gate(
         "ready",
-        serde_json::json!({"counts":counts,"stable_channels":stable.len(),"stable_sessions":counts.joins}),
+        serde_json::json!({"value_kind":args.value_kind,"counts":counts,"stable_channels":stable.len(),"stable_sessions":counts.joins}),
     )?;
     let started = Instant::now();
     let until = started + Duration::from_secs(args.seconds);
@@ -995,7 +1036,7 @@ async fn run(args: Args) -> Result<()> {
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
+        serde_json::json!({"value_kind":args.value_kind,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
     )?;
     // For short C++ churn runs, verify its delayed retirement explicitly. The
     // controller bounds the entire case to finish before the first 30-second GC.
