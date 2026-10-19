@@ -74,6 +74,15 @@ runner's final two-second mixed-size confirmation verifies 1,355,420 healthy
 deliveries, with 4.274 ms observed maximum. This is pressure-isolation evidence,
 not a relay performance change or a 100,000-user latency guarantee.
 
+The [overload/reuse probe](benchmarks/2026-10-18-overload-reuse/README.md)
+adds a short native check that unread-recipient overload releases global/IP
+admission and queued output while independent healthy traffic continues. Two
+fresh four-worker runs each complete three waves in about 21 ms, with three
+IP refusals, three global refusals, three same-IP replacements and 15 checked
+control deliveries. Descriptors return to 26/26 and final resource gauges are
+zero. Both probes' collision/failure-cleanup tests pass; no runtime change is
+needed for this finite case.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues

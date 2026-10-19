@@ -243,6 +243,25 @@ release. The two timeout waits make the successful probe about two seconds;
 this is a lifecycle check, not a connection-rate or latency benchmark. Existing
 output files are refused. See the [recorded probe](benchmarks/2026-10-18-admission-reuse/README.md).
 
+A separate short probe checks overload retirement under the same admission
+constraints:
+
+```sh
+python3 scripts/overload-reuse.py --server target/release/war-relay \
+  --output artifacts/overload-reuse.json
+```
+
+It checks three waves of unread-recipient pressure, IP/global refusals,
+healthy self-delivery between pressure submissions, and same-IP replacement
+routing after retirement. A FIFO self-delivery on the publisher drains its
+preceding input before reconnect. Partial output may require TCP termination;
+fully readable buffered frames are checked, but the overloaded recipient is not
+promised complete delivery. Before shutdown, queue/storage/session gauges return
+to zero and native descriptors return to baseline. This Linux loopback probe uses
+tight fixture-only output budgets and at most 2 MiB pressure input per wave; it
+is not a throughput or large-population latency benchmark. See the
+[overload/reuse evidence](benchmarks/2026-10-18-overload-reuse/README.md).
+
 Addresses come from the accepted TCP connection. IPv4-mapped IPv6 addresses use
 the same quota as their IPv4 form; other IPv6 addresses each have their own
 quota. HTTP `Forwarded`, `X-Forwarded-For` and similar headers do not change this

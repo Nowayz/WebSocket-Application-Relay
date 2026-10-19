@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class OutputTest(unittest.TestCase):
+    runner = 'admission-reuse.py'
+
     def test_existing_receipt_or_log_preserves_evidence_without_launch(self):
         for suffix in ['.json', '.server.log']:
             for dangling in [False, True]:
@@ -30,7 +32,7 @@ class OutputTest(unittest.TestCase):
                         artifact.symlink_to(absent)
                     else:
                         artifact.write_bytes(evidence)
-                    result = subprocess.run([sys.executable, str(ROOT / 'scripts/admission-reuse.py'),
+                    result = subprocess.run([sys.executable, str(ROOT / 'scripts' / self.runner),
                                              '--server', str(server), '--output', str(output)],
                                             capture_output=True, text=True, timeout=10)
                     self.assertNotEqual(result.returncode, 0)
@@ -81,7 +83,7 @@ with socket.socket() as listener:
     threading.Event().wait()
 """.replace('PID_FILE', repr(str(pid_file))))
             server.chmod(0o755)
-            result = subprocess.run([sys.executable, str(ROOT / 'scripts/admission-reuse.py'),
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts' / self.runner),
                                      '--server', str(server), '--output', str(output)],
                                     capture_output=True, text=True, timeout=10)
             self.assertNotEqual(result.returncode, 0)
@@ -91,6 +93,10 @@ with socket.socket() as listener:
             self.assertEqual(receipt['exit_code'], -15)
             with self.assertRaises(ProcessLookupError):
                 os.kill(int(pid_file.read_text()), 0)
+
+
+class OverloadOutputTest(OutputTest):
+    runner = 'overload-reuse.py'
 
 
 if __name__ == '__main__':
