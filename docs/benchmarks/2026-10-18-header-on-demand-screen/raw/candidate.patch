@@ -1,0 +1,34 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -506,25 +506,22 @@
+ ) -> io::Result<(usize, u64, u64)> {
+     const FRAMES: usize = 16;
+     let mut headers = [[0; 20]; FRAMES];
+-    let mut lengths = [0; FRAMES];
+-    for (i, pending) in queue.iter().take(FRAMES).enumerate() {
+-        lengths[i] = header(&pending.packet.frame, &mut headers[i]);
+-    }
+     let written = {
+         let mut slices: [IoSlice<'_>; FRAMES * 2] = std::array::from_fn(|_| IoSlice::new(&[]));
+         let mut count = 0;
+         let mut remaining = quantum;
+-        for (i, pending) in queue.iter().take(FRAMES).enumerate() {
+-            let head_start = pending.offset.min(lengths[i]);
+-            let head_end = lengths[i].min(head_start + remaining);
+-            let head = &headers[i][head_start..head_end];
++        for (pending, bytes) in queue.iter().zip(headers.iter_mut()) {
++            let length = header(&pending.packet.frame, bytes);
++            let head_start = pending.offset.min(length);
++            let head_end = length.min(head_start + remaining);
++            let head = &bytes[head_start..head_end];
+             if !head.is_empty() {
+                 slices[count] = IoSlice::new(head);
+                 count += 1;
+                 remaining -= head.len();
+             }
+             let body = pending.packet.frame.payload();
+-            let start = pending.offset.saturating_sub(lengths[i]);
++            let start = pending.offset.saturating_sub(length);
+             let end = body.len().min(start + remaining);
+             if end > start {
+                 slices[count] = IoSlice::new(&body[start..end]);
