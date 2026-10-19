@@ -26,13 +26,18 @@ class OfferedLoadTest(unittest.TestCase):
                            '--sidecar', os.environ.get('WAR_MIXED_TEST_SIDECAR', str(ROOT / 'target/release/examples/inspection')),
                            '--users', '32', '--seconds', '2', '--readers', '16',
                            '--scope', 'room', '--window', '4', '--inspectors', '0',
-                           '--pairs', '0', '--churn-cycles-per-second', '0',
+                           '--pairs', '0', '--churn-workers', '0', '--churn-cycles-per-second', '0',
                            '--fanout-windows-per-second', str(rate), '--pin-client-workers',
                            '--output', str(output)]
                 result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=45)
                 self.assertEqual(result.returncode, 0 if expected else 1, result.stdout + result.stderr)
                 receipt = json.loads(output.read_text())
                 self.assertTrue(receipt['correctness_passed'])
+                self.assertEqual(receipt['args']['churn_workers'], 0)
+                ready = next(e for e in receipt['sidecar_events'] if e['event'] == 'ready')
+                measured = next(e for e in receipt['sidecar_events'] if e['event'] == 'measured')
+                self.assertEqual(receipt['sidecar_events'][-1]['details']['counts']['joins'], ready['details']['counts']['joins'])
+                self.assertEqual(measured['details']['churn']['verified'], 0)
                 self.assertEqual(receipt['passed'], expected)
                 self.assertEqual(receipt['exit_codes'], [0, 0, 0])
                 self.assertEqual(receipt['fanout_offered_load_met'], None if rate == 0 else expected)

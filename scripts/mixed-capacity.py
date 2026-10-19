@@ -35,12 +35,12 @@ def free_port():
         return sock.getsockname()[1]
 
 
-def snapshot(pid):
+def snapshot(pid, *, include_fds=True):
     fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
     status = Path(f'/proc/{pid}/status').read_text().splitlines()
     return {'cpu_seconds': (int(fields[11]) + int(fields[12])) / os.sysconf('SC_CLK_TCK'),
             'rss_kib': int(next(line.split()[1] for line in status if line.startswith('VmRSS:'))),
-            'fds': len(list(Path(f'/proc/{pid}/fd').iterdir()))}
+            'fds': len(list(Path(f'/proc/{pid}/fd').iterdir())) if include_fds else None}
 
 
 def generator_lag(timeline, messages_per_second):
@@ -52,6 +52,39 @@ def generator_lag(timeline, messages_per_second):
     return {'available': True, 'period_ms': period_ms,
             'maximum_pre_send_ms': max(w['pre_send_delay']['max_ms'] for w in windows),
             'windows_over_one_period': late, 'exceeded_one_period': bool(late)}
+
+
+def fanout_timing_summary(timing):
+    """Summarize existing controller clocks after timing; never call this a server hop."""
+    if timing is None:
+        return {'available': False, 'reason': 'Client did not emit controller timing'}
+    ready = timing['ready_ns']
+    windows = timing['windows']
+    if type(ready) is not int or ready < 0 or not windows:
+        raise ValueError('invalid fanout controller readiness or empty windows')
+    fields = ['scheduled_ns', 'wake_ns', 'sent_ns', 'acknowledged_ns', 'completed_ns']
+    stages = {'wake_lag': [], 'publisher_work': [], 'after_last_send_to_all_acks': [],
+              'membership_cleanup': [], 'scheduled_to_complete': []}
+    previous_complete = ready
+    for index, window in enumerate(windows):
+        clocks = [window[key] for key in fields]
+        if (any(type(t) is not int or t < 0 for t in clocks)
+                or clocks != sorted(clocks) or clocks[1] < previous_complete):
+            raise ValueError(f'nonmonotonic fanout controller window {index}')
+        for name, value in zip(stages, [clocks[1]-clocks[0], clocks[2]-clocks[1],
+                                       clocks[3]-clocks[2], clocks[4]-clocks[3],
+                                       clocks[4]-clocks[0]]):
+            stages[name].append(value)
+        previous_complete = clocks[4]
+    summary = {'available': True, 'windows': len(windows), 'controller_ready_ms': ready/1e6,
+               'scope': 'Controller clocks. After-last-send includes relay, kernel, readers and acknowledgement processing; not server-hop latency.',
+               'median_method': 'nearest rank', 'stages': {}}
+    for name, values in stages.items():
+        worst = max(range(len(values)), key=values.__getitem__)
+        summary['stages'][name] = {'first_ms': values[0]/1e6,
+                                  'median_ms': sorted(values)[(len(values)-1)//2]/1e6,
+                                  'max_ms': values[worst]/1e6, 'max_window_index': worst}
+    return summary
 
 
 def main():
@@ -70,7 +103,10 @@ def main():
     parser.add_argument('--inspectors', type=int, default=2)
     parser.add_argument('--http-page-size', type=int, help='Opt-in native HTTP first-page inspection, limit 1..=1000; full traversal checked outside timing')
     parser.add_argument('--pairs', type=int, default=1)
-    parser.add_argument('--churn-cycles-per-second', type=int, default=0)
+    parser.add_argument('--churn-workers', type=int, default=8,
+                        help='Lifecycle workers; 0 disables churn (default: 8)')
+    parser.add_argument('--churn-cycles-per-second', type=int, default=0,
+                        help='Per-worker lifecycle rate; 0 means unpaced when workers are enabled')
     parser.add_argument('--fanout-windows-per-second', type=int, default=0)
     parser.add_argument('--fanout-churn-every', type=int, default=0)
     parser.add_argument('--exact-fanout-latency', action='store_true')
@@ -80,6 +116,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     assert args.users % 16 == 0 and args.seconds >= 2
+    if not 0 <= args.churn_workers <= 64:
+        parser.error('churn-workers must be in 0..=64, matching the inspection client')
     if args.http_page_size is not None and not (
             args.kind == 'rust' and 1 <= args.http_page_size <= 1000 and not args.fanout_churn_every):
         parser.error('--http-page-size requires Rust, limit 1..=1000, and no fanout membership churn')
@@ -120,7 +158,7 @@ def main():
         cc += ['--latency-stages']
     sc = ['taskset', '-c', '12-15,28-31', str(args.sidecar.resolve()), '--url', f'ws://127.0.0.1:{port}',
           '--protocol-only', '--mode', 'cbor', '--rooms', '0', '--pairs', str(args.pairs), '--seconds', str(args.seconds),
-          '--churn-workers', '8', '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
+          '--churn-workers', str(args.churn_workers), '--churn-cycles-per-second', str(args.churn_cycles_per_second), '--inspectors', str(args.inspectors), '--client-workers', '8',
           '--fanout-readers', str(args.readers), '--fanout-window', str(args.window), '--fanout-global-observers',
           '--external-capacity-rooms', str(args.users // 16), '--fanout-close-window', '32', '--fanout-windows-per-second', str(args.fanout_windows_per_second)]
     if args.value_kind != 'bytes':
@@ -219,7 +257,7 @@ def main():
             verify_client_affinity()
             start = time.monotonic(); current = metrics()
             record['monitoring'].append({'seconds': start - began, 'response_ms': (time.monotonic() - start) * 1000,
-                                         'process': snapshot(server.pid), 'metrics': current})
+                                         'process': snapshot(server.pid, include_fds=False), 'metrics': current})
             assert current['war_connections'] >= args.users
             assert current['war_queued_bytes'] <= 256 * 1024**2
             if args.kind == 'rust':
@@ -234,7 +272,9 @@ def main():
         if perf:
             perf.send_signal(signal.SIGINT); assert perf.wait(timeout=10) in (0, 130, -signal.SIGINT); perf = None
         assert event(sidecar, 'sidecar_events')['event'] == 'measured'
-        fanout = record['sidecar_events'][-1]['details']['fanout']
+        details = record['sidecar_events'][-1]['details']
+        fanout = details['fanout']
+        record['fanout_window_timing'] = fanout_timing_summary(details.get('fanout_controller_timing'))
         record['fanout_windows'] = {'completed': fanout['verified'] // (args.readers * args.window),
                                     'offered': args.seconds * args.fanout_windows_per_second if args.fanout_windows_per_second else None}
         offered = record['fanout_windows']['offered']

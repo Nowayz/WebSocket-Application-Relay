@@ -14,12 +14,23 @@ Selected source and locally running executables are distinct:
 
 The latest [short 100,000-user mixed check](benchmarks/2026-10-18-short-current-100k/README.md)
 measures two seconds per run in baseline/current/current/baseline order. Every
-user contributes eight checked private probes. One current-source trial misses
+user contributes eight checked private probes. These runs also include eight
+unpaced lifecycle workers; the earlier report incorrectly described churn as
+disabled, and its prose is now corrected without changing raw results.
+One current-source trial misses
 the fanout target (31/32 windows); the other three meet it. Fanout maxima vary
 from 61.7 to 99.3 ms for current source. This proves neither a consistent speedup
 nor a latency SLA. Figures include client/kernel/relay scheduling, and their
 measurement origin is explicitly documented. The unresolved target is reducing
 that variation while meeting the offered load, preserving FIFO and memory bounds.
+
+The [short workload diagnostics](benchmarks/2026-10-18-fanout-workload-diagnostics/README.md)
+add explicit churn-worker selection and remove repeated 100,000-descriptor scans
+from timed monitoring. A two-second-per-run light/heavy/heavy/light comparison
+meets every offered window; lighter monitoring yields private maxima 3.85–4.46 ms
+versus 8.51–10.06 ms, and fanout maxima 50.51–56.17 ms versus 58.97–61.89 ms.
+This fixes observer interference, not relay runtime performance. Phase-gate
+descriptor checks, exact counters, FIFO and complete resource retirement remain.
 
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.

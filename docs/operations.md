@@ -1407,10 +1407,25 @@ The current-host frozen recipe is:
 ```sh
 python3 scripts/mixed-capacity.py \
   --server artifacts/candidates/mixed-capacity-final/war-relay \
-  --scope room --pairs 0 --churn-cycles-per-second 4 \
+  --scope room --pairs 0 --churn-workers 8 --churn-cycles-per-second 4 \
   --fanout-windows-per-second 16 \
   --output artifacts/mixed-population.json
 ```
+
+`--churn-workers` defaults to eight. Set it to `0` to disable independent
+lifecycle churn explicitly. `--churn-cycles-per-second 0` means unpaced work
+when workers are enabled; it does not disable them. Fanout-audience membership
+churn is a separate option.
+
+Timed monitoring records CPU/RSS with `process.fds: null`, avoiding a complete
+`/proc/PID/fd` enumeration per sample. Existing phase-gate descriptor counts,
+exact population/counter checks and final resource retirement remain enabled.
+`fanout_window_timing` summarizes existing controller clocks after measurement:
+wakeup lag, publisher work, the interval from last send to all-reader ACKs,
+membership cleanup and scheduled-to-complete latency. The ACK interval includes
+relay, kernel, reader scheduling and acknowledgement processing; it is not an
+isolated server-hop measurement. Older clients without these clocks report it
+as unavailable. See the [short observer comparison](benchmarks/2026-10-18-fanout-workload-diagnostics/README.md).
 
 Use a new output path for each fresh trial. The helper records topology and
 verifies that load clients do not share the server's physical cores; its numeric
