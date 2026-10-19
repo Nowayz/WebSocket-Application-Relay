@@ -1,0 +1,12 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -315,6 +315,9 @@
+         }
+         let first = state.queue.is_empty();
+         let old_capacity = state.queue.capacity();
++        if old_capacity == 0 {
++            state.queue.reserve_exact(2);
++        }
+         state.queue.push_back(Pending {
+             packet: packet.into_owned(),
+             offset,
