@@ -1,0 +1,24 @@
+   Compiling tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/bridge-departure-validation-20261019-before-work/vendor/tungstenite)
+   Compiling tokio-tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/bridge-departure-validation-20261019-before-work/vendor/tokio-tungstenite)
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/bridge-departure-validation-20261019-before-work)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.49s
+     Running unittests src/lib.rs (artifacts/bridge-buffer-check/debug/deps/war_relay-1246fdc39159dbe4)
+
+running 1 test
+test legacy_bridge::tests::disconnect_events_preserve_valid_ids_and_reject_reserved_departures ... FAILED
+
+failures:
+
+---- legacy_bridge::tests::disconnect_events_preserve_valid_ids_and_reject_reserved_departures stdout ----
+
+thread 'legacy_bridge::tests::disconnect_events_preserve_valid_ids_and_reject_reserved_departures' (1604351) panicked at src/legacy_bridge.rs:632:13:
+assertion failed: from_cbor(&protocol::envelope(BROADCAST, &protocol::uint(id))).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    legacy_bridge::tests::disconnect_events_preserve_valid_ids_and_reject_reserved_departures
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
