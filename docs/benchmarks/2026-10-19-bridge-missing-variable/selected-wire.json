@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "binary_sha256": "668153c19ed08c3aecd3889698c8628cca5a2c9cf9100def6ce6ba54bcc6aeb3",
+  "cases": [
+    {
+      "valid_missing_reply": false,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/bridge-missing-variable-20261019-release-selected/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:50441",
+        "--upstream",
+        "ws://127.0.0.1:55151",
+        "--max-connections",
+        "1"
+      ],
+      "frontend_opcode": 8,
+      "frontend_body_hex": "03eb56616c75652052657175697265732043424f5220436c69656e74",
+      "fd_baseline": 10,
+      "fd_final": 10,
+      "upstream_retirement": [
+        "eof"
+      ],
+      "passed": true,
+      "exit_code": 0,
+      "worker_finished": true
+    },
+    {
+      "valid_missing_reply": true,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/bridge-missing-variable-20261019-release-selected/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:55889",
+        "--upstream",
+        "ws://127.0.0.1:33381",
+        "--max-connections",
+        "1"
+      ],
+      "frontend_opcode": 2,
+      "frontend_body_hex": "0000000000000000c8",
+      "fd_baseline": 10,
+      "fd_final": 10,
+      "upstream_retirement": [
+        "close-handshake"
+      ],
+      "passed": true,
+      "exit_code": 0,
+      "worker_finished": true
+    }
+  ]
+}
