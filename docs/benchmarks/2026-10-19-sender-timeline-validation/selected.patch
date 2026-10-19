@@ -1,0 +1,28 @@
+--- a/scripts/mixed-capacity.py
++++ b/scripts/mixed-capacity.py
+@@ -11,6 +11,7 @@
+ import csv
+ import hashlib
+ import json
++import math
+ import os
+ from pathlib import Path
+ import select
+@@ -45,7 +46,17 @@
+ 
+ def generator_lag(timeline, messages_per_second):
+     """Expose sender backlog using the workload's own period, not an arbitrary SLO."""
++    if type(messages_per_second) is not int or messages_per_second <= 0:
++        raise ValueError('messages_per_second must be a positive integer')
+     windows = timeline['windows']
++    if not windows:
++        raise ValueError('sender timeline must contain windows')
++    for second, window in enumerate(windows):
++        if type(window['intended_second']) is not int or window['intended_second'] != second:
++            raise ValueError('sender timeline seconds must be contiguous ordered integers')
++        delay = window['pre_send_delay']['max_ms']
++        if type(delay) not in (int, float) or not math.isfinite(delay) or delay < 0:
++            raise ValueError(f'invalid sender delay in second {second}')
+     period_ms = 1000 / messages_per_second
+     late = [w['intended_second'] for w in windows
+             if w['pre_send_delay']['max_ms'] > period_ms]

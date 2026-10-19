@@ -7075,3 +7075,13 @@ show overlapping RSS/CPU/latency ranges. The candidate RSS average is lower;
 this short set does not establish a reliable performance improvement. Keep
 the existing runtime and retain three public buffer-policy tests instead.
 See the [screen, complete user observations and selected coverage](benchmarks/2026-10-19-codec-limit-screen/README.md).
+
+
+### Sender backlog evidence validation (2026-10-19)
+
+The mixed-population postprocessor now rejects nonfinite/negative pre-send
+delays, invalid rates and skipped/repeated/reordered second labels. Controlled
+NaN evidence previously appeared as no missed period. Nine valid archived
+population timelines retain byte-for-value equivalent summaries; measured
+workload code is unchanged. Six seconds of small offered-load checks pass.
+See the [fixtures, replay and retained outcomes](benchmarks/2026-10-19-sender-timeline-validation/README.md).
