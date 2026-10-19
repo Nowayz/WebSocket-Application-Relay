@@ -1,0 +1,27 @@
+diff --git a/src/legacy_bridge.rs b/src/legacy_bridge.rs
+index f32dae8..1dd8ed2 100644
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -208,6 +208,13 @@ pub fn from_cbor(bytes: &[u8]) -> Result<Option<Message>> {
+ // already contains its name, a CBOR string header, array header and population.
+ fn channel_reply(d: &mut Decoder<'_>) -> Result<Message> {
+     let count = u32::try_from(d.array()?.context("indefinite channel list")?)?;
++    // Reply array, opcode and list use three items; each channel record needs
++    // its own array, name and population. Reject impossible schemas before
++    // allocating output, even when their individual elements are valid CBOR.
++    anyhow::ensure!(
++        u64::from(count) <= (protocol::MAX_ITEMS - 3) / 3,
++        "invalid channel entry count"
++    );
+     // Each representable name needs at most one length byte plus 255 bytes.
+     // A malformed oversized name must not inflate the destination allocation.
+     let names_bound = (d.input().len() - d.position()).min(count as usize * 256);
+@@ -787,7 +794,7 @@ mod tests {
+ 
+     #[test]
+     fn channel_replies_preserve_legacy_layout_and_reject_unrepresentable_fields() {
+-        for count in [0, 1, 64, 1024] {
++        for count in [0, 1, 64, 1024, (protocol::MAX_ITEMS - 3) / 3] {
+             let mut e = Encoder::new(Vec::new());
+             e.array(2)
+                 .unwrap()

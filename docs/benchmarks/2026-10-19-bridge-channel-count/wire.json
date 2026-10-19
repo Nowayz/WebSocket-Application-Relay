@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "binary_sha256": "5cc15150d975f3fa9eb86757413ad8c6ad36339c259b82f1a1dfc9e8bc1ecc28",
+  "cases": [
+    {
+      "valid_empty_channel_reply": false,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/bridge-channel-count-20261019-selected/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:39957",
+        "--upstream",
+        "ws://127.0.0.1:49117",
+        "--max-connections",
+        "1"
+      ],
+      "frontend_opcode": 8,
+      "frontend_body_hex": "03eb56616c75652052657175697265732043424f5220436c69656e74",
+      "fd_baseline": 10,
+      "fd_final": 10,
+      "upstream_retirement": [
+        "eof"
+      ],
+      "passed": true,
+      "exit_code": 0,
+      "worker_finished": true
+    },
+    {
+      "valid_empty_channel_reply": true,
+      "command": [
+        "/home/phil/dev/war_next/artifacts/candidates/bridge-channel-count-20261019-selected/war-legacy-bridge",
+        "--bind",
+        "127.0.0.1:54029",
+        "--upstream",
+        "ws://127.0.0.1:39015",
+        "--max-connections",
+        "1"
+      ],
+      "frontend_opcode": 2,
+      "frontend_body_hex": "000000000000000000000000",
+      "fd_baseline": 10,
+      "fd_final": 10,
+      "upstream_retirement": [
+        "close-handshake"
+      ],
+      "passed": true,
+      "exit_code": 0,
+      "worker_finished": true
+    }
+  ]
+}
