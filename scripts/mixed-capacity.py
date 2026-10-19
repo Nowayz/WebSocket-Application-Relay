@@ -104,6 +104,8 @@ def main():
     parser.add_argument('--kind', choices=['rust', 'cpp'], default='rust')
     parser.add_argument('--sidecar', type=Path, default=ROOT / 'target/release/examples/inspection')
     parser.add_argument('--capacity-client', type=Path, default=ROOT / 'artifacts/candidates/latency-timeline-client/capacity')
+    parser.add_argument('--workers', type=int, choices=range(1, 9), default=8,
+                        help='Server I/O workers, one per CPU within the fixed 0-7 fixture mask (default: 8)')
     parser.add_argument('--users', type=int, default=100000)
     parser.add_argument('--seconds', type=int, default=30)
     parser.add_argument('--readers', type=int, default=8192)
@@ -155,7 +157,7 @@ def main():
     admin_token = 'inspection-benchmark' if args.http_page_size is not None else 'mixed-capacity-fixture'
     env.update(WAR_ADMIN_TOKEN=admin_token, WAR_AUTH_PASSWORD='inspection-benchmark')
     cmd = ['taskset', '-c', '0-7', str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
-           '--admin-bind', f'127.0.0.1:{admin}', '--workers', '8', '--pin-workers',
+           '--admin-bind', f'127.0.0.1:{admin}', '--workers', str(args.workers), '--pin-workers',
            '--max-connections', str(args.users + args.readers + 1000),
            '--max-channel-members', str(max(10000, args.readers + 1)),
            '--max-message-bytes', '65536', '--queue-bytes', '262144',
@@ -258,7 +260,8 @@ def main():
         record['affinity'] = [{'name': (task / 'comm').read_text().strip(), 'cpus': sorted(os.sched_getaffinity(int(task.name)))}
                               for task in Path(f'/proc/{server.pid}/task').iterdir()
                               if (task / 'comm').read_text().startswith(('war-io-', 'war-cpp-'))]
-        assert len(record['affinity']) == 8 and all(len(t['cpus']) == 1 for t in record['affinity'])
+        assert len(record['affinity']) == args.workers and all(len(t['cpus']) == 1 for t in record['affinity'])
+        assert len({t['cpus'][0] for t in record['affinity']}) == args.workers, 'server workers share a CPU'
         if args.profile:
             log = open(str(prefix) + '-perf.log', 'w'); files.append(log)
             target = {'server': server, 'capacity': capacity, 'sidecar': sidecar}[args.profile_target]

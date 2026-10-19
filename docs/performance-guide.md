@@ -85,6 +85,10 @@ The inspection and capacity runners reserve their receipts with exclusive creati
 
 The mixed-capacity runner also rejects existing receipt, private CSV, timeline and process-log paths before launching its children, plus fanout CSV/profile paths when those modes are enabled. This is a preflight guard for sequential runs, not a cross-process artifact lock. `python3 scripts/test-mixed-output.py` checks regular-file and dangling-symlink collisions for all nine artifact kinds.
 
+`scripts/mixed-capacity.py --workers N` selects 1–8 native/C++ I/O workers within this recorded-host fixture's fixed server CPU pool 0–7; default eight preserves previous commands. The gate verifies the requested number of distinct pinned workers. This is a fixture constraint, not a production relay limit. Client masks stay unchanged. Compare counts using one frozen executable and reversed-order repeats.
+
+The [current 100k observer/churn comparison](benchmarks/2026-10-19-mixed-worker-count/README.md) passes the offered 16 fanout windows/s with eight workers. Four workers deliver correctly but miss that offer in both short runs and have much worse private-user tails. This does not make eight a universal count for all hardware, room sizes or private-only traffic; the four-worker deployment example has a different traffic/member envelope.
+
 Use a fresh output name. This measures the new executable, not a reproduction of a frozen historical binary. The runner's CPU masks are specific to the recorded Linux host; inspect topology before adapting them. Run comparisons sequentially, with matched settings, fresh processes and no concurrent builds/profiles.
 
 ## Read the result correctly
