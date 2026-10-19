@@ -38,6 +38,9 @@ def load(path, histogram_bounds=False, statistic="p99"):
                 raise ValueError(f'{path}: invalid latency values')
             values[key].append(observed)
             maxima[key] = max(maxima[key], top)
+        if (values['intended_send_to_receive'][-1] < values['send_to_receive'][-1]
+                or float(row[f'schedule_max_{unit}']) < float(row[f'max_{unit}'])):
+            raise ValueError(f'{path}: intended-send latency precedes actual-send latency')
     return {key: sorted(v) for key, v in values.items()}, samples, maxima
 
 

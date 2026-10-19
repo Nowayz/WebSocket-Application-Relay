@@ -86,6 +86,27 @@ class ComparisonTest(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 self.fixture(body)
 
+    def test_reject_inverted_percentiles_or_maxima_between_clocks(self):
+        for body in ['1,10,2,3,1,4\n', '1,10,1,5,2,4\n']:
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                self.fixture(body)
+
+    def test_histogram_clock_order_remains_required_when_bounds_exceed_maxima(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'bounded.csv'
+            for body in ['1,4,2,1.5,1,3\n', '1,4,2,1.5,4,1\n']:
+                path.write_text('id,samples,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms\n' + body)
+                with self.subTest(body=body), self.assertRaises(ValueError):
+                    comparison.load(path, histogram_bounds=True)
+
+    def test_maximum_mode_rejects_inverted_nanosecond_clocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fanout.csv'
+            path.write_text('id,samples,p99_ns,max_ns,schedule_p99_ns,schedule_max_ns\n'
+                            '1,384,1000000,5000000,2000000,4000000\n')
+            with self.assertRaises(ValueError):
+                comparison.load(path, statistic='max')
+
 
 if __name__ == '__main__':
     unittest.main()
