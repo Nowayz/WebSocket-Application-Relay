@@ -1036,7 +1036,7 @@ impl Relay {
                         // Older deferred notices must precede revocation's ACK.
                         // Match the registry -> retirement lock order used by
                         // removal; retirement output never reacquires registry.
-                        self.flush_retirements_with::<true>();
+                        self.flush_global_retirements();
                     }
                     state.set_listener_flags(peer, flags & 7);
                 } else {
@@ -1178,11 +1178,34 @@ impl Relay {
         self.retirement_pending.store(!pending.is_empty(), Relaxed);
     }
 
-    fn flush_retirements(&self) {
-        self.flush_retirements_with::<false>();
+    fn flush_global_retirements(&self) {
+        if !self.has_retirements() {
+            return;
+        }
+        let mut pending = self.retirements.lock();
+        // Every retirement view belongs to one channel: the departing peer's
+        // room, or global disconnect observers. Only global views can precede
+        // this observer's ACK. Removing them in order cannot reorder delivery
+        // to ordinary rooms, whose disjoint views stay queued for bounded turns.
+        pending.retain_mut(|work| {
+            let global = work
+                .recipients
+                .as_ref()
+                .expect("live retirement view")
+                .first()
+                .is_some_and(|peer| peer.channel.as_ref() == GLOBAL_CHANNEL);
+            if global {
+                let _ = work.resume_with::<true, true>(usize::MAX);
+            }
+            !global
+        });
+        if pending.is_empty() && pending.capacity() > 32 {
+            *pending = VecDeque::new();
+        }
+        self.retirement_pending.store(!pending.is_empty(), Relaxed);
     }
 
-    fn flush_retirements_with<const BARRIER: bool>(&self) {
+    fn flush_retirements(&self) {
         if !self.has_retirements() {
             return;
         }
@@ -1190,7 +1213,7 @@ impl Relay {
         // preceding retirements first so this fallback cannot overtake them.
         let mut pending = self.retirements.lock();
         for mut work in pending.drain(..) {
-            let _ = work.resume_with::<true, BARRIER>(usize::MAX);
+            let _ = work.resume(usize::MAX);
         }
         if pending.capacity() > 32 {
             *pending = VecDeque::new();

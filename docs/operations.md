@@ -80,12 +80,14 @@ such active views can consume about 80 MB of logical metadata credit before
 recipient frame reservations. This is a planning example, not a sufficient
 queue size or a physical-memory estimate.
 
-Clearing a global listener's disconnect flag synchronously drains pending
-departure work before acknowledging the change. This preserves the permission
-and FIFO boundary, but holds the registry write lock during that drain; its
-control latency is not bounded to the ordinary 1,024-recipient quantum. A short
-100,000-recipient check measured this cost in the hundreds of milliseconds.
-See the [observer revocation report](benchmarks/2026-10-19-observer-revocation/README.md).
+Clearing a global listener's disconnect flag drains pending global-channel
+departure jobs before acknowledging the change. Ordinary-room jobs retain their
+bounded asynchronous turns because their recipients are disjoint. The barrier
+holds the registry write lock while scanning queued jobs and submitting global
+output; many pending global recipients can still produce a long control turn.
+The [scoped barrier check](benchmarks/2026-10-19-observer-scoped-barrier/README.md)
+compares it with the previous all-room drain, whose 100,000-recipient check took
+hundreds of milliseconds. Queue-pressure fallback still drains all older work.
 
 Watch `war_queued_bytes` and changes in `war_global_pressure_total`. A nonzero
 pressure count can include metadata refusal even if synchronous fallback later

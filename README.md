@@ -23,8 +23,8 @@ membership view until that message finishes. Output-only wakes avoid entering
 the input decoder; departure notifications use the same owner-worker path.
 
 Large room and disconnect-observer retirements use one charged FIFO, advanced
-in 1,024-recipient turns outside the registry lock. This preserves departure
-sequence across workers while allowing unrelated routing to proceed. The
+in 1,024-recipient turns outside the registry lock. This preserves each
+recipient's departure sequence across workers while allowing unrelated routing to proceed. The
 [short 100,000-recipient departure comparison](docs/benchmarks/2026-10-19-departure-fifo/README.md)
 reduces the worst observed witness RTT from 107.13 to 4.57 ms, with ordinary
 mixed-load CPU effectively flat. Queue-pressure fallback remains synchronous;
@@ -32,9 +32,10 @@ its ordering and memory limits are covered separately in that report.
 Overlapping retirement publications now share one worker wake; refilling a
 drained queue wakes again. The [release component and short 100k checks](docs/benchmarks/2026-10-19-retirement-wake-coalescing/README.md)
 record the reduced publication cost and ordinary-workload limits.
-Disconnect-listener revocation now orders captured notices before its reply;
-the [short correctness check](docs/benchmarks/2026-10-19-observer-revocation/README.md)
-also records the synchronous barrier cost under a 100,000-recipient departure.
+Disconnect-listener revocation orders captured notices before its reply.
+Its barrier now drains global-channel departure jobs while leaving disjoint
+ordinary rooms asynchronous; the [short 100k comparison](docs/benchmarks/2026-10-19-observer-scoped-barrier/README.md)
+checks acknowledgment latency, unrelated routing and exact delivery.
 
 Workers also discover at most 1,024 expired timers per turn before returning to
 ready processing and socket polling. The [expiry-burst report](docs/benchmarks/2026-10-19-expiry-fairness/README.md)

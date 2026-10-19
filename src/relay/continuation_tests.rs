@@ -372,10 +372,19 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
         .unwrap();
     let source_id = source.peer.id.load(Relaxed);
+    let second = relay
+        .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
+        .unwrap();
+    let second_id = second.peer.id.load(Relaxed);
+    let global = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, Arc::new(NativeRetirement))
+        .unwrap();
+    let global_id = global.peer.id.load(Relaxed);
+    let output = Arc::new(Departures::default());
     let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
         .map(|_| {
             relay
-                .subscribe_with_output(b"observer-ack", Arc::new(NativeRetirement))
+                .subscribe_with_output(b"observer-ack", output.clone())
                 .unwrap()
         })
         .collect();
@@ -397,13 +406,25 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
     drop(observer.outgoing.try_recv().unwrap());
     drop(source);
     assert!(relay.has_retirements());
+    // Mix a global-room departure between two ordinary-room departures. All
+    // three reach the observer, but only two reach ordinary room members.
+    drop(global);
+    drop(second);
     relay
         .receive(
             &observer.registration.peer,
             protocol::request(1, &protocol::uint(0)),
         )
         .unwrap();
-    let notice = protocol::envelope(BROADCAST, &protocol::uint(source_id));
+    assert!(
+        relay.has_retirements(),
+        "ordinary room work must remain deferred"
+    );
+    assert!(
+        output.0.lock().is_empty(),
+        "revocation must not pump room output"
+    );
+    let expected = [source_id, global_id, second_id];
     let ack = protocol::reply(1, &protocol::uint(0));
     let mut acknowledged = false;
     let mut notices = 0;
@@ -413,7 +434,10 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
             assert!(!acknowledged);
             acknowledged = true;
         } else {
-            assert_eq!(bytes, notice);
+            assert_eq!(
+                bytes,
+                protocol::envelope(BROADCAST, &protocol::uint(expected[notices]))
+            );
             notices += 1;
             assert!(
                 !acknowledged,
@@ -422,7 +446,7 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         }
     }
     assert!(acknowledged);
-    for _ in 0..3 {
+    for _ in 0..4 {
         relay.progress_retirements();
     }
     assert!(!relay.has_retirements());
@@ -431,9 +455,19 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         "revoked listener received an old departure after its acknowledgment"
     );
     assert_eq!(
-        notices, 1,
+        notices, 3,
         "an already-authorized notice must precede revocation, not disappear"
     );
+    let packets = output.0.lock();
+    assert_eq!(packets.len(), targets.len() * 2);
+    for (packets, id) in packets.chunks(targets.len()).zip([source_id, second_id]) {
+        assert!(
+            packets
+                .iter()
+                .all(|p| p.to_vec() == protocol::envelope(BROADCAST, &protocol::uint(id)))
+        );
+    }
+    drop(packets);
     relay.begin_shutdown();
     drop(observer);
     drop(targets);
