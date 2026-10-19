@@ -168,7 +168,7 @@ def run(args):
                                                    if key == "LD_PRELOAD" or key.startswith("HEAP")},
                                    "scope": "Server allocator replaced by gperftools. Requested live allocations only; profile timing and RSS are diagnostic and excluded from ordinary comparisons."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
+    with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
         server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)
         client = perf = None
         perf_log = None
@@ -286,7 +286,7 @@ def run(args):
             if result["server_exit_code"] != 0 or result["server_forced_kill"]:
                 result["passed"] = False
                 result.setdefault("error", "relay did not exit cleanly")
-            args.output.write_text(json.dumps(result, indent=2) + "\n")
+            receipt.write(json.dumps(result, indent=2) + "\n")
     return result
 
 
@@ -329,10 +329,13 @@ if __name__ == "__main__":
     profiles.add_argument("--profile", action="store_true")
     profiles.add_argument("--heap-profile", type=Path, help="diagnostic only: gperftools heap prefix; changes allocator, timings/RSS excluded from ordinary medians")
     parser.add_argument("--heap-library", type=Path, default=Path("/usr/lib/libtcmalloc.so"))
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True, help="Fresh receipt path; existing files are never overwritten")
     arguments = parser.parse_args()
     if arguments.pin_client_workers and arguments.client_workers is None:
         parser.error("--pin-client-workers requires --client-workers")
-    outcome = run(arguments)
+    try:
+        outcome = run(arguments)
+    except FileExistsError:
+        parser.error(f"output already exists; choose a fresh receipt path: {arguments.output}")
     print(json.dumps({"passed": outcome["passed"], "error": outcome.get("error")}), flush=True)
     raise SystemExit(0 if outcome["passed"] else 1)

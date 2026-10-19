@@ -64,6 +64,8 @@ python3 scripts/mixed-capacity.py \
   --output artifacts/new-build-mixed.json
 ```
 
+The inspection runner reserves its receipt with exclusive creation before launching the relay. Reusing an existing receipt path fails without starting the server or replacing prior evidence; select a fresh name instead. `python3 scripts/test-inspection-output.py` checks this guard, dangling symlinks and fresh startup-failure receipts in under a second on the recorded host. This protects the receipt file, not every separately named profiling artifact.
+
 Use a fresh output name. This measures the new executable, not a reproduction of a frozen historical binary. The runner's CPU masks are specific to the recorded Linux host; inspect topology before adapting them. Run comparisons sequentially, with matched settings, fresh processes and no concurrent builds/profiles.
 
 ## Read the result correctly
