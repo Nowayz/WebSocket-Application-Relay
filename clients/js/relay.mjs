@@ -10,6 +10,7 @@ const decoder = new Decoder({ mapsAsObjects: true });
 // cbor-x shares output state: nested command capture must not reenter it.
 let encoding = 0;
 function encode(value) {
+  if (encoding !== 0) throw new Error('Relay serialization cannot be reentered');
   encoding++;
   try { return encoder.encode(value); }
   finally { encoding--; }

@@ -328,3 +328,39 @@ test('a command invoked from an application-value getter waits for that encoding
     assert.equal(await nested, true);
   } finally { relay.close(); await Promise.allSettled([nested]); }
 });
+
+test('reentrant application sends fail locally before either packet reaches the socket', () => {
+  const socket = new Socket();
+  const relay = new Relay(socket, 42n);
+  try {
+    assert.throws(() => relay.send(99n, { get child() {
+      relay.send(98n, 'nested');
+      return 'outer';
+    } }), /serialization.*reenter/i);
+    assert.equal(socket.sends, 0);
+    assert.equal(socket.closeCalls, 0);
+    relay.send(99n, 'recovered');
+    assert.equal(socket.sends, 1);
+  } finally { relay.close(); }
+});
+
+test('a reentrant connect rejects before creating a socket without corrupting the outer packet', async () => {
+  const socket = new CommandSocket();
+  const relay = new Relay(socket, 42n);
+  let created = 0, pending;
+  class NestedSocket extends Socket { constructor() { super(); created++; } }
+  try {
+    assert.doesNotThrow(() => relay.send(99n, { get child() {
+      pending = Relay.connect('ws://fixture', 'nested', { WebSocketClass: NestedSocket });
+      pending.catch(() => {});
+      return 'outer';
+    } }));
+    await assert.rejects(pending, /serialization.*reenter/i);
+    assert.equal(created, 0);
+    assert.deepEqual(socket.packets, [[99n, { child: 'outer' }]]);
+  } finally {
+    if (created) Socket.instance.dispatchEvent(new Event('close'));
+    relay.close();
+    await Promise.allSettled([pending]);
+  }
+});

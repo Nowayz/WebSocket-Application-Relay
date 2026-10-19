@@ -255,3 +255,16 @@ test('native variable writes retain the value supplied before command dispatch',
     found: true, value: { bytes: new Uint8Array([1, 2]), label: 'before' },
   });
 });
+
+test('native connection remains usable after locally rejected reentrant serialization', async t => {
+  const relay = await Relay.connect(url, 'js-reentry');
+  t.after(() => relay.close());
+  assert.throws(() => relay.send(relay.userId, { get child() {
+    relay.send(relay.userId, 'nested');
+    return 'outer';
+  } }), /serialization.*reenter/i);
+  const received = once(relay, 'message');
+  relay.send(relay.userId, 'recovered');
+  assert.deepEqual((await received)[0].detail, { sender: relay.userId, value: 'recovered' });
+  assert.equal(relay.ready, true);
+});

@@ -194,6 +194,12 @@ and deferred encoding to avoid reentering the shared codec, so such values must
 be cloneable. Shared-memory buffers remain shared under that API; keep their
 contents synchronized and stable until the request settles.
 
+Direct recursive serialization from a value getter is rejected locally:
+`send()`/`broadcast()` throw, and `connect()` rejects before opening a socket.
+This prevents the shared codec from producing a corrupt outer packet and leaves
+the connection usable after handling the error. Queueable commands retain the
+clone-and-defer behavior described above.
+
 Calling `close()` immediately rejects an outstanding command and prevents queued
 commands from sending; it does not wait for the peer's Close acknowledgement.
 `requestTimeoutMs` defaults to 10,000 and must be positive, finite, and at most

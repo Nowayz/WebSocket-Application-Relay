@@ -9,7 +9,7 @@ Selected source and locally running executables are distinct:
 | --- | --- | --- |
 | Native relay | `b92da66` metrics-buffer sizing; `ab6b343` coherent idle checks; unchanged queue/wake policies | PID `966632`, earlier `279c3c1` native binary, SHA-256 `3db9ebeb…` |
 | Legacy bridge | `0b531f9` bounded protocol/UTF-8 error Close handling, retaining `69e62d1` size-error behavior | PID `1106809`, `4c9113a` bridge binary, SHA-256 `bb2392f5…` |
-| JavaScript client | Current synchronous assignment acknowledgement and channel-listing checks; `d253758` integer listener acknowledgements and client error Close `4002`; queue-boundary coverage in `2692f3a` | Browser bundle rebuilt after the assignment-order correction; no native/bridge promotion implied |
+| JavaScript client | Current channel/command input capture and direct serialization reentry guard; synchronous assignment acknowledgement and channel-listing checks; `d253758` integer listener acknowledgements and client error Close `4002`; queue-boundary coverage in `2692f3a` | Browser bundle rebuilt after the serialization reentry correction; no native/bridge promotion implied |
 | Measurement tooling | `5e6d5d0` requires offered fanout rate for overall success; `a61fa5c` clarifies client timestamp origin | Separate disposable test processes only |
 
 The latest [short 100,000-user mixed check](benchmarks/2026-10-18-short-current-100k/README.md)
@@ -100,6 +100,14 @@ FIFO/error/timeout/Close behavior, protects reentrant codec use and passes all
 calls use a documented clone fallback. The browser artifact passes native
 mutation/transfer acceptance. A short SDK serialization screen has overlapping
 ranges, with no speed claim or native relay change.
+
+The [direct serialization reentry fix](benchmarks/2026-10-18-js-serialization-reentry/README.md)
+adds one guard to the existing encoder wrapper. A getter invoking send() or
+connect() previously corrupted the outer encoding; three regressions fail before
+the fix. Direct reentry now fails locally before nested bytes/socket creation,
+and a native connection remains usable afterward. All 55 tests pass in 1.113
+seconds; rebuilt-module recovery and prior queued capture tests pass too. No
+extra copy, lock, protocol field or native/C++ runtime change is introduced.
 
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
