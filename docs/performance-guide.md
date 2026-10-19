@@ -110,6 +110,7 @@ Search these decisions and the detailed history before building another prototyp
 | [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |
 | [Buffered fanout batches](benchmarks/2026-10-18-buffered-fanout/README.md) | Lower CPU/fanout delay did not establish consistently better private-user tails. |
 | [512-recipient quantum](benchmarks/2026-10-18-short-fairness-quantum/README.md) | Worsened private-user tails; retain 1,024. |
+| [256 KiB input byte budget](benchmarks/2026-10-19-read-byte-budget/README.md) | Diagnostic confirms large-private turns shorten from sixteen messages to four; two-second reversed-order comparisons do not establish a repeatable latency/CPU benefit. Retain the existing frame/recipient-work quotas. |
 | [Direct CBOR byte-string parsing](benchmarks/2026-10-18-direct-bytes-screen/README.md) | Faster isolated parsing did not improve measured relay performance. |
 | [Socket recv substitution](benchmarks/2026-10-18-socket-recv-screen/README.md) | Lower throughput and higher CPU per delivery in the short screen. |
 | [Inline cached WebSocket headers](benchmarks/2026-10-18-frame-header-cache/README.md) | Larger queued metadata; lower fanout rates and higher CPU per delivery in both short candidate runs. |

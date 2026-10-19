@@ -1,0 +1,35 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -62,6 +62,7 @@
+ const LISTENER: Token = Token(0);
+ const WAKE: Token = Token(1);
+ const READ_QUANTUM: usize = 256;
++const READ_BYTE_QUANTUM: usize = 256 * 1024;
+ const FANOUT_QUANTUM: usize = 1024;
+ const ACCEPT_QUANTUM: usize = 16;
+ 
+@@ -1147,6 +1148,7 @@
+             };
+         }
+         let mut route_budget = READ_QUANTUM;
++        let mut byte_budget = READ_BYTE_QUANTUM;
+         for _ in 0..READ_QUANTUM {
+             let Stage::WebSocket(ws) = &mut self.stage else {
+                 unreachable!()
+@@ -1169,6 +1171,7 @@
+                 }
+                 Ok(Some(_)) if self.closing.is_some() => continue,
+                 Ok(Some(message)) => {
++                    byte_budget = byte_budget.saturating_sub(message.len());
+                     if !self.limiter.allow(message.len(), now) {
+                         return self.start_close(Disconnect::RATE, relay, false, now);
+                     }
+@@ -1298,7 +1301,7 @@
+                     return result;
+                 }
+             }
+-            if route_budget == 0 {
++            if route_budget == 0 || byte_budget == 0 {
+                 break;
+             }
+         }
