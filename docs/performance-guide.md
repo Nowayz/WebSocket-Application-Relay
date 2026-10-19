@@ -8,6 +8,7 @@ Use this page to find the selected implementation and choose a short test. The d
 | --- | --- | --- |
 | Native Rust relay | Mio readiness workers; immediate private sends; shared immutable multicast bodies; bounded vectored output; 1,024 ordinary-room recipient visits per source turn | [100,000-user mixed-load selection](benchmarks/2026-10-18-mixed-100k-fairness/README.md) |
 | Native deferred output | Single queued frame uses the small borrowed writer; larger queues retain bounded vectored batching (`266e5b1`) | [Selected writer and tradeoffs](benchmarks/2026-10-18-single-queued-write/README.md) |
+| Native timer updates | Identical existing `Instant` deadlines stay in place; changed deadlines and cancellations use the existing indexed heap | [Keepalive census, two-second 100k comparisons and build-cache preflight](benchmarks/2026-10-18-unchanged-timers/README.md) |
 | Management page selection | Empty pages avoid allocation; populated pages use bounded selection batches (`3ee013c`) | [Allocation and locking tradeoffs](benchmarks/2026-10-18-batched-channel-page/README.md) |
 | Legacy bridge | CBOR upstream, upstream TCP_NODELAY, 4 KiB initial upstream read buffer; direct single-buffer binary and text encoding; existing frame/message limits retained | [Delayed-ACK fix](benchmarks/2026-10-18-bridge-upstream-nodelay/README.md), [connection memory](benchmarks/2026-10-18-bridge-read-buffer/README.md), [binary encoding](benchmarks/2026-10-18-bridge-fused-encoding/README.md), [text encoding](benchmarks/2026-10-18-bridge-text-encoding/README.md) |
 | Allocator | Existing system allocator; no default jemalloc preload | [Four-wave retirement/allocator screen](benchmarks/2026-10-18-churn-retention/README.md) |
@@ -33,6 +34,8 @@ The [latest-source consolidated 100,000-user acceptance](benchmarks/2026-10-18-c
 | Do stalled upgrades or Ping-only prejoin peers release admission? | `scripts/handshake-pressure.py` and `scripts/join-pressure.py` | Fixed five-second HTTP / two-second join-deadline fixtures; [checked examples](benchmarks/2026-10-18-stalled-ingress/README.md) and [unacknowledged Close](benchmarks/2026-10-18-unacknowledged-close/README.md) |
 
 Setup, proof scans and exhaustive departure/Close checks add wall time outside the measured phase. In particular, six seconds of offered mixed traffic does not mean a six-second complete test. Extend a test only when the result needs it; a short screen can reject a clear regression without pretending to prove a long-term tail guarantee.
+
+When building copied Git archives into a shared Cargo target directory, refresh the copied Rust source timestamps (including vendored sources) or clean the relevant artifacts before compiling. Archive timestamps can be older than cached outputs: the [timer experiment](benchmarks/2026-10-18-unchanged-timers/README.md) caught a diagnostic binary reused as an untouched control. Check the compile log, freeze the binary, record its hash and verify diagnostic identity before timing. Cargo success alone does not prove source freshness. Keep source edits and builds sequential.
 
 For a first routing/output screen, build the intended sources and use a fresh output path:
 

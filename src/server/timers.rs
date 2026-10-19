@@ -14,6 +14,14 @@ impl Timers {
     }
 
     pub fn set(&mut self, slot: usize, deadline: Option<Instant>) {
+        if let Some(deadline) = deadline
+            && self
+                .positions
+                .get(slot)
+                .is_some_and(|&index| index != usize::MAX && self.heap[index].0 == deadline)
+        {
+            return;
+        }
         if self.positions.len() <= slot {
             self.positions.resize(slot + 1, usize::MAX);
         }
@@ -122,7 +130,9 @@ mod tests {
                 expected.retain(|&(_, old)| old != slot);
                 if (slot + round) % 7 == 0 {
                     timers.set(slot, None);
+                    timers.set(slot, None);
                 } else {
+                    timers.set(slot, Some(when));
                     timers.set(slot, Some(when));
                     expected.insert((when, slot));
                 }
