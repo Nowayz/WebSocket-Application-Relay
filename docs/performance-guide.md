@@ -126,6 +126,8 @@ The timeline plotter also [preserves existing PNG, PDF and JSON outputs](benchma
 
 The [queued-write turn census](benchmarks/2026-10-19-queued-write-turns/README.md) finds no 256 KiB quantum exhaustion in two short instrumented mixed workloads (1 KiB and 64 KiB private payloads). Retain the current limit; the census excludes immediate sends and is not ordinary latency/throughput evidence. An existing exact-quantum test serves as a positive control.
 
+The [timer-slot shortcut screen](benchmarks/2026-10-19-timer-slot-screen/README.md) rejects removing a timer-discovery token-map lookup: component scheduling improves about 22%, but both short 100k candidate runs use more CPU and have higher worst fanout latency than either control. Keep the current runtime; the isolated gain does not establish a mixed-load benefit.
+
 ## Read the result correctly
 
 - Treat each user equally. A percentile across users' individual latency statistics is different from a pooled packet percentile. With eight observations (two seconds) or 24 (six seconds), nearest-rank per-user p99 equals its observed maximum. The runner reports this explicitly in `latency_sampling`.

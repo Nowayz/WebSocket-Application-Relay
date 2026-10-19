@@ -1,0 +1,49 @@
+--- a/src/server/fairness_tests.rs
++++ b/src/server/fairness_tests.rs
+@@ -489,3 +489,46 @@
+         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+     }
+ }
++
++#[test]
++#[ignore = "component measurement, not production test"]
++fn timer_slot_measurement() {
++    let relay = Relay::new(crate::Config {
++        max_connections: 2048, max_connections_per_ip: 0, total_read_buffer_bytes: 0,
++        ..crate::Config::default()
++    }).unwrap();
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    let address = listener.local_addr().unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let mut worker = Worker::new(listener, relay).unwrap();
++    let mut clients = Vec::new();
++    for _ in 0..READY_QUANTUM {
++        clients.push(std::net::TcpStream::connect(address).unwrap());
++        worker.accept().unwrap();
++    }
++    assert_eq!(worker.connections.len(), READY_QUANTUM);
++    let now = Instant::now();
++    let mut batches = Vec::new();
++    for _ in 0..7 {
++        let mut nanos = 0_u128;
++        for _ in 0..100 {
++            worker.ready.clear();
++            for (slot, connection) in &mut worker.connections {
++                connection.scheduled = false;
++                connection.output_only = true;
++                worker.timers.set(slot, Some(now));
++            }
++            let began = Instant::now();
++            worker.schedule_timers(now);
++            nanos += began.elapsed().as_nanos();
++            assert_eq!(worker.ready.len(), READY_QUANTUM);
++            assert!(worker.timers.next().is_none());
++            for (slot, connection) in &worker.connections {
++                assert!(connection.scheduled && !connection.output_only);
++                assert_eq!(worker.ready[slot], connection.token);
++            }
++        }
++        batches.push(nanos as f64 / (100 * READY_QUANTUM) as f64);
++    }
++    println!("TIMER_SLOT_MEASUREMENT {}", serde_json::json!({"connections":READY_QUANTUM,"iterations_per_batch":100,"ns_per_scheduled_timer":batches}));
++}

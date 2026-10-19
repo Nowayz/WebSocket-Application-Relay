@@ -1,0 +1,22 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -332,6 +332,10 @@
+         let Some(&slot) = self.tokens.get(&token) else {
+             return;
+         };
++        self.schedule_slot(slot, token);
++    }
++
++    fn schedule_slot(&mut self, slot: usize, token: Token) {
+         if let Some(connection) = self.connections.get_mut(slot)
+             && connection.token == token
+         {
+@@ -526,7 +530,7 @@
+                 break;
+             };
+             if let Some(connection) = self.connections.get(slot) {
+-                self.schedule(connection.token);
++                self.schedule_slot(slot, connection.token);
+             }
+         }
+     }
