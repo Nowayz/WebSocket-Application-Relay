@@ -1,0 +1,81 @@
+diff --git a/src/server.rs b/src/server.rs
+index 120b8ed..6c1130d 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -64,6 +64,7 @@ const WAKE: Token = Token(1);
+ const READ_QUANTUM: usize = 256;
+ const FANOUT_QUANTUM: usize = 1024;
+ const ACCEPT_QUANTUM: usize = 16;
++const READY_QUANTUM: usize = 1024;
+ 
+ /// Run pre-bound listeners. Tokio services management and signals; native data
+ /// sockets belong to a fixed number of readiness workers. Config's backlog
+@@ -517,6 +518,19 @@ impl Worker {
+         self.update_connection_slots();
+     }
+ 
++    // Limit expiry discovery too: scheduling an entire due heap would put
++    // every expired socket ahead of newly readable healthy connections.
++    fn schedule_timers(&mut self, now: Instant) {
++        for _ in 0..READY_QUANTUM {
++            let Some(slot) = self.timers.pop_due(now) else {
++                break;
++            };
++            if let Some(connection) = self.connections.get(slot) {
++                self.schedule(connection.token);
++            }
++        }
++    }
++
+     fn run(mut self) -> Result<()> {
+         let mut events = Events::with_capacity(1024);
+         let mut shutdown_deadline = None;
+@@ -550,14 +564,10 @@ impl Worker {
+                 // Drain an already queued flow even without a fresh edge.
+                 self.accept()?;
+             }
+-            while let Some(slot) = self.timers.pop_due(now) {
+-                if let Some(connection) = self.connections.get(slot) {
+-                    self.schedule(connection.token);
+-                }
+-            }
++            self.schedule_timers(now);
+             // A bounded ready batch makes progress on buffered continuations
+             // without starving new socket events, timers, or shutdown signals.
+-            let batch = self.ready.len().min(1024);
++            let batch = self.ready.len().min(READY_QUANTUM);
+             for _ in 0..batch {
+                 let token = self.ready.pop_front().expect("ready batch");
+                 if token == LISTENER {
+diff --git a/src/server/fairness_tests.rs b/src/server/fairness_tests.rs
+index 57dc644..e31e51a 100644
+--- a/src/server/fairness_tests.rs
++++ b/src/server/fairness_tests.rs
+@@ -384,3 +384,27 @@ fn singleton_room_still_delivers_to_enabled_channel_observers() {
+     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+     assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+ }
++
++#[test]
++fn expired_timer_discovery_yields_and_preserves_the_remaining_deadlines() {
++    let relay = Relay::new(crate::Config::default()).unwrap();
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let mut worker = Worker::new(listener, relay).unwrap();
++    let now = Instant::now();
++    let due = READY_QUANTUM * 2 + 1;
++    for slot in 0..due {
++        worker.timers.set(slot, Some(now));
++    }
++    let future = now + Duration::from_secs(1);
++    worker.timers.set(due, Some(future));
++    worker.schedule_timers(now);
++    let mut remaining = 0;
++    while worker.timers.pop_due(now).is_some() {
++        remaining += 1;
++    }
++    assert_eq!(remaining, due - READY_QUANTUM);
++    assert_eq!(worker.timers.next(), Some(future));
++    assert_eq!(worker.timers.pop_due(future), Some(due));
++    assert_eq!(worker.timers.next(), None);
++}

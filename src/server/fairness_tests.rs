@@ -384,3 +384,27 @@ fn singleton_room_still_delivers_to_enabled_channel_observers() {
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
 }
+
+#[test]
+fn expired_timer_discovery_yields_and_preserves_the_remaining_deadlines() {
+    let relay = Relay::new(crate::Config::default()).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let mut worker = Worker::new(listener, relay).unwrap();
+    let now = Instant::now();
+    let due = READY_QUANTUM * 2 + 1;
+    for slot in 0..due {
+        worker.timers.set(slot, Some(now));
+    }
+    let future = now + Duration::from_secs(1);
+    worker.timers.set(due, Some(future));
+    worker.schedule_timers(now);
+    let mut remaining = 0;
+    while worker.timers.pop_due(now).is_some() {
+        remaining += 1;
+    }
+    assert_eq!(remaining, due - READY_QUANTUM);
+    assert_eq!(worker.timers.next(), Some(future));
+    assert_eq!(worker.timers.pop_due(future), Some(due));
+    assert_eq!(worker.timers.next(), None);
+}

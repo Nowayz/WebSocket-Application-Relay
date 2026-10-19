@@ -64,6 +64,7 @@ const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
 const FANOUT_QUANTUM: usize = 1024;
 const ACCEPT_QUANTUM: usize = 16;
+const READY_QUANTUM: usize = 1024;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
 /// sockets belong to a fixed number of readiness workers. Config's backlog
@@ -517,6 +518,19 @@ impl Worker {
         self.update_connection_slots();
     }
 
+    // Limit expiry discovery too: scheduling an entire due heap would put
+    // every expired socket ahead of newly readable healthy connections.
+    fn schedule_timers(&mut self, now: Instant) {
+        for _ in 0..READY_QUANTUM {
+            let Some(slot) = self.timers.pop_due(now) else {
+                break;
+            };
+            if let Some(connection) = self.connections.get(slot) {
+                self.schedule(connection.token);
+            }
+        }
+    }
+
     fn run(mut self) -> Result<()> {
         let mut events = Events::with_capacity(1024);
         let mut shutdown_deadline = None;
@@ -550,14 +564,10 @@ impl Worker {
                 // Drain an already queued flow even without a fresh edge.
                 self.accept()?;
             }
-            while let Some(slot) = self.timers.pop_due(now) {
-                if let Some(connection) = self.connections.get(slot) {
-                    self.schedule(connection.token);
-                }
-            }
+            self.schedule_timers(now);
             // A bounded ready batch makes progress on buffered continuations
             // without starving new socket events, timers, or shutdown signals.
-            let batch = self.ready.len().min(1024);
+            let batch = self.ready.len().min(READY_QUANTUM);
             for _ in 0..batch {
                 let token = self.ready.pop_front().expect("ready batch");
                 if token == LISTENER {
