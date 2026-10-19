@@ -120,6 +120,8 @@ The [current 100k observer/churn comparison](benchmarks/2026-10-19-mixed-worker-
 
 Use a fresh output name. This measures the new executable, not a reproduction of a frozen historical binary. The runner's CPU masks are specific to the recorded Linux host; inspect topology before adapting them. Run comparisons sequentially, with matched settings, fresh processes and no concurrent builds/profiles.
 
+The timeline plotter also [preserves existing PNG, PDF and JSON outputs](benchmarks/2026-10-19-timeline-output-preservation/README.md), including dangling symlinks, before reading inputs or importing plotting packages. Choose a fresh output stem. `python scripts/test-timeline-output.py` checks all six collision cases without relay traffic.
+
 ## Read the result correctly
 
 - Treat each user equally. A percentile across users' individual latency statistics is different from a pooled packet percentile. With eight observations (two seconds) or 24 (six seconds), nearest-rank per-user p99 equals its observed maximum. The runner reports this explicitly in `latency_sampling`.

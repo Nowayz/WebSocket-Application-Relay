@@ -3,16 +3,23 @@
 import argparse
 import json
 from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--case', action='append', required=True, metavar='LABEL=WINDOWS_JSON')
+parser.add_argument('--output', type=Path, required=True,
+                    help='Fresh output stem for PNG, PDF and JSON; existing outputs are preserved')
+parser.add_argument('--title', default='Latency over time')
+parser.add_argument('--subtitle', default='')
+args = parser.parse_args()
+for suffix in ('.png', '.pdf', '.json'):
+    output = args.output.with_suffix(suffix)
+    if output.exists() or output.is_symlink():
+        parser.error(f'output already exists: {output}')
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--case', action='append', required=True, metavar='LABEL=WINDOWS_JSON')
-parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--title', default='Latency over time')
-parser.add_argument('--subtitle', default='')
-args = parser.parse_args()
 cases = []
 for item in args.case:
     label, separator, path = item.partition('=')
