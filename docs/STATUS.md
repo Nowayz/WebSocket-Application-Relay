@@ -58,6 +58,12 @@ target; real perf still succeeds and records exit code, data bytes and SHA-256.
 The ordinary paced/missed-load/unpaced gates remain unchanged. This is a
 measurement correctness fix; relay and client runtimes are untouched.
 
+A [changed-deadline timer screen](benchmarks/2026-10-18-timer-retime-screen/README.md)
+leaves the existing timer update selected. An isolated in-place heap repair helps
+earlier deadlines but has mixed results for other patterns, including a slower
+postponement repeat. Two timer reference-model tests pass; no full-population
+campaign follows an inconclusive local screen. No runtime code changes.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues
