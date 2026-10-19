@@ -652,6 +652,9 @@ Both environment secrets must be valid UTF-8. A malformed encoding stops startup
 before listeners bind; diagnostics name the variable and omit its contents. Empty
 values keep the existing absent-secret behavior. Embedders loading environment
 secrets now handle `Config::load_secrets() -> Result<()>` before validation.
+Management authentication compares the token bytes following the exact `Bearer `
+prefix directly with the configured UTF-8 bytes. The HTTP client and any
+intermediary must preserve those bytes; see the [direct HTTP checks](benchmarks/2026-10-19-admin-token-bytes/README.md).
 
 ## Drain and restart
 

@@ -65,11 +65,8 @@ fn authorized(relay: &Relay, headers: &HeaderMap, metrics: bool) -> bool {
     }
     headers
         .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .is_some_and(|s| {
-            protocol::secret_matches(relay.config.admin_token.as_deref(), s.as_bytes())
-        })
+        .and_then(|h| h.as_bytes().strip_prefix(b"Bearer "))
+        .is_some_and(|s| protocol::secret_matches(relay.config.admin_token.as_deref(), s))
 }
 
 async fn metrics(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Response {
@@ -183,6 +180,64 @@ mod tests {
     };
     use tokio_tungstenite::{connect_async, tungstenite::Message};
     use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn authorization_compares_exact_configured_token_bytes() {
+        for token in ["ascii-fixture", "unicode-π-世界"] {
+            let relay = Relay::new(Config {
+                admin_token: Some(token.into()),
+                ..Config::default()
+            })
+            .unwrap();
+            for (value, expected) in [
+                (format!("Bearer {token}").into_bytes(), true),
+                (format!("Bearer {token}x").into_bytes(), false),
+                (format!("Basic {token}").into_bytes(), false),
+                (b"Bearer invalid-\xff".to_vec(), false),
+            ] {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "authorization",
+                    axum::http::HeaderValue::from_bytes(&value).unwrap(),
+                );
+                assert_eq!(authorized(&relay, &headers, false), expected);
+                assert_eq!(authorized(&relay, &headers, true), expected);
+            }
+            assert!(!authorized(&relay, &HeaderMap::new(), false));
+            assert!(!authorized(&relay, &HeaderMap::new(), true));
+        }
+    }
+
+    #[tokio::test]
+    async fn unicode_admin_token_authenticates_real_http_without_text_coercion() {
+        timeout(Duration::from_secs(2), async {
+            let relay = Relay::new(Config { admin_token: Some("unicode-π-世界".into()), ..Config::default() }).unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let stop = CancellationToken::new();
+            let token = stop.clone();
+            let router = admin_router(relay.clone());
+            let server = tokio::spawn(async move {
+                axum::serve(listener, router).with_graceful_shutdown(token.cancelled_owned()).await.unwrap();
+            });
+            for (credential, expected) in [
+                (None, "401"),
+                (Some("Bearer unicode-π-世界x"), "401"),
+                (Some("Bearer unicode-π-世界"), "200"),
+            ] {
+                let mut stream = TcpStream::connect(address).await.unwrap();
+                let auth = credential.map(|value| format!("Authorization: {value}\r\n")).unwrap_or_default();
+                stream.write_all(format!("GET /v1/channels?limit=1 HTTP/1.1\r\nHost: localhost\r\n{auth}Connection: close\r\n\r\n").as_bytes()).await.unwrap();
+                let mut bytes = Vec::new();
+                stream.read_to_end(&mut bytes).await.unwrap();
+                let response = String::from_utf8(bytes).unwrap();
+                assert!(response.starts_with(&format!("HTTP/1.1 {expected} ")));
+            }
+            assert_eq!(relay.counts(), (0, 1));
+            stop.cancel();
+            server.await.unwrap();
+        }).await.expect("exact-byte management authentication must complete promptly");
+    }
 
     #[test]
     fn shutdown_cannot_be_resumed_by_an_authorized_management_request() {
