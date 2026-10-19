@@ -351,7 +351,7 @@ async fn bridge(
                     return Err(error.into());
                 }
                 Ok(Message::Binary(bytes)) => break Ok::<_, anyhow::Error>(Some(bytes)),
-                Ok(Message::Text(text)) => break Ok(Some(Bytes::copy_from_slice(text.as_bytes()))),
+                Ok(Message::Text(text)) => break Ok(Some(text.into())),
                 Ok(Message::Ping(_)) => legacy.flush().await?,
                 Ok(Message::Pong(_)) => {}
                 Ok(Message::Close(_)) => {

@@ -1,0 +1,11 @@
+# Transfer the text join owner
+
+The legacy bridge now consumes `Utf8Bytes` through its supported `From<Utf8Bytes> for Bytes` conversion instead of copying the channel name. The dependency conversion returns the same underlying byte owner. The subscription encoder still copies into its CBOR packet; `drop(joined)` releases the frontend view immediately afterward. This is not an end-to-end zero-copy claim.
+
+A focused comparison used fresh bridge processes, 256 distinct text joins (`mem0` through `memff`), eight verified 1 KiB binary messages per connection, and clean retirement. Each variant completed all 2,048 messages with FIFO/body checks. Four quiescent tcmalloc heap captures separated baseline, joined, warmed, and retired phases. These are allocator diagnostics, not ordinary timing or RSS benchmarks.
+
+After subtracting baseline cumulative counters, the candidate removed exactly **256 allocations and 1,264 allocated bytes** at the joined checkpoint. That difference persisted through traffic and retirement. Absolute cumulative byte counters differed by an additional one byte already present at baseline; it is excluded from the claimed saving. Live requested heap and live object counts were identical at all four checkpoints. Both variants returned bridge descriptor counts to baseline.
+
+Validation: 106 Rust library tests passed in 0.47 seconds; Clippy passed with warnings denied. All 61 JavaScript integration tests passed in 1.116 seconds against the frozen candidate and an isolated native fixture; the six checked native resource gauges returned to zero, and both fixture processes exited successfully. No throughput, response latency, RSS improvement, or 100,000-user result is claimed for this small setup-path change.
+
+The raw profiler captures and frozen executable identities remain referenced by the receipts. `heap-totals.json` records the exact summed heap headers. Local reproduction helpers are `artifacts/bridge-text-join-heap.py`, `artifacts/bridge-text-join-memory-probe.py`, and `artifacts/analyze-bridge-text-join.py`. The control executable is `artifacts/candidates/bridge-join-owner-candidate/war-legacy-bridge`; the selected executable is `artifacts/candidates/bridge-text-join-candidate/war-legacy-bridge`. Existing manually running services were left unchanged.
