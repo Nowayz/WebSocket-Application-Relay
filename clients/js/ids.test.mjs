@@ -322,3 +322,34 @@ test('channel listing preserves empty/binary names and exact numeric types', asy
     }
   } finally { relay.close(); }
 });
+
+test('assignment acknowledgement updates identity before the next message callback', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'assignment-order', { WebSocketClass });
+  try {
+    const id = BROADCAST - 2n;
+    const assignment = relay.assignId(id);
+    await Promise.resolve();
+    let observed;
+    relay.addEventListener('message', event => {
+      observed = { userId: relay.userId, detail: event.detail };
+    }, { once: true });
+    // A transport may dispatch consecutive decoded frames in one callback.
+    WebSocketClass.instance.receive([0, [3, id]]);
+    WebSocketClass.instance.receive([id, 'after assignment']);
+    assert.deepEqual(observed, { userId: id, detail: { sender: id, value: 'after assignment' } });
+    assert.equal(await assignment, id);
+  } finally { relay.close(); }
+});
+
+test('low-level assignment acknowledgements update identity without changing result types', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'assignment-order', { WebSocketClass });
+  try {
+    const pending = relay.request(3, 42n);
+    await Promise.resolve();
+    WebSocketClass.instance.receive([0, [3, 42]]);
+    assert.equal(relay.userId, 42n);
+    assert.equal(await pending, 42);
+  } finally { relay.close(); }
+});

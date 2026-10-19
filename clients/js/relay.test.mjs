@@ -210,3 +210,20 @@ test('native channel listing returns sorted byte names and current populations',
   host.send(host.userId, { afterListing: true });
   assert.deepEqual((await received)[0].detail.value, { afterListing: true });
 });
+
+test('native pipelined assignment and self-message expose the acknowledged identity', async t => {
+  const relay = await Relay.connect(url, 'js-id-pipeline');
+  t.after(() => relay.close());
+  assert.equal(await relay.authenticate('js-test-host'), true);
+  const id = 0xabcd000000001234n;
+  const received = new Promise(resolve => relay.addEventListener('message', event => {
+    resolve({ userId: relay.userId, detail: event.detail });
+  }, { once: true }));
+  const assignment = relay.assignId(id);
+  // Start the queued control send, then pipeline data without awaiting its ack.
+  await Promise.resolve();
+  relay.send(id, { afterAssignment: true });
+  const [assigned, observed] = await Promise.all([assignment, received]);
+  assert.equal(assigned, id);
+  assert.deepEqual(observed, { userId: id, detail: { sender: id, value: { afterAssignment: true } } });
+});

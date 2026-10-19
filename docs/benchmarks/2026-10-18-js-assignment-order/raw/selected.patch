@@ -1,0 +1,88 @@
+diff --git a/clients/js/ids.test.mjs b/clients/js/ids.test.mjs
+index 42432da..6c429a2 100644
+--- a/clients/js/ids.test.mjs
++++ b/clients/js/ids.test.mjs
+@@ -322,3 +322,34 @@ test('channel listing preserves empty/binary names and exact numeric types', asy
+     }
+   } finally { relay.close(); }
+ });
++
++test('assignment acknowledgement updates identity before the next message callback', async () => {
++  const WebSocketClass = socketClass(1);
++  const relay = await Relay.connect('ws://fixture', 'assignment-order', { WebSocketClass });
++  try {
++    const id = BROADCAST - 2n;
++    const assignment = relay.assignId(id);
++    await Promise.resolve();
++    let observed;
++    relay.addEventListener('message', event => {
++      observed = { userId: relay.userId, detail: event.detail };
++    }, { once: true });
++    // A transport may dispatch consecutive decoded frames in one callback.
++    WebSocketClass.instance.receive([0, [3, id]]);
++    WebSocketClass.instance.receive([id, 'after assignment']);
++    assert.deepEqual(observed, { userId: id, detail: { sender: id, value: 'after assignment' } });
++    assert.equal(await assignment, id);
++  } finally { relay.close(); }
++});
++
++test('low-level assignment acknowledgements update identity without changing result types', async () => {
++  const WebSocketClass = socketClass(1);
++  const relay = await Relay.connect('ws://fixture', 'assignment-order', { WebSocketClass });
++  try {
++    const pending = relay.request(3, 42n);
++    await Promise.resolve();
++    WebSocketClass.instance.receive([0, [3, 42]]);
++    assert.equal(relay.userId, 42n);
++    assert.equal(await pending, 42);
++  } finally { relay.close(); }
++});
+diff --git a/clients/js/relay.mjs b/clients/js/relay.mjs
+index 0a48318..eec6699 100644
+--- a/clients/js/relay.mjs
++++ b/clients/js/relay.mjs
+@@ -69,7 +69,8 @@ export class Relay extends EventTarget {
+           const [op, result] = value;
+           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
+           if (op === 2) validateChannelListing(result);
+-          if (op === 3) wireId(result, true);
++          // Apply the acknowledged identity before another frame is dispatched.
++          if (op === 3) this.userId = wireId(result, true);
+           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
+             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
+@@ -173,8 +174,7 @@ export class Relay extends EventTarget {
+   async assignId(id) {
+     id = asUserId(id);
+     if (id === RELAY || id === BROADCAST) throw new RangeError('Reserved session ID');
+-    this.userId = BigInt(await this.request(3, id));
+-    return this.userId;
++    return BigInt(await this.request(3, id));
+   }
+   setVariable(key, value) { return this.request(4, [key, value]); }
+   async getVariable(key) { const [found, value] = await this.request(5, key); return { found, value }; }
+diff --git a/clients/js/relay.test.mjs b/clients/js/relay.test.mjs
+index 120ce60..293e351 100644
+--- a/clients/js/relay.test.mjs
++++ b/clients/js/relay.test.mjs
+@@ -210,3 +210,20 @@ test('native channel listing returns sorted byte names and current populations',
+   host.send(host.userId, { afterListing: true });
+   assert.deepEqual((await received)[0].detail.value, { afterListing: true });
+ });
++
++test('native pipelined assignment and self-message expose the acknowledged identity', async t => {
++  const relay = await Relay.connect(url, 'js-id-pipeline');
++  t.after(() => relay.close());
++  assert.equal(await relay.authenticate('js-test-host'), true);
++  const id = 0xabcd000000001234n;
++  const received = new Promise(resolve => relay.addEventListener('message', event => {
++    resolve({ userId: relay.userId, detail: event.detail });
++  }, { once: true }));
++  const assignment = relay.assignId(id);
++  // Start the queued control send, then pipeline data without awaiting its ack.
++  await Promise.resolve();
++  relay.send(id, { afterAssignment: true });
++  const [assigned, observed] = await Promise.all([assignment, received]);
++  assert.equal(assigned, id);
++  assert.deepEqual(observed, { userId: id, detail: { sender: id, value: { afterAssignment: true } } });
++});

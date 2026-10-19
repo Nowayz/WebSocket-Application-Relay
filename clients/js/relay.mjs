@@ -69,7 +69,8 @@ export class Relay extends EventTarget {
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
           if (op === 2) validateChannelListing(result);
-          if (op === 3) wireId(result, true);
+          // Apply the acknowledged identity before another frame is dispatched.
+          if (op === 3) this.userId = wireId(result, true);
           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
@@ -173,8 +174,7 @@ export class Relay extends EventTarget {
   async assignId(id) {
     id = asUserId(id);
     if (id === RELAY || id === BROADCAST) throw new RangeError('Reserved session ID');
-    this.userId = BigInt(await this.request(3, id));
-    return this.userId;
+    return BigInt(await this.request(3, id));
   }
   setVariable(key, value) { return this.request(4, [key, value]); }
   async getVariable(key) { const [found, value] = await this.request(5, key); return { found, value }; }

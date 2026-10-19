@@ -151,6 +151,10 @@ invalid-ID regressions, valid large-ID routing and the measured client cost.
 The [listener compatibility checks](docs/benchmarks/2026-10-18-js-listener-compatibility/README.md)
 exercise actual native acknowledgements and real WebSocket error closes. Server-sent
 protocol Close `1002` is preserved.
+An assignment acknowledgement updates `userId` before subsequent message callbacks;
+`assignId()` still resolves to the acknowledged BigInt ID. The
+[assignment-order regression](docs/benchmarks/2026-10-18-js-assignment-order/README.md)
+checks pipelined assignment and self-routing against the native relay.
 Connection setup removes its temporary listeners on success, error, or timeout.
 A failed join send rejects immediately and closes the socket; delayed events
 cannot start a subscription after setup has failed. See the [short connection
