@@ -108,6 +108,8 @@ If the OS refuses to execute a server after receipt reservation, inspection and 
 
 Inspection profiler shutdown now handles a SIGINT timeout with one bounded kill/reap step, records forced termination as failure, and continues client/server cleanup and receipt writing. The [controlled and real-child checks](benchmarks/2026-10-19-inspection-perf-cleanup/README.md) take one traffic second each; `python3 scripts/test-inspection-cleanup.py` exercises the timeout without sleeping.
 
+The mixed-capacity runner now uses the same bounded profiler stop pattern in normal and failure cleanup. A profiler that ignores SIGINT is killed and reaped, marked failed, and cannot skip workload cleanup or final receipt writing. [Controlled regressions, a real stubborn child and short actual workload checks](benchmarks/2026-10-19-mixed-profiler-cleanup/README.md) cover both paths; `python scripts/test-mixed-cleanup.py` runs without waiting through the timeout.
+
 The capacity runner also preflights exact/histogram latency files, derived window summaries and the selected perf output before starting children, and rejects overlapping resolved output paths. The [short artifact-preservation checks](benchmarks/2026-10-19-capacity-output-preflight/README.md) include a reproduced CSV/timeline overwrite, 18 new rejection cases and two one-second valid-output runs.
 
 The prejoin-pressure tool now preserves existing receipt/server-log paths, including dangling symlinks, and saves failed server-exec receipts. Its [seven focused checks and two-second real-wire case](benchmarks/2026-10-19-join-pressure-output/README.md) retain policy and cleanup behavior.

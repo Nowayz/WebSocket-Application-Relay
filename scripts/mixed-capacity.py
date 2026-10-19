@@ -98,6 +98,19 @@ def fanout_timing_summary(timing):
     return summary
 
 
+def stop_perf(perf):
+    forced = False
+    if perf.poll() is None:
+        perf.send_signal(signal.SIGINT)
+        try:
+            perf.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            forced = True
+            perf.kill()
+            perf.wait(timeout=5)
+    return perf.returncode, forced
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, required=True)
@@ -300,11 +313,10 @@ def main():
             if code is not None:
                 record['profile']['exit_code'] = code
                 raise RuntimeError(f'profiler exited before controller stop (status {code}); see {prefix}-perf.log')
-            perf.send_signal(signal.SIGINT)
-            code = perf.wait(timeout=10)
-            record['profile']['exit_code'] = code
+            code, forced = stop_perf(perf)
+            record['profile'].update(exit_code=code, forced_kill=forced)
             perf = None
-            if code not in (0, 130, -signal.SIGINT):
+            if forced or code not in (0, 130, -signal.SIGINT):
                 raise RuntimeError(f'profiler stop failed (status {code}); see {prefix}-perf.log')
             data_path = Path(str(prefix) + '.perf.data')
             if not data_path.is_file() or data_path.stat().st_size == 0:
@@ -422,8 +434,15 @@ def main():
         record['error'] = repr(error)
         raise
     finally:
-        if perf and perf.poll() is None:
-            perf.send_signal(signal.SIGINT); perf.wait(timeout=10)
+        if perf is not None:
+            try:
+                code, forced = stop_perf(perf)
+                record['profile'].update(exit_code=code, forced_kill=forced)
+                if forced or code not in (0, 130, -signal.SIGINT):
+                    record['correctness_passed'] = False
+            except Exception as error:
+                record['profile']['cleanup_error'] = repr(error)
+                record['correctness_passed'] = False
         for proc in reversed(processes):
             if proc.poll() is None:
                 proc.terminate()
