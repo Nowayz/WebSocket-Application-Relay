@@ -210,3 +210,57 @@ test('valid envelopes preserve arbitrary application values including undefined'
     }
   } finally { relay.close(); }
 });
+
+test('malformed variable results reject before being exposed as found/value', async () => {
+  for (const value of [new Uint8Array([1, 2]), 'ab', [], [true], [true, 1, 2],
+    [1, null], ['true', null], [null, null], null, {}]) {
+    const WebSocketClass = socketClass(1);
+    const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
+    try {
+      const pending = relay.getVariable('key');
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [200, value]]);
+      await assert.rejects(pending, /Invalid variable response/);
+      assert.equal(WebSocketClass.instance.closed.code, 1002);
+    } finally { relay.close(); }
+  }
+});
+
+test('boolean command replies reject nonboolean results', async () => {
+  for (const op of [0, 1, 4]) {
+    for (const value of [0, 1, 'true', null, [], {}]) {
+      const WebSocketClass = socketClass(1);
+      const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
+      try {
+        const pending = relay.request(op, null);
+        await Promise.resolve();
+        WebSocketClass.instance.receive([0, [op, value]]);
+        await assert.rejects(pending, /Invalid boolean response/);
+        assert.equal(WebSocketClass.instance.closed.code, 1002);
+      } finally { relay.close(); }
+    }
+  }
+});
+
+test('valid command results preserve false and arbitrary stored CBOR values', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
+  try {
+    for (const op of [0, 1, 4]) {
+      for (const value of [false, true]) {
+        const pending = relay.request(op, null);
+        await Promise.resolve();
+        WebSocketClass.instance.receive([0, [op, value]]);
+        assert.equal(await pending, value);
+      }
+    }
+    for (const [found, value] of [[false, null], [true, undefined], [true, null],
+      [true, new Uint8Array([0, 255])], [true, { nested: [false, 3] }]]) {
+      const pending = relay.getVariable('key');
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [200, [found, value]]]);
+      assert.deepEqual(await pending, { found, value });
+    }
+    assert.equal(relay.ready, true);
+  } finally { relay.close(); }
+});

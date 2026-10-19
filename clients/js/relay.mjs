@@ -44,6 +44,10 @@ export class Relay extends EventTarget {
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
           if (op === 3) wireId(result, true);
+          if ((op === 0 || op === 1 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+          if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean')) {
+            throw new Error('Invalid variable response');
+          }
           this.#pending.resolve(result);
         } else if (sender === BROADCAST) {
           this.dispatchEvent(new CustomEvent('disconnect', { detail: { userId: wireId(value, true) } }));

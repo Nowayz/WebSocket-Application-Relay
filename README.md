@@ -136,6 +136,9 @@ welcome, departure and assigned session IDs also exclude reserved values.
 Wire envelopes and control reply bodies must be two-element arrays; arbitrary
 application values retain their CBOR types. The [response-shape check](docs/benchmarks/2026-10-18-js-response-shapes/README.md)
 covers byte-string lookalikes and missing/extra fields.
+Variable results require `[found: boolean, value]`; authenticate, listen, and
+set-variable results require booleans. The [command-result checks](docs/benchmarks/2026-10-18-js-command-results/README.md)
+preserve valid false replies and arbitrary stored CBOR values.
 Malformed responses immediately reject any pending command, then close with
 protocol error `1002`; rejection does not wait for the peer’s Close acknowledgement. The [short validation
 and compatibility check](docs/benchmarks/2026-10-18-js-wire-id/README.md) records
