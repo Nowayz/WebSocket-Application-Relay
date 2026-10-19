@@ -445,6 +445,11 @@ Management uses a separate HTTP listener:
 On a matched session-disconnect route, missing or invalid credentials return
 `401` even when the ID is malformed. Authorized malformed IDs retain `400`;
 valid IDs without a live session return `404`.
+Session IDs retain full uint64 precision in the decimal URL path. JavaScript
+management tools should keep IDs as `BigInt` and use `id.toString()` to build the
+path. [Live-session boundary checks](docs/benchmarks/2026-10-19-admin-id-boundaries/README.md)
+verify exact targeting and neighbour liveness across the 32-bit, JavaScript integer
+precision and maximum-session-ID boundaries.
 
 Manual drain preserves existing sessions and can be resumed. Shutdown is terminal:
 readiness and admission remain drained even if a management request races with

@@ -1,0 +1,26 @@
+   Compiling tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/admin-id-boundaries-20261019-source/vendor/tungstenite)
+   Compiling tokio-tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/admin-id-boundaries-20261019-source/vendor/tokio-tungstenite)
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/admin-id-boundaries-20261019-source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.48s
+     Running unittests src/lib.rs (artifacts/bridge-buffer-check/debug/deps/war_relay-1246fdc39159dbe4)
+
+running 1 test
+test admin::tests::disconnect_targets_exact_uint64_sessions_and_preserves_neighbours ... FAILED
+
+failures:
+
+---- admin::tests::disconnect_targets_exact_uint64_sessions_and_preserves_neighbours stdout ----
+
+thread 'admin::tests::disconnect_targets_exact_uint64_sessions_and_preserves_neighbours' (1710019) panicked at src/admin.rs:551:17:
+assertion `left == right` failed
+  left: Binary(b"\x82\x1b\xff\xff\xff\xff\xff\xff\xff\xff\x1b\0\0\0\x01\0\0\0\0")
+ right: Binary(b"\x82\x1a\xff\xff\xff\xff\x18*")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    admin::tests::disconnect_targets_exact_uint64_sessions_and_preserves_neighbours
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 137 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

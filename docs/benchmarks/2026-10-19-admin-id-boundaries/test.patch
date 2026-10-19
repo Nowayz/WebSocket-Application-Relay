@@ -1,0 +1,163 @@
+--- a/src/admin.rs
++++ b/src/admin.rs
+@@ -433,6 +433,160 @@
+             .await
+             .unwrap()
+             .unwrap();
++    }
++
++    #[tokio::test]
++    async fn disconnect_targets_exact_uint64_sessions_and_preserves_neighbours() {
++        use std::sync::atomic::Ordering::Relaxed;
++
++        async fn assigned(
++            address: std::net::SocketAddr,
++            id: u64,
++        ) -> (tokio_tungstenite::WebSocketStream<TcpStream>, u64) {
++            let stream = TcpStream::connect(address).await.unwrap();
++            let (mut ws, _) = tokio_tungstenite::client_async(format!("ws://{address}"), stream)
++                .await
++                .unwrap();
++            ws.send(Message::Binary(protocol::byte_string(b"admin-ids")))
++                .await
++                .unwrap();
++            let Some(Ok(Message::Binary(welcome))) = ws.next().await else {
++                panic!("missing welcome");
++            };
++            let old = minicbor::Decoder::new(&welcome).u64().unwrap();
++            for (op, value, expected) in [
++                (
++                    0,
++                    protocol::byte_string(b"admin-id-auth"),
++                    protocol::reply(0, b"\xf5"),
++                ),
++                (
++                    3,
++                    protocol::uint(id),
++                    protocol::reply(3, &protocol::uint(id)),
++                ),
++            ] {
++                ws.send(Message::Binary(protocol::request(op, &value)))
++                    .await
++                    .unwrap();
++                assert_eq!(ws.next().await.unwrap().unwrap(), Message::Binary(expected));
++            }
++            (ws, old)
++        }
++
++        timeout(Duration::from_secs(5), async {
++            let relay = Relay::new(Config {
++                workers: Some(2),
++                ping_interval_secs: 0,
++                auth_password: Some("admin-id-auth".into()),
++                admin_token: Some("shutdown-test".into()),
++                ..Config::default()
++            })
++            .unwrap();
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let address = listener.local_addr().unwrap();
++            let admin = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let admin_address = admin.local_addr().unwrap();
++            let stop = CancellationToken::new();
++            let _cancel_on_exit = stop.clone().drop_guard();
++            let mut tasks = tokio::task::JoinSet::new();
++            tasks.spawn(crate::server::serve(
++                listener,
++                None,
++                relay.clone(),
++                stop.clone(),
++            ));
++            let router = admin_router(relay.clone());
++            let stopped = stop.clone();
++            tasks.spawn(async move {
++                axum::serve(admin, router)
++                    .with_graceful_shutdown(stopped.cancelled_owned())
++                    .await
++                    .map_err(anyhow::Error::from)
++            });
++            for target in [u32::MAX as u64 + 1, (1u64 << 53) + 1, u64::MAX - 1] {
++                let neighbour = target - 1;
++                let (mut guard, _) = assigned(address, neighbour).await;
++                let (mut victim, old_id) = assigned(address, target).await;
++                let path = format!("/v1/sessions/{target}/disconnect");
++                assert!(
++                    http(admin_address, "POST", &path, false)
++                        .await
++                        .starts_with("HTTP/1.1 401")
++                );
++                // Authentication and absent/old IDs must not mutate either session.
++                for absent in [old_id, target + 1] {
++                    assert!(
++                        http(
++                            admin_address,
++                            "POST",
++                            &format!("/v1/sessions/{absent}/disconnect"),
++                            true
++                        )
++                        .await
++                        .starts_with("HTTP/1.1 404")
++                    );
++                }
++                let probe = protocol::envelope(target, &protocol::uint(17));
++                victim.send(Message::Binary(probe.clone())).await.unwrap();
++                assert_eq!(
++                    victim.next().await.unwrap().unwrap(),
++                    Message::Binary(probe)
++                );
++                assert!(
++                    http(admin_address, "POST", &path, true)
++                        .await
++                        .starts_with("HTTP/1.1 204")
++                );
++                let Some(Ok(Message::Close(Some(frame)))) = victim.next().await else {
++                    panic!("target {target} did not receive administrative Close");
++                };
++                assert_eq!(u16::from(frame.code), 4000);
++                assert_eq!(frame.reason, "Administrative Disconnect");
++                assert!(
++                    crate::transport::acknowledge_close(&mut victim, Duration::from_secs(1)).await
++                );
++                // The live neighbour receives exactly this departed uint64 ID.
++                assert_eq!(
++                    guard.next().await.unwrap().unwrap(),
++                    Message::Binary(protocol::envelope(
++                        protocol::BROADCAST,
++                        &protocol::uint(target)
++                    ))
++                );
++                let probe = protocol::envelope(neighbour, &protocol::uint(42));
++                guard.send(Message::Binary(probe.clone())).await.unwrap();
++                assert_eq!(guard.next().await.unwrap().unwrap(), Message::Binary(probe));
++                assert!(
++                    http(admin_address, "POST", &path, true)
++                        .await
++                        .starts_with("HTTP/1.1 404")
++                );
++                assert!(
++                    crate::transport::initiate_close(
++                        &mut guard,
++                        None,
++                        Duration::from_secs(1),
++                        None
++                    )
++                    .await
++                );
++            }
++            while relay.metrics.connections.load(Relaxed) != 0 {
++                tokio::task::yield_now().await;
++            }
++            assert_eq!(relay.counts(), (0, 1));
++            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++            assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
++            stop.cancel();
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap().unwrap();
++            }
++            assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), 0);
++            assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
++        })
++        .await
++        .expect("exact-ID disconnect, neighbour liveness and retirement must finish promptly");
+     }
+ 
+     #[tokio::test]

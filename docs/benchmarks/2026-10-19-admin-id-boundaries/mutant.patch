@@ -1,0 +1,11 @@
+--- a/src/admin.rs
++++ b/src/admin.rs
+@@ -158,7 +158,7 @@
+         Ok(id) => id,
+         Err(error) => return error.into_response(),
+     };
+-    let status = if relay.disconnect(id) {
++    let status = if relay.disconnect((id as f64) as u64) {
+         info!(id, "administrator disconnected session");
+         StatusCode::NO_CONTENT
+     } else {
