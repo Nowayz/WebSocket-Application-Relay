@@ -1,0 +1,91 @@
+--- a/clients/js/relay.mjs
++++ b/clients/js/relay.mjs
+@@ -85,6 +85,7 @@
+           // Apply the acknowledged identity before another frame is dispatched.
+           if (op === 3) this.userId = wireId(result, true);
+           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
++          if (op === 4 && result !== true) throw new Error('Invalid variable acknowledgement');
+           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
+             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
+             throw new Error('Invalid listener response');
+--- a/clients/js/connect.test.mjs
++++ b/clients/js/connect.test.mjs
+@@ -548,3 +548,29 @@
+     socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
+   }
+ });
++
++test('false write acknowledgement rejects pending and queued commands before peer Close', async () => {
++  class ClosingSocket extends CommandSocket {
++    close(code, reason) { super.close(); this.lastClose = { code, reason }; }
++  }
++  const socket = new ClosingSocket();
++  const relay = new Relay(socket, 42n, 1000);
++  let value, firstError, queuedError;
++  const first = relay.setVariable('key', 42).then(result => { value = result; }, error => { firstError = error; });
++  const queued = relay.getVariable('key').catch(error => { queuedError = error; });
++  try {
++    await commandTurn();
++    socket.reply(4, false);
++    await commandTurn();
++    assert.match(firstError?.message ?? '', /Invalid variable acknowledgement/);
++    assert.equal(value, undefined);
++    assert.match(queuedError?.message ?? '', /Relay is closed/);
++    assert.equal(socket.packets.length, 1, 'queued read must not reach the wire');
++    assert.equal(socket.lastClose.code, 4002);
++    assert.equal(socket.readyState, 2, 'rejection must not wait for peer Close acknowledgement');
++  } finally {
++    relay.close();
++    socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
++    await Promise.all([first, queued]);
++  }
++});
+--- a/clients/js/ids.test.mjs
++++ b/clients/js/ids.test.mjs
+@@ -246,13 +246,11 @@
+   const WebSocketClass = socketClass(1);
+   const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
+   try {
+-    for (const op of [0, 4]) {
+-      for (const value of [false, true]) {
+-        const pending = relay.request(op, null);
+-        await Promise.resolve();
+-        WebSocketClass.instance.receive([0, [op, value]]);
+-        assert.equal(await pending, value);
+-      }
++    for (const [op, value] of [[0, false], [0, true], [4, true]]) {
++      const pending = op === 0 ? relay.authenticate('fixture') : relay.setVariable('key', 0);
++      await Promise.resolve();
++      WebSocketClass.instance.receive([0, [op, value]]);
++      assert.equal(await pending, value);
+     }
+     for (const [found, value] of [[false, null], [true, undefined], [true, null],
+       [true, new Uint8Array([0, 255])], [true, { nested: [false, 3] }]]) {
+--- a/clients/js/protocol-error.test.mjs
++++ b/clients/js/protocol-error.test.mjs
+@@ -45,6 +45,7 @@
+             if (mode === 'text-reply') frame(1, Buffer.from('1048576'));
+             else if (mode === 'reply') frame(2, [0x82, 0, 0x82, 1, 0xf5]);
+             else if (mode === 'missing-variable') frame(2, [0x82, 0, 0x82, 0x18, 0xc8, 0x82, 0xf4, 0]);
++            else if (mode === 'write-ack') frame(2, [0x82, 0, 0x82, 4, 0xf4]);
+             else if (mode === 'server-close') frame(8, [3, 234]); // 1002
+           }
+         }
+@@ -59,6 +60,7 @@
+   ['welcome', /Invalid/],
+   ['reply', /Invalid listener response/],
+   ['missing-variable', /Invalid variable response/],
++  ['write-ack', /Invalid variable acknowledgement/],
+   ['timeout', /request timeout/i],
+   ['text-welcome', /binary CBOR/],
+   ['text-reply', /binary CBOR/],
+@@ -72,7 +74,8 @@
+       const relay = await Relay.connect(remote.url, 'fault-peer');
+       t.after(() => relay.close());
+       if (mode === 'timeout') relay.requestTimeoutMs = 1;
+-      const pending = mode === 'missing-variable' ? relay.getVariable('missing') : relay.listen(1);
++      const pending = mode === 'missing-variable' ? relay.getVariable('missing')
++        : mode === 'write-ack' ? relay.setVariable('key', 42) : relay.listen(1);
+       const queued = relay.listen(2);
+       await Promise.all([
+         assert.rejects(pending, expectedError),

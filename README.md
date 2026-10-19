@@ -233,6 +233,9 @@ Variable replies preserve the distinction between a missing entry (`[false, null
 and a stored null (`[true, null]`). A missing-entry reply carrying another value
 rejects the request and queued commands and closes with code 4002; see the
 [reply-validation checks](docs/benchmarks/2026-10-19-js-missing-null/README.md).
+A variable-write acknowledgement must be `true`; `false` triggers the same
+protocol-error cleanup. Authentication may legitimately return `false` without
+closing the connection. See the [acknowledgement checks](docs/benchmarks/2026-10-19-js-missing-null/write-ack/README.md).
 
 To build a standalone browser ES module and open its acceptance page:
 

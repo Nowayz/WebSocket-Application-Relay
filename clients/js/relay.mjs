@@ -85,6 +85,7 @@ export class Relay extends EventTarget {
           // Apply the acknowledged identity before another frame is dispatched.
           if (op === 3) this.userId = wireId(result, true);
           if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+          if (op === 4 && result !== true) throw new Error('Invalid variable acknowledgement');
           if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
             || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
             throw new Error('Invalid listener response');

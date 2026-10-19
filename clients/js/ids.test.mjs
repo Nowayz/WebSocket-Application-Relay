@@ -246,13 +246,11 @@ test('valid command results preserve false and arbitrary stored CBOR values', as
   const WebSocketClass = socketClass(1);
   const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
   try {
-    for (const op of [0, 4]) {
-      for (const value of [false, true]) {
-        const pending = relay.request(op, null);
-        await Promise.resolve();
-        WebSocketClass.instance.receive([0, [op, value]]);
-        assert.equal(await pending, value);
-      }
+    for (const [op, value] of [[0, false], [0, true], [4, true]]) {
+      const pending = op === 0 ? relay.authenticate('fixture') : relay.setVariable('key', 0);
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [op, value]]);
+      assert.equal(await pending, value);
     }
     for (const [found, value] of [[false, null], [true, undefined], [true, null],
       [true, new Uint8Array([0, 255])], [true, { nested: [false, 3] }]]) {

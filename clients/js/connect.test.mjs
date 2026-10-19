@@ -548,3 +548,29 @@ test('missing null and stored null remain distinct variable results', async () =
     socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
   }
 });
+
+test('false write acknowledgement rejects pending and queued commands before peer Close', async () => {
+  class ClosingSocket extends CommandSocket {
+    close(code, reason) { super.close(); this.lastClose = { code, reason }; }
+  }
+  const socket = new ClosingSocket();
+  const relay = new Relay(socket, 42n, 1000);
+  let value, firstError, queuedError;
+  const first = relay.setVariable('key', 42).then(result => { value = result; }, error => { firstError = error; });
+  const queued = relay.getVariable('key').catch(error => { queuedError = error; });
+  try {
+    await commandTurn();
+    socket.reply(4, false);
+    await commandTurn();
+    assert.match(firstError?.message ?? '', /Invalid variable acknowledgement/);
+    assert.equal(value, undefined);
+    assert.match(queuedError?.message ?? '', /Relay is closed/);
+    assert.equal(socket.packets.length, 1, 'queued read must not reach the wire');
+    assert.equal(socket.lastClose.code, 4002);
+    assert.equal(socket.readyState, 2, 'rejection must not wait for peer Close acknowledgement');
+  } finally {
+    relay.close();
+    socket.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
+    await Promise.all([first, queued]);
+  }
+});
