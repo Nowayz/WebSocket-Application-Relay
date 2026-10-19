@@ -7034,3 +7034,13 @@ pass, including seven real JS compatibility/idle tests on the selected build.
 The local idle bridge adopts clean `db798ce`; native relay behavior and buffer/
 queue/message/ownership policies are unchanged. This is a conditional bridge
 latency fix, not a general throughput or population-scale guarantee.
+
+
+### Short current Rust/C++ fairness comparison (2026-10-18)
+
+Four matched two-second screens hold 100,000 private users plus 8,192 fanout
+readers. Rust has lower observed worst-user tails in both repeats; C++ uses
+substantially less RSS and gives more private users sub-5-ms observed maxima.
+The distributions cross, so neither wins for every user. Full per-user curves,
+limits and reproducible receipts are in the
+[short comparison](benchmarks/2026-10-18-short-rust-cpp-fairness/README.md).
