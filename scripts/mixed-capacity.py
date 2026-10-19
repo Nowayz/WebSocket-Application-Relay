@@ -80,7 +80,15 @@ def main():
             args.kind == 'rust' and 1 <= args.http_page_size <= 1000 and not args.fanout_churn_every):
         parser.error('--http-page-size requires Rust, limit 1..=1000, and no fanout membership churn')
     prefix = args.output.with_suffix('')
-    assert not args.output.exists() and not Path(str(prefix) + '.csv').exists()
+    artifacts = [args.output, Path(str(prefix) + '.csv'), Path(str(prefix) + '.windows.json')]
+    artifacts += [Path(str(prefix) + f'-{name}.err') for name in ('server', 'capacity', 'sidecar')]
+    if args.exact_fanout_latency:
+        artifacts.append(Path(str(prefix) + '-fanout.csv'))
+    if args.profile:
+        artifacts += [Path(str(prefix) + '.perf.data'), Path(str(prefix) + '-perf.log')]
+    for artifact in artifacts:
+        if os.path.lexists(artifact):
+            parser.error(f'output already exists; choose a fresh artifact prefix: {artifact}')
     client_path = args.capacity_client.resolve()
     port, admin = free_port(), free_port()
     while admin == port:

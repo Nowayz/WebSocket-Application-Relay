@@ -67,6 +67,8 @@ python3 scripts/mixed-capacity.py \
 
 The inspection and capacity runners reserve their receipts with exclusive creation before launching the relay. Reusing an existing receipt path fails without starting the server or replacing prior evidence; select a fresh name instead. Inspection profiled runs also check their derived `.perf.data` path before launching the relay, including dangling symlinks, and report the conflicting artifact path. `python3 scripts/test-inspection-output.py` checks both receipt guards, inspection profile collisions and fresh inspection startup-failure receipts in under a second on the recorded host. Receipt reservation is exclusive; the profile check is preflight, so keep the existing sequential-run discipline and give profiles distinct basenames.
 
+The mixed-capacity runner also rejects existing receipt, private CSV, timeline and process-log paths before launching its children, plus fanout CSV/profile paths when those modes are enabled. This is a preflight guard for sequential runs, not a cross-process artifact lock. `python3 scripts/test-mixed-output.py` checks regular-file and dangling-symlink collisions for all nine artifact kinds.
+
 Use a fresh output name. This measures the new executable, not a reproduction of a frozen historical binary. The runner's CPU masks are specific to the recorded Linux host; inspect topology before adapting them. Run comparisons sequentially, with matched settings, fresh processes and no concurrent builds/profiles.
 
 ## Read the result correctly
