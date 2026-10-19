@@ -368,6 +368,7 @@ host, network, payloads, and fanout.
 ```sh
 cargo fmt --check
 python3 scripts/check-vendor.py
+python3 scripts/test-build-snapshot.py
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ./scripts/check-js.sh

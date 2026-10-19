@@ -35,7 +35,9 @@ The [latest-source consolidated 100,000-user acceptance](benchmarks/2026-10-18-c
 
 Setup, proof scans and exhaustive departure/Close checks add wall time outside the measured phase. In particular, six seconds of offered mixed traffic does not mean a six-second complete test. Extend a test only when the result needs it; a short screen can reject a clear regression without pretending to prove a long-term tail guarantee.
 
-When building copied Git archives into a shared Cargo target directory, refresh the copied Rust source timestamps (including vendored sources) or clean the relevant artifacts before compiling. Archive timestamps can be older than cached outputs: the [timer experiment](benchmarks/2026-10-18-unchanged-timers/README.md) caught a diagnostic binary reused as an untouched control. Check the compile log, freeze the binary, record its hash and verify diagnostic identity before timing. Cargo success alone does not prove source freshness. Keep source edits and builds sequential.
+For copied benchmark archives, prefer `scripts/build-snapshot.py --snapshot PATH --target-dir CACHE --output NEW_DIRECTORY --bin war-relay` (or `--example inspection`). It refreshes copied inputs, requires Cargo's structured artifact message to confirm recompilation, checks unchanged source contents and freezes the executable with hashes and logs. It refuses checkouts and reused outputs. See the [command, real stale-cache regression and acceptance](benchmarks/2026-10-18-snapshot-builder/README.md).
+
+For manual builds sharing a target directory, refresh the copied source timestamps (including vendored sources) or clean the relevant artifacts before compiling. Archive timestamps can be older than cached outputs: the [timer experiment](benchmarks/2026-10-18-unchanged-timers/README.md) caught a diagnostic binary reused as an untouched control. Check the compile log, freeze the binary, record its hash and verify diagnostic identity before timing. Cargo success alone does not prove source freshness. Keep source edits and all builds using the shared cache sequential.
 
 For a first routing/output screen, build the intended sources and use a fresh output path:
 
