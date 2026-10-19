@@ -48,6 +48,10 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
     }
     assert_eq!(worker.connections.len(), 512);
     let original_capacity = worker.connections.capacity();
+    assert_eq!(
+        relay.metrics.native_connection_slots.load(Relaxed),
+        original_capacity
+    );
     worker.reclaim_connections();
     assert_eq!(worker.connections.capacity(), original_capacity);
     assert!(!worker.compacted, "a dense arena must keep its capacity");
@@ -177,6 +181,10 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
     }
     worker.reclaim_connections();
     assert!(worker.connections.capacity() < original_capacity / 8);
+    assert_eq!(
+        relay.metrics.native_connection_slots.load(Relaxed),
+        worker.connections.capacity()
+    );
     assert_eq!(worker.connections.len(), survivors.len());
     assert_eq!(worker.ready.iter().copied().collect::<Vec<_>>(), ready);
     assert_eq!(
@@ -335,4 +343,38 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
             .unwrap(),
         0
     );
+}
+
+#[test]
+fn connection_slot_gauge_aggregates_retained_capacity_and_releases_worker_ownership() {
+    let relay = Relay::new(crate::Config::default()).unwrap();
+    let make_worker = || {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        Worker::new(listener, relay.clone()).unwrap()
+    };
+    let mut first = make_worker();
+    let mut second = make_worker();
+    first.connections.reserve_exact(32);
+    first.update_connection_slots();
+    let warm = first.connections.capacity();
+    first.reclaim_connections();
+    assert_eq!(first.connections.capacity(), warm);
+    second.connections.reserve_exact(1024);
+    second.update_connection_slots();
+    let total = warm + second.connections.capacity();
+    assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), total);
+    second.update_connection_slots();
+    assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), total);
+    assert!(relay.metrics.render(0, 1, false).contains(&format!(
+        "# TYPE war_native_connection_slots gauge\nwar_native_connection_slots {total}\n"
+    )));
+    second.reclaim_connections();
+    assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), warm);
+    second.connections.reserve_exact(1024);
+    second.update_connection_slots();
+    drop(second);
+    assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), warm);
+    drop(first);
+    assert_eq!(relay.metrics.native_connection_slots.load(Relaxed), 0);
 }

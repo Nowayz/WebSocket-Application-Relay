@@ -707,6 +707,17 @@ and outstanding-byte accounting remain immediate. Completion counters publish
 at vectored-write boundaries. No quota depends on deferred
 statistics. See the [input-counter measurements](performance.md#worker-local-input-statistics-2026-10-17).
 
+`war_native_connection_slots` reports allocated native connection-arena capacity,
+including both occupied and spare slots across workers. It changes on arena
+growth, compaction, empty-arena release and worker exit; no per-packet updates
+are needed. Small empty arenas can remain warm for reconnects, so a nonzero value
+with zero connections can be expected. It counts slots, not resident bytes,
+receive/output payload storage or an admission limit. Read it alongside
+`war_connections` after activity settles; concurrent admission/retirement makes
+the separate gauges nontransactional. The
+[population heap diagnostic](benchmarks/2026-10-18-population-heap-and-slots/README.md)
+explains how connection metadata differs from reserved receive/output bytes.
+
 `war_output_queue_capacity_bytes` reports allocated native output queue slots,
 including unused retained capacity. `war_output_queue_peak_capacity_bytes` is
 the process-wide high-water mark of that aggregate. These count requested slot

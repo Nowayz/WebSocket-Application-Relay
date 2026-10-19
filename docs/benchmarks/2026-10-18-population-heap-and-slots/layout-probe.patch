@@ -1,0 +1,36 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -1364,3 +1364,17 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++mod heap_layout_probe {
++    #[test]
++    fn report_connection_metadata() {
++        use super::*;
++        println!("connection={} stage={} upgrade={} websocket={} socket={} socket_state={} limiter={} registration={} closing={} option_closing={}",
++            std::mem::size_of::<Connection>(), std::mem::size_of::<Stage>(),
++            std::mem::size_of::<Upgrade>(), std::mem::size_of::<WebSocket<Stream>>(),
++            std::mem::size_of::<Socket>(), std::mem::size_of::<socket::State>(),
++            std::mem::size_of::<RateLimiter>(), std::mem::size_of::<Registration>(),
++            std::mem::size_of::<Closing>(), std::mem::size_of::<Option<Closing>>());
++    }
++}
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -1991,3 +1991,13 @@
+ 
+ #[cfg(test)]
+ mod continuation_tests;
++
++#[cfg(test)]
++mod heap_layout_probe {
++    #[test]
++    fn report_peer_metadata() {
++        use super::*;
++        println!("peer={} budget={} envelope={}", std::mem::size_of::<Peer>(),
++            std::mem::size_of::<Budget>(), std::mem::size_of::<Envelope>());
++    }
++}

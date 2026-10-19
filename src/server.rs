@@ -248,6 +248,7 @@ struct Worker {
     signal: Arc<Signal>,
     relay: Arc<Relay>,
     connections: Slab<Connection>,
+    connection_capacity: usize,
     tokens: HashMap<Token, usize>,
     next_token: usize,
     ready: VecDeque<Token>,
@@ -263,6 +264,10 @@ impl Drop for Worker {
         // A fatal poll/accept error or panic also retires membership. Suppress
         // fanout before fields drop, even before the supervisor sees the error.
         self.relay.begin_shutdown();
+        self.relay
+            .metrics
+            .native_connection_slots
+            .fetch_sub(self.connection_capacity, Relaxed);
     }
 }
 
@@ -284,6 +289,7 @@ impl Worker {
             signal,
             relay,
             connections: Slab::new(),
+            connection_capacity: 0,
             tokens: HashMap::new(),
             next_token: 2,
             ready: VecDeque::new(),
@@ -416,6 +422,7 @@ impl Worker {
             let connection = Connection::new(socket, token, lease, &self.relay);
             let deadline = connection.deadline(&self.relay);
             self.connections.insert(connection);
+            self.update_connection_slots();
             self.tokens.insert(token, slot);
             self.timers.set(slot, deadline);
             self.schedule(token);
@@ -446,6 +453,17 @@ impl Worker {
         Ok(())
     }
 
+    fn update_connection_slots(&mut self) {
+        let capacity = self.connections.capacity();
+        let slots = &self.relay.metrics.native_connection_slots;
+        if capacity > self.connection_capacity {
+            slots.fetch_add(capacity - self.connection_capacity, Relaxed);
+        } else if capacity < self.connection_capacity {
+            slots.fetch_sub(self.connection_capacity - capacity, Relaxed);
+        }
+        self.connection_capacity = capacity;
+    }
+
     fn reclaim_connections(&mut self) {
         if self.connections.is_empty() {
             self.scratch = ReadStorage::default();
@@ -470,6 +488,7 @@ impl Worker {
             self.timers.shrink_to_fit(self.connections.len());
             self.compacted = true;
         }
+        self.update_connection_slots();
     }
 
     fn run(mut self) -> Result<()> {

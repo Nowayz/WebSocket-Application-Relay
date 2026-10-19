@@ -7053,3 +7053,15 @@ A two-run, four-second traffic screen tests 1.5x rather than 2x growth above
 in this pair and has higher observed CPU/private/fanout maxima. This does not
 establish a repeatable timing regression or justify adoption; the existing
 simple growth policy remains. See the [screen and complete receipts](benchmarks/2026-10-18-slab-growth-screen/README.md).
+
+
+### Population heap attribution and connection slots (2026-10-18)
+
+Two short allocator diagnostics attribute the larger Rust heap primarily to
+backing storage and connection metadata rather than a larger native socket
+allocation group. Requested ready heap is 111.03 MiB for Rust and 48.91 MiB
+for C++; these replacement-allocator captures are not ordinary RSS or timing.
+The selected `war_native_connection_slots` gauge exposes retained arena
+capacity without per-packet updates. A separate ordinary population check
+reports 131,072 slots for 108,194 sessions, then zero after full retirement.
+See the [raw heaps, release layouts and selected gauge checks](benchmarks/2026-10-18-population-heap-and-slots/README.md).

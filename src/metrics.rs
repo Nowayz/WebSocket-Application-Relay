@@ -34,6 +34,7 @@ pub struct Metrics {
     /// in-flight messages and charged fanout membership snapshots.
     pub queued_bytes: AtomicUsize,
     pub connections: AtomicUsize,
+    pub native_connection_slots: AtomicUsize,
     pub variable_bytes: AtomicUsize,
     pub global_pressure: AtomicU64,
     pub write_timeouts: AtomicU64,
@@ -275,6 +276,11 @@ impl Metrics {
                 "draining",
                 usize::from(draining),
                 "Whether admission is disabled.",
+            ),
+            (
+                "native_connection_slots",
+                self.native_connection_slots.load(Relaxed),
+                "Allocated native connection arena slots, including spare retained slots; not resident bytes or a connection limit.",
             ),
             (
                 "output_queue_capacity_bytes",
