@@ -1,0 +1,11 @@
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -137,7 +137,7 @@
+     }
+ 
+     fn notify(&self) {
+-        if !self.notified.swap(true, Relaxed) {
++        if !self.notified.load(Relaxed) && !self.notified.swap(true, Relaxed) {
+             let mut pending = self.signal.pending.lock();
+             let wake = pending.is_empty();
+             pending.push_back(self.token);
