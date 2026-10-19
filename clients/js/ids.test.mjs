@@ -109,3 +109,29 @@ test('valid assignment acknowledgement keeps the BigInt API', async () => {
   assert.equal(relay.userId, id);
   relay.close();
 });
+
+test('malformed replies reject pending commands before the close handshake completes', async () => {
+  const WebSocketClass = class extends socketClass(1) {
+    close(code, reason) {
+      this.closed = { code, reason };
+      this.readyState = 2; // Peer withholds the Close acknowledgement.
+    }
+  };
+  const relay = await Relay.connect('ws://fixture', 'id-check', { WebSocketClass });
+  const pending = relay.listen(1);
+  let rejection;
+  const settled = pending.catch(error => { rejection = error; });
+  await Promise.resolve();
+  const ws = WebSocketClass.instance;
+  try {
+    ws.receive([0, [99, null]]); // Does not match the outstanding operation.
+    await new Promise(setImmediate);
+    assert.ok(rejection instanceof Error, 'command waited for Close or its request timeout');
+    assert.match(rejection.message, /Unexpected relay response/);
+    assert.equal(ws.closed.code, 1002);
+    assert.equal(ws.readyState, 2);
+  } finally {
+    ws.dispatchEvent(Object.assign(new Event('close'), { code: 1002, reason: 'fixture cleanup' }));
+    await settled;
+  }
+});

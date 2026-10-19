@@ -1,0 +1,30 @@
+✔ welcome IDs must be exact, nonreserved uint64 integers (14.941126ms)
+✔ malformed sender and disconnect IDs close without dispatching application events (1.407802ms)
+✔ valid large sender and disconnect IDs retain exact BigInt values (0.940704ms)
+✔ invalid assignment acknowledgements reject the command and close the connection (2.145722ms)
+✔ valid assignment acknowledgement keeps the BigInt API (0.176155ms)
+✖ malformed replies reject pending commands before the close handshake completes (2.342127ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 5
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67.359551
+
+✖ failing tests:
+
+test at clients/js/ids.test.mjs:113:1
+✖ malformed replies reject pending commands before the close handshake completes (2.342127ms)
+  AssertionError [ERR_ASSERTION]: command waited for Close or its request timeout
+      at TestContext.<anonymous> (file:///home/phil/dev/war_next/clients/js/ids.test.mjs:129:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

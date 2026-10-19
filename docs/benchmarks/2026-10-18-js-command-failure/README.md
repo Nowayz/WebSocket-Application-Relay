@@ -1,0 +1,9 @@
+# Reject malformed command replies without waiting for Close
+
+Selected on 2026-10-18: the JavaScript client's existing invalid-response handler immediately rejects an outstanding command with the original protocol error. Its normal rejection cleanup clears the request timer and pending slot; the error event and protocol Close 1002 still follow.
+
+Previously, the handler emitted an error and called WebSocket.close, leaving the command pending until the peer completed Close or the configured request timeout fired (default ten seconds). The prior ID tests' immediate mock Close event hid this delay. The regression now uses a socket that enters CLOSING without emitting Close. After one event-loop turn, a malformed operation reply must already have rejected its waiter with the original Unexpected relay response error, while the socket remains CLOSING. Explicit fixture cleanup then emits Close, so the old implementation's failing test does not wait for the production timeout.
+
+The failure reproduces before the one-line change. All six focused tests pass afterward in about 63 ms. The complete disposable native/legacy suite passes all 13 checks in 1.09 seconds, including existing ID, payload, command, takeover and idle compatibility. Both services exit normally; final connections/sessions/queued reservations/variables are zero. Browser bundling succeeds. No normal-message decode, FIFO, payload ownership or server-runtime behavior changes. This is error-path responsiveness, not a general network-latency or throughput claim.
+
+The selected patch, before/after unit logs, live receipt and browser build log are retained. builds.json identifies the source base and client hash; the live receipt pins disposable server binaries and client source. Run python verify.py for offline checks. The standalone regression is node --test clients/js/ids.test.mjs. Manual services and protected source edits remain unchanged.

@@ -48,6 +48,7 @@ export class Relay extends EventTarget {
           this.dispatchEvent(new CustomEvent('message', { detail: { sender, value } }));
         }
       } catch (error) {
+        this.#pending?.reject(error);
         this.dispatchEvent(new CustomEvent('error', { detail: error }));
         ws.close(1002, 'Invalid Relay Response');
       }

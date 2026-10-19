@@ -133,7 +133,8 @@ Install with `npm ci --prefix clients/js --ignore-scripts`. The client supports
 modern browsers through an ES module bundler and Node 22+. IDs are `BigInt`.
 Received IDs are checked for exact integer representation and uint64 range;
 welcome, departure and assigned session IDs also exclude reserved values.
-Malformed responses close with protocol error `1002`. The [short validation
+Malformed responses immediately reject any pending command, then close with
+protocol error `1002`; rejection does not wait for the peer’s Close acknowledgement. The [short validation
 and compatibility check](docs/benchmarks/2026-10-18-js-wire-id/README.md) records
 invalid-ID regressions, valid large-ID routing and the measured client cost.
 
