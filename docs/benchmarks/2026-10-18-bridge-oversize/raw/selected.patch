@@ -1,0 +1,117 @@
+diff --git a/src/legacy_bridge.rs b/src/legacy_bridge.rs
+index 89b8284..36a4be9 100644
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -19,7 +19,7 @@ use tokio::{
+ use tokio_tungstenite::{
+     accept_hdr_async_with_config, connect_async_with_config,
+     tungstenite::{
+-        Message,
++        Error, Message,
+         client::{IntoClientRequest, uri_mode},
+         protocol::{CloseFrame, WebSocketConfig, frame::coding::CloseCode},
+     },
+@@ -321,13 +321,27 @@ async fn bridge(
+             match legacy
+                 .next()
+                 .await
+-                .context("legacy client left before join")??
++                .context("legacy client left before join")?
+             {
+-                Message::Binary(bytes) => break Ok::<_, anyhow::Error>(Some(bytes)),
+-                Message::Text(text) => break Ok(Some(Bytes::copy_from_slice(text.as_bytes()))),
+-                Message::Ping(_) => legacy.flush().await?,
+-                Message::Pong(_) => {}
+-                Message::Close(_) => {
++                Err(Error::Capacity(_)) => {
++                    transport::initiate_close(
++                        &mut legacy,
++                        Some(CloseFrame {
++                            code: CloseCode::Size,
++                            reason: "Message Too Large".into(),
++                        }),
++                        WAIT,
++                        None,
++                    )
++                    .await;
++                    break Ok(None);
++                }
++                Err(error) => return Err(error.into()),
++                Ok(Message::Binary(bytes)) => break Ok::<_, anyhow::Error>(Some(bytes)),
++                Ok(Message::Text(text)) => break Ok(Some(Bytes::copy_from_slice(text.as_bytes()))),
++                Ok(Message::Ping(_)) => legacy.flush().await?,
++                Ok(Message::Pong(_)) => {}
++                Ok(Message::Close(_)) => {
+                     transport::acknowledge_close(&mut legacy, WAIT).await;
+                     break Ok(None);
+                 }
+@@ -384,6 +398,15 @@ async fn bridge(
+                     transport::initiate_close(&mut upstream, frame, WAIT, None).await;
+                     break;
+                 }
++                Some(Err(Error::Capacity(_))) => {
++                    transport::initiate_close(
++                        &mut legacy,
++                        Some(CloseFrame { code: CloseCode::Size, reason: "Message Too Large".into() }),
++                        WAIT,
++                        None,
++                    ).await;
++                    break;
++                }
+                 Some(Ok(message)) => match to_cbor(message) {
+                     Ok(Some(packet)) => timeout(WAIT, upstream.send(Message::Binary(packet))).await??,
+                     Ok(None) => {},
+@@ -415,6 +438,53 @@ async fn bridge(
+ mod tests {
+     use super::*;
+ 
++    #[tokio::test]
++    async fn oversized_frame_headers_send_1009_before_and_after_join() {
++        use tokio::io::AsyncWriteExt;
++        timeout(Duration::from_secs(2), async {
++            for joined in [false, true] {
++                let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++                let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++                let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++                let url = format!("ws://{}", listener.local_addr().unwrap());
++                let shutdown = CancellationToken::new();
++                let mut tasks = JoinSet::new();
++                tasks.spawn(async move {
++                    let (stream, _) = upstream.accept().await.unwrap();
++                    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                    ws.send(Message::Binary(protocol::uint(1))).await.unwrap();
++                    while ws.next().await.is_some_and(|message| message.is_ok()) {}
++                });
++                let token = shutdown.clone();
++                tasks.spawn(async move {
++                    serve(listener, upstream_url, 1, token).await.unwrap();
++                });
++                let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
++                if joined {
++                    ws.send(Message::Binary(Bytes::from_static(b"size-check")))
++                        .await
++                        .unwrap();
++                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
++                }
++                // No large payload allocation: rejection follows the advertised length.
++                let mut header = [0; 14];
++                header[..2].copy_from_slice(&[0x82, 0xff]);
++                header[2..10].copy_from_slice(&(16 * 1024 * 1024 + 1u64).to_be_bytes());
++                ws.get_mut().write_all(&header).await.unwrap();
++                let Some(Ok(Message::Close(Some(frame)))) = ws.next().await else {
++                    panic!("oversized frame did not receive Close: joined={joined}");
++                };
++                assert_eq!(frame.code, CloseCode::Size);
++                assert_eq!(frame.reason, "Message Too Large");
++                shutdown.cancel();
++                tasks.shutdown().await;
++            }
++        })
++        .await
++        .expect("oversized-header rejection must be prompt");
++    }
++
+     #[tokio::test]
+     async fn invalid_upstream_is_rejected_before_the_accept_loop() {
+         for upstream in ["not a URL", "http://localhost/", "ws://", "/relative"] {

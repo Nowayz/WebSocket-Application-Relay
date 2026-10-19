@@ -257,6 +257,10 @@ The optional migration bridge translates the original binary/text wire format:
 The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
 Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
 the check. Reachability and TLS availability are checked when forwarding a client.
+Oversized frontend messages receive Close `1009` before or after joining; the
+bridge retains its 16 MiB incoming message limit. The [short oversized-header
+check](docs/benchmarks/2026-10-18-bridge-oversize/README.md) verifies rejection
+without allocating a large payload and confirms independent native routing.
 
 Existing `relay.js` clients connect to `ws://127.0.0.1:1337`. Their binary/text
 payloads become CBOR byte/text strings and interoperate with native CBOR clients.
