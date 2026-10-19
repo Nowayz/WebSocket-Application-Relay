@@ -83,6 +83,7 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 
 | Experiment | Decision and reason |
 | --- | --- |
+| [Inline large integer replies](benchmarks/2026-10-18-inline-u64-screen/README.md) | Same Frame size on the measured 64-bit host and cheaper large-reply clones, but slower unshared construction and higher mixed CPU per delivery. Lower observed maxima do not establish a fixed-load fairness gain. |
 | [Skip discarded poll-timeout calculations](benchmarks/2026-10-18-ready-poll-timeout/README.md) | Overlapping CPU costs; no consistent joint latency/throughput improvement. |
 | [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |
 | [Buffered fanout batches](benchmarks/2026-10-18-buffered-fanout/README.md) | Lower CPU/fanout delay did not establish consistently better private-user tails. |

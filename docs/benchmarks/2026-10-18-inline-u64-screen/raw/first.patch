@@ -1,0 +1,50 @@
+--- a/src/frame.rs
++++ b/src/frame.rs
+@@ -7,7 +7,7 @@
+ 
+ #[derive(Clone)]
+ pub(crate) struct Frame {
+-    prefix: [u8; 10],
++    prefix: [u8; 14],
+     prefix_len: u8,
+     payload: Bytes,
+ }
+@@ -15,7 +15,7 @@
+ impl Frame {
+     fn encoded(payload: Bytes) -> Self {
+         Self {
+-            prefix: [0; 10],
++            prefix: [0; 14],
+             prefix_len: 0,
+             payload,
+         }
+@@ -63,15 +63,13 @@
+     }
+ 
+     pub(crate) fn reply_uint(op: u8, value: u64) -> Self {
+-        if value > u64::from(u32::MAX) {
+-            return Self::reply(op, crate::protocol::uint(value));
+-        }
+-        // The longest control prefix plus uint32 is exactly ten bytes.
++        // The longest control prefix plus uint64 fits in fourteen bytes.
++        // This uses existing Frame padding on 64-bit hosts.
+         let mut frame = Self::reply(op, Bytes::new());
+         let mut e = Encoder::new(Cursor::new(frame.prefix.as_mut_slice()));
+         e.writer_mut().set_position(usize::from(frame.prefix_len));
+         e.u64(value)
+-            .expect("control prefix and uint32 fit in ten bytes");
++            .expect("control prefix and uint64 fit in fourteen bytes");
+         frame.prefix_len = e.writer().position() as u8;
+         frame
+     }
+@@ -152,8 +150,8 @@
+                 let frame = Frame::reply_uint(op, value);
+                 assert_eq!(frame.to_vec(), protocol::reply(op, &protocol::uint(value)));
+                 assert_eq!(frame.len(), frame.to_vec().len());
+-                assert!(frame.prefix().len() <= 10);
+-                assert_eq!(frame.payload().is_empty(), value <= u32::MAX as u64);
++                assert!(frame.prefix().len() <= 14);
++                assert!(frame.payload().is_empty());
+                 for flag in [false, true] {
+                     assert_eq!(
+                         Frame::reply_bool(op, flag).to_vec(),

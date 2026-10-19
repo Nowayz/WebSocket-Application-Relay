@@ -1,0 +1,40 @@
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/inline-u64-work)
+warning: unused import: `war_relay::protocol`
+ --> examples/frame_cost.rs:2:5
+  |
+2 | use war_relay::protocol;
+  |     ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated items are never used
+   --> examples/../src/frame.rs:33:19
+    |
+ 15 | impl Frame {
+    | ---------- associated items in this implementation
+...
+ 33 |     pub(crate) fn integer(value: u64) -> Self {
+    |                   ^^^^^^^
+...
+ 40 |     pub(crate) fn envelope(sender: u64, value: Bytes) -> Self {
+    |                   ^^^^^^^^
+...
+ 48 |     pub(crate) fn reply(op: u8, value: Bytes) -> Self {
+    |                   ^^^^^
+...
+ 58 |     pub(crate) fn reply_bool(op: u8, value: bool) -> Self {
+    |                   ^^^^^^^^^^
+...
+ 78 |     pub(crate) fn variable(value: Option<Bytes>) -> Self {
+    |                   ^^^^^^^^
+...
+ 93 |     pub(crate) fn routed(sender: u64, mut input: Bytes, value_start: usize, compact: bool) -> Self {
+    |                   ^^^^^^
+...
+118 |     pub(crate) fn len(&self) -> usize {
+    |                   ^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `war-relay` (example "frame_cost") generated 2 warnings (run `cargo fix --example "frame_cost"` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 9.00s
