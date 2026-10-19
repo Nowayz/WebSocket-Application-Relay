@@ -46,11 +46,9 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
             }
             Some(match legacy::command(&bytes[8..])? {
                 legacy::Command::Authenticate(secret) => byte_request(0, secret),
-                legacy::Command::Listen(flags) => {
-                    protocol::request(1, &protocol::uint(u64::from(flags)))
-                }
+                legacy::Command::Listen(flags) => uint_request(1, u64::from(flags)),
                 legacy::Command::Channels => protocol::request(2, &[0xf6]),
-                legacy::Command::Assign(id) => protocol::request(3, &protocol::uint(id)),
+                legacy::Command::Assign(id) => uint_request(3, id),
                 legacy::Command::SetVariable { key, value } => {
                     let capacity = 5
                         + protocol::uint_len(key.len() as u64)
@@ -112,6 +110,19 @@ fn byte_request(op: u8, value: &[u8]) -> Bytes {
         .and_then(|e| e.array(2))
         .and_then(|e| e.u8(op))
         .and_then(|e| e.bytes(value))
+        .expect("Vec encoding");
+    e.into_writer().into()
+}
+
+fn uint_request(op: u8, value: u64) -> Bytes {
+    let mut e = Encoder::new(Vec::with_capacity(
+        3 + protocol::uint_len(u64::from(op)) + protocol::uint_len(value),
+    ));
+    e.array(2)
+        .and_then(|e| e.u8(0))
+        .and_then(|e| e.array(2))
+        .and_then(|e| e.u8(op))
+        .and_then(|e| e.u64(value))
         .expect("Vec encoding");
     e.into_writer().into()
 }
@@ -930,6 +941,39 @@ mod tests {
             "wss://relay.example.invalid:443/path",
         ] {
             validate_upstream(upstream).unwrap();
+        }
+    }
+
+    #[test]
+    fn scalar_commands_preserve_flags_and_all_id_widths() {
+        for flags in [0, 7, 23, 24, 255] {
+            let mut packet = vec![0; 8];
+            packet.extend_from_slice(&[1, flags]);
+            assert_eq!(
+                to_cbor(Message::Binary(packet.into())).unwrap().unwrap(),
+                protocol::request(1, &protocol::uint(u64::from(flags)))
+            );
+        }
+        for id in [
+            0,
+            1,
+            23,
+            24,
+            255,
+            256,
+            65535,
+            65536,
+            u32::MAX as u64,
+            u32::MAX as u64 + 1,
+            u64::MAX,
+        ] {
+            let mut packet = vec![0; 8];
+            packet.push(3);
+            packet.extend_from_slice(&id.to_le_bytes());
+            assert_eq!(
+                to_cbor(Message::Binary(packet.into())).unwrap().unwrap(),
+                protocol::request(3, &protocol::uint(id))
+            );
         }
     }
 
