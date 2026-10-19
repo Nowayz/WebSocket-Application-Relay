@@ -100,9 +100,12 @@ The barrier submits only that observer's still-pending notices and records a
 sequence watermark so deferred jobs cannot replay them after re-subscription.
 Other recipients retain their bounded turns. The barrier still scans pending
 global recipient views under the registry lock; many such views can make the
-control turn longer. Queue-budget fallback is also synchronous. These are known
-limits, not fixed control-turn guarantees. See the
-[observer-barrier report](observer-barriers.md).
+control turn longer. Queue-budget fallback is also synchronous, but finishes
+preceding jobs only for the overlapping recipient channel. Disjoint rooms keep
+their turns and reservations. Large overlapping jobs and long job queues remain
+known limits, not fixed control-turn guarantees. See the
+[observer-barrier report](observer-barriers.md) and
+[cross-room fallback check](retirement-fallback.md).
 
 ## Lifecycle and deadlines
 

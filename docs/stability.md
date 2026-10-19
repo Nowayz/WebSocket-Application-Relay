@@ -46,8 +46,15 @@ verifies a priming broadcast before checking every Close `1001` and TCP EOF;
 terminal shutdown retains its existing flush-and-retire policy without awaiting
 peer acknowledgments.
 
-Known limits include synchronous queue-pressure fallback and pending global-view
-scans during observer revocation. Faults and failed gates belong in the evidence. Source and
+Fallback checks hold an actual source output reservation, verify that disjoint
+room jobs stay deferred and preserve FIFO for a global observer shared by both
+departures. The native fixture forces that local-budget condition with a blocked
+partial echo, then verifies the healthy notice matrix and every audience Close/EOF.
+It requires exactly one cancelled write for the administratively removed source.
+
+Known limits include synchronous queue-pressure fallback for overlapping channels
+and pending global-view scans during observer revocation. Faults and failed gates
+belong in the evidence. Source and
 client digests, commands, affinity, measurement windows and cleanup semantics
 must accompany performance claims. See [the guide](performance-guide.md) and
 [historical findings](performance-history.md).

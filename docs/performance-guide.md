@@ -24,7 +24,10 @@ per-publisher charge. See the [snapshot ownership measurements](retirement-snaps
 The observer-revocation barrier now submits only the requesting observer's
 notices. A publication sequence and per-peer watermark prevent deferred replay;
 other recipients keep their normal turns. It still scans pending global views
-under the registry lock and retains synchronous queue-pressure fallback. See the
+under the registry lock. Queue-pressure fallback now finishes only preceding jobs
+whose recipient channel overlaps the direct notification; unrelated jobs retain
+their turns and reservations. See the [fallback measurements](retirement-fallback.md)
+and the
 [measured event screen](observer-barriers.md) before choosing the next bottleneck.
 
 ## Small checks before timing
@@ -88,6 +91,13 @@ messages, departures, all process exits and final resource gauges.
 - `scripts/shutdown-capacity.py --prime-broadcast` warms and verifies a room's
   recipient cache before checking every client's shutdown Close `1001` and TCP
   EOF. Compare with the unprimed case and keep the same shutdown grace.
+- `scripts/retirement-fallback.py` stages one full-size echo in a deliberately
+  blocked source's local output budget, publishes a large-room departure, then
+  administratively disconnects the blocked source in another room. It verifies
+  both healthy notice paths, an independent witness and every audience Close/EOF.
+  One cancelled partial write is required for that deliberately blocked source;
+  other error counters must remain unchanged. Use `--audience 100000` with separate
+  client/server cores for the measured case, or 2,048 peers and two workers in CI.
 - `scripts/observer-barrier.py` checks native unsubscribe ordering, re-subscription,
   an independent echo witness and every audience member's departure/Close matrix.
   Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client

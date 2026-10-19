@@ -32,6 +32,7 @@ jobs:
       - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --output artifacts/observer-barrier-ci.json
       - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --departures 8 --queue-budget-bytes 65546 --output artifacts/observer-burst-ci.json
       - run: python3 scripts/shutdown-capacity.py --server target/debug/war-relay --workers 2 --users 2048 --prime-broadcast --output artifacts/shutdown-warm-ci.json
+      - run: python3 scripts/retirement-fallback.py --server target/debug/war-relay --workers 2 --audience 2048 --output artifacts/retirement-fallback-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
       - run: npm run check:types --prefix clients/js
       - run: npm run build:browser --prefix clients/js

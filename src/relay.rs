@@ -1307,20 +1307,31 @@ impl Relay {
         observer.retirement_barrier.store(pending.sequence, Relaxed);
     }
 
-    fn flush_retirements(&self) {
+    fn flush_retirements(&self, channel: &[u8]) {
         if !self.has_retirements() {
             return;
         }
-        // Budget refusal may require synchronous best-effort delivery. Finish
-        // preceding retirements first so this fallback cannot overtake them.
+        // Every captured view contains peers from one channel. Finish only
+        // overlapping jobs before synchronous best-effort fallback; disjoint
+        // rooms need no ordering barrier and retain their bounded turns.
         let mut pending = self.retirements.lock();
-        for mut work in pending.jobs.drain(..) {
-            let _ = work.resume(usize::MAX);
-        }
-        if pending.jobs.capacity() > 32 {
+        pending.jobs.retain_mut(|work| {
+            let overlaps = work
+                .recipients
+                .as_ref()
+                .expect("live retirement view")
+                .first()
+                .is_some_and(|peer| peer.channel.as_ref() == channel);
+            if overlaps {
+                let _ = work.resume(usize::MAX);
+            }
+            !overlaps
+        });
+        if pending.jobs.is_empty() && pending.jobs.capacity() > 32 {
             pending.jobs = VecDeque::new();
         }
-        self.retirement_pending.store(false, Relaxed);
+        self.retirement_pending
+            .store(!pending.jobs.is_empty(), Relaxed);
     }
 
     fn defer_retirement(&self, source: &Peer, recipients: FanoutRecipients, frame: &Frame) -> bool {
@@ -1391,7 +1402,7 @@ impl Relay {
                 deferred = self.defer_retirement(peer, FanoutRecipients::Room(recipients), frame);
             }
             if !deferred && !channel.members.is_empty() {
-                self.flush_retirements();
+                self.flush_retirements(&peer.channel);
                 for recipient in channel.members.values() {
                     let _ = recipient.enqueue_fanout(frame);
                 }
@@ -1423,7 +1434,7 @@ impl Relay {
                         self.defer_retirement(peer, FanoutRecipients::Disconnect(recipients), frame)
                     });
             if !deferred && count != 0 {
-                self.flush_retirements();
+                self.flush_retirements(GLOBAL_CHANNEL);
                 for recipient in state.listeners(DISCONNECT_MESSAGE) {
                     let _ = recipient.enqueue_fanout(frame);
                 }

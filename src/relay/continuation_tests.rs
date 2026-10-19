@@ -285,6 +285,93 @@ fn retirement_budget_refusal_finishes_older_work_before_synchronous_fallback() {
     check_retirement_sequence(true);
 }
 
+#[test]
+fn local_retirement_pressure_keeps_unrelated_room_work_deferred() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        max_message_bytes: 65536,
+        queue_bytes: 65546,
+        ping_interval_secs: 0,
+        ..Config::default()
+    })
+    .unwrap();
+    let (observer, observed) = recorded_disconnect_observer(&relay);
+    let large = relay
+        .subscribe_with_output(b"pressure-large", Arc::new(NativeRetirement))
+        .unwrap();
+    let large_id = large.peer.id.load(Relaxed);
+    let outputs: Vec<_> = (0..=FANOUT_QUANTUM)
+        .map(|_| Arc::new(Departures::default()))
+        .collect();
+    let targets: Vec<_> = outputs
+        .iter()
+        .map(|output| {
+            relay
+                .subscribe_with_output(b"pressure-large", output.clone())
+                .unwrap()
+        })
+        .collect();
+    let small = relay
+        .subscribe_with_output(b"pressure-small", Arc::new(NativeRetirement))
+        .unwrap();
+    let small_id = small.peer.id.load(Relaxed);
+    let output = Arc::new(Departures::default());
+    let target = relay
+        .subscribe_with_output(b"pressure-small", output.clone())
+        .unwrap();
+    // Hold an actual charged envelope, as a partially written native echo does.
+    // The source cannot fund another departure body from its local allowance.
+    let frame = Frame::envelope(BROADCAST, Bytes::from(vec![0; 65526]));
+    assert_eq!(frame.len(), 65536);
+    let held = small.peer.charge(&frame).unwrap().unwrap().into_owned();
+    assert_eq!(small.peer.budget.used.load(Relaxed), 65536);
+    drop(large);
+    assert!(relay.has_retirements());
+    drop(small);
+    assert!(
+        outputs.iter().all(|o| o.0.lock().is_empty()),
+        "local fallback synchronously visited a disjoint room"
+    );
+    assert!(relay.has_retirements());
+    let expected = protocol::envelope(BROADCAST, &protocol::uint(small_id));
+    assert_eq!(output.0.lock()[0].to_vec(), expected);
+    assert_eq!(output.0.lock().len(), 1);
+    // The global observer overlaps both departures. Its preceding notification
+    // must be finished before the newer synchronous notice, while the large
+    // room itself remains deferred.
+    {
+        let packets = observed.0.lock();
+        assert_eq!(packets.len(), 2);
+        for (packet, id) in packets.iter().zip([large_id, small_id]) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(relay.metrics.global_pressure.load(Relaxed), 0);
+    assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 0);
+    drop(held);
+    for _ in 0..2 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    for output in &outputs {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 1);
+        assert_eq!(
+            packets[0].to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(large_id))
+        );
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(targets);
+    drop(target);
+    drop(observer);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
 fn check_retirement_sequence(pressure: bool) {
     let relay = Relay::new(Config {
         max_message_bytes: 1024,
