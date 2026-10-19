@@ -113,9 +113,13 @@ def main():
     parser.add_argument('--latency-stages', action='store_true', help='Opt-in client clock decomposition; diagnostic timing only')
     parser.add_argument('--pin-client-workers', action='store_true', help='Pin client I/O workers individually inside their existing CPU masks')
     parser.add_argument('--profile', action='store_true')
+    parser.add_argument('--profile-target', choices=['server', 'capacity', 'sidecar'], default='server',
+                        help='Process sampled by --profile (default: server); diagnostic timing only')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     assert args.users % 16 == 0 and args.seconds >= 2
+    if args.profile_target != 'server' and not args.profile:
+        parser.error('--profile-target requires --profile')
     if not 0 <= args.churn_workers <= 64:
         parser.error('churn-workers must be in 0..=64, matching the inspection client')
     if args.http_page_size is not None and not (
@@ -246,8 +250,12 @@ def main():
         assert len(record['affinity']) == 8 and all(len(t['cpus']) == 1 for t in record['affinity'])
         if args.profile:
             log = open(str(prefix) + '-perf.log', 'w'); files.append(log)
-            perf = subprocess.Popen(['perf', 'record', '-e', 'cycles:u', '-F', '499', '--call-graph', 'dwarf,8192',
-                                     '-p', str(server.pid), '-o', str(prefix) + '.perf.data'], stdout=log, stderr=log)
+            target = {'server': server, 'capacity': capacity, 'sidecar': sidecar}[args.profile_target]
+            command = ['perf', 'record', '-e', 'cycles:u', '-F', '499', '--call-graph', 'dwarf,8192',
+                       '-p', str(target.pid), '-o', str(prefix) + '.perf.data']
+            record['profile'] = {'target': args.profile_target, 'pid': target.pid, 'command': command,
+                                 'scope': 'Diagnostic user-cycle samples; exclude from ordinary timing comparisons'}
+            perf = subprocess.Popen(command, stdout=log, stderr=log)
             time.sleep(.2)
         record['before'] = snapshot(server.pid)
         record['client_before'] = {'capacity': snapshot(capacity.pid), 'sidecar': snapshot(sidecar.pid)}

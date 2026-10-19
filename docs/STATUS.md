@@ -40,6 +40,16 @@ no compelling fanout gain: candidate maxima 51.64–53.07 ms versus control
 51.32–51.92 ms. All meet 32/32 offered windows and exact retirement; 92 library
 tests and Clippy pass. The current runtime stays selected.
 
+The [client profiling follow-up](benchmarks/2026-10-18-client-profile-targets/README.md)
+adds `--profile-target server|capacity|sidecar`, with server as the existing
+default and exact PID/command evidence. A separate two-second sidecar profile
+puts 21.85% of sampled user cycles in timeout polling. A corrected-monitor,
+zero-churn control/candidate/candidate/control recheck still rejects the earlier
+one-timeout-per-window client: no consistent CPU saving, mixed private tails,
+and one candidate completes 31/32 offered windows. Correctness remains true,
+but overall success correctly fails. All three profile targets are checked live;
+relay/client runtimes remain unchanged.
+
 The new [admission-reuse probe](benchmarks/2026-10-18-admission-reuse/README.md)
 checks six failed upgrades across four native workers in about two seconds.
 All same-IP replacements route successfully; a separate healthy user continues

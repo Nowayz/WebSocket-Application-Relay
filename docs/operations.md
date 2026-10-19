@@ -1417,6 +1417,15 @@ lifecycle churn explicitly. `--churn-cycles-per-second 0` means unpaced work
 when workers are enabled; it does not disable them. Fanout-audience membership
 churn is a separate option.
 
+For a separate two-second attribution run, add `--seconds 2 --profile`.
+The default profile target is the server. Add `--profile-target sidecar` to sample
+the fanout/inspection client, or `--profile-target capacity` for the private-load
+client. Nondefault targets require `--profile`. The receipt records the exact
+PID and perf command in `profile`; output prefixes remain exclusive. User-cycle
+sampling changes the measured workload, so exclude profiled runs from ordinary
+latency comparisons. Samples identify CPU work, not server-hop delay or the
+fraction of end-to-end latency caused by each component.
+
 Timed monitoring records CPU/RSS with `process.fds: null`, avoiding a complete
 `/proc/PID/fd` enumeration per sample. Existing phase-gate descriptor counts,
 exact population/counter checks and final resource retirement remain enabled.
