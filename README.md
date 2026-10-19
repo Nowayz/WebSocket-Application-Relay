@@ -314,6 +314,10 @@ listening; see the [startup-boundary regressions](docs/benchmarks/2026-10-19-bri
 If that connection fails or exceeds its ten-second deadline, the legacy client
 receives a bounded `1013 / Upstream Unavailable` Close. A later connection attempt
 can succeed once the upstream returns; see the [failure and recovery checks](docs/benchmarks/2026-10-19-bridge-upstream-unavailable/README.md).
+A failed subscription write, upstream TCP drop before welcome, or welcome timeout
+also produces `1013 / Upstream Unavailable`; the subscription write shares the
+welcome phase’s ten-second deadline. The closing handshake has its own bounded
+budget. See the [welcome failure and single-slot recovery checks](docs/benchmarks/2026-10-19-bridge-welcome-failure/README.md).
 While awaiting the upstream welcome, Ping/Pong control frames are handled within
 the same ten-second deadline. An upstream Close is relayed with its original code
 and reason even before a legacy ID is assigned, so a full native room reports a

@@ -491,8 +491,8 @@ async fn bridge(
     let subscription = protocol::byte_string(&joined);
     // The encoded subscription owns its bytes; release the frontend join view.
     drop(joined);
-    upstream.send(Message::Binary(subscription)).await?;
     let welcome = timeout(WAIT, async {
+        upstream.send(Message::Binary(subscription)).await?;
         loop {
             match upstream
                 .next()
@@ -518,7 +518,24 @@ async fn bridge(
         }
     })
     .await
-    .context("upstream welcome timeout")??;
+    .context("upstream welcome timeout")
+    .and_then(|result| result);
+    let welcome = match welcome {
+        Ok(welcome) => welcome,
+        Err(error) => {
+            transport::initiate_close(
+                &mut legacy,
+                Some(CloseFrame {
+                    code: CloseCode::Again,
+                    reason: "Upstream Unavailable".into(),
+                }),
+                WAIT,
+                None,
+            )
+            .await;
+            return Err(error);
+        }
+    };
     let Some(welcome) = welcome else {
         return Ok(());
     };
@@ -1138,6 +1155,89 @@ mod tests {
         })
         .await
         .expect("fragment scheduling and exact output must complete promptly");
+    }
+
+    async fn welcome_failure_closes_and_recovers(stalled: bool) {
+        timeout(Duration::from_secs(14), async {
+            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", listener.local_addr().unwrap());
+            let shutdown = CancellationToken::new();
+            let mut tasks = JoinSet::new();
+            tasks.spawn(async move {
+                let (stream, _) = upstream.accept().await.unwrap();
+                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                let Some(Ok(Message::Binary(join))) = ws.next().await else {
+                    panic!("missing first upstream subscription");
+                };
+                assert_eq!(protocol::join(&join).unwrap(), b"welcome-recover");
+                if stalled {
+                    // Hold a successfully upgraded connection without an ID.
+                    // Only bridge retirement ends this read; no test-side timer
+                    // or upstream Close triggers the expected frontend Close.
+                    let _ = ws.next().await;
+                }
+                drop(ws);
+                let (stream, _) = upstream.accept().await.unwrap();
+                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+                ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
+            });
+            let token = shutdown.clone();
+            tasks.spawn(async move {
+                serve(listener, upstream_url, 1, token).await.unwrap();
+            });
+            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+            ws.send(Message::Binary(Bytes::from_static(b"welcome-recover")))
+                .await
+                .unwrap();
+            let began = tokio::time::Instant::now();
+            let received = ws.next().await;
+            let Some(Ok(Message::Close(Some(frame)))) = received else {
+                panic!("welcome failure caused unclean legacy retirement: {received:?}");
+            };
+            assert_eq!(frame.code, CloseCode::Again);
+            assert_eq!(frame.reason, "Upstream Unavailable");
+            eprintln!(
+                "welcome_failure stalled={stalled} elapsed={:?}",
+                began.elapsed()
+            );
+            assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
+            assert!(ws.next().await.is_none());
+            // A real welcome on the next connection proves the only admission
+            // slot retired, without a bridge restart or retry state.
+            let (mut recovered, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+            recovered
+                .send(Message::Binary(Bytes::from_static(b"welcome-recover")))
+                .await
+                .unwrap();
+            assert_eq!(
+                recovered.next().await.unwrap().unwrap(),
+                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
+            );
+            assert!(
+                transport::initiate_close(&mut recovered, None, Duration::from_secs(1), None).await
+            );
+            shutdown.cancel();
+            while let Some(result) = tasks.join_next().await {
+                result.unwrap();
+            }
+        })
+        .await
+        .expect("welcome failure, clean Close and single-slot recovery must remain bounded");
+    }
+
+    #[tokio::test]
+    async fn upstream_eof_before_welcome_closes_cleanly_and_recovers() {
+        welcome_failure_closes_and_recovers(false).await;
+    }
+
+    #[tokio::test]
+    async fn upstream_welcome_timeout_closes_cleanly_and_recovers() {
+        welcome_failure_closes_and_recovers(true).await;
     }
 
     #[tokio::test]
