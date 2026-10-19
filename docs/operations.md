@@ -679,6 +679,13 @@ have reached some recipients when global capacity runs out; there are no deliver
 acknowledgements or transactional broadcasts. Disconnect notifications may be
 dropped under global queue pressure. During full service shutdown they are
 suppressed to avoid quadratic traffic among sessions that are all closing.
+Terminal shutdown also releases all three global listener indexes in one pass,
+before session retirement, avoiding repeated vector searches as global members
+leave. Registrations still own sessions until their transports retire. The
+[100,000-global-listener check](benchmarks/2026-10-19-global-shutdown-indexes/README.md)
+verifies normal Close at every client with the unchanged ten-second default
+shutdown grace. Its shortened two-second diagnostic did not complete every Close;
+size the grace for population cleanup rather than a single socket write.
 
 A close decision removes routing membership and releases queued reservations
 before waiting for a graceful handshake. TCP connection capacity remains charged

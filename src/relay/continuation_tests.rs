@@ -474,3 +474,48 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+#[test]
+fn shutdown_releases_listener_indexes_before_retiring_global_sessions() {
+    let relay = Relay::new(Config {
+        auth_password: Some("shutdown-indexes".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let authenticate = protocol::request(0, &protocol::text("shutdown-indexes"));
+    let listen = protocol::request(1, &protocol::uint(7));
+    let mut peers = Vec::new();
+    for _ in 0..FANOUT_QUANTUM + 1 {
+        let peer = relay
+            .subscribe_with_output(GLOBAL_CHANNEL, Arc::new(NativeRetirement))
+            .unwrap();
+        relay.receive(&peer.peer, authenticate.clone()).unwrap();
+        relay.receive(&peer.peer, listen.clone()).unwrap();
+        peers.push(peer);
+    }
+    assert!(
+        relay
+            .state
+            .read()
+            .listeners
+            .iter()
+            .all(|v| v.len() == peers.len())
+    );
+    let weak = Arc::downgrade(&peers[0].peer);
+    relay.begin_shutdown();
+    relay.begin_shutdown();
+    assert!(
+        relay
+            .state
+            .read()
+            .listeners
+            .iter()
+            .all(|v| v.capacity() == 0)
+    );
+    // Registrations still own these sessions until their transports retire.
+    assert_eq!(relay.counts().0, peers.len());
+    drop(peers);
+    assert!(weak.upgrade().is_none());
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+}

@@ -443,7 +443,9 @@ recorded results and local dependency setup.
   Process shutdown flushes its `1001` Close before TCP retirement and does not
   wait for a peer acknowledgement. Service cleanup keeps joining remaining
   workers after a task failure, preserving the first error within the existing
-  shutdown deadline.
+  shutdown deadline. Terminal shutdown releases global listener indexes before
+  retiring their sessions; the [short 100k global-listener check](docs/benchmarks/2026-10-19-global-shutdown-indexes/README.md)
+  verifies every normal Close and the reduced bulk cleanup time.
 - OS resource pressure during accept, including an exhausted descriptor limit,
   suspends new admission for one second while established sessions continue. Both ingresses
   retry and recover queued connections. Native failures are exposed through

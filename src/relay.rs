@@ -732,6 +732,10 @@ impl Relay {
 
     pub(crate) fn begin_shutdown(&self) {
         self.admission.store(Admission::Stopping as u8, Relaxed);
+        // Terminal shutdown sends no departure notices. Release listener views
+        // once instead of searching them for every retiring global session.
+        // Drop the registry guard before taking the retirement queue lock.
+        self.state.write().listeners = Default::default();
         let mut pending = self.retirements.lock();
         pending.clear();
         self.retirement_pending.store(false, Relaxed);
