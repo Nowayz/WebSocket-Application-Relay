@@ -1,0 +1,41 @@
+--- a/scripts/inspection.py
++++ b/scripts/inspection.py
+@@ -117,6 +117,12 @@
+             perf.kill()
+             perf.wait(timeout=5)
+     return perf.returncode, forced
++
++
++def set_census_phase(admin, phase):
++    request = urllib.request.Request(f"http://127.0.0.1:{admin}/diag/census/{phase}", data=b"", method="POST")
++    with urllib.request.urlopen(request, timeout=2) as response:
++        assert response.status == 204
+ 
+ 
+ def run(args):
+@@ -190,6 +196,7 @@
+                                                    if key == "LD_PRELOAD" or key.startswith("HEAP")},
+                                    "scope": "Server allocator replaced by gperftools. Requested live allocations only; profile timing and RSS are diagnostic and excluded from ordinary comparisons."}
+     args.output.parent.mkdir(parents=True, exist_ok=True)
++    result["diagnostic_only"] = True
+     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
+         server = client = perf = None
+         perf_log = None
+@@ -237,6 +244,8 @@
+                         if perf.poll() is not None:
+                             raise RuntimeError("perf could not attach")
+                         result["profile_path"] = str(profile)
++                    set_census_phase(admin, 1)
++                    event["census_next_phase"] = 1
+                     ready = event
+                 elif event["event"] == "measured":
+                     check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
+@@ -247,6 +256,8 @@
+                         perf_log.close()
+                         perf = perf_log = None
+                         assert not result["perf_forced_kill"] and result["perf_exit_code"] in (0, -signal.SIGINT), "perf failed"
++                    set_census_phase(admin, 2)
++                    event["census_next_phase"] = 2
+                     mixed = dict(event["details"])
+                     mixed["server_cpu_seconds"] = event["process"]["cpu_seconds"] - ready["process"]["cpu_seconds"]
+                     mixed["server_cpu_seconds_per_wall_second"] = mixed["server_cpu_seconds"] / mixed["elapsed_seconds"]

@@ -41,3 +41,5 @@ cargo test --locked --release \
 ```
 
 Keep builds, tests and instrumented diagnostics separate from ordinary timed comparisons. The diagnostic remains unselected; there is no added production telemetry, lock, buffer or scheduling policy.
+
+A [phase-separated I/O follow-up](../2026-10-19-native-io-census/README.md) reconciles complete traffic-phase bytes and separately counts 2,098,176 departure deliveries during fanout cleanup. The lifetime-only small-packet buckets above should not be interpreted as steady fanout payload sizes. The original counts and quantum decision remain unchanged.

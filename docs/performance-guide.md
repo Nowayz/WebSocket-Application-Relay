@@ -132,6 +132,8 @@ The [timer-slot shortcut screen](benchmarks/2026-10-19-timer-slot-screen/README.
 
 The [process CPU accounting check](benchmarks/2026-10-19-process-cpu-accounting/README.md) fixes stat parsing for command names containing spaces and adds `user_cpu_seconds` / `system_cpu_seconds` to raw process snapshots from existing reads. Two short native fixtures charge about 81% of process CPU to kernel time. Interpret user-only cycle profiles accordingly; this does not identify a syscall or select a runtime change.
 
+The [phase-separated native I/O census](benchmarks/2026-10-19-native-io-census/README.md) observes about one vectored send per frame, no send short/WouldBlock results and no writable-interest changes in two short instrumented fixtures. Exact 4/8-byte header accounting separates steady traffic from the 2,098,176 fanout departure deliveries in cleanup. These are API counts, not kernel-cost attribution or ordinary performance results.
+
 ## Read the result correctly
 
 - Treat each user equally. A percentile across users' individual latency statistics is different from a pooled packet percentile. With eight observations (two seconds) or 24 (six seconds), nearest-rank per-user p99 equals its observed maximum. The runner reports this explicitly in `latency_sampling`.
