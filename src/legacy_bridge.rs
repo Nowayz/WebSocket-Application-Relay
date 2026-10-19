@@ -143,7 +143,24 @@ pub fn from_cbor(bytes: &[u8]) -> Result<Option<Message>> {
             bail!("invalid upstream command reply");
         }
         return Ok(match d.u8()? {
-            0 | 1 | 3 | 4 => None, // Old clients do not expect command acknowledgements.
+            // Validate acknowledgements even though old clients do not receive them.
+            0 => {
+                d.bool()?;
+                None
+            }
+            1 => {
+                anyhow::ensure!(d.u8()? <= 7, "invalid upstream listener flags");
+                None
+            }
+            3 => {
+                let id = d.u64()?;
+                anyhow::ensure!(id != 0 && id != BROADCAST, "invalid upstream assigned ID");
+                None
+            }
+            4 => {
+                anyhow::ensure!(d.bool()?, "invalid upstream variable acknowledgement");
+                None
+            }
             2 => Some(channel_reply(&mut d)?),
             200 => {
                 if d.array()? != Some(2) {
@@ -590,6 +607,66 @@ async fn bridge(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upstream_acknowledgements_validate_and_remain_invisible_to_legacy_clients() {
+        for value in [false, true] {
+            let encoded = if value { b"\xf5" } else { b"\xf4" };
+            assert!(from_cbor(&protocol::reply(0, encoded)).unwrap().is_none());
+        }
+        for flags in 0..=7 {
+            assert!(
+                from_cbor(&protocol::reply(1, &protocol::uint(flags)))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        for id in [
+            1,
+            23,
+            24,
+            255,
+            256,
+            65_535,
+            65_536,
+            1u64 << 32,
+            u64::MAX - 1,
+        ] {
+            assert!(
+                from_cbor(&protocol::reply(3, &protocol::uint(id)))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(from_cbor(&protocol::reply(4, b"\xf5")).unwrap().is_none());
+    }
+
+    #[test]
+    fn upstream_acknowledgements_reject_wrong_types_and_impossible_results() {
+        for op in [0, 1, 3, 4] {
+            for value in [b"\xf6".as_slice(), b"\x40", b"\x60", b"\x80", b"\xa0"] {
+                assert!(
+                    from_cbor(&protocol::reply(op, value)).is_err(),
+                    "op {op}, value {value:?}"
+                );
+            }
+        }
+        for op in [0, 4] {
+            assert!(from_cbor(&protocol::reply(op, b"\x00")).is_err());
+        }
+        for op in [1, 3] {
+            for value in [b"\xf4", b"\xf5", b"\x20"] {
+                assert!(from_cbor(&protocol::reply(op, value)).is_err());
+            }
+        }
+        for flags in [8, 255, 256, u64::MAX] {
+            assert!(from_cbor(&protocol::reply(1, &protocol::uint(flags))).is_err());
+        }
+        for id in [0, BROADCAST] {
+            assert!(from_cbor(&protocol::reply(3, &protocol::uint(id))).is_err());
+        }
+        assert!(from_cbor(&protocol::reply(4, b"\xf4")).is_err());
+    }
 
     #[test]
     fn missing_variable_replies_require_null_and_preserve_present_values() {
