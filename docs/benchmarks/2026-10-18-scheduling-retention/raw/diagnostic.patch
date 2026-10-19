@@ -1,0 +1,12 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -562,6 +562,9 @@
+                         self.ready.push_back(token);
+                     }
+                 }
++            }
++            if self.connections.is_empty() && self.ready.is_empty() {
++                eprintln!("scheduling-empty ready={} pending={}", self.ready.capacity(), self.signal.pending.lock().capacity());
+             }
+             if shutdown_deadline.is_some() && self.connections.is_empty() {
+                 break;
