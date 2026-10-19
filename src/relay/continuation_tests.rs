@@ -185,6 +185,102 @@ fn retirement_sequence_survives_the_small_room_threshold() {
 }
 
 #[test]
+fn terminal_removal_discards_cached_membership_and_preserves_captured_views() {
+    for capture in [false, true] {
+        let relay = Relay::new(Config::default()).unwrap();
+        let first = relay
+            .subscribe_with_output(b"terminal-view", Arc::new(NativeRetirement))
+            .unwrap();
+        let second = relay
+            .subscribe_with_output(b"terminal-view", Arc::new(NativeRetirement))
+            .unwrap();
+        let third = relay
+            .subscribe_with_output(b"terminal-view", Arc::new(NativeRetirement))
+            .unwrap();
+        relay
+            .receive(&first.peer, protocol::envelope(BROADCAST, &[0xf6]))
+            .unwrap();
+        let captured = {
+            let state = relay.state.read();
+            let view = state.channels[b"terminal-view".as_slice()]
+                .broadcast
+                .get()
+                .unwrap();
+            assert_eq!(Arc::strong_count(view), 1);
+            assert_eq!(Arc::weak_count(view), 0);
+            capture.then(|| view.clone())
+        };
+        let first_key = first.peer.key;
+        let first_weak = Arc::downgrade(&first.peer);
+        relay.begin_shutdown();
+        drop(first);
+        assert!(
+            relay.state.read().channels[b"terminal-view".as_slice()]
+                .broadcast
+                .get()
+                .is_none(),
+            "terminal removal has no cached recipient index to maintain"
+        );
+        if let Some(view) = &captured {
+            assert_eq!(view.len(), 3);
+            assert!(view.iter().any(|peer| peer.key == first_key));
+            assert!(
+                first_weak.upgrade().is_some(),
+                "captured views retain their owners"
+            );
+        }
+        drop(captured);
+        assert!(first_weak.upgrade().is_none());
+        drop(second);
+        drop(third);
+        assert_eq!(relay.counts(), (0, 1));
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+}
+
+#[test]
+fn reversible_drain_keeps_the_live_room_view_consistent() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let first = relay
+        .subscribe_with_output(b"drain-view", Arc::new(NativeRetirement))
+        .unwrap();
+    let second = relay
+        .subscribe_with_output(b"drain-view", Arc::new(NativeRetirement))
+        .unwrap();
+    relay
+        .receive(&first.peer, protocol::envelope(BROADCAST, &[0xf6]))
+        .unwrap();
+    assert!(relay.set_draining(true));
+    drop(second);
+    {
+        let state = relay.state.read();
+        let view = state.channels[b"drain-view".as_slice()]
+            .broadcast
+            .get()
+            .unwrap();
+        assert_eq!(view.len(), 1);
+        assert_eq!(view[0].key, first.peer.key);
+    }
+    assert!(relay.set_draining(false));
+    let third = relay
+        .subscribe_with_output(b"drain-view", Arc::new(NativeRetirement))
+        .unwrap();
+    {
+        let state = relay.state.read();
+        let view = state.channels[b"drain-view".as_slice()]
+            .broadcast
+            .get()
+            .unwrap();
+        assert_eq!(view.len(), 2);
+        assert!(view.iter().any(|peer| peer.key == third.peer.key));
+    }
+    relay.begin_shutdown();
+    drop(first);
+    drop(third);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
 fn retirement_budget_refusal_finishes_older_work_before_synchronous_fallback() {
     check_retirement_sequence(true);
 }

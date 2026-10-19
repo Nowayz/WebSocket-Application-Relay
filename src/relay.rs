@@ -1367,6 +1367,11 @@ impl Relay {
         let Some(channel) = state.channels.get_mut(&peer.channel) else {
             return;
         };
+        if self.is_stopping() {
+            // Terminal removals do not need a future routing index. Drop its
+            // cache once; captured fanouts keep their own immutable owners.
+            channel.broadcast.take();
+        }
         if !channel.remove(peer.key) {
             return;
         }

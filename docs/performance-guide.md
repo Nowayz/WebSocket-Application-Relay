@@ -85,6 +85,9 @@ messages, departures, all process exits and final resource gauges.
   `scripts/handshake-pressure.py` probe decoder/timer fairness.
 - `scripts/accept-pressure.py` uses a child-only descriptor limit to check accept
   recovery, existing-client responsiveness, queued-flow recovery and shutdown.
+- `scripts/shutdown-capacity.py --prime-broadcast` warms and verifies a room's
+  recipient cache before checking every client's shutdown Close `1001` and TCP
+  EOF. Compare with the unprimed case and keep the same shutdown grace.
 - `scripts/observer-barrier.py` checks native unsubscribe ordering, re-subscription,
   an independent echo witness and every audience member's departure/Close matrix.
   Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client

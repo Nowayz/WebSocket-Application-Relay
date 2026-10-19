@@ -40,6 +40,11 @@ old notices before acknowledgments and all audience departure/Close receipts.
 Shared snapshot checks also cover reuse across pending jobs, membership
 invalidation, release on the last owning job, refusal when a view cannot fit,
 and multiple departures fitting one shared view within a fixed byte budget.
+Shutdown cache tests distinguish unique and externally captured views, and verify
+that reversible drain keeps the live view consistent. The native shutdown fixture
+verifies a priming broadcast before checking every Close `1001` and TCP EOF;
+terminal shutdown retains its existing flush-and-retire policy without awaiting
+peer acknowledgments.
 
 Known limits include synchronous queue-pressure fallback and pending global-view
 scans during observer revocation. Faults and failed gates belong in the evidence. Source and

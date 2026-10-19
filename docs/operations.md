@@ -106,6 +106,12 @@ limits, not fixed control-turn guarantees. See the
 
 ## Lifecycle and deadlines
 
+Terminal membership removal discards each room's cached recipient index instead
+of maintaining it for future broadcasts. Captured fanouts keep their own owners;
+reversible drain retains ordinary cache maintenance. The
+[warmed-room shutdown check](shutdown-views.md) covers a large room after real
+delivery, all shutdown Close frames and transport EOFs.
+
 Handshake, join, write, heartbeat, application-idle and shutdown deadlines are
 independent controls. `WAR_IDLE_TIMEOUT_SECS=0` preserves application-idle sessions.
 Heartbeat interval zero disables server heartbeat generation. Tune idle policies
