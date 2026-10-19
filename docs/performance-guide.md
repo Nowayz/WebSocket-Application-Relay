@@ -37,6 +37,8 @@ Setup, proof scans and exhaustive departure/Close checks add wall time outside t
 
 For copied benchmark archives, prefer `scripts/build-snapshot.py --snapshot PATH --target-dir CACHE --output NEW_DIRECTORY --bin war-relay` (or `--example inspection`). It refreshes copied inputs, requires Cargo's structured artifact message to confirm recompilation, checks unchanged source contents and freezes the executable with hashes and logs. It refuses checkouts and reused outputs. See the [command, real stale-cache regression and acceptance](benchmarks/2026-10-18-snapshot-builder/README.md).
 
+Snapshot, cache and output directories must be separate with no ancestor/descendant overlap after resolving aliases. The [directory-overlap regression](benchmarks/2026-10-18-snapshot-directory-overlap/README.md) closes the previously allowed snapshot-inside-cache case, so a full cache clean cannot erase the copied source. Rejection occurs before timestamp refresh or Cargo invocation.
+
 For manual builds sharing a target directory, refresh the copied source timestamps (including vendored sources) or clean the relevant artifacts before compiling. Archive timestamps can be older than cached outputs: the [timer experiment](benchmarks/2026-10-18-unchanged-timers/README.md) caught a diagnostic binary reused as an untouched control. Check the compile log, freeze the binary, record its hash and verify diagnostic identity before timing. Cargo success alone does not prove source freshness. Keep source edits and all builds using the shared cache sequential.
 
 For a first routing/output screen, build the intended sources and use a fresh output path:

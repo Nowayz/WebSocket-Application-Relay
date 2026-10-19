@@ -38,8 +38,10 @@ def main():
             raise ValueError('use a copied snapshot, not a Git checkout')
         if not (root / 'Cargo.toml').is_file() or not (root / 'Cargo.lock').is_file():
             raise ValueError('snapshot needs Cargo.toml and Cargo.lock')
-        if root == cache or root in cache.parents or root == output or root in output.parents:
-            raise ValueError('target and output directories must be outside the snapshot')
+        if root == cache or root in cache.parents or cache in root.parents:
+            raise ValueError('snapshot and target directories must not contain one another')
+        if root == output or root in output.parents or output in root.parents:
+            raise ValueError('snapshot and output directories must not contain one another')
         if cache == output or cache in output.parents or output in cache.parents:
             raise ValueError('target and output directories must be separate')
         before = sources(root)

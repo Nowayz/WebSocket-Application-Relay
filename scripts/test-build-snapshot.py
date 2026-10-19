@@ -21,9 +21,9 @@ class SnapshotTest(unittest.TestCase):
         (snapshot / 'src/main.rs').write_text('fn main() { println!("diagnostic"); }\n')
         return snapshot
 
-    def invoke(self, root, snapshot, output, kind='bin', name='snapshot-fixture'):
+    def invoke(self, root, snapshot, output, kind='bin', name='snapshot-fixture', cache=None):
         return subprocess.run([sys.executable, str(TOOL), '--snapshot', str(snapshot),
-                               '--target-dir', str(root / 'cache'), '--output', str(output),
+                               '--target-dir', str(cache or root / 'cache'), '--output', str(output),
                                '--' + kind, name], capture_output=True, text=True, timeout=60)
 
     def test_stale_source_recompiles_and_existing_frozen_binary_is_preserved(self):
@@ -116,6 +116,24 @@ class SnapshotTest(unittest.TestCase):
             self.assertFalse(record['passed'])
             self.assertIn('snapshot contents changed', record['error'])
             self.assertFalse((output / 'snapshot-fixture').exists())
+
+    def test_snapshot_target_overlaps_are_rejected_before_mutation(self):
+        for layout in ['source-in-cache', 'cache-in-source', 'same', 'cache-alias']:
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                snapshot = self.fixture(root / 'cache' if layout in ['source-in-cache', 'cache-alias'] else root)
+                cache = {'source-in-cache': root / 'cache',
+                         'cache-in-source': snapshot / 'target',
+                         'same': snapshot, 'cache-alias': root / 'alias'}[layout]
+                if layout == 'cache-alias':
+                    cache.symlink_to(root / 'cache', target_is_directory=True)
+                source = snapshot / 'src/main.rs'
+                before = source.stat().st_mtime_ns
+                output = root / 'refused'
+                result = self.invoke(root, snapshot, output, cache=cache)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertEqual(source.stat().st_mtime_ns, before)
+                self.assertFalse(output.exists())
 
 
 if __name__ == '__main__':
