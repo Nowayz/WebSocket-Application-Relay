@@ -1,0 +1,64 @@
+diff --git a/scripts/join-pressure.py b/scripts/join-pressure.py
+index 31b3fd4..fea0b8d 100644
+--- a/scripts/join-pressure.py
++++ b/scripts/join-pressure.py
+@@ -44,6 +44,13 @@ def probe(peer, sequence):
+ 
+ 
+ def run(args):
++    log_path = args.output.with_suffix('.server.log')
++    for path in [args.output, log_path]:
++        if os.path.lexists(path):
++            raise FileExistsError(f'use fresh output paths: {path}')
++    # Reserve the receipt before starting children; retain failed startup evidence.
++    with args.output.open('x'):
++        pass
+     port, admin = free_port(), free_port()
+     while admin == port:
+         admin = free_port()
+@@ -57,7 +64,7 @@ def run(args):
+     env = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
+     env['WAR_ADMIN_TOKEN'] = TOKEN
+     record = {'passed': False, 'command': command, 'connections': args.connections,
+-              'waves': args.waves, 'ping': args.ping, 'withhold_close_ack': args.withhold_close_ack, 'server_sha256': hashlib.sha256(args.server.read_bytes()).hexdigest(),
++              'waves': args.waves, 'ping': args.ping, 'withhold_close_ack': args.withhold_close_ack, 'server_sha256': None,
+               'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+               'wire_sha256': hashlib.sha256((ROOT / 'scripts/input-corpus.py').read_bytes()).hexdigest(),
+               'fragment_wire_sha256': hashlib.sha256((ROOT / 'scripts/fragment-fairness.py').read_bytes()).hexdigest(),
+@@ -83,9 +90,11 @@ def run(args):
+         assert m['war_queued_bytes'] <= 76, (name, m['war_queued_bytes'])
+     recovered_bytes = 0
+     peers = []; witness = None; worker = None; poller = None; stop = threading.Event(); failures = []
+-    with args.output.with_suffix('.server.log').open('w') as log:
+-        server = subprocess.Popen(command, env=env, stdout=log, stderr=log)
++    server = None
++    with log_path.open('x') as log:
+         try:
++            record['server_sha256'] = hashlib.sha256(args.server.read_bytes()).hexdigest()
++            server = subprocess.Popen(command, env=env, stdout=log, stderr=log)
+             for _ in range(300):
+                 assert server.poll() is None
+                 try:
+@@ -206,13 +215,15 @@ def run(args):
+                 witness.socket.close()
+             if worker:
+                 worker.join(timeout=6)
+-            if server.poll() is None:
+-                server.terminate()
+-            try:
+-                record['server_exit_code'] = server.wait(timeout=15)
+-            except subprocess.TimeoutExpired:
+-                server.kill(); record['server_exit_code'] = server.wait(timeout=5)
+-                record['server_forced_kill'] = True
++            record['server_exit_code'] = None
++            if server is not None:
++                if server.poll() is None:
++                    server.terminate()
++                try:
++                    record['server_exit_code'] = server.wait(timeout=15)
++                except subprocess.TimeoutExpired:
++                    server.kill(); record['server_exit_code'] = server.wait(timeout=5)
++                    record['server_forced_kill'] = True
+             record['passed'] = record['passed'] and record['server_exit_code'] == 0 and not record.get('server_forced_kill')
+             args.output.write_text(json.dumps(record, indent=2) + '\n')
+     return record
