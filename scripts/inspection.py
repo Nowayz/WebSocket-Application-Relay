@@ -177,10 +177,10 @@ def run(args):
                                    "scope": "Server allocator replaced by gperftools. Requested live allocations only; profile timing and RSS are diagnostic and excluded from ordinary comparisons."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)
-        client = perf = None
+        server = client = perf = None
         perf_log = None
         try:
+            server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)
             started = time.monotonic()
             while True:
                 if server.poll() is not None:
@@ -279,14 +279,16 @@ def run(args):
                 result["client_exit_code"] = client.returncode
                 client.stdin.close()
                 client.stdout.close()
-            server.terminate()
             result["server_forced_kill"] = False
-            try:
-                result["server_exit_code"] = server.wait(timeout=12)
-            except subprocess.TimeoutExpired:
-                result["server_forced_kill"] = True
-                server.kill()
-                result["server_exit_code"] = server.wait()
+            result["server_exit_code"] = None
+            if server is not None:
+                server.terminate()
+                try:
+                    result["server_exit_code"] = server.wait(timeout=12)
+                except subprocess.TimeoutExpired:
+                    result["server_forced_kill"] = True
+                    server.kill()
+                    result["server_exit_code"] = server.wait()
             logs.seek(0)
             client_errors.seek(0)
             result.update(server_log=logs.read().decode(errors="replace"), client_log=client_errors.read().decode(errors="replace"))

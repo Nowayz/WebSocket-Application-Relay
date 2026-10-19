@@ -188,11 +188,11 @@ def run(args):
               "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
-        client = None
+        server = client = None
         pressure = pressure_result = None
         perf = perf_log = None
         try:
+            server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
             started = time.monotonic()
             while True:
                 if server.poll() is not None:
@@ -398,6 +398,8 @@ def run(args):
                         result.setdefault("forced_kill_pids", []).append(child.pid)
             if perf_log is not None:
                 perf_log.close()
+            result["server_exit_code"] = server.returncode if server is not None else None
+            result["client_exit_code"] = client.returncode if client is not None else None
             logs.seek(0)
             client_errors.seek(0)
             result["server_log"] = logs.read().decode(errors="replace")[-12000:]

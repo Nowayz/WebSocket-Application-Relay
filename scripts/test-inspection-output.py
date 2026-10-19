@@ -110,6 +110,34 @@ class ReceiptTest(unittest.TestCase):
                 else:
                     self.assertEqual(output.read_bytes(), evidence)
 
+    def test_server_exec_failures_write_failed_receipts_without_starting_client(self):
+        for runner in ['inspection.py', 'capacity.py']:
+            for executable in [False, True]:
+                with self.subTest(runner=runner, executable=executable), tempfile.TemporaryDirectory() as temporary:
+                    directory = Path(temporary)
+                    server = directory / 'server'
+                    server.write_text(f'#!{directory / "missing-interpreter"}\n')
+                    server.chmod(0o755 if executable else 0o644)
+                    marker = directory / 'client-started'
+                    client = directory / 'client'
+                    client.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
+                                      f'Path({str(marker)!r}).touch()\n')
+                    client.chmod(0o755)
+                    output = directory / 'receipt.json'
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / 'scripts' / runner),
+                         '--server', str(server), '--client', str(client),
+                         '--server-cpus', '', '--client-cpus', '', '--output', str(output)],
+                        cwd=ROOT, capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertFalse(marker.exists())
+                    receipt = json.loads(output.read_text())
+                    self.assertFalse(receipt['passed'])
+                    self.assertIn('FileNotFoundError' if executable else 'PermissionError', receipt['error'])
+                    self.assertIsNone(receipt.get('server_exit_code'))
+                    self.assertEqual(receipt['server_log'], '')
+                    self.assertEqual(receipt['client_log'], '')
+
     def test_fresh_path_records_startup_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
