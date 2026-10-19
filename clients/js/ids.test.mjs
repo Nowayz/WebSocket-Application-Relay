@@ -39,7 +39,7 @@ test('welcome IDs must be exact, nonreserved uint64 integers', async () => {
   for (const id of invalidSessions) {
     const WebSocketClass = socketClass(id);
     await assert.rejects(Relay.connect('ws://fixture', 'id-check', { WebSocketClass, requestTimeoutMs: 1000 }), undefined, String(id));
-    assert.equal(WebSocketClass.instance.closed.code, 1002);
+    assert.equal(WebSocketClass.instance.closed.code, 4002);
   }
   for (const id of [1, Number.MAX_SAFE_INTEGER, 1n << 53n, BROADCAST - 1n]) {
     const WebSocketClass = socketClass(id);
@@ -62,7 +62,7 @@ test('malformed sender and disconnect IDs close without dispatching application 
       WebSocketClass.instance.receive(notification ? [BROADCAST, id] : [id, 'payload']);
       assert.equal(delivered, 0, `${notification}: ${String(id)}`);
       assert.equal(errors, 1);
-      assert.equal(WebSocketClass.instance.closed.code, 1002);
+      assert.equal(WebSocketClass.instance.closed.code, 4002);
     }
   }
 });
@@ -94,7 +94,7 @@ test('invalid assignment acknowledgements reject the command and close the conne
     await assert.rejects(assignment);
     assert.equal(relay.userId, 1n);
     assert.equal(errors, 1);
-    assert.equal(WebSocketClass.instance.closed.code, 1002);
+    assert.equal(WebSocketClass.instance.closed.code, 4002);
   }
 });
 
@@ -156,10 +156,10 @@ test('malformed replies reject pending commands before the close handshake compl
     await new Promise(setImmediate);
     assert.ok(rejection instanceof Error, 'command waited for Close or its request timeout');
     assert.match(rejection.message, /Unexpected relay response/);
-    assert.equal(ws.closed.code, 1002);
+    assert.equal(ws.closed.code, 4002);
     assert.equal(ws.readyState, 2);
   } finally {
-    ws.dispatchEvent(Object.assign(new Event('close'), { code: 1002, reason: 'fixture cleanup' }));
+    ws.dispatchEvent(Object.assign(new Event('close'), { code: 4002, reason: 'fixture cleanup' }));
     await settled;
   }
 });
@@ -175,7 +175,7 @@ test('envelopes require exactly two array elements, not iterable byte strings', 
       WebSocketClass.instance.receive(malformed);
       assert.equal(delivered, 0);
       assert.equal(errors, 1);
-      assert.equal(WebSocketClass.instance.closed.code, 1002);
+      assert.equal(WebSocketClass.instance.closed.code, 4002);
     } finally { relay.close(); }
   }
 });
@@ -189,7 +189,7 @@ test('control replies require exactly two array elements before resolving a comm
     try {
       WebSocketClass.instance.receive([0, malformed]);
       await assert.rejects(pending);
-      assert.equal(WebSocketClass.instance.closed.code, 1002);
+      assert.equal(WebSocketClass.instance.closed.code, 4002);
     } finally { relay.close(); }
   }
 });
@@ -221,13 +221,13 @@ test('malformed variable results reject before being exposed as found/value', as
       await Promise.resolve();
       WebSocketClass.instance.receive([0, [200, value]]);
       await assert.rejects(pending, /Invalid variable response/);
-      assert.equal(WebSocketClass.instance.closed.code, 1002);
+      assert.equal(WebSocketClass.instance.closed.code, 4002);
     } finally { relay.close(); }
   }
 });
 
 test('boolean command replies reject nonboolean results', async () => {
-  for (const op of [0, 1, 4]) {
+  for (const op of [0, 4]) {
     for (const value of [0, 1, 'true', null, [], {}]) {
       const WebSocketClass = socketClass(1);
       const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
@@ -236,7 +236,7 @@ test('boolean command replies reject nonboolean results', async () => {
         await Promise.resolve();
         WebSocketClass.instance.receive([0, [op, value]]);
         await assert.rejects(pending, /Invalid boolean response/);
-        assert.equal(WebSocketClass.instance.closed.code, 1002);
+        assert.equal(WebSocketClass.instance.closed.code, 4002);
       } finally { relay.close(); }
     }
   }
@@ -246,7 +246,7 @@ test('valid command results preserve false and arbitrary stored CBOR values', as
   const WebSocketClass = socketClass(1);
   const relay = await Relay.connect('ws://fixture', 'result-check', { WebSocketClass });
   try {
-    for (const op of [0, 1, 4]) {
+    for (const op of [0, 4]) {
       for (const value of [false, true]) {
         const pending = relay.request(op, null);
         await Promise.resolve();
@@ -263,4 +263,28 @@ test('valid command results preserve false and arbitrary stored CBOR values', as
     }
     assert.equal(relay.ready, true);
   } finally { relay.close(); }
+});
+
+test('listener flags accept only effective integers in 0 through 7', async () => {
+  const WebSocketClass = socketClass(1);
+  const relay = await Relay.connect('ws://fixture', 'listener-check', { WebSocketClass });
+  try {
+    for (const value of [0, 1, 7, 0n, 1n, 7n]) {
+      const pending = relay.listen(1);
+      await Promise.resolve();
+      WebSocketClass.instance.receive([0, [1, value]]);
+      assert.equal(await pending, value);
+    }
+  } finally { relay.close(); }
+  for (const value of [-1, 8, 1.5, '1', true, false, null, [], {}, NaN, Infinity, -1n, 8n]) {
+    const InvalidSocket = socketClass(1);
+    const client = await Relay.connect('ws://fixture', 'listener-check', { WebSocketClass: InvalidSocket });
+    try {
+      const pending = client.listen(1);
+      await Promise.resolve();
+      InvalidSocket.instance.receive([0, [1, value]]);
+      await assert.rejects(pending, /Invalid listener response/);
+      assert.equal(InvalidSocket.instance.closed.code, 4002);
+    } finally { client.close(); }
+  }
 });

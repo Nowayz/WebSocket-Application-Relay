@@ -109,9 +109,9 @@ test('changed timeout configuration rejects a command before sending and can rec
     const command = relay.listen(1);
     await Promise.resolve();
     socket.dispatchEvent(new MessageEvent('message', {
-      data: Uint8Array.from([0x82, 0, 0x82, 1, 0xf5]).buffer,
+      data: Uint8Array.from([0x82, 0, 0x82, 1, 1]).buffer,
     }));
-    assert.equal(await command, true);
+    assert.equal(await command, 1);
   } finally { relay.close(); }
 });
 

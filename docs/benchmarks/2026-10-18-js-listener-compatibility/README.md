@@ -1,0 +1,11 @@
+# JavaScript listener compatibility and real protocol-error closes
+
+Corrected a regression introduced in afd51f4: listener opcode 1 returns effective integer flags 0 through 7, not a boolean. The old mocked acknowledgements hid the error. The guard now accepts exact Number or BigInt values in that range, preserving the decoded representation. Authentication and variable-write acknowledgements remain boolean.
+
+A real native-server test reproduces the old failure: 28 of 29 tests passed, with the listener failing. It also exposed that client-requested Close 1002 throws InvalidAccessError in the actual WebSocket API. The [WebSockets Standard](https://websockets.spec.whatwg.org/#dom-websocket-close) allows callers to request 1000 or application codes 3000 through 4999. Client-detected malformed welcomes, malformed replies and command timeouts now request application code 4002. Server-sent protocol Close 1002 remains intact.
+
+The final short suite passes all 34 tests in approximately 1.1 seconds. Native integration checks flag values 0, 1, 7, masked 255, private observation, disabling observation and continued command usability. Focused unit checks exercise valid Number/BigInt flags and thirteen invalid values. A small actual TCP/WebSocket peer verifies all three client error-close paths and the server-sent 1002 path. The first candidate run had 33 passes and one test-only failure caused by an incorrect timeout-message assertion; its evidence is retained alongside the corrected final run.
+
+The disposable four-worker native relay and legacy bridge both exit cleanly, and connections, sessions, queued bytes and variable bytes retire to zero. The browser bundle rebuild succeeds. Existing manual services and native source overlays were preserved. This is a compatibility correction with no throughput or 100,000-user latency claim; no long benchmark was needed.
+
+Raw receipts include frozen native/bridge binary identities, test commands, output and cleanup gauges. build.json identifies selected source and browser bundle hashes. Run `python docs/benchmarks/2026-10-18-js-listener-compatibility/verify.py` to audit the retained evidence without starting services.

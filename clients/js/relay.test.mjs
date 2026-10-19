@@ -8,6 +8,25 @@ import { Relay, BROADCAST } from './relay.mjs';
 const url = process.env.WAR_TEST_URL ?? 'ws://127.0.0.1:1338';
 const bridgeUrl = process.env.WAR_TEST_BRIDGE_URL ?? 'ws://127.0.0.1:1337';
 
+test('native listener acknowledgements return effective flags and private observation stays usable', async t => {
+  const observer = await Relay.connect(url, 're_globl');
+  const sender = await Relay.connect(url, 'js-listener');
+  const receiver = await Relay.connect(url, 'js-listener');
+  t.after(() => { observer.close(); sender.close(); receiver.close(); });
+  assert.equal(await observer.authenticate('js-test-host'), true);
+  for (const [flags, expected] of [[0, 0], [1, 1], [7, 7], [255, 7], [2, 2]]) {
+    assert.equal(await observer.listen(flags), expected);
+  }
+  const observed = once(observer, 'message');
+  const received = once(receiver, 'message');
+  sender.send(receiver.userId, { listener: true });
+  const expected = { sender: sender.userId, value: { listener: true } };
+  assert.deepEqual((await observed)[0].detail, expected);
+  assert.deepEqual((await received)[0].detail, expected);
+  assert.equal(await observer.listen(0), 0);
+  assert.equal(await observer.authenticate('js-test-host'), true);
+});
+
 test('CBOR client carries objects, bytes, text, uint64 IDs, and concurrent variable requests', async t => {
   const a = await Relay.connect(url, 'js-cbor');
   const b = await Relay.connect(url, 'js-cbor');

@@ -7,6 +7,8 @@ export const LISTEN = Object.freeze({ CHANNEL: 1, PRIVATE: 2, DISCONNECT: 4 });
 // Standard CBOR only: record-extension tags would bind the server to this codec.
 const encoder = new Encoder({ useRecords: false, mapsAsObjects: true, tagUint8Array: false });
 const decoder = new Decoder({ mapsAsObjects: true });
+// WebSocket.close() permits 1000 or application codes in 3000..4999.
+const CLIENT_PROTOCOL_ERROR = 4002;
 
 function requestTimeout(value) {
   // Both supported timer APIs use a signed 32-bit millisecond delay.
@@ -52,7 +54,11 @@ export class Relay extends EventTarget {
           const [op, result] = value;
           if (!this.#pending || this.#pending.op !== op) throw new Error('Unexpected relay response');
           if (op === 3) wireId(result, true);
-          if ((op === 0 || op === 1 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+          if ((op === 0 || op === 4) && typeof result !== 'boolean') throw new Error('Invalid boolean response');
+          if (op === 1 && !((Number.isInteger(result) && result >= 0 && result <= 7)
+            || (typeof result === 'bigint' && result >= 0n && result <= 7n))) {
+            throw new Error('Invalid listener response');
+          }
           if (op === 200 && (!Array.isArray(result) || result.length !== 2 || typeof result[0] !== 'boolean')) {
             throw new Error('Invalid variable response');
           }
@@ -65,7 +71,7 @@ export class Relay extends EventTarget {
       } catch (error) {
         this.#pending?.reject(error);
         this.dispatchEvent(new CustomEvent('error', { detail: error }));
-        ws.close(1002, 'Invalid Relay Response');
+        ws.close(CLIENT_PROTOCOL_ERROR, 'Invalid Relay Response');
       }
     });
     ws.addEventListener('close', event => {
@@ -102,7 +108,7 @@ export class Relay extends EventTarget {
         try {
           const id = decoder.decode(new Uint8Array(event.data));
           resolve(new Relay(ws, id, requestTimeoutMs));
-        } catch (error) { fail(error, 1002, 'Invalid Subscription'); }
+        } catch (error) { fail(error, CLIENT_PROTOCOL_ERROR, 'Invalid Subscription'); }
       };
       const timer = setTimeout(() => fail(new Error('Relay join timeout')), requestTimeoutMs);
       ws.addEventListener('close', closed, { once: true });
@@ -136,7 +142,7 @@ export class Relay extends EventTarget {
         this.#pending = null;
         reject(new Error('Relay request timeout'));
         // A late reply cannot be assigned to another request after a timeout.
-        this.ws.close(1002, 'Relay Request Timeout');
+        this.ws.close(CLIENT_PROTOCOL_ERROR, 'Relay Request Timeout');
       }, delay);
       this.#pending = { op: op === 5 ? 200 : op, resolve: finish(resolve), reject: finish(reject) };
       try { this.send(RELAY, [op, value]); } catch (error) { this.#pending.reject(error); }

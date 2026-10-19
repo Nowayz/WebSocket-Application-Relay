@@ -1,5 +1,7 @@
 # Validate client command result types — 2026-10-18
 
+**Correction:** The original listener assumption below was wrong: opcode 1 returns integer flags 0 through 7, not a boolean. The browser WebSocket API also rejects client-requested Close 1002. Both are corrected in the [listener compatibility follow-up](../2026-10-18-js-listener-compatibility/README.md); the historical evidence below is retained.
+
 Selected: JavaScript command handling validates boolean results for authenticate/listen/set-variable replies and requires an exact two-element array with a boolean `found` flag for variable replies (opcode 200). These checks happen before resolving the pending command. A malformed result enters the existing immediate rejection/error/Close-1002 path. The previously selected assignment-ID check remains in place. No new dependency, schema framework or runtime mode was added.
 
 Previously the outer control reply was shape-checked, but these result values were accepted without checking their documented types. `getVariable()` destructured arbitrary iterables, so a two-byte byte string could resolve as numeric `found` and `value` properties. Other malformed values could fail later in the async wrapper without closing the protocol connection. Nonboolean authentication results could also be exposed directly to callers. The selected guards enforce the existing protocol's result types before application code observes them.
