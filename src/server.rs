@@ -128,8 +128,26 @@ pub async fn serve(
                     worker.run()
                 })();
                 let _ = finished.send(outcome);
-            })
-            .context("cannot start native I/O worker")?;
+            });
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(error) => {
+                // Stop before draining: dropping the join set would detach
+                // earlier workers while they still own their listeners.
+                drop(signals);
+                let deadline = Duration::from_secs(relay.config.shutdown_timeout_secs)
+                    + Duration::from_secs(1);
+                return tokio::time::timeout(
+                    deadline,
+                    drain_service_workers(
+                        &mut tasks,
+                        Err(error).context("cannot start native I/O worker"),
+                    ),
+                )
+                .await
+                .context("native worker startup cleanup exceeded its deadline")?;
+            }
+        };
         tasks.spawn(async move {
             let outcome = result.await;
             thread

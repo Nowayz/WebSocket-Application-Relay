@@ -817,6 +817,13 @@ distributed by the kernel; they are not balanced by channel or current load.
 Other platforms use cloned listeners. Management and process signals use Tokio.
 Dropping the service or losing a worker suppresses shutdown notifications before
 retiring membership, including when the embedding future is cancelled.
+Worker/listener storage reservations return errors when capacity cannot be
+reserved. If OS thread creation fails after earlier native workers have started,
+`serve` stops and joins those workers before returning the startup error, using
+the configured shutdown deadline plus the existing one-second cleanup allowance.
+A cleanup timeout is reported separately. This returned-error guarantee does not
+change the separate future-cancellation path. See the
+[actual child-process thread-limit checks](benchmarks/2026-10-19-worker-startup-cleanup/README.md).
 
 Full HTTP channel listings copy bounded names and numeric metadata into an owned
 snapshot under the registry read lock, then release the lock before base64
