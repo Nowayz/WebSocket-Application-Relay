@@ -78,7 +78,7 @@ pub struct Config {
     pub idle_timeout_secs: u64,
     #[arg(long, env = "WAR_SHUTDOWN_TIMEOUT_SECS", default_value_t = 10)]
     pub shutdown_timeout_secs: u64,
-    /// Disable the legacy ability of re_globl members to broadcast to all users.
+    /// Disable the ability of re_globl members to broadcast to all users.
     #[arg(long, env = "WAR_DISABLE_GLOBAL_BROADCAST")]
     pub disable_global_broadcast: bool,
     #[arg(long, env = "WAR_WORKERS")]

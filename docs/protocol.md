@@ -3,7 +3,7 @@
 ## Framing
 
 HTTP upgrades optionally enforce an exact browser Origin allowlist through
-`--allowed-origin` / `WAR_ALLOWED_ORIGINS`, shared by native and legacy listeners.
+`--allowed-origin` / `WAR_ALLOWED_ORIGINS`, on the native listener.
 The default remains unrestricted. With a list, denied or duplicate Origin
 headers receive HTTP `403` before upgrade; missing Origin remains allowed for
 native clients. This is separate from authentication and leaves CBOR routing
@@ -17,7 +17,7 @@ a CBOR uint64, excluding 0 and `18446744073709551615`.
 
 Subsequent messages are `[target: uint64, value: CBOR]`. Forwarded messages are
 `[sender: uint64, value: CBOR]`. CBOR integer byte order is independent of the
-machine; the original little-endian encoding exists only in the legacy bridge.
+machine.
 The sender prefix is stored separately from the received application value and
 gathered into one ordinary binary WebSocket message at write time. Both compact
 and full-width target IDs remain accepted; no fixed-width CBOR requirement or
@@ -124,7 +124,7 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 | `1000` | Normal close |
 | `1001` | Shutdown, heartbeat timeout, or configured application-idle timeout |
 | `1002` | Invalid CBOR/WAR or WebSocket framing |
-| `1003` | Text at CBOR endpoint, or structured CBOR at a legacy recipient |
+| `1003` | WebSocket text at the CBOR endpoint |
 | `1008` | Authentication, rate, join-timeout, reserved-ID, or global-send policy |
 | `1009` | Incoming message exceeds configured size |
 | `1013` | Admission/variable capacity or recipient queue budget |
@@ -132,8 +132,7 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 | `4001` | Privileged fixed-ID takeover |
 
 Admission refusals before upgrade can end with a TCP close instead of a WebSocket
-close frame. The bridge suppresses modern command acknowledgements to preserve
-original-client expectations. See the README for its supported value conversions.
+close frame.
 
 After a successful HTTP upgrade, native decoder rejections use the same policy
 before and after channel join: protocol errors send `1002`, excessive message

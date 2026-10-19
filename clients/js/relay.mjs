@@ -1,4 +1,6 @@
-import { Encoder, Decoder } from 'cbor-x';
+// Explicit JavaScript entry points avoid Node's optional native extractor.
+import { Encoder } from 'cbor-x/encode';
+import { Decoder } from 'cbor-x/decode';
 
 export const BROADCAST = 0xffffffffffffffffn;
 export const RELAY = 0n;

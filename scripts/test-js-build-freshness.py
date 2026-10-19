@@ -30,7 +30,7 @@ def tree(root, label, dependency):
     (root / 'vendor/marker/Cargo.toml').write_text('[package]\nname="marker"\nversion="0.1.0"\nedition="2024"\n')
     (root / 'vendor/marker/src/lib.rs').write_text(f'pub const MARKER: &str = "{dependency}";\n')
     (root / 'src/lib.rs').write_text(f'pub fn marker() -> String {{ format!("{label}-{{}}", marker::MARKER) }}\n')
-    for name in ['war-relay', 'war-legacy-bridge']:
+    for name in ['war-relay']:
         (root / f'src/bin/{name}.rs').write_text(
             'fn main() {\n'
             ' let root = std::env::var("CHECK_JS_CACHE_MARKERS").unwrap();\n'
@@ -89,7 +89,7 @@ class BuildFreshnessTests(unittest.TestCase):
             tree(source, 'unused', 'unused')
             (source / 'Cargo.lock').write_text('# fixture\n')
             entries = []
-            for name, port in [('war-relay', 19139), ('war-legacy-bridge', 19137)]:
+            for name, port in [('war-relay', 19139)]:
                 binary = root / name
                 code = ('#!/usr/bin/env python3\nimport os, socket, time\nfrom pathlib import Path\n'
                         'root=Path(os.environ["CHECK_JS_CACHE_MARKERS"])\n'
@@ -129,7 +129,7 @@ class BuildFreshnessTests(unittest.TestCase):
             self.assertTrue(bounded, 'checker remained blocked on a real stalled HTTP request for eight seconds')
             self.assertNotEqual(process.returncode, 0)
             self.assertLess(time.monotonic() - started, 8)
-            for name in ['war-relay', 'war-legacy-bridge']:
+            for name in ['war-relay']:
                 pid = int((markers / (name + '.pid')).read_text())
                 with self.assertRaises(ProcessLookupError):
                     os.kill(pid, 0)
@@ -146,7 +146,7 @@ class BuildFreshnessTests(unittest.TestCase):
             tree(source, 'unused', 'unused')
             (source / 'Cargo.lock').write_text('# fixture\n')
             entries = []
-            for name in ['war-relay', 'war-legacy-bridge']:
+            for name in ['war-relay']:
                 binary = root / name
                 executable(binary, '#!/usr/bin/env python3\n'
                     'import json, os, time\nfrom pathlib import Path\n'
@@ -155,7 +155,7 @@ class BuildFreshnessTests(unittest.TestCase):
                     '"keep":os.environ.get("CHECK_JS_KEEP"),"target":os.environ.get("CARGO_TARGET_DIR")}\n'
                     f'(root/"{name}").write_text(json.dumps(data))\n'
                     'end=time.monotonic()+1\n'
-                    'while not all((root/n).exists() for n in ["war-relay","war-legacy-bridge"]) and time.monotonic()<end: time.sleep(.005)\n'
+                    'while not all((root/n).exists() for n in ["war-relay"]) and time.monotonic()<end: time.sleep(.005)\n'
                     'raise SystemExit(1)\n')
                 entries.append({'reason': 'compiler-artifact', 'target': {'name': name, 'kind': ['bin']},
                                 'manifest_path': str(source / 'Cargo.toml'), 'executable': str(binary), 'fresh': False})
@@ -165,8 +165,7 @@ class BuildFreshnessTests(unittest.TestCase):
             done = subprocess.run(['bash', 'scripts/check-js.sh'], cwd=source, env=env,
                                   capture_output=True, text=True, timeout=10)
             self.assertNotEqual(done.returncode, 0)
-            for name, expected in [('war-relay', {'WAR_AUTH_PASSWORD': 'js-test-host', 'WAR_ADMIN_TOKEN': ''}),
-                                   ('war-legacy-bridge', {})]:
+            for name, expected in [('war-relay', {'WAR_AUTH_PASSWORD': 'js-test-host', 'WAR_ADMIN_TOKEN': ''})]:
                 child = json.loads((markers / name).read_text())
                 self.assertEqual(child['war'], expected)
                 self.assertEqual(child['keep'], 'preserved')
@@ -183,7 +182,7 @@ class BuildFreshnessTests(unittest.TestCase):
                 tree(source, 'unused', 'unused')
                 (source / 'Cargo.lock').write_text('# fixture\n')
                 entries = []
-                for name in ['war-relay', 'war-legacy-bridge']:
+                for name in ['war-relay']:
                     binary = root / name
                     executable(binary, '#!/bin/sh\nprintf started >"$CHECK_JS_CACHE_MARKERS/' + name + '"\nexit 1\n')
                     entries.append({'reason': 'compiler-artifact', 'target': {'name': name, 'kind': ['bin']},

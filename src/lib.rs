@@ -4,8 +4,6 @@ mod admission;
 mod common;
 pub mod config;
 mod frame;
-pub mod legacy;
-pub mod legacy_bridge;
 pub mod metrics;
 pub mod origin;
 pub mod protocol;

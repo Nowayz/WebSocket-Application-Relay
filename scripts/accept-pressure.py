@@ -2,7 +2,7 @@
 """Verify Linux accept recovery and shutdown with a child-only descriptor limit.
 
 No system limits are changed. Raw masked WebSocket frames independently check
-native CBOR and legacy replies. Build both binaries before running.
+native CBOR replies. Build the Rust server before running.
 """
 import argparse
 import hashlib
@@ -35,10 +35,10 @@ def exact(stream, count):
 
 
 class Client:
-    def __init__(self, stream, legacy, name=b"live"):
-        self.stream, self.legacy = stream, legacy
+    def __init__(self, stream, name=b"live"):
+        self.stream = stream
         stream.settimeout(5)
-        protocol = b"" if legacy else b"Sec-WebSocket-Protocol: war.cbor.v1\r\n"
+        protocol = b"Sec-WebSocket-Protocol: war.cbor.v1\r\n"
         stream.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\n"
                        b"Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n"
                        b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" + protocol + b"\r\n")
@@ -48,18 +48,14 @@ class Client:
             assert len(header) < 8192
         assert header.startswith(b"HTTP/1.1 101 ")
         assert len(name) < 24
-        self.send(1 if legacy else 2, name if legacy else bytes([0x60 + len(name)]) + name)
+        self.send(2, bytes([0x60 + len(name)]) + name)
         opcode, self.welcome = self.read()
         assert opcode == 2
-        if legacy:
-            assert len(self.welcome) == 8
-            user_id = int.from_bytes(self.welcome, "little")
-        else:
-            first = self.welcome[0]
-            assert first >> 5 == 0
-            size = {24: 1, 25: 2, 26: 4, 27: 8}.get(first & 31, 0)
-            assert len(self.welcome) == 1 + size
-            user_id = int.from_bytes(self.welcome[1:], "big") if size else first
+        first = self.welcome[0]
+        assert first >> 5 == 0
+        size = {24: 1, 25: 2, 26: 4, 27: 8}.get(first & 31, 0)
+        assert len(self.welcome) == 1 + size
+        user_id = int.from_bytes(self.welcome[1:], "big") if size else first
         assert 0 < user_id < (1 << 64) - 1
         self.echo()
 
@@ -82,7 +78,7 @@ class Client:
 
     def echo(self):
         value = b"\x18\x2a"
-        packet = self.welcome + value if self.legacy else b"\x82" + self.welcome + value
+        packet = b"\x82" + self.welcome + value
         self.send(2, packet)
         assert self.read() == (2, packet)
 
@@ -149,44 +145,33 @@ def fill(process, port, held):
 
 
 def run_case(args, name):
-    legacy = name == "bridge"
-    port, admin, bridge_port = runtime.free_port(), runtime.free_port(), runtime.free_port()
-    assert len({port, admin, bridge_port}) == 3
-    workers = 1 if legacy else int(name.rsplit("-", 1)[1])
+    port, admin = runtime.free_port(), runtime.free_port()
+    assert port != admin
+    workers = int(name.rsplit("-", 1)[1])
     native_command = [str(args.server.resolve()), "--workers", str(workers),
                       "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
                       "--handshake-timeout-secs", "60", "--ping-interval-secs", "0"]
-    bridge_command = [str(args.bridge.resolve()), "--bind", f"127.0.0.1:{bridge_port}",
-                      "--upstream", f"ws://127.0.0.1:{port}"] if legacy else None
     env = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
     env["RUST_LOG"] = "war_relay=info"
     record = {"case": name, "rlimit_nofile": FD_LIMIT, "native_command": native_command,
-              "bridge_command": bridge_command, "passed": False}
+              "passed": False}
     processes, held, pending, healthy, management = [], [], None, None, None
     with tempfile.TemporaryFile() as logs:
         try:
             def limited():
                 resource.setrlimit(resource.RLIMIT_NOFILE, (FD_LIMIT, FD_LIMIT))
             native = subprocess.Popen(native_command, env=env, stdout=logs, stderr=logs,
-                                      preexec_fn=None if legacy else limited)
+                                      preexec_fn=limited)
             processes.append(native)
             management = wait_live(native, lambda: Management(admin))
             management.metrics()
-            if legacy:
-                target = subprocess.Popen(bridge_command, env=env, stdout=logs, stderr=logs,
-                                          preexec_fn=limited)
-                processes.append(target)
-            else:
-                target = native
-            public = bridge_port if legacy else port
+            target = native
+            public = port
             stream = wait_live(target, lambda: socket.create_connection(("127.0.0.1", public), timeout=3))
-            healthy = Client(stream, legacy)
+            healthy = Client(stream)
             record["initial_metrics"] = management.metrics()
             def accept_errors():
-                if not legacy:
-                    return management.metrics().get("war_accept_errors_total", 0)
-                return os.pread(logs.fileno(), 1024 * 1024, 0).count(b"legacy accept failed")
-
+                return management.metrics()["war_accept_errors_total"]
             def wait_error(previous):
                 deadline = time.monotonic() + 5
                 while accept_errors() <= previous:
@@ -211,15 +196,14 @@ def run_case(args, name):
             record["pressure"] = {"fd_count": fd_count(target), "elapsed_seconds": elapsed,
                                   "cpu_seconds": last["cpu_seconds"] - first["cpu_seconds"],
                                   "metrics": metrics}
-            if not legacy:
-                errors = metrics["war_accept_errors_total"]
-                assert errors > 0
-                assert errors - errors_before <= workers * (math.ceil(elapsed) + 1), "accept retry spun"
+            errors = metrics["war_accept_errors_total"]
+            assert errors > 0
+            assert errors - errors_before <= workers * (math.ceil(elapsed) + 1), "accept retry spun"
             for stream in held:
                 stream.close()
             held.clear()
             started = time.monotonic()
-            recovered = Client(pending, legacy, b"recovered")
+            recovered = Client(pending, b"recovered")
             pending = None
             recovered.close()
             healthy.echo()
@@ -242,10 +226,9 @@ def run_case(args, name):
             healthy.echo()
             started = time.monotonic()
             target.send_signal(signal.SIGTERM)
-            if not legacy:
-                opcode, body = healthy.read()
-                assert opcode == 8 and int.from_bytes(body[:2], "big") == 1001
-                record["shutdown_close"] = 1001
+            opcode, body = healthy.read()
+            assert opcode == 8 and int.from_bytes(body[:2], "big") == 1001
+            record["shutdown_close"] = 1001
             assert target.wait(timeout=3) == 0
             record["shutdown_seconds"] = time.monotonic() - started
             record["passed"] = True
@@ -280,16 +263,14 @@ def run_case(args, name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
-    parser.add_argument("--bridge", type=Path, default=ROOT / "target/release/war-legacy-bridge")
-    parser.add_argument("--cases", nargs="+", choices=["native-1", "native-4", "bridge"],
-                        default=["native-1", "native-4", "bridge"])
+    parser.add_argument("--cases", nargs="+", choices=["native-1", "native-4"],
+                        default=["native-1", "native-4"])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not Path("/proc/self/fd").is_dir():
         parser.error("the descriptor-pressure probe requires Linux /proc")
     result = {"scope": __doc__, "source": Path(__file__).read_text(),
               "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
-              "bridge_sha256": hashlib.sha256(args.bridge.read_bytes()).hexdigest(),
               "cases": [], "passed": False}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     for name in args.cases:

@@ -1,7 +1,7 @@
 //! Optional browser-origin admission, evaluated once during HTTP upgrade.
 use anyhow::{Context, Result, ensure};
 use clap::Args;
-use tokio_tungstenite::tungstenite::{
+use tungstenite::{
     handshake::server::ErrorResponse,
     http::{HeaderMap, Response, Uri, header},
 };
@@ -91,7 +91,7 @@ pub(crate) fn forbidden() -> ErrorResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio_tungstenite::tungstenite::http::HeaderValue;
+    use tungstenite::http::HeaderValue;
 
     #[test]
     fn exact_origins_preserve_native_clients_and_reject_ambiguous_values() {

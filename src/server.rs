@@ -41,15 +41,15 @@ use bytes::Bytes;
 use mio::{Events, Interest, Poll, Registry, Token, net::TcpListener};
 use slab::Slab;
 use tokio::{net::TcpListener as AsyncListener, task::JoinSet};
-use tokio_tungstenite::tungstenite::{
-    self, Error, Message, WebSocket,
+use tokio_util::sync::CancellationToken;
+use tungstenite::{
+    Error, Message, WebSocket,
     handshake::{
         HandshakeError, MidHandshake,
         server::{Callback, ErrorResponse, Request, Response, ServerHandshake},
     },
     protocol::{CloseFrame, ReadLease, ReadStorage, WebSocketConfig, frame::coding::CloseCode},
 };
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     Relay,

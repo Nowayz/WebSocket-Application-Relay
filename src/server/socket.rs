@@ -1165,4 +1165,46 @@ mod tests {
         drop(registration);
         assert_eq!(relay.counts(), (0, 1));
     }
+
+    #[test]
+    fn registration_failure_closes_the_socket_and_releases_physical_admission() {
+        let relay = Relay::new(Config::default()).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut reader = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        reader
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        stream.set_nonblocking(true).unwrap();
+        let mut stream = TcpStream::from_std(stream);
+        let poll = Poll::new().unwrap();
+        let registry = Arc::new(poll.registry().try_clone().unwrap());
+        // A second registration of this descriptor fails in the real poller.
+        // No preload library or unsafe syscall interception is needed.
+        registry
+            .register(&mut stream, Token(2), Interest::READABLE)
+            .unwrap();
+        let signal = Arc::new(Signal {
+            waker: Waker::new(&registry, Token(1)).unwrap(),
+            stopping: AtomicBool::new(false),
+            pending: Mutex::new(VecDeque::new()),
+        });
+        relay.metrics.connections.fetch_add(1, Relaxed);
+        let result = Socket::new(
+            stream,
+            Token(3),
+            registry,
+            signal,
+            ConnectionGuard(relay.metrics.clone(), None),
+            &relay,
+        );
+        assert!(result.is_err(), "duplicate registration must fail");
+        assert_eq!(
+            reader.read(&mut [0]).unwrap(),
+            0,
+            "failed setup must close TCP"
+        );
+        assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
 }

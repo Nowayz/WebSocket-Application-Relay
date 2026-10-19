@@ -24,7 +24,7 @@ fn templates_preserve_default_wire_bytes_and_equal_encoded_sizes() {
                 );
             }
             assert_eq!(decoder.position(), encoded.len());
-            let packet = Wire::Cbor.envelope(42, &encoded);
+            let packet = protocol::envelope(42, &encoded);
             assert_eq!(protocol::parse(&packet).unwrap(), (42, encoded.as_ref()));
         }
     }
@@ -48,7 +48,7 @@ fn private_template_sizes_preserve_markers_and_complete_encoded_values() {
                 assert_eq!(decoded, payload);
                 assert_eq!(&decoded[..8], &sequence.to_le_bytes());
                 assert_eq!(decoder.position(), encoded.len());
-                let packet = Wire::Cbor.envelope(42, &encoded);
+                let packet = protocol::envelope(42, &encoded);
                 assert_eq!(protocol::parse(&packet).unwrap(), (42, encoded.as_ref()));
             }
         }

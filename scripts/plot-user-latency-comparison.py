@@ -105,7 +105,7 @@ def main():
     summary['histogram_bounds'] = args.histogram_bounds
     summary['statistic'] = args.statistic
     summary['measurement_start'] = (
-        'The legacy send_to_receive field starts at the source client timestamp, '
+        'The historical send_to_receive field starts at the source client timestamp, '
         'which can precede socket send; it is not an isolated server-hop duration.')
     if args.statistic == 'max':
         summary['scope'] = 'CDFs of per-user observed maxima. Thresholds count users with every observed packet at or below the threshold. Finite observations, not a latency guarantee; intended-send includes generator backlog.'

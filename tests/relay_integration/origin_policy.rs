@@ -1,4 +1,4 @@
-//! Real HTTP and WebSocket admission, including the legacy public ingress.
+//! Real HTTP and WebSocket origin admission.
 use super::*;
 use tokio_tungstenite::tungstenite::{
     Error,
@@ -207,69 +207,5 @@ async fn no_origin_policy_preserves_unrestricted_requests_and_protocol_errors_st
     assert_eq!(server.relay.metrics.handshake_errors.load(Relaxed), 1);
     assert_eq!(server.relay.metrics.rejected.load(Relaxed), 0);
     assert_eq!(server.relay.metrics.origin_rejected.load(Relaxed), 0);
-    server.stop().await;
-}
-
-#[tokio::test]
-async fn legacy_public_ingress_checks_origin_and_bounds_http_without_limiting_later_frames() {
-    let server = Server::new(Config {
-        origin_policy: policy(&[APP]),
-        ..config()
-    })
-    .await;
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let url = format!("ws://{address}");
-    let shutdown = CancellationToken::new();
-    let task = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
-        war_relay::legacy_bridge::serve_with_origin_policy(
-            listener,
-            server.url.clone(),
-            1,
-            policy(&[APP]),
-            shutdown.clone(),
-        ),
-    ));
-    for origins in [vec!["https://other.example"], vec!["null"], vec![APP, APP]] {
-        forbidden(request(&url, &origins)).await;
-    }
-    assert_eq!(server.relay.metrics.accepted.load(Relaxed), 0);
-    // The legacy listener now reuses the native 16 KiB raw HTTP guard.
-    let mut raw = TcpStream::connect(address).await.unwrap();
-    let headers = format!(
-        "GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nOrigin: {APP}\r\nX-Padding: {}\r\n\r\n",
-        "x".repeat(20 * 1024)
-    );
-    raw.write_all(headers.as_bytes()).await.unwrap();
-    let mut reply = Vec::new();
-    let end = timeout(Duration::from_secs(3), raw.read_to_end(&mut reply))
-        .await
-        .unwrap();
-    assert!(end.is_ok() || end.unwrap_err().kind() == std::io::ErrorKind::ConnectionReset);
-    assert!(!reply.starts_with(b"HTTP/1.1 101"));
-    assert_eq!(server.relay.metrics.accepted.load(Relaxed), 0);
-    // A single bridge slot is reusable, and accepted HTTP no longer caps data.
-    for origins in [vec![APP], vec![]] {
-        let (mut socket, _) = connect_async(request(&url, &origins)).await.unwrap();
-        socket.send(Message::Text("origin".into())).await.unwrap();
-        let welcome = data(&mut socket).await;
-        let id = u64::from_le_bytes(welcome.as_ref().try_into().unwrap());
-        let mut packet = Vec::from(id.to_le_bytes());
-        packet.extend((0..64 * 1024).map(|i| (i % 251) as u8));
-        let packet = Bytes::from(packet);
-        socket.send(Message::Binary(packet.clone())).await.unwrap();
-        assert_eq!(data(&mut socket).await, packet);
-        clean_close(&mut socket).await;
-        connections(&server, 0).await;
-    }
-    assert_eq!(server.relay.metrics.accepted.load(Relaxed), 2);
-    assert_eq!(server.relay.metrics.origin_rejected.load(Relaxed), 0);
-    assert_eq!(server.relay.metrics.handshake_errors.load(Relaxed), 0);
-    shutdown.cancel();
-    timeout(Duration::from_secs(3), task)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
     server.stop().await;
 }

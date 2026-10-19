@@ -183,9 +183,9 @@ def send_message(peer, payload, mode):
 
 
 class Worker:
-    def __init__(self, port, index, legacy_expectation):
+    def __init__(self, port, index, expected_result):
         self.port, self.channel = port, f"corpus-{index}".encode()
-        self.baseline = legacy_expectation
+        self.baseline = expected_result
         self.peers, self.rows = [], []
         self.counts = dict(joins=0, incoming_messages=0, incoming_bytes=0,
                            join_rejected=0, protocol_errors=0, normal_closes=0,

@@ -727,7 +727,7 @@ async fn shared_network_payloads_are_reused_without_copying_later_base_slab_valu
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn global_listeners_and_global_broadcast_preserve_legacy_scope() {
+async fn global_listeners_and_global_broadcast_preserve_global_scope() {
     let server = Server::new(config()).await;
     let (mut global, gid) = server.join("re_globl").await;
     let (mut a, aid) = server.join("alpha").await;

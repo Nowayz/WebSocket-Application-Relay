@@ -3,9 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 task_logs=$(mktemp -d)
 relay_pid=''
-bridge_pid=''
 cleanup() {
-  if [[ -n "$bridge_pid" ]]; then kill "$bridge_pid" 2>/dev/null || true; wait "$bridge_pid" 2>/dev/null || true; fi
   if [[ -n "$relay_pid" ]]; then kill "$relay_pid" 2>/dev/null || true; wait "$relay_pid" 2>/dev/null || true; fi
   rm -rf "$task_logs"
 }
@@ -30,7 +28,7 @@ for (const line of fs.readFileSync(process.argv[2], 'utf8').trim().split('\n')) 
     paths.set(artifact.target.name, artifact);
   }
 }
-for (const name of ['war-relay', 'war-legacy-bridge']) {
+for (const name of ['war-relay']) {
   if (!paths.has(name)) throw new Error(`Cargo did not report ${name}`);
   const artifact = paths.get(name);
   if (artifact.fresh !== false) throw new Error(`Cargo did not confirm recompilation of ${name}`);
@@ -38,7 +36,7 @@ for (const name of ['war-relay', 'war-legacy-bridge']) {
 }
 JS
 mapfile -t binaries <"$task_logs/binaries"
-npm ci --prefix clients/js --ignore-scripts --no-audit --no-fund
+npm ci --prefix clients/js --omit=optional --ignore-scripts --no-audit --no-fund
 start_relay() {
   WAR_AUTH_PASSWORD=js-test-host WAR_ADMIN_TOKEN='' "${binaries[0]}" \
     --bind 127.0.0.1:19138 --admin-bind 127.0.0.1:19139 --workers 4 --idle-timeout-secs 1 >>"$task_logs/relay.log" 2>&1 &
@@ -47,41 +45,33 @@ start_relay() {
 wait_services() {
   local ready_deadline=$((SECONDS + 5))
   while ((SECONDS < ready_deadline)); do
-    if ! kill -0 "$relay_pid" 2>/dev/null || ! kill -0 "$bridge_pid" 2>/dev/null; then
-      cat "$task_logs/relay.log" "$task_logs/bridge.log"
+    if ! kill -0 "$relay_pid" 2>/dev/null; then
+      cat "$task_logs/relay.log"
       return 1
     fi
     # Bound both HTTP completion and TCP connection, including a stalled peer.
     if node - <<'JS'
 const http = require('node:http');
-const net = require('node:net');
-let httpReady = false, bridgeReady = false;
 const fail = () => process.exit(1);
-const finish = () => { if (httpReady && bridgeReady) process.exit(0); };
 setTimeout(fail, 1000);
-const socket = net.connect({ host: '127.0.0.1', port: 19137 });
-socket.once('connect', () => { bridgeReady = true; socket.destroy(); finish(); });
-socket.on('error', () => { if (!bridgeReady) fail(); });
 http.get('http://127.0.0.1:19139/readyz', response => {
   if (response.statusCode !== 200) return fail();
   response.on('error', fail);
-  response.on('end', () => { httpReady = true; finish(); });
+  response.on('end', () => process.exit(0));
   response.resume();
 }).on('error', fail);
 JS
     then return 0; fi
     sleep 0.05
   done
-  cat "$task_logs/relay.log" "$task_logs/bridge.log"
+  cat "$task_logs/relay.log"
   echo 'JavaScript fixture readiness deadline exceeded.' >&2
   return 1
 }
 
 start_relay
-TOKIO_WORKER_THREADS=4 "${binaries[1]}" --bind 127.0.0.1:19137 --upstream ws://127.0.0.1:19138 >"$task_logs/bridge.log" 2>&1 &
-bridge_pid=$!
 wait_services
-WAR_TEST_IDLE_ENABLED=1 WAR_TEST_URL=ws://127.0.0.1:19138 WAR_TEST_BRIDGE_URL=ws://127.0.0.1:19137 npm test --prefix clients/js
+WAR_TEST_IDLE_ENABLED=1 WAR_TEST_URL=ws://127.0.0.1:19138 npm test --prefix clients/js
 # The suite must retire its sockets and accounted memory before fixture shutdown.
 for attempt in {1..100}; do
   if curl --fail --silent --max-time 1 http://127.0.0.1:19139/metrics >"$task_logs/final-metrics" \

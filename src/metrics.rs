@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed},
     },
 };
-use tokio_tungstenite::tungstenite::protocol::ReadBudget;
+use tungstenite::protocol::ReadBudget;
 
 #[derive(Default)]
 pub struct Metrics {

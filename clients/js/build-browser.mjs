@@ -1,4 +1,4 @@
-import { build } from 'esbuild';
+import { build } from 'esbuild-wasm';
 import { copyFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -17,3 +17,4 @@ await build({
 });
 await copyFile(new URL('browser/check.mjs', import.meta.url), new URL('check.js', outdir));
 await copyFile(new URL('browser/index.html', import.meta.url), new URL('index.html', outdir));
+await copyFile(new URL('relay.d.ts', import.meta.url), new URL('relay.d.ts', outdir));

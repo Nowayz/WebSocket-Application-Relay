@@ -1,29 +1,20 @@
-//! Transport admission and asynchronous HTTP-upgrade/Close helpers.
-use std::{
-    io::{self, IoSlice},
-    pin::Pin,
-    task::{Context, Poll},
-    time::Duration,
-};
-
+//! Native accept retry policy and test WebSocket close helpers.
+#[cfg(test)]
 use futures_util::{SinkExt, StreamExt};
+use std::{io, time::Duration};
+#[cfg(test)]
 use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
+    io::{AsyncRead, AsyncWrite},
     time::timeout,
 };
+#[cfg(test)]
 use tokio_tungstenite::{
     WebSocketStream,
     tungstenite::{Error, Message, protocol::CloseFrame},
 };
+#[cfg(test)]
 use tokio_util::sync::CancellationToken;
 
-// Bound fragment parsing in the asynchronous migration bridge.
-pub(crate) const READ_FRAMES_PER_POLL: std::num::NonZeroUsize =
-    std::num::NonZeroUsize::new(256).unwrap();
-
-/// Retry failed incoming flows immediately. Other accept failures, including
-/// descriptor/socket-buffer pressure, wait without blocking established peers.
-/// This follows the same portable policy as axum's management listener.
 pub(crate) fn accept_retry_delay(error: &io::Error) -> Duration {
     match error.kind() {
         io::ErrorKind::Interrupted
@@ -34,89 +25,9 @@ pub(crate) fn accept_retry_delay(error: &io::Error) -> Duration {
     }
 }
 
-/// Bound the raw HTTP upgrade without parsing or copying it a second time.
-/// After upgrade, reads and all vectored writes delegate directly to the socket.
-pub(crate) struct HandshakeStream<S> {
-    stream: S,
-    remaining: Option<usize>,
-    // Drop the TCP stream before releasing its direct-peer admission lease.
-    _ip_permit: Option<crate::admission::IpPermit>,
-}
-
-impl<S> HandshakeStream<S> {
-    pub(crate) fn new(stream: S, ip_permit: Option<crate::admission::IpPermit>) -> Self {
-        Self {
-            stream,
-            remaining: Some(crate::config::MAX_HTTP_UPGRADE_BYTES),
-            _ip_permit: ip_permit,
-        }
-    }
-
-    pub(crate) fn handshake_done(&mut self) {
-        self.remaining = None;
-    }
-
-    pub(crate) fn get_ref(&self) -> &S {
-        &self.stream
-    }
-}
-
-impl<S: AsyncRead + Unpin> AsyncRead for HandshakeStream<S> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        let Some(remaining) = self.remaining else {
-            return Pin::new(&mut self.stream).poll_read(cx, buf);
-        };
-        if buf.remaining() == 0 {
-            return Poll::Ready(Ok(()));
-        }
-        if remaining == 0 {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "HTTP upgrade exceeds 16384 bytes",
-            )));
-        }
-        let length = remaining.min(buf.remaining());
-        let mut limited = ReadBuf::new(buf.initialize_unfilled_to(length));
-        let result = Pin::new(&mut self.stream).poll_read(cx, &mut limited);
-        let read = limited.filled().len();
-        buf.advance(read);
-        self.remaining = Some(remaining - read);
-        result
-    }
-}
-
-impl<S: AsyncWrite + Unpin> AsyncWrite for HandshakeStream<S> {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_write(cx, buf)
-    }
-    fn poll_write_vectored(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        bufs: &[IoSlice<'_>],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_write_vectored(cx, bufs)
-    }
-    fn is_write_vectored(&self) -> bool {
-        self.stream.is_write_vectored()
-    }
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_flush(cx)
-    }
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_shutdown(cx)
-    }
-}
-
 /// Reading Close already queued the exact acknowledgement. Sending a fresh Close
 /// here would be SendAfterClosing and would leave the acknowledgement unflushed.
+#[cfg(test)]
 pub(crate) async fn acknowledge_close<S>(ws: &mut WebSocketStream<S>, duration: Duration) -> bool
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -126,6 +37,7 @@ where
 
 /// Use one deadline for sending Close and receiving its acknowledgement. An
 /// already requested service shutdown skips waiting after the Close is sent.
+#[cfg(test)]
 pub(crate) async fn initiate_close<S>(
     ws: &mut WebSocketStream<S>,
     frame: Option<CloseFrame>,

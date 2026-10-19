@@ -41,40 +41,7 @@ static AUDITED_IDS: OnceLock<parking_lot::Mutex<HashSet<u64>>> = OnceLock::new()
 enum Mode {
     None,
     Cbor,
-    Binary,
     Http,
-}
-
-#[derive(Clone, Copy, ValueEnum, PartialEq)]
-enum Wire {
-    Cbor,
-    Cpp,
-}
-
-impl Wire {
-    fn envelope(self, target: u64, value: &[u8]) -> Bytes {
-        match self {
-            Self::Cbor => protocol::envelope(target, value),
-            Self::Cpp => {
-                let mut bytes = Vec::with_capacity(8 + value.len());
-                bytes.extend_from_slice(&target.to_le_bytes());
-                bytes.extend_from_slice(value);
-                bytes.into()
-            }
-        }
-    }
-    fn query(self) -> Bytes {
-        match self {
-            Self::Cbor => protocol::request(2, b"\xf6"),
-            Self::Cpp => self.envelope(0, &[2]),
-        }
-    }
-    fn check_query(self, expected: &Expected, bytes: &[u8], quiescent: bool) -> Result<()> {
-        match self {
-            Self::Cbor => expected.cbor(bytes, quiescent),
-            Self::Cpp => expected.cpp(bytes),
-        }
-    }
 }
 
 /// Prepared application values; templates are allocated before measurement.
@@ -114,12 +81,10 @@ struct Args {
     #[arg(long)]
     #[arg(default_value = "127.0.0.1:1339")]
     admin: String,
-    #[arg(long, value_enum, default_value = "cbor")]
-    wire: Wire,
     /// Verify setup/cleanup using a retained authenticated socket, without HTTP.
     #[arg(long)]
     protocol_only: bool,
-    /// Diagnostic only: reject repeated welcome IDs before the first C++ GC.
+    /// Diagnostic only: reject repeated welcome IDs during this run.
     #[arg(long)]
     audit_ids: bool,
     #[arg(long, value_enum, default_value = "http")]
@@ -346,54 +311,6 @@ impl Expected {
         );
         Ok(())
     }
-    fn cpp(&self, bytes: &[u8]) -> Result<()> {
-        ensure!(
-            bytes.len() >= 12 && bytes[..8] == [0; 8],
-            "binary query header"
-        );
-        let count = u32::from_le_bytes(bytes[8..12].try_into()?) as usize;
-        ensure!(count == self.raw.len(), "binary query channel count");
-        let mut names = Vec::with_capacity(count);
-        let mut position = 12;
-        for _ in 0..count {
-            let len = usize::from(*bytes.get(position).context("missing name length")?);
-            position += 1;
-            let name = bytes
-                .get(position..position + len)
-                .context("truncated name")?;
-            names.push(name);
-            position += len;
-        }
-        ensure!(
-            bytes.len() == position + count * 4,
-            "binary query count/trailing bytes"
-        );
-        // The upstream protocol does not promise an order; normalize it only here.
-        let mut entries: Vec<_> = names
-            .into_iter()
-            .zip(bytes[position..].chunks_exact(4))
-            .map(|(name, count)| {
-                (
-                    name,
-                    u64::from(u32::from_le_bytes(count.try_into().unwrap())),
-                )
-            })
-            .collect();
-        entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
-        let mut previous: Option<&[u8]> = None;
-        for (name, members) in entries {
-            ensure!(
-                previous.is_none_or(|p| p < name),
-                "duplicate binary channel"
-            );
-            ensure!(
-                self.raw.get(name) == Some(&members),
-                "binary name/member mismatch"
-            );
-            previous = Some(name);
-        }
-        Ok(())
-    }
     fn http(&self, bytes: &[u8], quiescent: bool) -> Result<()> {
         let rows: Vec<Info> = serde_json::from_slice(bytes)?;
         ensure!(
@@ -491,7 +408,7 @@ async fn data(socket: &mut Socket) -> Result<Bytes> {
         m => anyhow::bail!("unexpected {m:?}"),
     }
 }
-async fn join(url: &str, name: &Bytes, wire: Wire, counts: &mut Counts) -> Result<(Socket, u64)> {
+async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
     let (mut socket, _) = timeout(
         Duration::from_secs(5),
         connect_async_with_config(
@@ -502,21 +419,12 @@ async fn join(url: &str, name: &Bytes, wire: Wire, counts: &mut Counts) -> Resul
     )
     .await??;
     socket
-        .send(Message::Binary(match wire {
-            Wire::Cbor => protocol::byte_string(name),
-            Wire::Cpp => name.clone(),
-        }))
+        .send(Message::Binary(protocol::byte_string(name)))
         .await?;
     let welcome = data(&mut socket).await?;
-    let id = match wire {
-        Wire::Cbor => {
-            let mut d = Decoder::new(&welcome);
-            let id = d.u64()?;
-            ensure!(d.position() == welcome.len(), "trailing welcome");
-            id
-        }
-        Wire::Cpp => u64::from_le_bytes(welcome.as_ref().try_into()?),
-    };
+    let mut d = Decoder::new(&welcome);
+    let id = d.u64()?;
+    ensure!(d.position() == welcome.len(), "trailing welcome");
     ensure!(id != 0 && id != protocol::BROADCAST, "invalid welcome");
     if let Some(ids) = AUDITED_IDS.get() {
         ensure!(
@@ -535,22 +443,14 @@ async fn exchange(socket: &mut Socket, request: Bytes, counts: &mut Counts) -> R
     counts.received(&result);
     Ok(result)
 }
-async fn authenticate(socket: &mut Socket, wire: Wire, counts: &mut Counts) -> Result<()> {
-    match wire {
-        Wire::Cbor => ensure!(
-            exchange(socket, protocol::request(0, &protocol::text(TOKEN)), counts)
-                .await?
-                .as_ref()
-                == b"\x82\0\x82\0\xf5",
-            "authentication"
-        ),
-        Wire::Cpp => {
-            // The original has no auth acknowledgement; the checked query is the barrier.
-            let request = wire.envelope(0, b"\0metalgear");
-            counts.sent(&request);
-            socket.send(Message::Binary(request)).await?;
-        }
-    }
+async fn authenticate(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
+    ensure!(
+        exchange(socket, protocol::request(0, &protocol::text(TOKEN)), counts)
+            .await?
+            .as_ref()
+            == b"\x82\0\x82\0\xf5",
+        "authentication"
+    );
     Ok(())
 }
 async fn close(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
@@ -655,7 +555,6 @@ async fn healthy(mut pair: Pair, until: Instant) -> Result<(Pair, Counts, Histog
 async fn churn(
     url: String,
     name: Bytes,
-    wire: Wire,
     until: Instant,
     cycles_per_second: u32,
 ) -> Result<(Counts, Histogram)> {
@@ -676,11 +575,11 @@ async fn churn(
             }
         }
         let stamp = Instant::now();
-        let (mut socket, id) = join(&url, &name, wire, &mut counts)
+        let (mut socket, id) = join(&url, &name, &mut counts)
             .await
             .with_context(|| format!("churn join, room {name:?}, sequence {sequence}"))?;
         let value = protocol::byte_string(&sequence.to_le_bytes());
-        let request = wire.envelope(id, &value);
+        let request = protocol::envelope(id, &value);
         let reply = exchange(&mut socket, request.clone(), &mut counts)
             .await
             .with_context(|| {
@@ -701,7 +600,6 @@ async fn churn(
 }
 async fn inspect(
     mut socket: Option<Socket>,
-    wire: Wire,
     admin: String,
     expected: Arc<Expected>,
     until: Instant,
@@ -723,8 +621,8 @@ async fn inspect(
         }
         let stamp = Instant::now();
         if let Some(socket) = &mut socket {
-            let bytes = exchange(socket, wire.query(), &mut counts).await?;
-            wire.check_query(&expected, &bytes, false)?;
+            let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;
+            expected.cbor(&bytes, false)?;
         } else {
             http(&admin, &mut buffer, &expected, false).await?;
         }
@@ -760,10 +658,6 @@ async fn run(args: Args) -> Result<()> {
         );
     }
     ensure!(
-        args.wire == Wire::Cbor || args.value_kind == ValueKind::Bytes,
-        "text value kinds require CBOR wire"
-    );
-    ensure!(
         args.rooms <= 8192
             && (1..=60).contains(&args.seconds)
             && args.pairs <= 64
@@ -790,33 +684,17 @@ async fn run(args: Args) -> Result<()> {
     );
     ensure!(
         args.fanout_churn_every == 0
-            || (args.fanout_readers > 0
-                && args.mode == Mode::None
-                && args.inspectors == 0
-                && args.wire == Wire::Cbor),
+            || (args.fanout_readers > 0 && args.mode == Mode::None && args.inspectors == 0),
         "fanout membership churn requires CBOR readers, mode none and no inspectors"
     );
     ensure!(
-        !args.fanout_global_observers
-            || (args.fanout_readers > 0 && args.wire == Wire::Cbor && args.fanout_churn_every == 0),
+        !args.fanout_global_observers || (args.fanout_readers > 0 && args.fanout_churn_every == 0),
         "global observers require CBOR fanout readers without fanout membership churn"
     );
     ensure!(
         args.page_size
-            .is_none_or(|limit| (1..=1000).contains(&limit)
-                && args.mode == Mode::Http
-                && args.wire == Wire::Cbor),
+            .is_none_or(|limit| (1..=1000).contains(&limit) && args.mode == Mode::Http),
         "bounded pages require HTTP/CBOR and a limit in 1..=1000"
-    );
-    ensure!(
-        match args.wire {
-            Wire::Cpp =>
-                args.protocol_only
-                    && (args.mode == Mode::None
-                        || (args.mode == Mode::Binary && args.churn_workers == 0)),
-            Wire::Cbor => args.mode != Mode::Binary,
-        },
-        "C++ requires --protocol-only and either --mode none or --mode binary --churn-workers 0"
     );
     let inspectors = if args.mode == Mode::None {
         0
@@ -833,43 +711,26 @@ async fn run(args: Args) -> Result<()> {
             2 => Bytes::from_static("π".as_bytes()),
             _ => Bytes::from(format!("room{i:04x}")),
         };
-        idle.push(join(&args.url, &name, args.wire, &mut counts).await?.0);
+        idle.push(join(&args.url, &name, &mut counts).await?.0);
         stable.push((name, 1));
     }
     let mut pairs = Vec::with_capacity(args.pairs);
     for i in 0..args.pairs {
         let name = Bytes::from(format!("health{i}"));
-        let (mut source, id) = join(&args.url, &name, args.wire, &mut counts).await?;
-        let (target, target_id) = join(&args.url, &name, args.wire, &mut counts).await?;
+        let (mut source, id) = join(&args.url, &name, &mut counts).await?;
+        let (target, target_id) = join(&args.url, &name, &mut counts).await?;
         if i == 0 {
-            if args.wire == Wire::Cbor {
-                ensure!(
-                    exchange(
-                        &mut source,
-                        protocol::request(4, b"\x82\x45ready\xf5"),
-                        &mut counts
-                    )
-                    .await?
-                    .as_ref()
-                        == b"\x82\0\x82\x04\xf5",
-                    "variable setup"
-                );
-            } else {
-                let request = args.wire.envelope(0, b"\x04\x05ready\xf5");
-                counts.sent(&request);
-                source.send(Message::Binary(request)).await?;
-                ensure!(
-                    exchange(
-                        &mut source,
-                        args.wire.envelope(0, b"\x05ready"),
-                        &mut counts
-                    )
-                    .await?
-                    .as_ref()
-                        == b"\0\0\0\0\0\0\0\0\xc8\xf5",
-                    "binary variable setup"
-                );
-            }
+            ensure!(
+                exchange(
+                    &mut source,
+                    protocol::request(4, b"\x82\x45ready\xf5"),
+                    &mut counts
+                )
+                .await?
+                .as_ref()
+                    == b"\x82\0\x82\x04\xf5",
+                "variable setup"
+            );
         }
         let mut payload = args.value_kind.payload(args.private_payload_bytes);
         let value_bytes = args.value_kind.encode(&payload).len() as u64;
@@ -878,8 +739,8 @@ async fn run(args: Args) -> Result<()> {
                 payload[..8].copy_from_slice(&n.to_le_bytes());
                 let value = args.value_kind.encode(&payload);
                 (
-                    args.wire.envelope(target_id, &value),
-                    args.wire.envelope(id, &value),
+                    protocol::envelope(target_id, &value),
+                    protocol::envelope(id, &value),
                 )
             })
             .collect();
@@ -900,10 +761,10 @@ async fn run(args: Args) -> Result<()> {
     }
     let mut sockets = Vec::with_capacity(inspectors);
     for i in 0..inspectors {
-        if matches!(args.mode, Mode::Cbor | Mode::Binary) {
+        if args.mode == Mode::Cbor {
             let name = Bytes::from(format!("inspect{i}"));
-            let (mut socket, _) = join(&args.url, &name, args.wire, &mut counts).await?;
-            authenticate(&mut socket, args.wire, &mut counts).await?;
+            let (mut socket, _) = join(&args.url, &name, &mut counts).await?;
+            authenticate(&mut socket, &mut counts).await?;
             sockets.push(Some(socket));
             stable.push((name, 1));
         } else {
@@ -912,8 +773,8 @@ async fn run(args: Args) -> Result<()> {
     }
     let mut probe = if args.protocol_only {
         let name = Bytes::from_static(b"probe");
-        let (mut socket, _) = join(&args.url, &name, args.wire, &mut counts).await?;
-        authenticate(&mut socket, args.wire, &mut counts).await?;
+        let (mut socket, _) = join(&args.url, &name, &mut counts).await?;
+        authenticate(&mut socket, &mut counts).await?;
         stable.push((name, 1));
         Some(socket)
     } else {
@@ -923,7 +784,6 @@ async fn run(args: Args) -> Result<()> {
         let group = fanout::Fanout::new(
             &args.url,
             args.fanout_readers,
-            args.wire,
             args.value_kind,
             args.fanout_global_observers,
             &mut counts,
@@ -948,13 +808,13 @@ async fn run(args: Args) -> Result<()> {
     let mut buffer = Vec::with_capacity(1024 * 1024);
     let mut inspections_verified = 0u64;
     if let Some(socket) = &mut probe {
-        let bytes = exchange(socket, args.wire.query(), &mut counts).await?;
-        args.wire.check_query(&expected, &bytes, true)?;
+        let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;
+        expected.cbor(&bytes, true)?;
         inspections_verified += 1;
         // Also prove every retained inspector authenticated before starting time.
         for socket in sockets.iter_mut().flatten() {
-            let bytes = exchange(socket, args.wire.query(), &mut counts).await?;
-            args.wire.check_query(&expected, &bytes, true)?;
+            let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;
+            expected.cbor(&bytes, true)?;
             inspections_verified += 1;
         }
     } else {
@@ -986,7 +846,6 @@ async fn run(args: Args) -> Result<()> {
             tokio::spawn(churn(
                 args.url.clone(),
                 Bytes::from(format!("churn{i}")),
-                args.wire,
                 until,
                 args.churn_cycles_per_second,
             ))
@@ -997,7 +856,6 @@ async fn run(args: Args) -> Result<()> {
         .map(|s| {
             tokio::spawn(inspect(
                 s,
-                args.wire,
                 args.admin.clone(),
                 expected.clone(),
                 until,
@@ -1048,31 +906,17 @@ async fn run(args: Args) -> Result<()> {
         "measured",
         serde_json::json!({"value_kind":args.value_kind,"private_payload_bytes":args.private_payload_bytes,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
     )?;
-    // For short C++ churn runs, verify its delayed retirement explicitly. The
-    // controller bounds the entire case to finish before the first 30-second GC.
     if let Some(socket) = &mut probe {
-        let bytes = exchange(socket, args.wire.query(), &mut counts).await?;
-        if args.wire == Wire::Cpp && args.churn_workers > 0 {
-            let mut retained = stable.clone();
-            retained.extend(
-                churn_lifecycles
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, count)| **count > 0)
-                    .map(|(i, count)| (Bytes::from(format!("churn{i}")), *count)),
-            );
-            Expected::new(&retained, 0, None).cpp(&bytes)?;
-        } else {
-            args.wire.check_query(&expected, &bytes, true)?;
-        }
+        let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;
+        expected.cbor(&bytes, true)?;
         inspections_verified += 1;
     } else {
         http(&args.admin, &mut buffer, &expected, true).await?;
         inspections_verified += 1;
     }
     for socket in sockets.iter_mut().flatten() {
-        let bytes = exchange(socket, args.wire.query(), &mut counts).await?;
-        args.wire.check_query(&expected, &bytes, true)?;
+        let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;
+        expected.cbor(&bytes, true)?;
         inspections_verified += 1;
     }
     if let Some(group) = fanout {
@@ -1085,14 +929,7 @@ async fn run(args: Args) -> Result<()> {
         close(&mut pair.source, &mut counts).await?;
         let departure = data(&mut pair.target).await?;
         ensure!(
-            departure
-                == args.wire.envelope(
-                    protocol::BROADCAST,
-                    &match args.wire {
-                        Wire::Cbor => protocol::uint(pair.id),
-                        Wire::Cpp => Bytes::copy_from_slice(&pair.id.to_le_bytes()),
-                    }
-                ),
+            departure == protocol::envelope(protocol::BROADCAST, &protocol::uint(pair.id)),
             "departure changed"
         );
         counts.received(&departure);
@@ -1106,7 +943,7 @@ async fn run(args: Args) -> Result<()> {
     }
     gate(
         "done",
-        serde_json::json!({"counts":counts,"inspections_verified":inspection_stats.n+inspections_verified,"retired_churn_members_verified":if args.wire==Wire::Cpp {churn_lifecycles.iter().sum::<u64>()}else{0},"passed":true}),
+        serde_json::json!({"counts":counts,"inspections_verified":inspection_stats.n+inspections_verified,"passed":true}),
     )?;
     Ok(())
 }

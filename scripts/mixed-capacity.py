@@ -114,9 +114,8 @@ def stop_perf(perf):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, required=True)
-    parser.add_argument('--kind', choices=['rust', 'cpp'], default='rust')
     parser.add_argument('--sidecar', type=Path, default=ROOT / 'target/release/examples/inspection')
-    parser.add_argument('--capacity-client', type=Path, default=ROOT / 'artifacts/candidates/latency-timeline-client/capacity')
+    parser.add_argument('--capacity-client', type=Path, default=ROOT / 'target/release/examples/capacity')
     parser.add_argument('--workers', type=int, choices=range(1, 9), default=8,
                         help='Server I/O workers, one per CPU within the fixed 0-7 fixture mask (default: 8)')
     parser.add_argument('--users', type=int, default=100000)
@@ -149,8 +148,8 @@ def main():
     if not 0 <= args.churn_workers <= 64:
         parser.error('churn-workers must be in 0..=64, matching the inspection client')
     if args.http_page_size is not None and not (
-            args.kind == 'rust' and 1 <= args.http_page_size <= 1000 and not args.fanout_churn_every):
-        parser.error('--http-page-size requires Rust, limit 1..=1000, and no fanout membership churn')
+            1 <= args.http_page_size <= 1000 and not args.fanout_churn_every):
+        parser.error('--http-page-size requires limit 1..=1000 and no fanout membership churn')
     prefix = args.output.with_suffix('')
     artifacts = [args.output, Path(str(prefix) + '.csv'), Path(str(prefix) + '.windows.json')]
     artifacts += [Path(str(prefix) + f'-{name}.err') for name in ('server', 'capacity', 'sidecar')]
@@ -177,10 +176,6 @@ def main():
            '--total-read-buffer-bytes', '268435456',
            '--messages-per-second', '0', '--bytes-per-second', '0', '--ping-interval-secs', '0',
            '--idle-timeout-secs', '0', '--tcp-send-buffer-bytes', '16384', '--tcp-receive-buffer-bytes', '65536']
-    if args.kind == 'cpp':
-        for option in ['--total-read-buffer-bytes', '--messages-per-second', '--bytes-per-second', '--ping-interval-secs', '--idle-timeout-secs']:
-            position = cmd.index(option)
-            del cmd[position:position + 2]
     cc = ['taskset', '-c', '8-11,24-27', str(client_path), '--url', f'ws://127.0.0.1:{port}',
           '--users', str(args.users), '--seconds', str(args.seconds), '--messages-per-second', '4',
           '--client-workers', '8', '--user-latency-output', str(prefix) + '.csv']
@@ -272,7 +267,7 @@ def main():
         assert record['ready_metrics']['war_connections'] == args.users + args.readers + 1 + inspection_sessions + 2 * args.pairs
         record['affinity'] = [{'name': (task / 'comm').read_text().strip(), 'cpus': sorted(os.sched_getaffinity(int(task.name)))}
                               for task in Path(f'/proc/{server.pid}/task').iterdir()
-                              if (task / 'comm').read_text().startswith(('war-io-', 'war-cpp-'))]
+                              if (task / 'comm').read_text().startswith('war-io-')]
         assert len(record['affinity']) == args.workers and all(len(t['cpus']) == 1 for t in record['affinity'])
         assert len({t['cpus'][0] for t in record['affinity']}) == args.workers, 'server workers share a CPU'
         if args.profile:
@@ -299,9 +294,8 @@ def main():
                                          'process': snapshot(server.pid, include_fds=False), 'metrics': current})
             assert current['war_connections'] >= args.users
             assert current['war_queued_bytes'] <= 256 * 1024**2
-            if args.kind == 'rust':
-                assert current['war_read_buffer_reserved_bytes'] <= 256 * 1024**2
-                assert current['war_routing_copied_bytes_total'] == 0
+            assert current['war_read_buffer_reserved_bytes'] <= 256 * 1024**2
+            assert current['war_routing_copied_bytes_total'] == 0
         assert event(capacity, 'events')['event'] == 'measured'
         verify_client_affinity()
         record['after'] = snapshot(server.pid)
@@ -346,7 +340,7 @@ def main():
             time.sleep(.01)
         record['final_metrics'] = final
         zero_keys = ['war_connections', 'war_queued_bytes', 'war_variable_bytes']
-        zero_keys += ['war_sessions', 'war_output_queue_capacity_bytes', 'war_read_buffer_reserved_bytes', 'war_routing_copied_bytes_total'] if args.kind == 'rust' else ['war_users', 'war_retained_output_bytes']
+        zero_keys += ['war_sessions', 'war_output_queue_capacity_bytes', 'war_read_buffer_reserved_bytes', 'war_routing_copied_bytes_total']
         for key in zero_keys:
             assert final[key] == 0, (key, final[key])
         assert final['war_channels'] == 1
@@ -357,8 +351,6 @@ def main():
                               ('war_incoming_messages_total', 'sent_messages'), ('war_incoming_bytes_total', 'sent_bytes'),
                               ('war_deliveries_total', 'deliveries'), ('war_delivered_bytes_total', 'delivered_bytes'),
                               ('war_routing_reused_bytes_total', 'value_bytes')]
-        if args.kind == 'cpp':
-            counter_pairs = [('war_sent_messages_total', 'sent_messages'), ('war_deliveries_total', 'deliveries'), ('war_disconnected_total', 'normal_closes')]
         for metric, field in counter_pairs:
             assert final[metric] == left[field] + right[field], (metric, final[metric], left[field], right[field])
         assert snapshot(server.pid)['fds'] == record['baseline']['fds']

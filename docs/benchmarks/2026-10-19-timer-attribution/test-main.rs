@@ -1,2 +1,0 @@
-mod timers;
-fn main() {}

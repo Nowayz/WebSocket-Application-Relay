@@ -672,11 +672,8 @@ impl Relay {
         let _ = random_id()?;
         let mut channels = HashMap::new();
         channels.insert(Bytes::from_static(GLOBAL_CHANNEL), Channel::default());
-        let read_budget = (config.total_read_buffer_bytes > 0).then(|| {
-            tokio_tungstenite::tungstenite::protocol::ReadBudget::new(
-                config.total_read_buffer_bytes,
-            )
-        });
+        let read_budget = (config.total_read_buffer_bytes > 0)
+            .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
         Ok(Arc::new(Self {
             ip_limit: crate::admission::IpLimit::new(config.max_connections_per_ip),
             config,

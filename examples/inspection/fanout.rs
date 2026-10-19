@@ -9,7 +9,6 @@ pub(super) struct Fanout {
     sender: Socket,
     readers: Vec<(Socket, u64)>,
     packets: Arc<Vec<(Bytes, Bytes)>>,
-    wire: Wire,
     global_observers: bool,
 }
 
@@ -120,12 +119,8 @@ async fn acknowledge(
     .context("fanout window timed out")?
 }
 
-fn departure(wire: Wire, id: u64) -> Bytes {
-    let value = match wire {
-        Wire::Cbor => protocol::uint(id),
-        Wire::Cpp => Bytes::copy_from_slice(&id.to_le_bytes()),
-    };
-    wire.envelope(protocol::BROADCAST, &value)
+fn departure(id: u64) -> Bytes {
+    protocol::envelope(protocol::BROADCAST, &protocol::uint(id))
 }
 
 #[cfg(test)]
@@ -218,10 +213,10 @@ mod tests {
                 ));
                 socket.flush().await?;
                 drop(socket);
-                let notice = departure(Wire::Cbor, 4);
+                let notice = departure(4);
                 for (index, peer) in peers.iter_mut().enumerate() {
                     let packet = if index == 2 {
-                        departure(Wire::Cbor, 5)
+                        departure(5)
                     } else {
                         notice.clone()
                     };
@@ -233,16 +228,9 @@ mod tests {
             std::future::pending::<Result<()>>().await
         });
         let mut counts = Counts::default();
-        let group = Fanout::new(
-            &url,
-            2,
-            Wire::Cbor,
-            ValueKind::Bytes,
-            global_observers,
-            &mut counts,
-        )
-        .await
-        .unwrap();
+        let group = Fanout::new(&url, 2, ValueKind::Bytes, global_observers, &mut counts)
+            .await
+            .unwrap();
         let error = timeout(
             Duration::from_secs(2),
             group.run(
@@ -273,13 +261,12 @@ impl Fanout {
     pub(super) async fn new(
         url: &str,
         readers: usize,
-        wire: Wire,
         value_kind: ValueKind,
         global_observers: bool,
         counts: &mut Counts,
     ) -> Result<Self> {
         let name = Bytes::from_static(b"fanout");
-        let (sender, id) = join(url, &name, wire, counts).await?;
+        let (sender, id) = join(url, &name, counts).await?;
         let mut peers = Vec::with_capacity(readers);
         for _ in 0..readers {
             let reader_name = if global_observers {
@@ -287,9 +274,9 @@ impl Fanout {
             } else {
                 name.clone()
             };
-            let (mut socket, id) = join(url, &reader_name, wire, counts).await?;
+            let (mut socket, id) = join(url, &reader_name, counts).await?;
             if global_observers {
-                authenticate(&mut socket, wire, counts).await?;
+                authenticate(&mut socket, counts).await?;
                 ensure!(
                     exchange(
                         &mut socket,
@@ -310,8 +297,8 @@ impl Fanout {
                 payload[..8].copy_from_slice(&n.to_le_bytes());
                 let value = value_kind.encode(&payload);
                 (
-                    wire.envelope(protocol::BROADCAST, &value),
-                    wire.envelope(id, &value),
+                    protocol::envelope(protocol::BROADCAST, &value),
+                    protocol::envelope(id, &value),
                 )
             })
             .collect();
@@ -319,7 +306,6 @@ impl Fanout {
             sender,
             readers: peers,
             packets: Arc::new(packets),
-            wire,
             global_observers,
         })
     }
@@ -341,7 +327,6 @@ impl Fanout {
             mut sender,
             readers,
             packets,
-            wire,
             global_observers,
         } = self;
         ensure!(
@@ -437,7 +422,7 @@ impl Fanout {
             let wake = Instant::now();
             let joined_at = wake;
             let transient = if churn_every > 0 && iteration.is_multiple_of(churn_every) {
-                Some(join(&url, &Bytes::from_static(b"fanout"), wire, &mut counts).await?)
+                Some(join(&url, &Bytes::from_static(b"fanout"), &mut counts).await?)
             } else {
                 None
             };
@@ -474,7 +459,7 @@ impl Fanout {
                     counts.received(&bytes);
                 }
                 close(&mut socket, &mut counts).await?;
-                let expected = departure(wire, id);
+                let expected = departure(id);
                 windows.send_replace(Some(Step::Departure(expected.clone())));
                 let actual = data(&mut sender).await?;
                 ensure!(actual == expected, "fanout sender departure changed");
@@ -543,7 +528,6 @@ impl Fanout {
                 sender,
                 readers,
                 packets,
-                wire,
                 global_observers,
             },
             counts,
@@ -570,7 +554,7 @@ impl Fanout {
                     counts.received(departure);
                 }
                 close(&mut socket, counts).await?;
-                expected.push(departure(self.wire, id));
+                expected.push(departure(id));
             }
             for (peer, _) in &mut self.readers {
                 for departure in &expected {
