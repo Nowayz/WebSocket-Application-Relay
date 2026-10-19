@@ -491,28 +491,48 @@ async fn bridge(
     let subscription = protocol::byte_string(&joined);
     // The encoded subscription owns its bytes; release the frontend join view.
     drop(joined);
+    // Keep one owned application frame if it arrives before the welcome. Stop
+    // frontend reads then, preserving FIFO without an unbounded setup queue.
+    let mut pending = None;
     let welcome = timeout(WAIT, async {
         upstream.send(Message::Binary(subscription)).await?;
         loop {
-            match upstream
-                .next()
-                .await
-                .context("upstream closed before welcome")?
-            {
-                Ok(Message::Ping(_)) => upstream.flush().await?,
-                Ok(Message::Pong(_)) => {}
-                Ok(Message::Close(frame)) => {
-                    transport::acknowledge_close(&mut upstream, WAIT).await;
-                    transport::initiate_close(&mut legacy, frame, WAIT, None).await;
-                    break Ok(None);
-                }
-                Ok(message) => break Ok::<_, anyhow::Error>(Some(message)),
-                Err(error) => {
-                    if let Some(frame) = frame_error_close(&error) {
-                        transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
+            tokio::select! {
+                incoming = legacy.next(), if pending.is_none() => match incoming {
+                    Some(Ok(Message::Ping(_))) => legacy.flush().await?,
+                    Some(Ok(Message::Pong(_))) => {},
+                    Some(Ok(Message::Close(frame))) => {
+                        transport::acknowledge_close(&mut legacy, WAIT).await;
+                        // Send Close, but do not let an upstream that withholds
+                        // its welcome retain admission waiting for an ACK too.
+                        let _ = timeout(WAIT, upstream.close(frame)).await;
                         break Ok(None);
                     }
-                    return Err(error.into());
+                    Some(Ok(message)) => pending = Some(message),
+                    Some(Err(error)) => {
+                        if let Some(frame) = frame_error_close(&error) {
+                            let _ = timeout(WAIT, legacy.close(Some(frame))).await;
+                        }
+                        break Ok(None);
+                    }
+                    None => break Ok(None),
+                },
+                incoming = upstream.next() => match incoming.context("upstream closed before welcome")? {
+                    Ok(Message::Ping(_)) => upstream.flush().await?,
+                    Ok(Message::Pong(_)) => {}
+                    Ok(Message::Close(frame)) => {
+                        transport::acknowledge_close(&mut upstream, WAIT).await;
+                        transport::initiate_close(&mut legacy, frame, WAIT, None).await;
+                        break Ok(None);
+                    }
+                    Ok(message) => break Ok::<_, anyhow::Error>(Some(message)),
+                    Err(error) => {
+                        if let Some(frame) = frame_error_close(&error) {
+                            transport::initiate_close(&mut legacy, Some(frame), WAIT, None).await;
+                            break Ok(None);
+                        }
+                        return Err(error.into());
+                    }
                 }
             }
         }
@@ -569,7 +589,12 @@ async fn bridge(
         .await?;
     loop {
         tokio::select! {
-            incoming = legacy.next() => match incoming {
+            incoming = async {
+                match pending.take() {
+                    Some(message) => Some(Ok(message)),
+                    None => legacy.next().await,
+                }
+            } => match incoming {
                 Some(Ok(Message::Ping(_))) => { timeout(WAIT, legacy.flush()).await??; }
                 Some(Ok(Message::Pong(_))) => {}
                 Some(Ok(Message::Close(frame))) => {
@@ -1155,6 +1180,187 @@ mod tests {
         })
         .await
         .expect("fragment scheduling and exact output must complete promptly");
+    }
+
+    #[tokio::test]
+    async fn frontend_ping_and_pipelined_packets_preserve_welcome_and_fifo() {
+        timeout(Duration::from_secs(2), async {
+            for text in [false, true] {
+                let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
+                let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let url = format!("ws://{}", listener.local_addr().unwrap());
+                let shutdown = CancellationToken::new();
+                let (joined, wait_join) = tokio::sync::oneshot::channel();
+                let (welcome, wait_welcome) = tokio::sync::oneshot::channel();
+                let mut tasks = JoinSet::new();
+                tasks.spawn(async move {
+                    let (stream, _) = upstream.accept().await.unwrap();
+                    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                    assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+                    joined.send(()).unwrap();
+                    wait_welcome.await.unwrap();
+                    ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
+                    for value in ["first-π", "second-π"] {
+                        let encoded = if text {
+                            protocol::text(value)
+                        } else {
+                            protocol::byte_string(value.as_bytes())
+                        };
+                        let expected = Message::Binary(protocol::envelope(42, &encoded));
+                        assert_eq!(ws.next().await.unwrap().unwrap(), expected);
+                        ws.send(expected).await.unwrap();
+                    }
+                    assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+                    assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
+                });
+                let token = shutdown.clone();
+                tasks.spawn(async move {
+                    serve(listener, upstream_url, 1, token).await.unwrap();
+                });
+                let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+                ws.send(Message::Binary(Bytes::from_static(b"pipeline")))
+                    .await
+                    .unwrap();
+                wait_join.await.unwrap();
+                ws.send(Message::Ping(Bytes::from_static(b"waiting")))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    ws.next().await.unwrap().unwrap(),
+                    Message::Pong(Bytes::from_static(b"waiting"))
+                );
+                let messages: Vec<_> = ["first-π", "second-π"]
+                    .into_iter()
+                    .map(|value| {
+                        if text {
+                            Message::Text(
+                                format!("{}{value}", STANDARD.encode(42u64.to_le_bytes())).into(),
+                            )
+                        } else {
+                            Message::Binary(
+                                [42u64.to_le_bytes().as_slice(), value.as_bytes()]
+                                    .concat()
+                                    .into(),
+                            )
+                        }
+                    })
+                    .collect();
+                for message in &messages {
+                    ws.send(message.clone()).await.unwrap();
+                }
+                tokio::task::yield_now().await;
+                welcome.send(()).unwrap();
+                assert_eq!(
+                    ws.next().await.unwrap().unwrap(),
+                    Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
+                );
+                for message in messages {
+                    assert_eq!(ws.next().await.unwrap().unwrap(), message);
+                }
+                assert!(
+                    transport::initiate_close(&mut ws, None, Duration::from_secs(1), None).await
+                );
+                shutdown.cancel();
+                while let Some(result) = tasks.join_next().await {
+                    result.unwrap();
+                }
+            }
+        })
+        .await
+        .expect("pre-welcome Ping and pipelined binary/text FIFO must complete promptly");
+    }
+
+    async fn frontend_retirement_before_welcome_recovers(abrupt: bool) {
+        timeout(Duration::from_secs(2), async {
+            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("ws://{}", listener.local_addr().unwrap());
+            let shutdown = CancellationToken::new();
+            let (joined, wait_join) = tokio::sync::oneshot::channel();
+            let (retired, wait_retired) = tokio::sync::oneshot::channel();
+            let mut tasks = JoinSet::new();
+            tasks.spawn(async move {
+                let (stream, _) = upstream.accept().await.unwrap();
+                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+                joined.send(()).unwrap();
+                let end = ws.next().await;
+                if !abrupt {
+                    let Some(Ok(Message::Close(Some(frame)))) = end else {
+                        panic!("frontend Close was not forwarded before welcome: {end:?}");
+                    };
+                    assert_eq!(frame.code, CloseCode::Normal);
+                    assert_eq!(frame.reason, "cancel join");
+                } else {
+                    assert!(end.is_none() || matches!(end, Some(Err(_))));
+                }
+                drop(ws);
+                retired.send(()).unwrap();
+                let (stream, _) = upstream.accept().await.unwrap();
+                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Binary(_)))));
+                ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
+            });
+            let token = shutdown.clone();
+            tasks.spawn(async move {
+                serve(listener, upstream_url, 1, token).await.unwrap();
+            });
+            let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+            ws.send(Message::Binary(Bytes::from_static(b"cancel-join")))
+                .await
+                .unwrap();
+            wait_join.await.unwrap();
+            if abrupt {
+                drop(ws);
+            } else {
+                assert!(
+                    transport::initiate_close(
+                        &mut ws,
+                        Some(CloseFrame {
+                            code: CloseCode::Normal,
+                            reason: "cancel join".into(),
+                        }),
+                        Duration::from_secs(1),
+                        None
+                    )
+                    .await
+                );
+                drop(ws);
+            }
+            wait_retired.await.unwrap();
+            let (mut recovered, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+            recovered
+                .send(Message::Binary(Bytes::from_static(b"cancel-join")))
+                .await
+                .unwrap();
+            assert_eq!(
+                recovered.next().await.unwrap().unwrap(),
+                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
+            );
+            assert!(
+                transport::initiate_close(&mut recovered, None, Duration::from_secs(1), None).await
+            );
+            shutdown.cancel();
+            while let Some(result) = tasks.join_next().await {
+                result.unwrap();
+            }
+        })
+        .await
+        .expect("frontend retirement must not wait for the upstream welcome deadline");
+    }
+
+    #[tokio::test]
+    async fn frontend_close_before_welcome_releases_the_only_slot() {
+        frontend_retirement_before_welcome_recovers(false).await;
+    }
+
+    #[tokio::test]
+    async fn frontend_eof_before_welcome_releases_the_only_slot() {
+        frontend_retirement_before_welcome_recovers(true).await;
     }
 
     async fn welcome_failure_closes_and_recovers(stalled: bool) {
