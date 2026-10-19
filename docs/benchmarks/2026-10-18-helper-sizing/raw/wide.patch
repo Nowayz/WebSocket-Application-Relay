@@ -1,0 +1,101 @@
+--- a/src/protocol.rs
++++ b/src/protocol.rs
+@@ -141,7 +141,7 @@
+ 
+ /// Encode a validated value. No decode/re-encode occurs in its application payload.
+ pub fn envelope(sender: u64, value: &[u8]) -> Bytes {
+-    let mut e = Encoder::new(Vec::with_capacity(10 + value.len()));
++    let mut e = Encoder::new(Vec::with_capacity(1 + uint_len(sender) + value.len()));
+     e.array(2)
+         .and_then(|e| e.u64(sender))
+         .expect("Vec encoding");
+@@ -162,7 +162,7 @@
+ }
+ 
+ pub fn uint(value: u64) -> Bytes {
+-    let mut e = Encoder::new(Vec::with_capacity(9));
++    let mut e = Encoder::new(Vec::with_capacity(uint_len(value)));
+     e.u64(value).expect("Vec encoding");
+     e.into_writer().into()
+ }
+@@ -177,13 +177,17 @@
+ }
+ 
+ pub fn text(value: &str) -> Bytes {
+-    let mut e = Encoder::new(Vec::with_capacity(9 + value.len()));
++    let mut e = Encoder::new(Vec::with_capacity(
++        uint_len(value.len() as u64) + value.len(),
++    ));
+     e.str(value).expect("Vec encoding");
+     e.into_writer().into()
+ }
+ 
+ pub fn reply(op: u8, value: &[u8]) -> Bytes {
+-    let mut e = Encoder::new(Vec::with_capacity(13 + value.len()));
++    let mut e = Encoder::new(Vec::with_capacity(
++        3 + uint_len(u64::from(op)) + value.len(),
++    ));
+     e.array(2)
+         .and_then(|e| e.u64(0))
+         .and_then(|e| e.array(2))
+@@ -426,6 +430,60 @@
+     }
+ 
+     #[test]
++    fn text_envelopes_and_replies_keep_exact_owned_storage() {
++        fn exact_storage(encoded: Bytes) {
++            let pointer = encoded.as_ptr();
++            let shared = encoded.clone();
++            drop(encoded);
++            assert_eq!(shared.as_ptr(), pointer, "clone copied the encoded body");
++            let owned = shared.try_into_mut().expect("last owner recovers storage");
++            assert_eq!(owned.as_ptr(), pointer, "ownership recovery moved bytes");
++            assert_eq!(owned.capacity(), owned.len(), "spare encoded capacity");
++        }
++        for length in [0, 1, 23, 24, 255, 256, 65535, 65536] {
++            let value = "x".repeat(length);
++            let encoded = text(&value);
++            let mut decoder = Decoder::new(&encoded);
++            assert_eq!(decoder.str().unwrap(), value);
++            assert_eq!(decoder.position(), encoded.len());
++            exact_storage(encoded);
++        }
++        for value in ["é", "🦀", "日本語", "a\0b"] {
++            let encoded = text(value);
++            assert_eq!(Decoder::new(&encoded).str().unwrap(), value);
++            exact_storage(encoded);
++        }
++        let value = byte_string(b"payload");
++        for sender in [
++            0,
++            23,
++            24,
++            255,
++            256,
++            65535,
++            65536,
++            u32::MAX as u64,
++            u32::MAX as u64 + 1,
++            u64::MAX,
++        ] {
++            let encoded = envelope(sender, &value);
++            assert_eq!(parse(&encoded).unwrap(), (sender, value.as_ref()));
++            exact_storage(encoded);
++        }
++        for op in [0, 23, 24, 255] {
++            let encoded = reply(op, &value);
++            let mut decoder = Decoder::new(&encoded);
++            assert_eq!(decoder.array().unwrap(), Some(2));
++            assert_eq!(decoder.u64().unwrap(), 0);
++            assert_eq!(decoder.array().unwrap(), Some(2));
++            assert_eq!(decoder.u8().unwrap(), op);
++            assert_eq!(decoder.bytes().unwrap(), b"payload");
++            assert_eq!(decoder.position(), encoded.len());
++            exact_storage(encoded);
++        }
++    }
++
++    #[test]
+     fn rejects_trailing_indefinite_deep_and_truncated_cbor() {
+         for value in [
+             &[0x82, 1, 0xff][..],
