@@ -24,6 +24,7 @@ The primary mixed-load comparison has 100,000 private users plus 8,192 fanout re
 | --- | --- | --- |
 | Does a local routing/output change merit further testing? | Two-second `scripts/inspection.py` screen below; compare fresh control/candidate processes sequentially | Two seconds plus setup/retirement; rejects regressions, does not establish population fairness |
 | Does a change hurt private users while a hot room broadcasts? | `scripts/mixed-capacity.py --seconds 6` with the full mixed-load options below | Six seconds; 24 observations/user at 4 Hz |
+| Do unread consumers retire while healthy traffic survives? | [Selected-writer pressure fixture](benchmarks/2026-10-18-selected-writer-pressure/README.md): 128 stable users plus eight unread fanout recipients | 25 seconds of stable probes with a ten-second pressure phase; bounded Close/retirement checks add wall time |
 | Do repeated population bursts retire correctly? | `scripts/capacity.py --users 16384 --room-size 2 --waves 4 --seconds 1 --active-percent 10` | Four one-second traffic phases, with checked joins/closes between |
 | Does bridge cancellation retire both legs while native traffic survives? | [Disposable shutdown probe](benchmarks/2026-10-18-bridge-shutdown/README.md) | Small joined/incomplete populations; current transport-cancellation policy |
 | Did input/control handling change? | `scripts/input-corpus.py --workers 4 --clients 8` | Finite 776-case independent corpus |
