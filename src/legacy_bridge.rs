@@ -127,6 +127,10 @@ fn uint_request(op: u8, value: u64) -> Bytes {
     e.into_writer().into()
 }
 
+/// Convert a complete upstream envelope into an owned legacy message.
+///
+/// Returned messages do not borrow `bytes`. Binary payloads are copied into a
+/// single legacy-format allocation; shared codec receive storage is not mutated.
 pub fn from_cbor(bytes: &[u8]) -> Result<Option<Message>> {
     let (sender, value) =
         protocol::parse(bytes).map_err(|_| anyhow::anyhow!("invalid upstream envelope"))?;
