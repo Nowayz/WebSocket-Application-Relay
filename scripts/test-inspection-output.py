@@ -110,6 +110,62 @@ class ReceiptTest(unittest.TestCase):
                 else:
                     self.assertEqual(output.read_bytes(), evidence)
 
+    def test_capacity_latency_and_profile_files_block_launch(self):
+        for kind in ['exact', 'windows', 'histogram', 'profile', 'counters']:
+            for symlink in [False, True]:
+                with self.subTest(kind=kind, symlink=symlink), tempfile.TemporaryDirectory() as temporary:
+                    directory = Path(temporary)
+                    output = directory / 'run.json'
+                    csv = directory / 'users.csv'
+                    if kind in ['exact', 'windows']:
+                        extra = ['--user-latency-output', str(csv)]
+                        target = csv if kind == 'exact' else csv.with_suffix('.windows.json')
+                    elif kind == 'histogram':
+                        extra = ['--user-latency-histogram-output', str(csv)]
+                        target = csv
+                    else:
+                        extra = ['--profile'] + (['--profile-counters'] if kind == 'counters' else [])
+                        target = output.with_suffix('.perf-stat.csv' if kind == 'counters' else '.perf.data')
+                    evidence = b'prior latency or profile evidence\n'
+                    absent = directory / 'absent-evidence'
+                    if symlink:
+                        target.symlink_to(absent)
+                    else:
+                        target.write_bytes(evidence)
+                    result, marker = self.invoke(directory, output, runner='capacity.py', extra=extra)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn(str(target), result.stderr)
+                    self.assertFalse(marker.exists())
+                    self.assertFalse(output.exists())
+                    if symlink:
+                        self.assertTrue(target.is_symlink())
+                        self.assertFalse(absent.exists())
+                    else:
+                        self.assertEqual(target.read_bytes(), evidence)
+
+    def test_capacity_output_paths_must_be_distinct_before_launch(self):
+        cases = [
+            ('run.json', ['--user-latency-output', 'run.json']),
+            ('users.windows.json', ['--user-latency-output', 'users.csv']),
+            ('users.windows.json', ['--user-latency-output', 'users.']),
+            ('.users.windows.json', ['--user-latency-output', '.users']),
+            ('users.csv', ['--user-latency-histogram-output', 'users.csv']),
+            ('run.json', ['--profile', '--user-latency-output', 'run.perf.data']),
+            ('run.json', ['--profile', '--profile-counters', '--user-latency-output', 'run.perf-stat.csv']),
+            ('run.json', ['--user-latency-output', 'nested/../run.json']),
+        ]
+        for name, options in cases:
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                (directory / 'nested').mkdir()
+                output = directory / name
+                extra = [str(directory / token) if not token.startswith('--') else token for token in options]
+                result, marker = self.invoke(directory, output, runner='capacity.py', extra=extra)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('output paths overlap', result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
+
     def test_server_exec_failures_write_failed_receipts_without_starting_client(self):
         for runner in ['inspection.py', 'capacity.py']:
             for executable in [False, True]:

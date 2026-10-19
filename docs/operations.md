@@ -131,8 +131,10 @@ python3 scripts/capacity.py --users 100000 --seconds 65 \
   --output artifacts/capacity-100k-heartbeat-churn.json
 ```
 
-Choose fresh receipt/log/CSV paths for each trial. For competing fanout and
-per-user fairness, use the [two-second mixed-load recipe](performance-guide.md#choose-the-smallest-test-that-answers-the-question)
+Choose fresh receipt/log/CSV paths for each trial. The capacity runner
+rejects existing latency/timeline/profile files and overlapping output paths
+before launch; see the [output-preservation checks](benchmarks/2026-10-19-capacity-output-preflight/README.md).
+For competing fanout and per-user fairness, use the [two-second mixed-load recipe](performance-guide.md#choose-the-smallest-test-that-answers-the-question)
 rather than treating a private-only population check as mixed-load acceptance.
 
 Run `cargo build --locked --release --example stress` before using the optional

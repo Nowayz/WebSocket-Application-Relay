@@ -7,6 +7,7 @@ or machine-wide descriptor limits are changed. Gate scans are outside traffic.
 """
 import argparse
 import datetime
+import errno
 import hashlib
 import json
 import os
@@ -138,7 +139,33 @@ def check(observed, event, args, pressure=None):
     event["exact_counter_checks"] = expected
 
 
+def _preflight_outputs(args):
+    paths = [args.output]
+    if args.user_latency_output:
+        csv = args.user_latency_output
+        # Match Rust Path::with_extension, including an empty final extension.
+        name = csv.name
+        if not name or name == '..':
+            raise argparse.ArgumentError(None, 'user-latency-output must name a file')
+        stem, dot, _ = name.rpartition('.')
+        timeline = csv.with_name((stem if dot and stem else name) + '.windows.json')
+        paths += [csv, timeline]
+    if args.user_latency_histogram_output:
+        paths.append(args.user_latency_histogram_output)
+    if args.profile:
+        paths.append(args.output.with_suffix('.perf-stat.csv' if args.profile_counters else '.perf.data'))
+    seen = {}
+    for path in paths:
+        identity = path.resolve()
+        if identity in seen:
+            raise argparse.ArgumentError(None, f'output paths overlap: {seen[identity]} and {path}')
+        seen[identity] = path
+        if os.path.lexists(path):
+            raise FileExistsError(errno.EEXIST, 'output already exists', str(path))
+
+
 def run(args):
+    _preflight_outputs(args)
     assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= args.users + 128, "descriptor limit too low"
     port, admin = runtime.free_port(), runtime.free_port()
     while port == admin:
@@ -306,12 +333,10 @@ def run(args):
                     if args.pin_client_workers:
                         result["thread_affinity"].extend(pin_child_workers(client.pid, args.client_workers, False))
                 if event["event"] == "ready" and args.profile:
-                    path = args.output.with_suffix(".perf.data")
-                    assert not path.exists(), "use a fresh profile path"
+                    path = args.output.with_suffix(".perf-stat.csv" if args.profile_counters else ".perf.data")
+                    assert not os.path.lexists(path), "use a fresh profile path"
                     perf_log = tempfile.TemporaryFile()
                     if args.profile_counters:
-                        path = args.output.with_suffix(".perf-stat.csv")
-                        assert not path.exists(), "use a fresh counter path"
                         result["profile_pids"] = {"server": server.pid}
                         if args.profile_client:
                             result["profile_pids"]["client"] = client.pid
@@ -487,3 +512,5 @@ if __name__ == "__main__":
         run(args)
     except FileExistsError as error:
         parser.error(f"output already exists; choose a fresh artifact path: {error.filename}")
+    except argparse.ArgumentError as error:
+        parser.error(str(error))
