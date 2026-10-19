@@ -342,6 +342,13 @@ impl Socket {
 }
 
 impl PeerOutput for Socket {
+    fn supports_retirement(&self) -> bool {
+        true
+    }
+    fn wake_retirement(&self) {
+        let _ = self.signal.waker.wake();
+    }
+
     fn send(&self, packet: Submission<'_>) -> bool {
         self.submit::<false>(packet)
     }

@@ -155,3 +155,98 @@ fn continuation_metadata_cannot_escape_the_global_queue_budget() {
     drop(source);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+struct NativeRetirement;
+impl PeerOutput for NativeRetirement {
+    fn send(&self, _: Submission<'_>) -> bool {
+        true
+    }
+    fn close(&self, _: Disconnect) {}
+    fn supports_retirement(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Default)]
+struct Departures(parking_lot::Mutex<Vec<Frame>>);
+impl PeerOutput for Departures {
+    fn send(&self, packet: Submission<'_>) -> bool {
+        if protocol::parse(&packet.frame.to_vec()).is_ok_and(|(id, _)| id == BROADCAST) {
+            self.0.lock().push(packet.frame.clone());
+        }
+        true
+    }
+    fn close(&self, _: Disconnect) {}
+}
+
+#[test]
+fn retirement_sequence_survives_the_small_room_threshold() {
+    check_retirement_sequence(false);
+}
+
+#[test]
+fn retirement_budget_refusal_finishes_older_work_before_synchronous_fallback() {
+    check_retirement_sequence(true);
+}
+
+fn check_retirement_sequence(pressure: bool) {
+    let relay = Relay::new(Config {
+        max_message_bytes: 1024,
+        queue_bytes: 2048,
+        total_queue_bytes: if pressure { 12000 } else { 256 * 1024 * 1024 },
+        ping_interval_secs: 0,
+        ..Config::default()
+    })
+    .unwrap();
+    let first = relay
+        .subscribe_with_output(b"sequence", Arc::new(NativeRetirement))
+        .unwrap();
+    let second = relay
+        .subscribe_with_output(b"sequence", Arc::new(NativeRetirement))
+        .unwrap();
+    let first_id = first.peer.id.load(Relaxed);
+    let second_id = second.peer.id.load(Relaxed);
+    let mut targets = Vec::new();
+    let mut outputs = Vec::new();
+    for _ in 0..FANOUT_QUANTUM {
+        let output = Arc::new(Departures::default());
+        targets.push(
+            relay
+                .subscribe_with_output(b"sequence", output.clone())
+                .unwrap(),
+        );
+        outputs.push(output);
+    }
+    drop(first);
+    assert!(relay.has_retirements());
+    // The second departure crosses back to the synchronous-size threshold.
+    // It must still follow the unfinished first job, including on budget refusal.
+    drop(second);
+    if pressure {
+        assert!(!relay.has_retirements());
+        assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
+    } else {
+        relay.progress_retirements();
+        relay.progress_retirements();
+        assert!(relay.has_retirements());
+        assert!(outputs.iter().all(|o| o.0.lock().len() == 1));
+        relay.progress_retirements();
+        assert!(!relay.has_retirements());
+    }
+    for output in outputs {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 2);
+        assert_eq!(
+            packets[0].to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(first_id))
+        );
+        assert_eq!(
+            packets[1].to_vec(),
+            protocol::envelope(BROADCAST, &protocol::uint(second_id))
+        );
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(targets);
+    assert_eq!(relay.counts(), (0, 1));
+}

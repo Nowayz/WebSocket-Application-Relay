@@ -22,6 +22,14 @@ recipient visits per source turn, retaining the same shared body and immutable
 membership view until that message finishes. Output-only wakes avoid entering
 the input decoder; departure notifications use the same owner-worker path.
 
+Large room and disconnect-observer retirements use one charged FIFO, advanced
+in 1,024-recipient turns outside the registry lock. This preserves departure
+sequence across workers while allowing unrelated routing to proceed. The
+[short 100,000-recipient departure comparison](docs/benchmarks/2026-10-19-departure-fifo/README.md)
+reduces the worst observed witness RTT from 107.13 to 4.57 ms, with ordinary
+mixed-load CPU effectively flat. Queue-pressure fallback remains synchronous;
+its ordering and memory limits are covered separately in that report.
+
 Workers also discover at most 1,024 expired timers per turn before returning to
 ready processing and socket polling. The [expiry-burst report](docs/benchmarks/2026-10-19-expiry-fairness/README.md)
 records the responsiveness improvement beside 100,000 overdue pending handshakes,

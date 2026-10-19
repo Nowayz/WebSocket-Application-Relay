@@ -54,7 +54,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     Relay,
     protocol::{self, Disconnect},
-    relay::{ReceiveBatch, Registration, RoomFanout},
+    relay::{FANOUT_QUANTUM, ReceiveBatch, Registration, RoomFanout},
 };
 use socket::{Signal, Socket, Stream};
 use timers::Timers;
@@ -62,7 +62,6 @@ use timers::Timers;
 const LISTENER: Token = Token(0);
 const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
-const FANOUT_QUANTUM: usize = 1024;
 const ACCEPT_QUANTUM: usize = 16;
 const READY_QUANTUM: usize = 1024;
 
@@ -616,6 +615,11 @@ impl Worker {
                     }
                 }
             }
+            // Retirements outlive their source connection. One bounded turn
+            // interleaves their FIFO with socket readiness, timers and shutdown.
+            if shutdown_deadline.is_none() && self.relay.has_retirements() {
+                self.relay.progress_retirements();
+            }
             // Publish before polling, even when no more input will arrive.
             incoming.publish();
             {
@@ -646,7 +650,7 @@ impl Worker {
                     }),
                 );
             }
-            if !self.ready.is_empty() {
+            if !self.ready.is_empty() || self.relay.has_retirements() {
                 timeout = Some(Duration::ZERO);
             }
             match self.poll.poll(&mut events, timeout) {

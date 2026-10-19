@@ -179,6 +179,8 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         assert!(connection.room_fanout.as_ref().unwrap().active());
         assert!(connection.deadline(&relay).is_some());
         let delivered: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
+        // Production publishes terminal shutdown before retiring connections.
+        relay.begin_shutdown();
         connection.start_close(Disconnect::SHUTDOWN, &relay, false, Instant::now());
         assert!(!connection.room_fanout.as_ref().unwrap().active());
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -488,4 +490,135 @@ fn readable_upgrades_cannot_bypass_deadlines_or_shutdown_behind_an_expiry_batch(
         assert_eq!(relay.counts(), (0, 1));
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     }
+}
+
+#[test]
+fn native_departure_work_yields_and_releases_all_reservations() {
+    check_departure_work(false, false);
+}
+
+#[test]
+fn discarding_native_departure_work_releases_staging_without_delivery() {
+    check_departure_work(true, false);
+}
+
+#[test]
+fn native_disconnect_observer_work_yields_and_releases_all_reservations() {
+    check_departure_work(false, true);
+}
+
+fn check_departure_work(cancel: bool, observers: bool) {
+    let relay = Relay::new(crate::Config {
+        ping_interval_secs: 0,
+        total_read_buffer_bytes: 0,
+        auth_password: Some("fairness".into()),
+        ..crate::Config::default()
+    })
+    .unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    let (stream, _) = listener.accept().unwrap();
+    stream.set_nonblocking(true).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let worker = Worker::new(listener, relay.clone()).unwrap();
+    relay.metrics.connections.fetch_add(1, Relaxed);
+    let socket = Socket::new(
+        mio::net::TcpStream::from_std(stream),
+        Token(2),
+        worker.registry.clone(),
+        worker.signal.clone(),
+        ConnectionGuard(relay.metrics.clone(), None),
+        &relay,
+    )
+    .unwrap();
+    let source = relay
+        .subscribe_with_output(b"depart", socket.clone())
+        .unwrap();
+    let id = source.peer.id.load(Relaxed);
+    let mut targets = Vec::new();
+    for _ in 0..FANOUT_QUANTUM + 3 {
+        let mut target = relay
+            .subscribe(if observers {
+                protocol::GLOBAL_CHANNEL
+            } else {
+                b"depart"
+            })
+            .unwrap();
+        drop(target.outgoing.try_recv().unwrap());
+        if observers {
+            relay
+                .receive(
+                    &target.registration.peer,
+                    protocol::request(0, &protocol::text("fairness")),
+                )
+                .unwrap();
+            relay
+                .receive(
+                    &target.registration.peer,
+                    protocol::request(1, &protocol::uint(u64::from(protocol::DISCONNECT_MESSAGE))),
+                )
+                .unwrap();
+            while target.outgoing.try_recv().is_ok() {}
+        }
+        targets.push(target);
+    }
+    if !observers {
+        relay
+            .receive(&source.peer, protocol::envelope(protocol::BROADCAST, &[1]))
+            .unwrap();
+    }
+    // Policy closes may already have set closing; departure charging must not
+    // silently skip the notifications in that case.
+    source.peer.close(Disconnect::OVERLOADED);
+    drop(source);
+    assert!(relay.has_retirements());
+    assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
+    if !observers {
+        for target in &mut targets {
+            let earlier = target.outgoing.try_recv().unwrap();
+            assert_eq!(earlier.frame.to_vec(), protocol::envelope(id, &[1]));
+        }
+    }
+    assert!(targets.iter_mut().all(|t| t.outgoing.try_recv().is_err()));
+    let mut late = relay.subscribe(b"depart").unwrap();
+    drop(late.outgoing.try_recv().unwrap());
+    if cancel {
+        relay.begin_shutdown();
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        assert!(targets.iter_mut().all(|t| t.outgoing.try_recv().is_err()));
+    } else {
+        let expected = protocol::envelope(protocol::BROADCAST, &protocol::uint(id));
+        relay.progress_retirements();
+        assert!(relay.has_retirements());
+        let mut received = 0;
+        for t in &mut targets {
+            if let Ok(packet) = t.outgoing.try_recv() {
+                assert_eq!(packet.frame.to_vec(), expected);
+                received += 1;
+            }
+        }
+        assert_eq!(received, FANOUT_QUANTUM);
+        assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
+        relay.progress_retirements();
+        assert!(!relay.has_retirements());
+        for t in &mut targets {
+            if let Ok(packet) = t.outgoing.try_recv() {
+                assert_eq!(packet.frame.to_vec(), expected);
+                received += 1;
+            }
+        }
+        assert_eq!(received, FANOUT_QUANTUM + 3);
+        assert!(
+            late.outgoing.try_recv().is_err(),
+            "late join must not receive an older departure"
+        );
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    }
+    relay.begin_shutdown();
+    drop(targets);
+    drop(late);
+    drop(socket);
+    drop(client);
+    assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+    assert_eq!(relay.counts(), (0, 1));
 }

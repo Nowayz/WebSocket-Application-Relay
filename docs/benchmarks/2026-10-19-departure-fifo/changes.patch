@@ -1,0 +1,628 @@
+diff --git a/src/relay.rs b/src/relay.rs
+index 206948f..abdfd44 100644
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -1,5 +1,5 @@
+ use std::{
+-    collections::HashMap,
++    collections::{HashMap, VecDeque},
+     hash::Hash,
+     sync::{
+         Arc, OnceLock,
+@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
+ use base64::{Engine, engine::general_purpose::STANDARD};
+ use bytes::Bytes;
+ use minicbor::Encoder;
+-use parking_lot::RwLock;
++use parking_lot::{Mutex, RwLock};
+ use serde::Serialize;
+ #[cfg(test)]
+ use tokio::sync::{mpsc, watch};
+@@ -28,6 +28,8 @@ use crate::{
+ 
+ mod listing;
+ 
++pub(crate) const FANOUT_QUANTUM: usize = 1024;
++
+ pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
+ 
+ #[repr(u8)]
+@@ -44,6 +46,8 @@ pub struct Relay {
+     pub metrics: Arc<Metrics>,
+     admission: AtomicU8,
+     state: RwLock<Registry>,
++    retirements: Mutex<VecDeque<Box<RoomFanout>>>,
++    retirement_pending: AtomicBool,
+     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
+ }
+ 
+@@ -98,7 +102,13 @@ impl ReceiveBatch<'_> {
+                     return deliver_room(source, recipients, frame);
+                 }
+                 let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
+-                work.begin(source, recipients, frame, self.relay.config.write_timeout())?;
++                work.begin(
++                    source,
++                    recipients,
++                    frame,
++                    self.relay.config.write_timeout(),
++                    false,
++                )?;
+                 work.resume(quantum)?;
+                 Ok(quantum)
+             },
+@@ -232,8 +242,8 @@ pub(crate) struct Peer {
+     budget: Arc<Budget>,
+ }
+ 
+-/// One immutable membership snapshot and one charged shared body. The box is
+-/// allocated only on a publisher's first oversized room multicast and reused.
++/// One immutable membership snapshot and one charged shared body. Publisher
++/// slots reuse their box; retirement jobs belong to the shared work queue.
+ /// Empty slots retain no payload or peer ownership; metadata is bounded by the
+ /// admitted connection count and staged bodies share the normal queue budget.
+ #[derive(Default)]
+@@ -244,6 +254,7 @@ pub(crate) struct RoomFanout {
+     source: u64,
+     snapshot_bytes: usize,
+     deadline: Option<std::time::Instant>,
++    retirement: bool,
+ }
+ 
+ impl RoomFanout {
+@@ -253,12 +264,16 @@ impl RoomFanout {
+         recipients: Arc<Vec<Arc<Peer>>>,
+         frame: Frame,
+         timeout: std::time::Duration,
++        retirement: bool,
+     ) -> Result<(), Disconnect> {
+         debug_assert!(!self.active());
+-        let packet = source
+-            .reserve(&frame)?
+-            .ok_or(Disconnect::OVERLOADED)?
+-            .into_owned();
++        let packet = if retirement {
++            source.charge(&frame)?
++        } else {
++            source.reserve(&frame)?
++        }
++        .ok_or(Disconnect::OVERLOADED)?
++        .into_owned();
+         // Account conservatively per active publisher, even if several share
+         // this view. Churn can otherwise pin many distinct old membership views
+         // outside the queue budget while workers advance their cursors.
+@@ -267,7 +282,13 @@ impl RoomFanout {
+             .checked_mul(std::mem::size_of::<Arc<Peer>>())
+             .and_then(|n| {
+                 n.checked_add(
+-                    std::mem::size_of::<Vec<Arc<Peer>>>() + 2 * std::mem::size_of::<usize>(),
++                    std::mem::size_of::<Vec<Arc<Peer>>>()
++                        + 2 * std::mem::size_of::<usize>()
++                        + if retirement {
++                            std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
++                        } else {
++                            0
++                        },
+                 )
+             })
+             .ok_or(Disconnect::OVERLOADED)?;
+@@ -284,6 +305,7 @@ impl RoomFanout {
+             packet.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+             return Err(Disconnect::OVERLOADED);
+         }
++        self.retirement = retirement;
+         self.snapshot_bytes = snapshot_bytes;
+         self.packet = Some(packet);
+         self.recipients = Some(recipients);
+@@ -316,12 +338,23 @@ impl RoomFanout {
+     }
+ 
+     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
++        if self.retirement {
++            self.resume_with::<true>(quantum)
++        } else {
++            self.resume_with::<false>(quantum)
++        }
++    }
++
++    fn resume_with<const RETIREMENT: bool>(&mut self, quantum: usize) -> Result<(), Disconnect> {
+         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
+         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
+         let end = self.cursor.saturating_add(quantum).min(recipients.len());
+         for recipient in &recipients[self.cursor..end] {
+             if recipient.key != self.source {
+-                recipient.enqueue_fanout(frame)?;
++                let result = recipient.enqueue_fanout(frame);
++                if !RETIREMENT {
++                    result?;
++                }
+             }
+         }
+         self.cursor = end;
+@@ -404,6 +437,12 @@ pub(crate) trait PeerOutput: Send + Sync {
+     fn send(&self, packet: Submission<'_>) -> bool;
+     fn close(&self, reason: Disconnect);
+ 
++    /// Native workers can advance retirement work independently of the source.
++    fn supports_retirement(&self) -> bool {
++        false
++    }
++    fn wake_retirement(&self) {}
++
+     /// Multicast may defer to recipient owners for parallel, batched output.
+     /// Simple/test transports retain their ordinary FIFO submission contract.
+     fn send_fanout(&self, packet: Submission<'_>) -> bool {
+@@ -474,6 +513,11 @@ impl Peer {
+         if self.closing.load(Relaxed) {
+             return Ok(None);
+         }
++        self.charge(frame)
++    }
++
++    // Retirement notifications remain chargeable after the source has closed.
++    fn charge<'a>(&'a self, frame: &'a Frame) -> Result<Option<Submission<'a>>, Disconnect> {
+         let size = frame.len();
+         if self
+             .budget
+@@ -620,6 +664,8 @@ impl Relay {
+                 ..Metrics::default()
+             }),
+             admission: AtomicU8::new(Admission::Open as u8),
++            retirements: Mutex::new(VecDeque::new()),
++            retirement_pending: AtomicBool::new(false),
+             state: RwLock::new(Registry {
+                 users: HashMap::new(),
+                 channels,
+@@ -665,6 +711,9 @@ impl Relay {
+ 
+     pub(crate) fn begin_shutdown(&self) {
+         self.admission.store(Admission::Stopping as u8, Relaxed);
++        let mut pending = self.retirements.lock();
++        pending.clear();
++        self.retirement_pending.store(false, Relaxed);
+     }
+ 
+     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
+@@ -728,7 +777,7 @@ impl Relay {
+     }
+ 
+     #[cfg(test)]
+-    fn subscribe(self: &Arc<Self>, channel: &[u8]) -> Result<Subscription, Disconnect> {
++    pub(crate) fn subscribe(self: &Arc<Self>, channel: &[u8]) -> Result<Subscription, Disconnect> {
+         let (outgoing, receiver) = mpsc::channel(self.config.queue_messages);
+         let (close, close_receiver) = watch::channel(None);
+         let registration =
+@@ -1078,6 +1127,79 @@ impl Relay {
+         })
+     }
+ 
++    pub(crate) fn has_retirements(&self) -> bool {
++        self.retirement_pending.load(Relaxed)
++    }
++
++    pub(crate) fn progress_retirements(&self) {
++        // Serialize the retirement sequence, but never make another worker wait
++        // for this turn. No registry lock is acquired during output submission.
++        let Some(mut pending) = self.retirements.try_lock() else {
++            return;
++        };
++        if let Some(work) = pending.front_mut() {
++            let _ = work.resume(FANOUT_QUANTUM);
++            if !work.active() {
++                pending.pop_front();
++            }
++        }
++        if pending.is_empty() && pending.capacity() > 32 {
++            *pending = VecDeque::new();
++        }
++        self.retirement_pending.store(!pending.is_empty(), Relaxed);
++    }
++
++    fn flush_retirements(&self) {
++        if !self.has_retirements() {
++            return;
++        }
++        // Budget refusal may require synchronous best-effort delivery. Finish
++        // preceding retirements first so this fallback cannot overtake them.
++        let mut pending = self.retirements.lock();
++        for mut work in pending.drain(..) {
++            let _ = work.resume(usize::MAX);
++        }
++        if pending.capacity() > 32 {
++            *pending = VecDeque::new();
++        }
++        self.retirement_pending.store(false, Relaxed);
++    }
++
++    fn defer_retirement(
++        &self,
++        source: &Peer,
++        recipients: Arc<Vec<Arc<Peer>>>,
++        frame: &Frame,
++    ) -> bool {
++        if !source.output.supports_retirement() {
++            return false;
++        }
++        let mut work = Box::<RoomFanout>::default();
++        if work
++            .begin(
++                source,
++                recipients,
++                frame.clone(),
++                self.config.write_timeout(),
++                true,
++            )
++            .is_err()
++        {
++            return false;
++        }
++        // Registry removal serializes publication. One queue preserves that
++        // sequence across workers, including causally ordered client closes.
++        let mut pending = self.retirements.lock();
++        if self.is_stopping() {
++            return true;
++        }
++        pending.push_back(work);
++        self.retirement_pending.store(true, Relaxed);
++        drop(pending);
++        source.output.wake_retirement();
++        true
++    }
++
+     fn remove(&self, peer: &Peer) {
+         let mut state = self.state.write();
+         let Some(channel) = state.channels.get_mut(&peer.channel) else {
+@@ -1091,8 +1213,21 @@ impl Relay {
+         let notify = !self.is_stopping();
+         let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
+         if let Some(frame) = &frame {
+-            for recipient in channel.members.values() {
+-                let _ = recipient.enqueue_fanout(frame);
++            let mut deferred = false;
++            if !channel.members.is_empty()
++                && (channel.members.len() > FANOUT_QUANTUM || self.has_retirements())
++            {
++                let recipients = channel
++                    .broadcast
++                    .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
++                    .clone();
++                deferred = self.defer_retirement(peer, recipients, frame);
++            }
++            if !deferred && !channel.members.is_empty() {
++                self.flush_retirements();
++                for recipient in channel.members.values() {
++                    let _ = recipient.enqueue_fanout(frame);
++                }
+             }
+         }
+         if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
+@@ -1110,8 +1245,16 @@ impl Relay {
+             state.set_listener_flags(peer, 0);
+         }
+         if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
+-            for recipient in state.listeners(DISCONNECT_MESSAGE) {
+-                let _ = recipient.enqueue_fanout(frame.as_ref().expect("notifications enabled"));
++            let frame = frame.as_ref().expect("notifications enabled");
++            let listeners = state.listeners(DISCONNECT_MESSAGE);
++            let deferred = !listeners.is_empty()
++                && (listeners.len() > FANOUT_QUANTUM || self.has_retirements())
++                && self.defer_retirement(peer, Arc::new(listeners.to_vec()), frame);
++            if !deferred && !listeners.is_empty() {
++                self.flush_retirements();
++                for recipient in listeners {
++                    let _ = recipient.enqueue_fanout(frame);
++                }
+             }
+         }
+         // A displaced session must never erase the new owner of its previous ID.
+diff --git a/src/relay/continuation_tests.rs b/src/relay/continuation_tests.rs
+index c79fa44..11e3b53 100644
+--- a/src/relay/continuation_tests.rs
++++ b/src/relay/continuation_tests.rs
+@@ -155,3 +155,98 @@ fn continuation_metadata_cannot_escape_the_global_queue_budget() {
+     drop(source);
+     assert_eq!(relay.counts(), (0, 1));
+ }
++
++struct NativeRetirement;
++impl PeerOutput for NativeRetirement {
++    fn send(&self, _: Submission<'_>) -> bool {
++        true
++    }
++    fn close(&self, _: Disconnect) {}
++    fn supports_retirement(&self) -> bool {
++        true
++    }
++}
++
++#[derive(Default)]
++struct Departures(parking_lot::Mutex<Vec<Frame>>);
++impl PeerOutput for Departures {
++    fn send(&self, packet: Submission<'_>) -> bool {
++        if protocol::parse(&packet.frame.to_vec()).is_ok_and(|(id, _)| id == BROADCAST) {
++            self.0.lock().push(packet.frame.clone());
++        }
++        true
++    }
++    fn close(&self, _: Disconnect) {}
++}
++
++#[test]
++fn retirement_sequence_survives_the_small_room_threshold() {
++    check_retirement_sequence(false);
++}
++
++#[test]
++fn retirement_budget_refusal_finishes_older_work_before_synchronous_fallback() {
++    check_retirement_sequence(true);
++}
++
++fn check_retirement_sequence(pressure: bool) {
++    let relay = Relay::new(Config {
++        max_message_bytes: 1024,
++        queue_bytes: 2048,
++        total_queue_bytes: if pressure { 12000 } else { 256 * 1024 * 1024 },
++        ping_interval_secs: 0,
++        ..Config::default()
++    })
++    .unwrap();
++    let first = relay
++        .subscribe_with_output(b"sequence", Arc::new(NativeRetirement))
++        .unwrap();
++    let second = relay
++        .subscribe_with_output(b"sequence", Arc::new(NativeRetirement))
++        .unwrap();
++    let first_id = first.peer.id.load(Relaxed);
++    let second_id = second.peer.id.load(Relaxed);
++    let mut targets = Vec::new();
++    let mut outputs = Vec::new();
++    for _ in 0..FANOUT_QUANTUM {
++        let output = Arc::new(Departures::default());
++        targets.push(
++            relay
++                .subscribe_with_output(b"sequence", output.clone())
++                .unwrap(),
++        );
++        outputs.push(output);
++    }
++    drop(first);
++    assert!(relay.has_retirements());
++    // The second departure crosses back to the synchronous-size threshold.
++    // It must still follow the unfinished first job, including on budget refusal.
++    drop(second);
++    if pressure {
++        assert!(!relay.has_retirements());
++        assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
++    } else {
++        relay.progress_retirements();
++        relay.progress_retirements();
++        assert!(relay.has_retirements());
++        assert!(outputs.iter().all(|o| o.0.lock().len() == 1));
++        relay.progress_retirements();
++        assert!(!relay.has_retirements());
++    }
++    for output in outputs {
++        let packets = output.0.lock();
++        assert_eq!(packets.len(), 2);
++        assert_eq!(
++            packets[0].to_vec(),
++            protocol::envelope(BROADCAST, &protocol::uint(first_id))
++        );
++        assert_eq!(
++            packets[1].to_vec(),
++            protocol::envelope(BROADCAST, &protocol::uint(second_id))
++        );
++    }
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    relay.begin_shutdown();
++    drop(targets);
++    assert_eq!(relay.counts(), (0, 1));
++}
+diff --git a/src/server.rs b/src/server.rs
+index 6c1130d..11f8ebc 100644
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -54,7 +54,7 @@ use tokio_util::sync::CancellationToken;
+ use crate::{
+     Relay,
+     protocol::{self, Disconnect},
+-    relay::{ReceiveBatch, Registration, RoomFanout},
++    relay::{FANOUT_QUANTUM, ReceiveBatch, Registration, RoomFanout},
+ };
+ use socket::{Signal, Socket, Stream};
+ use timers::Timers;
+@@ -62,7 +62,6 @@ use timers::Timers;
+ const LISTENER: Token = Token(0);
+ const WAKE: Token = Token(1);
+ const READ_QUANTUM: usize = 256;
+-const FANOUT_QUANTUM: usize = 1024;
+ const ACCEPT_QUANTUM: usize = 16;
+ const READY_QUANTUM: usize = 1024;
+ 
+@@ -616,6 +615,11 @@ impl Worker {
+                     }
+                 }
+             }
++            // Retirements outlive their source connection. One bounded turn
++            // interleaves their FIFO with socket readiness, timers and shutdown.
++            if shutdown_deadline.is_none() && self.relay.has_retirements() {
++                self.relay.progress_retirements();
++            }
+             // Publish before polling, even when no more input will arrive.
+             incoming.publish();
+             {
+@@ -646,7 +650,7 @@ impl Worker {
+                     }),
+                 );
+             }
+-            if !self.ready.is_empty() {
++            if !self.ready.is_empty() || self.relay.has_retirements() {
+                 timeout = Some(Duration::ZERO);
+             }
+             match self.poll.poll(&mut events, timeout) {
+diff --git a/src/server/fairness_tests.rs b/src/server/fairness_tests.rs
+index ac09114..2182fa4 100644
+--- a/src/server/fairness_tests.rs
++++ b/src/server/fairness_tests.rs
+@@ -179,6 +179,8 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
+         assert!(connection.room_fanout.as_ref().unwrap().active());
+         assert!(connection.deadline(&relay).is_some());
+         let delivered: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
++        // Production publishes terminal shutdown before retiring connections.
++        relay.begin_shutdown();
+         connection.start_close(Disconnect::SHUTDOWN, &relay, false, Instant::now());
+         assert!(!connection.room_fanout.as_ref().unwrap().active());
+         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+@@ -489,3 +491,134 @@ fn readable_upgrades_cannot_bypass_deadlines_or_shutdown_behind_an_expiry_batch(
+         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+     }
+ }
++
++#[test]
++fn native_departure_work_yields_and_releases_all_reservations() {
++    check_departure_work(false, false);
++}
++
++#[test]
++fn discarding_native_departure_work_releases_staging_without_delivery() {
++    check_departure_work(true, false);
++}
++
++#[test]
++fn native_disconnect_observer_work_yields_and_releases_all_reservations() {
++    check_departure_work(false, true);
++}
++
++fn check_departure_work(cancel: bool, observers: bool) {
++    let relay = Relay::new(crate::Config {
++        ping_interval_secs: 0,
++        total_read_buffer_bytes: 0,
++        auth_password: Some("fairness".into()),
++        ..crate::Config::default()
++    })
++    .unwrap();
++    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++    let client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
++    let (stream, _) = listener.accept().unwrap();
++    stream.set_nonblocking(true).unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let worker = Worker::new(listener, relay.clone()).unwrap();
++    relay.metrics.connections.fetch_add(1, Relaxed);
++    let socket = Socket::new(
++        mio::net::TcpStream::from_std(stream),
++        Token(2),
++        worker.registry.clone(),
++        worker.signal.clone(),
++        ConnectionGuard(relay.metrics.clone(), None),
++        &relay,
++    )
++    .unwrap();
++    let source = relay
++        .subscribe_with_output(b"depart", socket.clone())
++        .unwrap();
++    let id = source.peer.id.load(Relaxed);
++    let mut targets = Vec::new();
++    for _ in 0..FANOUT_QUANTUM + 3 {
++        let mut target = relay
++            .subscribe(if observers {
++                protocol::GLOBAL_CHANNEL
++            } else {
++                b"depart"
++            })
++            .unwrap();
++        drop(target.outgoing.try_recv().unwrap());
++        if observers {
++            relay
++                .receive(
++                    &target.registration.peer,
++                    protocol::request(0, &protocol::text("fairness")),
++                )
++                .unwrap();
++            relay
++                .receive(
++                    &target.registration.peer,
++                    protocol::request(1, &protocol::uint(u64::from(protocol::DISCONNECT_MESSAGE))),
++                )
++                .unwrap();
++            while target.outgoing.try_recv().is_ok() {}
++        }
++        targets.push(target);
++    }
++    if !observers {
++        relay
++            .receive(&source.peer, protocol::envelope(protocol::BROADCAST, &[1]))
++            .unwrap();
++    }
++    // Policy closes may already have set closing; departure charging must not
++    // silently skip the notifications in that case.
++    source.peer.close(Disconnect::OVERLOADED);
++    drop(source);
++    assert!(relay.has_retirements());
++    assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
++    if !observers {
++        for target in &mut targets {
++            let earlier = target.outgoing.try_recv().unwrap();
++            assert_eq!(earlier.frame.to_vec(), protocol::envelope(id, &[1]));
++        }
++    }
++    assert!(targets.iter_mut().all(|t| t.outgoing.try_recv().is_err()));
++    let mut late = relay.subscribe(b"depart").unwrap();
++    drop(late.outgoing.try_recv().unwrap());
++    if cancel {
++        relay.begin_shutdown();
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++        assert!(targets.iter_mut().all(|t| t.outgoing.try_recv().is_err()));
++    } else {
++        let expected = protocol::envelope(protocol::BROADCAST, &protocol::uint(id));
++        relay.progress_retirements();
++        assert!(relay.has_retirements());
++        let mut received = 0;
++        for t in &mut targets {
++            if let Ok(packet) = t.outgoing.try_recv() {
++                assert_eq!(packet.frame.to_vec(), expected);
++                received += 1;
++            }
++        }
++        assert_eq!(received, FANOUT_QUANTUM);
++        assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
++        relay.progress_retirements();
++        assert!(!relay.has_retirements());
++        for t in &mut targets {
++            if let Ok(packet) = t.outgoing.try_recv() {
++                assert_eq!(packet.frame.to_vec(), expected);
++                received += 1;
++            }
++        }
++        assert_eq!(received, FANOUT_QUANTUM + 3);
++        assert!(
++            late.outgoing.try_recv().is_err(),
++            "late join must not receive an older departure"
++        );
++        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    }
++    relay.begin_shutdown();
++    drop(targets);
++    drop(late);
++    drop(socket);
++    drop(client);
++    assert_eq!(relay.metrics.connections.load(Relaxed), 0);
++    assert_eq!(relay.counts(), (0, 1));
++}
+diff --git a/src/server/socket.rs b/src/server/socket.rs
+index b8cbb06..1e55b9f 100644
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -342,6 +342,13 @@ impl Socket {
+ }
+ 
+ impl PeerOutput for Socket {
++    fn supports_retirement(&self) -> bool {
++        true
++    }
++    fn wake_retirement(&self) {
++        let _ = self.signal.waker.wake();
++    }
++
+     fn send(&self, packet: Submission<'_>) -> bool {
+         self.submit::<false>(packet)
+     }
