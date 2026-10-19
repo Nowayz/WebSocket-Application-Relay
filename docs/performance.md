@@ -7180,3 +7180,14 @@ p99 nor uniform sub-5-ms responsiveness. The
 [full-population report and fairness curves](benchmarks/2026-10-19-current-100k-short/README.md)
 retain commands, exact CSV identities and cleanup evidence. No runtime tuning
 or manual service promotion is part of this check.
+
+### Direct legacy variable-write encoding (2026-10-19)
+
+The bridge encodes the complete variable-write request into one exactly sized
+owned vector, removing the intermediate key/value pair buffer and second copy.
+A 1,000-conversion allocation probe with 32 KiB values drops from 2,000 to 1,000
+allocations and 65.571 MB to 32.780 MB of cumulative requested storage. Release
+conversion timing falls from 661–667 ns to 433–439 ns for that size; tiny values
+show no clear benefit. CBOR length boundaries and original-client round trips
+through 32 KiB are verified. See the
+[allocation, conversion and socket evidence](benchmarks/2026-10-19-bridge-variable-write/README.md).

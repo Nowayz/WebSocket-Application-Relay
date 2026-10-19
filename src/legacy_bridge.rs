@@ -54,12 +54,21 @@ pub fn to_cbor(message: Message) -> Result<Option<Bytes>, Disconnect> {
                 legacy::Command::Channels => protocol::request(2, &[0xf6]),
                 legacy::Command::Assign(id) => protocol::request(3, &protocol::uint(id)),
                 legacy::Command::SetVariable { key, value } => {
-                    let mut e = Encoder::new(Vec::with_capacity(20 + key.len() + value.len()));
+                    let capacity = 5
+                        + protocol::uint_len(key.len() as u64)
+                        + key.len()
+                        + protocol::uint_len(value.len() as u64)
+                        + value.len();
+                    let mut e = Encoder::new(Vec::with_capacity(capacity));
                     e.array(2)
+                        .and_then(|e| e.u8(0))
+                        .and_then(|e| e.array(2))
+                        .and_then(|e| e.u8(4))
+                        .and_then(|e| e.array(2))
                         .and_then(|e| e.bytes(key))
                         .and_then(|e| e.bytes(value))
                         .expect("Vec encoding");
-                    protocol::request(4, &e.into_writer())
+                    e.into_writer().into()
                 }
                 legacy::Command::GetVariable(key) => {
                     protocol::request(5, &protocol::byte_string(key))
@@ -909,6 +918,27 @@ mod tests {
             "wss://relay.example.invalid:443/path",
         ] {
             validate_upstream(upstream).unwrap();
+        }
+    }
+
+    #[test]
+    fn variable_writes_preserve_key_and_value_length_boundaries() {
+        for key_len in [1, 23, 24, 255] {
+            let key = vec![b'k'; key_len];
+            for value_len in [0, 23, 24, 255, 256, 65535, 65536] {
+                let value = vec![0xa5; value_len];
+                let mut input = vec![0; 8];
+                input.extend_from_slice(&[4, key_len as u8]);
+                input.extend_from_slice(&key);
+                input.extend_from_slice(&value);
+                let mut pair = vec![0x82];
+                pair.extend_from_slice(&protocol::byte_string(&key));
+                pair.extend_from_slice(&protocol::byte_string(&value));
+                assert_eq!(
+                    to_cbor(Message::Binary(input.into())).unwrap().unwrap(),
+                    protocol::request(4, &pair)
+                );
+            }
         }
     }
 

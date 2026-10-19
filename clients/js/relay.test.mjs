@@ -72,6 +72,12 @@ test('the unchanged upstream relay.js works through the optional bridge', async 
   a.SetChannelVar('legacy-key', new Uint8Array([3, 4, 5]));
   const variable = await new Promise(resolve => a.GetChannelVar('legacy-key', resolve));
   assert.deepEqual(Array.from(variable), [3, 4, 5]);
+  for (const length of [0, 23, 24, 255, 256, 32768]) {
+    const expected = Uint8Array.from({ length }, (_, index) => index % 256);
+    a.SetChannelVar('legacy-key', expected);
+    const actual = await new Promise(resolve => a.GetChannelVar('legacy-key', resolve));
+    assert.deepEqual(Array.from(actual), Array.from(expected));
+  }
   const disconnected = new Promise(resolve => b.onClientDisconnect = resolve);
   a.ws.close();
   assert.deepEqual(Array.from(await disconnected), Array.from(a.userId));
