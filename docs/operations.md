@@ -16,6 +16,7 @@ and install the unit into `/etc/systemd/system/`. Secret values belong in the
 environment file with permissions restricted to its administrator.
 
 The optional legacy bridge is a separate process and owns two sockets per client.
+Build it when needed with `cargo build --locked --release --bin war-legacy-bridge`.
 Keep it on a trusted network or behind TLS termination as well. Its upstream URL
 currently supports plain `ws://`; connect locally to the relay. Native CBOR clients
 avoid the translation, second socket, and extra memory/CPU entirely.
@@ -78,35 +79,64 @@ windows can constrain throughput on high-latency networks; tune and verify them
 against the target network's bandwidth-delay product. Kernel buffer requests
 are not a complete accounting of TCP memory, allocator state or TLS edge costs.
 
-To reproduce the population acceptance on a Linux test host with enough file
-descriptors and available memory:
+For a short population/routing check on a Linux test host with enough file
+descriptors and available memory, start with two traffic seconds. Build from the
+revision you intend to test; inspect local changes or use a clean snapshot as
+explained in the [current performance guide](performance-guide.md). This quick
+check does not exercise heartbeats or churn:
 
 ```sh
-cargo build --locked --release --bins --example capacity --example stress
-python3 scripts/capacity.py --users 100000 --seconds 65 \
-  --ping-interval-secs 15 --churn-workers 16 \
-  --connection-headroom 10000 \
+cargo build --locked --release --bin war-relay --example capacity
+python3 scripts/capacity.py --users 100000 --seconds 2 \
+  --messages-per-second 4 --ping-interval-secs 0 --churn-workers 0 \
+  --workers 8 --client-workers 8 --server-cpus 0-7 --client-cpus 8-15 \
+  --pin-workers --pin-client-workers --connection-headroom 10000 \
   --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
-  --output artifacts/capacity-100k.json
+  --output artifacts/capacity-100k-short.json
 ```
 
-This creates a fresh isolated loopback relay. It uses four physical CPU cores
-for the server and eight different cores for the client by default; override
-`--server-cpus` and `--client-cpus` for the host, or pass empty strings to leave
-affinity unrestricted. A pool of source addresses avoids the ephemeral-port
-ceiling of a single client address. The driver changes no host limits or
+This creates a fresh disposable loopback relay. The quick recipe requests eight
+native workers on CPUs 0–7 and eight client workers on CPUs 8–15. These masks are
+host-specific: inspect CPU topology and adjust worker counts and masks together.
+For unrestricted placement, omit the pinning flags and pass empty strings for
+`--server-cpus` and `--client-cpus`. The deployment environment example has its own
+worker settings and needs separate acceptance with those settings. A pool of
+source addresses avoids the ephemeral-port ceiling of a single client address. The driver changes no host limits or
 sysctls. Every stable socket must first deliver a full checked ring message.
-The timed workload sends one 1 KiB private message per user per second;
+The quick recipe sends four checked 1 KiB private messages per user per second:
+eight observations per user, with setup and retirement outside the two-second
+phase. That is too few observations to establish a long-term per-user p99 or
+latency deadline. The runner's default is one message per user per second;
 `--messages-per-second`, `--active-percent` and `--payload-bytes` vary that load.
-Additional churn rooms verify complete lifecycles while the stable population
-remains connected. Inactive clients answer heartbeats. The controller checks
-management responses, exact counters, actual established TCP sockets, all
+When enabled, additional churn rooms verify complete lifecycles while the stable
+population remains connected, and inactive clients answer heartbeats. The
+controller checks management responses, exact counters, actual established TCP sockets, all
 departure messages, Close acknowledgements, EOF and final resource release.
 After the timed workload, a separate checked ring proves every stable user's
 application routing still works, including the inactive population. This sweep
 is outside the timing interval.
 `--waves 2` repeats complete population/traffic/retirement on the same process.
-An optional `--pressure-client target/release/examples/stress` adds one verifying
+
+When the question specifically concerns the 15-second heartbeat policy and
+reconnect churn, use the longer retained recipe below. Its 65-second traffic
+phase spans several heartbeat intervals; a two-second check cannot establish
+that every connection handles that policy. This recipe uses the runner's default
+four server workers and CPU masks, which also need adapting to the test host:
+
+```sh
+python3 scripts/capacity.py --users 100000 --seconds 65 \
+  --ping-interval-secs 15 --churn-workers 16 \
+  --connection-headroom 10000 \
+  --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 \
+  --output artifacts/capacity-100k-heartbeat-churn.json
+```
+
+Choose fresh receipt/log/CSV paths for each trial. For competing fanout and
+per-user fairness, use the [two-second mixed-load recipe](performance-guide.md#choose-the-smallest-test-that-answers-the-question)
+rather than treating a private-only population check as mixed-load acceptance.
+
+Run `cargo build --locked --release --example stress` before using the optional
+`--pressure-client target/release/examples/stress`. It adds one verifying
 fanout reader and eight unread recipients during a single wave of at least
 25 seconds. Its exact input, shared-byte and lifecycle totals are checked;
 intentionally cancelled output has explicit bounds and full frame validation
@@ -818,6 +848,17 @@ metadata again; compaction runs on the retiring connection's worker. The
 separate its memory benefit from traffic and retirement costs. Allocators can
 retain freed pages, so arena reclamation does not set a process RSS ceiling.
 
+Expired-timer discovery is also bounded to 1,024 entries per worker turn, matching
+the existing ready-processing quantum. Overdue entries keep the next poll
+nonblocking, so expiration continues between socket-readiness checks. This
+prevents a whole overdue heap from being queued ahead of a healthy socket.
+Connection drive still enforces its own deadline even when its timer remains
+queued; readable late HTTP input cannot renew an expired handshake, and shutdown
+retains priority. See the [controlled expiry-burst comparison](benchmarks/2026-10-19-expiry-fairness/README.md)
+and [readable-input/shutdown regression](benchmarks/2026-10-19-expiry-fairness/readiness/README.md).
+The measured 100,000 pending-handshake case is a resumption stress fixture, not a
+latency guarantee for 100,000 active users.
+
 I/O workers own dedicated OS threads and are independent of an embedder's Tokio
 blocking-pool capacity. On Linux each worker has a separate `SO_REUSEPORT` listen
 socket on the supplied address, preserving its IPv6-only setting. New flows are
@@ -1452,14 +1493,17 @@ combines 100,000 continuously active private users with 8,192 room readers,
 32 complete churn cycles/s and two authenticated inspectors. It includes every
 user's actual-send and intended-send latency, exact counters, source/binary
 hashes, full retirement, quiet controls and explicit fanout-window tradeoffs.
-The current-host frozen recipe is:
+The report's historical frozen reference can be checked with an explicit short
+phase below. For a build of the selected current source, use the [current
+performance guide](performance-guide.md); rebuilding does not update an already
+running historical process:
 
 ```sh
 python3 scripts/mixed-capacity.py \
   --server artifacts/candidates/mixed-capacity-final/war-relay \
-  --scope room --pairs 0 --churn-workers 8 --churn-cycles-per-second 4 \
+  --seconds 2 --scope room --pairs 0 --churn-workers 8 --churn-cycles-per-second 4 \
   --fanout-windows-per-second 16 \
-  --output artifacts/mixed-population.json
+  --output artifacts/mixed-population-short.json
 ```
 
 `--churn-workers` defaults to eight. Set it to `0` to disable independent
@@ -1467,7 +1511,8 @@ lifecycle churn explicitly. `--churn-cycles-per-second 0` means unpaced work
 when workers are enabled; it does not disable them. Fanout-audience membership
 churn is a separate option.
 
-For a separate two-second attribution run, add `--seconds 2 --profile`.
+For a separate attribution run, keep the two-second phase and add `--profile`.
+Use a different output path and exclude profiled timings from ordinary comparisons.
 The default profile target is the server. Add `--profile-target sidecar` to sample
 the fanout/inspection client, or `--profile-target capacity` for the private-load
 client. Nondefault targets require `--profile`. The receipt records the exact
@@ -1498,10 +1543,13 @@ and their sources. Missed sidecar timer ticks are skipped and counted by complet
 versus offered windows. Every submitted window must still reach every reader,
 and all scheduled private probes must complete.
 
-For short mixed-load screens, set `--seconds 6` explicitly; setup and checked
-cleanup remain outside that traffic phase. Add `--pin-client-workers` to pin
-each of the two clients' eight I/O workers to a distinct CPU within its existing
-mask. The helper uses the shared affinity implementation, records each thread
+For short mixed-load screens, set `--seconds 2` explicitly; setup and checked
+cleanup remain outside that traffic phase. At four private probes per user per
+second this gives eight observations/user, so empirical per-user p99 equals the
+observed maximum. Use six seconds only when 24 observations/user answer the next
+question; neither phase establishes a long-term latency guarantee. Add
+`--pin-client-workers` to pin each of the two clients' eight I/O workers to a
+distinct CPU within its existing mask. The helper uses the shared affinity implementation, records each thread
 and CPU in `client_thread_affinity`, and rechecks affinity before, during and
 after measurement. It leaves the default placement unchanged and does not pin
 individual Tokio tasks. A process CPU mask alone is not per-thread pinning.

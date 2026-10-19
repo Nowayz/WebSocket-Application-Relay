@@ -22,6 +22,11 @@ recipient visits per source turn, retaining the same shared body and immutable
 membership view until that message finishes. Output-only wakes avoid entering
 the input decoder; departure notifications use the same owner-worker path.
 
+Workers also discover at most 1,024 expired timers per turn before returning to
+ready processing and socket polling. The [expiry-burst report](docs/benchmarks/2026-10-19-expiry-fairness/README.md)
+records the responsiveness improvement beside 100,000 overdue pending handshakes,
+normal mixed-load checks and deadline/shutdown regressions.
+
 The [100,000-user mixed-load fairness report](docs/benchmarks/2026-10-18-mixed-100k-fairness/README.md)
 records the selected runtime, every user's latency, bounded-memory/FIFO checks
 and comparisons with previous Rust and modern C++. Median user p99 falls from
