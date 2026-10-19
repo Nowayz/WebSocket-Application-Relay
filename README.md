@@ -351,6 +351,9 @@ Existing `relay.js` clients connect to `ws://127.0.0.1:1337`. Their binary/text
 payloads become CBOR byte/text strings and interoperate with native CBOR clients.
 Other structured CBOR values require a CBOR client: an incompatible legacy
 recipient closes with `1003`, rather than receiving an invented encoding.
+Rejected upstream message owners are released before waiting for Close acknowledgement;
+[fragmented versus shared-storage checks](docs/benchmarks/2026-10-19-bridge-rejected-owner/README.md)
+verify the memory-lifetime benefit without changing successful forwarding.
 
 The bridge preserves original command/reply layouts and suppresses CBOR command
 acknowledgements. Tests execute the **unchanged upstream `relay.js`** on real

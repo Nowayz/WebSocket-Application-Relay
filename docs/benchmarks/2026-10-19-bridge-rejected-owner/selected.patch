@@ -1,0 +1,23 @@
+diff --git a/src/legacy_bridge.rs b/src/legacy_bridge.rs
+index 1dd8ed2..4aacbc9 100644
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -630,7 +630,7 @@ async fn bridge(
+                 Some(Ok(Message::Binary(bytes))) => match from_cbor(&bytes) {
+                     Ok(Some(message)) => timeout(WAIT, legacy.send(message)).await??,
+                     Ok(None) => {},
+-                    Err(_) => { drop(pending.take()); transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
++                    Err(_) => { drop(bytes); drop(pending.take()); transport::initiate_close(&mut legacy, Some(CloseFrame { code: CloseCode::Unsupported, reason: "Value Requires CBOR Client".into() }), WAIT, None).await; break; }
+                 }
+                 Some(Err(error)) => {
+                     if let Some(frame) = frame_error_close(&error) {
+@@ -639,7 +639,8 @@ async fn bridge(
+                     }
+                     break;
+                 }
+-                Some(Ok(Message::Text(_))) => {
++                Some(Ok(Message::Text(text))) => {
++                    drop(text);
+                     drop(pending.take());
+                     transport::initiate_close(&mut legacy, Some(CloseFrame {
+                         code: CloseCode::Protocol,
