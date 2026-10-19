@@ -294,6 +294,10 @@ The optional migration bridge translates the original binary/text wire format:
 The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
 Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
 the check. Reachability and TLS availability are checked when forwarding a client.
+While awaiting the upstream welcome, Ping/Pong control frames are handled within
+the same ten-second deadline. An upstream Close is relayed with its original code
+and reason even before a legacy ID is assigned, so a full native room reports a
+clean `1013 / Try Again Later` instead of an unexplained `1006` disconnect.
 Oversized frontend messages receive Close `1009` before or after joining; the
 bridge retains its 16 MiB incoming message limit. Malformed framing receives
 `1002`, and invalid UTF-8 receives `1007`; decoder-error Close output is bounded

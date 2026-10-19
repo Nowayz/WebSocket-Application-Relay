@@ -7115,3 +7115,13 @@ preserving the first error and refusing queued commands. Controlled real-socket
 evidence shows the original client assigning a false authentication reply to
 the next command. Local encoding failures remain recoverable. All 61 source
 and five generated-module tests pass. See the [fault-injection evidence](benchmarks/2026-10-19-js-command-send-failure/README.md).
+
+
+### Bridge upstream-welcome controls (2026-10-19)
+
+The bridge now handles Ping/Pong and relays Close before its upstream welcome,
+within one existing ten-second deadline. A real native full-room rejection
+changes from unexplained 1006 to clean 1013 / Try Again Later. Two one-slot
+rejections and subsequent admission/routing verify resource reuse; 104 library
+and 61 client integration tests pass. Post-welcome routing is unchanged.
+See the [before/after protocol evidence](benchmarks/2026-10-19-bridge-upstream-welcome/README.md).
