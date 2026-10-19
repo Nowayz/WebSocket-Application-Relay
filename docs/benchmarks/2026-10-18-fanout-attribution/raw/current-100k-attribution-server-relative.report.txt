@@ -1,0 +1,33 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 17K of event 'cycles:u'
+# Event count (approx.): 31545552818
+#
+# Overhead  Symbol                                                                                                                   IPC   [IPC Coverage]
+# ........  .......................................................................................................................  ....................
+#
+    17.59%  [.] war_relay::server::Connection::drive_batched                                                                         -      -            
+    16.20%  [.] war_relay::relay::ReceiveBatch::receive_bounded                                                                      -      -            
+     8.56%  [.] war_relay::server::Worker::run                                                                                       -      -            
+     5.18%  [.] war_relay::relay::Peer::enqueue_fanout                                                                               -      -            
+     5.03%  [.] war_relay::server::socket::Socket::notify                                                                            -      -            
+     4.99%  [.] war_relay::server::Worker::schedule                                                                                  -      -            
+     4.12%  [.] 0x000000000018fcb6                                                                                                   -      -            
+     2.84%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send                                            -      -            
+     2.56%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout                                     -      -            
+     2.50%  [k] 0xffffffff8b40edd6                                                                                                   -      -            
+     2.21%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                                                           -      -            
+     2.15%  [.] __vdso_clock_gettime                                                                                                 -      -            
+            |
+            ---clock_gettime
+
+     2.05%  [.] war_relay::relay::Peer::enqueue_frame                                                                                -      -            
+     2.04%  [.] tungstenite::protocol::frame::FrameCodec::swap_read_storage                                                          -      -            
+
+
+#
+# (Tip: If you have debuginfo enabled, try: perf report -s sym,srcline)
+#
