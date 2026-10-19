@@ -1,0 +1,48 @@
+{
+  "scope": "CDFs of per-user observed maxima. Thresholds count users with every observed packet at or below the threshold. Finite observations, not a latency guarantee; intended-send includes generator backlog.",
+  "percentile_method": "nearest rank",
+  "cases": {
+    "Fanout readers (8,192)": {
+      "users": 8192,
+      "total_packet_samples": 3145728,
+      "samples_per_user": {
+        "minimum": 384,
+        "maximum": 384
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_max_ms": {
+            "minimum": 50.675752,
+            "median": 55.988367,
+            "p95": 61.177696,
+            "p99": 61.487427,
+            "maximum": 61.75658
+          },
+          "worst_packet_ms": 61.75658,
+          "users_with_max_at_or_below_ms_percent": {
+            "50.0": 0.0,
+            "60.0": 84.82666015625
+          }
+        },
+        "intended_send_to_receive": {
+          "user_max_ms": {
+            "minimum": 52.254142,
+            "median": 57.566757,
+            "p95": 62.756086,
+            "p99": 63.065817,
+            "maximum": 63.33497
+          },
+          "worst_packet_ms": 63.33497,
+          "users_with_max_at_or_below_ms_percent": {
+            "50.0": 0.0,
+            "60.0": 69.54345703125
+          }
+        }
+      },
+      "csv": "artifacts/simd-text-100k-fanout.csv",
+      "csv_sha256": "5dde4f6b2833ebaf4d15db1ffefa768a1b42570bf1e0692eaea72ae1bb875cbf"
+    }
+  },
+  "histogram_bounds": false,
+  "statistic": "max"
+}

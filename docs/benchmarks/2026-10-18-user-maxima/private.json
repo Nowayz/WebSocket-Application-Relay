@@ -1,0 +1,48 @@
+{
+  "scope": "CDFs of per-user observed maxima. Thresholds count users with every observed packet at or below the threshold. Finite observations, not a latency guarantee; intended-send includes generator backlog.",
+  "percentile_method": "nearest rank",
+  "cases": {
+    "Private users (100,000)": {
+      "users": 100000,
+      "total_packet_samples": 2400000,
+      "samples_per_user": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "metrics": {
+        "send_to_receive": {
+          "user_max_ms": {
+            "minimum": 0.511546,
+            "median": 1.497129,
+            "p95": 4.0398,
+            "p99": 6.58976,
+            "maximum": 11.712151
+          },
+          "worst_packet_ms": 11.712151,
+          "users_with_max_at_or_below_ms_percent": {
+            "5.0": 97.834,
+            "10.0": 99.855
+          }
+        },
+        "intended_send_to_receive": {
+          "user_max_ms": {
+            "minimum": 0.832028,
+            "median": 2.899983,
+            "p95": 4.992865,
+            "p99": 7.511119,
+            "maximum": 13.070374
+          },
+          "worst_packet_ms": 13.070374,
+          "users_with_max_at_or_below_ms_percent": {
+            "5.0": 95.054,
+            "10.0": 99.788
+          }
+        }
+      },
+      "csv": "artifacts/simd-text-100k.csv",
+      "csv_sha256": "d2029b5b7f49bb277a20c0e04e1855d3375db9f469c8f19ed9a4dd76c3b798e7"
+    }
+  },
+  "histogram_bounds": false,
+  "statistic": "max"
+}

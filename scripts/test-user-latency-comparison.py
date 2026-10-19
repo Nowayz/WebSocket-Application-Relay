@@ -2,6 +2,8 @@
 """Independent tiny fixtures protect percentile semantics and invalid-input handling."""
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -39,6 +41,44 @@ class ComparisonTest(unittest.TestCase):
             self.assertEqual(metric['users_with_p99_upper_bound_at_or_below_ms_percent']['2'], 100)
             with self.assertRaises(KeyError):
                 comparison.load(path)
+
+    def test_observed_maxima_expose_stalls_hidden_by_per_user_p99(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'users.csv'
+            path.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n'
+                            '1,1000,1,2,2,4\n2,1000,1,100,2,200\n')
+            values, samples, maxima = comparison.load(path)
+            p99 = comparison.summarize(values, samples, maxima, [2])
+            self.assertEqual(p99['metrics']['send_to_receive']['users_with_p99_at_or_below_ms_percent']['2'], 100)
+            values, samples, maxima = comparison.load(path, statistic='max')
+            result = comparison.summarize(values, samples, maxima, [2], statistic='max')
+            actual = result['metrics']['send_to_receive']
+            self.assertNotIn('user_p99_ms', actual)
+            self.assertEqual(actual['user_max_ms']['maximum'], 100)
+            self.assertEqual(actual['users_with_max_at_or_below_ms_percent']['2'], 50)
+            self.assertEqual(result['metrics']['intended_send_to_receive']['user_max_ms']['maximum'], 200)
+
+    def test_nanosecond_fanout_columns_normalize_both_statistics_to_milliseconds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fanout.csv'
+            path.write_text('id,samples,p99_ns,max_ns,schedule_p99_ns,schedule_max_ns\n'
+                            '1,384,1000001,2000001,3000001,4000001\n')
+            for statistic, expected in [('p99', 1.000001), ('max', 2.000001)]:
+                values, samples, maxima = comparison.load(path, statistic=statistic)
+                self.assertEqual(values['send_to_receive'], [expected])
+                self.assertEqual(maxima['intended_send_to_receive'], 4.000001)
+                self.assertEqual(samples, [384])
+
+    def test_maximum_mode_rejects_a_histogram_percentile_label(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'plot'
+            result = subprocess.run([sys.executable, str(Path(comparison.__file__)),
+                                     '--case', 'fixture=unused.csv', '--output', str(output),
+                                     '--statistic', 'max', '--histogram-bounds'],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('observed maxima are exact', result.stderr)
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_reject_empty_duplicate_or_invalid(self):
         for body in ['', '1,10,1,2,4,5\n1,10,1,2,4,5\n',
