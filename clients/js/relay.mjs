@@ -69,18 +69,34 @@ export class Relay extends EventTarget {
     const ws = new WebSocketClass(url, 'war.cbor.v1');
     ws.binaryType = 'arraybuffer';
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { reject(new Error('Relay join timeout')); ws.close(); }, requestTimeoutMs);
-      const fail = () => { clearTimeout(timer); reject(new Error('Relay closed before subscription')); };
-      ws.addEventListener('close', fail, { once: true });
-      ws.addEventListener('error', fail, { once: true });
-      ws.addEventListener('open', () => ws.send(encoder.encode(channel)), { once: true });
-      ws.addEventListener('message', event => {
-        clearTimeout(timer); ws.removeEventListener('close', fail); ws.removeEventListener('error', fail);
+      const cleanup = () => {
+        clearTimeout(timer);
+        ws.removeEventListener('open', open);
+        ws.removeEventListener('message', welcome);
+        ws.removeEventListener('close', closed);
+        ws.removeEventListener('error', closed);
+      };
+      const fail = (error, code, reason) => {
+        cleanup();
+        reject(error);
+        ws.close(code, reason);
+      };
+      const closed = () => fail(new Error('Relay closed before subscription'));
+      const open = () => {
+        try { ws.send(encoder.encode(channel)); } catch (error) { fail(error); }
+      };
+      const welcome = event => {
+        cleanup();
         try {
           const id = decoder.decode(new Uint8Array(event.data));
           resolve(new Relay(ws, id, requestTimeoutMs));
-        } catch (error) { reject(error); ws.close(1002, 'Invalid Subscription'); }
-      }, { once: true });
+        } catch (error) { fail(error, 1002, 'Invalid Subscription'); }
+      };
+      const timer = setTimeout(() => fail(new Error('Relay join timeout')), requestTimeoutMs);
+      ws.addEventListener('close', closed, { once: true });
+      ws.addEventListener('error', closed, { once: true });
+      ws.addEventListener('open', open, { once: true });
+      ws.addEventListener('message', welcome, { once: true });
     });
   }
 

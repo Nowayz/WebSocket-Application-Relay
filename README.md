@@ -140,6 +140,10 @@ Malformed responses immediately reject any pending command, then close with
 protocol error `1002`; rejection does not wait for the peer’s Close acknowledgement. The [short validation
 and compatibility check](docs/benchmarks/2026-10-18-js-wire-id/README.md) records
 invalid-ID regressions, valid large-ID routing and the measured client cost.
+Connection setup removes its temporary listeners on success, error, or timeout.
+A failed join send rejects immediately and closes the socket; delayed events
+cannot start a subscription after setup has failed. See the [short connection
+lifecycle checks](docs/benchmarks/2026-10-18-js-connect-cleanup/README.md).
 
 ```js
 import { Relay } from './clients/js/relay.mjs';
