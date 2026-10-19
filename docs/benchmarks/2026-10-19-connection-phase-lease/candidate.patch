@@ -1,0 +1,86 @@
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -704,7 +704,7 @@
+ // Both phases keep their metadata inline in the connection slab. Input and
+ // frame buffers retain their own lifetimes across resumptions and slab moves.
+ enum Stage {
+-    Upgrade(Option<Upgrade>),
++    Upgrade(Option<Upgrade>, Option<ReadLease>),
+     WebSocket(WebSocket<Stream>),
+ }
+ 
+@@ -715,7 +715,6 @@
+     room_fanout: Option<Box<RoomFanout>>,
+     socket: Arc<Socket>,
+     stage: Stage,
+-    handshake_lease: Option<ReadLease>,
+     registration: Option<Registration>,
+     phase_deadline: Instant,
+     closing: Option<Closing>,
+@@ -767,8 +766,7 @@
+             output_only: false,
+             room_fanout: None,
+             socket,
+-            stage: Stage::Upgrade(Some(handshake)),
+-            handshake_lease: lease,
++            stage: Stage::Upgrade(Some(handshake), lease),
+             registration: None,
+             phase_deadline: now + Duration::from_secs(config.handshake_timeout_secs),
+             closing: None,
+@@ -783,7 +781,7 @@
+         if let Some(closing) = &self.closing {
+             return Some(closing.deadline);
+         }
+-        if matches!(self.stage, Stage::Upgrade(_)) || self.registration.is_none() {
++        if matches!(self.stage, Stage::Upgrade(..)) || self.registration.is_none() {
+             return Some(self.phase_deadline);
+         }
+         let mut deadline = {
+@@ -847,7 +845,7 @@
+             };
+         }
+         self.output_only = false;
+-        if let Stage::Upgrade(handshake) = &mut self.stage {
++        if let Stage::Upgrade(handshake, lease) = &mut self.stage {
+             if stopping {
+                 return Drive::Drop;
+             }
+@@ -858,7 +856,7 @@
+             match handshake.take().expect("pending handshake").handshake() {
+                 Ok(mut ws) => {
+                     ws.get_mut().remaining_upgrade = None;
+-                    if let Some(lease) = self.handshake_lease.take()
++                    if let Some(lease) = lease.take()
+                         && ws.set_read_budget(lease).is_err()
+                     {
+                         return Drive::Drop;
+--- a/src/server/arena_tests.rs
++++ b/src/server/arena_tests.rs
+@@ -81,8 +81,10 @@
+                     .shared_read_buffer(true),
+             ),
+         );
+-        ws.set_read_budget(connection.handshake_lease.take().unwrap())
+-            .unwrap();
++        let Stage::Upgrade(_, lease) = &mut connection.stage else {
++            panic!("expected upgrade");
++        };
++        ws.set_read_budget(lease.take().unwrap()).unwrap();
+         connection.stage = Stage::WebSocket(ws);
+         connection.registration = Some(
+             relay
+--- a/src/server/ownership_tests.rs
++++ b/src/server/ownership_tests.rs
+@@ -91,8 +91,10 @@
+                 .shared_read_buffer(true),
+         ),
+     );
+-    ws.set_read_budget(connection.handshake_lease.take().unwrap())
+-        .unwrap();
++    let Stage::Upgrade(_, lease) = &mut connection.stage else {
++        panic!("expected upgrade");
++    };
++    ws.set_read_budget(lease.take().unwrap()).unwrap();
+     connection.stage = Stage::WebSocket(ws);
+     connection.registration = Some(
+         relay

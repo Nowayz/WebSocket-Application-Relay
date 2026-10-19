@@ -1,0 +1,78 @@
+   Compiling tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/connection-phase-lease-20261019-work/vendor/tungstenite)
+   Compiling tokio-tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/connection-phase-lease-20261019-work/vendor/tokio-tungstenite)
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/connection-phase-lease-20261019-work)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.23s
+
+added 7 packages in 189ms
+npm notice run @war/relay-client@0.1.0 test
+npm notice run node --test --test-timeout=10000 connect.test.mjs ids.test.mjs protocol-error.test.mjs relay.test.mjs
+✔ failed connection removes setup listeners before delayed socket events (14.272209ms)
+✔ join timeout removes listeners and closes without a peer Close event (5.253676ms)
+✔ join send failure rejects immediately with its original error (0.396529ms)
+✔ successful welcome replaces setup listeners with the live relay listeners (0.793678ms)
+✔ overflowing join timeout is rejected before creating a socket (0.165636ms)
+✔ constructor rejects unsafe timeout configuration before installing listeners (0.159916ms)
+✔ changed timeout configuration rejects a command before sending and can recover (0.459837ms)
+✔ timer ceiling is inclusive and direct construction uses the standard default (0.287193ms)
+✔ connect captures a byte channel before the delayed socket open (0.590324ms)
+✔ connect does not depend on the channel buffer remaining attached (0.317521ms)
+✔ prepared subscriptions survive concurrent joins and encoder buffer growth (0.34981ms)
+✔ commands capture nested values before the next microtask sends them (2.440283ms)
+✔ a queued command survives transfer of its original value buffer (0.419519ms)
+✔ reentrant value getters preserve outer command order and encode once (0.38066ms)
+✔ encoding failure retains its queue position and allows the next command (0.509446ms)
+✔ a reentrant queued write captures its buffer without corrupting the outer encoder (0.408429ms)
+✔ a closed client rejects commands without evaluating their values (0.159146ms)
+✔ a command invoked from an application-value getter waits for that encoding (0.478687ms)
+✔ reentrant application sends fail locally before either packet reaches the socket (0.234683ms)
+✔ a reentrant connect rejects before creating a socket without corrupting the outer packet (0.238423ms)
+✔ final close removes live handlers before notifying and rejects outstanding controls (0.703651ms)
+✔ final close preserves caller socket listeners and stops relay dispatch (0.212974ms)
+✔ a command send exception stops queued commands even when the first frame was forwarded (0.466488ms)
+✔ a command send exception before forwarding also stops the command queue (0.243923ms)
+✔ welcome IDs must be exact, nonreserved uint64 integers (19.091437ms)
+✔ malformed sender and disconnect IDs close without dispatching application events (1.713283ms)
+✔ valid large sender and disconnect IDs retain exact BigInt values (0.710101ms)
+✔ invalid assignment acknowledgements reject the command and close the connection (1.962496ms)
+✔ valid assignment acknowledgement keeps the BigInt API (0.214964ms)
+✔ local close rejects pending and queued commands before a peer Close event (2.330316ms)
+✔ malformed replies reject pending commands before the close handshake completes (0.552485ms)
+✔ envelopes require exactly two array elements, not iterable byte strings (0.666881ms)
+✔ control replies require exactly two array elements before resolving a command (0.446578ms)
+✔ valid envelopes preserve arbitrary application values including undefined (0.419989ms)
+✔ malformed variable results reject before being exposed as found/value (0.998813ms)
+✔ boolean command replies reject nonboolean results (0.953884ms)
+✔ valid command results preserve false and arbitrary stored CBOR values (0.38948ms)
+✔ listener flags accept only effective integers in 0 through 7 (0.951574ms)
+✔ channel listing rejects malformed rows and populations (1.317984ms)
+✔ channel listing preserves empty/binary names and exact numeric types (0.252633ms)
+✔ assignment acknowledgement updates identity before the next message callback (0.232973ms)
+✔ low-level assignment acknowledgements update identity without changing result types (0.128116ms)
+✔ real WebSocket closes with application code 4002 for invalid welcome (15.726899ms)
+✔ real WebSocket closes with application code 4002 for invalid reply (5.270026ms)
+✔ real WebSocket closes with application code 4002 for invalid timeout (3.517324ms)
+✔ real WebSocket preserves a server-sent protocol Close 1002 (2.55054ms)
+✔ native listener acknowledgements return effective flags and private observation stays usable (31.442879ms)
+✔ CBOR client carries objects, bytes, text, uint64 IDs, and concurrent variable requests (4.933985ms)
+✔ the unchanged upstream relay.js works through the optional bridge (11.943343ms)
+✔ CBOR byte strings and text interoperate with legacy sessions through the bridge (2.968389ms)
+✔ legacy privileged commands preserve channel-list layout and fixed-ID takeover (5.267596ms)
+✔ native CBOR and legacy connections finish close handshakes before and after joining (3.107885ms)
+✔ an unsupported structured value closes a legacy recipient cleanly and leaves CBOR routing usable (2.051694ms)
+✔ application idle policy reaches native and legacy browser WebSockets cleanly (1004.266458ms)
+✔ native channel listing returns sorted byte names and current populations (4.444069ms)
+✔ native pipelined assignment and self-message expose the acknowledged identity (1.408842ms)
+✔ native subscription retains the byte channel supplied before the socket opens (0.986203ms)
+✔ native variable writes retain the value supplied before command dispatch (1.043511ms)
+✔ native connection remains usable after locally rejected reentrant serialization (1.030082ms)
+✔ native final close detaches the live client socket handlers (0.775009ms)
+✔ native command send failure cannot misassign a late authentication reply (1.200538ms)
+ℹ tests 61
+ℹ suites 0
+ℹ pass 61
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1122.546819
+JavaScript fixture resources retired: all six checked gauges are zero.
