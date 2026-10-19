@@ -17,6 +17,39 @@ fn bad<T>(_: T) -> Disconnect {
     Disconnect::PROTOCOL
 }
 
+// Called only for a definite text item established by datatype(). Keep short
+// canonical strings on the existing decoder; no scratch is needed for them.
+fn validate_text(decoder: &mut Decoder<'_>) -> Result<(), Disconnect> {
+    let start = decoder.position();
+    let input = decoder.input();
+    let info = input[start] & 0x1f;
+    if info < 24 {
+        decoder.str().map_err(bad)?;
+        return Ok(());
+    }
+    let header_len = match info {
+        24 => 2,
+        25 => 3,
+        26 => 5,
+        27 => 9,
+        _ => return Err(Disconnect::PROTOCOL),
+    };
+    let body_start = start.checked_add(header_len).ok_or(Disconnect::PROTOCOL)?;
+    // Definite string lengths use CBOR's unsigned argument encoding. Translate
+    // only the major type in at most nine header bytes, reusing minicbor's
+    // length decoder rather than copying or materializing the string body.
+    let mut header = [0; 9];
+    header[..header_len].copy_from_slice(input.get(start..body_start).ok_or(Disconnect::PROTOCOL)?);
+    header[0] = info;
+    let length =
+        usize::try_from(Decoder::new(&header[..header_len]).u64().map_err(bad)?).map_err(bad)?;
+    let end = body_start.checked_add(length).ok_or(Disconnect::PROTOCOL)?;
+    let body = input.get(body_start..end).ok_or(Disconnect::PROTOCOL)?;
+    simdutf8::compat::from_utf8(body).map_err(bad)?;
+    decoder.set_position(end);
+    Ok(())
+}
+
 /// Validate the next value without recursion or heap allocations.
 ///
 /// Advances `decoder` past that value; following bytes are left for the caller.
@@ -53,7 +86,7 @@ pub fn validate_value(decoder: &mut Decoder<'_>) -> Result<(), Disconnect> {
                 0
             }
             Type::String => {
-                decoder.str().map_err(bad)?;
+                validate_text(decoder)?;
                 0
             }
             Type::Array => decoder.array().map_err(bad)?.ok_or(Disconnect::PROTOCOL)?,
@@ -513,6 +546,93 @@ mod tests {
             assert_eq!(decoder.position(), encoded.len());
             exact_storage(encoded);
         }
+    }
+
+    #[test]
+    fn text_validation_matches_minicbor_across_headers_and_utf8_boundaries() {
+        fn same(input: &[u8]) {
+            let mut original = Decoder::new(input);
+            let expected = original.str().is_ok();
+            let mut candidate = Decoder::new(input);
+            assert_eq!(
+                validate_value(&mut candidate).is_ok(),
+                expected,
+                "text header {:x?}",
+                &input[..input.len().min(16)]
+            );
+            if expected {
+                assert_eq!(candidate.position(), original.position());
+            }
+        }
+        // Noncanonical length widths remain accepted as before, including empty
+        // strings. Header truncation and impossible lengths remain rejected.
+        for length in [0usize, 1, 23, 24, 63, 64, 65, 255, 256, 65535, 65536] {
+            for (info, width) in [(24, 1), (25, 2), (26, 4), (27, 8)] {
+                if width < 8 && length as u64 >= (1u64 << (width * 8)) {
+                    continue;
+                }
+                let mut encoded = vec![0x60 | info];
+                let argument = (length as u64).to_be_bytes();
+                encoded.extend_from_slice(&argument[8 - width..]);
+                for cut in 0..encoded.len() {
+                    same(&encoded[..cut]);
+                }
+                same(&encoded);
+                encoded.resize(encoded.len() + length, b'a');
+                encoded.push(0xf6); // next item must remain outside this string
+                same(&encoded);
+            }
+        }
+        for info in 28..=31 {
+            same(&[0x60 | info]);
+        }
+        same(&[0x7b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        for pair in 0u32..=65535 {
+            same(&[0x78, 2, (pair >> 8) as u8, pair as u8]);
+        }
+        let sequences: &[&[u8]] = &[
+            b"a",
+            b"\xc2\xa2",
+            b"\xe2\x82\xac",
+            b"\xf0\x9f\xa6\x80",
+            b"\xf4\x8f\xbf\xbf",
+            b"\x80",
+            b"\xc0\x80",
+            b"\xc2",
+            b"\xe0\x80\x80",
+            b"\xed\xa0\x80",
+            b"\xe2\x82",
+            b"\xf0\x80\x80\x80",
+            b"\xf4\x90\x80\x80",
+            b"\xf5\x80\x80\x80",
+        ];
+        for sequence in sequences {
+            for offset in 0..=129 {
+                let mut encoded = vec![0x79, 1, 4]; // 260 content bytes
+                encoded.resize(263, b'a');
+                encoded[3 + offset..3 + offset + sequence.len()].copy_from_slice(sequence);
+                encoded.push(0xf6);
+                same(&encoded);
+            }
+        }
+        let mut split = vec![0x78, 64];
+        split.resize(66, b'a');
+        split[65] = 0xc2;
+        split.push(0xa2); // a continuation outside the declared text is invalid
+        same(&split);
+    }
+
+    #[test]
+    fn validated_long_text_still_borrows_its_original_encoded_value() {
+        let value = text(&"é".repeat(512));
+        let packet = envelope(1, &value);
+        let (sender, borrowed) = parse(&packet).unwrap();
+        assert_eq!(sender, 1);
+        assert_eq!(borrowed, value.as_ref());
+        assert_eq!(
+            borrowed.as_ptr(),
+            packet[packet.len() - value.len()..].as_ptr()
+        );
     }
 
     #[test]
