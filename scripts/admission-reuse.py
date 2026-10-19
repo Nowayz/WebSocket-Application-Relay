@@ -65,7 +65,11 @@ def main():
     parser.add_argument('--server', type=Path, default=ROOT / 'target/release/war-relay')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    # Exclusive files refuse ordinary and dangling-symlink collisions.
+    # Check the complete evidence group before creating either file. Exclusive
+    # opens still prevent overwrites if another process wins a creation race.
+    for artifact in [args.output, args.output.with_suffix('.server.log')]:
+        if os.path.lexists(artifact):
+            parser.error(f'output already exists; choose a fresh prefix: {artifact}')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as receipt, args.output.with_suffix('.server.log').open('x') as log:
         port, admin = free_port(), free_port()
