@@ -1,0 +1,171 @@
+--- a/src/metrics.rs
++++ b/src/metrics.rs
+@@ -6,6 +6,26 @@
+     },
+ };
+ use tokio_tungstenite::tungstenite::protocol::ReadBudget;
++
++
++#[repr(align(64))]
++struct ClockCounts([AtomicU64; 14]);
++static CLOCK_COUNTS: [ClockCounts; 4] = [const { ClockCounts([const { AtomicU64::new(0) }; 14]) }; 4];
++static CLOCK_UNTRACKED: AtomicU64 = AtomicU64::new(0);
++thread_local! {
++    static CLOCK_SLOT: Option<usize> = std::thread::current().name()
++        .and_then(|name| name.strip_prefix("war-io-"))
++        .and_then(|index| index.parse().ok());
++}
++pub(crate) fn clock_probe(site: usize) -> std::time::Instant {
++    CLOCK_SLOT.with(|slot| {
++        if let Some(worker) = slot.and_then(|i| CLOCK_COUNTS.get(i)) {
++            let count = &worker.0[site];
++            count.store(count.load(Relaxed).wrapping_add(1), Relaxed);
++        } else { CLOCK_UNTRACKED.fetch_add(1, Relaxed); }
++    });
++    std::time::Instant::now()
++}
+ 
+ #[derive(Default)]
+ pub struct Metrics {
+@@ -52,6 +72,12 @@
+ impl Metrics {
+     pub fn render(&self, sessions: usize, channels: usize, draining: bool) -> String {
+         let mut text = String::with_capacity(2500);
++        for site in 0..14 {
++            let value: u64 = CLOCK_COUNTS.iter().map(|worker| worker.0[site].load(Relaxed)).sum();
++            writeln!(text, "war_clock_probe_{site}_total {value}").unwrap();
++        }
++        writeln!(text, "war_clock_probe_untracked_total {}", CLOCK_UNTRACKED.load(Relaxed)).unwrap();
++
+         let budget = self.read_budget.as_deref();
+         for (name, kind, value, help) in [
+             (
+--- a/src/server.rs
++++ b/src/server.rs
+@@ -425,7 +425,7 @@
+         // Stop readiness notifications during resource pressure. Existing
+         // sockets, timers and shutdown remain serviced; retry drains queued TCP.
+         self.registry.deregister(&mut self.listener)?;
+-        self.accept_retry = Some(Instant::now() + delay);
++        self.accept_retry = Some(crate::metrics::clock_probe(0) + delay);
+         tracing::warn!(%error, operation, "native admission failed; retrying in one second");
+         Ok(())
+     }
+@@ -467,7 +467,7 @@
+                     self.registry.deregister(&mut self.listener)?;
+                 }
+                 shutdown_deadline = Some(
+-                    Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
++                    crate::metrics::clock_probe(1) + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
+                 );
+                 for (_, connection) in self.connections.iter_mut() {
+                     if !connection.scheduled {
+@@ -476,12 +476,12 @@
+                     }
+                 }
+             }
+-            if shutdown_deadline.is_some_and(|d| d <= Instant::now())
++            if shutdown_deadline.is_some_and(|d| d <= crate::metrics::clock_probe(2))
+                 || (shutdown_deadline.is_some() && self.connections.is_empty())
+             {
+                 break;
+             }
+-            let now = Instant::now();
++            let now = crate::metrics::clock_probe(3);
+             if self.accept_retry.is_some_and(|deadline| deadline <= now) {
+                 self.accept_retry = None;
+                 self.registry
+@@ -566,7 +566,7 @@
+             if shutdown_deadline.is_some() && self.connections.is_empty() {
+                 break;
+             }
+-            let now = Instant::now();
++            let now = crate::metrics::clock_probe(4);
+             let mut timeout = self.timers.next().map(|d| d.saturating_duration_since(now));
+             for deadline in [shutdown_deadline, self.accept_retry].into_iter().flatten() {
+                 timeout = Some(
+@@ -699,7 +699,7 @@
+             UpgradePolicy(relay.clone()),
+             Some(ws_config),
+         );
+-        let now = Instant::now();
++        let now = crate::metrics::clock_probe(5);
+         Self {
+             token,
+             scheduled: false,
+@@ -759,7 +759,7 @@
+         stopping: bool,
+         incoming: &mut ReceiveBatch<'_>,
+     ) -> Drive {
+-        let now = Instant::now();
++        let now = crate::metrics::clock_probe(6);
+         if self.output_only
+             && !self.room_fanout.as_ref().is_some_and(|f| f.active())
+             && !stopping
+@@ -1155,7 +1155,7 @@
+                                 }
+                             }
+                             if relay.config.idle_timeout_secs > 0 {
+-                                self.socket.state.lock().activity = Instant::now();
++                                self.socket.state.lock().activity = crate::metrics::clock_probe(7);
+                             }
+                         }
+                         Message::Ping(_) => match ws.flush() {
+--- a/src/server/socket.rs
++++ b/src/server/socket.rs
+@@ -93,7 +93,7 @@
+                 writable: false,
+                 control_pending: false,
+                 control_deadline: None,
+-                activity: Instant::now(),
++                activity: crate::metrics::clock_probe(8),
+             }),
+             registry,
+             signal,
+@@ -161,7 +161,7 @@
+             .delivered_bytes
+             .fetch_add(frame.len() as u64, Relaxed);
+         if self.track_activity {
+-            state.activity = Instant::now();
++            state.activity = crate::metrics::clock_probe(9);
+         }
+     }
+ 
+@@ -218,7 +218,7 @@
+                         self.metrics.deliveries.fetch_add(delivered, Relaxed);
+                         self.metrics.delivered_bytes.fetch_add(bytes, Relaxed);
+                         if self.track_activity {
+-                            state.activity = Instant::now();
++                            state.activity = crate::metrics::clock_probe(10);
+                         }
+                     }
+                     if remaining == 0 {
+@@ -300,7 +300,7 @@
+         state.queue.push_back(Pending {
+             packet: packet.into_owned(),
+             offset,
+-            deadline: Instant::now() + self.write_timeout,
++            deadline: crate::metrics::clock_probe(11) + self.write_timeout,
+         });
+         let added = (state.queue.capacity() - old_capacity) * std::mem::size_of::<Pending>();
+         if added != 0 {
+@@ -391,7 +391,7 @@
+         state.control_pending = true;
+         state
+             .control_deadline
+-            .get_or_insert_with(|| Instant::now() + self.socket.write_timeout);
++            .get_or_insert_with(|| crate::metrics::clock_probe(12) + self.socket.write_timeout);
+         match state.stream.write(bytes) {
+             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                 self.socket.writable(&mut state, true)?;
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -289,7 +289,7 @@
+         self.recipients = Some(recipients);
+         self.cursor = 0;
+         self.source = source.key;
+-        self.deadline = Some(std::time::Instant::now() + timeout);
++        self.deadline = Some(crate::metrics::clock_probe(13) + timeout);
+         Ok(())
+     }
+ 
