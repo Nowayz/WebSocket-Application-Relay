@@ -1,0 +1,86 @@
+--- a/src/admin.rs
++++ b/src/admin.rs
+@@ -9,7 +9,7 @@
+     routing::{get, post},
+ };
+ use base64::{Engine, engine::general_purpose::STANDARD};
+-use bytes::{BufMut, BytesMut};
++use bytes::{BufMut, Bytes, BytesMut};
+ use serde::Deserialize;
+ use tracing::info;
+ 
+@@ -113,6 +113,13 @@
+     } else {
+         relay.channel_listing()
+     };
++    if channels.is_empty() {
++        return (
++            [("content-type", "application/json")],
++            Bytes::from_static(b"[]"),
++        )
++            .into_response();
++    }
+     // A normal bounded-name row fits in about 128 bytes. This is a capacity
+     // hint, not a limit: escaped names and large counters may grow the buffer.
+     // Snapshot and sort-key storage do not borrow the registry during encoding.
+@@ -237,6 +244,60 @@
+             stop.cancel();
+             server.await.unwrap();
+         }).await.expect("exact-byte management authentication must complete promptly");
++    }
++
++    #[tokio::test]
++    async fn empty_channel_page_preserves_json_wire_headers_and_authorization() {
++        timeout(Duration::from_secs(2), async {
++            let relay = Relay::new(Config {
++                admin_token: Some("shutdown-test".into()),
++                ..Config::default()
++            })
++            .unwrap();
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let address = listener.local_addr().unwrap();
++            let stop = CancellationToken::new();
++            let token = stop.clone();
++            let router = admin_router(relay.clone());
++            let server = tokio::spawn(async move {
++                axum::serve(listener, router)
++                    .with_graceful_shutdown(token.cancelled_owned())
++                    .await
++                    .unwrap();
++            });
++            let empty_path = "/v1/channels?limit=1&after=cmVfZ2xvYmw%3D";
++            let response = http(address, "GET", empty_path, true).await;
++            assert!(response.starts_with("HTTP/1.1 200 "));
++            let (headers, body) = response.split_once("\r\n\r\n").unwrap();
++            let headers = headers.to_ascii_lowercase();
++            assert!(
++                headers
++                    .lines()
++                    .any(|line| line == "content-type: application/json")
++            );
++            assert!(headers.lines().any(|line| line == "content-length: 2"));
++            assert_eq!(body, "[]");
++            assert!(
++                http(address, "GET", empty_path, false)
++                    .await
++                    .starts_with("HTTP/1.1 401 ")
++            );
++            assert!(
++                http(address, "GET", "/v1/channels?after=cmVfZ2xvYmw%3D", true)
++                    .await
++                    .starts_with("HTTP/1.1 400 ")
++            );
++            let populated = http(address, "GET", "/v1/channels?limit=1", true).await;
++            assert!(populated.starts_with("HTTP/1.1 200 "));
++            let body = populated.split_once("\r\n\r\n").unwrap().1;
++            let rows: serde_json::Value = serde_json::from_str(body).unwrap();
++            assert_eq!(rows.as_array().unwrap().len(), 1);
++            assert_eq!(relay.counts(), (0, 1));
++            stop.cancel();
++            server.await.unwrap();
++        })
++        .await
++        .expect("empty and populated page checks must finish promptly");
+     }
+ 
+     #[test]
