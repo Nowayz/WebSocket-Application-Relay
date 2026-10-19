@@ -8,12 +8,14 @@ Use this page to find the selected implementation and choose a short test. The d
 | --- | --- | --- |
 | Native Rust relay | Mio readiness workers; immediate private sends; shared immutable multicast bodies; bounded vectored output; 1,024 ordinary-room recipient visits per source turn | [100,000-user mixed-load selection](benchmarks/2026-10-18-mixed-100k-fairness/README.md) |
 | Native deferred output | Single queued frame uses the small borrowed writer; larger queues retain bounded vectored batching (`266e5b1`) | [Selected writer and tradeoffs](benchmarks/2026-10-18-single-queued-write/README.md) |
+| Native scalar control storage | Full-width unsigned replies fit the 14-byte inline prefix; Frame remains 48 bytes on the measured x86-64 build. This removes a large-ID reply allocation, not a general forwarding speedup | [Selected allocation/wire evidence](benchmarks/2026-10-19-inline-u64-control/README.md), [short 100k check](benchmarks/2026-10-19-current-100k-short/README.md), [earlier constructor/workload tradeoffs](benchmarks/2026-10-18-inline-u64-screen/README.md) |
+| Native startup failure handling | Fallible worker/listener reservations; partial OS-thread startup stops and joins earlier workers within the cleanup deadline before returning its error | [Reservation failures](benchmarks/2026-10-19-worker-reservation/README.md), [actual child-only thread-limit fault](benchmarks/2026-10-19-worker-startup-cleanup/README.md) |
 | Native timer updates | Identical existing `Instant` deadlines stay in place; changed deadlines and cancellations use the existing indexed heap | [Keepalive census, two-second 100k comparisons and build-cache preflight](benchmarks/2026-10-18-unchanged-timers/README.md) |
 | Management page selection | Empty pages avoid allocation; populated pages use bounded selection batches (`3ee013c`) | [Allocation and locking tradeoffs](benchmarks/2026-10-18-batched-channel-page/README.md) |
 | Legacy bridge | CBOR upstream, upstream TCP_NODELAY, 4 KiB initial upstream read buffer; direct single-buffer binary, text, variable-write and byte-command encoding; existing frame/message limits retained | [Delayed-ACK fix](benchmarks/2026-10-18-bridge-upstream-nodelay/README.md), [connection memory](benchmarks/2026-10-18-bridge-read-buffer/README.md), [binary encoding](benchmarks/2026-10-18-bridge-fused-encoding/README.md), [text encoding](benchmarks/2026-10-18-bridge-text-encoding/README.md), [variable writes](benchmarks/2026-10-19-bridge-variable-write/README.md), [byte-valued commands](benchmarks/2026-10-19-bridge-byte-request/README.md) |
 | Allocator | Existing system allocator; no default jemalloc preload | [Four-wave retirement/allocator screen](benchmarks/2026-10-18-churn-retention/README.md) |
 
-The table describes selected source behavior. The frozen native baseline predates the deferred-writer and management-page changes; a running historical binary does not acquire later source changes.
+The table describes selected committed source behavior. Uncommitted prototypes can affect builds from a working tree; inspect its diff or use a clean snapshot for a comparison against the selected source. The frozen native baseline predates the deferred-writer and management-page changes; a running historical binary does not acquire later source changes.
 
 The frozen native baseline is runtime revision `279c3c1`, SHA-256 `3db9ebeb0fff87636a1bf2fc5a6e0ae88d48d12aa7a52571cb4b28fa4d911fa9`. The frozen bridge baseline is code revision `4c9113a`, SHA-256 `bb2392f53bd8fe1bdff47f0a8e790b366269400e259839565bdeb4573f9f8bf1`. These identify measured artifacts, not the repository's latest documentation commit. A new build must be identified by its own source and executable hashes.
 
@@ -39,6 +41,8 @@ Setup, proof scans and exhaustive departure/Close checks add wall time outside t
 For copied benchmark archives, prefer `scripts/build-snapshot.py --snapshot PATH --target-dir CACHE --output NEW_DIRECTORY --bin war-relay` (or `--example inspection`). It refreshes copied inputs, requires Cargo's structured artifact message to confirm recompilation, checks unchanged source contents and freezes the executable with hashes and logs. It refuses checkouts and reused outputs. See the [command, real stale-cache regression and acceptance](benchmarks/2026-10-18-snapshot-builder/README.md).
 
 Snapshot, cache and output directories must be separate with no ancestor/descendant overlap after resolving aliases. The [directory-overlap regression](benchmarks/2026-10-18-snapshot-directory-overlap/README.md) closes the previously allowed snapshot-inside-cache case, so a full cache clean cannot erase the copied source. Rejection occurs before timestamp refresh or Cargo invocation.
+
+Prepare snapshots in an explicitly fresh directory, with shell error propagation enabled (`set -euo pipefail`). Stop if `mkdir` fails; never continue extracting into an older experiment's scratch directory. Keep historical source snapshots, receipts and frozen binaries intact. The build helper freezes existing copied inputs; it cannot undo an archive extraction that already overwrote the wrong directory.
 
 For manual builds sharing a target directory, refresh the copied source timestamps (including vendored sources) or clean the relevant artifacts before compiling. Archive timestamps can be older than cached outputs: the [timer experiment](benchmarks/2026-10-18-unchanged-timers/README.md) caught a diagnostic binary reused as an untouched control. Check the compile log, freeze the binary, record its hash and verify diagnostic identity before timing. Cargo success alone does not prove source freshness. Keep source edits and all builds using the shared cache sequential.
 
@@ -93,10 +97,11 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 
 ## Recent alternatives left unselected
 
+Search these decisions and the detailed history before building another prototype. Describe what has changed in the workload, implementation or evidence that could overturn the previous result. A new label for the same layout, queue or accounting idea is not a new experiment. The [current output-accounting review](benchmarks/2026-10-19-output-accounting-review/README.md) records a fresh profile and stops a redundant layout screen before timing.
+
 | Experiment | Decision and reason |
 | --- | --- |
 | [Cached ready-slot hints](benchmarks/2026-10-18-ready-slot-screen/README.md) | Token checks and compaction/reuse tests pass, but larger ready entries and fallback logic do not establish a full-population win: CPU/intended fanout delays increase while private tails vary. |
-| [Inline large integer replies](benchmarks/2026-10-18-inline-u64-screen/README.md) | Same Frame size on the measured 64-bit host and cheaper large-reply clones, but slower unshared construction and higher mixed CPU per delivery. Lower observed maxima do not establish a fixed-load fairness gain. |
 | [Skip discarded poll-timeout calculations](benchmarks/2026-10-18-ready-poll-timeout/README.md) | Overlapping CPU costs; no consistent joint latency/throughput improvement. |
 | [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |
 | [Buffered fanout batches](benchmarks/2026-10-18-buffered-fanout/README.md) | Lower CPU/fanout delay did not establish consistently better private-user tails. |
@@ -104,9 +109,11 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 | [Direct CBOR byte-string parsing](benchmarks/2026-10-18-direct-bytes-screen/README.md) | Faster isolated parsing did not improve measured relay performance. |
 | [Socket recv substitution](benchmarks/2026-10-18-socket-recv-screen/README.md) | Lower throughput and higher CPU per delivery in the short screen. |
 | [Inline cached WebSocket headers](benchmarks/2026-10-18-frame-header-cache/README.md) | Larger queued metadata; lower fanout rates and higher CPU per delivery in both short candidate runs. |
-| [Notification/counter-layout screen](benchmarks/2026-10-18-notify-metrics-screen/README.md) | Zero redundant notification swaps in the diagnostic; separating counter groups did not improve whole-workload results. |
+| [Notification/counter-layout screen](benchmarks/2026-10-18-notify-metrics-screen/README.md), [earlier padded counters](benchmarks/2026-10-16-counter-layout-study.json), [striped counters](benchmarks/2026-10-16-counter-stripes-study.json) | Zero redundant notification swaps in the diagnostic; cache-line separation and stripes did not establish repeatable whole-workload benefits. Samples near atomic instructions are not proof of false sharing. |
 | [Completed-credit batching](benchmarks/2026-10-18-completion-credits/README.md) | Accounting and ownership checks pass, but mixed and fanout-only screens do not establish a repeatable gain. |
-| [Notification queue handoff](benchmarks/2026-10-18-pending-lock-screen/README.md) | Fewer measured lock collisions did not establish a repeatable application benefit. |
+| [Notification queue handoff](benchmarks/2026-10-18-pending-lock-screen/README.md), [later queue-swap repeat](benchmarks/2026-10-19-notification-drain-screen/README.md) | Fewer measured lock collisions or shorter mutex holds did not establish a repeatable application benefit. |
+| [Observer-index lock split](benchmarks/2026-10-19-observer-lock-screen/README.md) | Registry-release and permission-barrier checks pass, but the small-screen private-tail advantage did not repeat consistently at 100k users with paced churn. The existing worktree prototype remains unselected. |
+| [Inline boolean acknowledgements](benchmarks/2026-10-19-inline-bool-screen/README.md) | Both forms already allocate nothing; the fixed 100,000-command screen did not justify changing the existing static body. |
 
 A change earns selection through the required workload and invariants: low and consistent user latency, complete delivery, FIFO, shared payload ownership and bounded resource admission. Neither a microbenchmark win nor a shorter critical section establishes that by itself.
 

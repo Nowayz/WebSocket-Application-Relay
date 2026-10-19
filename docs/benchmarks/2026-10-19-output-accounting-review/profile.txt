@@ -1,0 +1,51 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cycles:u'
+# Event count (approx.): 6779186869
+#
+# Overhead  Symbol                                                                                IPC   [IPC Coverage]
+# ........  ....................................................................................  ....................
+#
+    14.52%  [.] war_relay::server::Connection::drive_batched                                      -      -            
+            |          
+             --1.28%--war_relay::server::Connection::drive_batched
+
+     7.85%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send         -      -            
+     6.65%  [.] war_relay::relay::ReceiveBatch::receive_bounded                                   -      -            
+     5.61%  [.] war_relay::server::socket::write_batch                                            -      -            
+     5.40%  [.] war_relay::server::Worker::run                                                    -      -            
+     5.31%  [.] tungstenite::protocol::WebSocketContext::read_bounded                             -      -            
+     4.86%  [.] __vdso_clock_gettime                                                              -      -            
+            |
+            ---clock_gettime
+
+     4.83%  [.] war_relay::relay::Peer::enqueue_fanout                                            -      -            
+     3.88%  [.] war_relay::server::socket::Socket::notify                                         -      -            
+     3.55%  [.] <war_relay::server::socket::Socket as war_relay::relay::PeerOutput>::send_fanout  -      -            
+     3.28%  [k] 0xffffffff8ac00080                                                                -      -            
+            |
+            ---0x7f0e366a08f2
+               |          
+                --3.20%--internal_syscall_cancel (inlined)
+                          syscall_cancel (inlined)
+                          |          
+                           --3.08%--sendmsg
+
+     3.17%  [.] bytes::bytes_mut::shared_v_drop                                                   -      -            
+     2.55%  [.] core::hash::BuildHasher::hash_one                                                 -      -            
+     2.30%  [.] war_relay::server::Connection::deadline                                           -      -            
+     2.22%  [.] war_relay::relay::Peer::enqueue_frame                                             -      -            
+     2.16%  [.] war_relay::server::socket::Socket::flush_locked                                   -      -            
+     1.69%  [.] war_relay::server::socket::write_frame                                            -      -            
+     1.27%  [.] 0x000000000018f380                                                                -      -            
+     1.21%  [.] <war_relay::server::socket::Stream as std::io::Read>::read                        -      -            
+     1.12%  [.] 0x000000000018fcbd                                                                -      -            
+     1.10%  [.] bytes::bytes_mut::BytesMut::split_to                                              -      -            
+
+
+#
+# (Tip: Add -I to perf record to sample register values, which will be visible in perf report sample context.)
+#
