@@ -1,0 +1,46 @@
+diff --git a/scripts/mixed-capacity.py b/scripts/mixed-capacity.py
+index 05acd26..f3e2f6d 100644
+--- a/scripts/mixed-capacity.py
++++ b/scripts/mixed-capacity.py
+@@ -4,6 +4,8 @@
+ Two clients use disjoint CPU sets and disjoint rooms. Capacity is held connected
+ until sidecar inspection and cleanup finish, preserving its exact expected census.
+ All server timing excludes setup, CSV output and teardown. Never time in parallel.
++Overall success requires correctness and any explicitly offered fanout rate.
++The receipt retains correctness_passed separately when the offered rate is missed.
+ """
+ import argparse
+ import csv
+@@ -135,7 +137,7 @@ def main():
+         sc += ['--fanout-latency-output', str(prefix) + '-fanout.csv']
+     if args.scope == 'room':
+         sc.remove('--fanout-global-observers')
+-    record = {'passed': False, 'args': vars(args).copy(), 'server_command': cmd, 'client_command': cc,
++    record = {'passed': False, 'correctness_passed': False, 'args': vars(args).copy(), 'server_command': cmd, 'client_command': cc,
+               'sidecar_command': sc, 'sha256': {'server': digest(args.server), 'capacity_client': digest(client_path),
+               'sidecar': digest(args.sidecar), 'runner': digest(__file__), 'benchmark_helper': digest(runtime.__file__)}, 'events': [], 'sidecar_events': [], 'monitoring': [], 'client_thread_affinity': []}
+     record['args'] = {k: str(v) if isinstance(v, Path) else v for k, v in record['args'].items()}
+@@ -335,7 +337,7 @@ def main():
+                 record['fanout_exact_ms'][column.removesuffix('_ns') + '_ms'] = {
+                     name: values[(len(values) - 1) * q // 100]
+                     for name, q in [('median', 50), ('p95', 95), ('p99', 99), ('max', 100)]}
+-        record['passed'] = True
++        record['correctness_passed'] = True
+     except Exception as error:
+         record['error'] = repr(error)
+         raise
+@@ -350,11 +352,12 @@ def main():
+                 except subprocess.TimeoutExpired:
+                     proc.kill(); proc.wait()
+         record['exit_codes'] = [proc.returncode for proc in processes]
+-        record['passed'] = record['passed'] and all(code == 0 for code in record['exit_codes'])
++        record['correctness_passed'] = record['correctness_passed'] and all(code == 0 for code in record['exit_codes'])
++        record['passed'] = record['correctness_passed'] and record.get('fanout_offered_load_met') is not False
+         for handle in files:
+             handle.close()
+         args.output.write_text(json.dumps(record, indent=2) + '\n')
+-    print(json.dumps({'passed': record['passed'], 'fanout_windows': record.get('fanout_windows'), 'fanout_offered_load_met': record.get('fanout_offered_load_met'), 'generator_exceeded_one_period': record.get('generator_lag', {}).get('exceeded_one_period'), 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
++    print(json.dumps({'passed': record['passed'], 'correctness_passed': record['correctness_passed'], 'fanout_windows': record.get('fanout_windows'), 'fanout_offered_load_met': record.get('fanout_offered_load_met'), 'generator_exceeded_one_period': record.get('generator_lag', {}).get('exceeded_one_period'), 'cpu': record.get('server_cpu_seconds'), 'latency': record.get('latency'), 'fanout_exact_ms': record.get('fanout_exact_ms')}))
+     if not record['passed']:
+         raise SystemExit(1)
+ 
