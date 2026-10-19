@@ -94,7 +94,12 @@ source's normal Close does not prove its recipients received departure events.
 The [snapshot ownership report](retirement-snapshots.md) checks an eight-departure
 burst against 100,000 observers with the same constrained shared credit.
 
-Ordinary room/departure work advances in 1,024-recipient turns. Clearing a global
+Ordinary large-room work advances in 1,024-recipient turns. Deferred departures
+use 128-recipient native worker turns so publication and other ready sockets can
+interleave more promptly. This trades some bulk-work CPU efficiency for shorter
+control stalls; see the [measured scheduling comparison](retirement-turns.md).
+Small-room synchronous delivery and its deferral threshold retain their behavior.
+Clearing a global
 listener's disconnect flag orders captured notices before its acknowledgment.
 The barrier submits only that observer's still-pending notices and records a
 sequence watermark so deferred jobs cannot replay them after re-subscription.

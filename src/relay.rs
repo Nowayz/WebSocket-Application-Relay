@@ -1259,14 +1259,14 @@ impl Relay {
         self.retirement_pending.load(Relaxed)
     }
 
-    pub(crate) fn progress_retirements(&self) {
+    pub(crate) fn progress_retirements(&self, quantum: usize) {
         // Serialize the retirement sequence, but never make another worker wait
         // for this turn. No registry lock is acquired during output submission.
         let Some(mut pending) = self.retirements.try_lock() else {
             return;
         };
         if let Some(work) = pending.jobs.front_mut() {
-            let _ = work.resume(FANOUT_QUANTUM);
+            let _ = work.resume(quantum);
             if !work.active() {
                 pending.jobs.pop_front();
             }

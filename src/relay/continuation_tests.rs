@@ -180,6 +180,71 @@ impl PeerOutput for Departures {
 }
 
 #[test]
+fn retirement_turn_budget_bounds_visits_without_reordering_jobs() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let count = FANOUT_QUANTUM + 1;
+    let observers: Vec<_> = (0..count)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"budget-source", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let first = depart();
+    let second = depart();
+    let delivered = || {
+        observers
+            .iter()
+            .map(|(_, output)| output.0.lock().len())
+            .sum::<usize>()
+    };
+    let charged = relay.metrics.queued_bytes.load(Relaxed);
+    assert!(charged > 0);
+    relay.progress_retirements(0);
+    assert_eq!(delivered(), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), charged);
+    relay.progress_retirements(13);
+    assert_eq!(delivered(), 13);
+    relay.progress_retirements(7);
+    assert_eq!(delivered(), 20);
+    assert!(
+        observers
+            .iter()
+            .all(|(_, output)| output.0.lock().len() <= 1)
+    );
+    relay.progress_retirements(count - 20);
+    assert_eq!(delivered(), count);
+    assert!(relay.has_retirements());
+    relay.progress_retirements(5);
+    assert_eq!(delivered(), count + 5);
+    relay.progress_retirements(count - 5);
+    assert!(!relay.has_retirements());
+    for (_, output) in &observers {
+        let packets = output.0.lock();
+        assert_eq!(packets.len(), 2);
+        for (packet, id) in packets.iter().zip([first, second]) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
 fn retirement_sequence_survives_the_small_room_threshold() {
     check_retirement_sequence(false);
 }
@@ -353,7 +418,7 @@ fn local_retirement_pressure_keeps_unrelated_room_work_deferred() {
     assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 0);
     drop(held);
     for _ in 0..2 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     for output in &outputs {
@@ -409,11 +474,11 @@ fn check_retirement_sequence(pressure: bool) {
         assert!(!relay.has_retirements());
         assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
     } else {
-        relay.progress_retirements();
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
+        relay.progress_retirements(FANOUT_QUANTUM);
         assert!(relay.has_retirements());
         assert!(outputs.iter().all(|o| o.0.lock().len() == 1));
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
         assert!(!relay.has_retirements());
     }
     for output in outputs {
@@ -462,7 +527,7 @@ fn a_pending_departure_cannot_notify_a_recreated_room() {
         if !relay.has_retirements() {
             break;
         }
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert!(output.0.lock().is_empty());
@@ -523,7 +588,7 @@ fn retirement_publications_share_one_wake_until_the_queue_drains() {
         "an active queue already has a waking or running owner"
     );
     for _ in 0..4 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -535,7 +600,7 @@ fn retirement_publications_share_one_wake_until_the_queue_drains() {
         "refilling an empty queue must wake again"
     );
     for _ in 0..2 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -663,7 +728,7 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
     drop(fresh);
     // Three two-turn room jobs and four single-turn global jobs.
     for _ in 0..10 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert_eq!(
@@ -791,14 +856,14 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         view
     };
     for _ in 0..2 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(
         old_view.upgrade().is_some(),
         "other jobs still own the old view and its credit"
     );
     for _ in 0..4 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(
         old_view.upgrade().is_none(),
@@ -815,7 +880,7 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         );
     }
     for _ in 0..2 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert!(
@@ -873,7 +938,7 @@ fn shared_disconnect_views_preserve_the_queue_budget_without_per_job_overchargin
     assert!(relay.metrics.queued_bytes.load(Relaxed) <= 12000);
     assert_eq!(relay.metrics.global_pressure.load(Relaxed), 0);
     for _ in 0..16 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -972,7 +1037,7 @@ fn observer_barrier_distinguishes_absence_and_positions_in_captured_generations(
         .receive(&observer.peer, protocol::request(1, &protocol::uint(0)))
         .unwrap();
     for _ in 0..10 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     for (frames, expected) in [
@@ -1020,7 +1085,7 @@ fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue
     let first = depart();
     let second = depart();
     // The first observer has already seen the first notice, but the last has not.
-    relay.progress_retirements();
+    relay.progress_retirements(FANOUT_QUANTUM);
     assert_eq!(observers[0].1.0.lock().len(), 1);
     assert!(observers[FANOUT_QUANTUM].1.0.lock().is_empty());
     for index in [0, FANOUT_QUANTUM] {
@@ -1057,7 +1122,7 @@ fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue
         .unwrap();
     let third = depart();
     for _ in 0..6 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     assert_eq!(observers[0].1.0.lock().len(), 3);
@@ -1078,7 +1143,7 @@ fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue
         )
         .unwrap();
     for _ in 0..2 {
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
     }
     assert!(!relay.has_retirements());
     let packets = observers[0].1.0.lock();

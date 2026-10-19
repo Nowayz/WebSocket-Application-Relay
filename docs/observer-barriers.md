@@ -260,3 +260,7 @@ The JavaScript fixture retired all six resource gauges. Final native checks
 also passed with 100,000 observers/eight departures under 2 MiB credit, verifying
 1,100,009 notices, re-subscription, zero pressure/copy counters and 100,000 shutdown
 Close receipts. The two-worker, 2,048-observer one-slot queue check passed too.
+
+The subsequent [retirement scheduling change](retirement-turns.md) reduces native
+departure turns to 128 recipient visits. The measurements above retain their
+original 1,024-visit scheduling contract.

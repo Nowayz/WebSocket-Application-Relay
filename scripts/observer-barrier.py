@@ -152,9 +152,13 @@ def main():
             probe_thread = threading.Thread(target=probe_loop)
             probe_thread.start()
             assert probe_started.wait(2) and (not probe_errors)
+            result['close_samples'] = []
             result['departure_start_ns'] = time.monotonic_ns()
             for source in sources:
+                sent = time.monotonic_ns()
                 source.close()
+                result['close_samples'].append({'id': str(source.id), 'sent_ns': sent,
+                                                'ack_ns': time.monotonic_ns()})
             result['departure_end_ns'] = time.monotonic_ns()
             began = time.monotonic_ns()
             result['barrier_start_ns'] = began
@@ -188,6 +192,11 @@ def main():
             for peer in audience:
                 for source in sources:
                     departure(peer, source.id)
+                if peer is audience[0]:
+                    # Later jobs cannot pass earlier jobs' recipient traversal.
+                    # This reader's final notice therefore follows all earlier
+                    # jobs' submissions, without timing a serial audience drain.
+                    result['first_audience_burst_complete_ns'] = time.monotonic_ns()
             observer.socket.settimeout(0.1)
             try:
                 opcode, body = observer.receive()
@@ -225,6 +234,7 @@ def main():
                     break
                 time.sleep(0.01)
             result['after'] = metrics
+            result['process_after'] = wire.runtime.snapshot(server.pid)
             assert int(metrics['war_sessions']) == args.audience and int(metrics['war_queued_bytes']) == 0
             assert int(metrics['war_connections']) == args.audience
             assert int(metrics['war_routing_copied_bytes_total']) == 0

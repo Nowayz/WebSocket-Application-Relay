@@ -43,6 +43,8 @@ and multiple departures fitting one shared view within a fixed byte budget.
 Observer lookup checks distinguish equal-sized captured generations where the
 peer is absent or occupies a different position, and keep each job's visited
 cursor independent when several jobs share a view.
+Retirement budget checks cover zero and differently sized turns, exact visit
+bounds, cross-turn FIFO and release of all queued credit after completion.
 Shutdown cache tests distinguish unique and externally captured views, and verify
 that reversible drain keeps the live view consistent. The native shutdown fixture
 verifies a priming broadcast before checking every Close `1001` and TCP EOF;

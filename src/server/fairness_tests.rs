@@ -588,7 +588,7 @@ fn check_departure_work(cancel: bool, observers: bool) {
         assert!(targets.iter_mut().all(|t| t.outgoing.try_recv().is_err()));
     } else {
         let expected = protocol::envelope(protocol::BROADCAST, &protocol::uint(id));
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
         assert!(relay.has_retirements());
         let mut received = 0;
         for t in &mut targets {
@@ -599,7 +599,7 @@ fn check_departure_work(cancel: bool, observers: bool) {
         }
         assert_eq!(received, FANOUT_QUANTUM);
         assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
-        relay.progress_retirements();
+        relay.progress_retirements(FANOUT_QUANTUM);
         assert!(!relay.has_retirements());
         for t in &mut targets {
             if let Ok(packet) = t.outgoing.try_recv() {

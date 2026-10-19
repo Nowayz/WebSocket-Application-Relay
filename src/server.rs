@@ -64,6 +64,9 @@ const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
 const ACCEPT_QUANTUM: usize = 16;
 const READY_QUANTUM: usize = 1024;
+// Retirement progress holds the publication mutex. Shorter turns let closes
+// and observer controls interleave without reducing live room fanout batches.
+const RETIREMENT_QUANTUM: usize = 128;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
 /// sockets belong to a fixed number of readiness workers. Config's backlog
@@ -618,7 +621,7 @@ impl Worker {
             // Retirements outlive their source connection. One bounded turn
             // interleaves their FIFO with socket readiness, timers and shutdown.
             if shutdown_deadline.is_none() && self.relay.has_retirements() {
-                self.relay.progress_retirements();
+                self.relay.progress_retirements(RETIREMENT_QUANTUM);
             }
             // Publish before polling, even when no more input will arrive.
             incoming.publish();

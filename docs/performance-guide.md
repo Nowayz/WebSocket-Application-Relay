@@ -10,8 +10,11 @@ conflict with consistently responsive users.
 
 Mio workers own decoding and timers. Private sends retain their immediate
 borrowed path. Multicast output uses shared bodies and bounded owner-worker
-vectored writes. Ordinary large rooms and departures advance by 1,024 recipient
-visits per turn; expiry discovery is also bounded. Retirement work uses one
+vectored writes. Ordinary large rooms advance by 1,024 recipient visits per turn;
+native deferred departures use 128 visits to keep the shared publication mutex
+and worker turns short. See the [retirement scheduling measurements](retirement-turns.md)
+for the measured CPU/bulk-delivery tradeoff. Expiry discovery is also bounded.
+Retirement work uses one
 charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
 control replies fit the inline frame prefix. No alternative allocator or native
 numerical library is selected by default.
