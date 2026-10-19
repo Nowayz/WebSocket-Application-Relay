@@ -7085,3 +7085,13 @@ NaN evidence previously appeared as no missed period. Nine valid archived
 population timelines retain byte-for-value equivalent summaries; measured
 workload code is unchanged. Six seconds of small offered-load checks pass.
 See the [fixtures, replay and retained outcomes](benchmarks/2026-10-19-sender-timeline-validation/README.md).
+
+
+### Singleton room observer guard (2026-10-19)
+
+The existing small-room path needs no large-fanout continuation. A proposed
+one-member early return would nevertheless drop enabled global observer
+deliveries. Two focused checks now protect no self-echo, membership changes
+and observer enable/disable behavior; an isolated bad shortcut fails the
+observer-delivery assertion. No runtime branch is added. See the
+[contract checks and mutation evidence](benchmarks/2026-10-19-singleton-observer-contract/README.md).

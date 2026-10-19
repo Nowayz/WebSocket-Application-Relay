@@ -1,0 +1,156 @@
+--- a/src/server/fairness_tests.rs
++++ b/src/server/fairness_tests.rs
+@@ -234,3 +234,153 @@
+     drop(client);
+     assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+ }
++
++fn singleton_source() -> (Arc<Relay>, Registration, Arc<Sequence>) {
++    let relay = Relay::new(crate::Config {
++        auth_password: Some("singleton".into()),
++        ..crate::Config::default()
++    })
++    .unwrap();
++    let output = Arc::new(Sequence::default());
++    let source = relay
++        .subscribe_with_output(b"singleton", output.clone())
++        .unwrap();
++    (relay, source, output)
++}
++
++#[test]
++fn singleton_broadcasts_skip_self_and_follow_membership_without_a_continuation() {
++    let (relay, source, output) = singleton_source();
++    let mut incoming = relay.receive_batch();
++    let mut pending = None;
++    assert_eq!(
++        incoming
++            .receive_bounded(
++                &source.peer,
++                protocol::envelope(protocol::BROADCAST, &[1]),
++                4096,
++                &mut pending,
++                FANOUT_QUANTUM
++            )
++            .unwrap(),
++        1
++    );
++    assert_eq!(output.messages.load(Relaxed), 0);
++    assert!(pending.is_none());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++
++    let recipient_output = Arc::new(Sequence::default());
++    let recipient = relay
++        .subscribe_with_output(b"singleton", recipient_output.clone())
++        .unwrap();
++    assert_eq!(
++        incoming
++            .receive_bounded(
++                &source.peer,
++                protocol::envelope(protocol::BROADCAST, &[1]),
++                4096,
++                &mut pending,
++                FANOUT_QUANTUM
++            )
++            .unwrap(),
++        2
++    );
++    assert_eq!(recipient_output.messages.load(Relaxed), 1);
++    drop(recipient);
++    assert_eq!(
++        incoming
++            .receive_bounded(
++                &source.peer,
++                protocol::envelope(protocol::BROADCAST, &[2]),
++                4096,
++                &mut pending,
++                FANOUT_QUANTUM
++            )
++            .unwrap(),
++        1
++    );
++    incoming.publish();
++    assert_eq!(recipient_output.messages.load(Relaxed), 1);
++    assert_eq!(output.messages.load(Relaxed), 0);
++    assert!(pending.is_none());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
++}
++
++#[test]
++fn singleton_room_still_delivers_to_enabled_channel_observers() {
++    let (relay, source, output) = singleton_source();
++    let observer_output = Arc::new(Sequence::default());
++    let observer = relay
++        .subscribe_with_output(protocol::GLOBAL_CHANNEL, observer_output.clone())
++        .unwrap();
++    relay
++        .receive(
++            &observer.peer,
++            protocol::request(0, &protocol::text("singleton")),
++        )
++        .unwrap();
++    relay
++        .receive(
++            &observer.peer,
++            protocol::request(1, &protocol::uint(u64::from(protocol::CHANNEL_MESSAGE))),
++        )
++        .unwrap();
++    let mut incoming = relay.receive_batch();
++    let mut pending = None;
++    let work = incoming
++        .receive_bounded(
++            &source.peer,
++            protocol::envelope(protocol::BROADCAST, &[1]),
++            4096,
++            &mut pending,
++            FANOUT_QUANTUM,
++        )
++        .unwrap();
++    assert_eq!(
++        observer_output.messages.load(Relaxed),
++        1,
++        "enabled observer missed the singleton broadcast"
++    );
++    assert_eq!(work, 2);
++    relay
++        .receive(&observer.peer, protocol::request(1, &protocol::uint(0)))
++        .unwrap();
++    assert_eq!(
++        incoming
++            .receive_bounded(
++                &source.peer,
++                protocol::envelope(protocol::BROADCAST, &[2]),
++                4096,
++                &mut pending,
++                FANOUT_QUANTUM
++            )
++            .unwrap(),
++        1
++    );
++    assert_eq!(observer_output.messages.load(Relaxed), 1);
++    relay
++        .receive(
++            &observer.peer,
++            protocol::request(1, &protocol::uint(u64::from(protocol::CHANNEL_MESSAGE))),
++        )
++        .unwrap();
++    assert_eq!(
++        incoming
++            .receive_bounded(
++                &source.peer,
++                protocol::envelope(protocol::BROADCAST, &[2]),
++                4096,
++                &mut pending,
++                FANOUT_QUANTUM
++            )
++            .unwrap(),
++        2
++    );
++    incoming.publish();
++    assert_eq!(observer_output.messages.load(Relaxed), 2);
++    assert_eq!(output.messages.load(Relaxed), 0);
++    assert!(pending.is_none());
++    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
++    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
++}

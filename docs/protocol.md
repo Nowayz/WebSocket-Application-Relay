@@ -55,6 +55,8 @@ received item is its ID. A socket remains tied to its channel until disconnectio
 `re_globl` broadcasts reach all sessions, while privileged listeners in that
 channel can receive selected traffic. `--disable-global-broadcast` requires
 authentication for global sends. This does not change listener authorization.
+A broadcast from the only member of a room still reaches authorized
+channel-message observers; it does not echo to the sender.
 
 ## Commands
 

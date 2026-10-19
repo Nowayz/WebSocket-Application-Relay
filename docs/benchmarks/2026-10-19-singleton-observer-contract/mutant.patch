@@ -1,0 +1,14 @@
+--- a/src/relay.rs
++++ b/src/relay.rs
+@@ -862,6 +862,11 @@
+                 None => return Ok(1),
+             }
+         };
++        if target == BROADCAST && peer.channel.as_ref() != GLOBAL_CHANNEL
++            && state.channels.get(&peer.channel).is_some_and(|channel| channel.members.len() == 1)
++        {
++            return Ok(1);
++        }
+         let value_start = bytes.len() - value.len();
+         let compact = storage_capacity > self.config.read_buffer_bytes
+             && bytes.len().saturating_mul(8) < storage_capacity
