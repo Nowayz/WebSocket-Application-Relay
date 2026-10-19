@@ -130,6 +130,8 @@ The [queued-write turn census](benchmarks/2026-10-19-queued-write-turns/README.m
 
 The [timer-slot shortcut screen](benchmarks/2026-10-19-timer-slot-screen/README.md) rejects removing a timer-discovery token-map lookup: component scheduling improves about 22%, but both short 100k candidate runs use more CPU and have higher worst fanout latency than either control. Keep the current runtime; the isolated gain does not establish a mixed-load benefit.
 
+The [process CPU accounting check](benchmarks/2026-10-19-process-cpu-accounting/README.md) fixes stat parsing for command names containing spaces and adds `user_cpu_seconds` / `system_cpu_seconds` to raw process snapshots from existing reads. Two short native fixtures charge about 81% of process CPU to kernel time. Interpret user-only cycle profiles accordingly; this does not identify a syscall or select a runtime change.
+
 ## Read the result correctly
 
 - Treat each user equally. A percentile across users' individual latency statistics is different from a pooled packet percentile. With eight observations (two seconds) or 24 (six seconds), nearest-rank per-user p99 equals its observed maximum. The runner reports this explicitly in `latency_sampling`.

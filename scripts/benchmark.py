@@ -79,21 +79,29 @@ def pin_child_workers(pid, count, native, apply=True):
     return records
 
 
+def cpu_times(stat):
+    # comm is parenthesized and may itself contain spaces or parentheses.
+    fields = stat.rsplit(")", 1)[1].split()
+    ticks = os.sysconf("SC_CLK_TCK")
+    user, system = int(fields[11]), int(fields[12])
+    return {"cpu_seconds": (user + system) / ticks,
+            "user_cpu_seconds": user / ticks,
+            "system_cpu_seconds": system / ticks}
+
+
 def snapshot(pid):
     values = {}
     for line in Path(f"/proc/{pid}/status").read_text().splitlines():
         if line.startswith(("VmRSS:", "VmSize:", "RssAnon:", "Threads:")):
             key, value = line.split(":", 1)
             values[key] = int(value.split()[0])
-    fields = Path(f"/proc/{pid}/stat").read_text().split()
-    values["cpu_seconds"] = (int(fields[13]) + int(fields[14])) / os.sysconf("SC_CLK_TCK")
+    values.update(cpu_times(Path(f"/proc/{pid}/stat").read_text()))
     # Quiescent-gate diagnostics expose flow/worker placement without sampling
     # inside a timed request. Threads may retire between directory and stat.
     threads = {}
     for task in Path(f"/proc/{pid}/task").iterdir():
         try:
-            fields = (task / "stat").read_text().rsplit(")", 1)[1].split()
-            threads[task.name] = (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+            threads[task.name] = cpu_times((task / "stat").read_text())["cpu_seconds"]
         except FileNotFoundError:
             continue
     values["thread_cpu_seconds"] = threads

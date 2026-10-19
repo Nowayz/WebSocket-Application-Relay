@@ -37,9 +37,9 @@ def free_port():
 
 
 def snapshot(pid, *, include_fds=True):
-    fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+    times = runtime.cpu_times(Path(f'/proc/{pid}/stat').read_text())
     status = Path(f'/proc/{pid}/status').read_text().splitlines()
-    return {'cpu_seconds': (int(fields[11]) + int(fields[12])) / os.sysconf('SC_CLK_TCK'),
+    return {**times,
             'rss_kib': int(next(line.split()[1] for line in status if line.startswith('VmRSS:'))),
             'fds': len(list(Path(f'/proc/{pid}/fd').iterdir())) if include_fds else None}
 
