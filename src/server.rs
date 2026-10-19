@@ -738,7 +738,16 @@ impl Connection {
         if matches!(self.stage, Stage::Upgrade(_)) || self.registration.is_none() {
             return Some(self.phase_deadline);
         }
-        let mut deadline = self.socket.deadline();
+        let mut deadline = {
+            let state = self.socket.state.lock();
+            let deadline = state.deadline();
+            if relay.config.idle_timeout_secs > 0 {
+                let next = state.activity + Duration::from_secs(relay.config.idle_timeout_secs);
+                Some(deadline.map_or(next, |d| d.min(next)))
+            } else {
+                deadline
+            }
+        };
         if let Some(next) = self.room_fanout.as_ref().and_then(|f| f.deadline()) {
             deadline = Some(deadline.map_or(next, |d| d.min(next)));
         }
@@ -750,11 +759,6 @@ impl Connection {
         .into_iter()
         .flatten()
         {
-            deadline = Some(deadline.map_or(next, |d| d.min(next)));
-        }
-        if relay.config.idle_timeout_secs > 0 {
-            let next = self.socket.state.lock().activity
-                + Duration::from_secs(relay.config.idle_timeout_secs);
             deadline = Some(deadline.map_or(next, |d| d.min(next)));
         }
         deadline
@@ -993,15 +997,14 @@ impl Connection {
                 );
             }
             if self.registration.is_some() && relay.config.idle_timeout_secs > 0 {
-                let output_pending = self.socket.deadline().is_some();
-                let mut state = self.socket.state.lock();
-                if state.activity + Duration::from_secs(relay.config.idle_timeout_secs) <= now {
-                    if !output_pending {
-                        drop(state);
-                        relay.metrics.idle_timeouts.fetch_add(1, Relaxed);
-                        return self.start_close(Disconnect::IDLE, relay, false, now);
-                    }
-                    state.activity = now;
+                let expired = self
+                    .socket
+                    .state
+                    .lock()
+                    .idle_expired(now, Duration::from_secs(relay.config.idle_timeout_secs));
+                if expired {
+                    relay.metrics.idle_timeouts.fetch_add(1, Relaxed);
+                    return self.start_close(Disconnect::IDLE, relay, false, now);
                 }
             }
         }

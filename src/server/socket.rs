@@ -74,6 +74,31 @@ struct Pending {
     deadline: Instant,
 }
 
+impl State {
+    pub fn deadline(&self) -> Option<Instant> {
+        match (
+            self.queue.front().map(|p| p.deadline),
+            self.control_deadline,
+        ) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    // Called for registered sockets with idle tracking enabled. Pending output
+    // postpones idle expiry, without extending its separate write deadline.
+    pub fn idle_expired(&mut self, now: Instant, timeout: Duration) -> bool {
+        if self.activity + timeout > now {
+            return false;
+        }
+        if self.deadline().is_none() {
+            return true;
+        }
+        self.activity = now;
+        false
+    }
+}
+
 impl Socket {
     pub fn new(
         stream: TcpStream,
@@ -166,14 +191,7 @@ impl Socket {
     }
 
     pub fn deadline(&self) -> Option<Instant> {
-        let state = self.state.lock();
-        match (
-            state.queue.front().map(|p| p.deadline),
-            state.control_deadline,
-        ) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        self.state.lock().deadline()
     }
 
     /// Resume bounded application output. `true` means this socket consumed its
@@ -733,12 +751,28 @@ mod tests {
         let value = protocol::byte_string(&[0x5a; 1024]);
         let input = protocol::envelope(protocol::BROADCAST, &value);
         let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&sender.peer, input).unwrap();
+        let now = Instant::now();
+        let idle_timeout = Duration::from_secs(1);
+        socket.state.lock().activity = now - idle_timeout;
+        let stale_output_pending = socket.deadline().is_some();
+        assert!(!stale_output_pending);
+        // Admit output on another thread between the former output/activity reads.
+        let writer_relay = relay.clone();
+        let writer = sender.peer.clone();
+        std::thread::spawn(move || writer_relay.receive(&writer, input))
+            .join()
+            .unwrap()
+            .unwrap();
         {
-            let state = socket.state.lock();
+            let mut state = socket.state.lock();
             assert_eq!(state.queue.len(), 1);
             assert_eq!(state.queue[0].offset, 0);
             assert_eq!(state.queue[0].packet.frame.payload().as_ptr(), pointer);
+            assert!(!stale_output_pending && state.activity + idle_timeout <= now);
+            let write_deadline = state.deadline();
+            assert!(!state.idle_expired(now, idle_timeout));
+            assert_eq!(state.activity, now);
+            assert_eq!(state.deadline(), write_deadline);
         }
         assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
         assert!(
@@ -761,6 +795,25 @@ mod tests {
             reader.read().unwrap(),
             Message::Binary(protocol::envelope(sender_id, &value))
         );
+    }
+
+    #[test]
+    fn idle_expiry_preserves_exact_boundary_and_pending_control_deadline() {
+        let (_relay, socket, _reader, _poll) = connected();
+        let now = Instant::now();
+        let timeout = Duration::from_secs(1);
+        let mut state = socket.state.lock();
+        state.activity = now;
+        assert!(!state.idle_expired(now, timeout));
+        state.activity = now - timeout;
+        assert!(state.idle_expired(now, timeout));
+        assert_eq!(state.activity, now - timeout);
+        let write_deadline = now + Duration::from_secs(5);
+        state.control_pending = true;
+        state.control_deadline = Some(write_deadline);
+        assert!(!state.idle_expired(now, timeout));
+        assert_eq!(state.activity, now);
+        assert_eq!(state.deadline(), Some(write_deadline));
     }
 
     #[test]

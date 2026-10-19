@@ -523,6 +523,9 @@ replies. Receive-only clients remain active while output arrives. Ping/Pong
 traffic does not refresh application activity, and an unfinished WebSocket data
 message does not qualify as completed input. Queued/in-flight output is active
 work governed by the existing queue and write limits.
+Native idle decisions inspect activity and pending output under one socket-state
+lock. Pending output postpones idle expiry without extending its write deadline;
+see the [controlled interleaving check](benchmarks/2026-10-18-idle-state-snapshot/README.md).
 
 An application-idle decision sends `1001` / `Application Idle` and increments
 `war_idle_timeouts_total`. Routing membership is removed before the handshake;
