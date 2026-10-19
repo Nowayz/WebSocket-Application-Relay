@@ -27,6 +27,10 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     args.origin_policy.validate()?;
     war_relay::legacy_bridge::validate_upstream(&args.upstream)?;
+    war_relay::legacy_bridge::validate_connection_limits(
+        args.max_connections,
+        args.max_connections_per_ip,
+    )?;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),

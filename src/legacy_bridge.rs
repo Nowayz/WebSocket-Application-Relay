@@ -250,6 +250,23 @@ pub fn validate_upstream(upstream: &str) -> Result<()> {
     Ok(())
 }
 
+/// Check admission counter and semaphore ranges without allocating or binding.
+/// Serving repeats this validation; callers may also use it before binding.
+pub fn validate_connection_limits(
+    max_connections: usize,
+    max_connections_per_ip: usize,
+) -> Result<()> {
+    anyhow::ensure!(
+        max_connections_per_ip <= u32::MAX as usize,
+        "max-connections-per-ip must be in 0..=4294967295"
+    );
+    anyhow::ensure!(
+        max_connections > 0 && max_connections <= Semaphore::MAX_PERMITS,
+        "invalid bridge connection limit"
+    );
+    Ok(())
+}
+
 /// Optional direct-peer admission at the public legacy ingress. Forwarding
 /// headers do not change the address observed on the accepted TCP connection.
 pub async fn serve_with_limits(
@@ -262,14 +279,7 @@ pub async fn serve_with_limits(
 ) -> Result<()> {
     origin_policy.validate()?;
     validate_upstream(&upstream)?;
-    anyhow::ensure!(
-        max_connections_per_ip <= u32::MAX as usize,
-        "max-connections-per-ip must be in 0..=4294967295"
-    );
-    anyhow::ensure!(
-        max_connections > 0 && max_connections <= Semaphore::MAX_PERMITS,
-        "invalid bridge connection limit"
-    );
+    validate_connection_limits(max_connections, max_connections_per_ip)?;
     let slots = Arc::new(Semaphore::new(max_connections));
     let origin_policy = Arc::new(origin_policy);
     let ip_limit = crate::admission::IpLimit::new(max_connections_per_ip);

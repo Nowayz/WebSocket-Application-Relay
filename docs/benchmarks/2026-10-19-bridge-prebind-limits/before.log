@@ -1,0 +1,32 @@
+   Compiling tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/bridge-prebind-limits-20261019-work/vendor/tungstenite)
+   Compiling tokio-tungstenite v0.30.0 (/home/phil/dev/war_next/artifacts/bridge-prebind-limits-20261019-work/vendor/tokio-tungstenite)
+   Compiling war-relay v0.1.0 (/home/phil/dev/war_next/artifacts/bridge-prebind-limits-20261019-work)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.71s
+     Running tests/bridge_config.rs (artifacts/bridge-buffer-check/debug/deps/bridge_config-7be1460f00a35fa2)
+
+running 3 tests
+test invalid_per_ip_connection_limit_is_reported_before_binding ... FAILED
+test invalid_global_connection_limits_are_reported_before_binding ... FAILED
+test valid_admission_boundaries_still_reach_binding_without_allocating_slots ... ok
+
+failures:
+
+---- invalid_per_ip_connection_limit_is_reported_before_binding stdout ----
+
+thread 'invalid_per_ip_connection_limit_is_reported_before_binding' (1552303) panicked at tests/bridge_config.rs:53:5:
+assertion failed: error.contains("max-connections-per-ip must be in 0..=4294967295")
+
+---- invalid_global_connection_limits_are_reported_before_binding stdout ----
+
+thread 'invalid_global_connection_limits_are_reported_before_binding' (1552302) panicked at tests/bridge_config.rs:41:9:
+assertion failed: error.contains("invalid bridge connection limit")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    invalid_global_connection_limits_are_reported_before_binding
+    invalid_per_ip_connection_limit_is_reported_before_binding
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `--test bridge_config`

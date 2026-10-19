@@ -301,8 +301,10 @@ The optional migration bridge translates the original binary/text wire format:
 ```
 
 The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
-Rust embedders can use `legacy_bridge::validate_upstream`; serving also enforces
-the check. Reachability and TLS availability are checked when forwarding a client.
+Rust embedders can use `legacy_bridge::validate_upstream` and
+`legacy_bridge::validate_connection_limits` before binding; serving repeats these
+checks. The CLI checks connection limits before binding or logging that it is
+listening; see the [startup-boundary regressions](docs/benchmarks/2026-10-19-bridge-prebind-limits/README.md). Reachability and TLS availability are checked when forwarding a client.
 If that connection fails or exceeds its ten-second deadline, the legacy client
 receives a bounded `1013 / Upstream Unavailable` Close. A later connection attempt
 can succeed once the upstream returns; see the [failure and recovery checks](docs/benchmarks/2026-10-19-bridge-upstream-unavailable/README.md).
