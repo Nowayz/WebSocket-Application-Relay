@@ -10,6 +10,10 @@ cleanup() {
   rm -rf "$task_logs"
 }
 trap cleanup EXIT
+# Deployment settings belong to the caller, not these disposable fixtures.
+# Unset names without reading or logging their potentially secret values.
+for fixture_var in "${!WAR_@}"; do unset "$fixture_var"; done
+unset fixture_var
 # Archived inputs may predate a shared Cargo cache. Rebuild in-tree crates,
 # including patched dependencies, before accepting the fixture executables.
 find src vendor -type f -exec touch -c {} +
