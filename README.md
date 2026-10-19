@@ -165,6 +165,8 @@ b.close();
 expose privileged commands. `disconnect` events carry `{ userId }`; `close` events
 carry `{ code, reason }`. The client serializes control requests, including
 concurrent variable requests, because v1 deliberately has no request-ID field.
+Calling `close()` immediately rejects an outstanding command and prevents queued
+commands from sending; it does not wait for the peer's Close acknowledgement.
 
 To build a standalone browser ES module and open its acceptance page:
 

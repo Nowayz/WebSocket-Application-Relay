@@ -110,7 +110,10 @@ export class Relay extends EventTarget {
   }
 
   broadcast(value) { this.send(BROADCAST, value); }
-  close() { this.ws.close(1000); }
+  close() {
+    this.#pending?.reject(new Error('Relay is closed'));
+    this.ws.close(1000);
+  }
 
   /** Serialize commands: the deliberately small wire protocol has no request IDs. */
   request(op, value) {

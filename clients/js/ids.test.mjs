@@ -110,6 +110,34 @@ test('valid assignment acknowledgement keeps the BigInt API', async () => {
   relay.close();
 });
 
+test('local close rejects pending and queued commands before a peer Close event', async () => {
+  class DelayedClose extends socketClass(1) {
+    close(code = 1000, reason = '') {
+      this.closed = { code, reason };
+      this.readyState = 2;
+    }
+  }
+  const relay = await Relay.connect('ws://fixture', 'close-check', {
+    WebSocketClass: DelayedClose, requestTimeoutMs: 1000,
+  });
+  let firstError, queuedError;
+  const first = relay.channels().catch(error => { firstError = error; });
+  await Promise.resolve();
+  const queued = relay.listen(1).catch(error => { queuedError = error; });
+  const ws = DelayedClose.instance;
+  try {
+    relay.close();
+    await new Promise(setImmediate);
+    assert.match(firstError?.message ?? '', /Relay is closed/);
+    assert.match(queuedError?.message ?? '', /Relay is closed/);
+    assert.equal(ws.closed.code, 1000);
+    assert.equal(ws.readyState, 2);
+  } finally {
+    ws.dispatchEvent(Object.assign(new Event('close'), { code: 1000, reason: 'fixture cleanup' }));
+    await Promise.all([first, queued]);
+  }
+});
+
 test('malformed replies reject pending commands before the close handshake completes', async () => {
   const WebSocketClass = class extends socketClass(1) {
     close(code, reason) {
