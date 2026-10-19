@@ -15,7 +15,8 @@ recent rejected alternatives, start with the [current performance guide](docs/pe
 ## Native Rust fanout
 
 Native multicast shares immutable payloads, sends on the sockets' owning workers,
-and combines queued frames into bounded vectored writes. Ordinary private traffic
+and uses a small borrowed writer for a single queued frame, with bounded vectored
+batching for larger queues. Ordinary private traffic
 keeps its immediate-send path. Large ordinary rooms now submit at most 1,024
 recipient visits per source turn, retaining the same shared body and immutable
 membership view until that message finishes. Output-only wakes avoid entering

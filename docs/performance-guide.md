@@ -7,8 +7,12 @@ Use this page to find the selected implementation and choose a short test. The d
 | Component | Selected behavior | Evidence |
 | --- | --- | --- |
 | Native Rust relay | Mio readiness workers; immediate private sends; shared immutable multicast bodies; bounded vectored output; 1,024 ordinary-room recipient visits per source turn | [100,000-user mixed-load selection](benchmarks/2026-10-18-mixed-100k-fairness/README.md) |
+| Native deferred output | Single queued frame uses the small borrowed writer; larger queues retain bounded vectored batching (`266e5b1`) | [Selected writer and tradeoffs](benchmarks/2026-10-18-single-queued-write/README.md) |
+| Management page selection | Empty pages avoid allocation; populated pages use bounded selection batches (`3ee013c`) | [Allocation and locking tradeoffs](benchmarks/2026-10-18-batched-channel-page/README.md) |
 | Legacy bridge | CBOR upstream, upstream TCP_NODELAY, 4 KiB initial upstream read buffer; direct single-buffer binary and text encoding; existing frame/message limits retained | [Delayed-ACK fix](benchmarks/2026-10-18-bridge-upstream-nodelay/README.md), [connection memory](benchmarks/2026-10-18-bridge-read-buffer/README.md), [binary encoding](benchmarks/2026-10-18-bridge-fused-encoding/README.md), [text encoding](benchmarks/2026-10-18-bridge-text-encoding/README.md) |
 | Allocator | Existing system allocator; no default jemalloc preload | [Four-wave retirement/allocator screen](benchmarks/2026-10-18-churn-retention/README.md) |
+
+The table describes selected source behavior. The frozen native baseline predates the deferred-writer and management-page changes; a running historical binary does not acquire later source changes.
 
 The frozen native baseline is runtime revision `279c3c1`, SHA-256 `3db9ebeb0fff87636a1bf2fc5a6e0ae88d48d12aa7a52571cb4b28fa4d911fa9`. The frozen bridge baseline is code revision `4c9113a`, SHA-256 `bb2392f53bd8fe1bdff47f0a8e790b366269400e259839565bdeb4573f9f8bf1`. These identify measured artifacts, not the repository's latest documentation commit. A new build must be identified by its own source and executable hashes.
 
@@ -18,6 +22,7 @@ The primary mixed-load comparison has 100,000 private users plus 8,192 fanout re
 
 | Question | Test | Measured phase |
 | --- | --- | --- |
+| Does a local routing/output change merit further testing? | Two-second `scripts/inspection.py` screen below; compare fresh control/candidate processes sequentially | Two seconds plus setup/retirement; rejects regressions, does not establish population fairness |
 | Does a change hurt private users while a hot room broadcasts? | `scripts/mixed-capacity.py --seconds 6` with the full mixed-load options below | Six seconds; 24 observations/user at 4 Hz |
 | Do repeated population bursts retire correctly? | `scripts/capacity.py --users 16384 --room-size 2 --waves 4 --seconds 1 --active-percent 10` | Four one-second traffic phases, with checked joins/closes between |
 | Does bridge cancellation retire both legs while native traffic survives? | [Disposable shutdown probe](benchmarks/2026-10-18-bridge-shutdown/README.md) | Small joined/incomplete populations; current transport-cancellation policy |
@@ -26,7 +31,26 @@ The primary mixed-load comparison has 100,000 private users plus 8,192 fanout re
 
 Setup, proof scans and exhaustive departure/Close checks add wall time outside the measured phase. In particular, six seconds of offered mixed traffic does not mean a six-second complete test. Extend a test only when the result needs it; a short screen can reject a clear regression without pretending to prove a long-term tail guarantee.
 
-To test a new build, build it deliberately from the source tree you intend to measure, including or excluding local changes explicitly:
+For a first routing/output screen, build the intended sources and use a fresh output path:
+
+```sh
+cargo build --release --bin war-relay --example inspection
+python3 scripts/inspection.py \
+  --server target/release/war-relay \
+  --client target/release/examples/inspection \
+  --mode none --rooms 0 --seconds 2 --inspectors 0 --pairs 64 \
+  --churn-workers 0 --workers 4 --client-workers 8 \
+  --fanout-readers 2048 --fanout-window 4 --fanout-close-window 32 \
+  --server-cpus 0-3 --client-cpus 4-7,20-23 \
+  --pin-workers --pin-client-workers \
+  --output artifacts/new-build-short-mixed.json
+```
+
+Use `--pairs 0` for the corresponding fanout-only screen. The CPU masks above are for the recorded host; choose disjoint available CPUs on another machine. Freeze both executables before comparing variants, record their identities, and run control/candidate/candidate/control sequentially. Build outside timed traffic. A short screen can reject a candidate; favorable results still need the relevant fairness or pressure fixture. It does not prove 100,000-user behavior. Add `--profile` only for a separate diagnostic run; instrumented/profiled timings are excluded from ordinary comparisons.
+
+The selected-build [CPU profile](benchmarks/2026-10-18-selected-cpu-profile/README.md) and [clock call census](benchmarks/2026-10-18-clock-call-census/README.md) distinguish sampled cycle costs from call frequency. Dominant explicit clock calls check connection policy and start queued-frame deadlines; these times serve different purposes. [Admission retry counts](benchmarks/2026-10-18-admission-retries/README.md) are low in the measured fixture, but do not quantify successful atomic cache-coherence cost. None of these diagnostics establishes a performance gain or justifies weakening deadlines or exact admission.
+
+For population fairness, build deliberately from the source tree you intend to measure, including or excluding local changes explicitly:
 
 ```sh
 cargo build --release --bin war-relay --example capacity --example inspection
@@ -54,6 +78,8 @@ Use a fresh output name. This measures the new executable, not a reproduction of
 
 | Experiment | Decision and reason |
 | --- | --- |
+| [Skip discarded poll-timeout calculations](benchmarks/2026-10-18-ready-poll-timeout/README.md) | Overlapping CPU costs; no consistent joint latency/throughput improvement. |
+| [Specialized internal token hashing](benchmarks/2026-10-18-token-hash/README.md) | Initial fanout improvement did not hold against returning control; mixed traffic included CPU and latency regressions. |
 | [Buffered fanout batches](benchmarks/2026-10-18-buffered-fanout/README.md) | Lower CPU/fanout delay did not establish consistently better private-user tails. |
 | [512-recipient quantum](benchmarks/2026-10-18-short-fairness-quantum/README.md) | Worsened private-user tails; retain 1,024. |
 | [Direct CBOR byte-string parsing](benchmarks/2026-10-18-direct-bytes-screen/README.md) | Faster isolated parsing did not improve measured relay performance. |

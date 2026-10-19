@@ -366,7 +366,8 @@ cap, then checks deadline EOF and a successful recovery join. The expected
 it is distinct from a write failure or failed healthy delivery. See the
 [unacknowledged-close check](benchmarks/2026-10-18-unacknowledged-close/README.md).
 
-Queue limits concern logical payload storage, not the complete process RSS. WebSocket
+Queue limits concern logical output reservations, including charged active fanout
+membership snapshots in the global allowance, not the complete process RSS. WebSocket
 read/write buffers, partially assembled incoming frames, metadata, allocator
 overhead, stacks, and kernel socket buffers also cost memory. In particular, a
 large incoming-message limit multiplied by many simultaneous incomplete messages
@@ -673,8 +674,13 @@ statistics. See the [input-counter measurements](performance.md#worker-local-inp
 including unused retained capacity. `war_output_queue_peak_capacity_bytes` is
 the process-wide high-water mark of that aggregate. These count requested slot
 storage, not message bodies, allocator bookkeeping or kernel buffers. They are
-separate from `war_queued_bytes`, which charges encoded application bytes until
-completion or cancellation. A drained queue may retain up to 32 slots for reuse;
+separate from `war_queued_bytes`, the exact global output-admission counter. It
+charges in-flight encoded application bytes until completion or cancellation
+and active fanout membership snapshots until their continuation releases them.
+Shared bodies may be charged once per recipient, and concurrent publishers can
+conservatively charge the same membership view separately. This is logical
+admission accounting, not unique resident payload memory or a process RSS cap.
+A drained queue may retain up to 32 slots for reuse;
 larger empty queues release their storage. Terminal output releases even small
 queues. Freed storage can remain in allocator arenas, so a lower capacity gauge
 does not imply an immediate RSS decrease. Metrics have no user/channel labels.
