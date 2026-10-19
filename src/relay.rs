@@ -1193,10 +1193,13 @@ impl Relay {
         if self.is_stopping() {
             return true;
         }
+        let wake = pending.is_empty();
         pending.push_back(work);
         self.retirement_pending.store(true, Relaxed);
         drop(pending);
-        source.output.wake_retirement();
+        if wake {
+            source.output.wake_retirement();
+        }
         true
     }
 

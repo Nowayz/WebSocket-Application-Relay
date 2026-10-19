@@ -29,6 +29,9 @@ sequence across workers while allowing unrelated routing to proceed. The
 reduces the worst observed witness RTT from 107.13 to 4.57 ms, with ordinary
 mixed-load CPU effectively flat. Queue-pressure fallback remains synchronous;
 its ordering and memory limits are covered separately in that report.
+Overlapping retirement publications now share one worker wake; refilling a
+drained queue wakes again. The [release component and short 100k checks](docs/benchmarks/2026-10-19-retirement-wake-coalescing/README.md)
+record the reduced publication cost and ordinary-workload limits.
 
 Workers also discover at most 1,024 expired timers per turn before returning to
 ready processing and socket polling. The [expiry-burst report](docs/benchmarks/2026-10-19-expiry-fairness/README.md)

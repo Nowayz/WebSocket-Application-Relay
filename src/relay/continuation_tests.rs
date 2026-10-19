@@ -288,3 +288,75 @@ fn a_pending_departure_cannot_notify_a_recreated_room() {
     drop(replacement);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+struct WakeCounter {
+    wake: mio::Waker,
+    calls: AtomicUsize,
+}
+impl PeerOutput for WakeCounter {
+    fn send(&self, _: Submission<'_>) -> bool {
+        true
+    }
+    fn close(&self, _: Disconnect) {}
+    fn supports_retirement(&self) -> bool {
+        true
+    }
+    fn wake_retirement(&self) {
+        self.calls.fetch_add(1, Relaxed);
+        self.wake.wake().unwrap();
+    }
+}
+
+#[test]
+fn retirement_publications_share_one_wake_until_the_queue_drains() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let poll = mio::Poll::new().unwrap();
+    let output = Arc::new(WakeCounter {
+        wake: mio::Waker::new(poll.registry(), mio::Token(1)).unwrap(),
+        calls: AtomicUsize::new(0),
+    });
+    let first = relay
+        .subscribe_with_output(b"wake", output.clone())
+        .unwrap();
+    let second = relay
+        .subscribe_with_output(b"wake", output.clone())
+        .unwrap();
+    let third = relay
+        .subscribe_with_output(b"wake", output.clone())
+        .unwrap();
+    let targets: Vec<_> = (0..FANOUT_QUANTUM + 1)
+        .map(|_| {
+            relay
+                .subscribe_with_output(b"wake", Arc::new(NativeRetirement))
+                .unwrap()
+        })
+        .collect();
+    drop(first);
+    assert_eq!(output.calls.load(Relaxed), 1);
+    drop(second);
+    assert_eq!(
+        output.calls.load(Relaxed),
+        1,
+        "an active queue already has a waking or running owner"
+    );
+    for _ in 0..4 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    drop(third);
+    assert!(relay.has_retirements());
+    assert_eq!(
+        output.calls.load(Relaxed),
+        2,
+        "refilling an empty queue must wake again"
+    );
+    for _ in 0..2 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(targets);
+    assert_eq!(relay.counts(), (0, 1));
+}
