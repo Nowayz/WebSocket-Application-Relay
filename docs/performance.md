@@ -7147,3 +7147,14 @@ ordinary processes show warmed bridge RSS 10,908–10,952 KiB before versus
 9,876–9,980 KiB after. No data forwarding change or new allocation is added.
 106 library and 61 compatibility tests pass. See the
 [heap attribution and ordinary memory checks](benchmarks/2026-10-19-bridge-join-owner/README.md).
+
+### Full-width inline control integers (2026-10-19)
+
+The frame prefix now holds fourteen bytes, enough for the longest five-byte
+control prefix and a nine-byte CBOR uint64. This removes the allocated large-ID
+reply fallback. Both compiled layouts remain 48 bytes on the measured Linux
+x86-64 target. The focused socket allocation probe removes exactly one nine-byte
+allocation per full-width reply; small replies are unchanged. Fixed-rate short
+mixed checks do not show a consistent latency or CPU regression, but establish
+no general throughput or capacity improvement. See the
+[allocation, layout and traffic evidence](benchmarks/2026-10-19-inline-u64-control/README.md).
