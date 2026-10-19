@@ -7044,3 +7044,12 @@ substantially less RSS and gives more private users sub-5-ms observed maxima.
 The distributions cross, so neither wins for every user. Full per-user curves,
 limits and reproducible receipts are in the
 [short comparison](benchmarks/2026-10-18-short-rust-cpp-fairness/README.md).
+
+
+### Large connection-arena growth screen (2026-10-18)
+
+A two-run, four-second traffic screen tests 1.5x rather than 2x growth above
+4,096 connection slots. The candidate saves only 1.77% population-ready RSS
+in this pair and has higher observed CPU/private/fanout maxima. This does not
+establish a repeatable timing regression or justify adoption; the existing
+simple growth policy remains. See the [screen and complete receipts](benchmarks/2026-10-18-slab-growth-screen/README.md).
