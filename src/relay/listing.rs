@@ -1,3 +1,4 @@
+use base64::{Engine, engine::general_purpose::STANDARD};
 use std::num::NonZeroUsize;
 
 use super::{ChannelSnapshot, MAX_CHANNEL_PAGE_SIZE, Relay, SnapshotName};
@@ -16,8 +17,12 @@ impl Relay {
         let capacity = (2 * limit).min(state.channels.len());
         let mut selected = Vec::new();
         for (name, channel) in &state.channels {
-            let name = SnapshotName::new(name);
-            let key = name.base64();
+            // Cursor filtering needs only the borrowed name's sort key.
+            // Construct owned row metadata only after that filter succeeds.
+            let mut key = [0; 24];
+            STANDARD
+                .encode_slice(name, &mut key)
+                .expect("16-byte channel names fit in 24 base64 bytes");
             if after.is_some_and(|after| key <= after) {
                 continue;
             }
@@ -27,7 +32,7 @@ impl Relay {
             selected.push((
                 key,
                 ChannelSnapshot {
-                    name,
+                    name: SnapshotName::new(name),
                     members: channel.members.len(),
                     variables: channel.variables.len(),
                     variable_bytes: channel.variable_bytes,
