@@ -423,6 +423,8 @@ impl Write for Stream {
     }
 }
 
+// Body-bearing frames have at most ten prefix bytes: 10 WebSocket + 10 CBOR.
+// Longer inline scalar prefixes have no body and need only a two-byte header.
 fn header(frame: &Frame, bytes: &mut [u8; 20]) -> usize {
     bytes[0] = 0x82;
     let length = frame.len();
@@ -636,6 +638,69 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn stack_headers_fit_inline_controls_and_body_length_boundaries() {
+        fn check(frame: Frame, expected: bytes::Bytes) -> (usize, u8) {
+            let mut head = [0; 20];
+            let head_len = header(&frame, &mut head);
+            assert!(head_len <= head.len());
+            let mut wire = Vec::new();
+            let mut offset = 0;
+            while offset < wire_len(&frame) {
+                write_frame(&mut wire, &frame, &mut offset, WRITE_QUANTUM).unwrap();
+            }
+            assert_eq!(offset, wire.len());
+            let width = wire[1];
+            let mut client = WebSocket::from_raw_socket(io::Cursor::new(wire), Role::Client, None);
+            assert_eq!(client.read().unwrap(), Message::Binary(expected));
+            (head_len, width)
+        }
+
+        for value in [0, 23, 24, 255, 256, 65535, 65536, u32::MAX as u64, u64::MAX] {
+            check(Frame::integer(value), protocol::uint(value));
+            for op in [0, 23, 24, 200, 255] {
+                check(
+                    Frame::reply_uint(op, value),
+                    protocol::reply(op, &protocol::uint(value)),
+                );
+            }
+        }
+        assert_eq!(Frame::reply_uint(255, u64::MAX).prefix().len(), 14);
+        let mut widths = [false; 3];
+        let mut maximum_header = 0;
+        for size in [
+            0, 23, 24, 113, 114, 116, 117, 118, 119, 65522, 65523, 65524, 65525, 65526, 65527,
+            65528,
+        ] {
+            let value = protocol::byte_string(&vec![0x5a; size]);
+            for (frame, expected) in [
+                (
+                    Frame::envelope(u64::MAX - 1, value.clone()),
+                    protocol::envelope(u64::MAX - 1, &value),
+                ),
+                (
+                    Frame::reply(255, value.clone()),
+                    protocol::reply(255, &value),
+                ),
+                (
+                    Frame::variable(Some(value.clone())),
+                    protocol::reply(200, &[b"\x82\xf5".as_slice(), value.as_ref()].concat()),
+                ),
+            ] {
+                let (head_len, width) = check(frame, expected);
+                maximum_header = maximum_header.max(head_len);
+                widths[match width {
+                    0..=125 => 0,
+                    126 => 1,
+                    127 => 2,
+                    _ => unreachable!(),
+                }] = true;
+            }
+        }
+        assert_eq!(widths, [true; 3]);
+        assert_eq!(maximum_header, 20);
     }
 
     #[test]
