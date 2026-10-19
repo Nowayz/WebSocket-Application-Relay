@@ -19,6 +19,30 @@ class ComparisonTest(unittest.TestCase):
             path.write_text('id,samples,p99_ms,max_ms,schedule_p99_ms,schedule_max_ms\n' + body)
             return comparison.load(path)
 
+    def test_wire_user_ids_reject_reserved_malformed_and_numeric_aliases(self):
+        for unit, bounded in [('ms', False), ('ns', False), ('ms', True)]:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'users.csv'
+                metric = 'p99_upper' if bounded else 'p99'
+                header = f'id,samples,{metric}_{unit},max_{unit},schedule_{metric}_{unit},schedule_max_{unit}\n'
+                for identity in ['0', str(2**64 - 1), str(2**64), '-1', '+1', '1_0',
+                                 '1.0', '1e0', '0x1', 'abc', ' ', '١', '１']:
+                    path.write_text(header + f'{identity},100,1,2,3,4\n')
+                    with self.subTest(unit=unit, bounded=bounded, identity=identity):
+                        with self.assertRaisesRegex(ValueError, 'user ID'):
+                            comparison.load(path, histogram_bounds=bounded)
+                path.write_text(header + '1,100,1,2,3,4\n01,100,1,2,3,4\n')
+                with self.subTest(unit=unit, bounded=bounded, aliases=True):
+                    with self.assertRaisesRegex(ValueError, 'duplicate user ID'):
+                        comparison.load(path, histogram_bounds=bounded)
+
+    def test_wire_user_ids_accept_boundaries_and_single_decimal_alias(self):
+        values, samples, maxima = self.fixture(
+            f'0001,100,1,2,3,4\n2,100,2,3,4,5\n{2**64 - 2},100,3,4,5,6\n')
+        self.assertEqual(samples, [100, 100, 100])
+        self.assertEqual(values['send_to_receive'], [1, 2, 3])
+        self.assertEqual(maxima['intended_send_to_receive'], 6)
+
     def test_cli_preserves_existing_outputs_and_dangling_symlinks(self):
         for suffix in ['.png', '.pdf', '.json']:
             for symlink in [False, True]:

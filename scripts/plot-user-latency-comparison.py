@@ -23,9 +23,14 @@ def load(path, histogram_bounds=False, statistic="p99"):
     actual_column = f'{selected}_{unit}'
     intended_column = f'schedule_{selected}_{unit}'
     for row in rows:
-        identity = row['id']
-        if not identity or identity in ids:
-            raise ValueError(f'{path}: empty or duplicate user ID')
+        raw_identity = row['id']
+        if not raw_identity or not raw_identity.isascii() or not raw_identity.isdecimal():
+            raise ValueError(f'{path}: invalid user ID; expected decimal uint64 session ID')
+        identity = int(raw_identity)
+        if not 0 < identity < 2**64 - 1:
+            raise ValueError(f'{path}: invalid user ID; reserved or outside uint64 session range')
+        if identity in ids:
+            raise ValueError(f'{path}: duplicate user ID')
         ids.add(identity)
         count = int(row['samples'])
         if count <= 0:
