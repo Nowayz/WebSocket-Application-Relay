@@ -306,6 +306,13 @@ The optional migration bridge translates the original binary/text wire format:
   --bind 127.0.0.1:1337 --upstream ws://127.0.0.1:1338
 ```
 
+After the frontend WebSocket upgrade, send its channel name within ten seconds.
+Otherwise the bridge sends `1008 / Channel Join Timeout`, matching the native
+relay's join policy. Close acknowledgement has its own bounded ten-second budget;
+the admission slot is released when that exchange finishes or its budget expires.
+An unjoined client opens no upstream connection. See the [join timeout and
+single-slot recovery check](docs/benchmarks/2026-10-19-bridge-join-timeout/README.md).
+
 The bridge checks upstream URL syntax and the `ws`/`wss` scheme before binding.
 Rust embedders can use `legacy_bridge::validate_upstream` and
 `legacy_bridge::validate_connection_limits` before binding; serving repeats these

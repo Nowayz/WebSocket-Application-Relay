@@ -1,0 +1,99 @@
+--- a/src/legacy_bridge.rs
++++ b/src/legacy_bridge.rs
+@@ -451,7 +451,23 @@
+             }
+         }
+     })
+-    .await??;
++    .await;
++    let joined = match joined {
++        Ok(joined) => joined?,
++        Err(error) => {
++            transport::initiate_close(
++                &mut legacy,
++                Some(CloseFrame {
++                    code: CloseCode::Policy,
++                    reason: "Channel Join Timeout".into(),
++                }),
++                WAIT,
++                None,
++            )
++            .await;
++            return Err(error).context("legacy channel join timeout");
++        }
++    };
+     let Some(joined) = joined else {
+         return Ok(());
+     };
+@@ -1510,6 +1526,71 @@
+         frontend_retirement_before_welcome_recovers(true).await;
+     }
+ 
++    #[tokio::test]
++    async fn frontend_join_timeout_closes_cleanly_and_recovers_the_only_slot() {
++        use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
++
++        timeout(Duration::from_secs(14), async {
++            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let upstream_url = format!("ws://{}", upstream.local_addr().unwrap());
++            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let url = format!("ws://{}", listener.local_addr().unwrap());
++            let shutdown = CancellationToken::new();
++            let connected = Arc::new(AtomicBool::new(false));
++            let observed = connected.clone();
++            let mut tasks = JoinSet::new();
++            tasks.spawn(async move {
++                let (stream, _) = upstream.accept().await.unwrap();
++                observed.store(true, Relaxed);
++                let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
++                let Some(Ok(Message::Binary(join))) = ws.next().await else {
++                    panic!("missing recovered subscription");
++                };
++                assert_eq!(protocol::join(&join).unwrap(), b"join-timeout");
++                ws.send(Message::Binary(protocol::uint(42))).await.unwrap();
++                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
++                assert!(transport::acknowledge_close(&mut ws, Duration::from_secs(1)).await);
++            });
++            let token = shutdown.clone();
++            tasks.spawn(async move {
++                serve(listener, upstream_url, 1, token).await.unwrap();
++            });
++            let (mut idle, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            let started = tokio::time::Instant::now();
++            let received = idle.next().await;
++            let Some(Ok(Message::Close(Some(frame)))) = received else {
++                panic!("join timeout must send a clean Close: {received:?}");
++            };
++            assert_eq!(frame.code, CloseCode::Policy);
++            assert_eq!(frame.reason, "Channel Join Timeout");
++            assert!(started.elapsed() >= Duration::from_secs(9));
++            assert!(
++                !connected.load(Relaxed),
++                "an unjoined client must not open upstream TCP"
++            );
++            assert!(transport::acknowledge_close(&mut idle, Duration::from_secs(1)).await);
++            drop(idle);
++            let (mut recovered, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
++            recovered
++                .send(Message::Binary(Bytes::from_static(b"join-timeout")))
++                .await
++                .unwrap();
++            assert_eq!(
++                recovered.next().await.unwrap().unwrap(),
++                Message::Binary(Bytes::copy_from_slice(&42u64.to_le_bytes()))
++            );
++            assert!(
++                transport::initiate_close(&mut recovered, None, Duration::from_secs(1), None).await
++            );
++            shutdown.cancel();
++            while let Some(result) = tasks.join_next().await {
++                result.unwrap();
++            }
++        })
++        .await
++        .expect("join timeout, clean Close and one-slot recovery must stay bounded");
++    }
++
+     async fn welcome_failure_closes_and_recovers(stalled: bool) {
+         timeout(Duration::from_secs(14), async {
+             let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
