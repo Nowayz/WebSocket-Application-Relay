@@ -1,0 +1,28 @@
+--- a/examples/inspection.rs
++++ b/examples/inspection.rs
+@@ -6,7 +6,7 @@
+ use base64::{Engine, engine::general_purpose::STANDARD};
+ use bytes::Bytes;
+ use clap::{Parser, ValueEnum};
+-use futures_util::{SinkExt, StreamExt};
++use futures_util::{FutureExt, SinkExt, StreamExt};
+ use minicbor::Decoder;
+ use serde::{Deserialize, Serialize};
+ use std::{
+@@ -444,10 +444,12 @@
+     Ok(())
+ }
+ async fn data(socket: &mut Socket) -> Result<Bytes> {
+-    match timeout(Duration::from_secs(5), socket.next())
+-        .await?
+-        .context("missing data")??
+-    {
++    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
++    let next = match socket.next().now_or_never() {
++        Some(next) => next,
++        None => tokio::time::timeout_at(deadline, socket.next()).await?,
++    };
++    match next.context("missing data")?? {
+         Message::Binary(b) => Ok(b),
+         m => anyhow::bail!("unexpected {m:?}"),
+     }
