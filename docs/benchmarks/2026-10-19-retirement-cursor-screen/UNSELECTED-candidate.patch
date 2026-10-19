@@ -19,7 +19,7 @@
      pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
  }
 @@ -176,7 +177,7 @@
- 
+
  fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
      // HashMap iteration scans spare buckets too. After substantial retirement,
 -    // release excess slots in ownership, membership and channel-name indexes.
@@ -28,7 +28,7 @@
      // peers, queues, name/variable bytes and shared bodies keep their storage.
      let remaining = map.len();
 @@ -188,7 +189,9 @@
- 
+
  #[derive(Default)]
  struct Channel {
 -    members: HashMap<u64, Arc<Peer>>,
@@ -134,10 +134,10 @@
 +            .fetch_sub(self.metadata_bytes, Relaxed);
      }
  }
- 
+
 @@ -1132,16 +1216,31 @@
      }
- 
+
      pub(crate) fn progress_retirements(&self) {
 -        // Serialize the retirement sequence, but never make another worker wait
 -        // for this turn. No registry lock is acquired during output submission.
@@ -177,7 +177,7 @@
 @@ -1149,20 +1248,53 @@
          self.retirement_pending.store(!pending.is_empty(), Relaxed);
      }
- 
+
 -    fn flush_retirements(&self) {
 +    fn flush_retirements(&self, state: &Registry) {
          if !self.has_retirements() {
@@ -231,7 +231,7 @@
 +        self.publish_retirement(source, Retirement::Room(work));
 +        true
      }
- 
+
      fn defer_retirement(
 @@ -1174,7 +1306,7 @@
          if !source.output.supports_retirement() {
@@ -259,7 +259,7 @@
 +        self.publish_retirement(source, Retirement::Observers(work));
          true
      }
- 
+
      fn remove(&self, peer: &Peer) {
          let mut state = self.state.write();
 +        let before = state.next_key;
@@ -339,7 +339,7 @@
 --- a/src/relay/continuation_tests.rs
 +++ b/src/relay/continuation_tests.rs
 @@ -191,8 +191,8 @@
- 
+
  fn check_retirement_sequence(pressure: bool) {
      let relay = Relay::new(Config {
 -        max_message_bytes: 1024,
