@@ -533,6 +533,10 @@ cargo build --release --example stress
 python3 scripts/stability.py --output artifacts/stability.json
 ```
 
+Choose a fresh stability output path for each run. The runner refuses existing
+paths before launching a relay and retains metadata, completed cases and the
+error if a workload raises.
+
 To check private routing before, during and after an idle global-room population:
 
 ```sh

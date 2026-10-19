@@ -1499,6 +1499,13 @@ python3 scripts/stability.py --modes fanout \
   --payload-sizes 64,1024,65536 --fanout-teardown-gate --output FRESH.json
 ```
 
+Each stability run exclusively creates a fresh receipt before starting its relay.
+Existing paths, including dangling symlinks, are refused. Workload exceptions
+retain metadata, completed cases and an `error` field. Updates are flushed after
+each case; this does not guarantee durability across a power loss or an abrupt
+process kill during a write. See the
+[receipt ownership checks](benchmarks/2026-10-18-stability-receipt-ownership/README.md).
+
 Build a stress client supporting `--teardown-gate`
 first, or pass its frozen path with `--stress`. The new flag is opt-in and requires
 fanout mode. The receipt's `traffic_finished` sample must show exactly the

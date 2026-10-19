@@ -1,0 +1,101 @@
+FFFE
+======================================================================
+ERROR: test_workload_failure_leaves_parseable_metadata_and_original_error (__main__.StabilityOutputTest.test_workload_failure_leaves_parseable_metadata_and_original_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-stability-output.py", line 70, in test_workload_failure_leaves_parseable_metadata_and_original_error
+    receipt = json.loads(output.read_text())
+                         ~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 787, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmptath7gq7/run.json'
+
+======================================================================
+FAIL: test_existing_regular_or_dangling_receipt_blocks_server_start (__main__.StabilityOutputTest.test_existing_regular_or_dangling_receipt_blocks_server_start) (dangling=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-stability-output.py", line 36, in test_existing_regular_or_dangling_receipt_blocks_server_start
+    self.assertEqual(result.returncode, 2, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 2 : Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/stability.py", line 271, in <module>
+    main()
+    ~~~~^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 256, in main
+    output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
+                           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   stress_binary=args.stress, server_cpus=args.server_cpus,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                                   server_workers=args.workers,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   fanout_teardown_gate=args.fanout_teardown_gate))
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 76, in run_case
+    raise RuntimeError(logs.read().decode())
+RuntimeError: controlled startup failure
+
+
+
+======================================================================
+FAIL: test_existing_regular_or_dangling_receipt_blocks_server_start (__main__.StabilityOutputTest.test_existing_regular_or_dangling_receipt_blocks_server_start) (dangling=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-stability-output.py", line 36, in test_existing_regular_or_dangling_receipt_blocks_server_start
+    self.assertEqual(result.returncode, 2, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 2 : Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/stability.py", line 271, in <module>
+    main()
+    ~~~~^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 256, in main
+    output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
+                           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   stress_binary=args.stress, server_cpus=args.server_cpus,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                                   server_workers=args.workers,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   fanout_teardown_gate=args.fanout_teardown_gate))
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 76, in run_case
+    raise RuntimeError(logs.read().decode())
+RuntimeError: controlled startup failure
+
+
+
+======================================================================
+FAIL: test_receipt_created_during_metadata_collection_is_not_overwritten (__main__.StabilityOutputTest.test_receipt_created_during_metadata_collection_is_not_overwritten)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/test-stability-output.py", line 58, in test_receipt_created_during_metadata_collection_is_not_overwritten
+    self.assertEqual(result.returncode, 2, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 2 : Traceback (most recent call last):
+  File "/home/phil/dev/war_next/scripts/stability.py", line 271, in <module>
+    main()
+    ~~~~^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 256, in main
+    output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
+                           ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   stress_binary=args.stress, server_cpus=args.server_cpus,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                                   server_workers=args.workers,
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   fanout_teardown_gate=args.fanout_teardown_gate))
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phil/dev/war_next/scripts/stability.py", line 76, in run_case
+    raise RuntimeError(logs.read().decode())
+RuntimeError: controlled startup failure
+
+
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.401s
+
+FAILED (failures=3, errors=1)

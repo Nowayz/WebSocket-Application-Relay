@@ -240,6 +240,8 @@ def main():
         parser.error("source-addresses requires --modes churn and a value in 0..=65534")
     if args.max_connections_per_ip is not None and not 0 <= args.max_connections_per_ip <= 4294967295:
         parser.error("max-connections-per-ip must be in 0..=4294967295")
+    if os.path.lexists(args.output):
+        parser.error(f"output already exists; choose a fresh path: {args.output}")
     output = {"host": platform.platform(), "server_sha256": hashlib.sha256(args.server.read_bytes()).hexdigest(),
               "stress_sha256": hashlib.sha256(args.stress.read_bytes()).hexdigest(),
               "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -251,18 +253,33 @@ def main():
     server_args = [part for origin in args.allowed_origin for part in ("--allowed-origin", origin)]
     if args.max_connections_per_ip is not None:
         server_args += ["--max-connections-per-ip", str(args.max_connections_per_ip)]
-    for mode in args.modes:
-        seconds = {"traffic": args.traffic_secs, "churn": args.churn_secs, "slow": args.slow_secs, "fanout": args.fanout_secs}[mode]
-        output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
-                                       stress_binary=args.stress, server_cpus=args.server_cpus,
-                                       client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
-                                       payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
-                                       reader_delay_ms=args.reader_delay_ms, window=args.window,
-                                       origin=args.origin, source_addresses=args.source_addresses,
-                                       server_args=server_args, server_preload=args.server_preload,
-                                       server_workers=args.workers,
-                                       fanout_teardown_gate=args.fanout_teardown_gate))
-        args.output.write_text(json.dumps(output, indent=2) + "\n")
+    try:
+        receipt = args.output.open("x")
+    except FileExistsError:
+        parser.error(f"output already exists; choose a fresh path: {args.output}")
+    with receipt:
+        receipt.write(json.dumps(output, indent=2) + "\n")
+        receipt.flush()
+        for mode in args.modes:
+            try:
+                seconds = {"traffic": args.traffic_secs, "churn": args.churn_secs, "slow": args.slow_secs, "fanout": args.fanout_secs}[mode]
+                output["cases"].append(run_case(mode, seconds, args.clients, server_binary=args.server,
+                                               stress_binary=args.stress, server_cpus=args.server_cpus,
+                                               client_cpus=args.client_cpus, payload_bytes=args.payload_bytes,
+                                               payload_sizes=args.payload_sizes, unread_clients=args.unread_clients,
+                                               reader_delay_ms=args.reader_delay_ms, window=args.window,
+                                               origin=args.origin, source_addresses=args.source_addresses,
+                                               server_args=server_args, server_preload=args.server_preload,
+                                               server_workers=args.workers,
+                                               fanout_teardown_gate=args.fanout_teardown_gate))
+            except BaseException as error:
+                output["error"] = repr(error)
+                raise
+            finally:
+                receipt.seek(0)
+                receipt.write(json.dumps(output, indent=2) + "\n")
+                receipt.truncate()
+                receipt.flush()
     if not all(case["passed"] for case in output["cases"]):
         raise SystemExit(1)
 
