@@ -118,6 +118,7 @@ a sequence watermark prevents replay after re-subscription. The
 and remaining queue-pressure and pending-view scan costs.
 Pending disconnect jobs also [share charged observer snapshots](docs/retirement-snapshots.md),
 avoiding repeated list copies and repeated reservations for the same storage.
+An observer barrier reuses its lookup across jobs sharing a captured view.
 When a departure cannot fund deferred work, its synchronous fallback finishes
 only [preceding jobs for overlapping channels](docs/retirement-fallback.md).
 Unrelated rooms retain their bounded turns, including under source-local pressure.

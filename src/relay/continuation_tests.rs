@@ -928,6 +928,78 @@ fn an_unfunded_disconnect_view_falls_back_without_retaining_unaccounted_storage(
 }
 
 #[test]
+fn observer_barrier_distinguishes_absence_and_positions_in_captured_generations() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let older: Vec<_> = (0..=FANOUT_QUANTUM)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"gen-source", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let first = depart();
+    let second = depart();
+    relay
+        .receive(&older[0].0.peer, protocol::request(1, &protocol::uint(0)))
+        .unwrap();
+    let (observer, output) = recorded_disconnect_observer(&relay);
+    let third = depart();
+    // The new observer was absent from the first shared view and is last in
+    // the second. Move it to position zero in a third view of the same length;
+    // equal lengths do not make distinct captured generations interchangeable.
+    relay
+        .receive(
+            &older[FANOUT_QUANTUM].0.peer,
+            protocol::request(1, &protocol::uint(0)),
+        )
+        .unwrap();
+    let (replacement, replaced_output) = recorded_disconnect_observer(&relay);
+    assert_eq!(
+        relay.state.read().listeners(DISCONNECT_MESSAGE)[0].key,
+        observer.peer.key
+    );
+    let fourth = depart();
+    let fifth = depart();
+    relay
+        .receive(&observer.peer, protocol::request(1, &protocol::uint(0)))
+        .unwrap();
+    for _ in 0..10 {
+        relay.progress_retirements();
+    }
+    assert!(!relay.has_retirements());
+    for (frames, expected) in [
+        (&output, vec![third, fourth, fifth]),
+        (&older[0].1, vec![first, second]),
+        (&older[FANOUT_QUANTUM].1, vec![first, second, third]),
+        (&older[1].1, vec![first, second, third, fourth, fifth]),
+        (&replaced_output, vec![fourth, fifth]),
+    ] {
+        let packets = frames.0.lock();
+        assert_eq!(packets.len(), expected.len());
+        for (packet, id) in packets.iter().zip(expected) {
+            assert_eq!(
+                packet.to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(older);
+    drop(observer);
+    drop(replacement);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
 fn independent_observer_barriers_skip_visited_notices_and_survive_an_empty_queue() {
     let relay = Relay::new(Config {
         auth_password: Some("observer-ack".into()),

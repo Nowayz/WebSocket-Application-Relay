@@ -94,17 +94,17 @@ benefit with checked semantics, not a claimed general throughput improvement.
 
 ## Limits and further work
 
-The barrier still scans pending global recipient views under the registry write
-lock. Its cost depends on queued jobs and their unvisited membership, rather than
-being a fixed-time operation. Many pending views can still produce a long control
-turn. Queue-budget refusal still invokes synchronous best-effort fallback;
+The initial observer-specific barrier still searched each queued global view.
+The [shared-view follow-up](#shared-view-lookup-follow-up) below removes repeated
+searches of the same view. Distinct generations still need linear searches under
+the registry lock, and retirement advancement still serializes output turns.
+Queue-budget refusal uses [fallback scoped to overlapping channels](retirement-fallback.md);
 slow-recipient and exhausted-credit policies are unchanged. Keep enough metadata
-headroom for captured membership views.
+headroom for captured views.
 
-Further optimization should begin with a short screen that establishes a remaining
-bottleneck, such as many pending global jobs or queue-budget fallback. Include
-normal mixed traffic and all-user intended-send measurements before adopting a
-more complicated membership index or scheduling design.
+Further optimization should establish the remaining source of long control turns
+or close bursts with a short profile, then include normal mixed traffic and
+all-user intended-send measurements before changing membership or scheduling.
 
 ## Reproduction and source identity
 
@@ -149,3 +149,114 @@ Close receipts. No legacy or C/C++ implementation is reintroduced.
 The [subsequent snapshot ownership change](retirement-snapshots.md) reuses and
 charges overlapping disconnect views once. The footprint and comparison numbers
 above describe this report's `28e97de` revision.
+
+
+## Shared-view lookup follow-up
+
+The later shared-snapshot design made repeated scans of the same view visible.
+An observer revoking its disconnect flag still searched each queued job's
+recipient vector independently. A 64-departure burst against 100,000 observers
+searched essentially the same 100,001-member view repeatedly under the registry
+and retirement locks.
+
+A barrier now keeps one local borrowed view/position pair. Jobs sharing that
+view reuse the result, including an absent result. The identity comparison uses
+the slice's storage address and length, rather than its length or contents alone.
+Every job separately checks whether its own cursor has already visited that
+position. A changed view triggers a new lookup. The cache borrows from the locked
+queue and disappears before the guard is released; it owns no recipient handles,
+adds no allocation or per-peer field, and cannot survive into another command.
+Watermarks, FIFO publication, permission checks, shared body ownership and queue
+reservations retain their contracts.
+
+This reduces repeated-view lookup work to one scan plus a descriptor check per
+job. It leaves linear scans for distinct generations and can rescan a view if a
+different global view intervenes. The initial lookup searches the whole view to
+obtain a reusable position; an almost-finished single job can inspect an earlier
+prefix that the previous tail-only search skipped. This is a targeted optimization
+for shared pending views, not a fixed-time membership index.
+
+A disposable release component probe held 100,000 real registered listeners and
+queued real departure jobs, with a synchronous non-retaining test output. Five
+samples per size called the same barrier against an unchanged queue; the probe
+restored only its test observer's watermark between samples. It isolates lookup
+and submission cost, without transport, concurrent workers or publication timing.
+
+| Pending jobs sharing the view | Control median, ms | Candidate median, ms |
+| --- | ---: | ---: |
+| 1 | 0.021570 | 0.020219 |
+| 8 | 0.157976 | 0.020230 |
+| 64 | 1.258325 | 0.021179 |
+| 256 | 10.036373 | 0.024690 |
+
+The 256-job row is component evidence with a non-retaining output, not a promise
+that a native recipient can absorb a 256-message burst within its default queue.
+Individual control samples varied, especially at 256 jobs. Production timing
+uses separate uninstrumented frozen binaries.
+
+The native control and final-candidate cases used the same
+`scripts/observer-barrier.py`, eight workers on CPUs 0–7 and client cores
+8–15,24–31, with 100,000 audience observers and 64 distinct departure sources.
+Each checked 6,700,065 notices, their order, revocation/re-subscription, zero
+residual queued credit, zero copy/error counters and 100,000 shutdown Close
+`1001` receipts. All servers exited normally without a forced kill. Each complete
+fixture took roughly half a minute, largely for population and exhaustive proof.
+
+| Run | Revocation ACK, ms | Worst witness overlapping revocation, ms | Worst witness over short event, ms | First Close through ACK, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Control 1 | 4.485 | 5.370 | 5.370 | 91.743 |
+| Control 2 | 3.976 | 1.377 | 5.191 | 106.464 |
+| Final candidate 1 | 1.010 | 2.970 | 4.540 | 94.310 |
+| Final candidate 2 | 3.035 | 2.836 | 3.843 | 121.013 |
+
+Both candidate ACKs were faster than both controls; the two-sample median fell
+from 4.230 to 2.023 ms. Overlapping witness results were not uniformly better,
+and whole close-burst ranges overlapped. Measurements include client/kernel
+scheduling and do not establish a whole-burst gain, an all-user latency percentile
+or a sustained SLO. The adopted benefit is faster revocation across shared pending
+views with the complete wire/resource matrix intact.
+
+The new regression covers equal-sized membership generations where an observer
+is absent, then last, then first. Existing regressions verify shared jobs with
+different progress cursors, mixed ordinary/global views, independent barriers,
+watermark exhaustion and no late replay after re-subscription.
+
+To reproduce the native burst, add `--departures 64` to the event command above.
+The follow-up control is commit `0d16d35`, executable SHA-256
+`35dae946d6de535b8edcd038411bcc33fc46000b8cdd1ad1d608c4f0db9a7cd6`.
+The candidate executable SHA-256 is
+`34bd5cc087e2d0bd87181d449b3d014baf2eeb9e0d8598f1a98cce5ca9769c90`.
+Copied component/production sources, probe source, build receipts and native
+receipts preserve the exact inputs. The maintained JavaScript client and native
+CBOR protocol are unchanged.
+
+
+
+Four two-second ordinary mixed-load screens also passed with 100,000 capacity
+users, 8,192 room readers, 32 private pairs, two inspectors and paced churn/fanout.
+Each completed all 16 offered windows, 524,288 multicast deliveries, 512 churn
+cycles and 800,000 capacity observations, with exits `[0,0,0]`, final resources
+zero and no copy/pressure/error violations.
+
+| Run | Server CPU, seconds | Median user's observed maximum, ms | Worst observed user, ms | Private deliveries/s | Largest fanout window, ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Control, first | 8.93 | 0.949 | 4.334 | 1,162,949 | 71.634 |
+| Earlier cache build | 9.25 | 1.116 | 4.842 | 1,037,696 | 74.250 |
+| Final cache build | 9.31 | 1.118 | 8.149 | 1,192,299 | 73.039 |
+| Control, repeat | 9.34 | 1.132 | 5.107 | 1,081,017 | 79.835 |
+
+The earlier cache build used an equivalent negated guard; the native selection
+rows and final verification refer to the final executable above. Its initial
+ordinary pair had lower candidate private throughput. Reversing the order with
+the final build produced better throughput and similar CPU/median latency than
+the following control, but its worst sampled user remained slower. These short
+screens have only eight observations per user; they establish neither a general
+ordinary-forwarding gain nor tighter ordinary tails. The retained benefit is
+faster shared-view revocation with unchanged correctness and memory contracts.
+
+All 215 Rust tests and 66 JavaScript tests passed, along with formatting, Clippy
+warnings denied, vendor provenance and the maintained Rust/CBOR product audit.
+The JavaScript fixture retired all six resource gauges. Final native checks
+also passed with 100,000 observers/eight departures under 2 MiB credit, verifying
+1,100,009 notices, re-subscription, zero pressure/copy counters and 100,000 shutdown
+Close receipts. The two-worker, 2,048-observer one-slot queue check passed too.

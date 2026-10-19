@@ -23,8 +23,10 @@ per-publisher charge. See the [snapshot ownership measurements](retirement-snaps
 
 The observer-revocation barrier now submits only the requesting observer's
 notices. A publication sequence and per-peer watermark prevent deferred replay;
-other recipients keep their normal turns. It still scans pending global views
-under the registry lock. Queue-pressure fallback now finishes only preceding jobs
+other recipients keep their normal turns. A barrier reuses its peer lookup across
+jobs sharing the same immutable view; distinct views still require scans under
+the registry lock. See the [lookup follow-up](observer-barriers.md#shared-view-lookup-follow-up).
+Queue-pressure fallback now finishes only preceding jobs
 whose recipient channel overlaps the direct notification; unrelated jobs retain
 their turns and reservations. See the [fallback measurements](retirement-fallback.md)
 and the

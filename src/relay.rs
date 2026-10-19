@@ -1286,18 +1286,31 @@ impl Relay {
         let previous = observer.retirement_barrier.load(Relaxed);
         // Publication holds the registry write lock too, so the queue tail is
         // this revocation's boundary. Send only still-unvisited notices for this
-        // exact peer, in FIFO order. Pointer comparisons scan the immutable view
-        // without touching every peer's output or allocating a recipient index.
+        // exact peer, in FIFO order. Adjacent jobs often share an immutable view;
+        // reuse its lookup within this barrier, but check each job's own cursor.
+        // No recipient index or peer reference survives the locked traversal.
+        let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
         for work in &pending.jobs {
             let recipients = work.recipients.as_ref().expect("live retirement view");
-            if work.retirement_sequence > previous
-                && recipients
+            if work.retirement_sequence <= previous
+                || recipients
                     .first()
-                    .is_some_and(|peer| peer.channel.as_ref() == GLOBAL_CHANNEL)
-                && recipients[work.cursor..]
-                    .iter()
-                    .any(|peer| std::ptr::eq(Arc::as_ptr(peer), observer))
+                    .is_none_or(|peer| peer.channel.as_ref() != GLOBAL_CHANNEL)
             {
+                continue;
+            }
+            let view = recipients.as_slice();
+            let position = match searched {
+                Some((previous_view, position)) if std::ptr::eq(previous_view, view) => position,
+                _ => {
+                    let position = view
+                        .iter()
+                        .position(|peer| std::ptr::eq(Arc::as_ptr(peer), observer));
+                    searched = Some((view, position));
+                    position
+                }
+            };
+            if position.is_some_and(|position| position >= work.cursor) {
                 let _ = observer
                     .enqueue_barrier(&work.packet.as_ref().expect("charged retirement body").frame);
             }

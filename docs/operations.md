@@ -98,8 +98,9 @@ Ordinary room/departure work advances in 1,024-recipient turns. Clearing a globa
 listener's disconnect flag orders captured notices before its acknowledgment.
 The barrier submits only that observer's still-pending notices and records a
 sequence watermark so deferred jobs cannot replay them after re-subscription.
-Other recipients retain their bounded turns. The barrier still scans pending
-global recipient views under the registry lock; many such views can make the
+Other recipients retain their bounded turns. Within one barrier, jobs sharing a
+view reuse the peer's lookup and independently check their own progress cursor.
+Distinct global views still require scans under the registry lock; many can make the
 control turn longer. Queue-budget fallback is also synchronous, but finishes
 preceding jobs only for the overlapping recipient channel. Disjoint rooms keep
 their turns and reservations. Large overlapping jobs and long job queues remain

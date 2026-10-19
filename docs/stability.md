@@ -40,6 +40,9 @@ old notices before acknowledgments and all audience departure/Close receipts.
 Shared snapshot checks also cover reuse across pending jobs, membership
 invalidation, release on the last owning job, refusal when a view cannot fit,
 and multiple departures fitting one shared view within a fixed byte budget.
+Observer lookup checks distinguish equal-sized captured generations where the
+peer is absent or occupies a different position, and keep each job's visited
+cursor independent when several jobs share a view.
 Shutdown cache tests distinguish unique and externally captured views, and verify
 that reversible drain keeps the live view consistent. The native shutdown fixture
 verifies a priming broadcast before checking every Close `1001` and TCP EOF;
