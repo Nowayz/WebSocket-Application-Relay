@@ -1,0 +1,64 @@
+name: Rust relay
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@1.91.1
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: clients/js/package-lock.json
+      - run: python3 scripts/check-product.py
+      - run: python3 scripts/test-observer-message-output.py
+      - run: cargo fmt --check
+      - run: python3 scripts/check-vendor.py
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked --all-targets
+      - run: ./scripts/check-js.sh
+      - run: cargo build --locked --example inspection --example admission --example capacity
+      - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 256 --seconds 2 --churn-workers 2 --ping-interval-secs 1 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-ci.json
+      - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 32 --seconds 1 --payload-bytes 65520 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-large-frame-ci.json
+      - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 16 --client-workers 2 --mode none --inspectors 0 --churn-workers 0 --workers 2 --seconds 1 --server-cpus '' --client-cpus '' --output artifacts/active-pairs-ci.json
+      - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 1 --mode none --inspectors 0 --churn-workers 4 --fanout-readers 32 --fanout-churn-every 2 --fanout-window 1 --workers 2 --seconds 2 --server-cpus '' --client-cpus '' --output artifacts/room-churn-ci.json
+      - run: python3 scripts/inspection.py --server target/debug/war-relay --client target/debug/examples/inspection --rooms 0 --pairs 0 --mode none --inspectors 0 --churn-workers 0 --fanout-readers 2048 --fanout-global-broadcast --fanout-window 2 --fanout-windows-per-second 1 --fanout-latency-output artifacts/global-broadcast-ci.csv --workers 2 --client-workers 2 --seconds 2 --server-cpus '' --client-cpus '' --output artifacts/global-broadcast-ci.json
+      - run: python3 scripts/admission-flood.py --server target/debug/war-relay --client target/debug/examples/admission --workers 1 --flood-workers 32 --seconds 1 --server-cpus '' --client-cpus '' --flood-cpus '' --output artifacts/admission-flood-ci.json
+      - run: python3 scripts/handshake-pressure.py --server target/debug/war-relay --client target/debug/examples/admission --workers 1 --connections 16 --rounds 4 --quiet --seconds 1 --server-cpus '' --client-cpus '' --controller-cpus '' --output artifacts/handshake-pressure-ci.json
+      - run: python3 scripts/accept-pressure.py --server target/debug/war-relay --output artifacts/accept-pressure-ci.json
+      - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --output artifacts/observer-barrier-ci.json
+      - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 2048 --departures 8 --queue-budget-bytes 65546 --output artifacts/observer-burst-ci.json
+      - run: python3 scripts/observer-barrier.py --server target/debug/war-relay --workers 2 --audience 256 --idle-users 2048 --departures 8 --output artifacts/observer-idle-ci.json
+      - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --kind channel --output artifacts/observer-channel-message-ci.json
+      - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --kind private --output artifacts/observer-private-message-ci.json
+      - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --room-readers 2048 --queue-messages 1 --queue-bytes 2048 --kind channel --output artifacts/observer-combined-message-ci.json
+      - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --publishers 8 --payload-bytes 8 --kind mixed --output artifacts/observer-concurrent-message-ci.json
+      - run: python3 scripts/rejection-fairness.py --server target/debug/war-relay --output artifacts/rejection-fairness-ci.json
+      - run: python3 scripts/shutdown-capacity.py --server target/debug/war-relay --workers 2 --users 2048 --prime-broadcast --output artifacts/shutdown-warm-ci.json
+      - run: python3 scripts/retirement-fallback.py --server target/debug/war-relay --workers 2 --audience 2048 --output artifacts/retirement-fallback-ci.json
+      - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
+      - run: npm run check:types --prefix clients/js
+      - run: npm run build:browser --prefix clients/js
+      - run: python3 scripts/package-release.py --output artifacts/release-ci
+      - run: python3 scripts/check-release.py --release artifacts/release-ci --output artifacts/release-ci-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-candidate-and-checks
+          path: |
+            artifacts/release-ci/*.tar.gz
+            artifacts/release-ci/*.tgz
+            artifacts/release-ci/SHA256SUMS
+            artifacts/release-ci/release.json
+            artifacts/release-ci/package.log
+            artifacts/release-ci/build/build.json
+            artifacts/release-ci/build/build.log
+            artifacts/release-ci-check/

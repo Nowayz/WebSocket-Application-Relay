@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Relay browser check</title>
+<style>
+  :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+  body { max-width: 52rem; padding: 2rem; margin: auto; }
+  h1 { font-size: 1.8rem; }
+  label { display: block; margin-block: 1rem .3rem; }
+  input { box-sizing: border-box; font: inherit; padding: .55rem; width: 100%; }
+  button { font: inherit; margin-block: 1rem; padding: .55rem 1rem; }
+  li { margin-block: .4rem; }
+  #status { font-weight: 600; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<main>
+  <h1>Relay browser check</h1>
+  <p>Exercise the bundled CBOR client through this browser's WebSocket. Each run
+    opens three sessions, checks delivery and channel variables, then closes them.</p>
+  <form id="check">
+    <label for="url">Relay WebSocket URL</label>
+    <input id="url" type="url" value="ws://127.0.0.1:1338" required>
+    <button id="run" type="submit">Run browser check</button>
+  </form>
+  <p id="status" role="status">Ready</p>
+  <ol id="results" aria-label="Check results"></ol>
+  <pre id="details"></pre>
+</main>
+<script type="module" src="./check.js"></script>
+</html>
