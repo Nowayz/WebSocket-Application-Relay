@@ -169,6 +169,7 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
         worker.timers.set(slot, deadline);
     }
     let ready: Vec<_> = worker.ready.iter().copied().collect();
+    let input_ready: Vec<_> = worker.input_ready.iter().copied().collect();
     let pending: Vec<_> = worker.signal.pending.lock().iter().copied().collect();
     for (slot, client) in clients.iter_mut().enumerate() {
         if !survivors.contains(&slot) {
@@ -187,6 +188,10 @@ fn compaction_preserves_live_tokens_partial_input_queued_output_and_close_deadli
     );
     assert_eq!(worker.connections.len(), survivors.len());
     assert_eq!(worker.ready.iter().copied().collect::<Vec<_>>(), ready);
+    assert_eq!(
+        worker.input_ready.iter().copied().collect::<Vec<_>>(),
+        input_ready
+    );
     assert_eq!(
         worker
             .signal

@@ -93,6 +93,14 @@ equal-sized-generation regression checks eligibility, cached absence and view
 release across alternating channel/private jobs. The ignored release barrier
 diagnostic is opt-in and does not run as a normal correctness test.
 
+Worker scheduling checks cover partly spent aggregate credit during publication
+capture and continuation, source FIFO and no read-ahead across all four fanout
+paths. A small-fanout regression rejects shrinking the native source cutoff to
+the remaining worker credit, which would introduce unnecessary staging. Arena
+compaction preserves both fresh and buffered token queues. The
+[worker-scheduling report](worker-scheduling.md) records native concurrent-source,
+mixed-population and lifecycle acceptance with the selected policy.
+
 Known limits include cold recipient-view capture/invalidation,
 distinct captured-view scans during observer revocation and queue-pressure fallback for overlapping channels
 and pending global-view scans during observer revocation. Faults and failed gates

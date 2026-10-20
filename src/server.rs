@@ -278,6 +278,7 @@ struct Worker {
     tokens: HashMap<Token, usize>,
     next_token: usize,
     ready: VecDeque<Token>,
+    input_ready: VecDeque<Token>,
     timers: Timers,
     scratch: ReadStorage,
     compacted: bool,
@@ -319,6 +320,7 @@ impl Worker {
             tokens: HashMap::new(),
             next_token: 2,
             ready: VecDeque::new(),
+            input_ready: VecDeque::new(),
             timers: Timers::default(),
             scratch: ReadStorage::default(),
             compacted: false,
@@ -338,7 +340,7 @@ impl Worker {
             connection.output_only = false;
             if !connection.scheduled {
                 connection.scheduled = true;
-                self.ready.push_back(token);
+                self.input_ready.push_back(token);
             }
         }
     }
@@ -564,54 +566,72 @@ impl Worker {
                 self.accept()?;
             }
             self.schedule_timers(now);
-            // A bounded ready batch makes progress on buffered continuations
-            // without starving new socket events, timers, or shutdown signals.
-            let batch = self.ready.len().min(READY_QUANTUM);
-            for _ in 0..batch {
-                let token = self.ready.pop_front().expect("ready batch");
-                if token == LISTENER {
-                    self.accept_queued = false;
-                    if shutdown_deadline.is_none() {
-                        self.accept()?;
-                    }
-                    continue;
-                }
-                let Some(&slot) = self.tokens.get(&token) else {
-                    continue;
+            // Fresh input/timers and buffered continuations each receive a
+            // bounded turn. A continuously readable population cannot starve
+            // old publications, and old publications cannot bury fresh input.
+            for input in [true, false] {
+                let batch = if input {
+                    self.input_ready.len().min(READY_QUANTUM)
+                } else {
+                    self.ready.len().min(READY_QUANTUM)
                 };
-                let Some(connection) = self.connections.get_mut(slot).filter(|c| c.token == token)
-                else {
-                    continue;
-                };
-                connection.scheduled = false;
-                connection.socket.notified();
-                let keep = connection.drive_batched(
-                    &self.relay,
-                    &mut self.scratch,
-                    shutdown_deadline.is_some(),
-                    &mut incoming,
-                );
-                match keep {
-                    Drive::Drop => {
-                        self.timers.remove(slot);
-                        self.connections.remove(slot);
-                        self.tokens.remove(&token);
-                        if self.tokens.capacity() > 256
-                            && self.tokens.len() <= self.tokens.capacity() / 8
-                        {
-                            self.tokens.shrink_to(self.tokens.len() * 2);
-                        }
-                        self.reclaim_connections();
+                let mut routing_left = FANOUT_QUANTUM * 4;
+                for _ in 0..batch {
+                    let token = if input {
+                        self.input_ready.pop_front()
+                    } else {
+                        self.ready.pop_front()
                     }
-                    Drive::Wait | Drive::Again => {
-                        let deadline = self.connections[slot].deadline(&self.relay);
-                        self.timers.set(slot, deadline);
-                        if keep == Drive::Again {
-                            // Retain the reason: a write-quantum continuation
-                            // still needs no speculative input read.
-                            self.connections[slot].scheduled = true;
-                            self.ready.push_back(token);
+                    .expect("ready batch");
+                    if token == LISTENER {
+                        self.accept_queued = false;
+                        if shutdown_deadline.is_none() {
+                            self.accept()?;
                         }
+                        continue;
+                    }
+                    let Some(&slot) = self.tokens.get(&token) else {
+                        continue;
+                    };
+                    let Some(connection) =
+                        self.connections.get_mut(slot).filter(|c| c.token == token)
+                    else {
+                        continue;
+                    };
+                    connection.scheduled = false;
+                    connection.socket.notified();
+                    let keep = connection.drive_batched(
+                        &self.relay,
+                        &mut self.scratch,
+                        shutdown_deadline.is_some(),
+                        &mut incoming,
+                        &mut routing_left,
+                    );
+                    match keep {
+                        Drive::Drop => {
+                            self.timers.remove(slot);
+                            self.connections.remove(slot);
+                            self.tokens.remove(&token);
+                            if self.tokens.capacity() > 256
+                                && self.tokens.len() <= self.tokens.capacity() / 8
+                            {
+                                self.tokens.shrink_to(self.tokens.len() * 2);
+                            }
+                            self.reclaim_connections();
+                        }
+                        Drive::Wait | Drive::Again => {
+                            let deadline = self.connections[slot].deadline(&self.relay);
+                            self.timers.set(slot, deadline);
+                            if keep == Drive::Again {
+                                // Retain the reason: a write-quantum continuation
+                                // still needs no speculative input read.
+                                self.connections[slot].scheduled = true;
+                                self.ready.push_back(token);
+                            }
+                        }
+                    }
+                    if routing_left == 0 {
+                        break;
                     }
                 }
             }
@@ -650,7 +670,10 @@ impl Worker {
                     }),
                 );
             }
-            if !self.ready.is_empty() || self.relay.has_retirements() {
+            if !self.ready.is_empty()
+                || !self.input_ready.is_empty()
+                || self.relay.has_retirements()
+            {
                 timeout = Some(Duration::ZERO);
             }
             match self.poll.poll(&mut events, timeout) {
@@ -828,7 +851,14 @@ impl Connection {
 
     #[cfg(test)]
     fn drive(&mut self, relay: &Arc<Relay>, scratch: &mut ReadStorage, stopping: bool) -> Drive {
-        self.drive_batched(relay, scratch, stopping, &mut relay.receive_batch())
+        let mut routing_left = FANOUT_QUANTUM;
+        self.drive_batched(
+            relay,
+            scratch,
+            stopping,
+            &mut relay.receive_batch(),
+            &mut routing_left,
+        )
     }
 
     fn drive_batched(
@@ -837,6 +867,7 @@ impl Connection {
         scratch: &mut ReadStorage,
         stopping: bool,
         incoming: &mut ReceiveBatch<'_>,
+        routing_left: &mut usize,
     ) -> Drive {
         let now = Instant::now();
         if self.output_only
@@ -900,7 +931,7 @@ impl Connection {
             unreachable!()
         };
         ws.swap_read_storage(scratch);
-        let result = self.drive_websocket(relay, now, stopping, incoming);
+        let result = self.drive_websocket(relay, now, stopping, incoming, routing_left);
         let Stage::WebSocket(ws) = &mut self.stage else {
             unreachable!()
         };
@@ -989,6 +1020,7 @@ impl Connection {
         now: Instant,
         stopping: bool,
         incoming: &mut ReceiveBatch<'_>,
+        routing_left: &mut usize,
     ) -> Drive {
         let (fatal, requested) = {
             let state = self.socket.state.lock();
@@ -1155,6 +1187,9 @@ impl Connection {
             }
         }
         if let Some(fanout) = self.room_fanout.as_mut().filter(|f| f.active()) {
+            // Retain the source quantum and deferral cutoff. The final turn
+            // may overshoot this phase's allowance by less than one quantum.
+            *routing_left = routing_left.saturating_sub(FANOUT_QUANTUM);
             return match fanout.resume(FANOUT_QUANTUM) {
                 Ok(()) => Drive::Again,
                 Err(reason) => self.start_close(reason, relay, false, now),
@@ -1205,6 +1240,7 @@ impl Connection {
                                     }
                                 };
                                 route_budget = route_budget.saturating_sub(work);
+                                *routing_left = routing_left.saturating_sub(work);
                                 if large {
                                     self.reclaim_deadline = Some(
                                         now + Duration::from_secs(
@@ -1312,7 +1348,7 @@ impl Connection {
                     return result;
                 }
             }
-            if route_budget == 0 {
+            if route_budget == 0 || *routing_left == 0 {
                 break;
             }
         }

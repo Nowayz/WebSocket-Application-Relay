@@ -23,6 +23,14 @@ charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
 control replies fit the inline frame prefix. No alternative allocator or native
 numerical library is selected by default.
 
+Workers service separate fresh-readiness and buffered/output token queues.
+Each phase has a 4,096-visit routing allowance, finishing the ordinary 1,024-visit
+source turn before yielding. Fresh service is capped at 1,024 connection turns;
+buffered service at 1,024. Both receive progress each loop. This bounds aggregate
+publication work without changing the source deferral cutoff or staging cost.
+See the [worker-scheduling comparison](worker-scheduling.md) for the response-time
+benefit, burst CPU/batching tradeoff and limits of the allowance.
+
 Pending disconnect jobs reuse an immutable observer snapshot. Its ownership
 reserves membership storage once, and a weak registry cache retains no recipient
 storage after the last job finishes. Ordinary room and message-observer views retain their conservative

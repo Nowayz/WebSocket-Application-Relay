@@ -104,6 +104,10 @@ edge-triggered continuation, output order, shutdown/timer service and completed
 offered fanout work. Changing/cold recipient views under churn remain a separate
 membership-lock measurement target.
 
+The [worker-scheduling follow-up](worker-scheduling.md) implements and measures
+separate fresh/buffered service with aggregate routing allowances, while retaining
+the original source turn and small-fanout cutoff.
+
 Control executable SHA-256:
 `5f27499f27159a3bbaa9f5de5311bb1b6646719e681723503313e69eed4053c9`.
 Rejected candidate executable SHA-256:

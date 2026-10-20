@@ -68,6 +68,39 @@ enum FanoutScope {
 }
 
 fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
+    check_fanout_allowance(scope, cancel, FANOUT_QUANTUM, FANOUT_QUANTUM + 44);
+}
+
+#[test]
+fn a_partly_spent_worker_allowance_yields_after_a_native_turn_without_reading_ahead() {
+    for scope in [
+        FanoutScope::Room,
+        FanoutScope::Global,
+        FanoutScope::ChannelObservers,
+        FanoutScope::PrivateObservers,
+    ] {
+        check_fanout_allowance(scope, false, 17, FANOUT_QUANTUM + 44);
+    }
+}
+
+#[test]
+fn a_partly_spent_worker_allowance_does_not_add_staging_to_small_fanouts() {
+    for scope in [
+        FanoutScope::Room,
+        FanoutScope::Global,
+        FanoutScope::ChannelObservers,
+        FanoutScope::PrivateObservers,
+    ] {
+        check_fanout_allowance(scope, false, 1, 16);
+    }
+}
+
+fn check_fanout_allowance(
+    scope: FanoutScope,
+    cancel: bool,
+    initial_allowance: usize,
+    count: usize,
+) {
     let relay = Relay::new(crate::Config {
         ping_interval_secs: 0,
         total_read_buffer_bytes: 0,
@@ -104,7 +137,6 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
     );
     let mut targets = Vec::new();
     let mut outputs = Vec::new();
-    let count = FANOUT_QUANTUM + 44;
     for _ in 0..count {
         let output = Arc::new(Sequence::default());
         let channel = if matches!(scope, FanoutScope::Room) {
@@ -174,14 +206,51 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         ),
     ));
     let mut scratch = ReadStorage::default();
+    // Earlier connections may have consumed most of this worker's allowance.
+    let mut routing_left = initial_allowance;
     assert!(
-        connection.drive(&relay, &mut scratch, false) == Drive::Again,
+        connection.drive_batched(
+            &relay,
+            &mut scratch,
+            false,
+            &mut relay.receive_batch(),
+            &mut routing_left,
+        ) == Drive::Again,
         "recipient work must yield even with more complete input buffered"
     );
+    assert_eq!(routing_left, 0);
     assert_eq!(
         relay.metrics.incoming_messages.load(Relaxed),
         incoming_before + 1
     );
+    if count < FANOUT_QUANTUM {
+        assert!(
+            connection.room_fanout.is_none(),
+            "worker accounting changed the native deferral cutoff"
+        );
+        assert!(outputs.iter().all(|out| out.messages.load(Relaxed) == 1));
+        let mut routing_left = initial_allowance;
+        assert!(
+            connection.drive_batched(
+                &relay,
+                &mut scratch,
+                false,
+                &mut relay.receive_batch(),
+                &mut routing_left,
+            ) == Drive::Again
+        );
+        assert_eq!(routing_left, 0);
+        assert!(outputs.iter().all(|out| out.messages.load(Relaxed) == 2));
+        assert!(connection.drive(&relay, &mut scratch, false) == Drive::Wait);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        relay.begin_shutdown();
+        drop(targets);
+        drop(connection);
+        drop(socket);
+        drop(client);
+        assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+        return;
+    }
     if cancel {
         assert!(connection.room_fanout.as_ref().unwrap().active());
         assert!(connection.deadline(&relay).is_some());
@@ -217,7 +286,32 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
             relay.metrics.queued_bytes.load(Relaxed) > 0,
             "unfinished payload must stay charged"
         );
-        assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
+        if initial_allowance < FANOUT_QUANTUM {
+            // Keep the existing source turn, then stop this worker phase.
+            // Finishing this job must not consume its next buffered message.
+            let mut routing_left = 64;
+            assert!(
+                connection.drive_batched(
+                    &relay,
+                    &mut scratch,
+                    false,
+                    &mut relay.receive_batch(),
+                    &mut routing_left,
+                ) == Drive::Again
+            );
+            assert_eq!(routing_left, 0);
+            let after: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
+            assert!((1..=FANOUT_QUANTUM).contains(&(after - visited)));
+            assert!(!connection.room_fanout.as_ref().unwrap().active());
+            assert_eq!(
+                relay.metrics.incoming_messages.load(Relaxed),
+                incoming_before + 1,
+                "continuation read the next source frame early"
+            );
+        }
+        if initial_allowance == FANOUT_QUANTUM {
+            assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
+        }
         assert_eq!(
             relay.metrics.incoming_messages.load(Relaxed),
             incoming_before + 1
@@ -474,7 +568,7 @@ fn readable_upgrades_cannot_bypass_deadlines_or_shutdown_behind_an_expiry_batch(
                 .any(|event| event.token() == token && event.is_readable())
         );
         worker.schedule(token); // The normal readable-event scheduling path.
-        assert_eq!(worker.ready.pop_front(), Some(token));
+        assert_eq!(worker.input_ready.pop_front(), Some(token));
         let mut connection = worker.connections.remove(slot);
         assert!(matches!(
             connection.drive(&relay, &mut worker.scratch, stopping),

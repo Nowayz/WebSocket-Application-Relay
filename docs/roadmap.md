@@ -44,12 +44,14 @@ remaining lock hold, scan or allocation limits the complete workload first.
 Observer barriers also still scan distinct captured views under the membership
 write lock. The [concurrent-publisher follow-up](concurrent-observers.md) rejected
 a two-entry scan cache: a large component win did not produce a clear native
-eight-worker improvement. Keep its mixed-class fixture and measure aggregate
-worker service time across concurrent publications next. A bounded turn for each
-publication can still add up to a long ready batch before new readiness is
-polled. Profile and compare an aggregate routing allowance or interleaving policy
-before choosing one. Changing captured generations under churn remain a separate
-lock-hold target; do not add a recipient index from the component result alone.
+eight-worker improvement. The [worker-scheduling follow-up](worker-scheduling.md)
+now separates fresh readiness from buffered work and bounds aggregate routing
+work in both phases. Its short native and mixed-population checks preserve the
+source cutoff, FIFO and storage contracts while improving responsiveness.
+Finish conservative aggregate charging for failed initial routing attempts;
+they currently retain the connection-turn bound. Changing/cold captured
+generations under churn are the next lock-hold target. Do not add a recipient
+index from the earlier component result alone.
 
 ## Acceptance for each change
 

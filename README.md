@@ -73,7 +73,9 @@ can import `Relay` from the generated `relay.js` ES module.
 
 - [Native I/O](src/server.rs): fixed Mio readiness workers own decoding and
   timers. Idle sockets need no task, message channel or private receive slab.
-  Tokio handles management and process signals.
+  Fresh readiness and buffered/output work receive separate bounded turns;
+  [scheduling measurements](docs/worker-scheduling.md) document the latency/CPU
+  tradeoff. Tokio handles management and process signals.
 - [Routing](src/relay.rs): a registry read/write lock protects membership and
   ID ownership. Large native room, global and observer publications retain
   immutable recipient views and advance in bounded turns outside the registry
