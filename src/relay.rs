@@ -2116,9 +2116,13 @@ impl Relay {
         true
     }
 
+    /// The shared disconnect-observer view for departure jobs. The cache
+    /// mutex is held only to read or publish a handle; the copy and its
+    /// reservation happen outside it. Concurrent builders under the same
+    /// listener generation produce identical views, and the first to publish
+    /// wins.
     fn disconnect_recipients(&self, listeners: &Listeners) -> Option<Arc<RetirementSnapshot>> {
-        let mut cache = self.disconnect_snapshot.lock();
-        if let Some(snapshot) = cache.upgrade() {
+        if let Some(snapshot) = self.disconnect_snapshot.lock().upgrade() {
             return Some(snapshot);
         }
         let members = listeners.of(DISCONNECT_MESSAGE).to_vec();
@@ -2147,6 +2151,12 @@ impl Relay {
             bytes,
             metrics: self.metrics.clone(),
         });
+        let mut cache = self.disconnect_snapshot.lock();
+        if let Some(published) = cache.upgrade() {
+            // Another departure published the same membership first; use its
+            // view and let ours release its credit.
+            return Some(published);
+        }
         *cache = Arc::downgrade(&snapshot);
         Some(snapshot)
     }

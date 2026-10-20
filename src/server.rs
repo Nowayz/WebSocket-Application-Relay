@@ -104,15 +104,21 @@ pub async fn serve(
     prepared
         .try_reserve_exact(workers)
         .context("cannot reserve native worker storage")?;
-    for listener in worker_listeners(listener, workers, relay.config.listen_backlog)? {
+    let listeners = worker_listeners(listener, workers, relay.config.listen_backlog)?;
+    // Only a platform where some worker has no listener hands streams over;
+    // with one listener per worker the kernel balances accepts already.
+    let handoff = listeners.iter().any(Option::is_none);
+    for listener in listeners {
         prepared.push(Worker::build(listener, relay.clone())?);
     }
     let peers: Vec<Arc<Signal>> = prepared
         .iter()
         .map(|worker| worker.signal.clone())
         .collect();
-    for worker in &mut prepared {
-        worker.peers = peers.clone();
+    if handoff {
+        for worker in &mut prepared {
+            worker.peers = peers.clone();
+        }
     }
     let signals = StopOnDrop {
         signals: peers,

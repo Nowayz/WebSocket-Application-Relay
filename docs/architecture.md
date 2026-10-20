@@ -86,6 +86,36 @@ watermark is advanced under the listener lock, and the notices are submitted to
 the observer's socket only after that lock is released, ahead of the
 acknowledgement.
 
+### Shared locks that remain, and what bounds them
+
+Some state is inherently process-wide. Each of these locks is held for a
+bounded, small amount of work and never across socket I/O:
+
+- The listener lock. Routing takes it shared only while observers exist (the
+  atomic mask skips it otherwise). The exclusive side is taken by listener-flag
+  commands, which are administrative. A revocation holds it while scanning the
+  observer queue for that observer's pending jobs: one position lookup per
+  distinct captured view, so the hold is proportional to the number of
+  distinct views queued, not to traffic.
+- The global recipient-view cache. A mutex held only to read or publish one
+  handle. The view itself is built outside it.
+- The disconnect-snapshot cache. The same pattern: a copy of the observer list
+  is made and charged outside the mutex, then published under it.
+- The active list of departure queues. Workers only ever try to lock it;
+  departures lock it to append one entry.
+- The session-ownership shards: 64 independent locks, each held for one map
+  operation. A takeover holds two.
+
+The test `unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation`
+in `tests/relay_integration.rs` exercises all of them at once: a room of 1,100
+members receives a stream of broadcasts (each a continuation), members join and
+leave so every departure is a deferred job, and a global observer clears and
+restores its disconnect flag so barriers scan the observer queue, while a
+session in another room echoes continuously. The test fails if any echo takes
+longer than one second or if shutdown with the crowd connected exceeds the
+fixture's three-second bound. On the development machine the worst echo during
+that churn was about 6 ms.
+
 ## The data path of one message
 
 1. The owning worker reads a complete binary WebSocket message from the

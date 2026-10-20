@@ -2041,3 +2041,161 @@ async fn a_recipient_that_stops_reading_is_closed_as_a_slow_consumer_and_the_sen
     assert_eq!(acknowledged, Ok(true), "sender must still close normally");
     server.stop().await;
 }
+
+async fn join_at(url: &str, channel: &str) -> (Socket, u64) {
+    let mut request = url.into_client_request().unwrap();
+    request.headers_mut().insert(
+        "sec-websocket-protocol",
+        protocol::SUBPROTOCOL.parse().unwrap(),
+    );
+    let (mut ws, _) = connect_async(request).await.unwrap();
+    ws.send(Message::Binary(protocol::text(channel)))
+        .await
+        .unwrap();
+    let welcome = data(&mut ws).await;
+    (ws, Decoder::new(&welcome).u64().unwrap())
+}
+
+/// Nothing may broadly stall other work. While one large room takes a stream
+/// of broadcasts above the live-fanout quantum, members join and leave it so
+/// departure notices become deferred jobs, and a global observer keeps
+/// revoking and restoring its disconnect flag so barriers scan the observer
+/// queue, a session in an unrelated room must keep echoing with bounded
+/// latency, and shutdown must still finish inside the fixture's deadline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation() {
+    use std::{sync::atomic::AtomicBool, time::Instant};
+    const MEMBERS: usize = 1100; // above FANOUT_QUANTUM and RETIREMENT_QUANTUM
+    let server = Server::new(Config {
+        workers: Some(4),
+        max_channel_members: 4096,
+        ..config()
+    })
+    .await;
+    let url = server.url.clone();
+    // Crowd members drain their sockets and count application frames.
+    let received = Arc::new(AtomicU64::new(0));
+    let mut readers = tokio::task::JoinSet::new();
+    for _ in 0..MEMBERS {
+        let (mut ws, _) = join_at(&url, "crowd").await;
+        let received = received.clone();
+        readers.spawn(async move {
+            while let Some(Ok(message)) = ws.next().await {
+                match message {
+                    Message::Binary(_) => {
+                        received.fetch_add(1, Relaxed);
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        });
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut churn = tokio::task::JoinSet::new();
+    // Broadcaster: a steady stream of room broadcasts, each a continuation.
+    {
+        let (mut ws, _) = join_at(&url, "crowd").await;
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let value = protocol::byte_string(&vec![0x5a; 1024]);
+            let mut sent = 0u64;
+            while !stop.load(Relaxed) {
+                send(&mut ws, BROADCAST, &value).await;
+                sent += 1;
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            let _ = ws.close(None).await;
+            sent
+        });
+    }
+    // Join and leave churn: every departure notifies the whole crowd.
+    {
+        let url = url.clone();
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let mut departures = 0u64;
+            while !stop.load(Relaxed) {
+                let (mut ws, _) = join_at(&url, "crowd").await;
+                let _ = ws.close(None).await;
+                departures += 1;
+                tokio::time::sleep(Duration::from_millis(40)).await;
+            }
+            departures
+        });
+    }
+    // Observer revocation: barriers scan the observer queue under the
+    // listener lock on every clear.
+    {
+        let (mut ws, _) = join_at(&url, "re_globl").await;
+        assert_eq!(
+            command(&mut ws, 0, &protocol::text("host-test")).await,
+            protocol::reply(0, &[0xf5])
+        );
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let mut toggles = 0u64;
+            let mut notices = 0u64;
+            while !stop.load(Relaxed) {
+                for flags in [4u64, 0] {
+                    // While the flag is set, departure notices interleave
+                    // with the reply; the barrier delivers pending ones first.
+                    let reply = protocol::reply(1, &protocol::uint(flags));
+                    let mut packet = command(&mut ws, 1, &protocol::uint(flags)).await;
+                    while packet != reply {
+                        assert_eq!(protocol::parse(&packet).unwrap().0, BROADCAST);
+                        notices += 1;
+                        packet = data(&mut ws).await;
+                    }
+                }
+                toggles += 1;
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+            let _ = ws.close(None).await;
+            assert!(notices > 0, "the observer saw no departure notices");
+            toggles
+        });
+    }
+    // The probe lives in its own room and must never wait long for an echo.
+    let (mut probe, probe_id) = join_at(&url, "probe").await;
+    let end = Instant::now() + Duration::from_millis(2500);
+    let mut samples = 0u32;
+    let mut worst = Duration::ZERO;
+    let mut total = Duration::ZERO;
+    while Instant::now() < end {
+        let started = Instant::now();
+        send(&mut probe, probe_id, &[0x18, samples as u8]).await;
+        assert_eq!(
+            data(&mut probe).await,
+            protocol::envelope(probe_id, &[0x18, samples as u8])
+        );
+        let elapsed = started.elapsed();
+        worst = worst.max(elapsed);
+        total += elapsed;
+        samples += 1;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    stop.store(true, Relaxed);
+    let mut churn_counts = Vec::new();
+    while let Some(result) = churn.join_next().await {
+        churn_counts.push(result.unwrap());
+    }
+    eprintln!(
+        "probe: {samples} echoes, worst {worst:?}, mean {:?}; churn counts {churn_counts:?}; crowd frames {}",
+        total / samples.max(1),
+        received.load(Relaxed)
+    );
+    assert!(samples >= 50, "probe produced too few samples: {samples}");
+    assert!(
+        worst < Duration::from_secs(1),
+        "unrelated echo stalled for {worst:?} during large-room churn"
+    );
+    assert!(churn_counts.iter().all(|&count| count > 0));
+    assert!(received.load(Relaxed) > 0);
+    let _ = probe.close(None).await;
+    // Shutdown with the crowd still connected must finish inside the
+    // fixture's three-second bound and leave every gauge at zero.
+    server.stop().await;
+    readers.abort_all();
+    while readers.join_next().await.is_some() {}
+}
