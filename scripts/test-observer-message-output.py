@@ -25,19 +25,23 @@ class ReceiptTest(unittest.TestCase):
                 self.assertEqual(module.packet(identifier, b'\xf5'),
                                  b'\x82' + bytes.fromhex(encoded) + b'\xf5')
 
-    def invoke(self, directory, extra=()):
+    def invoke(self, directory, extra=(), script='observer-message-fairness.py'):
         marker = directory / 'server-started'
         server = directory / 'server'
         server.write_text('#!/usr/bin/env python3\nfrom pathlib import Path\n'
                           f'Path({str(marker)!r}).touch()\nraise SystemExit(1)\n')
         server.chmod(0o755)
         output = directory / 'receipt.json'
-        result = subprocess.run([sys.executable, str(ROOT / 'scripts/observer-message-fairness.py'),
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script),
                                  '--server', str(server), '--output', str(output), *extra],
                                 cwd=ROOT, capture_output=True, text=True, timeout=10)
         return result, marker, output
 
     def test_existing_receipt_or_dangling_symlink_blocks_server_launch(self):
+        for script in ['observer-message-fairness.py', 'rejection-fairness.py']:
+            self.check_receipt_exclusion(script)
+
+    def check_receipt_exclusion(self, script):
         for symlink in [False, True]:
             with self.subTest(symlink=symlink), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
@@ -46,7 +50,7 @@ class ReceiptTest(unittest.TestCase):
                     output.symlink_to(directory / 'missing.json')
                 else:
                     output.write_bytes(b'previous evidence\n')
-                result, marker, _ = self.invoke(directory)
+                result, marker, _ = self.invoke(directory, script=script)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(marker.exists())
                 if symlink:
@@ -83,8 +87,12 @@ class ReceiptTest(unittest.TestCase):
                 self.assertFalse(output.exists())
 
     def test_failed_startup_is_recorded_and_reaped(self):
+        for script in ['observer-message-fairness.py', 'rejection-fairness.py']:
+            self.check_failed_startup(script)
+
+    def check_failed_startup(self, script):
         with tempfile.TemporaryDirectory() as temporary:
-            result, marker, output = self.invoke(Path(temporary))
+            result, marker, output = self.invoke(Path(temporary), script=script)
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertTrue(marker.exists())
             receipt = json.loads(output.read_text())
@@ -92,6 +100,14 @@ class ReceiptTest(unittest.TestCase):
             self.assertEqual(receipt['server_exit'], 1)
             self.assertIn('server startup failed', receipt['error'])
             self.assertFalse(Path('/proc', str(receipt['server_pid'])).exists())
+
+    def test_rejection_fixture_resource_arguments_fail_before_launch(self):
+        for extra in [['--audience', '0'], ['--publishers', '0'], ['--queue-bytes', '4106']]:
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as temporary:
+                result, marker, output = self.invoke(Path(temporary), extra, 'rejection-fairness.py')
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
 
     def test_combined_scope_and_byte_budget_are_validated_before_launch(self):
         for extra in [['--room-readers', '-1'], ['--room-readers', '1', '--kind', 'private'],

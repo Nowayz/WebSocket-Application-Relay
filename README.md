@@ -11,6 +11,9 @@ capacity and latency depend on the workload and host.
 
 ## Build and run
 
+For release assets, installation and the final acceptance gate, see the
+[release guide](docs/release.md).
+
 Rust 1.91+ builds the server. Node 22+ is needed for the JavaScript tools.
 
 ```sh

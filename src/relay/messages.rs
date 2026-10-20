@@ -69,7 +69,7 @@ impl Publication {
         self.sequence.and_then(|_| self.work.lock().deadline)
     }
 
-    pub(super) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
+    pub(super) fn resume(&mut self, quantum: usize) -> Result<(), RoutingFailure> {
         let Some(sequence) = self.sequence else {
             return Ok(());
         };

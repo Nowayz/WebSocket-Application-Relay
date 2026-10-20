@@ -7,6 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: rustfmt, clippy
@@ -38,8 +41,24 @@ jobs:
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --kind private --output artifacts/observer-private-message-ci.json
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --room-readers 2048 --queue-messages 1 --queue-bytes 2048 --kind channel --output artifacts/observer-combined-message-ci.json
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --publishers 8 --payload-bytes 8 --kind mixed --output artifacts/observer-concurrent-message-ci.json
+      - run: python3 scripts/rejection-fairness.py --server target/debug/war-relay --output artifacts/rejection-fairness-ci.json
       - run: python3 scripts/shutdown-capacity.py --server target/debug/war-relay --workers 2 --users 2048 --prime-broadcast --output artifacts/shutdown-warm-ci.json
       - run: python3 scripts/retirement-fallback.py --server target/debug/war-relay --workers 2 --audience 2048 --output artifacts/retirement-fallback-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
       - run: npm run check:types --prefix clients/js
       - run: npm run build:browser --prefix clients/js
+      - run: python3 scripts/package-release.py --output artifacts/release-ci
+      - run: python3 scripts/check-release.py --release artifacts/release-ci --output artifacts/release-ci-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-candidate-and-checks
+          path: |
+            artifacts/release-ci/*.tar.gz
+            artifacts/release-ci/*.tgz
+            artifacts/release-ci/SHA256SUMS
+            artifacts/release-ci/release.json
+            artifacts/release-ci/package.log
+            artifacts/release-ci/build/build.json
+            artifacts/release-ci/build/build.log
+            artifacts/release-ci-check/

@@ -139,7 +139,7 @@ fn continuation_metadata_cannot_escape_the_global_queue_budget() {
             &mut slot,
             256
         ),
-        Err(Disconnect::OVERLOADED)
+        Err(Disconnect::OVERLOADED.into())
     );
     let work = slot.as_ref().unwrap();
     assert!(!work.active());

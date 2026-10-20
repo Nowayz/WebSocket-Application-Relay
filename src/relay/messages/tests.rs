@@ -52,6 +52,85 @@ fn data(output: &Recorded) -> Vec<Frame> {
 }
 
 #[test]
+fn failed_observer_work_counts_only_this_turn_across_both_segments() {
+    for first_turn in [0, 1] {
+        let relay = Relay::new(Config {
+            auth_password: Some("messages".into()),
+            max_message_bytes: 1024,
+            queue_bytes: 2048,
+            total_queue_bytes: 16384,
+            ..Config::default()
+        })
+        .unwrap();
+        let mut source = relay.subscribe(b"count-room").unwrap();
+        drop(source.outgoing.try_recv().unwrap());
+        let mut reader = relay.subscribe(b"count-room").unwrap();
+        drop(reader.outgoing.try_recv().unwrap());
+        let mut observers = Vec::new();
+        for _ in 0..FANOUT_QUANTUM + 44 {
+            let mut observer = relay.subscribe(GLOBAL_CHANNEL).unwrap();
+            drop(observer.outgoing.try_recv().unwrap());
+            for request in [
+                protocol::request(0, &protocol::text("messages")),
+                protocol::request(1, b"\x01"),
+            ] {
+                relay.receive(&observer.registration.peer, request).unwrap();
+                drop(observer.outgoing.try_recv().unwrap());
+            }
+            observers.push(observer);
+        }
+        let value = protocol::byte_string(&[0x35; 256]);
+        let input = protocol::envelope(BROADCAST, &value);
+        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
+        let mut pending = None;
+        relay
+            .receive_batch()
+            .receive_bounded(
+                &source.registration.peer,
+                input,
+                0,
+                &mut pending,
+                first_turn,
+            )
+            .unwrap();
+        let failure = pending
+            .as_mut()
+            .unwrap()
+            .resume_routing(FANOUT_QUANTUM)
+            .unwrap_err();
+        assert_eq!(failure.reason, Disconnect::OVERLOADED);
+        let mut packets = vec![reader.outgoing.try_recv().unwrap()];
+        let mut observer_count = 0;
+        for observer in &mut observers {
+            if let Ok(packet) = observer.outgoing.try_recv() {
+                observer_count += 1;
+                packets.push(packet);
+            }
+        }
+        assert!(observer_count > 0 && observer_count < FANOUT_QUANTUM);
+        // Two room handles include the skipped source. The failed observer
+        // consumes a visit, while the preceding turn must not be charged again.
+        assert_eq!(failure.work, 2 - first_turn + observer_count + 1);
+        for packet in &packets {
+            assert_eq!(packet.frame.payload().as_ptr(), pointer);
+            assert_eq!(
+                packet.frame.to_vec(),
+                protocol::envelope(source.registration.peer.id.load(Relaxed), &value)
+            );
+        }
+        assert!(!pending.as_ref().unwrap().active());
+        assert!(relay.messages.index.lock().jobs.is_empty());
+        assert_eq!(
+            relay.metrics.queued_bytes.load(Relaxed),
+            packets.iter().map(|p| p.frame.len()).sum::<usize>()
+        );
+        drop(packets);
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        relay.begin_shutdown();
+    }
+}
+
+#[test]
 fn partial_observer_publications_flush_only_the_revoking_peer_and_never_replay() {
     for flag in [CHANNEL_MESSAGE, PRIVATE_MESSAGE] {
         let relay = relay();
@@ -327,7 +406,7 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
             &mut pending,
             0
         ),
-        Err(Disconnect::OVERLOADED)
+        Err(Disconnect::OVERLOADED.into())
     );
     assert!(relay.messages.index.lock().jobs.is_empty());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -355,7 +434,7 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
             &mut pending,
             1
         ),
-        Err(Disconnect::OVERLOADED)
+        Err(Disconnect::OVERLOADED.into())
     );
     assert!(constrained.messages.index.lock().jobs.is_empty());
     assert_eq!(constrained.metrics.queued_bytes.load(Relaxed), 0);
@@ -387,7 +466,7 @@ fn private_primary_delivery_precedes_an_unfunded_observer_snapshot() {
             &mut pending,
             1,
         ),
-        Err(Disconnect::OVERLOADED)
+        Err(Disconnect::OVERLOADED.into())
     );
     assert_eq!(
         data(&output).len(),

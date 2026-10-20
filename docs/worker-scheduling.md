@@ -164,9 +164,10 @@ repeats for every user. Their summaries retain source CSV digests and the eight-
 observation scope. The room chart retains the slightly worse candidate maximum
 rather than pooling users or excluding it.
 
-Next conservatively charge failed initial routing attempts to the aggregate
-allowance, preserving cleanup progress under rejection pressure. Then measure
-cold/changing recipient views and observer barriers under churn.
+The [routing refusal follow-up](rejection-accounting.md) now charges failed
+initial attempts for their visited handles, preserving cleanup progress under
+rejection pressure. Cold/changing recipient views and observer barriers under
+churn remain future performance work; release readiness takes priority.
 The new scheduler does not remove their membership-lock scans. Already queued
 output work is upgraded in place when input becomes ready, rather than moved to
 the fresh queue; its buffered turn remains bounded. Slow-consumer write service,

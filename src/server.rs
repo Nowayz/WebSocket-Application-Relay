@@ -19,6 +19,8 @@ mod ownership_tests;
 
 #[cfg(test)]
 mod rate_tests;
+#[cfg(test)]
+mod rejection_tests;
 
 pub use crate::admin::admin_router;
 
@@ -1235,8 +1237,9 @@ impl Connection {
                                     FANOUT_QUANTUM,
                                 ) {
                                     Ok(work) => work,
-                                    Err(reason) => {
-                                        return self.start_close(reason, relay, false, now);
+                                    Err(error) => {
+                                        *routing_left = routing_left.saturating_sub(error.work);
+                                        return self.start_close(error.reason, relay, false, now);
                                     }
                                 };
                                 route_budget = route_budget.saturating_sub(work);

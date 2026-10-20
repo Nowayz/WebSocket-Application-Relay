@@ -21,7 +21,15 @@ with TypeScript declarations and browser bundle, protocol documentation,
 management API, native correctness checks and short Rust load clients. Audit
 this boundary in CI with `scripts/check-product.py`.
 
-## Immediate performance milestone
+## Immediate milestone: stable release
+
+Freeze performance experiments and complete the release checklist in
+[release.md](release.md). Ship a traceable server archive, source archive and
+installable CBOR client package, verify the packaged server/client together, and
+record the supported platform, upgrade break and operating limits. Resume the
+performance work below after this release baseline is established.
+
+## Subsequent performance work
 
 Finish bounding routing work that can monopolize a worker or membership lock.
 Large native room, global and observer broadcasts now
@@ -48,8 +56,8 @@ eight-worker improvement. The [worker-scheduling follow-up](worker-scheduling.md
 now separates fresh readiness from buffered work and bounds aggregate routing
 work in both phases. Its short native and mixed-population checks preserve the
 source cutoff, FIFO and storage contracts while improving responsiveness.
-Finish conservative aggregate charging for failed initial routing attempts;
-they currently retain the connection-turn bound. Changing/cold captured
+Failed initial routing attempts now [charge their visited handles](rejection-accounting.md)
+to the aggregate allowance. Changing/cold captured
 generations under churn are the next lock-hold target. Do not add a recipient
 index from the earlier component result alone.
 

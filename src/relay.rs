@@ -72,6 +72,34 @@ pub(crate) struct ReceiveBatch<'a> {
     totals: InputTotals,
 }
 
+/// Routing errors retain attempted recipient work for native worker fairness.
+/// Validation and preparation refusals count as one attempt, never a full turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RoutingFailure {
+    pub reason: Disconnect,
+    pub work: usize,
+}
+
+impl RoutingFailure {
+    fn visited(reason: Disconnect, work: usize) -> Self {
+        Self {
+            reason,
+            work: work.max(1),
+        }
+    }
+
+    fn after(mut self, preceding: usize) -> Self {
+        self.work = self.work.saturating_add(preceding);
+        self
+    }
+}
+
+impl From<Disconnect> for RoutingFailure {
+    fn from(reason: Disconnect) -> Self {
+        Self::visited(reason, 1)
+    }
+}
+
 impl ReceiveBatch<'_> {
     #[cfg(test)]
     pub(crate) fn receive(
@@ -82,6 +110,7 @@ impl ReceiveBatch<'_> {
     ) -> Result<usize, Disconnect> {
         self.relay
             .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals, None)
+            .map_err(|error| error.reason)
     }
 
     /// Native workers keep one reusable continuation slot per large publisher.
@@ -92,7 +121,7 @@ impl ReceiveBatch<'_> {
         storage_capacity: usize,
         pending: &mut Option<Box<RoomFanout>>,
         quantum: usize,
-    ) -> Result<usize, Disconnect> {
+    ) -> Result<usize, RoutingFailure> {
         self.relay.receive_with_totals(
             peer,
             bytes,
@@ -477,6 +506,10 @@ impl RoomFanout {
     }
 
     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
+        self.resume_routing(quantum).map_err(|error| error.reason)
+    }
+
+    fn resume_routing(&mut self, quantum: usize) -> Result<(), RoutingFailure> {
         let visits = self.recipients.as_ref().map_or(0, |view| {
             quantum.min(view.len().saturating_sub(self.cursor))
         });
@@ -490,7 +523,9 @@ impl RoomFanout {
         if self.packet.is_none()
             && let Some(observed) = &mut self.observed
         {
-            observed.resume(quantum - visits)?;
+            observed
+                .resume(quantum - visits)
+                .map_err(|error| error.after(visits))?;
         }
         Ok(())
     }
@@ -499,7 +534,7 @@ impl RoomFanout {
         &mut self,
         quantum: usize,
         message_sequence: Option<u64>,
-    ) -> Result<(), Disconnect> {
+    ) -> Result<(), RoutingFailure> {
         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
         let end = self.cursor.saturating_add(quantum).min(recipients.len());
@@ -517,7 +552,8 @@ impl RoomFanout {
                     message.excluded_observer,
                     frame,
                     message_sequence.expect("observer jobs have a publication sequence"),
-                )?;
+                )
+                .map_err(|error| error.after(room_end.saturating_sub(self.cursor)))?;
             }
         } else {
             Self::submit::<RETIREMENT, false>(
@@ -539,15 +575,15 @@ impl RoomFanout {
         excluded: u64,
         frame: &Frame,
         sequence: u64,
-    ) -> Result<(), Disconnect> {
-        for recipient in recipients {
+    ) -> Result<(), RoutingFailure> {
+        for (index, recipient) in recipients.iter().enumerate() {
             if recipient.key != excluded
                 && (!RETIREMENT || recipient.retirement_barrier.load(Relaxed) < sequence)
                 && (!MESSAGE || recipient.message_barrier.load(Relaxed) < sequence)
             {
                 let result = recipient.enqueue_fanout(frame);
                 if !RETIREMENT {
-                    result?;
+                    result.map_err(|reason| RoutingFailure::visited(reason, index + 1))?;
                 }
             }
         }
@@ -565,11 +601,13 @@ fn deliver_room(
     source: &Peer,
     recipients: Arc<Vec<Arc<Peer>>>,
     frame: Frame,
-) -> Result<usize, Disconnect> {
+) -> Result<usize, RoutingFailure> {
     let work = recipients.len().max(1);
-    for recipient in recipients.iter() {
+    for (index, recipient) in recipients.iter().enumerate() {
         if recipient.key != source.key {
-            recipient.enqueue_fanout(&frame)?;
+            recipient
+                .enqueue_fanout(&frame)
+                .map_err(|reason| RoutingFailure::visited(reason, index + 1))?;
         }
     }
     Ok(work)
@@ -1095,7 +1133,7 @@ impl Relay {
         storage_capacity: usize,
         totals: &mut InputTotals,
         native: Option<(&mut Option<Box<RoomFanout>>, usize)>,
-    ) -> Result<usize, Disconnect> {
+    ) -> Result<usize, RoutingFailure> {
         if peer.closing.load(Relaxed) {
             return Ok(1);
         }
@@ -1103,7 +1141,7 @@ impl Relay {
         totals.bytes = totals.bytes.wrapping_add(bytes.len() as u64);
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
-            return self.control(peer, value).map(|_| 1);
+            return self.control(peer, value).map(|_| 1).map_err(Into::into);
         }
         let state = self.state.read();
         if peer.closing.load(Relaxed) {
@@ -1117,7 +1155,8 @@ impl Relay {
                 return Err(Disconnect {
                     code: 1008,
                     reason: "Global Broadcast Requires Authentication",
-                });
+                }
+                .into());
             }
             None
         } else {
@@ -1144,7 +1183,10 @@ impl Relay {
             // retained target owns its lifetime through the socket write.
             let recipient = recipient.clone();
             drop(state);
-            return recipient.enqueue_frame(&frame).map(|_| 1);
+            return recipient
+                .enqueue_frame(&frame)
+                .map(|_| 1)
+                .map_err(Into::into);
         }
         if target == BROADCAST && peer.channel.as_ref() == GLOBAL_CHANNEL {
             let recipients = state
@@ -1226,29 +1268,42 @@ impl Relay {
             );
             if let Err(error) = prepared {
                 publisher.clear();
-                return Err(error);
+                return Err(error.into());
             }
             let direct_visits = usize::from(private_recipient.is_some());
             drop(state);
-            publisher.resume(quantum.saturating_sub(direct_visits))?;
+            publisher
+                .resume_routing(quantum.saturating_sub(direct_visits))
+                .map_err(|error| error.after(direct_visits))?;
             return Ok(quantum.max(direct_visits));
         }
+        let mut visited = 0;
         if target == BROADCAST {
             if let Some(channel) = state.channels.get(&peer.channel) {
                 for recipient in channel.members.values() {
+                    visited += 1;
                     if recipient.key != peer.key {
-                        recipient.enqueue_fanout(&frame)?;
+                        recipient
+                            .enqueue_fanout(&frame)
+                            .map_err(|reason| RoutingFailure::visited(reason, visited))?;
                     }
                 }
             }
             for recipient in state.listeners(CHANNEL_MESSAGE) {
-                recipient.enqueue_fanout(&frame)?;
+                visited += 1;
+                recipient
+                    .enqueue_fanout(&frame)
+                    .map_err(|reason| RoutingFailure::visited(reason, visited))?;
             }
         } else if let Some(recipient) = private_recipient {
+            visited = 1;
             recipient.enqueue_fanout(&frame)?;
             for listener in state.listeners(PRIVATE_MESSAGE) {
+                visited += 1;
                 if listener.key != recipient.key {
-                    listener.enqueue_fanout(&frame)?;
+                    listener
+                        .enqueue_fanout(&frame)
+                        .map_err(|reason| RoutingFailure::visited(reason, visited))?;
                 }
             }
         }
@@ -1261,7 +1316,7 @@ impl Relay {
         recipients: Arc<Vec<Arc<Peer>>>,
         frame: Frame,
         native: Option<(&mut Option<Box<RoomFanout>>, usize)>,
-    ) -> Result<usize, Disconnect> {
+    ) -> Result<usize, RoutingFailure> {
         if let Some((pending, quantum)) = native
             && recipients.len() > quantum
         {
@@ -1273,7 +1328,7 @@ impl Relay {
                 self.config.write_timeout(),
                 0,
             )?;
-            work.resume(quantum)?;
+            work.resume_routing(quantum)?;
             Ok(quantum)
         } else {
             deliver_room(source, recipients, frame)
