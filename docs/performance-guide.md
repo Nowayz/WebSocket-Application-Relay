@@ -119,6 +119,12 @@ messages, departures, all process exits and final resource gauges.
   `--queue-budget-bytes 2097152` explicitly constrains credit without relaxing
   the full wire matrix; its pressure-counter flag reports refusals, not lost
   message counts. Successful delivery at that limit is the acceptance check.
+- `scripts/observer-message-fairness.py` checks channel/private observer messages
+  before unsubscribe acknowledgments, immediate re-subscription, independent
+  witnesses, joins and every audience delivery. `--kind channel` uses private
+  echoes; `--kind private` uses control replies to avoid making the witnesses
+  publish additional fanouts. The [baseline report](observer-messages.md) records
+  the 100,000-observer stalls, profile, one-slot CI cases and timing limits.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
   Its isolated `--fanout-global-broadcast` mode checks global publications,

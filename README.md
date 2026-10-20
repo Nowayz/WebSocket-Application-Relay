@@ -131,6 +131,8 @@ Native departures above that 128-recipient budget normally defer at publication.
 Global broadcasts now use the same bounded live-fanout continuation; the
 [global broadcast report](docs/global-broadcasts.md) records short 100,000-reader
 checks and the remaining cold-view and observer-path limits.
+The [observer-message baseline](docs/observer-messages.md) measures the remaining
+synchronous observer publication path and records its ordering/pressure checks.
 
 ## Provenance
 

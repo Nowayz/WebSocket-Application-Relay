@@ -67,6 +67,15 @@ cancellation and storage retirement before credit return. The native global
 fixture verifies independent join/echo/Close probes after publication, paginated
 membership gates, exact per-reader delivery coverage and final resource totals.
 
+The observer-message fixture checks both message classes with a one-slot
+output limit, exact publication-before-unsubscribe-ACK ordering, immediate
+re-subscription, later windows and every retained shutdown Close/EOF. Independent
+witnesses and joins expose scheduling stalls. Receipt tests reject reused paths
+and dangling symlinks before launching a server and verify failed-startup cleanup.
+The [observer-message report](observer-messages.md) distinguishes live resource
+gates from terminal shutdown evidence and identifies the remaining implementation
+work; these checks do not yet make observer message fanout bounded.
+
 Known limits include cold global-view capture/invalidation, synchronous
 channel/private observer message fanout, queue-pressure fallback for overlapping channels
 and pending global-view scans during observer revocation. Faults and failed gates

@@ -30,9 +30,10 @@ live fanout uses 1,024-recipient turns; deferred departures use 128. The
 [global broadcast report](global-broadcasts.md) records the latest measured win.
 
 The next candidate is channel/private observer message fanout. It still submits
-an entire fanout synchronously before yielding. First reproduce its effect on
-an independent private peer and membership operation in a short test, then
-profile it. Any continuation must preserve which observers were eligible,
+an entire fanout synchronously before yielding. The
+[native observer-message screen](observer-messages.md) now reproduces membership
+and independent-witness stalls at 100,000 observers and records a publisher
+submission profile. Any continuation must preserve which observers were eligible,
 old-message-before-unsubscribe-ack ordering, source FIFO, cancellation, ID
 takeover and output-budget refusal. Deferring a loop without those boundaries
 would change the protocol.
