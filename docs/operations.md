@@ -32,7 +32,7 @@ sends without changing listener authorization.
 Use the [100k environment](../deploy/war-relay-100k.env.example) and
 [systemd override](../deploy/war-relay-100k.conf.example) as a starting profile.
 The profile includes 110,000 physical connection slots for joining/closing
-headroom, a 262,144 descriptor limit, 16 KiB requested send buffers, 64 KiB
+headroom, a 262,144 descriptor limit, 64 KiB requested send buffers, 64 KiB
 requested receive buffers, 16 MiB maximum encoded messages and 256 MiB global allowances
 for output and decoder staging. The room ceiling is 1,024 members. These are
 operating ceilings and safeguards, not preallocated memory or a universal
@@ -46,6 +46,8 @@ Global decoder/output budgets still apply, so concurrent large transfers and
 large multicast audiences must fit available credit. Payload bodies are shared
 across recipients, while per-recipient pending delivery remains conservatively
 charged. Use backpressure or reduce the offered rate when these budgets fill.
+The [large-file check](large-files.md) records the acceptance and socket-buffer
+comparison behind this profile.
 
 The base [systemd unit](../deploy/war-relay.service) has lower limits and is not
 sufficient for 100,000 sockets without its override. Include cgroup-charged kernel
