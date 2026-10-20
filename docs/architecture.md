@@ -20,8 +20,12 @@ Data sockets belong to a fixed set of Mio readiness workers in
 On Linux each worker has its own listening socket; the sockets share the port
 with `SO_REUSEPORT`, so the kernel spreads new connections across workers. On
 other platforms only the first worker listens. It accepts and hands each new
-stream to a worker in round-robin order through that worker's wake signal, and
-the stream is registered only with the poller of the worker that owns it.
+stream to the worker selected by a hash of the peer address, through that
+worker's wake signal, and the stream is registered only with the poller of
+the worker that owns it. Hashing mirrors the kernel's placement on Linux;
+strict rotation was tried first and left workers idle under a client that
+opens sender and receiver sockets alternately, because a sender's worker
+does that sender's read, routing and inline write.
 Registering duplicated handles of one listening socket in several pollers
 stalled workers on Windows, which is why the listener is never shared. Either
 way a connection stays with one worker for its whole life. That worker owns the

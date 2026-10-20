@@ -297,9 +297,9 @@ struct Worker {
     /// Absent on workers that receive accepted streams from a peer.
     listener: Option<TcpListener>,
     signal: Arc<Signal>,
-    /// Every worker's signal, including this one, for round-robin handoff.
+    /// Every worker's signal, including this one, for handing off accepted
+    /// streams by peer-address hash.
     peers: Vec<Arc<Signal>>,
-    next_peer: usize,
     relay: Arc<Relay>,
     connections: Slab<Connection>,
     connection_capacity: usize,
@@ -355,7 +355,6 @@ impl Worker {
             listener,
             signal,
             peers: Vec::new(),
-            next_peer: 0,
             relay,
             connections: Slab::new(),
             connection_capacity: 0,
@@ -419,10 +418,18 @@ impl Worker {
             };
             self.relay.metrics.accepted.fetch_add(1, Relaxed);
             // Spread admissions across workers; each stream is registered
-            // only with the poller of the worker that will own it.
+            // only with the poller of the worker that will own it. The
+            // target is a hash of the peer address, as the kernel's
+            // `SO_REUSEPORT` placement is on Linux: strict rotation correlates
+            // with a client's connect order, and a sender's worker does that
+            // sender's read, routing and inline write, so a client that
+            // opens sender and receiver sockets alternately would leave every
+            // other worker idle.
             if self.peers.len() > 1 {
-                let target = self.next_peer % self.peers.len();
-                self.next_peer = self.next_peer.wrapping_add(1);
+                let mut hasher = std::hash::DefaultHasher::new();
+                std::hash::Hash::hash(&address, &mut hasher);
+                let target =
+                    (std::hash::Hasher::finish(&hasher) % self.peers.len() as u64) as usize;
                 let peer = &self.peers[target];
                 if !Arc::ptr_eq(peer, &self.signal) {
                     let mut handoff = peer.handoff.lock();

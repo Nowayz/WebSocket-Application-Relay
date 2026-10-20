@@ -61,10 +61,14 @@
 - Workers poll with a one-second upper bound (`POLL_TICK`), so a missed wakeup
   delays work by at most one tick instead of stalling a worker.
 - On non-Linux hosts only the first worker listens and hands accepted streams
-  to the other workers. Sharing one listening socket between every worker's
+  to the other workers, placed by a hash of the peer address as the kernel
+  places them on Linux. Sharing one listening socket between every worker's
   poller left workers stalled at random on Windows: shutdowns ran to their
   full grace period and queued output was not flushed. Linux keeps one
-  `SO_REUSEPORT` listener per worker.
+  `SO_REUSEPORT` listener per worker. Strict rotation was tried first and
+  left workers idle under a client that opens sender and receiver sockets
+  alternately, since a sender's worker does that sender's read, routing and
+  inline write.
 - A handshake refused for lack of decoder staging credit now sends a FIN after
   its HTTP 503, so the reply reaches the peer instead of being reset.
 - `Config::default()` no longer reads `WAR_*` environment variables; only
