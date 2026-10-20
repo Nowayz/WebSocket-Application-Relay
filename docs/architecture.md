@@ -90,17 +90,15 @@ into independently locked pieces:
 Where locks nest, they nest in this order, from outer to inner:
 
 1. channel
-2. publication index, then one publication job
-3. departure queue (a revocation barrier holds every observer shard at once,
-   in index order; nothing else holds two)
+2. one publication job
+3. one departure queue
 4. socket output state
 
-The channel index, session ownership, the observer snapshot, the two caches
-and the list of pending departure queues are all lock-free. Two locks are
-still shared by sessions that are not members of one room, and neither is
-taken on the routing path: the publication index mutex, only for
-registering, finishing or scanning large observer publications, and the
-observer shards, only by departures, worker turns and barriers.
+Nothing holds two locks of one kind at once. The channel index, session
+ownership, the observer snapshot, the two caches, the list of pending
+departure queues and the publication index are all lock-free. Every lock
+that remains belongs to one object: a channel, a departure queue (an
+observer shard is one), a publication job or a socket.
 
 A path may skip levels but never takes an outer lock while holding an inner
 one. Session ownership, the listener snapshot, the two caches (global
@@ -130,9 +128,9 @@ amount of work and never across socket I/O:
   the observer before acknowledging, and nothing arrives afterwards) no longer
   comes from a lock. Each snapshot carries a generation. Every observer job
   records the generation it captured. A revocation publishes the next snapshot
-  first, then scans the queued jobs for that observer under the observer
-  shards' or the publication index's mutex, collects the pending notices,
-  and records on the
+  first, then scans the queued jobs for that observer one observer shard,
+  or one publication job, at a time, collects the pending notices, and
+  records on the
   observer the generation it revoked at. From then on a job captured at or
   before that generation skips the observer. A job that captured the old
   snapshot but registered only after the scan is therefore skipped rather than
@@ -162,11 +160,18 @@ amount of work and never across socket I/O:
   it has work; departures append one entry when a queue becomes non-empty.
   Nobody waits on it.
 - Observer notices (disconnect notices and `re_globl` departures) are spread
-  over sixteen departure queues by the departing session's room. A departure
-  or a worker turn locks one of them; a revocation barrier holds all sixteen
-  for one bounded scan, so that no turn can deliver a notice the scan has
-  already collected. Notices for sessions of different rooms are unordered
-  relative to each other, as room notices already were.
+  over sixteen departure queues by the departing session's room. A
+  departure, a worker turn or a revocation barrier locks one of them at a
+  time. Each shard numbers its own jobs and an observer keeps one watermark
+  per shard, stored while that shard is still locked, so no turn can deliver
+  a notice the scan has already collected and no watermark can suppress a
+  job the scan has not inspected. Notices for sessions of different rooms
+  are unordered relative to each other, as room notices already were.
+- The index of large observer publications is a lock-free map with an
+  atomic sequence. A barrier collects the live publications, sorts them by
+  sequence and inspects each under that job's own lock, storing the
+  observer's watermark while the job is held. Registration and completion
+  are single-key writes.
 
 The test `unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation`
 in `tests/relay_integration.rs` exercises all of them at once: a room of 1,100
@@ -184,9 +189,12 @@ covers the other shared path: two clients create and retire fresh rooms as
 fast as they can, which writes the channel index on every join and every
 departure, while a `re_globl` session broadcasts continuously, which
 rebuilds the invalidated global recipient view from every room on every
-broadcast, and an admin client pages through the channel listing, which
-walks the whole index. A session in a stable room must keep echoing, and
-every listing must answer, within one second.
+broadcast, an admin client pages through the channel listing, which walks
+the whole index, and a disconnect observer keeps clearing and restoring its
+flag, so every departure is a notice and every clear a barrier scan of the
+observer shards while departures and turns keep taking them. A session in a
+stable room must keep echoing, and every listing must answer, within one
+second.
 On the development machine roughly 5,000 rooms were created and retired in
 2.5 s under 157 global broadcasts and about 1,500 listing pages, and the
 worst echo was under 5 ms.
@@ -196,10 +204,10 @@ unrelated work: a channel's lock is held for one map insert or removal, or
 for cloning one handle to the cached view, with no I/O inside, and only that
 room's traffic ever takes it; a departure queue's lock is held for one
 bounded turn of at most 128 recipient submissions, which are queue pushes,
-never socket writes; the publication index mutex is held for one registration,
-one removal or one barrier scan of large observer publications, and never by
-a delivery; an observer shard's lock is held for one push, one bounded turn
-or one barrier scan. None of them is taken on the private-message path.
+never socket writes; a publication job's lock is held for one bounded turn or
+one barrier inspection; an observer shard's lock is held for one push, one
+bounded turn or one barrier scan of that shard. None of them is taken on the
+private-message path.
 
 ## The data path of one message
 

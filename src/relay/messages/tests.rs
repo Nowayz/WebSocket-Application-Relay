@@ -125,7 +125,7 @@ fn observer_pressure_drops_output_without_failing_the_source() {
             );
         }
         assert!(!pending.as_ref().unwrap().active());
-        assert!(relay.messages.index.lock().jobs.is_empty());
+        assert!(relay.messages.jobs_len() == 0);
         assert_eq!(
             relay.metrics.queued_bytes.load(Relaxed),
             packets.iter().map(|p| p.frame.len()).sum::<usize>()
@@ -157,7 +157,7 @@ fn partial_observer_publications_flush_only_the_revoking_peer_and_never_replay()
             .unwrap();
         assert!(pending.as_ref().unwrap().active());
         let allocation = Arc::as_ptr(&pending.as_ref().unwrap().observed.as_ref().unwrap().work);
-        assert_eq!(relay.messages.index.lock().jobs.len(), 1);
+        assert_eq!(relay.messages.jobs_len(), 1);
         assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
         let (observer, output) = &observers[2];
         assert!(data(output).is_empty());
@@ -187,7 +187,7 @@ fn partial_observer_publications_flush_only_the_revoking_peer_and_never_replay()
             .unwrap();
         pending.as_mut().unwrap().resume(usize::MAX).unwrap();
         assert!(!pending.as_ref().unwrap().active());
-        assert!(relay.messages.index.lock().jobs.is_empty());
+        assert!(relay.messages.jobs_len() == 0);
         for (_, output) in &observers {
             let packets = data(output);
             assert_eq!(packets.len(), 1);
@@ -240,7 +240,7 @@ fn private_primary_deduplicates_and_a_global_source_can_observe_its_own_message(
     assert_eq!(data(&source_output).len(), 2);
     assert_eq!(data(&target_output).len(), 2);
     assert_eq!(data(&other_output).len(), 2);
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
     drop(other);
@@ -363,10 +363,10 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         )
         .unwrap();
     pending.as_mut().unwrap().clear();
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert!(data(&output).is_empty());
-    relay.messages.index.lock().sequence = u64::MAX - 1;
+    relay.messages.set_sequence(u64::MAX - 1);
     relay
         .receive_batch()
         .receive_bounded(
@@ -406,7 +406,7 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         )
         .unwrap();
     assert_eq!(data(&output).len(), 2);
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
     drop(observer);
@@ -438,7 +438,7 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
     assert!(constrained.metrics.global_pressure.load(Relaxed) >= 1);
     assert!(observers.iter().any(|(_, output)| !data(output).is_empty()));
     assert!(!source.peer.closing.load(Relaxed));
-    assert!(constrained.messages.index.lock().jobs.is_empty());
+    assert!(constrained.messages.jobs_len() == 0);
     assert_eq!(constrained.metrics.queued_bytes.load(Relaxed), 0);
     constrained.begin_shutdown();
     drop(observers);
@@ -480,7 +480,7 @@ fn private_primary_delivery_precedes_an_unfunded_observer_snapshot() {
     assert!(observers.iter().any(|(_, output)| !data(output).is_empty()));
     assert!(relay.metrics.global_pressure.load(Relaxed) >= 1);
     assert!(!source.peer.closing.load(Relaxed));
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
 }
@@ -673,7 +673,7 @@ fn alternating_view_cache_distinguishes_equal_sized_generations_and_cached_absen
         views.iter().all(|view| view.upgrade().is_none()),
         "lookup cache pinned an old view"
     );
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
 }
@@ -777,7 +777,7 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
     assert_eq!(data(&last_output).len(), 1);
     assert_eq!(data(&gated.recorded).len(), 1);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert!(relay.messages.jobs_len() == 0);
     relay.begin_shutdown();
 }
 
@@ -860,7 +860,7 @@ fn observer_barrier_event_screen() {
                 )
                 .unwrap();
         }
-        assert_eq!(relay.messages.index.lock().jobs.len(), publishers);
+        assert_eq!(relay.messages.jobs_len(), publishers);
         let prepared = started.elapsed();
         sink.0.store(0, Relaxed);
         let barrier = std::time::Instant::now();
@@ -879,7 +879,7 @@ fn observer_barrier_event_screen() {
         relay
             .receive(observer, protocol::request(1, b"\x03"))
             .unwrap();
-        assert!(relay.messages.index.lock().jobs.is_empty());
+        assert!(relay.messages.jobs_len() == 0);
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
         samples.push(serde_json::json!({"prepare_ns":prepared.as_nanos(),"revoke_ns":revoked.as_nanos(),"whole_ns":started.elapsed().as_nanos()}));
     }

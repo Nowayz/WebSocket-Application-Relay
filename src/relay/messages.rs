@@ -1,22 +1,19 @@
 //! Large observer publications are owned and advanced by their source worker.
-//! The index is used only for registration, retirement and revocation; worker
-//! turns lock one publication, never the index or any membership lock, and
-//! direct (unqueued) deliveries never touch the index at all: each observer
-//! re-checks the revocation mark under its own output lock.
+//! The index is a lock-free map used only for registration, retirement and
+//! revocation; worker turns lock one publication, never any shared structure,
+//! and direct (unqueued) deliveries never touch the index at all: each
+//! observer re-checks the revocation mark under its own output lock.
 use super::*;
-use std::collections::BTreeMap;
 
 type ObserverView = Vec<Arc<Peer>>;
 
 #[derive(Default)]
 pub(super) struct MessageFanouts {
-    index: Mutex<Index>,
-}
-
-#[derive(Default)]
-pub(super) struct Index {
-    sequence: u64,
-    jobs: BTreeMap<u64, Weak<Mutex<RoomFanout>>>,
+    /// Numbers publications; a barrier inspects them in ascending order.
+    sequence: AtomicU64,
+    /// Live large observer publications by number. Registration, retirement
+    /// and a barrier's walk never wait on each other.
+    jobs: papaya::HashMap<u64, Weak<Mutex<RoomFanout>>>,
 }
 
 pub(super) struct Publication {
@@ -42,19 +39,22 @@ impl Publication {
         generation: u64,
     ) -> Result<(), Disconnect> {
         debug_assert!(!self.active());
-        // Registration happens under the index mutex, which a revocation also
-        // holds while scanning; the recorded generation covers a capture that
-        // raced the revocation and registers only afterwards.
-        let mut index = self.registry.index.lock();
-        let sequence = index
+        // The recorded generation covers a capture that raced a revocation
+        // and registers only after its scan: the job then skips the observer.
+        let sequence = self
+            .registry
             .sequence
-            .checked_add(1)
-            .ok_or(Disconnect::OVERLOADED)?;
+            .fetch_update(Relaxed, Relaxed, |sequence| sequence.checked_add(1))
+            .map_err(|_| Disconnect::OVERLOADED)?
+            + 1;
         let mut work = self.work.lock();
         work.begin(source, FanoutRecipients::Message(recipients), frame, 0)?;
         work.generation = generation;
-        index.sequence = sequence;
-        index.jobs.insert(sequence, Arc::downgrade(&self.work));
+        drop(work);
+        self.registry
+            .jobs
+            .pin()
+            .insert(sequence, Arc::downgrade(&self.work));
         self.sequence = Some(sequence);
         Ok(())
     }
@@ -79,8 +79,7 @@ impl Publication {
         let finished = !work.active();
         drop(work);
         if finished {
-            // Always release the job lock before taking the index lock.
-            self.registry.index.lock().jobs.remove(&sequence);
+            self.registry.jobs.pin().remove(&sequence);
             self.sequence = None;
         }
         result
@@ -89,7 +88,7 @@ impl Publication {
     pub(super) fn clear(&mut self) {
         self.work.lock().clear();
         if let Some(sequence) = self.sequence.take() {
-            self.registry.index.lock().jobs.remove(&sequence);
+            self.registry.jobs.pin().remove(&sequence);
         }
     }
 }
@@ -107,18 +106,24 @@ impl MessageFanouts {
     /// acknowledgement, and direct deliveries re-check it under the
     /// observer's own output lock, so none of them can follow the ACK.
     pub(super) fn flush(&self, observer: &Peer, revoked_at: u64) -> Vec<Frame> {
-        // Publication takes index -> job; progress takes only the job lock,
-        // then releases it before unregistering.
         let mut pending = Vec::new();
-        let index = self.index.lock();
         let previous = observer.message_barrier.load(Relaxed);
+        // The map is lock-free and unordered: collect, then inspect in ascending
+        // sequence. That order is essential, since a watermark must never
+        // suppress a lower-sequence job that this barrier has not inspected
+        // yet. A job registered during the walk may be missed; its generation
+        // then makes it skip the observer, as a capture concurrent with the
+        // revocation may.
+        let mut jobs: Vec<(u64, Weak<Mutex<RoomFanout>>)> = self
+            .jobs
+            .pin()
+            .iter()
+            .filter(|(sequence, _)| **sequence > previous)
+            .map(|(sequence, job)| (*sequence, job.clone()))
+            .collect();
+        jobs.sort_unstable_by_key(|(sequence, _)| *sequence);
         let mut searched: Option<(Weak<ObserverView>, Option<usize>)> = None;
-        // Ascending sequence is essential: a watermark must never suppress a
-        // lower-sequence job that this barrier has not inspected yet.
-        for (&sequence, weak) in index.jobs.range((
-            std::ops::Bound::Excluded(previous),
-            std::ops::Bound::Unbounded,
-        )) {
+        for (sequence, weak) in jobs {
             let Some(job) = weak.upgrade() else {
                 continue;
             };
@@ -152,11 +157,23 @@ impl MessageFanouts {
             // message to the observer once the watermark is visible.
             observer.message_barrier.store(sequence, Relaxed);
         }
-        observer.message_barrier.store(index.sequence, Relaxed);
+        observer
+            .message_barrier
+            .store(self.sequence.load(Relaxed), Relaxed);
         // A publication captured before the revocation but registered after
-        // this scan skips the observer instead of arriving after its ACK.
+        // this walk skips the observer instead of arriving after its ACK.
         observer.message_revoked.store(revoked_at, Relaxed);
         pending
+    }
+
+    #[cfg(test)]
+    pub(super) fn jobs_len(&self) -> usize {
+        self.jobs.pin().len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_sequence(&self, sequence: u64) {
+        self.sequence.store(sequence, Relaxed);
     }
 }
 

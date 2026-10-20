@@ -1274,7 +1274,9 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
     let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
         .map(|_| recorded_disconnect_observer(&relay))
         .collect();
-    relay.set_observer_sequence(u64::MAX - 1);
+    relay
+        .observer_queue_for(b"barrier-source")
+        .set_sequence(u64::MAX - 1);
     let depart = || {
         let source = relay
             .subscribe_with_output(b"barrier-source", Arc::new(NativeRetirement))
@@ -1302,7 +1304,10 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
         !relay.has_retirements(),
         "exhaustion must finish preceding work before direct delivery"
     );
-    assert_eq!(relay.observer_sequence(), u64::MAX);
+    assert_eq!(
+        relay.observer_queue_for(b"barrier-source").sequence(),
+        u64::MAX
+    );
     for (_, output) in &observers {
         let packets = output.0.lock();
         assert_eq!(packets.len(), 2);
@@ -1615,4 +1620,86 @@ fn a_source_that_leaves_mid_publication_still_reaches_every_recipient_before_its
         drop(targets);
         assert_eq!(relay.counts(), (0, 1));
     }
+}
+
+#[test]
+fn a_revocation_collects_pending_notices_from_every_shard_once_holding_one_at_a_time() {
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    // Two rooms whose departures queue in different observer shards.
+    let first_room = b"shard-room-0".to_vec();
+    let second_room = (1..64u32)
+        .map(|i| format!("shard-room-{i}").into_bytes())
+        .find(|name| {
+            !Arc::ptr_eq(
+                relay.observer_queue_for(&first_room),
+                relay.observer_queue_for(name),
+            )
+        })
+        .expect("sixteen shards spread 64 names");
+    let observers: Vec<_> = (0..RETIREMENT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = |room: &[u8]| {
+        let source = relay
+            .subscribe_with_output(room, Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    let notice = |id| protocol::envelope(BROADCAST, &protocol::uint(id)).to_vec();
+    let sorted = |output: &Departures| {
+        let mut packets: Vec<_> = output.0.lock().iter().map(|p| p.to_vec()).collect();
+        packets.sort();
+        packets
+    };
+    let first = depart(&first_room);
+    let second = depart(&second_room);
+    assert_eq!(relay.observer_queue_for(&first_room).len(), 1);
+    assert_eq!(relay.observer_queue_for(&second_room).len(), 1);
+    // One turn delivers the first notice to every observer but the last.
+    relay.progress_retirements(RETIREMENT_QUANTUM);
+    let (last, last_output) = &observers[RETIREMENT_QUANTUM];
+    assert!(last_output.0.lock().is_empty());
+    // Revoking the last observer scans the shards one at a time and submits
+    // both pending notices ahead of the acknowledgement. Each job then skips
+    // the observer when its turn reaches it: no duplicate, nothing lost.
+    relay
+        .receive(&last.peer, protocol::request(1, &protocol::uint(0)))
+        .unwrap();
+    let mut expected = vec![notice(first), notice(second)];
+    expected.sort();
+    assert_eq!(sorted(last_output), expected);
+    while relay.has_retirements() {
+        relay.progress_retirements(RETIREMENT_QUANTUM);
+    }
+    assert_eq!(
+        sorted(last_output),
+        expected,
+        "a collected notice must not be delivered again by its job"
+    );
+    for (_, output) in &observers[..RETIREMENT_QUANTUM] {
+        assert_eq!(sorted(output), expected);
+    }
+    // Restoring the flag admits later departures from either shard: their
+    // jobs are numbered above the watermark the barrier left in each shard.
+    relay
+        .receive(&last.peer, protocol::request(1, &protocol::uint(4)))
+        .unwrap();
+    let third = depart(&first_room);
+    let fourth = depart(&second_room);
+    while relay.has_retirements() {
+        relay.progress_retirements(RETIREMENT_QUANTUM);
+    }
+    expected.extend([notice(third), notice(fourth)]);
+    expected.sort();
+    assert_eq!(sorted(last_output), expected);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
 }

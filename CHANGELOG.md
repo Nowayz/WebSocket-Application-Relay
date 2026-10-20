@@ -14,10 +14,12 @@
   capture to enqueue. Flag changes and observer departures publish the next
   snapshot with a compare-and-swap loop instead of serializing on a writer
   mutex, and routing reads which observer classes exist from the snapshot it
-  loads. Direct deliveries to observers no longer take the publication index
-  mutex: each recipient re-checks the revocation mark under its own output
-  lock, so a frame either precedes the revocation's acknowledgement in that
-  observer's FIFO or is dropped. The global recipient-view cache and the
+  loads. Direct deliveries to observers take no shared lock: each recipient
+  re-checks the revocation mark under its own output lock, so a frame either
+  precedes the revocation's acknowledgement in that observer's FIFO or is
+  dropped. The index of large observer publications is a lock-free map; a
+  barrier inspects publications one job at a time. The global
+  recipient-view cache and the
   disconnect-observer snapshot cache are atomic swaps, the list of departure
   queues with pending work is a lock-free queue, and session ownership is a
   lock-free map. No lock shared by the whole relay remains on the routing
@@ -30,8 +32,9 @@
   twice, which could underflow the count and refuse later joins.
 - Departure notices use one queue per room instead of one global FIFO.
   `re_globl` departures and disconnect-observer notices are spread over
-  sixteen queues by the departing session's room, and a revocation barrier
-  scans all of them. Workers rotate across queues in bounded turns (128
+  sixteen queues by the departing session's room; a revocation barrier
+  scans them one at a time with one watermark per queue, so nothing holds
+  two of them. Workers rotate across queues in bounded turns (128
   recipients for departures, 1,024 for live broadcasts), so a large room's
   notices cannot delay another room's. Notices for different rooms, including
   disconnect notices for sessions of different rooms, are no longer ordered
@@ -74,9 +77,13 @@
   unrelated session must keep echoing within one second, every listing
   must answer within one second, and shutdown must stay bounded. Two unit
   tests race channel creation against the channel limit and joins against
-  retirements of one name, and a third stalls a direct observer delivery
+  retirements of one name, a third stalls a direct observer delivery
   across a revocation and checks that it is dropped rather than delivered
-  after the acknowledgement. The per-IP admission test accepts the
+  after the acknowledgement, and a fourth revokes an observer with pending
+  notices in two shards and checks that each arrives exactly once. The
+  room-churn responsiveness test also runs a disconnect observer that
+  keeps clearing and restoring its flag, so every departure is a notice
+  and every clear a barrier scan. The per-IP admission test accepts the
   `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.

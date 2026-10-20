@@ -2223,9 +2223,11 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
 /// The other stall-prone path: room creation and retirement write the
 /// channel index, every membership change invalidates the global recipient
 /// view, which the next global broadcast rebuilds from every room, and the
-/// admin channel listing walks the whole index. Under continuous room churn
-/// and a stream of global broadcasts, a session in a stable room must keep
-/// echoing and the listing must keep answering, both with bounded latency.
+/// admin channel listing walks the whole index; with a disconnect observer
+/// present, every departure is a notice and every revocation a barrier scan
+/// of the observer shards. Under continuous room churn and a stream of
+/// global broadcasts, a session in a stable room must keep echoing and the
+/// listing must keep answering, both with bounded latency.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcasts() {
     use std::{sync::atomic::AtomicBool, time::Instant};
@@ -2321,6 +2323,41 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
             pages
         });
     }
+    // A disconnect observer: every departure above becomes a notice to it,
+    // and every clear is a barrier scan of the observer shards while
+    // departures and worker turns keep taking them.
+    {
+        let (mut ws, _) = join_at(&url, "re_globl").await;
+        assert_eq!(
+            command(&mut ws, 0, &protocol::text("host-test")).await,
+            protocol::reply(0, &[0xf5])
+        );
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let mut toggles = 0u64;
+            let mut notices = 0u64;
+            while !stop.load(Relaxed) {
+                for flags in [4u64, 0] {
+                    let reply = protocol::reply(1, &protocol::uint(flags));
+                    let mut packet = command(&mut ws, 1, &protocol::uint(flags)).await;
+                    while packet != reply {
+                        // Global broadcasts reach `re_globl` members too;
+                        // only departure notices count.
+                        if protocol::parse(&packet).unwrap().0 == BROADCAST {
+                            notices += 1;
+                        }
+                        packet = data(&mut ws).await;
+                    }
+                    tokio::time::sleep(Duration::from_millis(if flags == 4 { 10 } else { 2 }))
+                        .await;
+                }
+                toggles += 1;
+            }
+            let _ = ws.close(None).await;
+            assert!(notices > 0, "the observer saw no departure notices");
+            toggles
+        });
+    }
     let (mut probe, probe_id) = join_at(&url, "probe").await;
     let end = Instant::now() + Duration::from_millis(2500);
     let mut samples = 0u32;
@@ -2347,7 +2384,7 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
         counts.push(result.unwrap());
     }
     eprintln!(
-        "probe: {samples} echoes, worst {worst:?}; broadcasts, rooms created per lane and pages listed {counts:?}; frames {}",
+        "probe: {samples} echoes, worst {worst:?}; broadcasts, rooms created per lane, pages listed and observer toggles {counts:?}; frames {}",
         received.load(Relaxed)
     );
     assert!(samples >= 50);

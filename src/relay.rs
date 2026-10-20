@@ -475,6 +475,9 @@ const OBSERVER_QUEUE_SHARDS: usize = 16;
 #[derive(Default)]
 pub(crate) struct DepartureQueue {
     state: Mutex<QueueState>,
+    /// Index among the observer shards; zero for room and detached queues,
+    /// whose jobs carry no observer watermark.
+    shard: usize,
 }
 
 #[derive(Default)]
@@ -487,9 +490,26 @@ struct QueueState {
 }
 
 impl DepartureQueue {
+    fn shard(index: usize) -> Self {
+        Self {
+            state: Mutex::default(),
+            shard: index,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.state.lock().jobs.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sequence(&self) -> u64 {
+        self.state.lock().sequence
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_sequence(&self, sequence: u64) {
+        self.state.lock().sequence = sequence;
     }
 
     #[cfg(test)]
@@ -504,9 +524,6 @@ impl DepartureQueue {
 #[derive(Default)]
 struct Retirements {
     active: SegQueue<Arc<DepartureQueue>>,
-    /// Numbers observer-notice jobs across every shard, so one watermark per
-    /// observer orders against all of them.
-    observer_sequence: AtomicU64,
 }
 
 /// Shared disconnect membership is charged once while any departure retains it.
@@ -599,6 +616,8 @@ pub(crate) struct RoomFanout {
     retirement_sequence: u64,
     /// Jobs in the observer shards honour each observer's revocation watermark.
     checks_barrier: bool,
+    /// The observer shard this job is queued in, which selects the watermark.
+    shard: usize,
     /// Listener snapshot generation this job captured its observers from.
     generation: u64,
     /// A refused recipient never aborts a job that outlives its source.
@@ -650,6 +669,7 @@ impl RoomFanout {
         }
         self.retirement_sequence = retirement_sequence;
         self.checks_barrier = false;
+        self.shard = 0;
         self.generation = 0;
         self.tolerant = retirement_sequence != 0;
         self.snapshot_bytes = snapshot_bytes;
@@ -750,6 +770,7 @@ impl RoomFanout {
                         BarrierKind::Message,
                         message_sequence.expect("observer jobs have a publication sequence"),
                         self.generation,
+                        0,
                     )),
                     tolerant,
                 )
@@ -760,6 +781,7 @@ impl RoomFanout {
                 BarrierKind::Retirement,
                 self.retirement_sequence,
                 self.generation,
+                self.shard,
             ));
             Self::submit(
                 &recipients.single_slice()[self.cursor..end],
@@ -780,23 +802,29 @@ impl RoomFanout {
         recipients: &[Arc<Peer>],
         excluded: u64,
         frame: &Frame,
-        barrier: Option<(BarrierKind, u64, u64)>,
+        barrier: Option<(BarrierKind, u64, u64, usize)>,
         tolerant: bool,
     ) -> Result<(), RoutingFailure> {
         for (index, recipient) in recipients.iter().enumerate() {
             if recipient.key == excluded {
                 continue;
             }
-            if let Some((kind, sequence, generation)) = barrier {
+            if let Some((kind, sequence, generation, shard)) = barrier {
                 let (watermark, revoked) = match kind {
-                    BarrierKind::Retirement => {
-                        (&recipient.retirement_barrier, &recipient.retirement_revoked)
-                    }
+                    BarrierKind::Retirement => (
+                        recipient
+                            .retirement_barriers
+                            .as_deref()
+                            .map(|barriers| &barriers[shard]),
+                        &recipient.retirement_revoked,
+                    ),
                     BarrierKind::Message => {
-                        (&recipient.message_barrier, &recipient.message_revoked)
+                        (Some(&recipient.message_barrier), &recipient.message_revoked)
                     }
                 };
-                if watermark.load(Relaxed) >= sequence || revoked.load(Relaxed) >= generation {
+                if watermark.is_some_and(|watermark| watermark.load(Relaxed) >= sequence)
+                    || revoked.load(Relaxed) >= generation
+                {
                     continue;
                 }
             }
@@ -961,7 +989,10 @@ pub(crate) struct Peer {
     // sequence watermark orders against jobs already queued; the revoked
     // generation also covers a job captured before the revocation but queued
     // after its barrier ran.
-    retirement_barrier: AtomicU64,
+    /// One retirement watermark per observer shard, since each shard numbers
+    /// its own jobs. Only `re_globl` members can observe, so only they carry
+    /// the array.
+    retirement_barriers: Option<Box<[AtomicU64; OBSERVER_QUEUE_SHARDS]>>,
     retirement_revoked: AtomicU64,
     message_barrier: AtomicU64,
     message_revoked: AtomicU64,
@@ -1308,7 +1339,9 @@ impl Relay {
             listeners: ArcSwap::from_pointee(Listeners::empty(1)),
             disconnect_snapshot: ArcSwapOption::empty(),
             retirements: Retirements::default(),
-            observer_departures: std::array::from_fn(|_| Arc::new(DepartureQueue::default())),
+            observer_departures: std::array::from_fn(|index| {
+                Arc::new(DepartureQueue::shard(index))
+            }),
             detached: Arc::new(DepartureQueue::default()),
             messages: Arc::new(MessageFanouts::default()),
             sessions: AtomicUsize::new(0),
@@ -1537,7 +1570,8 @@ impl Relay {
                     authenticated: AtomicBool::new(false),
                     listener: AtomicU8::new(0),
                     closing: AtomicBool::new(false),
-                    retirement_barrier: AtomicU64::new(0),
+                    retirement_barriers: (room.name.as_ref() == GLOBAL_CHANNEL)
+                        .then(|| Box::new(std::array::from_fn(|_| AtomicU64::new(0)))),
                     retirement_revoked: AtomicU64::new(0),
                     message_barrier: AtomicU64::new(0),
                     message_revoked: AtomicU64::new(0),
@@ -2108,18 +2142,18 @@ impl Relay {
     /// together they hold every job that can reach a `re_globl` member.
     fn flush_observer_retirements(&self, observer: &Peer, revoked_at: u64) -> Vec<Frame> {
         let mut notices = Vec::new();
-        // Every shard is held for the whole scan, in index order: a job only
-        // advances under its shard's mutex, so no job can deliver to the
-        // observer between this scan and the marks stored below, which would
-        // duplicate a collected notice. Departures and worker turns wait at
-        // most for this bounded scan; routing never takes these locks.
-        let shards: Vec<_> = self
-            .observer_departures
-            .iter()
-            .map(|queue| queue.state.lock())
-            .collect();
-        let previous = observer.retirement_barrier.load(Relaxed);
-        for pending in &shards {
+        let Some(barriers) = observer.retirement_barriers.as_deref() else {
+            return notices;
+        };
+        // One shard at a time; nothing ever holds two. Each shard numbers its
+        // own jobs and the observer keeps one watermark per shard, stored while
+        // that shard is still locked: a job only advances under its shard's
+        // mutex, so no turn of an inspected job can run before it sees the
+        // watermark, and a job in a shard not yet scanned is inspected later
+        // with its cursor wherever its turns left it.
+        for (shard, queue) in self.observer_departures.iter().enumerate() {
+            let pending = queue.state.lock();
+            let previous = barriers[shard].load(Relaxed);
             // Adjacent jobs often share an immutable view; reuse its lookup
             // within this shard, but check each job's own cursor.
             let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
@@ -2157,14 +2191,13 @@ impl Relay {
                     );
                 }
             }
+            // Deferred visits skip notices already submitted by this barrier,
+            // even if the observer re-enables the bit before those jobs finish.
+            barriers[shard].store(pending.sequence, Relaxed);
         }
-        // Deferred visits skip notices already submitted by this barrier, even
-        // if the observer re-enables the bit before those jobs finish. A job
-        // captured before the revocation but queued after this scan is skipped
-        // by generation instead of arriving after the acknowledgement.
-        observer
-            .retirement_barrier
-            .store(self.retirements.observer_sequence.load(Relaxed), Relaxed);
+        // A job captured before the revocation but queued after its shard's
+        // scan is skipped by generation instead of arriving after the
+        // acknowledgement.
         observer.retirement_revoked.store(revoked_at, Relaxed);
         notices
     }
@@ -2215,20 +2248,7 @@ impl Relay {
         }
         // Exhaustion falls back to ordered synchronous delivery rather than
         // wrapping and making older observer watermarks suppress new notices.
-        // Observer shards number their jobs from one shared counter, so one
-        // watermark per observer orders against every shard. The number is
-        // taken under this shard's lock, so a barrier holding every shard
-        // sees every job numbered below the watermark it records.
-        let sequence = if checks_barrier {
-            self.retirements
-                .observer_sequence
-                .fetch_update(Relaxed, Relaxed, |sequence| sequence.checked_add(1))
-                .ok()
-                .map(|previous| previous + 1)
-        } else {
-            state.sequence.checked_add(1)
-        };
-        let Some(sequence) = sequence else {
+        let Some(sequence) = state.sequence.checked_add(1) else {
             return false;
         };
         let mut work = Box::<RoomFanout>::default();
@@ -2239,10 +2259,9 @@ impl Relay {
             return false;
         }
         work.checks_barrier = checks_barrier;
+        work.shard = queue.shard;
         work.generation = generation;
-        if !checks_barrier {
-            state.sequence = sequence;
-        }
+        state.sequence = sequence;
         state.jobs.push_back(work);
         let wake = if state.queued {
             false
@@ -2523,16 +2542,6 @@ impl Relay {
             .iter()
             .map(|queue| queue.len())
             .sum()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn observer_sequence(&self) -> u64 {
-        self.retirements.observer_sequence.load(Relaxed)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_observer_sequence(&self, sequence: u64) {
-        self.retirements.observer_sequence.store(sequence, Relaxed);
     }
 
     #[cfg(test)]
