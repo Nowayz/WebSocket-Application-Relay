@@ -44,7 +44,9 @@ npm install --omit=optional --ignore-scripts /path/to/war-relay-client-VERSION.t
 
 Node 22+ can then import `{ Relay }` from `@war/relay-client`. The client tarball
 includes its usage documentation. Neither installing the server archive nor the
-client silently starts a service.
+client silently starts a service. Keep `third-party/` with redistributed server
+archives and `browser/LICENSE*` with the standalone browser bundle; these contain
+the dependency notices.
 
 Keep the preceding server archive and matching client artifacts for rollback.
 Drain the current service, stop it, replace the executable, and start the selected

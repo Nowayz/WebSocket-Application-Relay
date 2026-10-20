@@ -33,6 +33,11 @@ resume, six zero resource gauges, and normal terminal Close on SIGTERM. A failur
 retains its logs and is not a passed release gate. Output directories cannot be
 reused. No script tags, publishes, installs or restarts an existing service.
 
+The server archive includes license/notice files for the dependency packages
+reported by the actual Cargo build, plus an indexed digest list. The standalone
+browser directory includes the project and bundled CBOR codec licenses. The
+artifact gate verifies these files before testing the installed client.
+
 ## Acceptance checklist
 
 - [x] Rust/CBOR product boundary and vendored patch provenance audited.

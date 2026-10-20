@@ -36,6 +36,37 @@ def pack_tree(root, destination, epoch):
             archive.add(root, arcname=root.name, filter=normalize)
 
 
+def dependency_notices(build_log, destination, source):
+    """Include notices for the exact compiled dependency set, including build tools."""
+    packages = {}
+    for line in build_log.read_text().splitlines():
+        try:
+            artifact = json.loads(line)
+        except ValueError:
+            continue
+        if artifact.get('reason') != 'compiler-artifact':
+            continue
+        manifest = Path(artifact['manifest_path'])
+        if manifest == source / 'Cargo.toml':
+            continue
+        packages[artifact['package_id']] = manifest
+    index = []
+    for identity, manifest in sorted(packages.items()):
+        package = tomllib.loads(manifest.read_text())['package']
+        name = f"{package['name']}-{package['version']}"
+        notices = sorted(p for p in manifest.parent.iterdir()
+                         if p.is_file() and p.name.startswith(('LICENSE', 'COPYING', 'NOTICE')))
+        if not notices:
+            raise ValueError(f'No dependency notices found for {identity}')
+        directory = destination / name
+        directory.mkdir(parents=True)
+        for notice in notices:
+            shutil.copy2(notice, directory / notice.name)
+        index.append({'package': identity, 'directory': name, 'license': package.get('license'),
+                      'files': {p.name: sha256(p) for p in notices}})
+    (destination / 'index.json').write_text(json.dumps(index, indent=2) + '\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New directory; never overwritten')
@@ -96,6 +127,7 @@ def main():
             runtime = work / f'war-relay-{version}-{host}'
             (runtime / 'bin').mkdir(parents=True)
             shutil.copy2(output / 'build/war-relay', runtime / 'bin/war-relay')
+            dependency_notices(output / 'build/build.log', runtime / 'third-party', source)
             for name in ('docs', 'deploy'):
                 shutil.copytree(source / name, runtime / name)
             shutil.copytree(source / 'target/browser', runtime / 'browser')

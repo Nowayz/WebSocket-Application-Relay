@@ -74,6 +74,15 @@ def main():
             installed = consumer / 'node_modules/@war/relay-client'
             assert (installed / 'LICENSE').read_bytes() == (runtime / 'LICENSE').read_bytes()
             assert (installed / 'relay.d.ts').read_bytes() == (source / 'clients/js/relay.d.ts').read_bytes()
+            assert (runtime / 'browser/LICENSE').read_bytes() == (runtime / 'LICENSE').read_bytes()
+            assert (runtime / 'browser/LICENSE.cbor-x').read_bytes() == (consumer / 'node_modules/cbor-x/LICENSE').read_bytes()
+            notices = json.loads((runtime / 'third-party/index.json').read_text())
+            assert notices
+            for package in notices:
+                for name, digest in package['files'].items():
+                    with (runtime / 'third-party' / package['directory'] / name).open('rb') as notice:
+                        assert hashlib.file_digest(notice, 'sha256').hexdigest() == digest
+            record['checks'].append(f"License notices verified for the browser codec and {len(notices)} compiled Rust dependency packages.")
             relay_port, admin_port = free_port(), free_port()
             while admin_port == relay_port:
                 admin_port = free_port()
