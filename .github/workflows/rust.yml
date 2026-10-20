@@ -61,6 +61,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: rustsec/audit-check@v2
+        env:
+          # rust-toolchain.toml would otherwise select the project pin.
+          RUSTUP_TOOLCHAIN: stable
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
   fixtures:

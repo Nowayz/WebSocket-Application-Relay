@@ -2147,9 +2147,12 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
                         notices += 1;
                         packet = data(&mut ws).await;
                     }
+                    // Keep the flag set long enough for departures to land
+                    // while it is on, so each revocation has work to flush.
+                    tokio::time::sleep(Duration::from_millis(if flags == 4 { 30 } else { 5 }))
+                        .await;
                 }
                 toggles += 1;
-                tokio::time::sleep(Duration::from_millis(25)).await;
             }
             let _ = ws.close(None).await;
             assert!(notices > 0, "the observer saw no departure notices");
