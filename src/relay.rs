@@ -1,10 +1,11 @@
 //! Routing registry with fine-grained locking.
 //!
-//! No single lock covers the whole relay. Session ownership lives in a sharded
-//! map, each channel owns its own membership lock and departure queue, global
-//! observers have a separate lock, and admission counters are atomics. No
-//! socket write ever happens while a registry lock is held: output is either
-//! submitted after the guard drops or queued for the owning worker.
+//! No single lock covers the whole relay. Session ownership is a lock-free
+//! concurrent map, each channel owns its own membership lock and departure
+//! queue, global observers are an atomically swapped snapshot, and admission
+//! counters are atomics. No socket write ever happens while a registry lock is
+//! held: output is either submitted after the guard drops or queued for the
+//! owning worker.
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
@@ -45,10 +46,6 @@ pub(crate) const FANOUT_QUANTUM: usize = 1024;
 pub(crate) const RETIREMENT_QUANTUM: usize = 128;
 
 pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
-
-/// Session IDs are random 64-bit values, so the top bits of a multiplicative
-/// hash spread ownership lookups evenly across independent locks.
-const USER_SHARDS: usize = 64;
 
 /// An immutable recipient view shared between the cache and in-flight work.
 type Recipients = Arc<Vec<Arc<Peer>>>;
@@ -190,96 +187,68 @@ impl Drop for ReceiveBatch<'_> {
 }
 
 // ---------------------------------------------------------------------------
-// Session ownership: sharded ID -> peer map.
+// Session ownership: lock-free ID -> peer map.
 
+/// Every operation is a single-key operation on a lock-free concurrent map,
+/// so routing never waits for a join, a departure or a takeover. An ID
+/// reassignment publishes the new key before it retires the old one, so a
+/// route that still finds the old key during that step reaches the session
+/// that owned it; a route begun after the assignment reply uses the new key.
+///
+/// The map holds weak handles. A lock-free map reclaims removed entries
+/// lazily, and a session's socket and budgets must be released by its own
+/// connection the moment it leaves, never by the map's reclamation schedule.
 struct Users {
-    shards: Vec<RwLock<HashMap<u64, Arc<Peer>>>>,
+    map: papaya::HashMap<u64, Weak<Peer>>,
 }
 
 impl Users {
     fn new() -> Self {
         Self {
-            shards: (0..USER_SHARDS)
-                .map(|_| RwLock::new(HashMap::new()))
-                .collect(),
+            map: papaya::HashMap::new(),
         }
-    }
-
-    fn index(id: u64) -> usize {
-        (id.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - USER_SHARDS.trailing_zeros())) as usize
-    }
-
-    fn shard(&self, id: u64) -> &RwLock<HashMap<u64, Arc<Peer>>> {
-        &self.shards[Self::index(id)]
     }
 
     fn get(&self, id: u64) -> Option<Arc<Peer>> {
-        self.shard(id).read().get(&id).cloned()
+        self.map.pin().get(&id).and_then(Weak::upgrade)
     }
 
     fn try_insert(&self, id: u64, peer: &Arc<Peer>) -> bool {
-        let mut shard = self.shard(id).write();
-        if shard.contains_key(&id) {
-            return false;
-        }
-        shard.insert(id, peer.clone());
-        true
+        self.map.pin().try_insert(id, Arc::downgrade(peer)).is_ok()
     }
 
     /// Remove `id` only while `key` still owns it. A displaced session must
     /// never erase the new owner of its previous ID.
     fn remove_owned(&self, id: u64, key: u64) {
-        let mut shard = self.shard(id).write();
-        if shard.get(&id).is_some_and(|owner| owner.key == key) {
-            shard.remove(&id);
-            shrink_sparse_map(&mut shard);
-        }
+        let _ = self.map.pin().remove_if(&id, |_, owner| {
+            owner.upgrade().is_none_or(|owner| owner.key == key)
+        });
     }
 
-    /// Move ownership of `old` to `new` atomically with respect to routing.
-    /// Returns the displaced owner of `new`, or `None` when `peer` no longer
-    /// owns `old`.
+    /// Move ownership of `old` to `new`. Returns the displaced owner of `new`,
+    /// or `None` when `peer` no longer owns `old`.
     fn reassign(&self, peer: &Peer, old: u64, new: u64) -> Option<Option<Arc<Peer>>> {
-        let (a, b) = (Self::index(old), Self::index(new));
-        let (mut first, mut second);
-        let (from, to) = if a == b {
-            first = self.shards[a].write();
-            let shard = &mut *first;
-            if shard.get(&old).is_none_or(|owner| owner.key != peer.key) {
-                return None;
-            }
-            let owner = shard.remove(&old).expect("verified owner");
-            let previous = shard.insert(new, owner);
-            shrink_sparse_map(shard);
-            return Some(previous);
-        } else if a < b {
-            first = self.shards[a].write();
-            second = self.shards[b].write();
-            (&mut *first, &mut *second)
-        } else {
-            second = self.shards[b].write();
-            first = self.shards[a].write();
-            (&mut *first, &mut *second)
-        };
-        if from.get(&old).is_none_or(|owner| owner.key != peer.key) {
-            return None;
-        }
-        let owner = from.remove(&old).expect("verified owner");
-        shrink_sparse_map(from);
-        Some(to.insert(new, owner))
-    }
-
-    #[cfg(test)]
-    fn capacity(&self) -> usize {
-        self.shards
-            .iter()
-            .map(|shard| shard.read().capacity())
-            .sum()
+        let map = self.map.pin();
+        let owner = map
+            .get(&old)
+            .and_then(Weak::upgrade)
+            .filter(|owner| owner.key == peer.key)?;
+        let displaced = map
+            .insert(new, Arc::downgrade(&owner))
+            .and_then(Weak::upgrade);
+        // Only this session's own entry retires: another takeover of `old`
+        // in the meantime already replaced it.
+        let _ = map.remove_if(&old, |_, current| {
+            current
+                .upgrade()
+                .is_none_or(|current| current.key == peer.key)
+        });
+        Some(displaced)
     }
 
     #[cfg(test)]
     fn len(&self) -> usize {
-        self.shards.iter().map(|shard| shard.read().len()).sum()
+        self.map.pin().len()
     }
 }
 
@@ -2439,11 +2408,6 @@ impl Relay {
     #[cfg(test)]
     pub(crate) fn listeners_locked(&self) -> bool {
         self.listener_writes.try_lock().is_none()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn users_capacity(&self) -> usize {
-        self.users.capacity()
     }
 
     #[cfg(test)]

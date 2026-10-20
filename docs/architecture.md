@@ -44,9 +44,14 @@ their sockets. The supervisor waits one extra second for their reports.
 There is no global registry lock. [src/relay.rs](../src/relay.rs) splits state
 into independently locked pieces:
 
-- Session ownership (ID to session) is a map split into 64 shards, each behind
-  its own read/write lock. A session ID picks its shard by hash. ID takeover
-  locks the two affected shards in index order.
+- Session ownership (ID to session) is a lock-free concurrent map
+  (`papaya`). Lookups, joins and departures are single-key operations that
+  never wait. An ID takeover publishes the new key before retiring the old
+  one, so a route that still finds the old key during that step reaches the
+  session that owned it, and a route begun after the assignment reply uses
+  the new key. The map holds weak handles: a lock-free map reclaims removed
+  entries lazily, and a session's socket and budgets are released by its own
+  connection the moment it leaves, never by the map's reclamation schedule.
 - The channel index (name to channel) is one read/write lock. Lookup takes the
   read side; creating or retiring a channel takes the write side.
 - Each channel has one read/write lock covering its membership, its variables
@@ -74,9 +79,9 @@ Where locks nest, they nest in this order, from outer to inner:
 6. socket output state
 
 A path may skip levels but never takes an outer lock while holding an inner
-one. Session-ownership shards are leaf locks. The listener snapshot, the two
-caches (global recipient view, disconnect snapshot) and the active list of
-departure queues are not locks at all; see below.
+one. Session ownership, the listener snapshot, the two caches (global
+recipient view, disconnect snapshot) and the active list of departure queues
+are not locks at all; see below.
 
 No socket write happens while a registry lock is held. Output is either
 submitted after the guard has been dropped or queued for the socket's owning
@@ -109,8 +114,9 @@ socket I/O:
   concurrent with it may omit that one notice for that observer. Direct
   (unqueued) observer deliveries hold the same queue or index mutex for their
   short loop, so they cannot land after the acknowledgement either.
-- The session-ownership shards: 64 independent locks, each held for one map
-  operation. A takeover holds two.
+- Session ownership is a lock-free map. A private message's target lookup
+  is a wait-free read; a join, a departure or a takeover is a single-key
+  write that never blocks a reader.
 - The global recipient-view cache and the disconnect-snapshot cache are
   atomic pointer swaps (`arc_swap`). Reads and publication are wait-free; the
   views themselves are built outside any lock, and a lost publication race

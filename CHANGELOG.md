@@ -3,8 +3,8 @@
 ## Unreleased
 
 - The routing registry no longer has a global lock. Session ownership is a
-  64-way sharded map, each channel has its own lock, global observers have a
-  separate lock and admission counters are atomics. No socket write happens
+  lock-free concurrent map, each channel has its own lock, global observers
+  are an atomically swapped snapshot and admission counters are atomics. No socket write happens
   while a registry lock is held. The welcome frame is still written before a
   session is published to its room, so it remains first in the session's FIFO.
 - The global observer list is an immutable snapshot swapped atomically, with
@@ -12,7 +12,7 @@
   capture to enqueue; routing never waits on observer changes. The global
   recipient-view cache and the disconnect-observer snapshot cache are
   wait-free atomic swaps, and the list of departure queues with pending work
-  is a lock-free queue. Apart from the 64 session-ownership shards, no
+  is a lock-free queue, and session ownership is a lock-free map. No
   process-wide lock remains on the routing path. A publication or departure
   captured concurrently with a revocation may be omitted for that observer;
   it never arrives after the acknowledgement.

@@ -279,8 +279,6 @@ fn sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads() {
             subscription
         })
         .collect();
-    let peak_capacity = relay.users_capacity();
-    assert!(peak_capacity >= 1026);
     let value = protocol::byte_string(&[0x5a; 8192]);
     let input = protocol::envelope(id, &value);
     let payload_pointer = protocol::parse(&input).unwrap().1.as_ptr();
@@ -289,10 +287,7 @@ fn sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads() {
     assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
     drop(fillers);
     {
-        // Sharded ownership keeps each shard small; no shard grows past the
-        // shrink threshold here, so only the total is bounded by its peak.
         assert_eq!(relay.users_len(), 2);
-        assert!(relay.users_capacity() <= peak_capacity);
         assert!(Arc::ptr_eq(
             &relay.user(id).unwrap(),
             &owner.registration.peer
@@ -344,8 +339,6 @@ fn takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish() {
         })
         .collect();
     let id = subscriptions[0].registration.peer.id.load(Relaxed);
-    let peak_capacity = relay.users_capacity();
-    assert!(peak_capacity >= 1024);
     for i in 1..subscriptions.len() {
         let peer = subscriptions[i].registration.peer.clone();
         relay
@@ -367,7 +360,6 @@ fn takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish() {
     {
         assert_eq!(relay.counts().0, 1024);
         assert_eq!(relay.users_len(), 1);
-        assert!(relay.users_capacity() <= peak_capacity);
         assert!(Arc::ptr_eq(
             &relay.user(id).unwrap(),
             &subscriptions.last().unwrap().registration.peer
