@@ -15,9 +15,6 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'labeled')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: read
-      checks: write # rustsec/audit-check publishes its advisories as a check run
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,14 +45,24 @@ jobs:
       - run: python3 scripts/check-vendor.py
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
-      - name: cargo audit
-        uses: rustsec/audit-check@v2
-        continue-on-error: false
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/check-js.sh
       - run: npm run check:types --prefix clients/js
       - run: npm run build:browser --prefix clients/js
+  audit:
+    # The advisory scanner is built from source and needs a newer compiler
+    # than the project's pin, so it runs on stable in its own job.
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'labeled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write # rustsec/audit-check publishes its advisories as a check run
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
   fixtures:
     # Measurement fixtures and the release rehearsal: weekly, on demand, and on
     # pull requests carrying the `perf` label.
