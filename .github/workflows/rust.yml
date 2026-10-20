@@ -4,6 +4,17 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
+    inputs:
+      ab:
+        description: Run the A/B fixtures instead of the scheduled fixtures
+        type: boolean
+        default: false
+      base:
+        description: Ref the A/B fixtures compare the dispatched ref against
+        default: master
+      repeats:
+        description: Alternating repeats of every A/B workload
+        default: '3'
   schedule:
     - cron: '0 6 * * 1'
 permissions:
@@ -69,7 +80,7 @@ jobs:
   fixtures:
     # Measurement fixtures and the release rehearsal: weekly, on demand, and on
     # pull requests carrying the `perf` label.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'perf'))
+    if: (github.event_name == 'workflow_dispatch' && !inputs.ab) || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'perf'))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -131,3 +142,38 @@ jobs:
             artifacts/release-ci/build/build.json
             artifacts/release-ci/build/build.log
             artifacts/release-ci-check/
+  ab:
+    # Measurement fixtures against release builds of two refs on one runner,
+    # alternating the order every repeat; every receipt is uploaded with a
+    # summary table of medians.
+    if: github.event_name == 'workflow_dispatch' && inputs.ab
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base }}
+          path: base
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: toolchain
+        run: |
+          python3 -c "import tomllib; print('channel=' + tomllib.load(open('candidate/rust-toolchain.toml', 'rb'))['toolchain']['channel'])" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+      - run: cargo build --release --locked --bins --examples
+        working-directory: candidate
+      - run: cargo build --release --locked --bins --examples
+        working-directory: base
+      - run: nproc && lscpu | head -20
+      - run: python3 candidate/scripts/ab-fixtures.py --base base --candidate candidate --repeats "${{ inputs.repeats }}" --output artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ab-fixtures
+          path: artifacts/

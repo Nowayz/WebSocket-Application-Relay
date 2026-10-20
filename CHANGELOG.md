@@ -94,7 +94,7 @@
   `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.
-  A dispatchable `A/B fixtures` workflow runs the measurement fixtures
+  Dispatching the workflow with `ab=true` runs the measurement fixtures
   against release builds of two refs on one runner, alternating the order,
   and uploads every receipt with a summary table (`scripts/ab-fixtures.py`).
   `check-release.py` uses explicit checks instead of `assert` and verifies
