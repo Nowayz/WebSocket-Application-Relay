@@ -572,7 +572,11 @@ mod tests {
                     .await
                 );
             }
-            while relay.metrics.connections.load(Relaxed) != 0 {
+            // Physical socket retirement precedes the owning worker's scratch
+            // reclamation within its turn. Wait for both observable resources.
+            while relay.metrics.connections.load(Relaxed) != 0
+                || relay.metrics.read_budget.as_ref().unwrap().reserved() != 0
+            {
                 tokio::task::yield_now().await;
             }
             assert_eq!(relay.counts(), (0, 1));

@@ -20,9 +20,9 @@ This adds one registry cache, with no new per-peer field or hot-path lock.
 There is at most one current index bounded by admitted population; older views
 retained by jobs are charged. The first capture after invalidation still takes
 O(number of addressable owners) work under a read lock. Releasing an unshared
-index also takes linear work. Channel/private observer message paths remain
-synchronous because their eligibility and acknowledgment boundaries need a
-separate continuation design.
+index also takes linear work. At this stage channel/private observer paths were
+still synchronous. The subsequent [observer-publication change](observer-publications.md)
+adds their separate eligibility and acknowledgment continuation design.
 
 ## Short comparison on 2026-10-19
 

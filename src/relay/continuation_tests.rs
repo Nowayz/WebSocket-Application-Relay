@@ -892,7 +892,9 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
     fn snapshot(job: &RoomFanout) -> &Arc<RetirementSnapshot> {
         match job.recipients.as_ref().unwrap() {
             FanoutRecipients::Disconnect(snapshot) => snapshot,
-            FanoutRecipients::Room(_) => panic!("expected disconnect snapshot"),
+            FanoutRecipients::Room(_) | FanoutRecipients::Message(_) => {
+                panic!("expected disconnect snapshot")
+            }
         }
     }
     let relay = Relay::new(Config {

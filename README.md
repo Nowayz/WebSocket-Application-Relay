@@ -75,9 +75,9 @@ can import `Relay` from the generated `relay.js` ES module.
   timers. Idle sockets need no task, message channel or private receive slab.
   Tokio handles management and process signals.
 - [Routing](src/relay.rs): a registry read/write lock protects membership and
-  ID ownership. Ordinary rooms without channel observers and global broadcasts
-  retain immutable recipient views and advance in bounded turns outside the
-  registry lock. Channel/private observer message fanout remains synchronous.
+  ID ownership. Large native room, global and observer publications retain
+  immutable recipient views and advance in bounded turns outside the registry
+  lock. Observer revocation finds pending publications through an ordered index.
 - [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
   multicast uses recipient-owner output and bounded vectored batches. Each socket
   serializes output so partial writes, commands and control frames retain order.
@@ -131,8 +131,9 @@ Native departures above that 128-recipient budget normally defer at publication.
 Global broadcasts now use the same bounded live-fanout continuation; the
 [global broadcast report](docs/global-broadcasts.md) records short 100,000-reader
 checks and the remaining cold-view and observer-path limits.
-The [observer-message baseline](docs/observer-messages.md) measures the remaining
-synchronous observer publication path and records its ordering/pressure checks.
+The [observer-message baseline](docs/observer-messages.md) records the former
+synchronous publication stalls. [Bounded observer publications](docs/observer-publications.md)
+preserve captured eligibility and acknowledgment ordering while yielding within a message.
 
 ## Provenance
 

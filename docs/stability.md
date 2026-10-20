@@ -72,12 +72,21 @@ output limit, exact publication-before-unsubscribe-ACK ordering, immediate
 re-subscription, later windows and every retained shutdown Close/EOF. Independent
 witnesses and joins expose scheduling stalls. Receipt tests reject reused paths
 and dangling symlinks before launching a server and verify failed-startup cleanup.
-The [observer-message report](observer-messages.md) distinguishes live resource
-gates from terminal shutdown evidence and identifies the remaining implementation
-work; these checks do not yet make observer message fanout bounded.
+The [observer-message baseline](observer-messages.md) distinguishes live resource
+gates from terminal shutdown evidence. Native observer publications now yield
+within a message. Deterministic checks pause a job during output submission,
+prove that membership is unlocked and race revocation against progress. They
+also cover cross-class watermarks, maximum publication sequence, cancellation,
+late subscribers, ID takeover and stale registration removal. Combined room and
+observer checks require one body reservation, pointer-identical payloads, and
+observer revocation while room traversal remains pending. The native combined
+case checks 2,048 room recipients plus 2,048 observers with one output slot and
+a 2 KiB local byte budget. Private-primary submission remains ahead of a refused
+observer snapshot. Two existing asynchronous checks now await worker scratch
+reclamation and batched input-statistic publication before asserting exact totals.
 
-Known limits include cold global-view capture/invalidation, synchronous
-channel/private observer message fanout, queue-pressure fallback for overlapping channels
+Known limits include cold recipient-view capture/invalidation,
+distinct captured-view scans during observer revocation and queue-pressure fallback for overlapping channels
 and pending global-view scans during observer revocation. Faults and failed gates
 belong in the evidence. Source and
 client digests, commands, affinity, measurement windows and cleanup semantics

@@ -35,12 +35,12 @@ fn a_large_global_broadcast_yields_within_a_message_and_preserves_source_fifo() 
 }
 
 #[test]
-fn channel_observer_fanout_yields_without_splitting_fanout() {
+fn channel_observer_fanout_yields_within_a_frame() {
     check_fanout_quantum(FanoutScope::ChannelObservers, false);
 }
 
 #[test]
-fn private_observer_fanout_yields_without_splitting_fanout() {
+fn private_observer_fanout_yields_within_a_frame() {
     check_fanout_quantum(FanoutScope::PrivateObservers, false);
 }
 
@@ -52,6 +52,12 @@ fn cancelling_an_unfinished_room_multicast_releases_staging_without_more_deliver
 #[test]
 fn cancelling_an_unfinished_global_broadcast_releases_staging() {
     check_fanout_quantum(FanoutScope::Global, true);
+}
+
+#[test]
+fn cancelling_an_unfinished_observer_publication_releases_staging() {
+    check_fanout_quantum(FanoutScope::ChannelObservers, true);
+    check_fanout_quantum(FanoutScope::PrivateObservers, true);
 }
 
 enum FanoutScope {
@@ -98,11 +104,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
     );
     let mut targets = Vec::new();
     let mut outputs = Vec::new();
-    let count = if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
-        FANOUT_QUANTUM + 44
-    } else {
-        300
-    };
+    let count = FANOUT_QUANTUM + 44;
     for _ in 0..count {
         let output = Arc::new(Sequence::default());
         let channel = if matches!(scope, FanoutScope::Room) {
@@ -204,7 +206,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         assert_eq!(relay.metrics.connections.load(Relaxed), 0);
         return;
     }
-    if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
+    {
         let visited: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
         assert!((1..=FANOUT_QUANTUM).contains(&visited));
         assert!(
@@ -227,7 +229,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         relay.metrics.incoming_messages.load(Relaxed),
         incoming_before + 2
     );
-    if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
+    {
         assert!(outputs.iter().any(|out| out.messages.load(Relaxed) == 1));
         assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
     }

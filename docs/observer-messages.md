@@ -1,11 +1,11 @@
 # Observer message scheduling baseline
 
-Channel/private message observers still receive synchronous fanout while the
-publisher holds the registry read lock. The native worker yields after the
-complete message, so a large audience can hold up membership writers and other
-connections owned by that worker. Other workers must also process the resulting
-output-ready backlog. This is the next measured scheduling problem after
-[bounded global broadcasts](global-broadcasts.md).
+At this baseline, channel/private message observers received synchronous fanout
+while the publisher held the registry read lock. The native worker yielded after
+the complete message, so a large audience could hold up membership writers and
+other connections owned by that worker. Other workers also had to process the resulting
+output-ready backlog. The [bounded-publication follow-up](observer-publications.md)
+records the implementation that addresses this measured problem.
 
 ## Short native screen on 2026-10-19
 

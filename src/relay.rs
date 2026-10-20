@@ -27,6 +27,8 @@ use crate::{
 };
 
 mod listing;
+mod messages;
+use messages::{MessageFanouts, Publication};
 
 pub(crate) const FANOUT_QUANTUM: usize = 1024;
 // Bound ordinary synchronous removal by the same visit budget as native
@@ -51,6 +53,7 @@ pub struct Relay {
     state: RwLock<Registry>,
     retirements: Mutex<Retirements>,
     retirement_pending: AtomicBool,
+    messages: Arc<MessageFanouts>,
     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
 
@@ -77,13 +80,8 @@ impl ReceiveBatch<'_> {
         bytes: Bytes,
         storage_capacity: usize,
     ) -> Result<usize, Disconnect> {
-        self.relay.receive_with_totals(
-            peer,
-            bytes,
-            storage_capacity,
-            &mut self.totals,
-            deliver_room,
-        )
+        self.relay
+            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals, None)
     }
 
     /// Native workers keep one reusable continuation slot per large publisher.
@@ -100,21 +98,7 @@ impl ReceiveBatch<'_> {
             bytes,
             storage_capacity,
             &mut self.totals,
-            |source, recipients, frame| {
-                if recipients.len() <= quantum {
-                    return deliver_room(source, recipients, frame);
-                }
-                let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
-                work.begin(
-                    source,
-                    FanoutRecipients::Room(recipients),
-                    frame,
-                    self.relay.config.write_timeout(),
-                    0,
-                )?;
-                work.resume(quantum)?;
-                Ok(quantum)
-            },
+            Some((pending, quantum)),
         )
     }
 
@@ -149,6 +133,7 @@ struct Registry {
     // Only authenticated global members opting into each class belong here.
     // Routing visits eligible listeners, independent of the idle population.
     listeners: [Vec<Arc<Peer>>; 3],
+    message_snapshots: [OnceLock<Arc<Vec<Arc<Peer>>>>; 2],
     // Overlapping disconnect jobs can share immutable membership. A weak cache
     // retains neither recipient handles nor sockets after the jobs drain.
     disconnect_snapshot: Weak<RetirementSnapshot>,
@@ -167,6 +152,9 @@ impl Registry {
             let mask = 1 << bit;
             if (previous ^ flags) & mask == 0 {
                 continue;
+            }
+            if bit < 2 {
+                self.message_snapshots[bit].take();
             }
             if flags & mask != 0 {
                 if let Some(member) = self.channels[GLOBAL_CHANNEL].members.get(&peer.key) {
@@ -289,6 +277,7 @@ pub(crate) struct Peer {
     // Accessed only under the retirement mutex. A barrier can submit this
     // observer's pending notices without advancing everyone else's cursors.
     retirement_barrier: AtomicU64,
+    message_barrier: AtomicU64,
     output: Arc<dyn PeerOutput>,
     budget: Arc<Budget>,
 }
@@ -320,15 +309,59 @@ impl Drop for RetirementSnapshot {
 enum FanoutRecipients {
     Room(Arc<Vec<Arc<Peer>>>),
     Disconnect(Arc<RetirementSnapshot>),
+    Message(MessageRecipients),
 }
 
-impl std::ops::Deref for FanoutRecipients {
-    type Target = Vec<Arc<Peer>>;
+struct MessageRecipients {
+    room: Option<Arc<Vec<Arc<Peer>>>>,
+    observers: Arc<Vec<Arc<Peer>>>,
+    excluded_observer: u64,
+}
 
-    fn deref(&self) -> &Self::Target {
+fn membership_bytes(capacity: usize) -> Option<usize> {
+    capacity
+        .checked_mul(std::mem::size_of::<Arc<Peer>>())
+        .and_then(|bytes| {
+            bytes.checked_add(
+                std::mem::size_of::<Vec<Arc<Peer>>>() + 2 * std::mem::size_of::<usize>(),
+            )
+        })
+}
+
+impl MessageRecipients {
+    fn room(&self) -> &[Arc<Peer>] {
+        self.room.as_ref().map_or(&[], |room| room.as_slice())
+    }
+
+    fn storage_bytes(&self) -> Option<usize> {
+        let room = self
+            .room
+            .as_ref()
+            .map_or(Some(0), |room| membership_bytes(room.capacity()))?;
+        room.checked_add(membership_bytes(self.observers.capacity())?)
+    }
+}
+
+impl FanoutRecipients {
+    fn single_slice(&self) -> &[Arc<Peer>] {
         match self {
             Self::Room(members) => members,
             Self::Disconnect(snapshot) => &snapshot.members,
+            Self::Message(_) => unreachable!("message publications have two recipient segments"),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Message(message) => message.room().len().saturating_add(message.observers.len()),
+            _ => self.single_slice().len(),
+        }
+    }
+
+    fn first(&self) -> Option<&Arc<Peer>> {
+        match self {
+            Self::Message(message) => message.room().first().or_else(|| message.observers.first()),
+            _ => self.single_slice().first(),
         }
     }
 }
@@ -347,6 +380,9 @@ pub(crate) struct RoomFanout {
     deadline: Option<std::time::Instant>,
     // Zero denotes a live publisher; positive values order departure jobs.
     retirement_sequence: u64,
+    // Reused only by sources publishing to a large observer audience. The
+    // indexed job has no Publication of its own, so ownership is acyclic.
+    observed: Option<Publication>,
 }
 
 impl RoomFanout {
@@ -374,19 +410,15 @@ impl RoomFanout {
         // Room views remain conservatively charged per publisher. Disconnect
         // snapshots own one shared charge, so jobs reserve only their metadata.
         let snapshot_bytes = match &recipients {
-            FanoutRecipients::Room(members) => members
-                .capacity()
-                .checked_mul(std::mem::size_of::<Arc<Peer>>())
-                .and_then(|n| {
-                    n.checked_add(
-                        std::mem::size_of::<Vec<Arc<Peer>>>()
-                            + 2 * std::mem::size_of::<usize>()
-                            + job_bytes,
-                    )
-                })
-                .ok_or(Disconnect::OVERLOADED)?,
-            FanoutRecipients::Disconnect(_) => job_bytes,
-        };
+            FanoutRecipients::Room(members) => {
+                membership_bytes(members.capacity()).and_then(|n| n.checked_add(job_bytes))
+            }
+            FanoutRecipients::Disconnect(_) => Some(job_bytes),
+            FanoutRecipients::Message(message) => message
+                .storage_bytes()
+                .and_then(|n| n.checked_add(job_bytes)),
+        }
+        .ok_or(Disconnect::OVERLOADED)?;
         if packet
             .budget
             .metrics
@@ -411,12 +443,22 @@ impl RoomFanout {
     }
 
     pub(crate) fn active(&self) -> bool {
-        self.packet.is_some()
+        self.packet.is_some() || self.observed.as_ref().is_some_and(Publication::active)
     }
     pub(crate) fn deadline(&self) -> Option<std::time::Instant> {
         self.deadline
+            .into_iter()
+            .chain(self.observed.as_ref().and_then(Publication::deadline))
+            .min()
     }
     pub(crate) fn clear(&mut self) {
+        if let Some(observed) = &mut self.observed {
+            observed.clear();
+        }
+        self.clear_local();
+    }
+
+    fn clear_local(&mut self) {
         // Captured views can be the final owners after index invalidation.
         // Drop their storage before returning the corresponding queue credit.
         self.recipients = None;
@@ -435,31 +477,79 @@ impl RoomFanout {
     }
 
     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
-        if self.retirement_sequence != 0 {
-            self.resume_with::<true>(quantum)
-        } else {
-            self.resume_with::<false>(quantum)
+        let visits = self.recipients.as_ref().map_or(0, |view| {
+            quantum.min(view.len().saturating_sub(self.cursor))
+        });
+        if self.packet.is_some() {
+            if self.retirement_sequence != 0 {
+                self.resume_with::<true>(visits, None)?;
+            } else {
+                self.resume_with::<false>(visits, None)?;
+            }
         }
+        if self.packet.is_none()
+            && let Some(observed) = &mut self.observed
+        {
+            observed.resume(quantum - visits)?;
+        }
+        Ok(())
     }
 
-    fn resume_with<const RETIREMENT: bool>(&mut self, quantum: usize) -> Result<(), Disconnect> {
+    fn resume_with<const RETIREMENT: bool>(
+        &mut self,
+        quantum: usize,
+        message_sequence: Option<u64>,
+    ) -> Result<(), Disconnect> {
         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
         let end = self.cursor.saturating_add(quantum).min(recipients.len());
-        for recipient in &recipients[self.cursor..end] {
-            if recipient.key != self.source
-                && (!RETIREMENT
-                    || recipient.retirement_barrier.load(Relaxed) < self.retirement_sequence)
+        if let FanoutRecipients::Message(message) = recipients {
+            let room = message.room();
+            let room_end = end.min(room.len());
+            if self.cursor < room_end {
+                Self::submit::<false, false>(&room[self.cursor..room_end], self.source, frame, 0)?;
+            }
+            let observer_start = self.cursor.saturating_sub(room.len());
+            let observer_end = end.saturating_sub(room.len());
+            if observer_start < observer_end {
+                Self::submit::<false, true>(
+                    &message.observers[observer_start..observer_end],
+                    message.excluded_observer,
+                    frame,
+                    message_sequence.expect("observer jobs have a publication sequence"),
+                )?;
+            }
+        } else {
+            Self::submit::<RETIREMENT, false>(
+                &recipients.single_slice()[self.cursor..end],
+                self.source,
+                frame,
+                self.retirement_sequence,
+            )?;
+        }
+        self.cursor = end;
+        if end == recipients.len() {
+            self.clear_local();
+        }
+        Ok(())
+    }
+
+    fn submit<const RETIREMENT: bool, const MESSAGE: bool>(
+        recipients: &[Arc<Peer>],
+        excluded: u64,
+        frame: &Frame,
+        sequence: u64,
+    ) -> Result<(), Disconnect> {
+        for recipient in recipients {
+            if recipient.key != excluded
+                && (!RETIREMENT || recipient.retirement_barrier.load(Relaxed) < sequence)
+                && (!MESSAGE || recipient.message_barrier.load(Relaxed) < sequence)
             {
                 let result = recipient.enqueue_fanout(frame);
                 if !RETIREMENT {
                     result?;
                 }
             }
-        }
-        self.cursor = end;
-        if end == recipients.len() {
-            self.clear();
         }
         Ok(())
     }
@@ -777,11 +867,13 @@ impl Relay {
             admission: AtomicU8::new(Admission::Open as u8),
             retirements: Mutex::new(Retirements::default()),
             retirement_pending: AtomicBool::new(false),
+            messages: Arc::new(MessageFanouts::default()),
             state: RwLock::new(Registry {
                 users: HashMap::new(),
                 global_broadcast: OnceLock::new(),
                 channels,
                 listeners: Default::default(),
+                message_snapshots: Default::default(),
                 disconnect_snapshot: Weak::new(),
                 next_key: 1,
                 sessions: 0,
@@ -830,6 +922,7 @@ impl Relay {
         {
             let mut state = self.state.write();
             state.listeners = Default::default();
+            state.message_snapshots = Default::default();
             state.disconnect_snapshot = Weak::new();
             state.global_broadcast.take();
         }
@@ -949,6 +1042,7 @@ impl Relay {
             listener: AtomicU8::new(0),
             closing: AtomicBool::new(false),
             retirement_barrier: AtomicU64::new(0),
+            message_barrier: AtomicU64::new(0),
             output,
             budget: Arc::new(Budget {
                 used: AtomicUsize::new(0),
@@ -994,17 +1088,14 @@ impl Relay {
         self.receive_batch().receive(peer, bytes, storage_capacity)
     }
 
-    fn receive_with_totals<F>(
+    fn receive_with_totals(
         &self,
         peer: &Peer,
         bytes: Bytes,
         storage_capacity: usize,
         totals: &mut InputTotals,
-        room: F,
-    ) -> Result<usize, Disconnect>
-    where
-        F: FnOnce(&Peer, Arc<Vec<Arc<Peer>>>, Frame) -> Result<usize, Disconnect>,
-    {
+        native: Option<(&mut Option<Box<RoomFanout>>, usize)>,
+    ) -> Result<usize, Disconnect> {
         if peer.closing.load(Relaxed) {
             return Ok(1);
         }
@@ -1061,7 +1152,7 @@ impl Relay {
                 .get_or_init(|| Arc::new(state.users.values().cloned().collect()))
                 .clone();
             drop(state);
-            return room(peer, recipients, frame);
+            return self.deliver_room(peer, recipients, frame, native);
         }
         if target == BROADCAST
             && peer.channel.as_ref() != GLOBAL_CHANNEL
@@ -1075,7 +1166,7 @@ impl Relay {
                 .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
                 .clone();
             drop(state);
-            return room(peer, recipients, frame);
+            return self.deliver_room(peer, recipients, frame, native);
         }
         // Charge every fanout path by recipient visits, including global
         // observers. One complete message remains atomic with respect to this
@@ -1090,6 +1181,58 @@ impl Relay {
         } else {
             state.listeners(PRIVATE_MESSAGE).len().saturating_add(1)
         };
+        if let Some((pending, quantum)) = native
+            && work > quantum
+        {
+            // Preserve the primary private delivery before observer work,
+            // including when a large captured view cannot obtain staging credit.
+            if let Some(recipient) = private_recipient {
+                recipient.enqueue_fanout(&frame)?;
+            }
+            let flag = if target == BROADCAST {
+                CHANNEL_MESSAGE
+            } else {
+                PRIVATE_MESSAGE
+            };
+            let observers = state.message_snapshots[flag.trailing_zeros() as usize]
+                .get_or_init(|| Arc::new(state.listeners(flag).to_vec()))
+                .clone();
+            let room = if target == BROADCAST {
+                state
+                    .channels
+                    .get(&peer.channel)
+                    .filter(|room| room.members.len() > 1)
+                    .map(|room| {
+                        room.broadcast
+                            .get_or_init(|| Arc::new(room.members.values().cloned().collect()))
+                            .clone()
+                    })
+            } else {
+                None
+            };
+            let publisher = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
+            let observed = publisher
+                .observed
+                .get_or_insert_with(|| Publication::new(self.messages.clone()));
+            let prepared = observed.begin(
+                peer,
+                MessageRecipients {
+                    room,
+                    observers,
+                    excluded_observer: private_recipient.map_or(0, |p| p.key),
+                },
+                frame,
+                self.config.write_timeout(),
+            );
+            if let Err(error) = prepared {
+                publisher.clear();
+                return Err(error);
+            }
+            let direct_visits = usize::from(private_recipient.is_some());
+            drop(state);
+            publisher.resume(quantum.saturating_sub(direct_visits))?;
+            return Ok(quantum.max(direct_visits));
+        }
         if target == BROADCAST {
             if let Some(channel) = state.channels.get(&peer.channel) {
                 for recipient in channel.members.values() {
@@ -1112,6 +1255,31 @@ impl Relay {
         Ok(work.max(1))
     }
 
+    fn deliver_room(
+        &self,
+        source: &Peer,
+        recipients: Arc<Vec<Arc<Peer>>>,
+        frame: Frame,
+        native: Option<(&mut Option<Box<RoomFanout>>, usize)>,
+    ) -> Result<usize, Disconnect> {
+        if let Some((pending, quantum)) = native
+            && recipients.len() > quantum
+        {
+            let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
+            work.begin(
+                source,
+                FanoutRecipients::Room(recipients),
+                frame,
+                self.config.write_timeout(),
+                0,
+            )?;
+            work.resume(quantum)?;
+            Ok(quantum)
+        } else {
+            deliver_room(source, recipients, frame)
+        }
+    }
+
     fn control(&self, peer: &Peer, value: &[u8]) -> Result<(), Disconnect> {
         match protocol::command(value)? {
             Command::Authenticate(password) => {
@@ -1129,6 +1297,12 @@ impl Relay {
                     let mut state = self.state.write();
                     if peer.closing.load(Relaxed) {
                         return Ok(());
+                    }
+                    if peer.listener.load(Relaxed) & !flags & (CHANNEL_MESSAGE | PRIVATE_MESSAGE)
+                        != 0
+                    {
+                        self.messages.flush(peer);
+                        barrier = true;
                     }
                     if peer.listener.load(Relaxed) & DISCONNECT_MESSAGE != 0
                         && flags & DISCONNECT_MESSAGE == 0
@@ -1307,7 +1481,7 @@ impl Relay {
             {
                 continue;
             }
-            let view = recipients.as_slice();
+            let view = recipients.single_slice();
             let position = match searched {
                 Some((previous_view, position)) if std::ptr::eq(previous_view, view) => position,
                 _ => {

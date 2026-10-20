@@ -698,6 +698,9 @@ async fn shared_network_payloads_are_reused_without_copying_later_base_slab_valu
         data(&mut recipient).await,
         protocol::envelope(sender_id, &[0xf5])
     );
+    // Delivery can reach the client before its worker publishes batched input
+    // totals. Await that publication, then retain the exact counter assertion.
+    wait_counter(&server.relay.metrics.routing_reused_bytes, 1).await;
     assert_eq!(server.relay.metrics.routing_reused_bytes.load(Relaxed), 1);
     assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     let large = protocol::byte_string(&vec![0x5a; 65536]);
@@ -706,6 +709,11 @@ async fn shared_network_payloads_are_reused_without_copying_later_base_slab_valu
         data(&mut recipient).await,
         protocol::envelope(sender_id, &large)
     );
+    wait_counter(
+        &server.relay.metrics.routing_reused_bytes,
+        large.len() as u64 + 1,
+    )
+    .await;
     assert_eq!(
         server.relay.metrics.routing_reused_bytes.load(Relaxed),
         large.len() as u64 + 1
@@ -716,6 +724,11 @@ async fn shared_network_payloads_are_reused_without_copying_later_base_slab_valu
         data(&mut recipient).await,
         protocol::envelope(sender_id, &[0xf6])
     );
+    wait_counter(
+        &server.relay.metrics.routing_reused_bytes,
+        large.len() as u64 + 2,
+    )
+    .await;
     assert_eq!(server.relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(
         server.relay.metrics.routing_reused_bytes.load(Relaxed),

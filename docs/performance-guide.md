@@ -10,8 +10,8 @@ conflict with consistently responsive users.
 
 Mio workers own decoding and timers. Private sends retain their immediate
 borrowed path. Multicast output uses shared bodies and bounded owner-worker
-vectored writes. Ordinary large rooms without channel observers and global
-broadcasts advance by 1,024 recipient visits per turn;
+vectored writes. Large native room, global and observer publications
+advance by 1,024 recipient visits per turn;
 native deferred departures use 128 visits to keep the shared publication mutex
 and worker turns short. Native departure publication uses that same 128-recipient
 cutoff; the [cutoff follow-up](retirement-turns.md#deferral-cutoff-follow-up)
@@ -25,7 +25,7 @@ numerical library is selected by default.
 
 Pending disconnect jobs reuse an immutable observer snapshot. Its ownership
 reserves membership storage once, and a weak registry cache retains no recipient
-storage after the last job finishes. Ordinary room views retain their conservative
+storage after the last job finishes. Ordinary room and message-observer views retain their conservative
 per-publisher charge. See the [snapshot ownership measurements](retirement-snapshots.md).
 
 The observer-revocation barrier now submits only the requesting observer's
@@ -125,6 +125,10 @@ messages, departures, all process exits and final resource gauges.
   echoes; `--kind private` uses control replies to avoid making the witnesses
   publish additional fanouts. The [baseline report](observer-messages.md) records
   the 100,000-observer stalls, profile, one-slot CI cases and timing limits.
+  `--room-readers` adds same-room recipients to channel publications; combining
+  it with `--queue-bytes 2048` checks single-body staging under a tight local
+  budget. The [bounded-publication report](observer-publications.md) records the
+  implementation, ownership and remaining cold-view/barrier scan costs.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
   Its isolated `--fanout-global-broadcast` mode checks global publications,

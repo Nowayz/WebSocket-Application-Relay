@@ -93,6 +93,15 @@ class ReceiptTest(unittest.TestCase):
             self.assertIn('server startup failed', receipt['error'])
             self.assertFalse(Path('/proc', str(receipt['server_pid'])).exists())
 
+    def test_combined_scope_and_byte_budget_are_validated_before_launch(self):
+        for extra in [['--room-readers', '-1'], ['--room-readers', '1', '--kind', 'private'],
+                      ['--queue-bytes', '1046']]:
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as temporary:
+                result, marker, output = self.invoke(Path(temporary), extra)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

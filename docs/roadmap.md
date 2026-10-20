@@ -24,25 +24,26 @@ this boundary in CI with `scripts/check-product.py`.
 ## Immediate performance milestone
 
 Finish bounding routing work that can monopolize a worker or membership lock.
-Ordinary room broadcasts without channel observers and global broadcasts now
+Large native room, global and observer broadcasts now
 advance through immutable recipient views outside the registry lock. Native
 live fanout uses 1,024-recipient turns; deferred departures use 128. The
 [global broadcast report](global-broadcasts.md) records the latest measured win.
 
-The next candidate is channel/private observer message fanout. It still submits
-an entire fanout synchronously before yielding. The
-[native observer-message screen](observer-messages.md) now reproduces membership
-and independent-witness stalls at 100,000 observers and records a publisher
-submission profile. Any continuation must preserve which observers were eligible,
-old-message-before-unsubscribe-ack ordering, source FIFO, cancellation, ID
-takeover and output-budget refusal. Deferring a loop without those boundaries
-would change the protocol.
+The [native observer-message screen](observer-messages.md) established membership
+and independent-witness stalls at 100,000 observers. Its
+[bounded-publication follow-up](observer-publications.md) captures eligibility,
+registers pending work for revocation and keeps one charged body across room and
+observer segments. Preserve message-before-unsubscribe-ACK ordering, source FIFO,
+cancellation, ID takeover and output-budget refusal as this design evolves.
 
 Also measure cold recipient-view construction and invalidation under membership
 churn. The first global publication after a membership/ownership change still
 captures all addressable owners under a registry read lock. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
+Observer barriers also still scan distinct captured views under the membership
+write lock. Measure many concurrent publishers and changing generations before
+choosing a recipient index, cache policy or another synchronization change.
 
 ## Acceptance for each change
 

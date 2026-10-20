@@ -91,11 +91,12 @@ def run(args):
     port, admin = wire.runtime.free_port(), wire.runtime.free_port()
     while admin == port:
         admin = wire.runtime.free_port()
-    population = args.audience + args.workers + 2
+    retained = args.audience + args.room_readers
+    population = retained + args.workers + 2
     server_command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
                       '--admin-bind', f'127.0.0.1:{admin}', '--workers', str(args.workers),
                       '--max-connections', str(population + 1),
-                      '--max-channel-members', str(args.audience),
+                      '--max-channel-members', str(max(args.audience, args.room_readers + 1)),
                       '--ping-interval-secs', '0', '--idle-timeout-secs', '0',
                       '--messages-per-second', '0', '--bytes-per-second', '0',
                       '--tcp-send-buffer-bytes', '16384', '--tcp-receive-buffer-bytes', '65536',
@@ -104,6 +105,9 @@ def run(args):
         server_command = ['taskset', '-c', args.server_cpus] + server_command + ['--pin-workers']
     if args.queue_messages is not None:
         server_command += ['--queue-messages', str(args.queue_messages)]
+    if args.queue_bytes is not None:
+        server_command += ['--max-message-bytes', str(args.queue_bytes - 10),
+                           '--queue-bytes', str(args.queue_bytes)]
     environment = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
     environment['WAR_AUTH_PASSWORD'] = PASSWORD.decode()
     profile = args.output.with_suffix('.perf.data') if args.profile else None
@@ -155,6 +159,7 @@ def run(args):
             flag = 1 if args.kind == 'channel' else 2
             source = join(b'om-source')
             target = join(b'om-target')
+            room_readers = [join(b'om-source') for _ in range(args.room_readers)]
             for _ in range(args.audience):
                 if time.monotonic() - setup > 60:
                     raise TimeoutError('60-second setup budget')
@@ -254,6 +259,8 @@ def run(args):
                 for reader in audience:
                     if reader is not first_reader and reader is not observer:
                         reader.expect(expected)
+                for reader in room_readers:
+                    reader.expect(expected)
                 if args.kind == 'private':
                     target.expect(expected)
                 event['all_readers_verified_ns'] = time.monotonic_ns()
@@ -269,6 +276,9 @@ def run(args):
                                             - result['process_before']['cpu_seconds'])
             for peer in [source, target, *probes]:
                 peer.finish()
+                if peer is source:
+                    for reader in room_readers:
+                        reader.departure(source.id)
             expected_metrics = {
                 'war_joined_total': len(peers),
                 'war_disconnected_total': sum(peer.closed for peer in peers),
@@ -278,7 +288,7 @@ def run(args):
                 'war_delivered_bytes_total': sum(peer.received_data_bytes for peer in peers),
                 'war_routing_reused_bytes_total': sum(peer.values for peer in peers),
                 'war_routing_copied_bytes_total': 0,
-                'war_sessions': args.audience, 'war_connections': args.audience,
+                'war_sessions': retained, 'war_connections': retained,
                 'war_queued_bytes': 0, 'war_variable_bytes': 0}
             for _ in range(200):
                 metrics = wire.runtime.metrics(admin)
@@ -357,15 +367,23 @@ if __name__ == '__main__':
     parser.add_argument('--server', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--audience', type=int, default=2048)
+    parser.add_argument('--room-readers', type=int, default=0,
+                        help='Additional same-room recipients; channel publications only')
     parser.add_argument('--workers', type=int, default=2)
     parser.add_argument('--rounds', type=int, default=2)
     parser.add_argument('--kind', choices=['channel', 'private'], default='channel')
     parser.add_argument('--server-cpus', default='')
     parser.add_argument('--profile', action='store_true', help='Diagnostic server-only perf capture')
     parser.add_argument('--queue-messages', type=int, help='Explicit per-peer output-slot pressure diagnostic')
+    parser.add_argument('--queue-bytes', type=int,
+                        help='Explicit local byte budget; includes fixture message and routing headroom')
     arguments = parser.parse_args()
     if min(arguments.audience, arguments.workers, arguments.rounds) < 1:
         parser.error('audience, workers and rounds must be positive')
     if arguments.queue_messages is not None and arguments.queue_messages < 1:
         parser.error('queue messages must be positive')
+    if arguments.room_readers < 0 or (arguments.room_readers and arguments.kind != 'channel'):
+        parser.error('room readers must be nonnegative and require channel publications')
+    if arguments.queue_bytes is not None and arguments.queue_bytes < 1047:
+        parser.error('queue bytes must fit the 1037-byte fixture message plus routing headroom')
     raise SystemExit(0 if run(arguments) else 1)

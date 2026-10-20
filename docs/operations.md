@@ -94,12 +94,17 @@ source's normal Close does not prove its recipients received departure events.
 The [snapshot ownership report](retirement-snapshots.md) checks an eight-departure
 burst against 100,000 observers with the same constrained shared credit.
 
-Ordinary large-room work without channel observers and global broadcasts advance
+Large native room, global and observer publications advance
 in 1,024-recipient turns outside the registry lock. The first global publication
 after a membership/ID-ownership change still builds a full owner view under a
 read lock. The current cached index is bounded by admitted population; captured
 jobs retain their own charged views. See [global broadcast checks](global-broadcasts.md).
-Channel/private observer message fanout still submits synchronously.
+Observer publications register captured room/observer views for revocation and
+advance under a per-publication mutex. A combined room/observer publication
+reserves one body and both views; it does not copy a combined recipient list.
+Private primary submission precedes observer capture, including when remaining
+observer work cannot obtain staging credit. Already submitted output is not
+rolled back by a subsequent overload close. See [observer publications](observer-publications.md).
 Deferred departures
 use 128-recipient native worker turns so publication and other ready sockets can
 interleave more promptly. This trades some bulk-work CPU efficiency for shorter

@@ -80,13 +80,17 @@ connection stays authenticated after another attempt.
 | `4` set channel variable | `[key_text_or_bytes, value]` | `true` | No, matching upstream |
 | `5` get channel variable | Key text/bytes | Reply opcode `200`: `[found: bool, value]` | No, matching upstream |
 
-For an authenticated global listener, clearing disconnect bit `4` is an output
-barrier: previously captured disconnect-observer notices are submitted before
-the listener-flags reply. They cannot arrive after that reply. Re-enabling the
-bit admits future departures again. Ordinary room membership still receives its
+For an authenticated global listener, clearing a message-observer bit (`1` or
+`2`) submits its previously captured observer messages before the listener-flags
+reply. Clearing disconnect bit `4` does the same for captured disconnect-observer
+notices. Re-enabling a bit admits future publications without replaying flushed
+ones. Ordinary room membership still receives its
 own room's departure events independently of listener flags. Existing queue
 budgets and slow-recipient policy continue to apply. The barrier advances only
 that observer's output; unrelated recipients keep their asynchronous turns.
+Message revocation may also flush that listener's older pending messages for the
+other message class, so one watermark safely covers both classes. Publications
+from concurrent senders still have no global total-order guarantee.
 
 Variable keys contain 1–255 decoded bytes; text/byte keys with identical bytes
 address the same entry. Values retain their exact CBOR bytes. Missing entries
