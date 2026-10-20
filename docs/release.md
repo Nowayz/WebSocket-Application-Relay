@@ -75,7 +75,7 @@ These are deployment choices, not reasons to keep adding features to this releas
 Publishing a GitHub release, uploading packages and switching a running service
 are separate from producing and verifying the local release candidate.
 
-## Local acceptance: 2026-10-19
+## Initial local acceptance: 2026-10-19
 
 The verified assets are built from commit
 `9c7701ae47a1ac64e786921d894dd2789e9a8d66` on
@@ -119,7 +119,16 @@ The earlier browser fixture passed its UI checks but its harness sent SIGINT to
 the child before reading final metrics; it is not the cleanup acceptance record.
 The isolated final fixture verified cleanup before stopping its child normally.
 
-Remaining release actions are to push this branch, obtain the remote CI result,
-and publish/tag the selected commit and these assets. Deployment to a target host
-is a separate acceptance step using that host's TLS, secrets and operating
-profile. The existing local relay/bridge services were not restarted or replaced.
+The branch is now pushed with [draft PR #3](https://github.com/Nowayz/WebSocket-Application-Relay/pull/3).
+The first remote CI run exposed a race in the shutdown fixture's accounting:
+the self-reply barrier can retain a reservation briefly after the client receives
+it. The test now settles welcome reservations, includes that barrier in its
+bound, requires actual large output and returns one counter observation instead
+of racing a second read. All 239 Rust tests and Clippy passed locally again.
+The runtime implementation is unchanged by this correction.
+
+The candidate above is superseded for publication until CI verifies the corrected
+source archive. Use the artifacts and commit identified by the successful PR
+check, rather than publishing this earlier source tarball. Publication/tagging
+and target-host deployment remain separate steps; the existing local relay/bridge
+services were not restarted or replaced.

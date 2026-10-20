@@ -128,9 +128,22 @@ async fn shutdown_releases_blocked_output_and_pending_upgrades_with_live_clients
     let (mut responsive, responsive_id) = joined(&url, address, b"shutdown-good", false).await;
     let mut upgrading = TcpStream::connect(address).await.unwrap();
     upgrading.write_all(b"GET / HTTP/1.1\r\n").await.unwrap();
+    // A client can read its welcome before the worker drops that submission's
+    // reservation. Retire those charges before measuring the explicit burst.
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while relay.metrics.queued_bytes.load(Relaxed) != 0
+            || relay.metrics.connections.load(Relaxed) != 4
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("fixture welcomes and pending upgrade must settle");
     let value = protocol::byte_string(&vec![0x5a; 64 * 1024]);
     let packet = protocol::envelope(slow_id, &value);
-    tokio::time::timeout(Duration::from_secs(3), async {
+    let routed_len = protocol::envelope(responsive_id, &value).len();
+    let barrier = protocol::envelope(responsive_id, &protocol::uint(42));
+    let queued = tokio::time::timeout(Duration::from_secs(3), async {
         for _ in 0..32 {
             responsive
                 .send(Message::Binary(packet.clone()))
@@ -139,25 +152,33 @@ async fn shutdown_releases_blocked_output_and_pending_upgrades_with_live_clients
         }
         // The self reply is a FIFO barrier: cancel only after all submitted
         // private packets have been parsed, so unread input cannot reset Close.
-        let barrier = protocol::envelope(responsive_id, &protocol::uint(42));
         responsive
             .send(Message::Binary(barrier.clone()))
             .await
             .unwrap();
         assert_eq!(
             responsive.next().await.unwrap().unwrap(),
-            Message::Binary(barrier)
+            Message::Binary(barrier.clone())
         );
-        while relay.metrics.queued_bytes.load(Relaxed) == 0
-            || relay.metrics.connections.load(Relaxed) != 4
-        {
+        loop {
+            let queued = relay.metrics.queued_bytes.load(Relaxed);
+            // The self reply can still hold its own reservation after the
+            // client receives it. Require more than that transient charge and
+            // return this observation rather than racing a second gauge load.
+            if queued > barrier.len() && relay.metrics.connections.load(Relaxed) == 4 {
+                break queued;
+            }
             tokio::task::yield_now().await;
         }
     })
     .await
     .expect("fixture must establish actual deferred output and pending upgrade");
-    let queued = relay.metrics.queued_bytes.load(Relaxed);
-    assert!(queued > 0 && queued <= 32 * packet.len());
+    assert!(
+        queued <= 32 * routed_len + barrier.len(),
+        "queued={queued}, burst_bound={}, barrier_bound={}",
+        32 * routed_len,
+        barrier.len()
+    );
     assert!(queued <= relay.config.total_queue_bytes);
     stop.cancel();
     tokio::time::timeout(Duration::from_secs(3), async {
