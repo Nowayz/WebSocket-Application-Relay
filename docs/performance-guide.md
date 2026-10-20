@@ -10,18 +10,17 @@ conflict with consistently responsive users.
 
 Mio workers own decoding and timers. Private sends retain their immediate
 borrowed path. Multicast output uses shared bodies and bounded owner-worker
-vectored writes. Large native room, global and observer publications
-advance by 1,024 recipient visits per turn;
-native deferred departures use 128 visits to keep the shared publication mutex
-and worker turns short. Native departure publication uses that same 128-recipient
-cutoff; the [cutoff follow-up](reports/retirement-turns.md#deferral-cutoff-follow-up)
-measures the normal-sized-room boundary at a 100,000-connection population.
-See the [retirement scheduling measurements](reports/retirement-turns.md)
-for the measured CPU/bulk-delivery tradeoff. Expiry discovery is also bounded.
-Retirement work uses one
-charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
-control replies fit the inline frame prefix. No alternative allocator or native
-numerical library is selected by default.
+vectored writes. Large native room, global and observer publications advance
+by 1,024 recipient visits per turn; departure jobs use 128 visits. The
+[cutoff follow-up](reports/retirement-turns.md#deferral-cutoff-follow-up)
+measures the normal-sized-room boundary at a 100,000-connection population,
+and the [retirement scheduling measurements](reports/retirement-turns.md)
+record the CPU/bulk-delivery tradeoff of the shorter departure turn. Expiry
+discovery is also bounded. Scalar control replies fit the inline frame prefix.
+No alternative allocator or native numerical library is selected by default.
+The locking model, the per-room departure queues and the pressure policy that
+replaced the single registry lock and single retirement FIFO those reports
+describe are in [architecture.md](architecture.md).
 
 Workers service separate fresh-readiness and buffered/output token queues.
 Each phase has a 4,096-visit routing allowance, finishing the ordinary 1,024-visit
@@ -32,19 +31,17 @@ See the [worker-scheduling comparison](reports/worker-scheduling.md) for the res
 benefit, burst CPU/batching tradeoff and limits of the allowance.
 
 Pending disconnect jobs reuse an immutable observer snapshot. Its ownership
-reserves membership storage once, and a weak registry cache retains no recipient
+reserves membership storage once, and a weak cache retains no recipient
 storage after the last job finishes. Ordinary room and message-observer views retain their conservative
 per-publisher charge. See the [snapshot ownership measurements](reports/retirement-snapshots.md).
 
-The observer-revocation barrier now submits only the requesting observer's
+The observer-revocation barrier submits only the requesting observer's
 notices. A publication sequence and per-peer watermark prevent deferred replay;
 other recipients keep their normal turns. A barrier reuses its peer lookup across
-jobs sharing the same immutable view; distinct views still require scans under
-the registry lock. See the [lookup follow-up](reports/observer-barriers.md#shared-view-lookup-follow-up).
-Queue-pressure fallback now finishes only preceding jobs
-whose recipient channel overlaps the direct notification; unrelated jobs retain
-their turns and reservations. See the [fallback measurements](reports/retirement-fallback.md)
-and the
+jobs sharing the same immutable view. See the [lookup follow-up](reports/observer-barriers.md#shared-view-lookup-follow-up).
+Queue-pressure fallback finishes only the older jobs of the queue being
+bypassed; other queues retain their turns and reservations. See the
+[fallback measurements](reports/retirement-fallback.md) and the
 [measured event screen](reports/observer-barriers.md) before choosing the next bottleneck.
 
 ## Small checks before timing

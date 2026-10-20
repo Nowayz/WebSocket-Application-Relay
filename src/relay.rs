@@ -1786,6 +1786,7 @@ impl Relay {
                     return self.unauthorized();
                 }
                 let mut barrier = false;
+                let mut notices = Vec::new();
                 if peer.is_global() {
                     let member = peer.room.state.read().members.get(&peer.key).cloned();
                     let mut listeners = self.listeners.write();
@@ -1795,14 +1796,14 @@ impl Relay {
                     if peer.listener.load(Relaxed) & !flags & (CHANNEL_MESSAGE | PRIVATE_MESSAGE)
                         != 0
                     {
-                        self.messages.flush(peer);
+                        notices.extend(self.messages.flush(peer));
                         barrier = true;
                     }
                     if peer.listener.load(Relaxed) & DISCONNECT_MESSAGE != 0
                         && flags & DISCONNECT_MESSAGE == 0
                     {
                         // Older deferred notices must precede revocation's ACK.
-                        self.flush_observer_retirements(peer);
+                        notices.extend(self.flush_observer_retirements(peer));
                         barrier = true;
                     }
                     if listeners.set_flags(peer, flags & 7, member.as_ref()) {
@@ -1811,6 +1812,12 @@ impl Relay {
                     self.listener_mask.store(listeners.mask(), Relaxed);
                 } else {
                     peer.listener.store(flags & 7, Relaxed);
+                }
+                // Every registry lock is released now. The watermarks stored
+                // above keep deferred jobs from replaying these notices, and
+                // nothing can reach this observer's FIFO before its ACK.
+                for notice in &notices {
+                    let _ = peer.enqueue_barrier(notice);
                 }
                 let reply = Frame::reply_uint(1, u64::from(flags & 7));
                 if barrier {
@@ -1994,11 +2001,13 @@ impl Relay {
         }
     }
 
-    /// Submit this observer's still-pending captured notices before its
-    /// revocation acknowledgement, and record a watermark so deferred jobs
-    /// cannot replay them after re-subscription. Only the observer queue is
-    /// scanned; it holds every job that can reach a `re_globl` member.
-    fn flush_observer_retirements(&self, observer: &Peer) {
+    /// Collect this observer's still-pending captured notices and record a
+    /// watermark so deferred jobs cannot replay them after re-subscription.
+    /// The caller submits the notices once every lock is released, ahead of
+    /// the revocation acknowledgement. Only the observer queue is scanned; it
+    /// holds every job that can reach a `re_globl` member.
+    fn flush_observer_retirements(&self, observer: &Peer) -> Vec<Frame> {
+        let mut notices = Vec::new();
         let pending = self.observer_departures.state.lock();
         let previous = observer.retirement_barrier.load(Relaxed);
         // Adjacent jobs often share an immutable view; reuse its lookup within
@@ -2026,13 +2035,19 @@ impl Relay {
                 }
             };
             if position.is_some_and(|position| position >= work.cursor) {
-                let _ = observer
-                    .enqueue_barrier(&work.packet.as_ref().expect("charged retirement body").frame);
+                notices.push(
+                    work.packet
+                        .as_ref()
+                        .expect("charged retirement body")
+                        .frame
+                        .clone(),
+                );
             }
         }
         // Deferred visits skip notices already submitted by this barrier, even
         // if the observer re-enables the bit before those jobs finish.
         observer.retirement_barrier.store(pending.sequence, Relaxed);
+        notices
     }
 
     /// Budget refusal fallback: finish this queue's older jobs synchronously

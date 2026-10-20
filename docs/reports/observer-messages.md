@@ -68,8 +68,7 @@ ordinary timing table. Its exact source generation is preserved.
 
 Server SHA-256:
 `538c6632140e8b9916de7e7756781d7c16e8702fe16e22ffe8542acfc6b6c6e5`.
-Raw receipts, source generations, the profile and reports are local under
-`/home/phil/dev/war_next/artifacts/observer-messages-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.
 `baseline-summary.json` identifies the four accepted ordinary receipts. Earlier
 fixed-reader runs remain development evidence and are excluded from that table.
 An intentionally failing profiler check is also retained; failure was rejected,

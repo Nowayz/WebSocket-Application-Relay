@@ -178,6 +178,4 @@ Control server SHA-256:
 `5f27499f27159a3bbaa9f5de5311bb1b6646719e681723503313e69eed4053c9`.
 Selected server SHA-256:
 `a7b2350b129c7882995e3d3dcd3dba14d476f7c7adbdc53f173c733568eabd2a`.
-Frozen Cargo inputs, executable/build receipts, clients/helpers, profile, rejected
-prototype evidence, raw JSON/CSV, figures and final selection are local under
-`/home/phil/dev/war_next/artifacts/worker-budget-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.

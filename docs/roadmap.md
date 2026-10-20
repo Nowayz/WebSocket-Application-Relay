@@ -31,11 +31,12 @@ performance work below after this release baseline is established.
 
 ## Subsequent performance work
 
-Finish bounding routing work that can monopolize a worker or membership lock.
-Large native room, global and observer broadcasts now
-advance through immutable recipient views outside the registry lock. Native
-live fanout uses 1,024-recipient turns; deferred departures use 128. The
+Finish bounding routing work that can monopolize a worker or a channel lock.
+Large native room, global and observer broadcasts advance through immutable
+recipient views with no registry lock held. Native live fanout uses
+1,024-recipient turns; deferred departures use 128. The
 [global broadcast report](reports/global-broadcasts.md) records the latest measured win.
+The current locking model and queue design are in [architecture.md](architecture.md).
 
 The [native observer-message screen](reports/observer-messages.md) established membership
 and independent-witness stalls at 100,000 observers. Its
@@ -46,11 +47,11 @@ cancellation, ID takeover and output-budget refusal as this design evolves.
 
 Also measure cold recipient-view construction and invalidation under membership
 churn. The first global publication after a membership/ownership change still
-captures all addressable owners under a registry read lock. Do not replace the
+visits every channel to rebuild the global view. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
-Observer barriers also still scan distinct captured views under the membership
-write lock. The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
+Observer barriers still scan the observer queue's pending jobs under the
+listener lock. The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
 a two-entry scan cache: a large component win did not produce a clear native
 eight-worker improvement. The [worker-scheduling follow-up](reports/worker-scheduling.md)
 now separates fresh readiness from buffered work and bounds aggregate routing

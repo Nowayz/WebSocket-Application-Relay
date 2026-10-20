@@ -144,8 +144,6 @@ Control server SHA-256:
 `538c6632140e8b9916de7e7756781d7c16e8702fe16e22ffe8542acfc6b6c6e5`.
 Selected server SHA-256:
 `5f27499f27159a3bbaa9f5de5311bb1b6646719e681723503313e69eed4053c9`.
-Frozen Cargo inputs, client/helper sources, builds, negative regressions, JSON,
-CSV and figures are local under
-`/home/phil/dev/war_next/artifacts/observer-publications-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.
 The selected comparison uses the `composite` receipts. Initial and intermediate
 prototype receipts remain available but are excluded from these final tables.

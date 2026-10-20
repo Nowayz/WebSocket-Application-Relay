@@ -81,10 +81,13 @@ can import `Relay` from the generated `relay.js` ES module.
   Fresh readiness and buffered/output work receive separate bounded turns;
   [scheduling measurements](docs/reports/worker-scheduling.md) document the latency/CPU
   tradeoff. Tokio handles management and process signals.
-- [Routing](src/relay.rs): a registry read/write lock protects membership and
-  ID ownership. Large native room, global and observer publications retain
-  immutable recipient views and advance in bounded turns outside the registry
-  lock. Observer revocation finds pending publications through an ordered index.
+- [Routing](src/relay.rs): no global registry lock. ID ownership is a 64-way
+  sharded map, each channel has its own lock for membership, variables and its
+  cached recipient view, global observers have a separate lock, and admission
+  counters are atomics. No socket write happens while a registry lock is held.
+  Large broadcasts capture an immutable recipient view and advance in bounded
+  turns; each room has its own departure queue. See
+  [docs/architecture.md](docs/architecture.md).
 - [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
   multicast uses recipient-owner output and bounded vectored batches. Each socket
   serializes output so partial writes, commands and control frames retain order.
@@ -121,32 +124,26 @@ acceptance checks and the next performance milestone.
 The [roadmap](docs/roadmap.md) defines the Rust/CBOR product boundary and the
 next latency and operational acceptance work.
 
-Disconnect-listener revocation submits only the affected observer's pending
-notices before its acknowledgment. Other recipients retain their bounded turns;
-a sequence watermark prevents replay after re-subscription. The
-[observer-barrier report](docs/reports/observer-barriers.md) describes the measured benefit
-and remaining queue-pressure and pending-view scan costs.
-Pending disconnect jobs also [share charged observer snapshots](docs/reports/retirement-snapshots.md),
-avoiding repeated list copies and repeated reservations for the same storage.
-An observer barrier reuses its lookup across jobs sharing a captured view.
-When a departure cannot fund deferred work, its synchronous fallback finishes
-only [preceding jobs for overlapping channels](docs/reports/retirement-fallback.md).
-Unrelated rooms retain their bounded turns, including under source-local pressure.
-Native workers give deferred departures [shorter 128-recipient turns](docs/reports/retirement-turns.md)
-to reduce Close/control stalls while keeping live fanout at 1,024 recipients.
-Native departures above that 128-recipient budget normally defer at publication.
-Global broadcasts now use the same bounded live-fanout continuation; the
-[global broadcast report](docs/reports/global-broadcasts.md) records short 100,000-reader
-checks and the remaining cold-view and observer-path limits.
-The [observer-message baseline](docs/reports/observer-messages.md) records the former
-synchronous publication stalls. [Bounded observer publications](docs/reports/observer-publications.md)
-preserve captured eligibility and acknowledgment ordering while yielding within a message.
+## Delivery guarantees
+
+Everything one session sends reaches each recipient in order, followed by that
+session's departure notice. A broadcast reaches every recipient captured when
+it started, even if the sender leaves before delivery finishes. Under output
+pressure delivery is best-effort: a slow recipient is closed with `1013`, and
+when the global budget is exhausted the frame is dropped for that recipient
+while the sender is never closed. Departure notices are ordered within a room,
+not across rooms. The full list, with the exact drop policy, is in
+[docs/protocol.md](docs/protocol.md#delivery-guarantees); the design is in
+[docs/architecture.md](docs/architecture.md) and the dated measurement records
+are in [docs/reports/](docs/reports/README.md).
 
 ## Provenance
 
-Derived from [Nowayz/WebSocket-Application-Relay](https://github.com/Nowayz/WebSocket-Application-Relay)
-at upstream commit `881c8daaf2cf05adea8f522b28cf372e8f82d4e9`. The original C++
-implementation and later comparison candidates are preserved in Git history,
-along with their complete benchmark records. The maintained implementation is
-Rust/CBOR. [MIT license](LICENSE). Vendored Rust codec sources retain their
-licenses and [recorded patch provenance](vendor/README.md).
+This repository is [Nowayz/WebSocket-Application-Relay](https://github.com/Nowayz/WebSocket-Application-Relay).
+The Rust implementation replaced the original 2018 C++ server in October 2026.
+The original server, its `relay.js` client and the comparison candidates with
+their complete benchmark records are preserved in Git history at commit
+`587c1cd`; see [docs/migration.md](docs/migration.md) for retrieval commands.
+The maintained implementation is Rust/CBOR. [MIT license](LICENSE). Vendored
+Rust codec sources retain their licenses and
+[recorded patch provenance](vendor/README.md).

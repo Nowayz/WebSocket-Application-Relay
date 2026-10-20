@@ -59,8 +59,7 @@ latencies of 3.77–4.21 versus 2.78–3.66 ms and CPU of 4.12–4.13 versus
 file improvement while keeping small-message responsiveness in the observed
 range; they do not establish a tail-latency SLA or improve every tail sample.
 
-Raw socket-screen results and the frozen mixed-load driver/clients are retained
-locally under `/home/phil/dev/war_next/artifacts/release-0.1.0-large-files-socket-screen/`
-and `release-0.1.0-large-files-mixed-screen/`. The mixed driver raises the message
+The raw artifacts are retained by the maintainer outside the repository.
+The mixed driver raises the message
 and queue ceilings equally for both controls; only the send-buffer request
-differs. The executable/build receipt is in `release-0.1.0-large-files/`.
+differs. The executable/build receipt is retained with them.

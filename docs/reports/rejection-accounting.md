@@ -60,5 +60,4 @@ Control executable SHA-256:
 `a7b2350b129c7882995e3d3dcd3dba14d476f7c7adbdc53f173c733568eabd2a`.
 Counted executable SHA-256:
 `c7200e767f457d960686a3364803ca9df0aa921fe77bac308af01cf17967cd61`.
-Frozen source/build receipts, rejected prototype and raw comparisons are retained
-locally under `/home/phil/dev/war_next/artifacts/rejection-accounting-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.

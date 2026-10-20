@@ -112,9 +112,7 @@ Control executable SHA-256:
 `5f27499f27159a3bbaa9f5de5311bb1b6646719e681723503313e69eed4053c9`.
 Rejected candidate executable SHA-256:
 `c1baf3d03f8b8163573c015278ab2538cec82c53d285b2d7827795315404a6e7`.
-Frozen candidate Cargo inputs, build receipt, client/helper sources, diagnostic
-logs and native JSON are local under
-`/home/phil/dev/war_next/artifacts/concurrent-observers-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.
 The candidate build directory has a provisional `selected` suffix; the final
 selection receipt records its rejection. The retained runtime source remains
 that of `0b34e27`; this follow-up adds tests, fixtures and documentation.

@@ -29,7 +29,8 @@ accepted. Duplicate map keys and tag meanings are application responsibilities:
 the relay preserves opaque encoded values. Indefinite containers, malformed UTF-8,
 trailing items, truncated arguments, more than 64 nesting levels, or more than
 65,536 items per value are protocol violations. Validation uses a fixed stack and
-does not allocate an application object graph.
+does not allocate an application object graph. The maximum encoded message,
+including the routing envelope, is `WAR_MAX_MESSAGE_BYTES` (16 MiB by default).
 
 Expanded simple values `f8 00` through `f8 1f` are malformed under
 [RFC 8949 section 3.3](https://www.rfc-editor.org/rfc/rfc8949.html#section-3.3)
@@ -52,17 +53,50 @@ Unknown destinations are dropped. A connection's messages retain order;
 concurrent senders have no global total-order guarantee. A new connection's first
 received item is its ID. A socket remains tied to its channel until disconnection.
 
-Disconnect events obey the configured queue budget. Exhausted global credit can
-drop a notice even when the departing peer completes Close; that handshake is
-not an acknowledgment from other recipients. See the
-[departure queue-headroom guidance](operations.md#queue-headroom-for-departure-work)
-for the measured pressure limit and diagnostic.
-
 `re_globl` broadcasts reach all sessions, while privileged listeners in that
 channel can receive selected traffic. `--disable-global-broadcast` requires
 authentication for global sends. This does not change listener authorization.
 A broadcast from the only member of a room still reaches authorized
 channel-message observers; it does not echo to the sender.
+
+## Delivery guarantees
+
+These hold for every recipient the relay has accepted output for. The design
+behind them is in [architecture.md](architecture.md); terms are in the
+[glossary](glossary.md).
+
+- **Per-source FIFO.** Everything one session produces reaches each recipient
+  in the order the relay processed it: its messages, its command replies and
+  finally its departure notice. The welcome is the first item a session
+  receives. A large broadcast is finished before the same source's next
+  message is routed.
+- **A broadcast reaches every captured recipient even if the source leaves.**
+  Membership is captured when a broadcast starts. If the sending session
+  closes before delivery finishes, the remaining recipients still receive the
+  message through the departure queue. In an ordinary room it arrives before
+  that session's departure notice. A `re_globl` broadcast that outlives its
+  source is completed in a separate queue and is not ordered against the
+  source's departure notice.
+- **Best-effort under output pressure.** A recipient whose own queue is full
+  (`WAR_QUEUE_BYTES` or `WAR_QUEUE_MESSAGES`) is closed with `1013` and
+  receives nothing more. When the global budget `WAR_TOTAL_QUEUE_BYTES` is
+  exhausted, the frame for the recipient being charged is dropped and
+  `war_global_pressure_total` increments; that recipient is closed with `1013`
+  only if it already holds at least a quarter of its own `WAR_QUEUE_BYTES`, or
+  if the dropped frame was the reply to its own command. The sender is never
+  closed because of a recipient. Recipients are visited in order, so later
+  recipients of one broadcast may miss a frame that earlier recipients
+  received. Already submitted output is never rolled back.
+- **Departure notices are ordered within a room, not across rooms.** Within
+  one room a departure notice follows the departed session's last messages.
+  Notices for different rooms are advanced by independent queues and have no
+  order relative to each other. A departed peer completing its Close handshake
+  does not prove that other recipients received its notice.
+- **ID takeover.** Assigning an ID held by another session closes that session
+  with `4001`. Routing looks up the target atomically with reassignment: a
+  message routed after the assignment reply goes to the new owner, while
+  output already accepted for the old owner may still finish. The displaced
+  session's departure notice reports the ID it actually held.
 
 ## Commands
 
@@ -132,9 +166,20 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 | `1003` | WebSocket text at the CBOR endpoint |
 | `1008` | Authentication, rate, join-timeout, reserved-ID, or global-send policy |
 | `1009` | Incoming message exceeds configured size |
-| `1013` | Admission/variable capacity or recipient queue budget |
+| `1013` | Join refused by admission or drain; channel variable capacity; the session's own command reply could not be funded; the session is a slow consumer; decoder staging budget exhausted |
 | `4000` | Operator disconnect |
 | `4001` | Privileged fixed-ID takeover |
+
+`1013` means exactly one of the following. The join was refused because the
+relay is draining or a connection, channel or room limit was reached. A
+channel variable write exceeded the per-channel or global variable budget. The
+session's own command reply, including its welcome, could not be funded from
+its output budget. The session is a slow consumer: its per-session queue is
+full, or it holds at least a quarter of its own `WAR_QUEUE_BYTES` while the
+global budget is exhausted. After upgrade, exhausting the shared decoder
+staging budget (`WAR_TOTAL_READ_BUFFER_BYTES`) also closes with `1013`. A
+session is never closed with `1013` because of its recipients, and a recipient
+is never closed only because the global output budget is exhausted.
 
 Admission refusals before upgrade can end with a TCP close instead of a WebSocket
 close frame.

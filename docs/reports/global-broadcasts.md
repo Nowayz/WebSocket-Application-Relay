@@ -81,9 +81,7 @@ Control server SHA-256:
 `b4fde7a2012be2279121a7a6e68491a14e0255343b69bbcc3da4c2f9355dcb5b`.
 Candidate server SHA-256:
 `538c6632140e8b9916de7e7756781d7c16e8702fe16e22ffe8542acfc6b6c6e5`.
-Local source snapshots, build receipts, JSON, per-user CSV and failed fixture
-development attempts are retained under
-`/home/phil/dev/war_next/artifacts/global-fanout-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.
 The two earlier fixture failures were a probe-inclusive fanout count and an
 unpaged HTTP response exceeding the fixture's response buffer. Both happened
 before accepted comparison runs; the final fixture checks a paginated census.

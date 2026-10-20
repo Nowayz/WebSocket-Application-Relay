@@ -96,10 +96,13 @@ impl Drop for Publication {
 }
 
 impl MessageFanouts {
-    pub(super) fn flush(&self, observer: &Peer) {
+    /// Collect the observer's pending captured messages and advance its
+    /// watermark. The caller submits them after releasing every lock.
+    pub(super) fn flush(&self, observer: &Peer) -> Vec<Frame> {
         // Caller holds the listener write lock. Publication takes listeners ->
         // index -> job; progress takes only job, then releases it before
         // unregistering.
+        let mut pending = Vec::new();
         let index = self.index.lock();
         let previous = observer.message_barrier.load(Relaxed);
         let mut searched: Option<(Weak<ObserverView>, Option<usize>)> = None;
@@ -131,14 +134,15 @@ impl MessageFanouts {
                     message.room().len().saturating_add(position) >= work.cursor
                 }) && observer.key != message.excluded_observer
                 {
-                    let _ = observer.enqueue_barrier(&packet.frame);
+                    pending.push(packet.frame.clone());
                 }
             }
-            // Store while this job is locked: its source cannot replay the
-            // just-submitted message before the watermark becomes visible.
+            // Store while this job is locked: its source cannot deliver this
+            // message to the observer once the watermark is visible.
             observer.message_barrier.store(sequence, Relaxed);
         }
         observer.message_barrier.store(index.sequence, Relaxed);
+        pending
     }
 }
 

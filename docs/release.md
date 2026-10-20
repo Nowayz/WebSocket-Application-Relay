@@ -91,6 +91,11 @@ are separate from producing and verifying the local release candidate.
 
 ## Initial local acceptance: 2026-10-19
 
+This acceptance record predates the fine-grained locking rewrite described in
+[architecture.md](architecture.md): the tested executable used a single
+registry lock and a single departure FIFO. The gate must be rerun against the
+rewritten source before any release is published from it.
+
 The verified assets are built from commit
 `9c7701ae47a1ac64e786921d894dd2789e9a8d66` on
 `codex/departure-quantum`. This acceptance record is a subsequent documentation
@@ -126,9 +131,7 @@ Executable SHA-256:
 | `war-relay-0.1.0-source.tar.gz` | `d4bcc0bf259cdd3e67539e2d734f438492442480d16edb2b11b796e3080b2607` |
 | `war-relay-client-0.1.0.tgz` | `6f4d5e5da6debe5039e36006d80a0475632e692b9a9e229be9361f731ee55c81` |
 
-Local evidence is retained under `/home/phil/dev/war_next/artifacts/`:
-`release-0.1.0/`, `release-0.1.0-check/`,
-`release-0.1.0-browser-final/`, and `rejection-accounting-20261019/`.
+The raw artifacts are retained by the maintainer outside the repository.
 The earlier browser fixture passed its UI checks but its harness sent SIGINT to
 the child before reading final metrics; it is not the cleanup acceptance record.
 The isolated final fixture verified cleanup before stopping its child normally.
