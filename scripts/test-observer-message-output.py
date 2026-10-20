@@ -75,7 +75,7 @@ class ReceiptTest(unittest.TestCase):
                     self.assertEqual(profile.read_bytes(), b'previous profile\n')
 
     def test_invalid_resource_arguments_fail_before_launch(self):
-        for flag in ['--audience', '--workers', '--rounds', '--queue-messages']:
+        for flag in ['--audience', '--workers', '--rounds', '--queue-messages', '--publishers']:
             with self.subTest(flag=flag), tempfile.TemporaryDirectory() as temporary:
                 result, marker, output = self.invoke(Path(temporary), [flag, '0'])
                 self.assertEqual(result.returncode, 2, result.stderr)
@@ -95,7 +95,8 @@ class ReceiptTest(unittest.TestCase):
 
     def test_combined_scope_and_byte_budget_are_validated_before_launch(self):
         for extra in [['--room-readers', '-1'], ['--room-readers', '1', '--kind', 'private'],
-                      ['--queue-bytes', '1046']]:
+                      ['--queue-bytes', '1046'], ['--room-readers', '1', '--publishers', '2'],
+                      ['--kind', 'mixed'], ['--payload-bytes', '7'], ['--payload-bytes', '65523']]:
             with self.subTest(extra=extra), tempfile.TemporaryDirectory() as temporary:
                 result, marker, output = self.invoke(Path(temporary), extra)
                 self.assertEqual(result.returncode, 2, result.stderr)

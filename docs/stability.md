@@ -84,6 +84,14 @@ case checks 2,048 room recipients plus 2,048 observers with one output slot and
 a 2 KiB local byte budget. Private-primary submission remains ahead of a refused
 observer snapshot. Two existing asynchronous checks now await worker scratch
 reclamation and batched input-statistic publication before asserting exact totals.
+The [concurrent-publication screen](concurrent-observers.md) adds mixed message
+classes from multiple singleton sources. It checks every source's round value at
+every observer, capture before revocation, immediate re-subscription and every
+retained shutdown receipt. Cross-source order is intentionally unspecified;
+pipelined FIFO remains covered by the existing deterministic tests. A separate
+equal-sized-generation regression checks eligibility, cached absence and view
+release across alternating channel/private jobs. The ignored release barrier
+diagnostic is opt-in and does not run as a normal correctness test.
 
 Known limits include cold recipient-view capture/invalidation,
 distinct captured-view scans during observer revocation and queue-pressure fallback for overlapping channels

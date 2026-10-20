@@ -42,8 +42,14 @@ captures all addressable owners under a registry read lock. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
 Observer barriers also still scan distinct captured views under the membership
-write lock. Measure many concurrent publishers and changing generations before
-choosing a recipient index, cache policy or another synchronization change.
+write lock. The [concurrent-publisher follow-up](concurrent-observers.md) rejected
+a two-entry scan cache: a large component win did not produce a clear native
+eight-worker improvement. Keep its mixed-class fixture and measure aggregate
+worker service time across concurrent publications next. A bounded turn for each
+publication can still add up to a long ready batch before new readiness is
+polled. Profile and compare an aggregate routing allowance or interleaving policy
+before choosing one. Changing captured generations under churn remain a separate
+lock-hold target; do not add a recipient index from the component result alone.
 
 ## Acceptance for each change
 

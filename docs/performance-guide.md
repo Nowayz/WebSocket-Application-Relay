@@ -129,6 +129,13 @@ messages, departures, all process exits and final resource gauges.
   it with `--queue-bytes 2048` checks single-body staging under a tight local
   budget. The [bounded-publication report](observer-publications.md) records the
   implementation, ownership and remaining cold-view/barrier scan costs.
+  `--publishers 8 --kind mixed --payload-bytes 8` overlaps singleton sources
+  alternating channel/private messages while checking every source at every
+  observer. The eight-byte marker keeps the burst small; the default single-source
+  value remains 1 KiB. `--room-readers` requires one channel publisher.
+  See the [concurrent-publication screen](concurrent-observers.md) for capture
+  proof, source-order limits, the manual barrier diagnostic and a rejected cache
+  experiment whose component result did not establish a native eight-worker win.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
   Its isolated `--fanout-global-broadcast` mode checks global publications,

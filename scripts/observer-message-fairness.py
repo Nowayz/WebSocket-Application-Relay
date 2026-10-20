@@ -52,6 +52,14 @@ def command(index, value):
     return b'\x82\x00\x82' + bytes([index]) + value
 
 
+def byte_string_prefix(size):
+    if size < 24:
+        return bytes([0x40 + size])
+    if size < 256:
+        return b'\x58' + size.to_bytes(1, 'big')
+    return b'\x59' + size.to_bytes(2, 'big')
+
+
 class Peer(fixture.Peer):
     def __init__(self, *args):
         self.incoming = self.incoming_bytes = self.values = self.deliveries = 0
@@ -79,6 +87,18 @@ class Peer(fixture.Peer):
         self.send(body)
         self.expect(reply)
 
+    def expect_many(self, packets):
+        if len(packets) == 1:
+            return self.expect(packets[0])
+        remaining = set(packets)
+        assert len(remaining) == len(packets), 'duplicate expected publication'
+        for _ in packets:
+            opcode, body = self.receive()
+            assert opcode == 2 and body in remaining, {
+                'peer': str(self.id), 'opcode': opcode, 'remaining': len(remaining),
+                'received_prefix': body[:48].hex()}
+            remaining.remove(body)
+
     def finish(self):
         self.socket.sendall(wire.frame(0x88, b'\x03\xe8'))
         assert self.receive() == (8, b'\x03\xe8'), 'normal Close changed'
@@ -92,10 +112,11 @@ def run(args):
     while admin == port:
         admin = wire.runtime.free_port()
     retained = args.audience + args.room_readers
-    population = retained + args.workers + 2
+    population = retained + args.workers + args.publishers + 1
     server_command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
                       '--admin-bind', f'127.0.0.1:{admin}', '--workers', str(args.workers),
                       '--max-connections', str(population + 1),
+                      '--max-channels', str(args.publishers + args.workers + 3),
                       '--max-channel-members', str(max(args.audience, args.room_readers + 1)),
                       '--ping-interval-secs', '0', '--idle-timeout-secs', '0',
                       '--messages-per-second', '0', '--bytes-per-second', '0',
@@ -156,8 +177,10 @@ def run(args):
                 peers.append(peer)
                 return peer
 
-            flag = 1 if args.kind == 'channel' else 2
-            source = join(b'om-source')
+            flag = {'channel': 1, 'private': 2, 'mixed': 3}[args.kind]
+            sources = [join(b'om-source' if args.publishers == 1 else f'om-src{i:08x}'.encode())
+                       for i in range(args.publishers)]
+            source = sources[0]
             target = join(b'om-target')
             room_readers = [join(b'om-source') for _ in range(args.room_readers)]
             for _ in range(args.audience):
@@ -220,14 +243,22 @@ def run(args):
                 thread.start()
             assert all(event.wait(2) for event in ready) and not failures, failures
             for sequence in range(args.rounds):
-                value = b'\x59\x04\x00' + sequence.to_bytes(8, 'big') + b'm' * 1016
-                expected = packet(source.id, value)
+                value = (byte_string_prefix(args.payload_bytes) + sequence.to_bytes(8, 'big')
+                         + b'm' * (args.payload_bytes - 8))
+                expected = tuple(packet(sender.id, value) for sender in sources)
+                private = tuple(body for i, body in enumerate(expected)
+                                if args.kind == 'private' or (args.kind == 'mixed' and i % 2))
                 event = {'sequence': sequence, 'sent_ns': time.monotonic_ns()}
-                source.send(packet(2**64 - 1 if args.kind == 'channel' else target.id, value), len(value))
+                for index, sender in enumerate(sources):
+                    is_private = args.kind == 'private' or (args.kind == 'mixed' and index % 2)
+                    sender.send(packet(target.id if is_private else 2**64 - 1, value), len(value))
+                event['all_sent_ns'] = time.monotonic_ns()
                 first_ready = readable.poll(5, 1)
                 assert first_ready and first_ready[0][1] & select.EPOLLIN, first_ready
                 first_reader = readers_by_fd[first_ready[0][0]]
-                first_reader.expect(expected)
+                # Complete receipts from every source prove all publications
+                # were captured before revoking the final observer's flags.
+                first_reader.expect_many(expected)
                 event['first_reader_ns'] = time.monotonic_ns()
                 event['first_reader_id'] = str(first_reader.id)
 
@@ -247,7 +278,7 @@ def run(args):
                 event['revoke_sent_ns'] = time.monotonic_ns()
                 observer.send(command(1, b'\x00'))
                 if observer is not first_reader:
-                    observer.expect(expected)
+                    observer.expect_many(expected)
                 observer.expect(command(1, b'\x00'))
                 event['revoke_ack_ns'] = time.monotonic_ns()
                 # Reenable before draining the captured view. A deferred job
@@ -258,11 +289,11 @@ def run(args):
                 assert not join_thread.is_alive() and not failures, failures
                 for reader in audience:
                     if reader is not first_reader and reader is not observer:
-                        reader.expect(expected)
+                        reader.expect_many(expected)
                 for reader in room_readers:
-                    reader.expect(expected)
-                if args.kind == 'private':
-                    target.expect(expected)
+                    reader.expect_many(expected)
+                if private:
+                    target.expect_many(private)
                 event['all_readers_verified_ns'] = time.monotonic_ns()
                 result['events'].append(event)
             stop.set()
@@ -274,7 +305,7 @@ def run(args):
             result['process_after'] = wire.runtime.snapshot(server.pid)
             result['server_cpu_seconds'] = (result['process_after']['cpu_seconds']
                                             - result['process_before']['cpu_seconds'])
-            for peer in [source, target, *probes]:
+            for peer in [*sources, target, *probes]:
                 peer.finish()
                 if peer is source:
                     for reader in room_readers:
@@ -369,21 +400,32 @@ if __name__ == '__main__':
     parser.add_argument('--audience', type=int, default=2048)
     parser.add_argument('--room-readers', type=int, default=0,
                         help='Additional same-room recipients; channel publications only')
+    parser.add_argument('--publishers', type=int, default=1,
+                        help='Concurrent singleton sources; mixed alternates channel/private publications')
+    parser.add_argument('--payload-bytes', type=int, default=1024,
+                        help='Byte-string content including the eight-byte round marker')
     parser.add_argument('--workers', type=int, default=2)
     parser.add_argument('--rounds', type=int, default=2)
-    parser.add_argument('--kind', choices=['channel', 'private'], default='channel')
+    parser.add_argument('--kind', choices=['channel', 'private', 'mixed'], default='channel')
     parser.add_argument('--server-cpus', default='')
     parser.add_argument('--profile', action='store_true', help='Diagnostic server-only perf capture')
     parser.add_argument('--queue-messages', type=int, help='Explicit per-peer output-slot pressure diagnostic')
     parser.add_argument('--queue-bytes', type=int,
                         help='Explicit local byte budget; includes fixture message and routing headroom')
     arguments = parser.parse_args()
-    if min(arguments.audience, arguments.workers, arguments.rounds) < 1:
-        parser.error('audience, workers and rounds must be positive')
+    if min(arguments.audience, arguments.workers, arguments.rounds, arguments.publishers) < 1:
+        parser.error('audience, workers, rounds and publishers must be positive')
     if arguments.queue_messages is not None and arguments.queue_messages < 1:
         parser.error('queue messages must be positive')
-    if arguments.room_readers < 0 or (arguments.room_readers and arguments.kind != 'channel'):
-        parser.error('room readers must be nonnegative and require channel publications')
-    if arguments.queue_bytes is not None and arguments.queue_bytes < 1047:
-        parser.error('queue bytes must fit the 1037-byte fixture message plus routing headroom')
+    if arguments.room_readers < 0 or (arguments.room_readers and
+            (arguments.kind != 'channel' or arguments.publishers != 1)):
+        parser.error('room readers must be nonnegative and require a single channel publisher')
+    if arguments.kind == 'mixed' and arguments.publishers < 2:
+        parser.error('mixed mode requires at least two publishers')
+    if not 8 <= arguments.payload_bytes <= 65522:
+        parser.error('payload must fit its eight-byte marker and the fixture receive-frame bound')
+    frame_bytes = 10 + len(byte_string_prefix(arguments.payload_bytes)) + arguments.payload_bytes
+    minimum_queue = max(frame_bytes, len(command(0, bytes([0x60 + len(PASSWORD)]) + PASSWORD))) + 10
+    if arguments.queue_bytes is not None and arguments.queue_bytes < minimum_queue:
+        parser.error(f'queue bytes must fit the {frame_bytes}-byte fixture message and routing headroom')
     raise SystemExit(0 if run(arguments) else 1)

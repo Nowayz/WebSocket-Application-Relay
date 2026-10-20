@@ -522,6 +522,83 @@ fn captured_observer_eligibility_survives_id_takeover_and_stale_registration_rem
 }
 
 #[test]
+fn alternating_view_cache_distinguishes_equal_sized_generations_and_cached_absence() {
+    let relay = relay();
+    let sources: Vec<_> = (0..6)
+        .map(|i| peer(&relay, format!("s{i}").as_bytes(), 0))
+        .collect();
+    let (target, _) = peer(&relay, b"target", 0);
+    let (keeper, keeper_output) = peer(&relay, GLOBAL_CHANNEL, 3);
+    let (observer, output) = peer(&relay, GLOBAL_CHANNEL, 0);
+    let mut jobs: Vec<Option<Box<RoomFanout>>> = (0..6).map(|_| None).collect();
+    let mut views = Vec::new();
+    for index in 0..6 {
+        if index == 2 {
+            relay
+                .receive(&keeper.peer, protocol::request(1, b"\x00"))
+                .unwrap();
+            relay
+                .receive(&observer.peer, protocol::request(1, b"\x03"))
+                .unwrap();
+            output.0.lock().clear();
+        }
+        let destination = if index % 2 == 0 {
+            BROADCAST
+        } else {
+            target.peer.id.load(Relaxed)
+        };
+        relay
+            .receive_batch()
+            .receive_bounded(
+                &sources[index].0.peer,
+                protocol::envelope(destination, &protocol::uint(index as u64)),
+                0,
+                &mut jobs[index],
+                0,
+            )
+            .unwrap();
+        views.push(Arc::downgrade(
+            relay.state.read().message_snapshots[index % 2]
+                .get()
+                .unwrap(),
+        ));
+    }
+    relay
+        .receive(&observer.peer, protocol::request(1, b"\x00"))
+        .unwrap();
+    let packets = data(&output);
+    assert_eq!(packets.len(), 4);
+    for (index, packet) in packets.iter().enumerate() {
+        assert_eq!(
+            packet.to_vec(),
+            protocol::envelope(
+                sources[index + 2].0.peer.id.load(Relaxed),
+                &protocol::uint(index as u64 + 2)
+            )
+        );
+    }
+    relay
+        .receive(&observer.peer, protocol::request(1, b"\x03"))
+        .unwrap();
+    for job in &mut jobs {
+        job.as_mut().unwrap().resume(usize::MAX).unwrap();
+    }
+    assert_eq!(
+        data(&output).len(),
+        4,
+        "alternating cached generations replayed a publication"
+    );
+    assert_eq!(data(&keeper_output).len(), 2);
+    assert!(
+        views.iter().all(|view| view.upgrade().is_none()),
+        "lookup cache pinned an old view"
+    );
+    assert!(relay.messages.index.lock().jobs.is_empty());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+}
+
+#[test]
 fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_barrier() {
     struct Gated {
         recorded: Recorded,
@@ -619,5 +696,114 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
     assert_eq!(data(&gated.recorded).len(), 1);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert!(relay.messages.index.lock().jobs.is_empty());
+    relay.begin_shutdown();
+}
+
+// Isolate registry/barrier work from socket scheduling. Run separately from
+// ordinary tests and confirm any retained change with the native event screen.
+#[test]
+#[ignore = "manual release diagnostic; allocates a declared observer population"]
+fn observer_barrier_event_screen() {
+    struct Sink(AtomicUsize);
+    impl PeerOutput for Sink {
+        fn send(&self, _: Submission<'_>) -> bool {
+            self.0.fetch_add(1, Relaxed);
+            true
+        }
+        fn close(&self, _: Disconnect) {}
+    }
+    let setting = |name: &str, fallback| {
+        std::env::var(name).map_or(fallback, |value| {
+            value.parse::<usize>().expect("positive diagnostic setting")
+        })
+    };
+    let audience = setting("BENCH_OBSERVERS", 100_000);
+    let publishers = setting("BENCH_PUBLISHERS", 64);
+    let rounds = setting("BENCH_ROUNDS", 12);
+    assert!(audience > 0 && publishers > 0 && rounds > 0);
+    let relay = Relay::new(Config {
+        auth_password: Some("messages".into()),
+        max_connections: audience + publishers + 1,
+        max_channel_members: audience,
+        ..Config::default()
+    })
+    .unwrap();
+    let sink = Arc::new(Sink(AtomicUsize::new(0)));
+    let sources: Vec<_> = (0..publishers)
+        .map(|i| {
+            relay
+                .subscribe_with_output(format!("p{i:08x}").as_bytes(), sink.clone())
+                .unwrap()
+        })
+        .collect();
+    let target = relay
+        .subscribe_with_output(b"target", sink.clone())
+        .unwrap();
+    let observers: Vec<_> = (0..audience)
+        .map(|_| {
+            let peer = relay
+                .subscribe_with_output(GLOBAL_CHANNEL, sink.clone())
+                .unwrap();
+            relay
+                .receive(
+                    &peer.peer,
+                    protocol::request(0, &protocol::text("messages")),
+                )
+                .unwrap();
+            relay
+                .receive(&peer.peer, protocol::request(1, b"\x03"))
+                .unwrap();
+            peer
+        })
+        .collect();
+    let observer = &observers.last().unwrap().peer;
+    let mut jobs: Vec<Option<Box<RoomFanout>>> = (0..publishers).map(|_| None).collect();
+    let mut samples = Vec::with_capacity(rounds);
+    for round in 0..rounds {
+        let started = std::time::Instant::now();
+        for (index, (source, job)) in sources.iter().zip(&mut jobs).enumerate() {
+            let destination = if index % 2 == 0 {
+                BROADCAST
+            } else {
+                target.peer.id.load(Relaxed)
+            };
+            relay
+                .receive_batch()
+                .receive_bounded(
+                    &source.peer,
+                    protocol::envelope(destination, &protocol::uint(round as u64)),
+                    0,
+                    job,
+                    0,
+                )
+                .unwrap();
+        }
+        assert_eq!(relay.messages.index.lock().jobs.len(), publishers);
+        let prepared = started.elapsed();
+        sink.0.store(0, Relaxed);
+        let barrier = std::time::Instant::now();
+        relay
+            .receive(observer, protocol::request(1, b"\x00"))
+            .unwrap();
+        let revoked = barrier.elapsed();
+        assert_eq!(
+            sink.0.load(Relaxed),
+            publishers + 1,
+            "barrier delivered outside the requesting observer"
+        );
+        for job in &mut jobs {
+            job.as_mut().unwrap().clear();
+        }
+        relay
+            .receive(observer, protocol::request(1, b"\x03"))
+            .unwrap();
+        assert!(relay.messages.index.lock().jobs.is_empty());
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        samples.push(serde_json::json!({"prepare_ns":prepared.as_nanos(),"revoke_ns":revoked.as_nanos(),"whole_ns":started.elapsed().as_nanos()}));
+    }
+    println!(
+        "observer_barrier_event_screen={}",
+        serde_json::json!({"audience":audience,"publishers":publishers,"rounds":rounds,"samples":samples,"scope":"Release in-process routing/control/cancellation diagnostic; no native socket I/O"})
+    );
     relay.begin_shutdown();
 }

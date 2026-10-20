@@ -37,6 +37,7 @@ jobs:
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --kind channel --output artifacts/observer-channel-message-ci.json
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --queue-messages 1 --kind private --output artifacts/observer-private-message-ci.json
       - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --room-readers 2048 --queue-messages 1 --queue-bytes 2048 --kind channel --output artifacts/observer-combined-message-ci.json
+      - run: python3 scripts/observer-message-fairness.py --server target/debug/war-relay --workers 2 --audience 2048 --publishers 8 --payload-bytes 8 --kind mixed --output artifacts/observer-concurrent-message-ci.json
       - run: python3 scripts/shutdown-capacity.py --server target/debug/war-relay --workers 2 --users 2048 --prime-broadcast --output artifacts/shutdown-warm-ci.json
       - run: python3 scripts/retirement-fallback.py --server target/debug/war-relay --workers 2 --audience 2048 --output artifacts/retirement-fallback-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json

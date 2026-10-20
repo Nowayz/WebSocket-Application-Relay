@@ -47,7 +47,9 @@ discards the current observer views before bulk retirement.
 Cold view construction and invalidation remain linear in membership. Revocation
 still scans distinct or alternating captured views under the membership write lock.
 Many active publishers and frequent membership changes therefore remain a
-focused measurement target. This change does not promise zero allocation,
+focused measurement target. The [concurrent-publisher follow-up](concurrent-observers.md)
+adds the native mixed-class fixture and records a rejected scan-cache experiment.
+This change does not promise zero allocation,
 zero kernel copying, lossless fanout under exhausted budgets or an unconditional
 100,000-user latency guarantee.
 
