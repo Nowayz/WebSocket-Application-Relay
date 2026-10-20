@@ -13,6 +13,24 @@ shows the native route. Use exact browser Origins with `WAR_ALLOWED_ORIGINS`.
 Absent Origin remains allowed for native clients; Origin checking is separate
 from relay authentication and application authorization.
 
+Accepted relay and management connections use `TCP_NODELAY` to disable Nagle.
+The relay does not use `TCP_CORK`, `MSG_MORE` or a timed output batching window.
+Private output attempts a socket write immediately; fanout wakes the owning
+workers immediately and combines only output already queued. Bounded worker
+quanta preserve FIFO and give other ready users a turn without a batching timer.
+TCP flow/congestion control and the peer's receive window still govern progress.
+Browser WebSocket implementations and TLS ingress own their separate socket
+settings. Linux `TCP_QUICKACK` controls local ACK behavior temporarily, not the
+peer's ACK policy or a permanent transmit delay switch; it is not reapplied on
+every read. See [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html).
+
+Linux also has a separate `net.ipv4.tcp_autocorking` policy, which coalesces small
+writes while an earlier packet is still in the device/qdisc queue. On a dedicated
+relay host or network namespace, `sysctl -w net.ipv4.tcp_autocorking=0` disables
+that policy. This is a privileged, namespace-wide setting rather than a socket
+option; the relay does not change shared-host sysctls at startup. See the
+[kernel reference](https://www.kernel.org/doc/html/latest/networking/ip-sysctl.html).
+
 Health and readiness are `/healthz` and `/readyz`. Management provides `/metrics`,
 `GET /v1/channels?limit=...&after=...`, `POST /v1/drain`, `POST /v1/resume` and
 `POST /v1/sessions/{id}/disconnect`. Use decimal uint64 IDs without JavaScript

@@ -39,6 +39,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use axum::serve::ListenerExt;
 use bytes::Bytes;
 use mio::{Events, Interest, Poll, Registry, Token, net::TcpListener};
 use slab::Slab;
@@ -162,6 +163,11 @@ pub async fn serve(
     if let Some(admin) = admin {
         let stop = admin_stop.clone();
         let router = admin_router(relay.clone());
+        let admin = admin.tap_io(|stream| {
+            if let Err(error) = stream.set_nodelay(true) {
+                tracing::warn!(%error, "cannot disable Nagle on management connection");
+            }
+        });
         tasks.spawn(async move {
             axum::serve(admin, router)
                 .with_graceful_shutdown(stop.cancelled_owned())
@@ -400,6 +406,8 @@ impl Worker {
                 };
                 guard.1 = Some(permit);
             }
+            // Latency policy applies before HTTP upgrade and every data write.
+            // Do not wait for a full segment or an earlier segment's ACK.
             if let Err(error) = stream.set_nodelay(true) {
                 return self.setup_failed(error, "TCP_NODELAY");
             }

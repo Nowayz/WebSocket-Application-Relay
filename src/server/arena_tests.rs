@@ -2,6 +2,29 @@ use super::*;
 use std::io::Read;
 use tungstenite::protocol::Role;
 
+#[test]
+fn accepted_tcp_sockets_disable_nagle() {
+    for (send, receive) in [(0, 0), (65536, 65536)] {
+        let relay = Relay::new(crate::Config {
+            tcp_send_buffer_bytes: send,
+            tcp_receive_buffer_bytes: receive,
+            ..crate::Config::default()
+        })
+        .unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let mut worker = Worker::new(listener, relay).unwrap();
+        let _client = std::net::TcpStream::connect(address).unwrap();
+        worker.accept().unwrap();
+        assert_eq!(worker.connections.len(), 1);
+        let state = worker.connections[0].socket.state.lock();
+        assert!(state.stream.nodelay().unwrap());
+        #[cfg(target_os = "linux")]
+        assert!(!socket2::SockRef::from(&state.stream).tcp_cork().unwrap());
+    }
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn accepted_tcp_sockets_apply_both_kernel_buffer_requests() {

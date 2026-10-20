@@ -26,8 +26,12 @@ environment and requires large-body reuse, zero resources and normal shutdown.
 The real browser check includes both 128 KiB and 5 MiB values.
 
 The 100,000-user profile's former 16 KiB send-buffer request caused a large
-transfer stall on the test host. Using the same release executable, four workers
-on CPUs 0–3 and the same Node client on CPUs 8–15:
+transfer stall on the test host. Nagle was already disabled (`TCP_NODELAY=true`)
+in all of these runs. The relay
+does not cork application output or wait on an output batching timer. The exact
+kernel interaction behind the small-buffer slowdown has not been packet-traced.
+Using the same release executable, four workers on CPUs 0–3 and the same Node
+client on CPUs 8–15:
 
 | Requested send / receive buffer | Whole 5 MiB private-plus-room check |
 | --- | --- |
