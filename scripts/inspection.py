@@ -5,6 +5,7 @@ Build --release --bins --example inspection first. Phases are gated to separate
 population setup/teardown from the mixed workload. Profiles are diagnostic only.
 """
 import argparse
+import csv
 import datetime
 import errno
 import hashlib
@@ -120,6 +121,9 @@ def _stop_perf(perf):
 
 
 def run(args):
+    latency_output = getattr(args, "fanout_latency_output", None)
+    if latency_output is not None and os.path.lexists(latency_output):
+        raise FileExistsError(errno.EEXIST, "latency output already exists", str(latency_output))
     profile = args.output.with_suffix(".perf.data") if args.profile else None
     if profile is not None and os.path.lexists(profile):
         raise FileExistsError(errno.EEXIST, "profile output already exists", str(profile))
@@ -140,6 +144,11 @@ def run(args):
                                   HEAP_PROFILE_INUSE_INTERVAL=str(100 * 1024**3))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
                       "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
+    if getattr(args, "fanout_global_broadcast", False):
+        server_command += ["--max-connections", str(args.fanout_readers + 2),
+                           "--max-channels", str(args.fanout_readers + 2),
+                           "--max-channel-members", "1", "--idle-timeout-secs", "0",
+                           "--tcp-send-buffer-bytes", "16384", "--tcp-receive-buffer-bytes", "65536"]
     if getattr(args, "pin_workers", False):
         server_command.append("--pin-workers")
     command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}", "--admin", f"127.0.0.1:{admin}",
@@ -158,6 +167,12 @@ def run(args):
         command += ["--fanout-readers", str(args.fanout_readers)]
     if getattr(args, "fanout_global_observers", False):
         command += ["--fanout-global-observers"]
+    if getattr(args, "fanout_global_broadcast", False):
+        command += ["--fanout-global-broadcast"]
+    if getattr(args, "fanout_windows_per_second", 0):
+        command += ["--fanout-windows-per-second", str(args.fanout_windows_per_second)]
+    if getattr(args, "fanout_latency_output", None):
+        command += ["--fanout-latency-output", str(args.fanout_latency_output)]
     if getattr(args, "fanout_churn_every", 0):
         command += ["--fanout-churn-every", str(args.fanout_churn_every)]
     if getattr(args, "fanout_window", 16) != 16:
@@ -257,6 +272,17 @@ def run(args):
                     assert (mixed["inspection"]["verified"] > 0) == (args.mode != "none" and args.inspectors > 0)
                     assert (mixed.get("fanout", {}).get("verified", 0) > 0) == (args.fanout_readers > 0)
                     assert (mixed.get("fanout_membership", {}).get("verified", 0) > 0) == (getattr(args, "fanout_churn_every", 0) > 0)
+                    if getattr(args, "fanout_global_broadcast", False):
+                        offered = args.seconds * args.fanout_windows_per_second
+                        assert mixed["fanout"]["verified"] == offered * args.fanout_readers * args.fanout_window
+                        assert mixed["global_join_probe"]["verified"] == offered
+                        result["fanout_windows"] = {"offered": offered, "completed": offered}
+                        if args.fanout_latency_output:
+                            with args.fanout_latency_output.open() as source:
+                                rows = list(csv.DictReader(source))
+                            assert len(rows) == args.fanout_readers and len({row["id"] for row in rows}) == args.fanout_readers
+                            assert all(int(row["samples"]) == offered * args.fanout_window for row in rows)
+                            result["fanout_csv_sha256"] = digest(args.fanout_latency_output)
                     result["mixed"] = mixed
                     print(json.dumps(mixed), flush=True)
                 elif event["event"] == "done":
@@ -339,6 +365,10 @@ if __name__ == "__main__":
                         help="Add a verified broadcast room; requires the updated client")
     parser.add_argument("--fanout-global-observers", action="store_true",
                         help="Use authenticated global channel-message observers as fanout readers")
+    parser.add_argument("--fanout-global-broadcast", action="store_true",
+                        help="Isolated global-broadcast readers with independent join probes")
+    parser.add_argument("--fanout-windows-per-second", type=int, default=0)
+    parser.add_argument("--fanout-latency-output", type=Path)
     parser.add_argument("--fanout-churn-every", type=int, default=0,
                         help="Join/retire a verifying room member every N fanout windows; zero disables")
     parser.add_argument("--fanout-window", type=int, default=16,
@@ -363,6 +393,13 @@ if __name__ == "__main__":
         parser.error("--private-payload-bytes must be at least 8 for the sequence marker")
     if arguments.pin_client_workers and arguments.client_workers is None:
         parser.error("--pin-client-workers requires --client-workers")
+    if arguments.fanout_latency_output is not None:
+        paths = [arguments.output.resolve(), arguments.fanout_latency_output.resolve()]
+        if arguments.profile:
+            paths.append(arguments.output.with_suffix(".perf.data").resolve())
+        if any(a == b or a in b.parents or b in a.parents
+               for index, a in enumerate(paths) for b in paths[index + 1:]):
+            parser.error("output paths overlap; choose separate artifact paths")
     try:
         outcome = run(arguments)
     except FileExistsError as error:

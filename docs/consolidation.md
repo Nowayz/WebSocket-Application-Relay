@@ -60,3 +60,5 @@ load, CPU and retained memory. Adopt the change only if those results justify it
 while retaining per-recipient FIFO and bounded work/storage. The ongoing goal is
 consistently responsive operation at 100,000 concurrent users with an understandable
 Rust/CBOR implementation; this cleanup does not complete that performance work.
+The [current roadmap](roadmap.md) carries this goal forward after the observer
+barrier and global-broadcast scheduling changes.

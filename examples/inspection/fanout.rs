@@ -10,6 +10,11 @@ pub(super) struct Fanout {
     readers: Vec<(Socket, u64)>,
     packets: Arc<Vec<(Bytes, Bytes)>>,
     global_observers: bool,
+    global_broadcast: bool,
+}
+
+pub(super) fn global_reader_name(index: usize) -> Bytes {
+    Bytes::from(format!("global{index:08x}"))
 }
 
 // Optional diagnostics only: one preallocated row per paced window, never per delivery.
@@ -228,9 +233,16 @@ mod tests {
             std::future::pending::<Result<()>>().await
         });
         let mut counts = Counts::default();
-        let group = Fanout::new(&url, 2, ValueKind::Bytes, global_observers, &mut counts)
-            .await
-            .unwrap();
+        let group = Fanout::new(
+            &url,
+            2,
+            ValueKind::Bytes,
+            global_observers,
+            false,
+            &mut counts,
+        )
+        .await
+        .unwrap();
         let error = timeout(
             Duration::from_secs(2),
             group.run(
@@ -263,18 +275,33 @@ impl Fanout {
         readers: usize,
         value_kind: ValueKind,
         global_observers: bool,
+        global_broadcast: bool,
         counts: &mut Counts,
     ) -> Result<Self> {
         let name = Bytes::from_static(b"fanout");
-        let (sender, id) = join(url, &name, counts).await?;
+        let sender_name = if global_broadcast {
+            Bytes::from_static(protocol::GLOBAL_CHANNEL)
+        } else {
+            name.clone()
+        };
+        let (mut sender, id) = join(url, &sender_name, counts).await?;
+        if global_broadcast {
+            authenticate(&mut sender, counts).await?;
+        }
         let mut peers = Vec::with_capacity(readers);
-        for _ in 0..readers {
-            let reader_name = if global_observers {
+        for index in 0..readers {
+            let reader_name = if global_broadcast {
+                global_reader_name(index)
+            } else if global_observers {
                 Bytes::from_static(protocol::GLOBAL_CHANNEL)
             } else {
                 name.clone()
             };
-            let (mut socket, id) = join(url, &reader_name, counts).await?;
+            let (mut socket, id) = if global_broadcast {
+                join_bound(url, &reader_name, counts, index).await?
+            } else {
+                join(url, &reader_name, counts).await?
+            };
             if global_observers {
                 authenticate(&mut socket, counts).await?;
                 ensure!(
@@ -307,6 +334,7 @@ impl Fanout {
             readers: peers,
             packets: Arc::new(packets),
             global_observers,
+            global_broadcast,
         })
     }
 
@@ -328,6 +356,7 @@ impl Fanout {
             readers,
             packets,
             global_observers,
+            global_broadcast,
         } = self;
         ensure!(
             latency_output.is_none() || windows_per_second != 0,
@@ -393,6 +422,7 @@ impl Fanout {
             });
         }
         drop(initial);
+        let replay = global_broadcast.then(|| ack.clone());
         drop(ack);
         let mut counts = Counts::default();
         let mut sequence = 0usize;
@@ -443,6 +473,29 @@ impl Fanout {
             } else {
                 wake
             };
+            if let Some(replay) = &replay {
+                // A reader proves capture precedes this independent join.
+                let first = timeout(Duration::from_secs(5), acks.recv())
+                    .await?
+                    .context("missing first global reader")?;
+                ensure!(first < readers_len, "invalid first global acknowledgement");
+                replay
+                    .send(first)
+                    .await
+                    .context("global acknowledgement replay stopped")?;
+                let joined_at = Instant::now();
+                let (mut probe, id) =
+                    join(&url, &Bytes::from_static(b"global-probe"), &mut counts).await?;
+                let value = b"\xf5";
+                let expected = protocol::envelope(id, value);
+                counts.value_bytes += value.len() as u64;
+                ensure!(
+                    exchange(&mut probe, expected.clone(), &mut counts).await? == expected,
+                    "late global join received an old broadcast or changed echo"
+                );
+                close(&mut probe, &mut counts).await?;
+                membership.record(joined_at.elapsed());
+            }
             acknowledge(&mut acks, &mut jobs, &mut seen, &mut ready).await?;
             let acknowledged = if controller_timing.is_some() {
                 Instant::now()
@@ -513,14 +566,24 @@ impl Fanout {
         if let Some(out) = &mut exact_output {
             out.flush()?;
         }
+        let broadcast_messages = iteration as u64 * window as u64;
         ensure!(
-            stats.n == counts.sent_messages * readers_len as u64,
+            counts.sent_messages
+                == broadcast_messages + if global_broadcast { membership.n } else { 0 }
+                && stats.n == broadcast_messages * readers_len as u64,
             "incomplete fanout delivery matrix"
         );
         ensure!(
             counts.joins == membership.n
                 && counts.normal_closes == membership.n
-                && counts.deliveries == stats.n + membership.n * (readers_len + window + 2) as u64,
+                && counts.deliveries
+                    == stats.n
+                        + membership.n
+                            * if global_broadcast {
+                                2
+                            } else {
+                                (readers_len + window + 2) as u64
+                            },
             "incomplete fanout membership delivery matrix"
         );
         Ok((
@@ -529,6 +592,7 @@ impl Fanout {
                 readers,
                 packets,
                 global_observers,
+                global_broadcast,
             },
             counts,
             stats,
@@ -538,6 +602,14 @@ impl Fanout {
     }
 
     pub(super) async fn close(mut self, counts: &mut Counts, window: usize) -> Result<()> {
+        if self.global_broadcast {
+            // Isolated reader rooms produce no cross-reader departures.
+            // Keep teardown linear rather than manufacturing an N-squared storm.
+            for (mut socket, _) in self.readers {
+                close(&mut socket, counts).await?;
+            }
+            return close(&mut self.sender, counts).await;
+        }
         // Close a bounded batch, draining earlier departures before closing its
         // next member. Survivors then verify the exact same ordered sequence.
         // This amortizes receive syscalls for large audiences without discarding

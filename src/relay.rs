@@ -142,6 +142,9 @@ impl Drop for ReceiveBatch<'_> {
 
 struct Registry {
     users: HashMap<u64, Arc<Peer>>,
+    // Addressable ID owners at publication. Membership/ownership changes
+    // invalidate the routing index; captured fanouts keep their own view.
+    global_broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
     channels: HashMap<Bytes, Channel>,
     // Only authenticated global members opting into each class belong here.
     // Routing visits eligible listeners, independent of the idle population.
@@ -414,6 +417,9 @@ impl RoomFanout {
         self.deadline
     }
     pub(crate) fn clear(&mut self) {
+        // Captured views can be the final owners after index invalidation.
+        // Drop their storage before returning the corresponding queue credit.
+        self.recipients = None;
         if self.snapshot_bytes != 0 {
             self.packet
                 .as_ref()
@@ -425,7 +431,6 @@ impl RoomFanout {
             self.snapshot_bytes = 0;
         }
         self.packet = None;
-        self.recipients = None;
         self.deadline = None;
     }
 
@@ -774,6 +779,7 @@ impl Relay {
             retirement_pending: AtomicBool::new(false),
             state: RwLock::new(Registry {
                 users: HashMap::new(),
+                global_broadcast: OnceLock::new(),
                 channels,
                 listeners: Default::default(),
                 disconnect_snapshot: Weak::new(),
@@ -825,6 +831,7 @@ impl Relay {
             let mut state = self.state.write();
             state.listeners = Default::default();
             state.disconnect_snapshot = Weak::new();
+            state.global_broadcast.take();
         }
         let mut pending = self.retirements.lock();
         pending.jobs.clear();
@@ -952,6 +959,7 @@ impl Relay {
         });
         // Publish only after the welcome packet is first in this session's FIFO.
         peer.enqueue_frame(&Frame::integer(id))?;
+        state.global_broadcast.take();
         state.users.insert(id, peer.clone());
         let channel = state.channels.entry(peer.channel.clone()).or_default();
         channel.insert(peer.clone());
@@ -1047,6 +1055,14 @@ impl Relay {
             drop(state);
             return recipient.enqueue_frame(&frame).map(|_| 1);
         }
+        if target == BROADCAST && peer.channel.as_ref() == GLOBAL_CHANNEL {
+            let recipients = state
+                .global_broadcast
+                .get_or_init(|| Arc::new(state.users.values().cloned().collect()))
+                .clone();
+            drop(state);
+            return room(peer, recipients, frame);
+        }
         if target == BROADCAST
             && peer.channel.as_ref() != GLOBAL_CHANNEL
             && state.listeners(CHANNEL_MESSAGE).is_empty()
@@ -1066,36 +1082,24 @@ impl Relay {
         // source's FIFO; the connection yields before its next buffered frame.
         // Counts conservatively include the sender or duplicate primary target.
         let work = if target == BROADCAST {
-            if peer.channel.as_ref() == GLOBAL_CHANNEL {
-                state.users.len()
-            } else {
-                state
-                    .channels
-                    .get(&peer.channel)
-                    .map_or(0, |c| c.members.len())
-                    .saturating_add(state.listeners(CHANNEL_MESSAGE).len())
-            }
+            state
+                .channels
+                .get(&peer.channel)
+                .map_or(0, |c| c.members.len())
+                .saturating_add(state.listeners(CHANNEL_MESSAGE).len())
         } else {
             state.listeners(PRIVATE_MESSAGE).len().saturating_add(1)
         };
         if target == BROADCAST {
-            if peer.channel.as_ref() == GLOBAL_CHANNEL {
-                for recipient in state.users.values() {
+            if let Some(channel) = state.channels.get(&peer.channel) {
+                for recipient in channel.members.values() {
                     if recipient.key != peer.key {
                         recipient.enqueue_fanout(&frame)?;
                     }
                 }
-            } else {
-                if let Some(channel) = state.channels.get(&peer.channel) {
-                    for recipient in channel.members.values() {
-                        if recipient.key != peer.key {
-                            recipient.enqueue_fanout(&frame)?;
-                        }
-                    }
-                }
-                for recipient in state.listeners(CHANNEL_MESSAGE) {
-                    recipient.enqueue_fanout(&frame)?;
-                }
+            }
+            for recipient in state.listeners(CHANNEL_MESSAGE) {
+                recipient.enqueue_fanout(&frame)?;
             }
         } else if let Some(recipient) = private_recipient {
             recipient.enqueue_fanout(&frame)?;
@@ -1197,6 +1201,7 @@ impl Relay {
                     return Ok(());
                 }
                 if old != id {
+                    state.global_broadcast.take();
                     let owner = state.users.remove(&old).ok_or(Disconnect::PROTOCOL)?;
                     if let Some(previous) = state.users.insert(id, owner) {
                         previous.close(Disconnect::TAKEN);
@@ -1463,6 +1468,7 @@ impl Relay {
             .get(&id)
             .is_some_and(|owner| owner.key == peer.key)
         {
+            state.global_broadcast.take();
             state.users.remove(&id);
             shrink_sparse_map(&mut state.users);
         }

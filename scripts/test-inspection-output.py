@@ -11,6 +11,39 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReceiptTest(unittest.TestCase):
+    def test_inspection_latency_evidence_blocks_launch(self):
+        for symlink in [False, True]:
+            with self.subTest(symlink=symlink), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                output = directory / 'receipt.json'
+                latency = directory / 'users.csv'
+                if symlink:
+                    latency.symlink_to(directory / 'missing.csv')
+                else:
+                    latency.write_text('previous evidence\n')
+                result, marker = self.invoke(directory, output,
+                                             extra=['--fanout-latency-output', str(latency)])
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(str(latency), result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
+                if symlink:
+                    self.assertTrue(latency.is_symlink())
+                else:
+                    self.assertEqual(latency.read_text(), 'previous evidence\n')
+
+    def test_inspection_latency_paths_cannot_overlap_receipts(self):
+        for name in ['receipt.json', 'receipt.json/users.csv', '.']:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                output = directory / 'receipt.json'
+                result, marker = self.invoke(directory, output,
+                    extra=['--fanout-latency-output', str(directory / name)])
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('output paths overlap', result.stderr)
+                self.assertFalse(marker.exists())
+                self.assertFalse(output.exists())
+
     def invoke(self, directory, output, profile=False, runner="inspection.py", extra=()):
         marker = directory / 'server-started'
         server = directory / 'server'

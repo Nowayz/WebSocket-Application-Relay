@@ -75,8 +75,9 @@ can import `Relay` from the generated `relay.js` ES module.
   timers. Idle sockets need no task, message channel or private receive slab.
   Tokio handles management and process signals.
 - [Routing](src/relay.rs): a registry read/write lock protects membership and
-  ID ownership. Ordinary large-room work retains immutable recipient views and
-  advances in bounded turns outside the registry lock.
+  ID ownership. Ordinary rooms without channel observers and global broadcasts
+  retain immutable recipient views and advance in bounded turns outside the
+  registry lock. Channel/private observer message fanout remains synchronous.
 - [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
   multicast uses recipient-owner output and bounded vectored batches. Each socket
   serializes output so partial writes, commands and control frames retain order.
@@ -110,6 +111,8 @@ npm run build:browser --prefix clients/js
 [stability checks](docs/stability.md) describe the contracts and measurement limits.
 The [consolidation record](docs/consolidation.md) lists this migration's local
 acceptance checks and the next performance milestone.
+The [roadmap](docs/roadmap.md) defines the Rust/CBOR product boundary and the
+next latency and operational acceptance work.
 
 Disconnect-listener revocation submits only the affected observer's pending
 notices before its acknowledgment. Other recipients retain their bounded turns;
@@ -125,6 +128,9 @@ Unrelated rooms retain their bounded turns, including under source-local pressur
 Native workers give deferred departures [shorter 128-recipient turns](docs/retirement-turns.md)
 to reduce Close/control stalls while keeping live fanout at 1,024 recipients.
 Native departures above that 128-recipient budget normally defer at publication.
+Global broadcasts now use the same bounded live-fanout continuation; the
+[global broadcast report](docs/global-broadcasts.md) records short 100,000-reader
+checks and the remaining cold-view and observer-path limits.
 
 ## Provenance
 

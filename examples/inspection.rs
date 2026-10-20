@@ -128,6 +128,9 @@ struct Args {
     /// Subscribe fanout readers as authenticated global channel-message observers.
     #[arg(long)]
     fanout_global_observers: bool,
+    /// Benchmark global broadcasts with isolated readers and mid-broadcast join probes.
+    #[arg(long)]
+    fanout_global_broadcast: bool,
     /// Join and retire a verifying reader every N broadcast windows; zero disables.
     #[arg(long, default_value_t = 0)]
     fanout_churn_every: usize,
@@ -409,7 +412,7 @@ async fn data(socket: &mut Socket) -> Result<Bytes> {
     }
 }
 async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
-    let (mut socket, _) = timeout(
+    let (socket, _) = timeout(
         Duration::from_secs(5),
         connect_async_with_config(
             url,
@@ -418,6 +421,43 @@ async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u
         ),
     )
     .await??;
+    joined(socket, name, counts).await
+}
+
+async fn join_bound(
+    url: &str,
+    name: &Bytes,
+    counts: &mut Counts,
+    index: usize,
+) -> Result<(Socket, u64)> {
+    let uri: tokio_tungstenite::tungstenite::http::Uri = url.parse()?;
+    ensure!(
+        uri.scheme_str() == Some("ws") && uri.host() == Some("127.0.0.1"),
+        "bound global fixture requires loopback ws"
+    );
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    let address = std::net::Ipv4Addr::new(127, 0, (index / 12000).try_into()?, 2);
+    socket.bind((address, 0).into())?;
+    let stream = socket
+        .connect(
+            (
+                std::net::Ipv4Addr::LOCALHOST,
+                uri.port_u16().context("missing port")?,
+            )
+                .into(),
+        )
+        .await?;
+    stream.set_nodelay(true)?;
+    let (socket, _) = tokio_tungstenite::client_async_with_config(
+        url,
+        MaybeTlsStream::Plain(stream),
+        Some(WebSocketConfig::default().read_buffer_size(4096)),
+    )
+    .await?;
+    joined(socket, name, counts).await
+}
+
+async fn joined(mut socket: Socket, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
     socket
         .send(Message::Binary(protocol::byte_string(name)))
         .await?;
@@ -692,6 +732,21 @@ async fn run(args: Args) -> Result<()> {
         "global observers require CBOR fanout readers without fanout membership churn"
     );
     ensure!(
+        !args.fanout_global_broadcast
+            || (args.fanout_readers > 0
+                && !args.fanout_global_observers
+                && args.fanout_churn_every == 0
+                && args.pairs == 0
+                && args.rooms == 0
+                && args.churn_workers == 0
+                && args.mode == Mode::None
+                && args.inspectors == 0
+                && !args.protocol_only
+                && args.fanout_windows_per_second > 0
+                && args.external_capacity_rooms == 0),
+        "global broadcast fixture requires isolated readers, no other workloads and HTTP gates"
+    );
+    ensure!(
         args.page_size
             .is_none_or(|limit| (1..=1000).contains(&limit) && args.mode == Mode::Http),
         "bounded pages require HTTP/CBOR and a limit in 1..=1000"
@@ -786,25 +841,38 @@ async fn run(args: Args) -> Result<()> {
             args.fanout_readers,
             args.value_kind,
             args.fanout_global_observers,
+            args.fanout_global_broadcast,
             &mut counts,
         )
         .await?;
-        stable.push((
-            Bytes::from_static(b"fanout"),
+        if args.fanout_global_broadcast {
+            stable[0].1 += 1;
+            stable.extend(
+                (0..args.fanout_readers).map(|index| (fanout::global_reader_name(index), 1)),
+            );
+        } else {
+            stable.push((
+                Bytes::from_static(b"fanout"),
+                if args.fanout_global_observers {
+                    1
+                } else {
+                    args.fanout_readers as u64 + 1
+                },
+            ));
             if args.fanout_global_observers {
-                1
-            } else {
-                args.fanout_readers as u64 + 1
-            },
-        ));
-        if args.fanout_global_observers {
-            stable[0].1 += args.fanout_readers as u64;
+                stable[0].1 += args.fanout_readers as u64;
+            }
         }
         Some(group)
     } else {
         None
     };
-    let expected = Arc::new(Expected::new(&stable, args.churn_workers, args.page_size));
+    let gate_page_size = if args.fanout_global_broadcast {
+        Some(1000)
+    } else {
+        args.page_size
+    };
+    let expected = Arc::new(Expected::new(&stable, args.churn_workers, gate_page_size));
     let mut buffer = Vec::with_capacity(1024 * 1024);
     let mut inspections_verified = 0u64;
     if let Some(socket) = &mut probe {
@@ -904,7 +972,7 @@ async fn run(args: Args) -> Result<()> {
     let elapsed = started.elapsed().as_secs_f64();
     gate(
         "measured",
-        serde_json::json!({"value_kind":args.value_kind,"private_payload_bytes":args.private_payload_bytes,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":fanout_membership_stats.report(elapsed),"fanout_controller_timing":fanout_controller_timing}),
+        serde_json::json!({"value_kind":args.value_kind,"private_payload_bytes":args.private_payload_bytes,"elapsed_seconds":elapsed,"counts":counts,"healthy":healthy_stats.report(elapsed),"churn":churn_stats.report(elapsed),"churn_lifecycles_per_worker":churn_lifecycles,"inspection":inspection_stats.report(elapsed),"fanout":fanout_stats.report(elapsed),"fanout_membership":if args.fanout_global_broadcast {Histogram::new().report(elapsed)} else {fanout_membership_stats.report(elapsed)},"global_join_probe":if args.fanout_global_broadcast {Some(fanout_membership_stats.report(elapsed))} else {None},"fanout_controller_timing":fanout_controller_timing}),
     )?;
     if let Some(socket) = &mut probe {
         let bytes = exchange(socket, protocol::request(2, b"\xf6"), &mut counts).await?;

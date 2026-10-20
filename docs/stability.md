@@ -61,7 +61,14 @@ departures. The native fixture forces that local-budget condition with a blocked
 partial echo, then verifies the healthy notice matrix and every audience Close/EOF.
 It requires exactly one cancelled write for the administratively removed source.
 
-Known limits include synchronous queue-pressure fallback for overlapping channels
+Global-broadcast checks cover captured owner-view reuse and invalidation, late
+joins, ID takeover, stale-session removal, bounded native turns, cross-turn FIFO,
+cancellation and storage retirement before credit return. The native global
+fixture verifies independent join/echo/Close probes after publication, paginated
+membership gates, exact per-reader delivery coverage and final resource totals.
+
+Known limits include cold global-view capture/invalidation, synchronous
+channel/private observer message fanout, queue-pressure fallback for overlapping channels
 and pending global-view scans during observer revocation. Faults and failed gates
 belong in the evidence. Source and
 client digests, commands, affinity, measurement windows and cleanup semantics

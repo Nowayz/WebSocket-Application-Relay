@@ -10,7 +10,8 @@ conflict with consistently responsive users.
 
 Mio workers own decoding and timers. Private sends retain their immediate
 borrowed path. Multicast output uses shared bodies and bounded owner-worker
-vectored writes. Ordinary large rooms advance by 1,024 recipient visits per turn;
+vectored writes. Ordinary large rooms without channel observers and global
+broadcasts advance by 1,024 recipient visits per turn;
 native deferred departures use 128 visits to keep the shared publication mutex
 and worker turns short. Native departure publication uses that same 128-recipient
 cutoff; the [cutoff follow-up](retirement-turns.md#deferral-cutoff-follow-up)
@@ -120,6 +121,10 @@ messages, departures, all process exits and final resource gauges.
   message counts. Successful delivery at that limit is the acceptance check.
 - `scripts/inspection.py` measures CBOR command or HTTP inspection during checked
   private traffic, room multicast and churn. It has no alternate wire format.
+  Its isolated `--fanout-global-broadcast` mode checks global publications,
+  independent join/echo/Close responsiveness, every reader and exact cleanup.
+  See [the global broadcast report](global-broadcasts.md) for the short recipe,
+  measured scheduling benefit and cold-view/observer limitations.
 - `scripts/stability.py`, `scripts/retention.py` and `scripts/queue-waves.py`
   cover bounded retention and overload recovery. Choose short explicit phases.
 

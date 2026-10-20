@@ -1354,3 +1354,181 @@ fn shutdown_releases_listener_indexes_before_retiring_global_sessions() {
     assert_eq!(relay.counts(), (0, 1));
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
 }
+
+#[test]
+fn global_broadcast_reuses_its_owner_view_and_invalidates_join_and_removal() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let source_output = Arc::new(Recording::default());
+    let source = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, source_output.clone())
+        .unwrap();
+    let first_output = Arc::new(Recording::default());
+    let first = relay
+        .subscribe_with_output(b"global-a", first_output.clone())
+        .unwrap();
+    let second_output = Arc::new(Recording::default());
+    let second = relay
+        .subscribe_with_output(b"global-b", second_output.clone())
+        .unwrap();
+    let send = || {
+        relay
+            .receive(&source.peer, protocol::envelope(BROADCAST, b"\xf5"))
+            .unwrap()
+    };
+    send();
+    let captured = relay.state.read().global_broadcast.get().unwrap().clone();
+    send();
+    assert!(Arc::ptr_eq(
+        &captured,
+        relay.state.read().global_broadcast.get().unwrap()
+    ));
+    assert_eq!(first_output.0.lock().len(), 2);
+    assert_eq!(second_output.0.lock().len(), 2);
+    assert!(
+        source_output.0.lock().is_empty(),
+        "global sender received its own broadcast"
+    );
+    let late_output = Arc::new(Recording::default());
+    let late = relay
+        .subscribe_with_output(b"global-c", late_output.clone())
+        .unwrap();
+    assert!(relay.state.read().global_broadcast.get().is_none());
+    assert!(!captured.iter().any(|peer| peer.key == late.peer.key));
+    send();
+    assert_eq!(late_output.0.lock().len(), 1);
+    let old_peer = Arc::downgrade(&first.peer);
+    drop(first);
+    assert!(relay.state.read().global_broadcast.get().is_none());
+    send();
+    assert_eq!(first_output.0.lock().len(), 3);
+    assert_eq!(second_output.0.lock().len(), 4);
+    assert_eq!(late_output.0.lock().len(), 2);
+    assert!(old_peer.upgrade().is_some());
+    drop(captured);
+    assert!(old_peer.upgrade().is_none());
+    relay.begin_shutdown();
+    assert!(relay.state.read().global_broadcast.get().is_none());
+    drop(source);
+    drop(second);
+    drop(late);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn global_broadcast_owner_view_tracks_takeover_without_displaced_removal_erasing_it() {
+    let relay = Relay::new(Config {
+        auth_password: Some("owners".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let source = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, Arc::new(Recording::default()))
+        .unwrap();
+    let owner_output = Arc::new(Recording::default());
+    let owner = relay
+        .subscribe_with_output(b"owner", owner_output.clone())
+        .unwrap();
+    let displaced_output = Arc::new(Recording::default());
+    let displaced = relay
+        .subscribe_with_output(b"displaced", displaced_output.clone())
+        .unwrap();
+    let id = displaced.peer.id.load(Relaxed);
+    let send = || {
+        relay
+            .receive(&source.peer, protocol::envelope(BROADCAST, b"\xf5"))
+            .unwrap()
+    };
+    send();
+    let old = relay.state.read().global_broadcast.get().unwrap().clone();
+    relay
+        .receive(&owner.peer, protocol::request(0, &protocol::text("owners")))
+        .unwrap();
+    relay
+        .receive(&owner.peer, protocol::request(3, &protocol::uint(id)))
+        .unwrap();
+    assert!(relay.state.read().global_broadcast.get().is_none());
+    send();
+    assert_eq!(owner_output.0.lock().len(), 2);
+    assert_eq!(displaced_output.0.lock().len(), 1);
+    let current = relay.state.read().global_broadcast.get().unwrap().clone();
+    assert_eq!(current.len(), 2);
+    assert_eq!(old.len(), 3);
+    drop(displaced);
+    assert!(Arc::ptr_eq(
+        &current,
+        relay.state.read().global_broadcast.get().unwrap()
+    ));
+    send();
+    assert_eq!(owner_output.0.lock().len(), 3);
+    relay.begin_shutdown();
+    drop(source);
+    drop(owner);
+    drop(current);
+    drop(old);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn captured_view_storage_retires_before_its_queue_credit() {
+    struct DropProbe {
+        metrics: Arc<Metrics>,
+        minimum: Arc<AtomicUsize>,
+        dropped: Arc<AtomicBool>,
+    }
+    impl PeerOutput for DropProbe {
+        fn send(&self, _: Submission<'_>) -> bool {
+            true
+        }
+        fn close(&self, _: Disconnect) {}
+    }
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            assert!(
+                self.metrics.queued_bytes.load(Relaxed) >= self.minimum.load(Relaxed),
+                "queue credit returned before captured peer storage retired"
+            );
+            self.dropped.store(true, Relaxed);
+        }
+    }
+    let relay = Relay::new(Config::default()).unwrap();
+    let source = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, Arc::new(NativeRetirement))
+        .unwrap();
+    let minimum = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicBool::new(false));
+    let target = relay
+        .subscribe_with_output(
+            b"drop-probe",
+            Arc::new(DropProbe {
+                metrics: relay.metrics.clone(),
+                minimum: minimum.clone(),
+                dropped: dropped.clone(),
+            }),
+        )
+        .unwrap();
+    let weak = Arc::downgrade(&target.peer);
+    let mut pending = None;
+    relay
+        .receive_batch()
+        .receive_bounded(
+            &source.peer,
+            protocol::envelope(BROADCAST, b"\xf5"),
+            0,
+            &mut pending,
+            0,
+        )
+        .unwrap();
+    minimum.store(pending.as_ref().unwrap().snapshot_bytes, Relaxed);
+    assert!(minimum.load(Relaxed) > 0);
+    drop(target);
+    assert!(!dropped.load(Relaxed));
+    assert!(weak.upgrade().is_some());
+    pending.as_mut().unwrap().clear();
+    assert!(dropped.load(Relaxed));
+    assert!(weak.upgrade().is_none());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(source);
+    assert_eq!(relay.counts(), (0, 1));
+}

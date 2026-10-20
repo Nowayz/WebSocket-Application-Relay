@@ -30,7 +30,7 @@ fn a_large_room_multicast_yields_within_a_message_and_preserves_source_fifo() {
 }
 
 #[test]
-fn a_large_global_broadcast_yields_without_splitting_fanout() {
+fn a_large_global_broadcast_yields_within_a_message_and_preserves_source_fifo() {
     check_fanout_quantum(FanoutScope::Global, false);
 }
 
@@ -47,6 +47,11 @@ fn private_observer_fanout_yields_without_splitting_fanout() {
 #[test]
 fn cancelling_an_unfinished_room_multicast_releases_staging_without_more_deliveries() {
     check_fanout_quantum(FanoutScope::Room, true);
+}
+
+#[test]
+fn cancelling_an_unfinished_global_broadcast_releases_staging() {
+    check_fanout_quantum(FanoutScope::Global, true);
 }
 
 enum FanoutScope {
@@ -93,7 +98,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
     );
     let mut targets = Vec::new();
     let mut outputs = Vec::new();
-    let count = if matches!(scope, FanoutScope::Room) {
+    let count = if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
         FANOUT_QUANTUM + 44
     } else {
         300
@@ -199,7 +204,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         assert_eq!(relay.metrics.connections.load(Relaxed), 0);
         return;
     }
-    if matches!(scope, FanoutScope::Room) {
+    if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
         let visited: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
         assert!((1..=FANOUT_QUANTUM).contains(&visited));
         assert!(
@@ -222,7 +227,7 @@ fn check_fanout_quantum(scope: FanoutScope, cancel: bool) {
         relay.metrics.incoming_messages.load(Relaxed),
         incoming_before + 2
     );
-    if matches!(scope, FanoutScope::Room) {
+    if matches!(scope, FanoutScope::Room | FanoutScope::Global) {
         assert!(outputs.iter().any(|out| out.messages.load(Relaxed) == 1));
         assert!(connection.drive(&relay, &mut scratch, false) == Drive::Again);
     }
