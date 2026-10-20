@@ -45,6 +45,10 @@ peer is absent or occupies a different position, and keep each job's visited
 cursor independent when several jobs share a view.
 Retirement budget checks cover zero and differently sized turns, exact visit
 bounds, cross-turn FIFO and release of all queued credit after completion.
+Cutoff checks cover 128/129 recipients in ordinary rooms and disconnect audiences,
+FIFO while crossing the cutoff, metadata refusal there, and avoiding a captured
+room view for outputs that cannot drive deferred work. The idle-population
+fixture verifies declared startup counts and every retained shutdown Close.
 Shutdown cache tests distinguish unique and externally captured views, and verify
 that reversible drain keeps the live view consistent. The native shutdown fixture
 verifies a priming broadcast before checking every Close `1001` and TCP EOF;

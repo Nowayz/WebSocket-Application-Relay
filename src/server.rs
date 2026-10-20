@@ -54,7 +54,7 @@ use tungstenite::{
 use crate::{
     Relay,
     protocol::{self, Disconnect},
-    relay::{FANOUT_QUANTUM, ReceiveBatch, Registration, RoomFanout},
+    relay::{FANOUT_QUANTUM, RETIREMENT_QUANTUM, ReceiveBatch, Registration, RoomFanout},
 };
 use socket::{Signal, Socket, Stream};
 use timers::Timers;
@@ -64,9 +64,6 @@ const WAKE: Token = Token(1);
 const READ_QUANTUM: usize = 256;
 const ACCEPT_QUANTUM: usize = 16;
 const READY_QUANTUM: usize = 1024;
-// Retirement progress holds the publication mutex. Shorter turns let closes
-// and observer controls interleave without reducing live room fanout batches.
-const RETIREMENT_QUANTUM: usize = 128;
 
 /// Run pre-bound listeners. Tokio services management and signals; native data
 /// sockets belong to a fixed number of readiness workers. Config's backlog

@@ -26,6 +26,8 @@ def main():
     parser.add_argument('--server', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--audience', type=int, default=1024)
+    parser.add_argument('--idle-users', type=int, default=0,
+                        help='Additional connected users outside the disconnect audience')
     parser.add_argument('--departures', type=int, default=1,
                         help='Distinct singleton sources closed before revocation')
     parser.add_argument('--queue-budget-bytes', type=int,
@@ -35,15 +37,17 @@ def main():
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--burst-teardown', action='store_true', help='Diagnostic: publish two final departures before draining recipients')
     args = parser.parse_args()
-    if args.audience < 1 or args.workers < 1 or args.departures < 1:
-        parser.error('audience, workers and departures must be positive')
+    if args.audience < 1 or args.workers < 1 or args.departures < 1 or args.idle_users < 0:
+        parser.error('audience, workers and departures must be positive; idle users nonnegative')
+    retained_users = args.audience + args.idle_users
+    population = retained_users + args.departures + 2
     port, admin = (wire.runtime.free_port(), wire.runtime.free_port())
     while admin == port:
         admin = wire.runtime.free_port()
     command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}',
                '--admin-bind', f'127.0.0.1:{admin}', '--workers', str(args.workers),
-               '--max-connections', str(args.audience + args.departures + 2),
-               '--max-channel-members', str(args.audience + 1),
+               '--max-connections', str(population),
+               '--max-channel-members', str(max(args.audience + 1, min(args.idle_users, 1024))),
                '--ping-interval-secs', '0', '--idle-timeout-secs', '0',
                '--messages-per-second', '0', '--bytes-per-second', '0',
                '--shutdown-timeout-secs', '10', '--tcp-send-buffer-bytes', '16384',
@@ -66,12 +70,14 @@ def main():
         'helper_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in helpers},
         'audience': args.audience, 'burst_teardown': args.burst_teardown,
+        'idle_users': args.idle_users, 'initial_population': population,
         'departures': args.departures, 'queue_budget_bytes': args.queue_budget_bytes,
         'client_affinity': sorted(os.sched_getaffinity(0)),
         'mode': 'global_observers', 'sequence': [], 'server_forced_kill': False,
     }
     peers = []
     audience = []
+    idle = []
     probe_stop = threading.Event()
     probe_started = threading.Event()
     probe_thread = None
@@ -127,11 +133,17 @@ def main():
                 request(member, b'\x82\x00\x82\x00pobserver-barrier', b'\x82\x00\x82\x00\xf5')
                 request(member, b'\x82\x00\x82\x01\x04', b'\x82\x00\x82\x01\x04')
                 audience.append(member)
+            for index in range(args.idle_users):
+                if time.monotonic() - began > 60:
+                    raise TimeoutError('setup budget')
+                idle.append(join(f'idle{index // 1024:08x}'.encode()))
             observer = join(b're_globl')
             request(observer, b'\x82\x00\x82\x00pobserver-barrier', b'\x82\x00\x82\x00\xf5')
             request(observer, b'\x82\x00\x82\x01\x04', b'\x82\x00\x82\x01\x04')
             probe = join(b'barrier-probe')
             result['before'] = wire.runtime.metrics(admin)
+            assert int(result['before']['war_sessions']) == population
+            assert int(result['before']['war_connections']) == population
             result['process_before'] = wire.runtime.snapshot(server.pid)
 
             def probe_loop():
@@ -228,15 +240,15 @@ def main():
                 departure(peer, probe.id)
             for _ in range(100):
                 metrics = wire.runtime.metrics(admin)
-                if (int(metrics['war_sessions']) == args.audience
-                    and int(metrics['war_connections']) == args.audience
+                if (int(metrics['war_sessions']) == retained_users
+                    and int(metrics['war_connections']) == retained_users
                     and int(metrics['war_queued_bytes']) == 0):
                     break
                 time.sleep(0.01)
             result['after'] = metrics
             result['process_after'] = wire.runtime.snapshot(server.pid)
-            assert int(metrics['war_sessions']) == args.audience and int(metrics['war_queued_bytes']) == 0
-            assert int(metrics['war_connections']) == args.audience
+            assert int(metrics['war_sessions']) == retained_users and int(metrics['war_queued_bytes']) == 0
+            assert int(metrics['war_connections']) == retained_users
             assert int(metrics['war_routing_copied_bytes_total']) == 0
             for key in wire.ZERO_ERRORS:
                 if key == 'war_global_pressure_total' and args.queue_budget_bytes is not None:
@@ -263,11 +275,11 @@ def main():
                 server.terminate()
                 result['shutdown_closes'] = 0
                 try:
-                    for peer in audience:
+                    for peer in audience + idle:
                         opcode, body = peer.receive()
                         assert opcode == 8 and int.from_bytes(body[:2], 'big') == 1001, (opcode, body.hex())
                         result['shutdown_closes'] += 1
-                    result['shutdown_close_verified'] = result['shutdown_closes'] == args.audience
+                    result['shutdown_close_verified'] = result['shutdown_closes'] == retained_users
                 except Exception:
                     result['shutdown_error'] = traceback.format_exc()
                 for peer in peers:

@@ -98,7 +98,10 @@ Ordinary large-room work advances in 1,024-recipient turns. Deferred departures
 use 128-recipient native worker turns so publication and other ready sockets can
 interleave more promptly. This trades some bulk-work CPU efficiency for shorter
 control stalls; see the [measured scheduling comparison](retirement-turns.md).
-Small-room synchronous delivery and its deferral threshold retain their behavior.
+Native departures with more than 128 recipients use deferred work too; the
+same constant sets that cutoff and the normal worker visit budget. Smaller
+departures can deliver directly when no older job needs ordering. Outputs that
+cannot drive retirement and refused reservations retain synchronous fallback.
 Clearing a global
 listener's disconnect flag orders captured notices before its acknowledgment.
 The barrier submits only that observer's still-pending notices and records a

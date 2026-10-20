@@ -12,7 +12,10 @@ Mio workers own decoding and timers. Private sends retain their immediate
 borrowed path. Multicast output uses shared bodies and bounded owner-worker
 vectored writes. Ordinary large rooms advance by 1,024 recipient visits per turn;
 native deferred departures use 128 visits to keep the shared publication mutex
-and worker turns short. See the [retirement scheduling measurements](retirement-turns.md)
+and worker turns short. Native departure publication uses that same 128-recipient
+cutoff; the [cutoff follow-up](retirement-turns.md#deferral-cutoff-follow-up)
+measures the normal-sized-room boundary at a 100,000-connection population.
+See the [retirement scheduling measurements](retirement-turns.md)
 for the measured CPU/bulk-delivery tradeoff. Expiry discovery is also bounded.
 Retirement work uses one
 charged FIFO and wakes workers when an empty queue becomes nonempty. Scalar
@@ -109,6 +112,9 @@ messages, departures, all process exits and final resource gauges.
   pinned to separate physical cores. Default teardown serializes follow-up
   departures; `--burst-teardown` separately probes queue-pressure behavior.
   `--departures 8` queues distinct singleton-source departures before revocation.
+  `--idle-users` adds connected non-observers in rooms of up to 1,024 members,
+  so population and eligible fanout can be varied separately. Startup checks the
+  entire declared population; shutdown verifies every retained connection.
   `--queue-budget-bytes 2097152` explicitly constrains credit without relaxing
   the full wire matrix; its pressure-counter flag reports refusals, not lost
   message counts. Successful delivery at that limit is the acceptance check.

@@ -124,6 +124,7 @@ only [preceding jobs for overlapping channels](docs/retirement-fallback.md).
 Unrelated rooms retain their bounded turns, including under source-local pressure.
 Native workers give deferred departures [shorter 128-recipient turns](docs/retirement-turns.md)
 to reduce Close/control stalls while keeping live fanout at 1,024 recipients.
+Native departures above that 128-recipient budget normally defer at publication.
 
 ## Provenance
 

@@ -29,6 +29,9 @@ use crate::{
 mod listing;
 
 pub(crate) const FANOUT_QUANTUM: usize = 1024;
+// Bound ordinary synchronous removal by the same visit budget as native
+// retirement progress, while keeping live message fanout independently sized.
+pub(crate) const RETIREMENT_QUANTUM: usize = 128;
 
 pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
 
@@ -1406,7 +1409,8 @@ impl Relay {
         if let Some(frame) = &frame {
             let mut deferred = false;
             if !channel.members.is_empty()
-                && (channel.members.len() > FANOUT_QUANTUM || self.has_retirements())
+                && (channel.members.len() > RETIREMENT_QUANTUM || self.has_retirements())
+                && peer.output.supports_retirement()
             {
                 let recipients = channel
                     .broadcast
@@ -1439,7 +1443,7 @@ impl Relay {
             let frame = frame.as_ref().expect("notifications enabled");
             let count = state.listeners(DISCONNECT_MESSAGE).len();
             let deferred = count != 0
-                && (count > FANOUT_QUANTUM || self.has_retirements())
+                && (count > RETIREMENT_QUANTUM || self.has_retirements())
                 && peer.output.supports_retirement()
                 && state
                     .disconnect_recipients(&self.metrics, self.config.total_queue_bytes)

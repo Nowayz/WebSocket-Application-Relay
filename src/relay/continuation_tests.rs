@@ -180,6 +180,100 @@ impl PeerOutput for Departures {
 }
 
 #[test]
+fn ordinary_departures_defer_above_one_native_turn() {
+    check_retirement_cutover(false);
+}
+
+#[test]
+fn disconnect_observers_defer_above_one_native_turn() {
+    check_retirement_cutover(true);
+}
+
+fn check_retirement_cutover(global: bool) {
+    for count in [RETIREMENT_QUANTUM, RETIREMENT_QUANTUM + 1] {
+        let relay = Relay::new(Config {
+            auth_password: Some("observer-ack".into()),
+            ..Config::default()
+        })
+        .unwrap();
+        let source = relay
+            .subscribe_with_output(b"cutover", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        let members: Vec<_> = (0..count)
+            .map(|_| {
+                if global {
+                    recorded_disconnect_observer(&relay)
+                } else {
+                    let output = Arc::new(Departures::default());
+                    let member = relay
+                        .subscribe_with_output(b"cutover", output.clone())
+                        .unwrap();
+                    (member, output)
+                }
+            })
+            .collect();
+        drop(source);
+        let delivered = || {
+            members
+                .iter()
+                .map(|(_, output)| output.0.lock().len())
+                .sum::<usize>()
+        };
+        if count > RETIREMENT_QUANTUM {
+            assert!(relay.has_retirements());
+            assert_eq!(delivered(), 0);
+            relay.progress_retirements(RETIREMENT_QUANTUM);
+            assert_eq!(delivered(), RETIREMENT_QUANTUM);
+            assert!(relay.has_retirements());
+            relay.progress_retirements(RETIREMENT_QUANTUM);
+        }
+        assert!(!relay.has_retirements());
+        assert_eq!(delivered(), count);
+        for (_, output) in &members {
+            let packets = output.0.lock();
+            assert_eq!(packets.len(), 1);
+            assert_eq!(
+                packets[0].to_vec(),
+                protocol::envelope(BROADCAST, &protocol::uint(id))
+            );
+        }
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        relay.begin_shutdown();
+        drop(members);
+        assert_eq!(relay.counts(), (0, 1));
+    }
+}
+
+#[test]
+fn unsupported_retirement_output_does_not_capture_a_room_view() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let mut source = relay.subscribe(b"unsupported").unwrap();
+    drop(source.outgoing.try_recv().unwrap());
+    let output = Arc::new(Departures::default());
+    let members: Vec<_> = (0..=FANOUT_QUANTUM)
+        .map(|_| {
+            relay
+                .subscribe_with_output(b"unsupported", output.clone())
+                .unwrap()
+        })
+        .collect();
+    drop(source);
+    assert!(!relay.has_retirements());
+    assert!(
+        relay.state.read().channels[b"unsupported".as_slice()]
+            .broadcast
+            .get()
+            .is_none()
+    );
+    assert_eq!(output.0.lock().len(), members.len());
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(members);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
 fn retirement_turn_budget_bounds_visits_without_reordering_jobs() {
     let relay = Relay::new(Config {
         auth_password: Some("observer-ack".into()),
@@ -441,7 +535,7 @@ fn check_retirement_sequence(pressure: bool) {
     let relay = Relay::new(Config {
         max_message_bytes: 1024,
         queue_bytes: 2048,
-        total_queue_bytes: if pressure { 12000 } else { 256 * 1024 * 1024 },
+        total_queue_bytes: if pressure { 2048 } else { 256 * 1024 * 1024 },
         ping_interval_secs: 0,
         ..Config::default()
     })
@@ -456,7 +550,7 @@ fn check_retirement_sequence(pressure: bool) {
     let second_id = second.peer.id.load(Relaxed);
     let mut targets = Vec::new();
     let mut outputs = Vec::new();
-    for _ in 0..FANOUT_QUANTUM {
+    for _ in 0..RETIREMENT_QUANTUM {
         let output = Arc::new(Departures::default());
         targets.push(
             relay
@@ -474,11 +568,11 @@ fn check_retirement_sequence(pressure: bool) {
         assert!(!relay.has_retirements());
         assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
     } else {
-        relay.progress_retirements(FANOUT_QUANTUM);
-        relay.progress_retirements(FANOUT_QUANTUM);
+        relay.progress_retirements(RETIREMENT_QUANTUM);
+        relay.progress_retirements(RETIREMENT_QUANTUM);
         assert!(relay.has_retirements());
         assert!(outputs.iter().all(|o| o.0.lock().len() == 1));
-        relay.progress_retirements(FANOUT_QUANTUM);
+        relay.progress_retirements(RETIREMENT_QUANTUM);
         assert!(!relay.has_retirements());
     }
     for output in outputs {

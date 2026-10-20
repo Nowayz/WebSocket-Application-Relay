@@ -36,10 +36,11 @@ policy into routing semantics.
 
 Jobs stay in the same FIFO, with the same captured recipients, shared payloads,
 source reservations, observer watermarks and global accounting. There is no new
-lock, queue, per-peer field, allocation policy or configuration flag. Small-room
-synchronous delivery, the 1,024-recipient deferral threshold, deadlines and
-backpressure policy retain their behavior. A recipient-count bound is not an
-elapsed-time deadline under OS preemption or memory stalls.
+lock, queue, per-peer field, allocation policy or configuration flag. At this
+revision the deferral threshold stayed at 1,024 recipients; the cutoff follow-up
+below changes that threshold too. Deadlines and backpressure policy retain their
+behavior. A recipient-count bound is not an elapsed-time deadline under OS
+preemption or memory stalls.
 
 ## Complete native burst comparison
 
@@ -140,3 +141,107 @@ Selected executable SHA-256:
 Copied source snapshots, build receipts, diagnostic logs, raw matrices and plot
 inputs preserve the measured versions. Finite loopback tests establish neither
 a sustained all-user latency SLO nor equivalent results on another machine.
+
+
+## Deferral cutoff follow-up
+
+The initial scheduling change shortened deferred turns but left departures of
+up to 1,024 recipients synchronous under the registry write lock. Native
+publication now uses the same **128-recipient budget** as advancement. Both
+ordinary rooms and eligible disconnect audiences defer above that boundary.
+The constant is shared with the native worker, while live message fanout stays
+at 1,024. Older pending jobs still force ordered handling across the cutoff.
+
+Outputs that cannot drive retirement are checked before capturing a room view,
+avoiding a useless recipient-vector allocation before synchronous delivery.
+Reservation refusal retains the existing ordered best-effort fallback. No new
+lock, queue, per-peer field, payload copy or external configuration is added.
+This is the normal native publication cutoff, not a maximum on fallback work.
+
+A finite diagnostic build confirmed the remaining synchronous cost. With 100,000
+connections, 1,023 eligible recipients and 64 singleton-source closes, membership
+removal held the registry lock for 13.445 ms in total, inside a 17.431 ms burst.
+Registry acquisition itself totaled 0.005 ms. Diagnostic logging is confined to
+its copied source and supplies no production comparison row.
+
+### Population independent of the audience
+
+`scripts/observer-barrier.py --idle-users` now separates connection population
+from disconnect fanout. Idle users occupy ordinary rooms of up to 1,024 members
+and subscribe to no observation class. Startup verifies the entire declared
+physical/session count, and shutdown checks every retained connection.
+
+The boundary screen uses 1,022 audience observers, the tested observer, 64
+sources, one independent echo witness and 98,912 idle users: **exactly 100,000
+connections** before the event. Peak room membership stays within 1,024. Each
+accepted case checks 68,539 notices, FIFO, unsubscribe/re-subscription, zero
+residual queued credit, zero recorded routing-copy/error counters and all 99,934
+retained shutdown Close `1001` frames. The other original participants close
+normally during the fixture. Every process exits without a forced kill.
+
+| Run | Close burst through revoke ACK, ms | Median Close RTT, ms | Worst Close RTT, ms | Worst short-event witness RTT, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Control 1 | 17.346 | 0.283 | 0.624 | 0.501 |
+| Control 2 | 17.219 | 0.289 | 0.633 | 0.349 |
+| Final selected 1 | 13.554 | 0.197 | 0.820 | 0.482 |
+| Final selected 2 | 13.275 | 0.174 | 0.716 | 0.277 |
+
+The final build improves total/median Close response; worst individual Close
+and witness ranges do not uniformly improve. Completed-work process CPU is
+0.07 / 0.08 seconds for controls and 0.09 / 0.09 for selected runs. These short
+CPU intervals are quantized in 10 ms ticks, so they do not support a precise
+percentage efficiency claim. The first-audience completion timestamp in this
+small case follows the fixture's deliberate post-event sampling pause and is
+not evidence of packet-arrival latency. An earlier literal-cutoff prototype
+passed too; its receipts remain exploratory rather than final-build timings.
+
+### Frequent small-room departures with private probes
+
+The second screen uses the same frozen clients and 100,000 private-probe users,
+plus 1,022 stable room readers, 32 saturating private pairs and paced background
+churn. One broadcast and a member retirement occur per window, at 32 offered
+windows/s. The temporary member brings peak room size to exactly 1,024; its
+removal leaves 1,023 recipients, exercising the changed path. There are no
+inspectors in this targeted mode.
+
+Each two-second phase completes all 64 offered windows, 65,408 multicast
+observations, 64 membership cycles, 512 background churn cycles and 800,000
+private-probe observations. Each private user supplies eight samples; each
+multicast reader supplies 64. All process exits, exact messages, departures and
+final resource/copy/pressure/error gates pass. The table ranks users' observed
+maxima; it is not a long-term per-user p99 estimate.
+
+| Run | CPU, s | 95th percentile of private users' maxima, ms | Worst private observation, ms | Worst intended-send private observation, ms | Worst multicast observation, ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Control 1 | 9.37 | 1.458 | 4.335 | 5.981 | 2.642 |
+| Control 2 | 9.38 | 1.599 | 5.326 | 9.749 | 3.553 |
+| Final selected 1 | 9.46 | 1.524 | 3.733 | 8.451 | 2.752 |
+| Final selected 2 | 9.45 | 1.619 | 4.174 | 7.450 | 3.015 |
+
+The worst private observations are lower in both selected runs. Broader private
+percentiles, intended-send maxima and multicast results overlap, so no broad
+percentile or multicast improvement is established. Private throughput varies:
+controls deliver 1.614 / 1.345 million messages/s; selected runs 1.612 / 1.450
+million. The cutoff is retained for shorter aggregate/median Close handling and
+the observed private-response peak reduction, with modest measured CPU cost.
+These finite screens do not establish a universal latency bound.
+
+All 219 Rust tests, 66 JavaScript tests, formatting, Clippy warnings denied,
+vendor provenance and the Rust/CBOR product audit pass. New regressions check
+128/129 recipients in ordinary rooms and global audiences, FIFO and refusal at
+the new cutoff, and no captured room view for unsupported outputs. Native
+follow-ups cover 100,000 observers/eight departures under 2 MiB credit, one-slot
+queues, cross-room pressure fallback and the new small idle-population CI case.
+
+Reproduce the fully populated boundary screen with `--audience 1022
+--idle-users 98912 --departures 64`. For the mixed recipe above, change
+`--readers` to `1022` and `--fanout-windows-per-second` to `32`. Use the same
+frozen clients, CPU masks and fresh receipt paths before and after.
+
+Control: commit `6bcb8bb`, executable SHA-256
+`912f73e9c146b75273d8b381b38eee98bebd6c60daa0979accabd5be6812b754`.
+Final selected executable SHA-256:
+`b4fde7a2012be2279121a7a6e68491a14e0255343b69bbcc3da4c2f9355dcb5b`.
+Source snapshots, raw matrices, diagnostic logs and earlier prototype records
+preserve the complete experiment. Existing synchronous fallback remains a
+separate latency limit when a deferred reservation cannot be funded.
