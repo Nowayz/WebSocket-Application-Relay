@@ -35,8 +35,13 @@ and workload. Connection count alone does not establish a latency guarantee.
 
 `browser/relay.js` is the standalone browser ES module; `browser/relay.d.ts`
 provides its TypeScript declarations. Serve `browser/` over HTTP to run its
-interactive check against the relay (use HTTPS/WSS for a public site). The
-separate `war-relay-client-VERSION.tgz` asset installs in a Node project with:
+interactive check against the relay (use HTTPS/WSS for a public site). The check
+includes a 128 KiB value and requires the server's default message limit or an
+explicit `WAR_MAX_MESSAGE_BYTES=262144` on a disposable test instance. Both
+supplied deployment environments use a 64 KiB limit, so their deliberate rejection
+of this larger check packet is expected. Keep the deployment limit appropriate
+for the application; run this full client check against a separate test instance.
+The separate `war-relay-client-VERSION.tgz` asset installs in a Node project with:
 
 ```sh
 npm install --omit=optional --ignore-scripts /path/to/war-relay-client-VERSION.tgz

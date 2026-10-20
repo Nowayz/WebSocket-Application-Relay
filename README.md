@@ -69,7 +69,9 @@ The browser bundle and interactive check are written to `target/browser/`:
 python3 -m http.server 4181 --bind 127.0.0.1 --directory target/browser
 ```
 
-Open `http://127.0.0.1:4181`, enter the relay URL and run the check. Applications
+Open `http://127.0.0.1:4181`, enter the relay URL and run the check against a
+disposable server with the default message limit. Its 128 KiB value exceeds the
+64 KiB limit in the supplied deployment environments. Applications
 can import `Relay` from the generated `relay.js` ES module.
 
 ## Architecture

@@ -4,6 +4,14 @@ The release baseline is version 0.1.0: one Rust server and one native CBOR
 JavaScript/TypeScript client. Performance experiments and adjacent features are
 deferred until this baseline is packaged and verified.
 
+The selected candidate is staged in the repository's
+[release entry](https://github.com/Nowayz/WebSocket-Application-Relay/releases).
+Its `release.json` and `SHA256SUMS` identify the selected source and assets;
+[PR #3](https://github.com/Nowayz/WebSocket-Application-Relay/pull/3) records the
+current CI checks. The initial local acceptance record below is historical and
+does not replace that selected manifest. Merge and publication await release
+sign-off.
+
 ## Build the three assets
 
 Use a clean committed checkout, Rust 1.91+, Node 22+, npm and Python 3.12+:
@@ -50,7 +58,7 @@ artifact gate verifies these files before testing the installed client.
 
 Formatting, Clippy, Rust tests, JS tests, types and browser compilation remain
 required checks in CI. The CI release steps additionally build these archives and
-runs their installation/lifecycle gate. Local acceptance and GitHub CI are
+run their installation/lifecycle gate. Local acceptance and GitHub CI are
 distinct; a local run does not attest to a remote workflow result.
 
 ## Support and limits
