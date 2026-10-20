@@ -49,12 +49,17 @@ async fn join_from(url: &str, address: u8) -> (Socket, u64) {
 }
 
 async fn denied(mut socket: TcpStream) {
+    use std::io::ErrorKind::{ConnectionAborted, ConnectionReset};
     let result = timeout(Duration::from_secs(3), socket.read(&mut [0]))
         .await
         .unwrap();
+    // A refused transport is dropped unread, which the peer sees as a FIN
+    // or a reset. Windows reports the reset as either WSAECONNRESET or
+    // WSAECONNABORTED depending on timing.
     assert!(
         matches!(result, Ok(0))
-            || matches!(result,Err(ref error) if error.kind()==std::io::ErrorKind::ConnectionReset)
+            || matches!(result, Err(ref error) if matches!(error.kind(), ConnectionReset | ConnectionAborted)),
+        "a refused transport must be closed, got {result:?}"
     );
 }
 
