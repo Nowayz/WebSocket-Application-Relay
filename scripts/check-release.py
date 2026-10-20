@@ -21,6 +21,21 @@ def free_port():
         return listener.getsockname()[1]
 
 
+def wait_ready(server, base):
+    deadline = time.monotonic() + 5
+    while True:
+        if server.poll() is not None:
+            raise ValueError('packaged server failed startup; see its server log')
+        try:
+            with urllib.request.urlopen(base + '/readyz', timeout=0.5) as response:
+                assert response.status == 200
+            return
+        except (OSError, urllib.error.URLError):
+            if time.monotonic() >= deadline:
+                raise TimeoutError('packaged server readiness deadline')
+            time.sleep(0.05)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--release', type=Path, required=True)
@@ -93,18 +108,7 @@ def main():
                 server = subprocess.Popen([binary, '--bind', f'127.0.0.1:{relay_port}', '--admin-bind',
                                            f'127.0.0.1:{admin_port}', '--workers', '2', '--idle-timeout-secs', '1'],
                                           env=env, stdout=log, stderr=subprocess.STDOUT)
-                deadline = time.monotonic() + 5
-                while True:
-                    if server.poll() is not None:
-                        raise ValueError('packaged server failed startup; see server.log')
-                    try:
-                        with urllib.request.urlopen(env['WAR_TEST_ADMIN'] + '/readyz', timeout=0.5) as response:
-                            assert response.status == 200
-                        break
-                    except (OSError, urllib.error.URLError):
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError('packaged server readiness deadline')
-                        time.sleep(0.05)
+                wait_ready(server, env['WAR_TEST_ADMIN'])
                 tests = sorted((source / 'clients/js').glob('*.test.mjs'))
                 assert len(tests) == 4
                 for test in tests:
@@ -125,6 +129,20 @@ const request = (path, authorized = true, method = 'GET') => fetch(base + path, 
   headers: authorized ? { authorization: 'Bearer release-test-token' } : {},
 });
 const ready = async status => assert.equal((await request('/readyz', false)).status, status);
+if (process.env.WAR_TEST_LARGE_PROFILE) {
+  let reused = 0, copied = 0;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const response = await request('/metrics'); assert.equal(response.status, 200);
+    const metrics = new Map((await response.text()).split('\n').filter(l => l && !l.startsWith('#')).map(l => l.split(' ')));
+    reused = Number(metrics.get('war_routing_reused_bytes_total'));
+    copied = Number(metrics.get('war_routing_copied_bytes_total'));
+    if (reused >= 10 * 1024 * 1024) break;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert(reused >= 10 * 1024 * 1024, 'both 5 MiB publications must reuse their received values');
+  assert(copied < 1024, 'large file bodies were copied while routing');
+  console.log(JSON.stringify({ largeFileReusedBytes: reused, compactedSmallBytes: copied }));
+}
 assert.equal((await request('/metrics', false)).status, 401);
 assert.equal((await request('/v1/drain', false, 'POST')).status, 401);
 const a = await Relay.connect(process.env.WAR_TEST_URL, 'release-smoke');
@@ -167,6 +185,34 @@ console.log('Package exports, admin auth, pagination, drain/rejected admission/r
                                    env=env, stdout=lifecycle, stderr=subprocess.STDOUT, check=True, timeout=30)
                 assert server.wait(timeout=15) == 0
                 record['checks'].append('Package exports, management authentication, drain/resume, zero resources and graceful SIGTERM passed.')
+            for profile in ('war-relay.env.example', 'war-relay-100k.env.example'):
+                settings = dict(line.split('=', 1) for raw in (runtime / 'deploy' / profile).read_text().splitlines()
+                                if (line := raw.strip()) and not line.startswith('#'))
+                profile_env = env | settings
+                profile_env.pop('WAR_TEST_IDLE_ENABLED', None)
+                relay_port, admin_port = free_port(), free_port()
+                while admin_port == relay_port:
+                    admin_port = free_port()
+                profile_env.update(WAR_TEST_URL=f'ws://127.0.0.1:{relay_port}',
+                                   WAR_TEST_ADMIN=f'http://127.0.0.1:{admin_port}', WAR_TEST_LARGE_PROFILE='1')
+                with (output / f'{profile}.server.log').open('x') as log:
+                    server = subprocess.Popen([binary, '--bind', f'127.0.0.1:{relay_port}',
+                                               '--admin-bind', f'127.0.0.1:{admin_port}'],
+                                              env=profile_env, stdout=log, stderr=subprocess.STDOUT)
+                    wait_ready(server, profile_env['WAR_TEST_ADMIN'])
+                    tests_log = output / f'{profile}.tests.log'
+                    with tests_log.open('x') as tests_output:
+                        subprocess.run(['node', '--test', '--test-timeout=10000', '--test-reporter=tap',
+                                        '--test-name-pattern=native 5 MiB file values', 'relay.test.mjs'],
+                                       cwd=installed, env=profile_env, stdout=tests_output,
+                                       stderr=subprocess.STDOUT, check=True, timeout=30)
+                    assert '# pass 1' in tests_log.read_text().splitlines(), 'large-file profile test did not run'
+                    with (output / f'{profile}.lifecycle.log').open('x') as lifecycle:
+                        subprocess.run(['node', '--input-type=module', '-e', smoke, str(server.pid)],
+                                       cwd=consumer, env=profile_env, stdout=lifecycle,
+                                       stderr=subprocess.STDOUT, check=True, timeout=30)
+                    assert server.wait(timeout=15) == 0
+                record['checks'].append(f'{profile}: 5 MiB private/room FIFO, shared large values, zero resources and graceful shutdown passed.')
             record['passed'] = True
     except Exception as error:
         record['error'] = str(error)

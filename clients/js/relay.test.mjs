@@ -1,9 +1,53 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { once, getEventListeners } from 'node:events';
 import test from 'node:test';
 import { Relay, BROADCAST } from './relay.mjs';
 
 const url = process.env.WAR_TEST_URL ?? 'ws://127.0.0.1:1338';
+
+test('native 5 MiB file values preserve private and room FIFO', async t => {
+  const clients = [];
+  t.after(() => { for (const client of clients) client.close(); });
+  for (let i = 0; i < 3; i++) clients.push(await Relay.connect(url, 'js-large-file'));
+  const [a, b, c] = clients;
+  const bytes = new Uint8Array(5 * 1024 * 1024);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
+  const digest = value => createHash('sha256').update(value).digest('hex');
+  const expected = digest(bytes);
+  function pair(client) {
+    return new Promise(resolve => {
+      const packets = [];
+      const listener = ({ detail }) => {
+        packets.push(detail);
+        if (packets.length === 2) {
+          client.removeEventListener('message', listener);
+          resolve(packets);
+        }
+      };
+      client.addEventListener('message', listener);
+      t.after(() => client.removeEventListener('message', listener));
+    });
+  }
+  function check(packets, marker) {
+    assert.equal(packets[0].sender, a.userId);
+    assert(packets[0].value instanceof Uint8Array);
+    assert.equal(packets[0].value.length, bytes.length);
+    assert.equal(digest(packets[0].value), expected);
+    assert.deepEqual(packets[1], { sender: a.userId, value: marker });
+  }
+  const privatePackets = pair(b);
+  a.send(b.userId, bytes);
+  a.send(b.userId, 'after-private-file');
+  check(await privatePackets, 'after-private-file');
+  const roomB = pair(b), roomC = pair(c);
+  a.broadcast(bytes);
+  a.broadcast('after-room-file');
+  check(await roomB, 'after-room-file');
+  check(await roomC, 'after-room-file');
+  await b.setVariable('file-done', true);
+  assert.deepEqual(await c.getVariable('file-done'), { found: true, value: true });
+});
 
 test('native listener acknowledgements return effective flags and private observation stays usable', async t => {
   const observer = await Relay.connect(url, 're_globl');

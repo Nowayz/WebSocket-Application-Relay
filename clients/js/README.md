@@ -35,6 +35,14 @@ observers. Payloads can contain strings, bytes, booleans, arrays, maps/objects,
 numbers, bigint integers and null, subject to the server's bounded CBOR rules.
 Avoid codec-specific extensions and values outside that contract.
 
+Large files can be sent as one value. For a browser `File`, use
+`client.send(peerId, new Uint8Array(await file.arrayBuffer()))`; no Base64 or
+application-level chunking is required for a 5 MB image. The default server and
+both deployment profiles allow 16 MiB per encoded message, including the routing
+envelope, with a 32 MiB per-session output ceiling. These ceilings are not
+preallocated. Shared global budgets still bound concurrent transfers; the
+application must pace traffic to the available network and queue capacity.
+
 Commands return promises and serialize in invocation order because the wire
 protocol has no request IDs:
 

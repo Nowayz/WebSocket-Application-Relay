@@ -36,11 +36,13 @@ and workload. Connection count alone does not establish a latency guarantee.
 `browser/relay.js` is the standalone browser ES module; `browser/relay.d.ts`
 provides its TypeScript declarations. Serve `browser/` over HTTP to run its
 interactive check against the relay (use HTTPS/WSS for a public site). The check
-includes a 128 KiB value and requires the server's default message limit or an
-explicit `WAR_MAX_MESSAGE_BYTES=262144` on a disposable test instance. Both
-supplied deployment environments use a 64 KiB limit, so their deliberate rejection
-of this larger check packet is expected. Keep the deployment limit appropriate
-for the application; run this full client check against a separate test instance.
+includes 128 KiB and 5 MiB binary values. Both supplied deployment profiles use
+the server's 16 MiB encoded-message limit and a 32 MiB per-session output ceiling,
+so an image can be sent as one message. These are admission ceilings, allocated
+only as needed; shared global budgets still bound retained input/output. The
+message limit includes the CBOR value and routing metadata. Applications needing
+larger messages can configure `WAR_MAX_MESSAGE_BYTES` together with
+`WAR_QUEUE_BYTES` and the global budgets; see `docs/operations.md`.
 The separate `war-relay-client-VERSION.tgz` asset installs in a Node project with:
 
 ```sh

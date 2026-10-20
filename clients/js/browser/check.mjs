@@ -76,6 +76,14 @@ form.addEventListener('submit', async event => {
     assert(largePacket.sender === a.userId && largePacket.value instanceof Uint8Array && largePacket.value.length === bytes.length && largePacket.value.every((byte, i) => byte === bytes[i]), 'Large binary message changed');
     pass('A 128 KiB binary value arrived byte for byte.');
 
+    const image = new Uint8Array(5 * 1024 * 1024);
+    for (let i = 0; i < image.length; i++) image[i] = i % 251;
+    const file = once(b, 'message');
+    a.send(b.userId, image);
+    const filePacket = (await file).detail;
+    assert(filePacket.sender === a.userId && filePacket.value instanceof Uint8Array && filePacket.value.length === image.length && filePacket.value.every((byte, i) => byte === image[i]), '5 MiB file message changed');
+    pass('A 5 MiB file arrived byte for byte as one application message.');
+
     await a.setVariable('settings', { ready: true, bytes: new Uint8Array([3, 4]) });
     const values = await Promise.all([
       b.getVariable('settings'), b.getVariable('missing'),

@@ -41,6 +41,12 @@ resume, six zero resource gauges, and normal terminal Close on SIGTERM. A failur
 retains its logs and is not a passed release gate. Output directories cannot be
 reused. No script tags, publishes, installs or restarts an existing service.
 
+The gate also starts the packaged executable under each shipped deployment
+environment and sends a 5 MiB value privately and to a room. It checks complete
+SHA-256 values, following-message FIFO, reuse of the large encoded bodies, control
+requests, cleanup and shutdown. This prevents a smaller deployment-only message
+or queue ceiling from silently removing the server's large-file capability.
+
 The server archive includes license/notice files for the dependency packages
 reported by the actual Cargo build, plus an indexed digest list. The standalone
 browser directory includes the project and bundled CBOR codec licenses. The
