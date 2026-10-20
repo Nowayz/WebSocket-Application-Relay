@@ -88,23 +88,30 @@ acknowledgement.
 
 ### Shared locks that remain, and what bounds them
 
-Some state is inherently process-wide. Each of these locks is held for a
-bounded, small amount of work and never across socket I/O:
+Some state is inherently process-wide. Most of it is now lock-free; what is
+still a lock is held for a bounded, small amount of work and never across
+socket I/O:
 
 - The listener lock. Routing takes it shared only while observers exist (the
   atomic mask skips it otherwise). The exclusive side is taken by listener-flag
   commands, which are administrative. A revocation holds it while scanning the
   observer queue for that observer's pending jobs: one position lookup per
   distinct captured view, so the hold is proportional to the number of
-  distinct views queued, not to traffic.
-- The global recipient-view cache. A mutex held only to read or publish one
-  handle. The view itself is built outside it.
-- The disconnect-snapshot cache. The same pattern: a copy of the observer list
-  is made and charged outside the mutex, then published under it.
-- The active list of departure queues. Workers only ever try to lock it;
-  departures lock it to append one entry.
+  distinct views queued, not to traffic. This lock is kept on purpose: a
+  departure holds the shared side from capturing the observer list until its
+  job is queued, which is what guarantees that a revocation either sees the
+  job and flushes it before the acknowledgement or never captured that
+  observer at all. A copy-on-write snapshot could not give that guarantee.
 - The session-ownership shards: 64 independent locks, each held for one map
   operation. A takeover holds two.
+- The global recipient-view cache and the disconnect-snapshot cache are
+  atomic pointer swaps (`arc_swap`). Reads and publication are wait-free; the
+  views themselves are built outside any lock, and a lost publication race
+  stores an identical view or defers to the one already published.
+- The active list of departure queues is a lock-free queue
+  (`crossbeam_queue::SegQueue`). Workers pop an entry and push it back while
+  it has work; departures append one entry when a queue becomes non-empty.
+  Nobody waits on it.
 
 The test `unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation`
 in `tests/relay_integration.rs` exercises all of them at once: a room of 1,100

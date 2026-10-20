@@ -15,8 +15,10 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use arc_swap::ArcSwapOption;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
+use crossbeam_queue::SegQueue;
 use minicbor::Encoder;
 use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
@@ -68,12 +70,12 @@ pub struct Relay {
     /// Incremented on every membership change. A global view built against an
     /// older generation is used once and never cached.
     membership_generation: AtomicU64,
-    global_view: Mutex<Option<(u64, Recipients)>>,
+    global_view: ArcSwapOption<(u64, Recipients)>,
     listeners: RwLock<Listeners>,
     /// Bits of listener classes that currently have at least one member, so
     /// the ordinary routing path can skip the listener lock entirely.
     listener_mask: AtomicU8,
-    disconnect_snapshot: Mutex<Weak<RetirementSnapshot>>,
+    disconnect_snapshot: ArcSwapOption<Weak<RetirementSnapshot>>,
     retirements: Retirements,
     /// Disconnect-observer notices and `re_globl` room departures share one
     /// queue: both reach `re_globl` members, and one order keeps barriers simple.
@@ -484,12 +486,12 @@ impl DepartureQueue {
     }
 }
 
-/// Round-robin list of queues with pending work. Workers only ever `try_lock`
-/// it, so a busy worker never waits here.
+/// Queues with pending work, in round-robin order. This is a lock-free queue:
+/// workers pop an entry and push it back while it has work, departures append
+/// one entry when a queue becomes non-empty, and nobody ever waits on it.
 #[derive(Default)]
 struct Retirements {
-    active: Mutex<VecDeque<Arc<DepartureQueue>>>,
-    pending: AtomicBool,
+    active: SegQueue<Arc<DepartureQueue>>,
 }
 
 /// Shared disconnect membership is charged once while any departure retains it.
@@ -1230,10 +1232,10 @@ impl Relay {
             users: Users::new(),
             channels: RwLock::new(channels),
             membership_generation: AtomicU64::new(0),
-            global_view: Mutex::new(None),
+            global_view: ArcSwapOption::empty(),
             listeners: RwLock::new(Listeners::default()),
             listener_mask: AtomicU8::new(0),
-            disconnect_snapshot: Mutex::new(Weak::new()),
+            disconnect_snapshot: ArcSwapOption::empty(),
             retirements: Retirements::default(),
             observer_departures: Arc::new(DepartureQueue::default()),
             detached: Arc::new(DepartureQueue::default()),
@@ -1284,16 +1286,9 @@ impl Relay {
             *listeners = Listeners::default();
             self.listener_mask.store(0, Relaxed);
         }
-        *self.disconnect_snapshot.lock() = Weak::new();
-        *self.global_view.lock() = None;
-        // Lock order is queue state, then the active list. Take the list
-        // first on its own, then clear each queue without holding the list.
-        let queues: Vec<Arc<DepartureQueue>> = {
-            let mut active = self.retirements.active.lock();
-            self.retirements.pending.store(false, Relaxed);
-            active.drain(..).collect()
-        };
-        for queue in queues {
+        self.disconnect_snapshot.store(None);
+        self.global_view.store(None);
+        while let Some(queue) = self.retirements.active.pop() {
             let mut state = queue.state.lock();
             state.jobs.clear();
             state.queued = false;
@@ -1498,17 +1493,17 @@ impl Relay {
 
     fn membership_changed(&self) {
         self.membership_generation.fetch_add(1, Relaxed);
-        *self.global_view.lock() = None;
+        self.global_view.store(None);
     }
 
     /// Every current room member. Cached until the next membership change; a
     /// view built during a change is used once and not cached.
     fn global_recipients(&self) -> Arc<Vec<Arc<Peer>>> {
         let generation = self.membership_generation.load(Relaxed);
-        if let Some((cached, view)) = &*self.global_view.lock()
-            && *cached == generation
+        if let Some(cached) = self.global_view.load_full()
+            && cached.0 == generation
         {
-            return view.clone();
+            return cached.1.clone();
         }
         let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
         let mut members = Vec::new();
@@ -1525,12 +1520,12 @@ impl Relay {
         }
         let view = Arc::new(members);
         if self.membership_generation.load(Relaxed) == generation {
-            let mut cache = self.global_view.lock();
-            if cache
-                .as_ref()
-                .is_none_or(|(cached, _)| *cached < generation)
-            {
-                *cache = Some((generation, view.clone()));
+            // Publish unless a newer generation is already cached. A lost race
+            // against an equal generation stores an identical view.
+            let current = self.global_view.load();
+            if current.as_ref().is_none_or(|cached| cached.0 < generation) {
+                self.global_view
+                    .compare_and_swap(&current, Some(Arc::new((generation, view.clone()))));
             }
         }
         view
@@ -1807,7 +1802,7 @@ impl Relay {
                         barrier = true;
                     }
                     if listeners.set_flags(peer, flags & 7, member.as_ref()) {
-                        *self.disconnect_snapshot.lock() = Weak::new();
+                        self.disconnect_snapshot.store(None);
                     }
                     self.listener_mask.store(listeners.mask(), Relaxed);
                 } else {
@@ -1933,25 +1928,17 @@ impl Relay {
     }
 
     pub(crate) fn has_retirements(&self) -> bool {
-        self.retirements.pending.load(Relaxed)
+        !self.retirements.active.is_empty()
     }
 
     /// Advance one queue by one bounded turn. Queues rotate so a large job in
     /// one room cannot delay another room's notices. Never blocks a worker.
     pub(crate) fn progress_retirements(&self, quantum: usize) {
-        let queue = {
-            let Some(mut active) = self.retirements.active.try_lock() else {
-                return;
-            };
-            let Some(queue) = active.pop_front() else {
-                self.retirements.pending.store(false, Relaxed);
-                return;
-            };
-            self.retirements.pending.store(!active.is_empty(), Relaxed);
-            queue
+        let Some(queue) = self.retirements.active.pop() else {
+            return;
         };
         let Some(mut state) = queue.state.try_lock() else {
-            self.requeue(queue);
+            self.retirements.active.push(queue);
             return;
         };
         if let Some(work) = state.jobs.front_mut() {
@@ -1967,14 +1954,8 @@ impl Relay {
             }
         } else {
             drop(state);
-            self.requeue(queue);
+            self.retirements.active.push(queue);
         }
-    }
-
-    fn requeue(&self, queue: Arc<DepartureQueue>) {
-        let mut active = self.retirements.active.lock();
-        active.push_back(queue);
-        self.retirements.pending.store(true, Relaxed);
     }
 
     /// Append a job and make sure its queue is scheduled. Returns whether a
@@ -1989,11 +1970,8 @@ impl Relay {
         state.jobs.push_back(work);
         if !state.queued {
             state.queued = true;
-            let mut active = self.retirements.active.lock();
-            let wake = active.is_empty();
-            active.push_back(queue.clone());
-            self.retirements.pending.store(true, Relaxed);
-            drop(active);
+            let wake = self.retirements.active.is_empty();
+            self.retirements.active.push(queue.clone());
             drop(state);
             if wake {
                 output.wake_retirement();
@@ -2061,11 +2039,20 @@ impl Relay {
         if state.jobs.capacity() > 32 {
             state.jobs = VecDeque::new();
         }
-        if state.queued {
-            state.queued = false;
-            let mut active = self.retirements.active.lock();
-            active.retain(|listed| !Arc::ptr_eq(listed, queue));
-            self.retirements.pending.store(!active.is_empty(), Relaxed);
+        let listed = std::mem::replace(&mut state.queued, false);
+        drop(state);
+        if listed {
+            // Cycle the lock-free list once to drop this queue's entry. A
+            // worker that holds the entry popped right now finds the queue
+            // empty and drops it itself.
+            for _ in 0..self.retirements.active.len() {
+                let Some(entry) = self.retirements.active.pop() else {
+                    break;
+                };
+                if !Arc::ptr_eq(&entry, queue) {
+                    self.retirements.active.push(entry);
+                }
+            }
         }
     }
 
@@ -2103,10 +2090,8 @@ impl Relay {
             false
         } else {
             state.queued = true;
-            let mut active = self.retirements.active.lock();
-            let wake = active.is_empty();
-            active.push_back(queue.clone());
-            self.retirements.pending.store(true, Relaxed);
+            let wake = self.retirements.active.is_empty();
+            self.retirements.active.push(queue.clone());
             wake
         };
         drop(state);
@@ -2122,7 +2107,9 @@ impl Relay {
     /// listener generation produce identical views, and the first to publish
     /// wins.
     fn disconnect_recipients(&self, listeners: &Listeners) -> Option<Arc<RetirementSnapshot>> {
-        if let Some(snapshot) = self.disconnect_snapshot.lock().upgrade() {
+        if let Some(cached) = self.disconnect_snapshot.load_full()
+            && let Some(snapshot) = cached.upgrade()
+        {
             return Some(snapshot);
         }
         let members = listeners.of(DISCONNECT_MESSAGE).to_vec();
@@ -2151,13 +2138,14 @@ impl Relay {
             bytes,
             metrics: self.metrics.clone(),
         });
-        let mut cache = self.disconnect_snapshot.lock();
-        if let Some(published) = cache.upgrade() {
+        let current = self.disconnect_snapshot.load();
+        if let Some(published) = current.as_ref().and_then(|weak| weak.upgrade()) {
             // Another departure published the same membership first; use its
             // view and let ours release its credit.
             return Some(published);
         }
-        *cache = Arc::downgrade(&snapshot);
+        self.disconnect_snapshot
+            .compare_and_swap(&current, Some(Arc::new(Arc::downgrade(&snapshot))));
         Some(snapshot)
     }
 
@@ -2248,7 +2236,7 @@ impl Relay {
             if member_flags != 0 {
                 let mut listeners = self.listeners.write();
                 if listeners.set_flags(peer, 0, None) {
-                    *self.disconnect_snapshot.lock() = Weak::new();
+                    self.disconnect_snapshot.store(None);
                 }
                 self.listener_mask.store(listeners.mask(), Relaxed);
             }
@@ -2305,10 +2293,7 @@ impl Relay {
 
     #[cfg(test)]
     pub(crate) fn cached_global_view(&self) -> Option<Arc<Vec<Arc<Peer>>>> {
-        self.global_view
-            .lock()
-            .as_ref()
-            .map(|(_, view)| view.clone())
+        self.global_view.load_full().map(|cached| cached.1.clone())
     }
 
     #[cfg(test)]
@@ -2331,7 +2316,9 @@ impl Relay {
 
     #[cfg(test)]
     pub(crate) fn disconnect_snapshot_cached(&self) -> bool {
-        self.disconnect_snapshot.lock().upgrade().is_some()
+        self.disconnect_snapshot
+            .load_full()
+            .is_some_and(|weak| weak.upgrade().is_some())
     }
 
     #[cfg(test)]

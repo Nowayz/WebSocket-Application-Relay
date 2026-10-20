@@ -7,6 +7,11 @@
   separate lock and admission counters are atomics. No socket write happens
   while a registry lock is held. The welcome frame is still written before a
   session is published to its room, so it remains first in the session's FIFO.
+- The global recipient-view cache and the disconnect-observer snapshot cache
+  are wait-free atomic swaps, and the list of departure queues with pending
+  work is a lock-free queue. Apart from the listener lock, which the
+  revocation barrier guarantee requires, and the 64 ownership shards, no
+  process-wide lock remains on the data path.
 - Departure notices use one queue per room instead of one global FIFO.
   `re_globl` departures and disconnect-observer notices share a queue. Workers
   rotate across queues in bounded turns (128 recipients for departures, 1,024
