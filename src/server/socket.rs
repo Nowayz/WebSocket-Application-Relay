@@ -4,6 +4,7 @@
 use std::{
     collections::VecDeque,
     io::{self, IoSlice, Read, Write},
+    net::SocketAddr,
     sync::{
         Arc,
         atomic::{
@@ -32,6 +33,9 @@ pub(super) struct Signal {
     pub waker: Waker,
     pub stopping: AtomicBool,
     pub pending: Mutex<VecDeque<Token>>,
+    /// Accepted streams waiting for this worker to admit them. Only the
+    /// accepting worker pushes here; see `worker_listeners`.
+    pub handoff: Mutex<VecDeque<(TcpStream, SocketAddr)>>,
 }
 
 impl Signal {
@@ -779,6 +783,7 @@ mod tests {
             waker: Waker::new(&registry, Token(1)).unwrap(),
             stopping: AtomicBool::new(false),
             pending: Mutex::new(VecDeque::new()),
+            handoff: Mutex::new(VecDeque::new()),
         });
         relay.metrics.connections.fetch_add(1, Relaxed);
         let socket = Socket::new(
@@ -1251,6 +1256,7 @@ mod tests {
             waker: Waker::new(&registry, Token(1)).unwrap(),
             stopping: AtomicBool::new(false),
             pending: Mutex::new(VecDeque::new()),
+            handoff: Mutex::new(VecDeque::new()),
         });
         relay.metrics.connections.fetch_add(1, Relaxed);
         let result = Socket::new(

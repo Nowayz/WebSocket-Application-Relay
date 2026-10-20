@@ -105,13 +105,17 @@ pub async fn serve(
         .try_reserve_exact(workers)
         .context("cannot reserve native worker storage")?;
     for listener in worker_listeners(listener, workers, relay.config.listen_backlog)? {
-        prepared.push(Worker::new(listener, relay.clone())?);
+        prepared.push(Worker::build(listener, relay.clone())?);
+    }
+    let peers: Vec<Arc<Signal>> = prepared
+        .iter()
+        .map(|worker| worker.signal.clone())
+        .collect();
+    for worker in &mut prepared {
+        worker.peers = peers.clone();
     }
     let signals = StopOnDrop {
-        signals: prepared
-            .iter()
-            .map(|worker| worker.signal.clone())
-            .collect(),
+        signals: peers,
         relay: relay.clone(),
     };
     let mut tasks = JoinSet::new();
@@ -221,11 +225,15 @@ async fn drain_service_workers(
 #[cfg(test)]
 mod shutdown_tests;
 
+/// One listener per worker where the kernel can balance accept queues
+/// (Linux `SO_REUSEPORT`). Elsewhere only the first worker listens and hands
+/// accepted streams to the others: registering duplicate handles of a single
+/// listening socket in several pollers left workers stalled on Windows.
 fn worker_listeners(
     listener: std::net::TcpListener,
     workers: usize,
     backlog: u16,
-) -> io::Result<Vec<std::net::TcpListener>> {
+) -> io::Result<Vec<Option<std::net::TcpListener>>> {
     socket2::SockRef::from(&listener).listen(i32::from(backlog))?;
     let mut listeners = Vec::new();
     listeners
@@ -253,14 +261,12 @@ fn worker_listeners(
             socket.set_nonblocking(true)?;
             socket.bind(&address.into())?;
             socket.listen(i32::from(backlog))?;
-            listeners.push(socket.into());
+            listeners.push(Some(socket.into()));
         }
     }
     #[cfg(not(target_os = "linux"))]
-    for _ in 1..workers {
-        listeners.push(listener.try_clone()?);
-    }
-    listeners.push(listener);
+    listeners.extend((1..workers).map(|_| None));
+    listeners.push(Some(listener));
     Ok(listeners)
 }
 
@@ -282,8 +288,12 @@ impl Drop for StopOnDrop {
 struct Worker {
     poll: Poll,
     registry: Arc<Registry>,
-    listener: TcpListener,
+    /// Absent on workers that receive accepted streams from a peer.
+    listener: Option<TcpListener>,
     signal: Arc<Signal>,
+    /// Every worker's signal, including this one, for round-robin handoff.
+    peers: Vec<Arc<Signal>>,
+    next_peer: usize,
     relay: Arc<Relay>,
     connections: Slab<Connection>,
     connection_capacity: usize,
@@ -311,21 +321,35 @@ impl Drop for Worker {
 }
 
 impl Worker {
+    #[cfg(test)]
     fn new(listener: std::net::TcpListener, relay: Arc<Relay>) -> io::Result<Self> {
+        Self::build(Some(listener), relay)
+    }
+
+    fn build(listener: Option<std::net::TcpListener>, relay: Arc<Relay>) -> io::Result<Self> {
         let poll = Poll::new()?;
         let registry = Arc::new(poll.registry().try_clone()?);
-        let mut listener = TcpListener::from_std(listener);
-        registry.register(&mut listener, LISTENER, Interest::READABLE)?;
+        let listener = match listener {
+            Some(listener) => {
+                let mut listener = TcpListener::from_std(listener);
+                registry.register(&mut listener, LISTENER, Interest::READABLE)?;
+                Some(listener)
+            }
+            None => None,
+        };
         let signal = Arc::new(Signal {
             waker: mio::Waker::new(&registry, WAKE)?,
             stopping: AtomicBool::new(false),
             pending: parking_lot::Mutex::new(VecDeque::new()),
+            handoff: parking_lot::Mutex::new(VecDeque::new()),
         });
         Ok(Self {
             poll,
             registry,
             listener,
             signal,
+            peers: Vec::new(),
+            next_peer: 0,
             relay,
             connections: Slab::new(),
             connection_capacity: 0,
@@ -371,7 +395,10 @@ impl Worker {
             return Ok(());
         }
         for _ in 0..ACCEPT_QUANTUM {
-            let (stream, address) = match self.listener.accept() {
+            let Some(listener) = &self.listener else {
+                return Ok(());
+            };
+            let (stream, address) = match listener.accept() {
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) => {
@@ -384,8 +411,41 @@ impl Worker {
                 }
                 Ok(accepted) => accepted,
             };
+            self.relay.metrics.accepted.fetch_add(1, Relaxed);
+            // Spread admissions across workers; each stream is registered
+            // only with the poller of the worker that will own it.
+            if self.peers.len() > 1 {
+                let target = self.next_peer % self.peers.len();
+                self.next_peer = self.next_peer.wrapping_add(1);
+                let peer = &self.peers[target];
+                if !Arc::ptr_eq(peer, &self.signal) {
+                    let mut handoff = peer.handoff.lock();
+                    let wake = handoff.is_empty();
+                    handoff.push_back((stream, address));
+                    drop(handoff);
+                    if wake {
+                        let _ = peer.waker.wake();
+                    }
+                    continue;
+                }
+            }
+            self.admit(stream, address)?;
+        }
+        // EPOLLET requires an explicit continuation when we yield before
+        // WouldBlock. The listener uses the same bounded ready queue.
+        self.schedule_accept();
+        Ok(())
+    }
+
+    /// Admission for one accepted stream: policy checks, TCP options, the
+    /// handshake staging lease, and registration with this worker's poller.
+    fn admit(
+        &mut self,
+        stream: mio::net::TcpStream,
+        address: std::net::SocketAddr,
+    ) -> io::Result<()> {
+        {
             let metrics = &self.relay.metrics;
-            metrics.accepted.fetch_add(1, Relaxed);
             if self.relay.is_draining()
                 || metrics
                     .connections
@@ -395,7 +455,7 @@ impl Worker {
                     .is_err()
             {
                 metrics.rejected.fetch_add(1, Relaxed);
-                continue;
+                return Ok(());
             }
             let mut guard = ConnectionGuard(metrics.clone(), None);
             // Local bindings drop in reverse declaration order. Keep this
@@ -406,7 +466,7 @@ impl Worker {
                 let Some(permit) = limit.acquire(address.ip()) else {
                     metrics.rejected.fetch_add(1, Relaxed);
                     metrics.ip_rejected.fetch_add(1, Relaxed);
-                    continue;
+                    return Ok(());
                 };
                 guard.1 = Some(permit);
             }
@@ -435,7 +495,7 @@ impl Worker {
                         Err(_) => {
                             metrics.rejected.fetch_add(1, Relaxed);
                             let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-                            continue;
+                            return Ok(());
                         }
                     }
                 }
@@ -469,10 +529,23 @@ impl Worker {
             self.timers.set(slot, deadline);
             self.schedule(token);
         }
-        // EPOLLET requires an explicit continuation when we yield before
-        // WouldBlock. The listener uses the same bounded ready queue.
-        self.schedule_accept();
         Ok(())
+    }
+
+    /// Admit streams handed over by the accepting worker. During shutdown
+    /// they are refused by dropping them.
+    fn admit_handoffs(&mut self, stopping: bool) -> io::Result<()> {
+        loop {
+            let next = self.signal.handoff.lock().pop_front();
+            let Some((stream, address)) = next else {
+                return Ok(());
+            };
+            if stopping {
+                self.relay.metrics.rejected.fetch_add(1, Relaxed);
+                continue;
+            }
+            self.admit(stream, address)?;
+        }
     }
 
     fn setup_failed(&mut self, error: io::Error, operation: &'static str) -> io::Result<()> {
@@ -489,8 +562,11 @@ impl Worker {
     ) -> io::Result<()> {
         // Stop readiness notifications during resource pressure. Existing
         // sockets, timers and shutdown remain serviced; retry drains queued TCP.
-        self.registry.deregister(&mut self.listener)?;
-        self.accept_retry = Some(Instant::now() + delay);
+        // A worker without a listener only refuses the one stream.
+        if let Some(listener) = &mut self.listener {
+            self.registry.deregister(listener)?;
+            self.accept_retry = Some(Instant::now() + delay);
+        }
         tracing::warn!(%error, operation, "native admission failed; retrying in one second");
         Ok(())
     }
@@ -553,8 +629,10 @@ impl Worker {
         let mut incoming = relay.receive_batch();
         loop {
             if self.signal.stopping.load(Acquire) && shutdown_deadline.is_none() {
-                if self.accept_retry.take().is_none() {
-                    self.registry.deregister(&mut self.listener)?;
+                if self.accept_retry.take().is_none()
+                    && let Some(listener) = &mut self.listener
+                {
+                    self.registry.deregister(listener)?;
                 }
                 shutdown_deadline = Some(
                     Instant::now() + Duration::from_secs(self.relay.config.shutdown_timeout_secs),
@@ -574,8 +652,10 @@ impl Worker {
             let now = Instant::now();
             if self.accept_retry.is_some_and(|deadline| deadline <= now) {
                 self.accept_retry = None;
-                self.registry
-                    .register(&mut self.listener, LISTENER, Interest::READABLE)?;
+                if let Some(listener) = &mut self.listener {
+                    self.registry
+                        .register(listener, LISTENER, Interest::READABLE)?;
+                }
                 // Drain an already queued flow even without a fresh edge.
                 self.accept()?;
             }
@@ -672,6 +752,7 @@ impl Worker {
                     }
                 }
             }
+            self.admit_handoffs(shutdown_deadline.is_some())?;
             if shutdown_deadline.is_some() && self.connections.is_empty() {
                 break;
             }
@@ -1468,7 +1549,7 @@ mod tests {
         original.listen(128).unwrap();
         let listeners = worker_listeners(original.into(), 4, 173).unwrap();
         assert_eq!(listeners.len(), 4);
-        for listener in listeners {
+        for listener in listeners.into_iter().flatten() {
             assert!(socket2::SockRef::from(&listener).only_v6().unwrap());
             assert_eq!(listener.local_addr().unwrap().port(), port);
         }
