@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-- The routing registry no longer has a global lock. Session ownership is a
-  lock-free concurrent map, each channel has its own lock, global observers
-  are an atomically swapped snapshot and admission counters are atomics. No socket write happens
+- The routing registry no longer has a global lock. Session ownership and
+  the channel index are lock-free concurrent maps, each channel has its own
+  lock, global observers are an atomically swapped snapshot and admission
+  counters are atomics, including an exact channel count that enforces
+  `WAR_MAX_CHANNELS` under concurrent creation. No socket write happens
   while a registry lock is held. The welcome frame is still written before a
   session is published to its room, so it remains first in the session's FIFO.
 - The global observer list is an immutable snapshot swapped atomically, with
@@ -16,6 +18,10 @@
   process-wide lock remains on the routing path. A publication or departure
   captured concurrently with a revocation may be omitted for that observer;
   it never arrives after the acknowledgement.
+- A join that loses the race with its room's retirement after the welcome
+  has gone out now retries against the replacement room under the same ID.
+  It used to start over with a fresh ID and rolled the session count back
+  twice, which could underflow the count and refuse later joins.
 - Departure notices use one queue per room instead of one global FIFO.
   `re_globl` departures and disconnect-observer notices share a queue. Workers
   rotate across queues in bounded turns (128 recipients for departures, 1,024
@@ -54,9 +60,13 @@
 - New end-to-end test for a slow consumer, a unit test that a publication
   outlives its source, and two responsiveness tests: one drives a 1,100-member
   room through broadcasts, departures and observer revocations, the other
-  creates and retires rooms continuously under a stream of global broadcasts;
-  in both an unrelated session must keep echoing within one second and
-  shutdown must stay bounded.
+  creates and retires rooms continuously under a stream of global broadcasts
+  while an admin client pages through the channel listing; in both an
+  unrelated session must keep echoing within one second, every listing
+  must answer within one second, and shutdown must stay bounded. Two unit
+  tests race channel creation against the channel limit and joins against
+  retirements of one name. The per-IP admission test accepts the
+  `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.
   `check-release.py` uses explicit checks instead of `assert` and verifies

@@ -88,15 +88,7 @@ impl Server {
     }
 
     async fn http(&self, method: &str, path: &str, token: Option<&str>) -> String {
-        let mut socket = TcpStream::connect(self.admin).await.unwrap();
-        let auth = token.map_or(String::new(), |s| format!("Authorization: Bearer {s}\r\n"));
-        socket.write_all(format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
-        let mut bytes = Vec::new();
-        timeout(Duration::from_secs(3), socket.read_to_end(&mut bytes))
-            .await
-            .unwrap()
-            .unwrap();
-        String::from_utf8(bytes).unwrap()
+        http_at(self.admin, method, path, token).await
     }
 
     async fn stop(mut self) {
@@ -117,6 +109,23 @@ impl Server {
             );
         }
     }
+}
+
+async fn http_at(
+    admin: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+) -> String {
+    let mut socket = TcpStream::connect(admin).await.unwrap();
+    let auth = token.map_or(String::new(), |s| format!("Authorization: Bearer {s}\r\n"));
+    socket.write_all(format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
+    let mut bytes = Vec::new();
+    timeout(Duration::from_secs(3), socket.read_to_end(&mut bytes))
+        .await
+        .unwrap()
+        .unwrap();
+    String::from_utf8(bytes).unwrap()
 }
 
 impl Drop for Server {
@@ -2203,11 +2212,12 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
     while readers.join_next().await.is_some() {}
 }
 
-/// The other stall-prone path: room creation and retirement take the channel
-/// index write lock, and every membership change invalidates the global
-/// recipient view, which the next global broadcast rebuilds from every room.
-/// Under continuous room churn and a stream of global broadcasts, a session
-/// in a stable room must keep echoing with bounded latency.
+/// The other stall-prone path: room creation and retirement write the
+/// channel index, every membership change invalidates the global recipient
+/// view, which the next global broadcast rebuilds from every room, and the
+/// admin channel listing walks the whole index. Under continuous room churn
+/// and a stream of global broadcasts, a session in a stable room must keep
+/// echoing and the listing must keep answering, both with bounded latency.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcasts() {
     use std::{sync::atomic::AtomicBool, time::Instant};
@@ -2259,7 +2269,7 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
         });
     }
     // Room churn: fresh rooms are created and retired as fast as the client
-    // can join and leave, so the index write lock is taken continuously.
+    // can join and leave, so the index is written continuously.
     for lane in 0..2u64 {
         let url = url.clone();
         let stop = stop.clone();
@@ -2271,6 +2281,36 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
                 created += 1;
             }
             created
+        });
+    }
+    // Listing: the admin channel page walks the index while it churns.
+    {
+        let admin = server.admin;
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let mut pages = 0u64;
+            let mut worst = Duration::ZERO;
+            while !stop.load(Relaxed) {
+                let started = Instant::now();
+                let response =
+                    http_at(admin, "GET", "/v1/channels?limit=64", Some("admin-test")).await;
+                worst = worst.max(started.elapsed());
+                assert!(
+                    response.starts_with("HTTP/1.1 200 "),
+                    "listing failed: {}",
+                    response.lines().next().unwrap_or_default()
+                );
+                let body = response.split_once("\r\n\r\n").unwrap().1;
+                let page: serde_json::Value = serde_json::from_str(body).unwrap();
+                let rows = page.as_array().expect("a channel page is a JSON array");
+                assert!(!rows.is_empty() && rows.len() <= 64);
+                pages += 1;
+            }
+            assert!(
+                worst < Duration::from_secs(1),
+                "channel listing stalled for {worst:?} during room churn"
+            );
+            pages
         });
     }
     let (mut probe, probe_id) = join_at(&url, "probe").await;
@@ -2299,7 +2339,7 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
         counts.push(result.unwrap());
     }
     eprintln!(
-        "probe: {samples} echoes, worst {worst:?}; broadcasts and rooms created {counts:?}; frames {}",
+        "probe: {samples} echoes, worst {worst:?}; broadcasts, rooms created per lane and pages listed {counts:?}; frames {}",
         received.load(Relaxed)
     );
     assert!(samples >= 50);

@@ -521,8 +521,7 @@ fn sparse_channel_registry_preserves_names_variables_and_published_storage() {
             sub
         })
         .collect();
-    let peak_capacity = relay.channels_capacity();
-    assert!(peak_capacity >= 1027);
+    assert_eq!(relay.counts().1, 1027);
     let value = protocol::byte_string(&[0x5a; 8192]);
     let input = protocol::envelope(target.registration.peer.id.load(Relaxed), &value);
     let pointer = protocol::parse(&input).unwrap().1.as_ptr();
@@ -531,8 +530,6 @@ fn sparse_channel_registry_preserves_names_variables_and_published_storage() {
     drop(fillers);
     {
         assert_eq!(relay.counts().1, 3);
-        assert!(relay.channels_capacity() <= 256);
-        assert!(relay.channels_capacity() < peak_capacity / 4);
         for ((name, (key_pointer, value_pointer)), sub) in
             names.iter().zip(&pointers).zip([&source, &target, &global])
         {
@@ -836,4 +833,82 @@ fn deferred_submission_promotes_same_body_and_holds_reservation_through_retireme
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert!(frame.has_unique_payload());
+}
+
+#[test]
+fn channel_limit_holds_exactly_under_concurrent_creation() {
+    // 65 counts the global room, so exactly 64 ordinary rooms fit.
+    let relay = Relay::new(Config {
+        max_channels: 65,
+        ..config()
+    })
+    .unwrap();
+    let barrier = Arc::new(std::sync::Barrier::new(8));
+    let creators: Vec<_> = (0..8)
+        .map(|thread| {
+            let relay = relay.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                (0..32)
+                    .filter_map(|i| {
+                        relay
+                            .subscribe(format!("room-{thread}-{i}").as_bytes())
+                            .ok()
+                    })
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect();
+    let held: Vec<_> = creators
+        .into_iter()
+        .flat_map(|creator| creator.join().unwrap())
+        .collect();
+    assert_eq!(
+        held.len(),
+        64,
+        "the limit must hold exactly, never over or under"
+    );
+    assert_eq!(relay.counts().1, 65);
+    assert_eq!(relay.metrics.rejected.load(Relaxed), 8 * 32 - 64);
+    assert!(relay.subscribe(b"one-more").is_err());
+    drop(held);
+    // Retired rooms return their slots.
+    assert_eq!(relay.counts().1, 1);
+    let again = relay.subscribe(b"one-more").unwrap();
+    assert_eq!(relay.counts().1, 2);
+    drop(again);
+    assert_eq!(relay.counts().1, 1);
+}
+
+#[test]
+fn concurrent_joins_and_retirements_of_one_name_leave_a_consistent_index() {
+    let relay = Relay::new(config()).unwrap();
+    let barrier = Arc::new(std::sync::Barrier::new(4));
+    let workers: Vec<_> = (0..4)
+        .map(|_| {
+            let relay = relay.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..2000 {
+                    // Every join succeeds: a room retiring under a joiner is
+                    // replaced by a fresh one, never reported as a limit, and
+                    // the joiner is a member of a live room.
+                    let sub = relay.subscribe(b"shared").unwrap();
+                    let state = sub.registration.peer.room.state.read();
+                    assert!(!state.retired);
+                    assert!(state.members.contains_key(&sub.registration.peer.key));
+                    drop(state);
+                    drop(sub);
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(relay.counts(), (0, 1));
+    assert!(relay.channel(b"shared").is_none());
+    assert_eq!(relay.metrics.rejected.load(Relaxed), 0);
 }

@@ -63,7 +63,12 @@ pub struct Relay {
     pub metrics: Arc<Metrics>,
     admission: AtomicU8,
     users: Users,
-    channels: RwLock<HashMap<Bytes, Arc<Channel>>>,
+    /// Lock-free name-to-channel index. Lookup is wait-free; creation and
+    /// retirement are single-key writes that never block a reader.
+    channels: papaya::HashMap<Bytes, Arc<Channel>>,
+    /// Live channels, including the global room. Reserved before a channel
+    /// is inserted so `max_channels` is exact under concurrent creation.
+    channel_count: AtomicUsize,
     /// Incremented on every membership change. A global view built against an
     /// older generation is used once and never cached.
     membership_generation: AtomicU64,
@@ -215,6 +220,20 @@ impl Users {
 
     fn try_insert(&self, id: u64, peer: &Arc<Peer>) -> bool {
         self.map.pin().try_insert(id, Arc::downgrade(peer)).is_ok()
+    }
+
+    /// Point `id` at `peer` while `key` still owns it or its previous owner
+    /// is gone. Returns false when another session owns the ID now.
+    fn replace(&self, id: u64, key: u64, peer: &Arc<Peer>) -> bool {
+        use papaya::{Compute, Operation};
+        let map = self.map.pin();
+        let outcome = map.compute(id, |entry| match entry {
+            Some((_, owner)) if owner.upgrade().is_some_and(|owner| owner.key != key) => {
+                Operation::Abort(())
+            }
+            _ => Operation::Insert(Arc::downgrade(peer)),
+        });
+        !matches!(outcome, Compute::Aborted(()))
     }
 
     /// Remove `id` only while `key` still owns it. A displaced session must
@@ -1213,8 +1232,8 @@ impl Serialize for ChannelSnapshot {
 }
 
 fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
-    // HashMap iteration scans spare buckets too. After substantial retirement,
-    // release excess slots in ownership, membership and channel-name indexes.
+    // HashMap iteration scans spare buckets too. After substantial departure,
+    // release excess slots in a room's membership index.
     // Keep small maps and 2x headroom to avoid churn. Rehashing moves metadata;
     // peers, queues, name/variable bytes and shared bodies keep their storage.
     let remaining = map.len();
@@ -1232,9 +1251,11 @@ impl Relay {
         config.validate()?;
         // Verify entropy availability before listening, never silently use predictable IDs.
         let _ = random_id()?;
-        let mut channels = HashMap::new();
+        // Pre-size the index up to a modest cap so ordinary growth never
+        // resizes it; an iteration would otherwise help finish the resize.
+        let channels = papaya::HashMap::with_capacity(config.max_channels.min(1 << 16));
         let global = Bytes::from_static(GLOBAL_CHANNEL);
-        channels.insert(global.clone(), Channel::new(global));
+        channels.pin().insert(global.clone(), Channel::new(global));
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
         Ok(Arc::new(Self {
@@ -1246,7 +1267,8 @@ impl Relay {
             }),
             admission: AtomicU8::new(Admission::Open as u8),
             users: Users::new(),
-            channels: RwLock::new(channels),
+            channels,
+            channel_count: AtomicUsize::new(1),
             membership_generation: AtomicU64::new(0),
             global_view: ArcSwapOption::empty(),
             listeners: ArcSwap::from_pointee(Listeners::empty(1)),
@@ -1263,7 +1285,10 @@ impl Relay {
     }
 
     pub fn counts(&self) -> (usize, usize) {
-        (self.sessions.load(Relaxed), self.channels.read().len())
+        (
+            self.sessions.load(Relaxed),
+            self.channel_count.load(Relaxed),
+        )
     }
 
     /// Manual drain and terminal shutdown both refuse new admission.
@@ -1313,13 +1338,20 @@ impl Relay {
         }
     }
 
+    /// Handles to every live channel. The walk is lock-free: a channel
+    /// present throughout is seen exactly once, one created or retired
+    /// meanwhile may or may not appear.
+    pub(crate) fn live_channels(&self) -> Vec<Arc<Channel>> {
+        self.channels.pin().values().cloned().collect()
+    }
+
     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
-        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        let channels = self.live_channels();
         channels.iter().map(|c| ChannelSnapshot::of(c)).collect()
     }
 
     fn channel_members_snapshot(&self) -> Vec<(SnapshotName, usize)> {
-        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        let channels = self.live_channels();
         channels
             .iter()
             .map(|c| (SnapshotName::new(&c.name), c.state.read().members.len()))
@@ -1374,25 +1406,39 @@ impl Relay {
         })
     }
 
-    /// Find a live room or create it. The index read lock is the fast path;
-    /// creation takes the write lock and re-checks under it.
+    /// Find a live room or create it. Lookup is a wait-free read of the
+    /// index. Creation reserves a slot in the channel count first, so the
+    /// limit holds exactly under concurrent creation, then inserts; two
+    /// creators of one name resolve atomically and the loser adopts the
+    /// winner's channel and returns its reservation. At the limit, a name
+    /// created by someone else between the lookup and the reservation is
+    /// adopted on a second look; only a name that still does not exist is
+    /// refused.
     fn room(&self, name: &[u8]) -> Result<Arc<Channel>, Disconnect> {
-        if let Some(channel) = self.channels.read().get(name) {
-            return Ok(channel.clone());
-        }
-        let mut channels = self.channels.write();
+        let channels = self.channels.pin();
         if let Some(channel) = channels.get(name) {
             return Ok(channel.clone());
         }
-        if channels.len() >= self.config.max_channels {
-            return Err(Disconnect::OVERLOADED);
+        if self
+            .channel_count
+            .fetch_update(Relaxed, Relaxed, |count| {
+                (count < self.config.max_channels).then_some(count + 1)
+            })
+            .is_err()
+        {
+            return channels.get(name).cloned().ok_or(Disconnect::OVERLOADED);
         }
         // Copy a bounded name once per channel. Peers in an existing channel
         // share its canonical storage instead of allocating another name.
         let name = Bytes::copy_from_slice(name);
         let channel = Channel::new(name.clone());
-        channels.insert(name, channel.clone());
-        Ok(channel)
+        match channels.try_insert(name, channel.clone()) {
+            Ok(_) => Ok(channel),
+            Err(occupied) => {
+                self.channel_count.fetch_sub(1, Relaxed);
+                Ok(occupied.current.clone())
+            }
+        }
     }
 
     pub(crate) fn subscribe_with_output(
@@ -1422,93 +1468,114 @@ impl Relay {
             room: None,
             id: None,
         };
-        // Reserve room capacity before anything is sent, so a refused join
-        // never receives a welcome. A room retired by a concurrent last
-        // departure is replaced by a fresh one.
-        let room = loop {
-            let room = match self.room(channel) {
-                Ok(room) => room,
-                Err(reason) => {
-                    self.metrics.rejected.fetch_add(1, Relaxed);
-                    return Err(reason);
+        let key = self.next_key.fetch_add(1, Relaxed);
+        // Set once the welcome has been written. A retry against a replacement
+        // room keeps this ID, so the client never sees a second welcome.
+        let mut welcomed = None;
+        loop {
+            // Reserve room capacity before anything is sent, so a refused join
+            // never receives a welcome. A room retired by a concurrent last
+            // departure is replaced by a fresh one.
+            let room = loop {
+                let room = match self.room(channel) {
+                    Ok(room) => room,
+                    Err(reason) => {
+                        self.metrics.rejected.fetch_add(1, Relaxed);
+                        return Err(reason);
+                    }
+                };
+                if room
+                    .reserved
+                    .fetch_update(Relaxed, Relaxed, |count| {
+                        (count < self.config.max_channel_members).then_some(count + 1)
+                    })
+                    .is_err()
+                {
+                    return Err(refused(self));
+                }
+                if room.state.read().retired {
+                    room.reserved.fetch_sub(1, Relaxed);
+                    continue;
+                }
+                break room;
+            };
+            lease.room = Some(room.clone());
+            let build = |id: u64| {
+                Arc::new(Peer {
+                    key,
+                    id: AtomicU64::new(id),
+                    channel: room.name.clone(),
+                    room: room.clone(),
+                    authenticated: AtomicBool::new(false),
+                    listener: AtomicU8::new(0),
+                    closing: AtomicBool::new(false),
+                    retirement_barrier: AtomicU64::new(0),
+                    retirement_revoked: AtomicU64::new(0),
+                    message_barrier: AtomicU64::new(0),
+                    message_revoked: AtomicU64::new(0),
+                    output: output.clone(),
+                    budget: Arc::new(Budget {
+                        used: AtomicUsize::new(0),
+                        limit: self.config.queue_bytes,
+                        global_limit: self.config.total_queue_bytes,
+                        metrics: self.metrics.clone(),
+                    }),
+                })
+            };
+            let (id, peer) = match welcomed {
+                None => loop {
+                    let id = random_id().map_err(|_| Disconnect::OVERLOADED)?;
+                    if id == 0 || id == BROADCAST {
+                        continue;
+                    }
+                    let peer = build(id);
+                    if self.users.try_insert(id, &peer) {
+                        break (id, peer);
+                    }
+                },
+                Some(id) => {
+                    // The welcome already went out under this ID: point its
+                    // ownership at a peer bound to the replacement room.
+                    let peer = build(id);
+                    if !self.users.replace(id, key, &peer) {
+                        return Err(Disconnect::TAKEN);
+                    }
+                    (id, peer)
                 }
             };
-            if room
-                .reserved
-                .fetch_update(Relaxed, Relaxed, |count| {
-                    (count < self.config.max_channel_members).then_some(count + 1)
-                })
-                .is_err()
+            lease.id = Some((id, key));
+            if welcomed.is_none() {
+                // The welcome is first in this session's FIFO: nothing can
+                // address the peer through its room before the insert below.
+                // No lock is held here, so the inline socket write cannot delay
+                // any other session.
+                peer.enqueue_welcome(&Frame::integer(id))?;
+                welcomed = Some(id);
+            }
             {
-                return Err(refused(self));
+                let mut state = room.state.write();
+                if state.retired {
+                    // Lost a race with the last departure after the welcome
+                    // went out. Return this room's member slot and start over
+                    // against the replacement room. The session count and the
+                    // ID stay reserved by the lease.
+                    drop(state);
+                    lease.room = None;
+                    room.reserved.fetch_sub(1, Relaxed);
+                    continue;
+                }
+                state.insert(peer.clone());
             }
-            if room.state.read().retired {
-                room.reserved.fetch_sub(1, Relaxed);
-                continue;
-            }
-            break room;
-        };
-        lease.room = Some(room.clone());
-        let key = self.next_key.fetch_add(1, Relaxed);
-        let (id, peer) = loop {
-            let id = random_id().map_err(|_| Disconnect::OVERLOADED)?;
-            if id == 0 || id == BROADCAST {
-                continue;
-            }
-            let peer = Arc::new(Peer {
-                key,
-                id: AtomicU64::new(id),
-                channel: room.name.clone(),
-                room: room.clone(),
-                authenticated: AtomicBool::new(false),
-                listener: AtomicU8::new(0),
-                closing: AtomicBool::new(false),
-                retirement_barrier: AtomicU64::new(0),
-                retirement_revoked: AtomicU64::new(0),
-                message_barrier: AtomicU64::new(0),
-                message_revoked: AtomicU64::new(0),
-                output: output.clone(),
-                budget: Arc::new(Budget {
-                    used: AtomicUsize::new(0),
-                    limit: self.config.queue_bytes,
-                    global_limit: self.config.total_queue_bytes,
-                    metrics: self.metrics.clone(),
-                }),
+            self.membership_changed();
+            self.metrics.joined.fetch_add(1, Relaxed);
+            lease.room = None;
+            lease.id = None;
+            std::mem::forget(lease);
+            return Ok(Registration {
+                peer,
+                relay: self.clone(),
             });
-            if self.users.try_insert(id, &peer) {
-                break (id, peer);
-            }
-        };
-        lease.id = Some((id, key));
-        // The welcome is first in this session's FIFO: nothing can address the
-        // peer through its room before the insert below. No lock is held here,
-        // so the inline socket write cannot delay any other session.
-        peer.enqueue_welcome(&Frame::integer(id))?;
-        {
-            let mut state = room.state.write();
-            if state.retired {
-                // Lost a race with the last departure after the welcome went
-                // out. Start over against the replacement room; the welcome
-                // carries the same ID either way.
-                drop(state);
-                lease.room = None;
-                room.reserved.fetch_sub(1, Relaxed);
-                self.users.remove_owned(id, key);
-                lease.id = None;
-                self.sessions.fetch_sub(1, Relaxed);
-                return self.subscribe_with_output(channel, output);
-            }
-            state.insert(peer.clone());
         }
-        self.membership_changed();
-        self.metrics.joined.fetch_add(1, Relaxed);
-        lease.room = None;
-        lease.id = None;
-        std::mem::forget(lease);
-        Ok(Registration {
-            peer,
-            relay: self.clone(),
-        })
     }
 
     fn membership_changed(&self) {
@@ -1525,7 +1592,7 @@ impl Relay {
         {
             return cached.1.clone();
         }
-        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        let channels = self.live_channels();
         let mut members = Vec::new();
         for channel in &channels {
             members.extend(
@@ -2260,25 +2327,30 @@ impl Relay {
             }
             _ => {}
         }
-        // An empty ordinary room leaves the index. Re-check under both locks:
-        // a joiner may have arrived between the membership update and here.
+        // An empty ordinary room leaves the index. Re-check under the room's
+        // lock: a joiner may have arrived between the membership update and
+        // here. The mark, the count and the index entry all change under
+        // that lock, so a joiner that sees the mark and retries finds no
+        // stale entry. The count drops before the entry goes, so a creator
+        // that misses the entry always finds the slot free. Only this exact
+        // channel is removed; a replacement under the same name is left alone.
         if !peer.is_global() {
             let empty = room.state.read().members.is_empty();
             if empty {
-                let mut channels = self.channels.write();
                 let mut state = room.state.write();
-                if state.members.is_empty()
-                    && !state.retired
-                    && channels
-                        .get(&room.name)
-                        .is_some_and(|current| Arc::ptr_eq(current, room))
-                {
+                if state.members.is_empty() && !state.retired {
                     state.retired = true;
+                    self.channel_count.fetch_sub(1, Relaxed);
                     self.metrics
                         .variable_bytes
                         .fetch_sub(state.variable_bytes, Relaxed);
-                    channels.remove(&room.name);
-                    shrink_sparse_map(&mut channels);
+                    let channels = self.channels.pin();
+                    let removed =
+                        channels.remove_if(&room.name, |_, current| Arc::ptr_eq(current, room));
+                    debug_assert!(
+                        matches!(removed, Ok(Some(_))),
+                        "a live channel is indexed under its name until it retires"
+                    );
                 }
             } else {
                 shrink_sparse_map(&mut room.state.write().members);
@@ -2344,7 +2416,7 @@ impl Relay {
 
     #[cfg(test)]
     pub(crate) fn channel(&self, name: &[u8]) -> Option<Arc<Channel>> {
-        self.channels.read().get(name).cloned()
+        self.channels.pin().get(name).cloned()
     }
 
     #[cfg(test)]
@@ -2396,12 +2468,10 @@ impl Relay {
     /// must run with this true.
     #[cfg(test)]
     pub(crate) fn registry_unlocked(&self) -> bool {
-        self.channels.try_write().is_some()
-            && self.listener_writes.try_lock().is_some()
+        self.listener_writes.try_lock().is_some()
             && self
-                .channels
-                .read()
-                .values()
+                .live_channels()
+                .iter()
                 .all(|channel| channel.state.try_write().is_some())
     }
 
@@ -2413,11 +2483,6 @@ impl Relay {
     #[cfg(test)]
     pub(crate) fn users_len(&self) -> usize {
         self.users.len()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn channels_capacity(&self) -> usize {
-        self.channels.read().capacity()
     }
 }
 

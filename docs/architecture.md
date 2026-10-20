@@ -52,8 +52,22 @@ into independently locked pieces:
   the new key. The map holds weak handles: a lock-free map reclaims removed
   entries lazily, and a session's socket and budgets are released by its own
   connection the moment it leaves, never by the map's reclamation schedule.
-- The channel index (name to channel) is one read/write lock. Lookup takes the
-  read side; creating or retiring a channel takes the write side.
+- The channel index (name to channel) is a lock-free concurrent map with an
+  atomic channel count. Lookup is a wait-free read. Creation reserves a slot
+  in the count, so `max_channels` holds exactly under concurrent creation,
+  then inserts; two creators of one name resolve atomically and the loser
+  adopts the winner's channel. Retirement marks the channel, releases its
+  slot in the count and removes exactly that channel from the index, all
+  under the channel's own lock, so a joiner that sees the mark and retries
+  never finds a stale entry and a creator that misses the entry always
+  finds the slot free. The count is the limit; the index may briefly hold
+  an entry whose slot is already released while its removal completes.
+  One boundary case follows from having no index lock: exactly at the
+  channel limit, a join that races another client's creation of the same
+  name may be refused with `1013` instead of joining that channel. The
+  creator looks the name up a second time before refusing, so this needs
+  the other creator to be between its reservation and its insert at that
+  instant. The client retries, as `1013` asks.
 - Each channel has one read/write lock covering its membership, its variables
   and its cached recipient view. It also has an atomic reservation counter used
   for admission and its own departure queue.
@@ -65,18 +79,22 @@ into independently locked pieces:
   the snapshot when nobody is listening.
 - Admission counters are atomics: the admission state, the session count and
   each channel's reservation count.
-- The list of departure queues with pending work is a mutex that workers only
-  ever try to lock. A busy worker never waits on it.
+- The list of departure queues with pending work is a lock-free queue.
+  Workers pop an entry, run one bounded turn and push it back while it has
+  work; nobody waits on it.
 - Each departure queue is a mutex around a FIFO of jobs.
 
 Where locks nest, they nest in this order, from outer to inner:
 
-1. channel index
-2. channel
-3. listener writer mutex (flag changes and observer departures only)
-4. publication index, then one publication job
-5. departure queue
-6. socket output state
+1. channel
+2. listener writer mutex (flag changes and observer departures only)
+3. publication index, then one publication job
+4. departure queue
+5. socket output state
+
+No process-wide lock appears in that list. The channel index, session
+ownership, the observer snapshot, the two caches and the list of pending
+departure queues are all lock-free or wait-free.
 
 A path may skip levels but never takes an outer lock while holding an inner
 one. Session ownership, the listener snapshot, the two caches (global
@@ -96,9 +114,9 @@ acknowledgement.
 
 ### Shared locks that remain, and what bounds them
 
-Some state is inherently process-wide. Most of it is now lock-free; what is
-still a lock is held for a bounded, small amount of work and never across
-socket I/O:
+Some state is inherently process-wide. All of it is now lock-free or
+wait-free; the per-object locks that remain are held for a bounded, small
+amount of work and never across socket I/O:
 
 - The listener snapshot is wait-free to read. Routing never waits on observer
   changes. The barrier guarantee (a revocation flushes every job that captured
@@ -117,6 +135,15 @@ socket I/O:
 - Session ownership is a lock-free map. A private message's target lookup
   is a wait-free read; a join, a departure or a takeover is a single-key
   write that never blocks a reader.
+- The channel index is a lock-free map (`papaya`) with an atomic channel
+  count. Finding a room is a wait-free read; creating or retiring one is a
+  single-key write. Walks of the index (the global recipient view, the
+  admin listing and the channel-list command) never block a writer and are
+  never blocked by one; a channel present throughout a walk is seen once,
+  one created or retired meanwhile may or may not appear. The index is
+  pre-sized to the channel limit (capped at 65,536 slots), so it does not
+  resize in ordinary operation; a retired channel's slot is reused rather
+  than released, which bounds the index at the channel limit.
 - The global recipient-view cache and the disconnect-snapshot cache are
   atomic pointer swaps (`arc_swap`). Reads and publication are wait-free; the
   views themselves are built outside any lock, and a lost publication race
@@ -138,12 +165,15 @@ that churn was about 6 ms.
 
 A second test, `unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcasts`,
 covers the other shared path: two clients create and retire fresh rooms as
-fast as they can, which takes the channel index write lock on every join and
-every departure, while a `re_globl` session broadcasts continuously, which
+fast as they can, which writes the channel index on every join and every
+departure, while a `re_globl` session broadcasts continuously, which
 rebuilds the invalidated global recipient view from every room on every
-broadcast. A session in a stable room must keep echoing within one second.
-On the development machine roughly 6,800 rooms were created and retired in
-2.5 s under 157 global broadcasts, and the worst echo was under 4 ms.
+broadcast, and an admin client pages through the channel listing, which
+walks the whole index. A session in a stable room must keep echoing, and
+every listing must answer, within one second.
+On the development machine roughly 5,000 rooms were created and retired in
+2.5 s under 157 global broadcasts and about 1,500 listing pages, and the
+worst echo was under 5 ms.
 
 What the remaining per-object mutexes protect, and why they cannot stall
 unrelated work: a channel's lock is held for one map insert or removal, or
