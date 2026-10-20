@@ -119,7 +119,10 @@ For an authenticated global listener, clearing a message-observer bit (`1` or
 reply. Clearing disconnect bit `4` does the same for captured disconnect-observer
 notices. Re-enabling a bit admits future publications without replaying flushed
 ones. A publication or departure captured concurrently with the revocation
-may be omitted for that observer; it never arrives after the acknowledgement. Ordinary room membership still receives its
+may be omitted for that observer; it never arrives after the acknowledgement.
+Disconnect notices for sessions of different rooms are not ordered relative
+to each other; notices for sessions of one room arrive in departure order.
+Ordinary room membership still receives its
 own room's departure events independently of listener flags. Existing queue
 budgets and slow-recipient policy continue to apply. The barrier advances only
 that observer's output; unrelated recipients keep their asynchronous turns.

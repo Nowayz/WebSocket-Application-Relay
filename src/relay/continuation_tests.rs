@@ -783,7 +783,7 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         "revocation must not pump room output"
     );
     // Each of these notices has two observers and nothing older ahead of it
-    // in the observer queue, so all three were delivered directly, before the
+    // in their observer shard, so all three were delivered directly, before the
     // revocation. Only the large room job stays deferred.
     assert_eq!(bystander_output.0.lock().len(), 3);
     let expected = [source_id, global_id, second_id];
@@ -918,16 +918,18 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
     };
     let first = depart();
     let second = depart();
-    let old_view = relay.observer_queue().with_jobs(|jobs| {
-        assert_eq!(jobs.len(), 2);
-        let a = snapshot(&jobs[0]);
-        let b = snapshot(&jobs[1]);
-        assert!(
-            Arc::ptr_eq(a, b),
-            "unchanged disconnect membership should be captured once"
-        );
-        Arc::downgrade(a)
-    });
+    let old_view = relay
+        .observer_queue_for(b"snapshot-source")
+        .with_jobs(|jobs| {
+            assert_eq!(jobs.len(), 2);
+            let a = snapshot(&jobs[0]);
+            let b = snapshot(&jobs[1]);
+            assert!(
+                Arc::ptr_eq(a, b),
+                "unchanged disconnect membership should be captured once"
+            );
+            Arc::downgrade(a)
+        });
     // Other observation classes do not change disconnect membership.
     relay
         .receive(
@@ -936,21 +938,25 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         )
         .unwrap();
     let third = depart();
-    relay.observer_queue().with_jobs(|jobs| {
-        assert!(std::sync::Weak::ptr_eq(
-            &old_view,
-            &Arc::downgrade(snapshot(&jobs[2]))
-        ));
-    });
+    relay
+        .observer_queue_for(b"snapshot-source")
+        .with_jobs(|jobs| {
+            assert!(std::sync::Weak::ptr_eq(
+                &old_view,
+                &Arc::downgrade(snapshot(&jobs[2]))
+            ));
+        });
     // A newly authorized observer gets only subsequent departures. Captured
     // jobs retain their old membership while the next job takes a fresh view.
     let (late, late_output) = recorded_disconnect_observer(&relay);
     let fourth = depart();
-    let new_view = relay.observer_queue().with_jobs(|jobs| {
-        let view = Arc::downgrade(snapshot(&jobs[3]));
-        assert!(!std::sync::Weak::ptr_eq(&old_view, &view));
-        view
-    });
+    let new_view = relay
+        .observer_queue_for(b"snapshot-source")
+        .with_jobs(|jobs| {
+            let view = Arc::downgrade(snapshot(&jobs[3]));
+            assert!(!std::sync::Weak::ptr_eq(&old_view, &view));
+            view
+        });
     for _ in 0..2 {
         relay.progress_retirements(FANOUT_QUANTUM);
     }
@@ -965,15 +971,17 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         old_view.upgrade().is_none(),
         "the final old-view job releases its view"
     );
-    relay.observer_queue().with_jobs(|jobs| {
-        assert_eq!(jobs.len(), 1);
-        let job = &jobs[0];
-        assert_eq!(
-            relay.metrics.queued_bytes.load(Relaxed),
-            snapshot(job).bytes + job.snapshot_bytes + job.packet.as_ref().unwrap().frame.len(),
-            "only the remaining job, its body and its shared view retain credit"
-        );
-    });
+    relay
+        .observer_queue_for(b"snapshot-source")
+        .with_jobs(|jobs| {
+            assert_eq!(jobs.len(), 1);
+            let job = &jobs[0];
+            assert_eq!(
+                relay.metrics.queued_bytes.load(Relaxed),
+                snapshot(job).bytes + job.snapshot_bytes + job.packet.as_ref().unwrap().frame.len(),
+                "only the remaining job, its body and its shared view retain credit"
+            );
+        });
     for _ in 0..2 {
         relay.progress_retirements(FANOUT_QUANTUM);
     }
@@ -1026,7 +1034,7 @@ fn shared_disconnect_views_preserve_the_queue_budget_without_per_job_overchargin
         drop(source);
     }
     assert_eq!(
-        relay.observer_queue().len(),
+        relay.observer_queue_len(),
         8,
         "one charged view and eight small jobs fit without synchronous fallback"
     );
@@ -1266,7 +1274,7 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
     let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
         .map(|_| recorded_disconnect_observer(&relay))
         .collect();
-    relay.observer_queue().set_sequence(u64::MAX - 1);
+    relay.set_observer_sequence(u64::MAX - 1);
     let depart = || {
         let source = relay
             .subscribe_with_output(b"barrier-source", Arc::new(NativeRetirement))
@@ -1294,7 +1302,7 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
         !relay.has_retirements(),
         "exhaustion must finish preceding work before direct delivery"
     );
-    assert_eq!(relay.observer_queue().sequence(), u64::MAX);
+    assert_eq!(relay.observer_sequence(), u64::MAX);
     for (_, output) in &observers {
         let packets = output.0.lock();
         assert_eq!(packets.len(), 2);

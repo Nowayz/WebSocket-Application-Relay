@@ -11,22 +11,31 @@
   session is published to its room, so it remains first in the session's FIFO.
 - The global observer list is an immutable snapshot swapped atomically, with
   a generation-based barrier replacing the lock a departure used to hold from
-  capture to enqueue; routing never waits on observer changes. The global
-  recipient-view cache and the disconnect-observer snapshot cache are
-  wait-free atomic swaps, and the list of departure queues with pending work
-  is a lock-free queue, and session ownership is a lock-free map. No
-  process-wide lock remains on the routing path. A publication or departure
-  captured concurrently with a revocation may be omitted for that observer;
-  it never arrives after the acknowledgement.
+  capture to enqueue. Flag changes and observer departures publish the next
+  snapshot with a compare-and-swap loop instead of serializing on a writer
+  mutex, and routing reads which observer classes exist from the snapshot it
+  loads. Direct deliveries to observers no longer take the publication index
+  mutex: each recipient re-checks the revocation mark under its own output
+  lock, so a frame either precedes the revocation's acknowledgement in that
+  observer's FIFO or is dropped. The global recipient-view cache and the
+  disconnect-observer snapshot cache are atomic swaps, the list of departure
+  queues with pending work is a lock-free queue, and session ownership is a
+  lock-free map. No lock shared by the whole relay remains on the routing
+  path. A publication or departure captured concurrently with a revocation
+  may be omitted for that observer; it never arrives after the
+  acknowledgement.
 - A join that loses the race with its room's retirement after the welcome
   has gone out now retries against the replacement room under the same ID.
   It used to start over with a fresh ID and rolled the session count back
   twice, which could underflow the count and refuse later joins.
 - Departure notices use one queue per room instead of one global FIFO.
-  `re_globl` departures and disconnect-observer notices share a queue. Workers
-  rotate across queues in bounded turns (128 recipients for departures, 1,024
-  for live broadcasts), so a large room's notices cannot delay another room's.
-  Notices for different rooms are no longer ordered relative to each other.
+  `re_globl` departures and disconnect-observer notices are spread over
+  sixteen queues by the departing session's room, and a revocation barrier
+  scans all of them. Workers rotate across queues in bounded turns (128
+  recipients for departures, 1,024 for live broadcasts), so a large room's
+  notices cannot delay another room's. Notices for different rooms, including
+  disconnect notices for sessions of different rooms, are no longer ordered
+  relative to each other.
 - A session that closes with an unfinished broadcast (more than 1,024
   recipients) no longer truncates it. The remaining recipients receive the
   message through the departure queue, ahead of that session's departure
@@ -65,7 +74,9 @@
   unrelated session must keep echoing within one second, every listing
   must answer within one second, and shutdown must stay bounded. Two unit
   tests race channel creation against the channel limit and joins against
-  retirements of one name. The per-IP admission test accepts the
+  retirements of one name, and a third stalls a direct observer delivery
+  across a revocation and checks that it is dropped rather than delivered
+  after the acknowledgement. The per-IP admission test accepts the
   `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.

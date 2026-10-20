@@ -1,6 +1,8 @@
 //! Large observer publications are owned and advanced by their source worker.
 //! The index is used only for registration, retirement and revocation; worker
-//! turns lock one publication, never the index or any membership lock.
+//! turns lock one publication, never the index or any membership lock, and
+//! direct (unqueued) deliveries never touch the index at all: each observer
+//! re-checks the revocation mark under its own output lock.
 use super::*;
 use std::collections::BTreeMap;
 
@@ -99,14 +101,11 @@ impl Drop for Publication {
 }
 
 impl MessageFanouts {
-    /// Hold off revocation barriers while the caller delivers to observers
-    /// directly, so no delivery can land after a revocation's acknowledgement.
-    pub(super) fn exclude_barriers(&self) -> parking_lot::MutexGuard<'_, Index> {
-        self.index.lock()
-    }
-
     /// Collect the observer's pending captured messages and advance its
-    /// watermarks. The caller submits them after releasing every lock.
+    /// watermarks. The caller submits them after releasing every lock. The
+    /// revoked generation is stored before the caller enqueues the
+    /// acknowledgement, and direct deliveries re-check it under the
+    /// observer's own output lock, so none of them can follow the ACK.
     pub(super) fn flush(&self, observer: &Peer, revoked_at: u64) -> Vec<Frame> {
         // Publication takes index -> job; progress takes only the job lock,
         // then releases it before unregistering.

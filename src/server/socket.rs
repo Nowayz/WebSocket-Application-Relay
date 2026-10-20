@@ -287,9 +287,20 @@ impl Socket {
         self.writable(&mut state, queued)
     }
     #[inline(always)]
-    fn submit<const DEFER: bool, const BARRIER: bool>(&self, packet: Submission<'_>) -> bool {
+    fn submit<const DEFER: bool, const BARRIER: bool>(
+        &self,
+        packet: Submission<'_>,
+        gate: Option<&dyn Fn() -> bool>,
+    ) -> bool {
         let mut state = self.state.lock();
         if state.closed || state.fatal || state.requested.is_some() {
+            return true;
+        }
+        // Evaluated under the FIFO lock. A revocation stores its mark before
+        // enqueueing its acknowledgement through this same lock, so a frame
+        // that passes here precedes that acknowledgement; one that fails is
+        // dropped and refunds its credit.
+        if gate.is_some_and(|gate| !gate()) {
             return true;
         }
         if BARRIER
@@ -368,15 +379,19 @@ impl PeerOutput for Socket {
     }
 
     fn send(&self, packet: Submission<'_>) -> bool {
-        self.submit::<false, false>(packet)
+        self.submit::<false, false>(packet, None)
     }
 
     fn send_barrier(&self, packet: Submission<'_>) -> bool {
-        self.submit::<false, true>(packet)
+        self.submit::<false, true>(packet, None)
     }
 
     fn send_fanout(&self, packet: Submission<'_>) -> bool {
-        self.submit::<true, false>(packet)
+        self.submit::<true, false>(packet, None)
+    }
+
+    fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
+        self.submit::<true, false>(packet, Some(gate))
     }
 
     fn close(&self, reason: Disconnect) {

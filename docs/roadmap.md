@@ -50,8 +50,9 @@ churn. The first global publication after a membership/ownership change still
 visits every channel to rebuild the global view. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
-Observer barriers still scan the observer queue's pending jobs under the
-listener lock. The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
+Observer barriers scan the observer shards' pending jobs and the publication
+index for one bounded pass; no listener lock exists any more (see
+[architecture.md](architecture.md)). The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
 a two-entry scan cache: a large component win did not produce a clear native
 eight-worker improvement. The [worker-scheduling follow-up](reports/worker-scheduling.md)
 now separates fresh readiness from buffered work and bounds aggregate routing
@@ -59,7 +60,7 @@ work in both phases. Its short native and mixed-population checks preserve the
 source cutoff, FIFO and storage contracts while improving responsiveness.
 Failed initial routing attempts now [charge their visited handles](reports/rejection-accounting.md)
 to the aggregate allowance. Changing/cold captured
-generations under churn are the next lock-hold target. Do not add a recipient
+generations under churn are the next hold-time target. Do not add a recipient
 index from the earlier component result alone.
 
 ## Acceptance for each change

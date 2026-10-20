@@ -53,7 +53,7 @@ into independently locked pieces:
   entries lazily, and a session's socket and budgets are released by its own
   connection the moment it leaves, never by the map's reclamation schedule.
 - The channel index (name to channel) is a lock-free concurrent map with an
-  atomic channel count. Lookup is a wait-free read. Creation reserves a slot
+  atomic channel count. Lookup is a lock-free read. Creation reserves a slot
   in the count, so `max_channels` holds exactly under concurrent creation,
   then inserts; two creators of one name resolve atomically and the loser
   adopts the winner's channel. Retirement marks the channel, releases its
@@ -73,28 +73,34 @@ into independently locked pieces:
   for admission and its own departure queue.
 - Global observers (members of `re_globl` with listener flags) are an
   immutable snapshot that is swapped atomically. Routing and departures load
-  it without locking; only flag changes serialize among themselves on a small
-  writer mutex, build the next snapshot and publish it. An atomic mask records
-  which observer classes are non-empty, so ordinary routing does not even load
-  the snapshot when nobody is listening.
+  it without locking. A flag change or an observer departure builds the next
+  snapshot from the current one and publishes it with a compare-and-swap
+  loop, so writers do not lock either; two concurrent changes rebuild from
+  each other's result. Routing loads the snapshot once per frame and reads
+  from it which observer classes are non-empty.
 - Admission counters are atomics: the admission state, the session count and
   each channel's reservation count.
 - The list of departure queues with pending work is a lock-free queue.
   Workers pop an entry, run one bounded turn and push it back while it has
   work; nobody waits on it.
-- Each departure queue is a mutex around a FIFO of jobs.
+- Each departure queue is a mutex around a FIFO of jobs. Disconnect notices
+  and `re_globl` departures use sixteen such queues, chosen by the departing
+  session's room.
 
 Where locks nest, they nest in this order, from outer to inner:
 
 1. channel
-2. listener writer mutex (flag changes and observer departures only)
-3. publication index, then one publication job
-4. departure queue
-5. socket output state
+2. publication index, then one publication job
+3. departure queue (a revocation barrier holds every observer shard at once,
+   in index order; nothing else holds two)
+4. socket output state
 
-No process-wide lock appears in that list. The channel index, session
-ownership, the observer snapshot, the two caches and the list of pending
-departure queues are all lock-free or wait-free.
+The channel index, session ownership, the observer snapshot, the two caches
+and the list of pending departure queues are all lock-free. Two locks are
+still shared by sessions that are not members of one room, and neither is
+taken on the routing path: the publication index mutex, only for
+registering, finishing or scanning large observer publications, and the
+observer shards, only by departures, worker turns and barriers.
 
 A path may skip levels but never takes an outer lock while holding an inner
 one. Session ownership, the listener snapshot, the two caches (global
@@ -114,29 +120,32 @@ acknowledgement.
 
 ### Shared locks that remain, and what bounds them
 
-Some state is inherently process-wide. All of it is now lock-free or
-wait-free; the per-object locks that remain are held for a bounded, small
+Some state is inherently process-wide. All of it is now lock-free; the
+per-object and per-shard locks that remain are held for a bounded, small
 amount of work and never across socket I/O:
 
-- The listener snapshot is wait-free to read. Routing never waits on observer
+- The listener snapshot is lock-free to read and to replace. Routing never
+  waits on observer
   changes. The barrier guarantee (a revocation flushes every job that captured
   the observer before acknowledging, and nothing arrives afterwards) no longer
   comes from a lock. Each snapshot carries a generation. Every observer job
   records the generation it captured. A revocation publishes the next snapshot
-  first, then scans the queued jobs for that observer under the queue or
-  publication-index mutex, collects the pending notices, and records on the
+  first, then scans the queued jobs for that observer under the observer
+  shards' or the publication index's mutex, collects the pending notices,
+  and records on the
   observer the generation it revoked at. From then on a job captured at or
   before that generation skips the observer. A job that captured the old
   snapshot but registered only after the scan is therefore skipped rather than
   delivered late: the revocation is the linearization point, and a capture
   concurrent with it may omit that one notice for that observer. Direct
-  (unqueued) observer deliveries hold the same queue or index mutex for their
-  short loop, so they cannot land after the acknowledgement either.
+  (unqueued) observer deliveries take no shared lock: each recipient
+  re-checks the revocation mark under its own output lock, so a frame
+  either precedes the acknowledgement in that observer's FIFO or is dropped.
 - Session ownership is a lock-free map. A private message's target lookup
-  is a wait-free read; a join, a departure or a takeover is a single-key
+  is a lock-free read; a join, a departure or a takeover is a single-key
   write that never blocks a reader.
 - The channel index is a lock-free map (`papaya`) with an atomic channel
-  count. Finding a room is a wait-free read; creating or retiring one is a
+  count. Finding a room is a lock-free read; creating or retiring one is a
   single-key write. Walks of the index (the global recipient view, the
   admin listing and the channel-list command) never block a writer and are
   never blocked by one; a channel present throughout a walk is seen once,
@@ -145,19 +154,26 @@ amount of work and never across socket I/O:
   resize in ordinary operation; a retired channel's slot is reused rather
   than released, which bounds the index at the channel limit.
 - The global recipient-view cache and the disconnect-snapshot cache are
-  atomic pointer swaps (`arc_swap`). Reads and publication are wait-free; the
+  atomic pointer swaps (`arc_swap`). Reads and publication are lock-free; the
   views themselves are built outside any lock, and a lost publication race
   stores an identical view or defers to the one already published.
 - The active list of departure queues is a lock-free queue
   (`crossbeam_queue::SegQueue`). Workers pop an entry and push it back while
   it has work; departures append one entry when a queue becomes non-empty.
   Nobody waits on it.
+- Observer notices (disconnect notices and `re_globl` departures) are spread
+  over sixteen departure queues by the departing session's room. A departure
+  or a worker turn locks one of them; a revocation barrier holds all sixteen
+  for one bounded scan, so that no turn can deliver a notice the scan has
+  already collected. Notices for sessions of different rooms are unordered
+  relative to each other, as room notices already were.
 
 The test `unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation`
 in `tests/relay_integration.rs` exercises all of them at once: a room of 1,100
 members receives a stream of broadcasts (each a continuation), members join and
 leave so every departure is a deferred job, and a global observer clears and
-restores its disconnect flag so barriers scan the observer queue, while a
+restores its disconnect and channel-message flags so barriers scan the
+observer shards and the publication index, while a
 session in another room echoes continuously. The test fails if any echo takes
 longer than one second or if shutdown with the crowd connected exceeds the
 fixture's three-second bound. On the development machine the worst echo during
@@ -181,8 +197,9 @@ for cloning one handle to the cached view, with no I/O inside, and only that
 room's traffic ever takes it; a departure queue's lock is held for one
 bounded turn of at most 128 recipient submissions, which are queue pushes,
 never socket writes; the publication index mutex is held for one registration,
-one removal, or one barrier scan, and otherwise only while observers exist.
-None of them is taken on the private-message path at all.
+one removal or one barrier scan of large observer publications, and never by
+a delivery; an observer shard's lock is held for one push, one bounded turn
+or one barrier scan. None of them is taken on the private-message path.
 
 ## The data path of one message
 

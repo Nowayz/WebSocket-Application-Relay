@@ -8,7 +8,7 @@
 //! owning worker.
 use std::{
     collections::{HashMap, VecDeque},
-    hash::Hash,
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{
         Arc, OnceLock, Weak,
         atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed},
@@ -63,7 +63,7 @@ pub struct Relay {
     pub metrics: Arc<Metrics>,
     admission: AtomicU8,
     users: Users,
-    /// Lock-free name-to-channel index. Lookup is wait-free; creation and
+    /// Lock-free name-to-channel index. Lookup never blocks; creation and
     /// retirement are single-key writes that never block a reader.
     channels: papaya::HashMap<Bytes, Arc<Channel>>,
     /// Live channels, including the global room. Reserved before a channel
@@ -73,20 +73,18 @@ pub struct Relay {
     /// older generation is used once and never cached.
     membership_generation: AtomicU64,
     global_view: ArcSwapOption<(u64, Recipients)>,
-    /// Immutable snapshot, swapped atomically. Routing never locks it.
+    /// Immutable snapshot, swapped atomically. Routing loads it without
+    /// locking; a flag change or an observer departure publishes the next
+    /// snapshot with a compare-and-swap loop, so writers never lock either.
     listeners: ArcSwap<Listeners>,
-    /// Serializes snapshot writers (listener-flag commands and observer
-    /// departures) among themselves only.
-    listener_writes: Mutex<()>,
-    /// Bits of listener classes that currently have at least one member, so
-    /// the ordinary routing path can skip the listener lock entirely.
-    listener_mask: AtomicU8,
     /// Keyed by listener generation, so a stale snapshot is never reused.
     disconnect_snapshot: ArcSwapOption<(u64, Weak<RetirementSnapshot>)>,
     retirements: Retirements,
-    /// Disconnect-observer notices and `re_globl` room departures share one
-    /// queue: both reach `re_globl` members, and one order keeps barriers simple.
-    observer_departures: Arc<DepartureQueue>,
+    /// Disconnect-observer notices and `re_globl` room departures: both reach
+    /// `re_globl` members. Spread over shards by the departing session's
+    /// room, so departures and worker turns take one shard's lock while a
+    /// barrier scans every shard.
+    observer_departures: [Arc<DepartureQueue>; OBSERVER_QUEUE_SHARDS],
     /// Live fanouts whose source retired before they finished.
     detached: Arc<DepartureQueue>,
     messages: Arc<MessageFanouts>,
@@ -470,6 +468,10 @@ impl Listeners {
 
 /// FIFO of bounded jobs for one recipient population. Each room has one, the
 /// global observers share one, and orphaned live fanouts have one.
+/// Observer-notice queues: departures and worker turns spread across them,
+/// a barrier scans all of them. Chosen by the departing session's room.
+const OBSERVER_QUEUE_SHARDS: usize = 16;
+
 #[derive(Default)]
 pub(crate) struct DepartureQueue {
     state: Mutex<QueueState>,
@@ -491,16 +493,6 @@ impl DepartureQueue {
     }
 
     #[cfg(test)]
-    pub(crate) fn sequence(&self) -> u64 {
-        self.state.lock().sequence
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_sequence(&self, sequence: u64) {
-        self.state.lock().sequence = sequence;
-    }
-
-    #[cfg(test)]
     pub(crate) fn with_jobs<T>(&self, f: impl FnOnce(&VecDeque<Box<RoomFanout>>) -> T) -> T {
         f(&self.state.lock().jobs)
     }
@@ -512,6 +504,9 @@ impl DepartureQueue {
 #[derive(Default)]
 struct Retirements {
     active: SegQueue<Arc<DepartureQueue>>,
+    /// Numbers observer-notice jobs across every shard, so one watermark per
+    /// observer orders against all of them.
+    observer_sequence: AtomicU64,
 }
 
 /// Shared disconnect membership is charged once while any departure retains it.
@@ -602,7 +597,7 @@ pub(crate) struct RoomFanout {
     snapshot_bytes: usize,
     // Zero denotes a live publisher; positive values order departure jobs.
     retirement_sequence: u64,
-    /// Jobs in the observer queue honour each observer's revocation watermark.
+    /// Jobs in the observer shards honour each observer's revocation watermark.
     checks_barrier: bool,
     /// Listener snapshot generation this job captured its observers from.
     generation: u64,
@@ -913,6 +908,20 @@ pub(crate) trait PeerOutput: Send + Sync {
     fn send_fanout(&self, packet: Submission<'_>) -> bool {
         self.send(packet)
     }
+
+    /// Multicast to an observer whose capture may race a revocation. A
+    /// transport driven from several threads evaluates `gate` under the lock
+    /// that orders its FIFO and drops the packet when it returns false, so
+    /// no such frame can land behind a revocation's acknowledgement. This
+    /// default serves simple and test transports that are not driven
+    /// concurrently.
+    fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
+        if gate() {
+            self.send_fanout(packet)
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(test)]
@@ -980,6 +989,31 @@ impl Peer {
 
     fn enqueue_fanout(&self, frame: &Frame) -> Result<(), Disconnect> {
         self.enqueue::<true, false, false>(frame)
+    }
+
+    /// Multicast to this observer for a capture made under `generation`.
+    /// The transport re-checks the revocation mark under its own FIFO lock,
+    /// so the frame either precedes a concurrent revocation's acknowledgement
+    /// or is dropped. No lock shared with any other session is involved.
+    fn enqueue_gated(
+        &self,
+        frame: &Frame,
+        revoked: &AtomicU64,
+        generation: u64,
+    ) -> Result<(), Disconnect> {
+        if revoked.load(Relaxed) >= generation {
+            return Ok(());
+        }
+        let Some(packet) = self.reserve(frame, false)? else {
+            return Ok(());
+        };
+        if !self
+            .output
+            .send_gated(packet, &|| revoked.load(Relaxed) < generation)
+        {
+            self.overloaded();
+        }
+        Ok(())
     }
 
     fn enqueue_barrier(&self, frame: &Frame) -> Result<(), Disconnect> {
@@ -1272,11 +1306,9 @@ impl Relay {
             membership_generation: AtomicU64::new(0),
             global_view: ArcSwapOption::empty(),
             listeners: ArcSwap::from_pointee(Listeners::empty(1)),
-            listener_writes: Mutex::new(()),
-            listener_mask: AtomicU8::new(0),
             disconnect_snapshot: ArcSwapOption::empty(),
             retirements: Retirements::default(),
-            observer_departures: Arc::new(DepartureQueue::default()),
+            observer_departures: std::array::from_fn(|_| Arc::new(DepartureQueue::default())),
             detached: Arc::new(DepartureQueue::default()),
             messages: Arc::new(MessageFanouts::default()),
             sessions: AtomicUsize::new(0),
@@ -1323,12 +1355,8 @@ impl Relay {
         self.admission.store(Admission::Stopping as u8, Relaxed);
         // Terminal shutdown sends no departure notices. Release listener views
         // once instead of searching them for every retiring global session.
-        {
-            let _writer = self.listener_writes.lock();
-            let generation = self.listeners.load().generation + 1;
-            self.listeners.store(Arc::new(Listeners::empty(generation)));
-            self.listener_mask.store(0, Relaxed);
-        }
+        self.listeners
+            .rcu(|current| Arc::new(Listeners::empty(current.generation + 1)));
         self.disconnect_snapshot.store(None);
         self.global_view.store(None);
         while let Some(queue) = self.retirements.active.pop() {
@@ -1406,7 +1434,7 @@ impl Relay {
         })
     }
 
-    /// Find a live room or create it. Lookup is a wait-free read of the
+    /// Find a live room or create it. Lookup is a lock-free read of the
     /// index. Creation reserves a slot in the channel count first, so the
     /// limit holds exactly under concurrent creation, then inserts; two
     /// creators of one name resolve atomically and the loser adopts the
@@ -1687,7 +1715,11 @@ impl Relay {
             &mut totals.reused
         };
         *counter = counter.wrapping_add(frame.payload().len() as u64);
-        let mask = self.listener_mask.load(Relaxed);
+        // One lock-free load of the observer snapshot per routed frame. Its
+        // generation travels with any capture, so a concurrent revocation is
+        // honoured by the capture itself.
+        let listeners = self.listeners.load();
+        let mask = listeners.mask();
         if let Some(recipient) = &private_recipient
             && mask & PRIVATE_MESSAGE == 0
         {
@@ -1705,9 +1737,7 @@ impl Relay {
             let recipients = peer.room.state.read().view();
             return self.deliver_room(peer, recipients, frame, native);
         }
-        // Observers are present. The snapshot is immutable; its generation
-        // travels with the publication so a concurrent revocation is honoured.
-        let listeners = self.listeners.load_full();
+        // Observers are present. The snapshot is immutable.
         let flag = if target == BROADCAST {
             CHANNEL_MESSAGE
         } else {
@@ -1758,11 +1788,10 @@ impl Relay {
                 return Ok(quantum.max(direct_visits));
             }
             // Staging credit was refused: deliver immediately instead. The
-            // primary recipient was already served above. The publication
-            // index mutex excludes a concurrent revocation barrier, and an
-            // observer revoked since this snapshot was taken is skipped.
+            // primary recipient was already served above. Each observer
+            // re-checks the revocation mark under its own output lock, so
+            // nothing lands behind a concurrent revocation's acknowledgement.
             publisher.clear();
-            let _exclude = self.messages.exclude_barriers();
             let mut visited = direct_visits;
             if let Some(room) = &room {
                 for recipient in room.iter() {
@@ -1777,18 +1806,15 @@ impl Relay {
             let excluded = private_recipient.as_ref().map_or(0, |p| p.key);
             for recipient in observers {
                 visited += 1;
-                if recipient.key != excluded
-                    && recipient.message_revoked.load(Relaxed) < listeners.generation
-                {
+                if recipient.key != excluded {
                     recipient
-                        .enqueue_fanout(&frame)
+                        .enqueue_gated(&frame, &recipient.message_revoked, listeners.generation)
                         .map_err(|reason| RoutingFailure::visited(reason, visited))?;
                 }
             }
             return Ok(work.max(1));
         }
-        // Small enough for this turn. See the note above on the index mutex.
-        let _exclude = self.messages.exclude_barriers();
+        // Small enough for this turn. Observers are gated as above.
         let mut visited = 0;
         if let Some(room) = &room {
             for recipient in room.iter() {
@@ -1801,22 +1827,18 @@ impl Relay {
             }
             for recipient in observers {
                 visited += 1;
-                if recipient.message_revoked.load(Relaxed) < listeners.generation {
-                    recipient
-                        .enqueue_fanout(&frame)
-                        .map_err(|reason| RoutingFailure::visited(reason, visited))?;
-                }
+                recipient
+                    .enqueue_gated(&frame, &recipient.message_revoked, listeners.generation)
+                    .map_err(|reason| RoutingFailure::visited(reason, visited))?;
             }
         } else if let Some(recipient) = &private_recipient {
             visited = 1;
             recipient.enqueue_fanout(&frame)?;
             for listener in observers {
                 visited += 1;
-                if listener.key != recipient.key
-                    && listener.message_revoked.load(Relaxed) < listeners.generation
-                {
+                if listener.key != recipient.key {
                     listener
-                        .enqueue_fanout(&frame)
+                        .enqueue_gated(&frame, &listener.message_revoked, listeners.generation)
                         .map_err(|reason| RoutingFailure::visited(reason, visited))?;
                 }
             }
@@ -1883,20 +1905,19 @@ impl Relay {
                 let mut notices = Vec::new();
                 if peer.is_global() {
                     let member = peer.room.state.read().members.get(&peer.key).cloned();
-                    // Writers serialize among themselves; routing never waits.
-                    let _writer = self.listener_writes.lock();
                     if peer.closing.load(Relaxed) {
                         return Ok(());
                     }
                     let previous = peer.listener.load(Relaxed);
                     let next = flags & 7;
-                    let old = self.listeners.load_full();
                     // Publish first: every capture from now on sees the new
                     // membership, and the barrier below covers the old one.
-                    let snapshot = Arc::new(old.with_flags(peer, previous, next, member.as_ref()));
+                    // Concurrent changes by other observers each rebuild from
+                    // the latest snapshot; nobody locks.
+                    let old = self.listeners.rcu(|current| {
+                        Arc::new(current.with_flags(peer, previous, next, member.as_ref()))
+                    });
                     peer.listener.store(next, Relaxed);
-                    self.listener_mask.store(snapshot.mask(), Relaxed);
-                    self.listeners.store(snapshot);
                     if previous & !next & (CHANNEL_MESSAGE | PRIVATE_MESSAGE) != 0 {
                         notices.extend(self.messages.flush(peer, old.generation));
                         barrier = true;
@@ -2083,54 +2104,67 @@ impl Relay {
     /// Collect this observer's still-pending captured notices and record a
     /// watermark so deferred jobs cannot replay them after re-subscription.
     /// The caller submits the notices once every lock is released, ahead of
-    /// the revocation acknowledgement. Only the observer queue is scanned; it
-    /// holds every job that can reach a `re_globl` member.
+    /// the revocation acknowledgement. Only the observer shards are scanned;
+    /// together they hold every job that can reach a `re_globl` member.
     fn flush_observer_retirements(&self, observer: &Peer, revoked_at: u64) -> Vec<Frame> {
         let mut notices = Vec::new();
-        // Jobs in this queue only advance under its mutex, so nothing can
-        // deliver to the observer while this scan runs.
-        let pending = self.observer_departures.state.lock();
+        // Every shard is held for the whole scan, in index order: a job only
+        // advances under its shard's mutex, so no job can deliver to the
+        // observer between this scan and the marks stored below, which would
+        // duplicate a collected notice. Departures and worker turns wait at
+        // most for this bounded scan; routing never takes these locks.
+        let shards: Vec<_> = self
+            .observer_departures
+            .iter()
+            .map(|queue| queue.state.lock())
+            .collect();
         let previous = observer.retirement_barrier.load(Relaxed);
-        // Adjacent jobs often share an immutable view; reuse its lookup within
-        // this barrier, but check each job's own cursor.
-        let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
-        for work in &pending.jobs {
-            let Some(recipients) = work.recipients.as_ref() else {
-                continue;
-            };
-            // Captured after the revocation: the observer is not in it.
-            if work.retirement_sequence <= previous || work.generation > revoked_at {
-                continue;
-            }
-            let view = match recipients {
-                FanoutRecipients::Message(_) => continue,
-                other => other.single_slice(),
-            };
-            let position = match searched {
-                Some((previous_view, position)) if std::ptr::eq(previous_view, view) => position,
-                _ => {
-                    let position = view
-                        .iter()
-                        .position(|peer| std::ptr::eq(Arc::as_ptr(peer), observer));
-                    searched = Some((view, position));
-                    position
+        for pending in &shards {
+            // Adjacent jobs often share an immutable view; reuse its lookup
+            // within this shard, but check each job's own cursor.
+            let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
+            for work in &pending.jobs {
+                let Some(recipients) = work.recipients.as_ref() else {
+                    continue;
+                };
+                // Captured after the revocation: the observer is not in it.
+                if work.retirement_sequence <= previous || work.generation > revoked_at {
+                    continue;
                 }
-            };
-            if position.is_some_and(|position| position >= work.cursor) {
-                notices.push(
-                    work.packet
-                        .as_ref()
-                        .expect("charged retirement body")
-                        .frame
-                        .clone(),
-                );
+                let view = match recipients {
+                    FanoutRecipients::Message(_) => continue,
+                    other => other.single_slice(),
+                };
+                let position = match searched {
+                    Some((previous_view, position)) if std::ptr::eq(previous_view, view) => {
+                        position
+                    }
+                    _ => {
+                        let position = view
+                            .iter()
+                            .position(|peer| std::ptr::eq(Arc::as_ptr(peer), observer));
+                        searched = Some((view, position));
+                        position
+                    }
+                };
+                if position.is_some_and(|position| position >= work.cursor) {
+                    notices.push(
+                        work.packet
+                            .as_ref()
+                            .expect("charged retirement body")
+                            .frame
+                            .clone(),
+                    );
+                }
             }
         }
         // Deferred visits skip notices already submitted by this barrier, even
         // if the observer re-enables the bit before those jobs finish. A job
         // captured before the revocation but queued after this scan is skipped
         // by generation instead of arriving after the acknowledgement.
-        observer.retirement_barrier.store(pending.sequence, Relaxed);
+        observer
+            .retirement_barrier
+            .store(self.retirements.observer_sequence.load(Relaxed), Relaxed);
         observer.retirement_revoked.store(revoked_at, Relaxed);
         notices
     }
@@ -2181,7 +2215,20 @@ impl Relay {
         }
         // Exhaustion falls back to ordered synchronous delivery rather than
         // wrapping and making older observer watermarks suppress new notices.
-        let Some(sequence) = state.sequence.checked_add(1) else {
+        // Observer shards number their jobs from one shared counter, so one
+        // watermark per observer orders against every shard. The number is
+        // taken under this shard's lock, so a barrier holding every shard
+        // sees every job numbered below the watermark it records.
+        let sequence = if checks_barrier {
+            self.retirements
+                .observer_sequence
+                .fetch_update(Relaxed, Relaxed, |sequence| sequence.checked_add(1))
+                .ok()
+                .map(|previous| previous + 1)
+        } else {
+            state.sequence.checked_add(1)
+        };
+        let Some(sequence) = sequence else {
             return false;
         };
         let mut work = Box::<RoomFanout>::default();
@@ -2193,7 +2240,9 @@ impl Relay {
         }
         work.checks_barrier = checks_barrier;
         work.generation = generation;
-        state.sequence = sequence;
+        if !checks_barrier {
+            state.sequence = sequence;
+        }
         state.jobs.push_back(work);
         let wake = if state.queued {
             false
@@ -2271,9 +2320,9 @@ impl Relay {
     fn remove(&self, peer: &Peer) {
         let room = &peer.room;
         let stopping = self.is_stopping();
-        // Global room departures share the observer queue; see its notes.
+        // Global room departures use the observer shards; see their notes.
         let queue = if peer.is_global() {
-            &self.observer_departures
+            self.observer_queue_of(peer)
         } else {
             &room.departures
         };
@@ -2359,24 +2408,20 @@ impl Relay {
             shrink_sparse_map(&mut room.state.write().members);
             let member_flags = peer.listener.load(Relaxed);
             if member_flags != 0 {
-                let _writer = self.listener_writes.lock();
-                let old = self.listeners.load_full();
-                let snapshot = Arc::new(old.with_flags(peer, member_flags, 0, None));
                 peer.listener.store(0, Relaxed);
-                self.listener_mask.store(snapshot.mask(), Relaxed);
-                self.listeners.store(snapshot);
+                self.listeners
+                    .rcu(|current| Arc::new(current.with_flags(peer, member_flags, 0, None)));
             }
         }
         if let Some(frame) = &frame
             && !peer.is_global()
-            && self.listener_mask.load(Relaxed) & DISCONNECT_MESSAGE != 0
         {
             // The snapshot's generation travels with the job, so a revocation
             // that races this capture is honoured by the job itself.
             let listeners = self.listeners.load_full();
             let observers = listeners.of(DISCONNECT_MESSAGE);
             if !observers.is_empty() {
-                let queue = &self.observer_departures;
+                let queue = self.observer_queue_of(peer);
                 let deferred = peer.output.supports_retirement()
                     && (observers.len() > RETIREMENT_QUANTUM
                         || !queue.state.lock().jobs.is_empty());
@@ -2397,14 +2442,15 @@ impl Relay {
                     if deferred {
                         self.flush_queue(queue);
                     }
-                    // Direct delivery is serialized with the barrier scan by
-                    // the queue mutex; an observer revoked since this snapshot
-                    // was taken is skipped.
-                    let _exclude = queue.state.lock();
+                    // Each observer re-checks the revocation mark under its
+                    // own output lock, so no notice lands behind a concurrent
+                    // revocation's acknowledgement.
                     for recipient in observers {
-                        if recipient.retirement_revoked.load(Relaxed) < listeners.generation {
-                            let _ = recipient.enqueue_fanout(frame);
-                        }
+                        let _ = recipient.enqueue_gated(
+                            frame,
+                            &recipient.retirement_revoked,
+                            listeners.generation,
+                        );
                     }
                 }
             }
@@ -2454,9 +2500,39 @@ impl Relay {
             .is_some_and(|cached| cached.1.upgrade().is_some())
     }
 
+    /// The observer-notice shard for a departing session: by room, so notices
+    /// for sessions of one room stay in order while rooms spread out.
+    fn observer_queue_of(&self, peer: &Peer) -> &Arc<DepartureQueue> {
+        self.observer_shard(&peer.channel)
+    }
+
+    fn observer_shard(&self, channel: &[u8]) -> &Arc<DepartureQueue> {
+        let mut hasher = DefaultHasher::new();
+        channel.hash(&mut hasher);
+        &self.observer_departures[(hasher.finish() % OBSERVER_QUEUE_SHARDS as u64) as usize]
+    }
+
     #[cfg(test)]
-    pub(crate) fn observer_queue(&self) -> &Arc<DepartureQueue> {
-        &self.observer_departures
+    pub(crate) fn observer_queue_for(&self, channel: &[u8]) -> &Arc<DepartureQueue> {
+        self.observer_shard(channel)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observer_queue_len(&self) -> usize {
+        self.observer_departures
+            .iter()
+            .map(|queue| queue.len())
+            .sum()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observer_sequence(&self) -> u64 {
+        self.retirements.observer_sequence.load(Relaxed)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_observer_sequence(&self, sequence: u64) {
+        self.retirements.observer_sequence.store(sequence, Relaxed);
     }
 
     #[cfg(test)]
@@ -2468,16 +2544,14 @@ impl Relay {
     /// must run with this true.
     #[cfg(test)]
     pub(crate) fn registry_unlocked(&self) -> bool {
-        self.listener_writes.try_lock().is_some()
-            && self
-                .live_channels()
-                .iter()
-                .all(|channel| channel.state.try_write().is_some())
+        self.live_channels()
+            .iter()
+            .all(|channel| channel.state.try_write().is_some())
     }
 
     #[cfg(test)]
-    pub(crate) fn listeners_locked(&self) -> bool {
-        self.listener_writes.try_lock().is_none()
+    pub(crate) fn listener_generation(&self) -> u64 {
+        self.listeners.load().generation
     }
 
     #[cfg(test)]

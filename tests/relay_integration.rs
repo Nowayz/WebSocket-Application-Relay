@@ -2133,8 +2133,9 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
             departures
         });
     }
-    // Observer revocation: barriers scan the observer queue under the
-    // listener lock on every clear.
+    // Observer revocation: every clear publishes a new snapshot and scans
+    // the observer shards and the publication index for pending notices;
+    // with both bits set, broadcasts are captured as well as departures.
     {
         let (mut ws, _) = join_at(&url, "re_globl").await;
         assert_eq!(
@@ -2145,26 +2146,33 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
         churn.spawn(async move {
             let mut toggles = 0u64;
             let mut notices = 0u64;
+            let mut captured = 0u64;
             while !stop.load(Relaxed) {
-                for flags in [4u64, 0] {
-                    // While the flag is set, departure notices interleave
-                    // with the reply; the barrier delivers pending ones first.
+                for flags in [5u64, 0] {
+                    // While the flags are set, departure notices and captured
+                    // broadcasts interleave with the reply; the barrier
+                    // delivers pending ones first.
                     let reply = protocol::reply(1, &protocol::uint(flags));
                     let mut packet = command(&mut ws, 1, &protocol::uint(flags)).await;
                     while packet != reply {
-                        assert_eq!(protocol::parse(&packet).unwrap().0, BROADCAST);
-                        notices += 1;
+                        if protocol::parse(&packet).unwrap().0 == BROADCAST {
+                            notices += 1;
+                        } else {
+                            captured += 1;
+                        }
                         packet = data(&mut ws).await;
                     }
-                    // Keep the flag set long enough for departures to land
-                    // while it is on, so each revocation has work to flush.
-                    tokio::time::sleep(Duration::from_millis(if flags == 4 { 30 } else { 5 }))
+                    // Keep the flags set long enough for departures and
+                    // broadcasts to land while they are on, so each
+                    // revocation has work to flush.
+                    tokio::time::sleep(Duration::from_millis(if flags == 5 { 30 } else { 5 }))
                         .await;
                 }
                 toggles += 1;
             }
             let _ = ws.close(None).await;
             assert!(notices > 0, "the observer saw no departure notices");
+            assert!(captured > 0, "the observer captured no broadcasts");
             toggles
         });
     }

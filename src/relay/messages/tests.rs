@@ -753,16 +753,19 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
     );
     let barrier_relay = relay.clone();
     let observer = last.peer.clone();
+    let before = relay.listener_generation();
     let barrier = std::thread::spawn(move || {
         barrier_relay
             .receive(&observer, protocol::request(1, b"\x00"))
             .unwrap();
     });
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while !relay.listeners_locked() {
+    // The revocation publishes its snapshot first, then blocks on the job
+    // lock held by the paused submission.
+    while relay.listener_generation() == before {
         assert!(
             std::time::Instant::now() < deadline,
-            "barrier did not acquire membership"
+            "barrier did not publish its snapshot"
         );
         std::thread::yield_now();
     }
@@ -885,4 +888,110 @@ fn observer_barrier_event_screen() {
         serde_json::json!({"audience":audience,"publishers":publishers,"rounds":rounds,"samples":samples,"scope":"Release in-process routing/control/cancellation diagnostic; no native socket I/O"})
     );
     relay.begin_shutdown();
+}
+
+#[test]
+fn a_direct_observer_delivery_that_loses_the_race_with_a_revocation_is_dropped_not_delayed() {
+    // A transport that honours the gate under the lock ordering its FIFO, as
+    // the native socket does, and that can stall one delivery between its
+    // capture and its submission, like a worker preempted at that point.
+    struct Paused {
+        recorded: Mutex<Vec<Vec<u8>>>,
+        pause: AtomicBool,
+        entered: std::sync::mpsc::SyncSender<()>,
+        proceed: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+    impl PeerOutput for Paused {
+        fn send(&self, packet: Submission<'_>) -> bool {
+            self.recorded.lock().push(packet.frame.to_vec());
+            true
+        }
+        fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
+            if self.pause.swap(false, Relaxed) {
+                self.entered.send(()).unwrap();
+                self.proceed
+                    .lock()
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .unwrap();
+            }
+            let mut recorded = self.recorded.lock();
+            if gate() {
+                recorded.push(packet.frame.to_vec());
+            }
+            true
+        }
+        fn close(&self, _: Disconnect) {}
+    }
+    let relay = relay();
+    let (source, _) = peer(&relay, b"gated-room", 0);
+    let (mate, mate_output) = peer(&relay, b"gated-room", 0);
+    let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
+    let (proceed_tx, proceed_rx) = std::sync::mpsc::sync_channel(1);
+    let output = Arc::new(Paused {
+        recorded: Mutex::default(),
+        pause: AtomicBool::new(true),
+        entered: entered_tx,
+        proceed: Mutex::new(proceed_rx),
+    });
+    let observer = relay
+        .subscribe_with_output(GLOBAL_CHANNEL, output.clone())
+        .unwrap();
+    relay
+        .receive(
+            &observer.peer,
+            protocol::request(0, &protocol::text("messages")),
+        )
+        .unwrap();
+    let enable = protocol::request(1, &protocol::uint(u64::from(CHANNEL_MESSAGE)));
+    let revoke = protocol::request(1, &protocol::uint(0));
+    relay.receive(&observer.peer, enable.clone()).unwrap();
+    output.recorded.lock().clear();
+    // The sender captures the snapshot with the observer in it, then stalls
+    // before submitting to the observer.
+    let sender = {
+        let relay = relay.clone();
+        let peer = source.peer.clone();
+        std::thread::spawn(move || {
+            relay
+                .receive(&peer, protocol::envelope(BROADCAST, b"\x01"))
+                .unwrap();
+        })
+    };
+    entered_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    // The revocation completes, acknowledgement included, while that delivery
+    // is in flight. No shared lock holds it back.
+    relay.receive(&observer.peer, revoke.clone()).unwrap();
+    proceed_tx.send(()).unwrap();
+    sender.join().unwrap();
+    {
+        let recorded = output.recorded.lock();
+        assert_eq!(
+            recorded.len(),
+            1,
+            "only the acknowledgement may reach the observer: {recorded:?}"
+        );
+        assert_eq!(recorded[0], protocol::reply(1, &protocol::uint(0)).to_vec());
+    }
+    // The room still received the message; only the revoked observer did not.
+    assert_eq!(data(&mate_output).len(), 1);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    // A delivery that wins the race lands ahead of the acknowledgement.
+    relay.receive(&observer.peer, enable).unwrap();
+    relay
+        .receive(&source.peer, protocol::envelope(BROADCAST, b"\x02"))
+        .unwrap();
+    relay.receive(&observer.peer, revoke).unwrap();
+    let recorded = output.recorded.lock();
+    assert_eq!(recorded.len(), 4);
+    assert_eq!(
+        recorded[2],
+        protocol::envelope(source.peer.id.load(Relaxed), b"\x02").to_vec()
+    );
+    assert_eq!(recorded[3], protocol::reply(1, &protocol::uint(0)).to_vec());
+    drop(recorded);
+    assert_eq!(data(&mate_output).len(), 2);
+    drop(mate);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
 }
