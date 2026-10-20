@@ -7,13 +7,23 @@ use super::*;
 
 type ObserverView = Vec<Arc<Peer>>;
 
-#[derive(Default)]
 pub(super) struct MessageFanouts {
     /// Numbers publications; a barrier inspects them in ascending order.
     sequence: AtomicU64,
     /// Live large observer publications by number. Registration, retirement
-    /// and a barrier's walk never wait on each other.
+    /// and a barrier's walk never wait on each other. Pre-sized so that it
+    /// does not resize in ordinary operation; a walk would otherwise help
+    /// finish an in-progress resize first.
     jobs: papaya::HashMap<u64, Weak<Mutex<RoomFanout>>>,
+}
+
+impl Default for MessageFanouts {
+    fn default() -> Self {
+        Self {
+            sequence: AtomicU64::new(0),
+            jobs: papaya::HashMap::with_capacity(4096),
+        }
+    }
 }
 
 pub(super) struct Publication {

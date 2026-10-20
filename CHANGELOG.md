@@ -3,7 +3,8 @@
 ## Unreleased
 
 - The routing registry no longer has a global lock. Session ownership and
-  the channel index are lock-free concurrent maps, each channel has its own
+  the channel index are lock-free concurrent maps, pre-sized so they do not
+  resize in ordinary operation, each channel has its own
   lock, global observers are an atomically swapped snapshot and admission
   counters are atomics, including an exact channel count that enforces
   `WAR_MAX_CHANNELS` under concurrent creation. No socket write happens
@@ -33,8 +34,11 @@
 - Departure notices use one queue per room instead of one global FIFO.
   `re_globl` departures and disconnect-observer notices are spread over
   sixteen queues by the departing session's room; a revocation barrier
-  scans them one at a time with one watermark per queue, so nothing holds
-  two of them. Workers rotate across queues in bounded turns (128
+  scans them one at a time, at most 128 jobs per hold, with one watermark
+  per queue, so nothing holds two of them and a long queue cannot stall
+  departures on its shard. The synchronous fallback a departure takes when
+  staging credit is refused drains the queue in holds of at most eight
+  turns. Workers rotate across queues in bounded turns (128
   recipients for departures, 1,024 for live broadcasts), so a large room's
   notices cannot delay another room's. Notices for different rooms, including
   disconnect notices for sessions of different rooms, are no longer ordered
@@ -79,11 +83,14 @@
   tests race channel creation against the channel limit and joins against
   retirements of one name, a third stalls a direct observer delivery
   across a revocation and checks that it is dropped rather than delivered
-  after the acknowledgement, and a fourth revokes an observer with pending
-  notices in two shards and checks that each arrives exactly once. The
-  room-churn responsiveness test also runs a disconnect observer that
-  keeps clearing and restoring its flag, so every departure is a notice
-  and every clear a barrier scan. The per-IP admission test accepts the
+  after the acknowledgement, a fourth revokes an observer with pending
+  notices in two shards and checks that each arrives exactly once, a fifth
+  revokes an observer behind 3,000 queued jobs in one shard and checks that
+  every notice arrives exactly once, and a sixth drains 300 queued jobs
+  through the synchronous fallback in order. The room-churn responsiveness
+  test also runs 130 disconnect observers, so every departure is a queued
+  observer job, plus one that keeps clearing and restoring its flag, so
+  every clear is a chunked barrier scan racing those jobs. The per-IP admission test accepts the
   `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.

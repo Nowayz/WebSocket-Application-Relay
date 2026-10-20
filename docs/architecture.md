@@ -150,7 +150,14 @@ amount of work and never across socket I/O:
   one created or retired meanwhile may or may not appear. The index is
   pre-sized to the channel limit (capped at 65,536 slots), so it does not
   resize in ordinary operation; a retired channel's slot is reused rather
-  than released, which bounds the index at the channel limit.
+  than released, which bounds the index at the channel limit. That matters
+  because a resize is the one thing that can delay a lock-free map walk:
+  `papaya` finishes an in-progress resize before iterating. The session
+  map and the publication index are pre-sized the same way (to the
+  connection limit capped at 65,536, and to 4,096 publications), and
+  neither the session map nor anything else is walked on the routing path.
+  Beyond those sizes a map grows incrementally, at most once per doubling,
+  and the work is one copy of the table.
 - The global recipient-view cache and the disconnect-snapshot cache are
   atomic pointer swaps (`arc_swap`). Reads and publication are lock-free; the
   views themselves are built outside any lock, and a lost publication race
@@ -162,11 +169,16 @@ amount of work and never across socket I/O:
 - Observer notices (disconnect notices and `re_globl` departures) are spread
   over sixteen departure queues by the departing session's room. A
   departure, a worker turn or a revocation barrier locks one of them at a
-  time. Each shard numbers its own jobs and an observer keeps one watermark
-  per shard, stored while that shard is still locked, so no turn can deliver
+  time, and the barrier inspects at most 128 jobs per hold: each shard
+  numbers its jobs in queue order and an observer keeps one watermark per
+  shard, advanced under the lock after every chunk, so no turn can deliver
   a notice the scan has already collected and no watermark can suppress a
-  job the scan has not inspected. Notices for sessions of different rooms
-  are unordered relative to each other, as room notices already were.
+  job the scan has not inspected. A long queue therefore costs a departure
+  or a turn on that shard at most one chunk of waiting. The synchronous
+  fallback a departure takes when staging credit is refused drains the jobs
+  queued before it in holds of at most eight turns, for the same reason.
+  Notices for sessions of different rooms are unordered relative to each
+  other, as room notices already were.
 - The index of large observer publications is a lock-free map with an
   atomic sequence. A barrier collects the live publications, sorts them by
   sequence and inspects each under that job's own lock, storing the
@@ -190,11 +202,12 @@ fast as they can, which writes the channel index on every join and every
 departure, while a `re_globl` session broadcasts continuously, which
 rebuilds the invalidated global recipient view from every room on every
 broadcast, an admin client pages through the channel listing, which walks
-the whole index, and a disconnect observer keeps clearing and restoring its
-flag, so every departure is a notice and every clear a barrier scan of the
-observer shards while departures and turns keep taking them. A session in a
-stable room must keep echoing, and every listing must answer, within one
-second.
+the whole index, a crowd of 130 disconnect observers (more than one
+retirement turn) turns every departure into a queued observer job that
+worker turns drain shard by shard, and one more observer keeps clearing and
+restoring its flag, so every clear is a chunked barrier scan racing those
+departures and turns. A session in a stable room must keep echoing, and
+every listing must answer, within one second.
 On the development machine roughly 5,000 rooms were created and retired in
 2.5 s under 157 global broadcasts and about 1,500 listing pages, and the
 worst echo was under 5 ms.
@@ -206,8 +219,21 @@ room's traffic ever takes it; a departure queue's lock is held for one
 bounded turn of at most 128 recipient submissions, which are queue pushes,
 never socket writes; a publication job's lock is held for one bounded turn or
 one barrier inspection; an observer shard's lock is held for one push, one
-bounded turn or one barrier scan of that shard. None of them is taken on the
-private-message path.
+bounded turn, one chunk of at most 128 barrier inspections, or at most eight
+turns of a synchronous fallback. None of them is taken on the private-message
+path. A socket's own output lock is the one lock held across I/O, and only
+its own: one non-blocking write of at most 256 KiB to that socket, which a
+sender performs on the recipient's behalf when the queue is empty. Only
+other senders to that same socket can wait on it.
+
+These per-object locks are the fine-grained locking that replaced the
+global ones; they are not a remaining problem to remove. A room's
+membership must be a consistent set when a broadcast view is built, a
+queue must hand out jobs in order, a job's cursor must advance under one
+owner and a socket's FIFO must be written by one thread at a time. Each
+lock is contended only by work on that one object, held for a bounded
+amount of work, and never nested with another of its kind, so no object
+can stall work on a different object.
 
 ## The data path of one message
 

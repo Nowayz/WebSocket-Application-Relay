@@ -2223,9 +2223,10 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
 /// The other stall-prone path: room creation and retirement write the
 /// channel index, every membership change invalidates the global recipient
 /// view, which the next global broadcast rebuilds from every room, and the
-/// admin channel listing walks the whole index; with a disconnect observer
-/// present, every departure is a notice and every revocation a barrier scan
-/// of the observer shards. Under continuous room churn and a stream of
+/// admin channel listing walks the whole index; with an observer crowd larger
+/// than one turn, every departure is a queued observer job, worker turns keep
+/// taking the shards, and every revocation is a chunked barrier scan racing
+/// them. Under continuous room churn and a stream of
 /// global broadcasts, a session in a stable room must keep echoing and the
 /// listing must keep answering, both with bounded latency.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -2323,9 +2324,43 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
             pages
         });
     }
-    // A disconnect observer: every departure above becomes a notice to it,
-    // and every clear is a barrier scan of the observer shards while
-    // departures and worker turns keep taking them.
+    // A crowd of disconnect observers, larger than one retirement turn, so
+    // every departure above becomes a queued job in an observer shard and
+    // worker turns keep taking the shards. The observers drain their
+    // sockets and count notices.
+    const OBSERVERS: usize = 130; // above RETIREMENT_QUANTUM
+    let notified = Arc::new(AtomicU64::new(0));
+    for _ in 0..OBSERVERS {
+        let (mut ws, _) = join_at(&url, "re_globl").await;
+        // Global broadcasts already reach this member; skip them while
+        // waiting for each reply.
+        for (op, value, reply) in [
+            (0, protocol::text("host-test"), protocol::reply(0, &[0xf5])),
+            (1, protocol::uint(4), protocol::reply(1, &protocol::uint(4))),
+        ] {
+            let mut packet = command(&mut ws, op, &value).await;
+            while packet != reply {
+                packet = data(&mut ws).await;
+            }
+        }
+        let notified = notified.clone();
+        readers.spawn(async move {
+            while let Some(Ok(message)) = ws.next().await {
+                match message {
+                    Message::Binary(packet) => {
+                        if protocol::parse(&packet).is_ok_and(|(sender, _)| sender == BROADCAST) {
+                            notified.fetch_add(1, Relaxed);
+                        }
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        });
+    }
+    // One more observer keeps clearing and restoring its flag: every clear
+    // is a barrier scan of the shards, chunk by chunk, racing the
+    // departures and turns above.
     {
         let (mut ws, _) = join_at(&url, "re_globl").await;
         assert_eq!(
@@ -2384,8 +2419,9 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
         counts.push(result.unwrap());
     }
     eprintln!(
-        "probe: {samples} echoes, worst {worst:?}; broadcasts, rooms created per lane, pages listed and observer toggles {counts:?}; frames {}",
-        received.load(Relaxed)
+        "probe: {samples} echoes, worst {worst:?}; broadcasts, rooms created per lane, pages listed and observer toggles {counts:?}; frames {}; notices to the observer crowd {}",
+        received.load(Relaxed),
+        notified.load(Relaxed)
     );
     assert!(samples >= 50);
     assert!(
@@ -2394,6 +2430,10 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
     );
     assert!(counts.iter().all(|&count| count > 0));
     assert!(received.load(Relaxed) > 0);
+    assert!(
+        notified.load(Relaxed) > 0,
+        "the observer crowd saw no departures"
+    );
     let _ = probe.close(None).await;
     // Churned rooms must all have retired; only the stable rooms, the probe's
     // room and re_globl remain until shutdown clears them.

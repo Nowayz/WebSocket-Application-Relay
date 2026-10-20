@@ -1703,3 +1703,107 @@ fn a_revocation_collects_pending_notices_from_every_shard_once_holding_one_at_a_
     drop(observers);
     assert_eq!(relay.counts(), (0, 1));
 }
+
+#[test]
+fn a_barrier_over_a_long_shard_queue_submits_every_pending_notice_once_in_bounded_holds() {
+    const DEPARTURES: usize = 3_000;
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..RETIREMENT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    // Every departure defers (the audience exceeds one turn), and nothing
+    // progresses the queue, so one shard holds thousands of jobs.
+    let departed: Vec<u64> = (0..DEPARTURES)
+        .map(|_| {
+            let source = relay
+                .subscribe_with_output(b"long-queue", Arc::new(NativeRetirement))
+                .unwrap();
+            let id = source.peer.id.load(Relaxed);
+            drop(source);
+            id
+        })
+        .collect();
+    assert_eq!(relay.observer_queue_for(b"long-queue").len(), DEPARTURES);
+    let (last, last_output) = &observers[RETIREMENT_QUANTUM];
+    // The revocation walks the whole queue in chunks and submits every
+    // pending notice, in order, ahead of its acknowledgement.
+    let started = std::time::Instant::now();
+    relay
+        .receive(&last.peer, protocol::request(1, &protocol::uint(0)))
+        .unwrap();
+    let scan = started.elapsed();
+    let notices = |output: &Departures| -> Vec<Vec<u8>> {
+        output.0.lock().iter().map(|p| p.to_vec()).collect()
+    };
+    let expected: Vec<Vec<u8>> = departed
+        .iter()
+        .map(|&id| protocol::envelope(BROADCAST, &protocol::uint(id)).to_vec())
+        .collect();
+    assert_eq!(notices(last_output), expected);
+    // The jobs then skip the revoked observer: nothing is delivered twice.
+    while relay.has_retirements() {
+        relay.progress_retirements(RETIREMENT_QUANTUM);
+    }
+    assert_eq!(notices(last_output), expected);
+    for (_, output) in &observers[..RETIREMENT_QUANTUM] {
+        assert_eq!(notices(output), expected);
+    }
+    eprintln!("barrier over {DEPARTURES} queued jobs took {scan:?}");
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}
+
+#[test]
+fn a_synchronous_fallback_drains_a_long_queue_in_order_in_bounded_holds() {
+    const QUEUED: usize = 300;
+    let relay = Relay::new(Config {
+        auth_password: Some("observer-ack".into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let observers: Vec<_> = (0..RETIREMENT_QUANTUM + 1)
+        .map(|_| recorded_disconnect_observer(&relay))
+        .collect();
+    let depart = || {
+        let source = relay
+            .subscribe_with_output(b"fallback-queue", Arc::new(NativeRetirement))
+            .unwrap();
+        let id = source.peer.id.load(Relaxed);
+        drop(source);
+        id
+    };
+    // Numbering runs out exactly after the queued departures, so the next
+    // one cannot defer and must drain the queue before delivering directly.
+    relay
+        .observer_queue_for(b"fallback-queue")
+        .set_sequence(u64::MAX - QUEUED as u64);
+    let mut departed: Vec<u64> = (0..QUEUED).map(|_| depart()).collect();
+    assert_eq!(relay.observer_queue_for(b"fallback-queue").len(), QUEUED);
+    departed.push(depart());
+    assert!(
+        !relay.has_retirements(),
+        "the fallback finishes the preceding jobs before its direct delivery"
+    );
+    assert_eq!(relay.observer_queue_for(b"fallback-queue").len(), 0);
+    let expected: Vec<Vec<u8>> = departed
+        .iter()
+        .map(|&id| protocol::envelope(BROADCAST, &protocol::uint(id)).to_vec())
+        .collect();
+    for (_, output) in &observers {
+        let notices: Vec<Vec<u8>> = output.0.lock().iter().map(|p| p.to_vec()).collect();
+        assert_eq!(
+            notices, expected,
+            "every observer sees every departure in order"
+        );
+    }
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    relay.begin_shutdown();
+    drop(observers);
+    assert_eq!(relay.counts(), (0, 1));
+}

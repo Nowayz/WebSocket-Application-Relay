@@ -44,6 +44,10 @@ pub(crate) const FANOUT_QUANTUM: usize = 1024;
 // Bound ordinary synchronous removal by the same visit budget as native
 // retirement progress, while keeping live message fanout independently sized.
 pub(crate) const RETIREMENT_QUANTUM: usize = 128;
+/// Jobs a revocation barrier inspects per hold of one observer shard's lock.
+const BARRIER_QUANTUM: usize = 128;
+/// Turns a synchronous fallback runs per hold of one departure queue's lock.
+const FLUSH_TURNS_PER_HOLD: usize = 8;
 
 pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
 
@@ -206,9 +210,12 @@ struct Users {
 }
 
 impl Users {
-    fn new() -> Self {
+    /// Pre-sized up to a modest cap so ordinary growth never resizes the
+    /// table; a resize is the one operation that can make another thread's
+    /// map operation help copy entries before it proceeds.
+    fn new(sessions: usize) -> Self {
         Self {
-            map: papaya::HashMap::new(),
+            map: papaya::HashMap::with_capacity(sessions.min(1 << 16)),
         }
     }
 
@@ -1321,6 +1328,7 @@ impl Relay {
         let channels = papaya::HashMap::with_capacity(config.max_channels.min(1 << 16));
         let global = Bytes::from_static(GLOBAL_CHANNEL);
         channels.pin().insert(global.clone(), Channel::new(global));
+        let users = Users::new(config.max_connections);
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
         Ok(Arc::new(Self {
@@ -1331,7 +1339,7 @@ impl Relay {
                 ..Metrics::default()
             }),
             admission: AtomicU8::new(Admission::Open as u8),
-            users: Users::new(),
+            users,
             channels,
             channel_count: AtomicUsize::new(1),
             membership_generation: AtomicU64::new(0),
@@ -1394,8 +1402,12 @@ impl Relay {
         self.global_view.store(None);
         while let Some(queue) = self.retirements.active.pop() {
             let mut state = queue.state.lock();
-            state.jobs.clear();
+            let jobs = std::mem::take(&mut state.jobs);
             state.queued = false;
+            drop(state);
+            // Released outside the lock: a long queue's bodies and views
+            // are freed without holding up the shard.
+            drop(jobs);
         }
     }
 
@@ -2145,55 +2157,77 @@ impl Relay {
         let Some(barriers) = observer.retirement_barriers.as_deref() else {
             return notices;
         };
-        // One shard at a time; nothing ever holds two. Each shard numbers its
-        // own jobs and the observer keeps one watermark per shard, stored while
-        // that shard is still locked: a job only advances under its shard's
-        // mutex, so no turn of an inspected job can run before it sees the
-        // watermark, and a job in a shard not yet scanned is inspected later
-        // with its cursor wherever its turns left it.
+        // One shard at a time, and one bounded chunk of its jobs per hold.
+        // Each shard numbers its jobs in queue order and the observer keeps one
+        // watermark per shard, advanced under the lock after every chunk: a
+        // job only advances under its shard's mutex, so no turn of an
+        // inspected job can run before it sees the watermark, while a job not
+        // yet inspected is never suppressed and is inspected later with its
+        // cursor wherever its turns left it. Departures and turns on the shard
+        // wait for at most one chunk.
         for (shard, queue) in self.observer_departures.iter().enumerate() {
-            let pending = queue.state.lock();
-            let previous = barriers[shard].load(Relaxed);
-            // Adjacent jobs often share an immutable view; reuse its lookup
-            // within this shard, but check each job's own cursor.
-            let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
-            for work in &pending.jobs {
-                let Some(recipients) = work.recipients.as_ref() else {
-                    continue;
-                };
-                // Captured after the revocation: the observer is not in it.
-                if work.retirement_sequence <= previous || work.generation > revoked_at {
-                    continue;
+            loop {
+                let pending = queue.state.lock();
+                let previous = barriers[shard].load(Relaxed);
+                let start = pending
+                    .jobs
+                    .partition_point(|work| work.retirement_sequence <= previous);
+                let chunk = pending.jobs.range(start..).take(BARRIER_QUANTUM);
+                let mut inspected = 0;
+                let mut last = previous;
+                // Adjacent jobs often share an immutable view; reuse its lookup
+                // within this chunk, but check each job's own cursor.
+                let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
+                for work in chunk {
+                    inspected += 1;
+                    last = work.retirement_sequence;
+                    let Some(recipients) = work.recipients.as_ref() else {
+                        continue;
+                    };
+                    // Captured after the revocation: the observer is not in it.
+                    if work.generation > revoked_at {
+                        continue;
+                    }
+                    let view = match recipients {
+                        FanoutRecipients::Message(_) => continue,
+                        other => other.single_slice(),
+                    };
+                    let position = match searched {
+                        Some((previous_view, position)) if std::ptr::eq(previous_view, view) => {
+                            position
+                        }
+                        _ => {
+                            let position = view
+                                .iter()
+                                .position(|peer| std::ptr::eq(Arc::as_ptr(peer), observer));
+                            searched = Some((view, position));
+                            position
+                        }
+                    };
+                    if position.is_some_and(|position| position >= work.cursor) {
+                        notices.push(
+                            work.packet
+                                .as_ref()
+                                .expect("charged retirement body")
+                                .frame
+                                .clone(),
+                        );
+                    }
                 }
-                let view = match recipients {
-                    FanoutRecipients::Message(_) => continue,
-                    other => other.single_slice(),
-                };
-                let position = match searched {
-                    Some((previous_view, position)) if std::ptr::eq(previous_view, view) => {
-                        position
-                    }
-                    _ => {
-                        let position = view
-                            .iter()
-                            .position(|peer| std::ptr::eq(Arc::as_ptr(peer), observer));
-                        searched = Some((view, position));
-                        position
-                    }
-                };
-                if position.is_some_and(|position| position >= work.cursor) {
-                    notices.push(
-                        work.packet
-                            .as_ref()
-                            .expect("charged retirement body")
-                            .frame
-                            .clone(),
-                    );
+                let finished = start + inspected == pending.jobs.len();
+                if finished {
+                    // Cover the shard's numbering so far: a job queued after
+                    // this hold is newer than the revocation's publication.
+                    last = pending.sequence;
+                }
+                // Deferred visits skip notices already submitted by this
+                // barrier, even if the observer re-enables the bit before
+                // those jobs finish.
+                barriers[shard].store(last, Relaxed);
+                if finished {
+                    break;
                 }
             }
-            // Deferred visits skip notices already submitted by this barrier,
-            // even if the observer re-enables the bit before those jobs finish.
-            barriers[shard].store(pending.sequence, Relaxed);
         }
         // A job captured before the revocation but queued after its shard's
         // scan is skipped by generation instead of arriving after the
@@ -2205,28 +2239,54 @@ impl Relay {
     /// Budget refusal fallback: finish this queue's older jobs synchronously
     /// so a direct notice cannot overtake them. Other queues keep their turns.
     fn flush_queue(&self, queue: &Arc<DepartureQueue>) {
-        let mut state = queue.state.lock();
-        for work in state.jobs.iter_mut() {
-            let _ = work.resume(usize::MAX);
-        }
-        state.jobs.clear();
-        if state.jobs.capacity() > 32 {
-            state.jobs = VecDeque::new();
-        }
-        let listed = std::mem::replace(&mut state.queued, false);
-        drop(state);
-        if listed {
-            // Cycle the lock-free list once to drop this queue's entry. A
-            // worker that holds the entry popped right now finds the queue
-            // empty and drops it itself.
-            for _ in 0..self.retirements.active.len() {
-                let Some(entry) = self.retirements.active.pop() else {
+        // Finish the jobs queued before this call so the caller's direct
+        // delivery follows them, in bounded holds: a long queue must not stall
+        // departures on this shard while it drains. Jobs appended meanwhile
+        // are newer than the caller's notice and stay queued.
+        let until = queue.state.lock().sequence;
+        loop {
+            let mut state = queue.state.lock();
+            let mut turns = 0;
+            while let Some(work) = state.jobs.front_mut() {
+                if work.retirement_sequence > until || turns == FLUSH_TURNS_PER_HOLD {
                     break;
-                };
-                if !Arc::ptr_eq(&entry, queue) {
-                    self.retirements.active.push(entry);
+                }
+                turns += 1;
+                if work.resume(RETIREMENT_QUANTUM).is_err() || !work.active() {
+                    state.jobs.pop_front();
                 }
             }
+            let drained = state
+                .jobs
+                .front()
+                .is_none_or(|work| work.retirement_sequence > until);
+            if !drained {
+                drop(state);
+                continue;
+            }
+            if !state.jobs.is_empty() {
+                // Newer jobs keep the queue listed for worker turns.
+                return;
+            }
+            if state.jobs.capacity() > 32 {
+                state.jobs = VecDeque::new();
+            }
+            let listed = std::mem::replace(&mut state.queued, false);
+            drop(state);
+            if listed {
+                // Cycle the lock-free list once to drop this queue's entry. A
+                // worker that holds the entry popped right now finds the queue
+                // empty and drops it itself.
+                for _ in 0..self.retirements.active.len() {
+                    let Some(entry) = self.retirements.active.pop() else {
+                        break;
+                    };
+                    if !Arc::ptr_eq(&entry, queue) {
+                        self.retirements.active.push(entry);
+                    }
+                }
+            }
+            return;
         }
     }
 
