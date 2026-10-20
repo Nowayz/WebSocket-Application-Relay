@@ -94,6 +94,9 @@
   `ConnectionAborted` report Windows sometimes gives for a refused transport.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.
+  A dispatchable `A/B fixtures` workflow runs the measurement fixtures
+  against release builds of two refs on one runner, alternating the order,
+  and uploads every receipt with a summary table (`scripts/ab-fixtures.py`).
   `check-release.py` uses explicit checks instead of `assert` and verifies
   `SHA256SUMS`; the operator archive no longer includes `docs/reports`.
 - Removed the unreferenced `examples/encode_cost.rs`, `examples/placement.rs`
