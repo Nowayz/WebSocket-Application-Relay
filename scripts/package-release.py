@@ -128,8 +128,9 @@ def main():
             (runtime / 'bin').mkdir(parents=True)
             shutil.copy2(output / 'build/war-relay', runtime / 'bin/war-relay')
             dependency_notices(output / 'build/build.log', runtime / 'third-party', source)
-            for name in ('docs', 'deploy'):
-                shutil.copytree(source / name, runtime / name)
+            # Measurement reports stay in the source archive; operators get the guides only.
+            shutil.copytree(source / 'docs', runtime / 'docs', ignore=shutil.ignore_patterns('reports'))
+            shutil.copytree(source / 'deploy', runtime / 'deploy')
             shutil.copytree(source / 'target/browser', runtime / 'browser')
             shutil.copy2(source / 'LICENSE', runtime / 'LICENSE')
             shutil.copy2(source / 'deploy/README.md', runtime / 'README.md')

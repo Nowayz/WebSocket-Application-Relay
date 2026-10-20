@@ -1,30 +1,91 @@
 name: Rust relay
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
 permissions:
   contents: read
 jobs:
   verify:
+    # Every push and pull request. A `labeled` event only decides whether the
+    # fixtures job runs; the commit itself was verified when it was pushed.
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'labeled')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      checks: write # rustsec/audit-check publishes its advisories as a check run
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: dtolnay/rust-toolchain@1.91.1
+      # dtolnay/rust-toolchain@master requires an explicit toolchain input, so
+      # read it from rust-toolchain.toml to keep the pin in one place.
+      - id: toolchain
+        run: |
+          python3 -c "import tomllib; print('channel=' + tomllib.load(open('rust-toolchain.toml', 'rb'))['toolchain']['channel'])" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: clients/js/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: target/vendor-source-cache
+          key: vendor-source-${{ hashFiles('vendor/provenance.json') }}
       - run: python3 scripts/check-product.py
       - run: python3 scripts/test-observer-message-output.py
       - run: cargo fmt --check
       - run: python3 scripts/check-vendor.py
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
+      - name: cargo audit
+        uses: rustsec/audit-check@v2
+        continue-on-error: false
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - run: ./scripts/check-js.sh
+      - run: npm run check:types --prefix clients/js
+      - run: npm run build:browser --prefix clients/js
+  fixtures:
+    # Measurement fixtures and the release rehearsal: weekly, on demand, and on
+    # pull requests carrying the `perf` label.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'perf'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: toolchain
+        run: |
+          python3 -c "import tomllib; print('channel=' + tomllib.load(open('rust-toolchain.toml', 'rb'))['toolchain']['channel'])" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: clients/js/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: target/vendor-source-cache
+          key: vendor-source-${{ hashFiles('vendor/provenance.json') }}
+      # The fixtures drive target/debug/war-relay; `--example` alone does not build it.
+      - run: cargo build --locked --bins
       - run: cargo build --locked --example inspection --example admission --example capacity
       - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 256 --seconds 2 --churn-workers 2 --ping-interval-secs 1 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-ci.json
       - run: python3 scripts/capacity.py --server target/debug/war-relay --client target/debug/examples/capacity --users 32 --seconds 1 --payload-bytes 65520 --tcp-send-buffer-bytes 16384 --tcp-receive-buffer-bytes 65536 --workers 2 --client-workers 2 --server-cpus '' --client-cpus '' --output artifacts/capacity-large-frame-ci.json
@@ -45,8 +106,6 @@ jobs:
       - run: python3 scripts/shutdown-capacity.py --server target/debug/war-relay --workers 2 --users 2048 --prime-broadcast --output artifacts/shutdown-warm-ci.json
       - run: python3 scripts/retirement-fallback.py --server target/debug/war-relay --workers 2 --audience 2048 --output artifacts/retirement-fallback-ci.json
       - run: python3 scripts/input-corpus.py --server target/debug/war-relay --output artifacts/input-corpus-ci.json
-      - run: npm run check:types --prefix clients/js
-      - run: npm run build:browser --prefix clients/js
       - run: python3 scripts/package-release.py --output artifacts/release-ci
       - run: python3 scripts/check-release.py --release artifacts/release-ci --output artifacts/release-ci-check
       - uses: actions/upload-artifact@v4

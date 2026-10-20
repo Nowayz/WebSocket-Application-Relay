@@ -495,6 +495,10 @@ impl Worker {
                         Err(_) => {
                             metrics.rejected.fetch_add(1, Relaxed);
                             let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+                            // Finish with a FIN so the refusal reaches the
+                            // peer; dropping a socket with unread input would
+                            // reset the connection and discard the reply.
+                            let _ = stream.shutdown(std::net::Shutdown::Write);
                             return Ok(());
                         }
                     }

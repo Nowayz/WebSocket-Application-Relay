@@ -342,12 +342,16 @@ async fn handshake_reservations_reject_with_http_503_and_release_after_abandonme
     })
     .await
     .unwrap();
-    let Err(tokio_tungstenite::tungstenite::Error::Http(response)) =
-        connect_async(&server.url).await
-    else {
-        panic!("exhausted handshake admission must return HTTP 503");
-    };
-    assert_eq!(response.status(), 503);
+    match connect_async(&server.url).await {
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+            assert_eq!(response.status(), 503);
+        }
+        // Windows discards buffered input on a reset, so when the request
+        // bytes race the refusal's FIN the client may see a reset instead.
+        #[cfg(windows)]
+        Err(tokio_tungstenite::tungstenite::Error::Io(_)) => {}
+        other => panic!("exhausted handshake admission must return HTTP 503: {other:?}"),
+    }
     assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 0);
     assert_eq!(budget.reserved(), 40960);
     drop(half_open);

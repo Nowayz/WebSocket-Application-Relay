@@ -28,7 +28,8 @@ def wait_ready(server, base):
             raise ValueError('packaged server failed startup; see its server log')
         try:
             with urllib.request.urlopen(base + '/readyz', timeout=0.5) as response:
-                assert response.status == 200
+                if response.status != 200:
+                    raise RuntimeError(f'packaged server readiness returned HTTP {response.status}')
             return
         except (OSError, urllib.error.URLError):
             if time.monotonic() >= deadline:
@@ -55,13 +56,23 @@ def main():
     env = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
     env.update(WAR_AUTH_PASSWORD='js-test-host', WAR_ADMIN_TOKEN='release-test-token')
     try:
+        sums = []
+        for number, line in enumerate((release / 'SHA256SUMS').read_text().splitlines(), 1):
+            digest, separator, name = line.partition('  ')
+            if not (digest and separator and name):
+                raise ValueError(f'SHA256SUMS line {number} is not a "digest  name" entry')
+            sums.append((name, digest))
+        if set(sums) != set(manifest['assets'].items()):
+            raise ValueError('SHA256SUMS entries differ from the release.json assets')
+        record['checks'].append('SHA256SUMS lists exactly the release.json assets with matching digests.')
         with tempfile.TemporaryDirectory(prefix='war-release-check-') as temporary:
             work = Path(temporary)
             for name, digest in manifest['assets'].items():
                 if Path(name).name != name:
                     raise ValueError('asset names must be simple file names')
                 with (release / name).open('rb') as source:
-                    assert hashlib.file_digest(source, 'sha256').hexdigest() == digest, name
+                    if hashlib.file_digest(source, 'sha256').hexdigest() != digest:
+                        raise ValueError(f'{name}: SHA-256 digest differs from release.json')
                 if name.endswith('.tar.gz'):
                     with tarfile.open(release / name) as archive:
                         archive.extractall(work, filter='data')
@@ -71,14 +82,19 @@ def main():
             source = work / f'war-relay-{version}-source'
             binary = runtime / 'bin/war-relay'
             identity = json.loads((runtime / 'release.json').read_text())
-            assert all(identity[key] == manifest[key] for key in ('commit', 'version', 'host', 'tools'))
+            if not all(identity[key] == manifest[key] for key in ('commit', 'version', 'host', 'tools')):
+                raise ValueError('runtime archive release.json identity differs from the release manifest')
             build = json.loads((release / 'build/build.json').read_text())
             with binary.open('rb') as executable:
-                assert hashlib.file_digest(executable, 'sha256').hexdigest() == build['binary_sha256']
-            assert subprocess.check_output([binary, '--version'], text=True).strip() == f'war-relay {version}'
+                if hashlib.file_digest(executable, 'sha256').hexdigest() != build['binary_sha256']:
+                    raise ValueError('packaged server binary SHA-256 differs from build/build.json')
+            reported = subprocess.check_output([binary, '--version'], text=True).strip()
+            if reported != f'war-relay {version}':
+                raise ValueError(f'packaged server reported {reported!r}, expected war-relay {version}')
             for name in ('browser/relay.js', 'browser/relay.d.ts', 'browser/index.html',
                          'deploy/war-relay.service', 'docs/migration.md', 'LICENSE'):
-                assert (runtime / name).is_file(), name
+                if not (runtime / name).is_file():
+                    raise ValueError(f'runtime archive is missing {name}')
             client_archive, = [release / name for name in manifest['assets'] if name.endswith('.tgz')]
             consumer = work / 'consumer'
             consumer.mkdir()
@@ -87,16 +103,22 @@ def main():
                 subprocess.run(['npm', 'install', '--omit=optional', '--ignore-scripts', '--no-audit', '--no-fund',
                                 str(client_archive)], cwd=consumer, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
             installed = consumer / 'node_modules/@war/relay-client'
-            assert (installed / 'LICENSE').read_bytes() == (runtime / 'LICENSE').read_bytes()
-            assert (installed / 'relay.d.ts').read_bytes() == (source / 'clients/js/relay.d.ts').read_bytes()
-            assert (runtime / 'browser/LICENSE').read_bytes() == (runtime / 'LICENSE').read_bytes()
-            assert (runtime / 'browser/LICENSE.cbor-x').read_bytes() == (consumer / 'node_modules/cbor-x/LICENSE').read_bytes()
+            if (installed / 'LICENSE').read_bytes() != (runtime / 'LICENSE').read_bytes():
+                raise ValueError('installed client LICENSE differs from the runtime LICENSE')
+            if (installed / 'relay.d.ts').read_bytes() != (source / 'clients/js/relay.d.ts').read_bytes():
+                raise ValueError('installed client relay.d.ts differs from the source archive')
+            if (runtime / 'browser/LICENSE').read_bytes() != (runtime / 'LICENSE').read_bytes():
+                raise ValueError('browser/LICENSE differs from the runtime LICENSE')
+            if (runtime / 'browser/LICENSE.cbor-x').read_bytes() != (consumer / 'node_modules/cbor-x/LICENSE').read_bytes():
+                raise ValueError('browser/LICENSE.cbor-x differs from the installed cbor-x LICENSE')
             notices = json.loads((runtime / 'third-party/index.json').read_text())
-            assert notices
+            if not notices:
+                raise ValueError('third-party/index.json lists no dependency notices')
             for package in notices:
                 for name, digest in package['files'].items():
                     with (runtime / 'third-party' / package['directory'] / name).open('rb') as notice:
-                        assert hashlib.file_digest(notice, 'sha256').hexdigest() == digest
+                        if hashlib.file_digest(notice, 'sha256').hexdigest() != digest:
+                            raise ValueError(f"third-party notice digest differs: {package['directory']}/{name}")
             record['checks'].append(f"License notices verified for the browser codec and {len(notices)} compiled Rust dependency packages.")
             relay_port, admin_port = free_port(), free_port()
             while admin_port == relay_port:
@@ -110,7 +132,8 @@ def main():
                                           env=env, stdout=log, stderr=subprocess.STDOUT)
                 wait_ready(server, env['WAR_TEST_ADMIN'])
                 tests = sorted((source / 'clients/js').glob('*.test.mjs'))
-                assert len(tests) == 4
+                if len(tests) != 4:
+                    raise ValueError(f'expected 4 client test files in the source archive, found {len(tests)}')
                 for test in tests:
                     shutil.copy2(test, installed / test.name)
                 with (output / 'tests.log').open('x') as tests_log:
@@ -183,7 +206,9 @@ console.log('Package exports, admin auth, pagination, drain/rejected admission/r
                 with (output / 'lifecycle.log').open('x') as lifecycle:
                     subprocess.run(['node', '--input-type=module', '-e', smoke, str(server.pid)], cwd=consumer,
                                    env=env, stdout=lifecycle, stderr=subprocess.STDOUT, check=True, timeout=30)
-                assert server.wait(timeout=15) == 0
+                status = server.wait(timeout=15)
+                if status != 0:
+                    raise RuntimeError(f'packaged server exited with status {status} after SIGTERM')
                 record['checks'].append('Package exports, management authentication, drain/resume, zero resources and graceful SIGTERM passed.')
             for profile in ('war-relay.env.example', 'war-relay-100k.env.example'):
                 settings = dict(line.split('=', 1) for raw in (runtime / 'deploy' / profile).read_text().splitlines()
@@ -206,12 +231,15 @@ console.log('Package exports, admin auth, pagination, drain/rejected admission/r
                                         '--test-name-pattern=native 5 MiB file values', 'relay.test.mjs'],
                                        cwd=installed, env=profile_env, stdout=tests_output,
                                        stderr=subprocess.STDOUT, check=True, timeout=30)
-                    assert '# pass 1' in tests_log.read_text().splitlines(), 'large-file profile test did not run'
+                    if '# pass 1' not in tests_log.read_text().splitlines():
+                        raise ValueError(f'{profile}: large-file profile test did not run')
                     with (output / f'{profile}.lifecycle.log').open('x') as lifecycle:
                         subprocess.run(['node', '--input-type=module', '-e', smoke, str(server.pid)],
                                        cwd=consumer, env=profile_env, stdout=lifecycle,
                                        stderr=subprocess.STDOUT, check=True, timeout=30)
-                    assert server.wait(timeout=15) == 0
+                    status = server.wait(timeout=15)
+                    if status != 0:
+                        raise RuntimeError(f'{profile}: packaged server exited with status {status} after SIGTERM')
                 record['checks'].append(f'{profile}: 5 MiB private/room FIFO, shared large values, zero resources and graceful shutdown passed.')
             record['passed'] = True
     except Exception as error:
