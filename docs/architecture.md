@@ -136,6 +136,24 @@ longer than one second or if shutdown with the crowd connected exceeds the
 fixture's three-second bound. On the development machine the worst echo during
 that churn was about 6 ms.
 
+A second test, `unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcasts`,
+covers the other shared path: two clients create and retire fresh rooms as
+fast as they can, which takes the channel index write lock on every join and
+every departure, while a `re_globl` session broadcasts continuously, which
+rebuilds the invalidated global recipient view from every room on every
+broadcast. A session in a stable room must keep echoing within one second.
+On the development machine roughly 6,800 rooms were created and retired in
+2.5 s under 157 global broadcasts, and the worst echo was under 4 ms.
+
+What the remaining per-object mutexes protect, and why they cannot stall
+unrelated work: a channel's lock is held for one map insert or removal, or
+for cloning one handle to the cached view, with no I/O inside, and only that
+room's traffic ever takes it; a departure queue's lock is held for one
+bounded turn of at most 128 recipient submissions, which are queue pushes,
+never socket writes; the publication index mutex is held for one registration,
+one removal, or one barrier scan, and otherwise only while observers exist.
+None of them is taken on the private-message path at all.
+
 ## The data path of one message
 
 1. The owning worker reads a complete binary WebSocket message from the

@@ -52,10 +52,11 @@
   256 MiB so that every budget fits under the unit's `MemoryMax=1G`, and the
   unit gains `MemoryHigh=768M`.
 - New end-to-end test for a slow consumer, a unit test that a publication
-  outlives its source, and a responsiveness test that drives a 1,100-member
-  room through broadcasts, departures and observer revocations while an
-  unrelated session must keep echoing within one second and shutdown must
-  stay bounded.
+  outlives its source, and two responsiveness tests: one drives a 1,100-member
+  room through broadcasts, departures and observer revocations, the other
+  creates and retires rooms continuously under a stream of global broadcasts;
+  in both an unrelated session must keep echoing within one second and
+  shutdown must stay bounded.
 - CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
   cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.
   `check-release.py` uses explicit checks instead of `assert` and verifies

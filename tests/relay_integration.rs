@@ -2202,3 +2202,118 @@ async fn unrelated_traffic_stays_responsive_under_large_room_churn_and_revocatio
     readers.abort_all();
     while readers.join_next().await.is_some() {}
 }
+
+/// The other stall-prone path: room creation and retirement take the channel
+/// index write lock, and every membership change invalidates the global
+/// recipient view, which the next global broadcast rebuilds from every room.
+/// Under continuous room churn and a stream of global broadcasts, a session
+/// in a stable room must keep echoing with bounded latency.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcasts() {
+    use std::{sync::atomic::AtomicBool, time::Instant};
+    const ROOMS: usize = 150;
+    const PER_ROOM: usize = 4;
+    let server = Server::new(Config {
+        workers: Some(4),
+        max_channels: 10_000,
+        ..config()
+    })
+    .await;
+    let url = server.url.clone();
+    // A population spread over many rooms; every member drains its socket.
+    let received = Arc::new(AtomicU64::new(0));
+    let mut readers = tokio::task::JoinSet::new();
+    for room in 0..ROOMS {
+        for _ in 0..PER_ROOM {
+            let (mut ws, _) = join_at(&url, &format!("r{room}")).await;
+            let received = received.clone();
+            readers.spawn(async move {
+                while let Some(Ok(message)) = ws.next().await {
+                    match message {
+                        Message::Binary(_) => {
+                            received.fetch_add(1, Relaxed);
+                        }
+                        Message::Close(_) => break,
+                        _ => {}
+                    }
+                }
+            });
+        }
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut churn = tokio::task::JoinSet::new();
+    // Global broadcaster: each broadcast rebuilds the invalidated global view.
+    {
+        let (mut ws, _) = join_at(&url, "re_globl").await;
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let value = protocol::byte_string(&vec![0x5a; 256]);
+            let mut sent = 0u64;
+            while !stop.load(Relaxed) {
+                send(&mut ws, BROADCAST, &value).await;
+                sent += 1;
+                tokio::time::sleep(Duration::from_millis(15)).await;
+            }
+            let _ = ws.close(None).await;
+            sent
+        });
+    }
+    // Room churn: fresh rooms are created and retired as fast as the client
+    // can join and leave, so the index write lock is taken continuously.
+    for lane in 0..2u64 {
+        let url = url.clone();
+        let stop = stop.clone();
+        churn.spawn(async move {
+            let mut created = 0u64;
+            while !stop.load(Relaxed) {
+                let (mut ws, _) = join_at(&url, &format!("churn-{lane}-{created}")).await;
+                let _ = ws.close(None).await;
+                created += 1;
+            }
+            created
+        });
+    }
+    let (mut probe, probe_id) = join_at(&url, "probe").await;
+    let end = Instant::now() + Duration::from_millis(2500);
+    let mut samples = 0u32;
+    let mut worst = Duration::ZERO;
+    while Instant::now() < end {
+        let started = Instant::now();
+        send(&mut probe, probe_id, &[0x18, samples as u8]).await;
+        let expected = protocol::envelope(probe_id, &[0x18, samples as u8]);
+        // Global broadcasts reach the probe's room too; only the echo counts.
+        loop {
+            let packet = data(&mut probe).await;
+            if packet == expected {
+                break;
+            }
+            assert_ne!(protocol::parse(&packet).unwrap().0, probe_id);
+        }
+        worst = worst.max(started.elapsed());
+        samples += 1;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    stop.store(true, Relaxed);
+    let mut counts = Vec::new();
+    while let Some(result) = churn.join_next().await {
+        counts.push(result.unwrap());
+    }
+    eprintln!(
+        "probe: {samples} echoes, worst {worst:?}; broadcasts and rooms created {counts:?}; frames {}",
+        received.load(Relaxed)
+    );
+    assert!(samples >= 50);
+    assert!(
+        worst < Duration::from_secs(1),
+        "unrelated echo stalled for {worst:?} during room churn"
+    );
+    assert!(counts.iter().all(|&count| count > 0));
+    assert!(received.load(Relaxed) > 0);
+    let _ = probe.close(None).await;
+    // Churned rooms must all have retired; only the stable rooms, the probe's
+    // room and re_globl remain until shutdown clears them.
+    assert!(server.relay.counts().1 <= ROOMS + 2);
+    server.stop().await;
+    readers.abort_all();
+    while readers.join_next().await.is_some() {}
+}
