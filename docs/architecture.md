@@ -52,9 +52,12 @@ into independently locked pieces:
 - Each channel has one read/write lock covering its membership, its variables
   and its cached recipient view. It also has an atomic reservation counter used
   for admission and its own departure queue.
-- Global observers (members of `re_globl` with listener flags) live behind a
-  separate read/write lock. An atomic mask records which observer classes are
-  non-empty, so ordinary routing skips that lock when nobody is listening.
+- Global observers (members of `re_globl` with listener flags) are an
+  immutable snapshot that is swapped atomically. Routing and departures load
+  it without locking; only flag changes serialize among themselves on a small
+  writer mutex, build the next snapshot and publish it. An atomic mask records
+  which observer classes are non-empty, so ordinary routing does not even load
+  the snapshot when nobody is listening.
 - Admission counters are atomics: the admission state, the session count and
   each channel's reservation count.
 - The list of departure queues with pending work is a mutex that workers only
@@ -64,16 +67,16 @@ into independently locked pieces:
 Where locks nest, they nest in this order, from outer to inner:
 
 1. channel index
-2. listeners
-3. channel
+2. channel
+3. listener writer mutex (flag changes and observer departures only)
 4. publication index, then one publication job
 5. departure queue
-6. active list of departure queues
-7. socket output state
+6. socket output state
 
 A path may skip levels but never takes an outer lock while holding an inner
-one. Session-ownership shards and the two small caches (global recipient view,
-disconnect snapshot) are leaf locks.
+one. Session-ownership shards are leaf locks. The listener snapshot, the two
+caches (global recipient view, disconnect snapshot) and the active list of
+departure queues are not locks at all; see below.
 
 No socket write happens while a registry lock is held. Output is either
 submitted after the guard has been dropped or queued for the socket's owning
@@ -92,16 +95,20 @@ Some state is inherently process-wide. Most of it is now lock-free; what is
 still a lock is held for a bounded, small amount of work and never across
 socket I/O:
 
-- The listener lock. Routing takes it shared only while observers exist (the
-  atomic mask skips it otherwise). The exclusive side is taken by listener-flag
-  commands, which are administrative. A revocation holds it while scanning the
-  observer queue for that observer's pending jobs: one position lookup per
-  distinct captured view, so the hold is proportional to the number of
-  distinct views queued, not to traffic. This lock is kept on purpose: a
-  departure holds the shared side from capturing the observer list until its
-  job is queued, which is what guarantees that a revocation either sees the
-  job and flushes it before the acknowledgement or never captured that
-  observer at all. A copy-on-write snapshot could not give that guarantee.
+- The listener snapshot is wait-free to read. Routing never waits on observer
+  changes. The barrier guarantee (a revocation flushes every job that captured
+  the observer before acknowledging, and nothing arrives afterwards) no longer
+  comes from a lock. Each snapshot carries a generation. Every observer job
+  records the generation it captured. A revocation publishes the next snapshot
+  first, then scans the queued jobs for that observer under the queue or
+  publication-index mutex, collects the pending notices, and records on the
+  observer the generation it revoked at. From then on a job captured at or
+  before that generation skips the observer. A job that captured the old
+  snapshot but registered only after the scan is therefore skipped rather than
+  delivered late: the revocation is the linearization point, and a capture
+  concurrent with it may omit that one notice for that observer. Direct
+  (unqueued) observer deliveries hold the same queue or index mutex for their
+  short loop, so they cannot land after the acknowledgement either.
 - The session-ownership shards: 64 independent locks, each held for one map
   operation. A takeover holds two.
 - The global recipient-view cache and the disconnect-snapshot cache are
@@ -189,11 +196,13 @@ publication goes into the detached queue and is not ordered against the
 source's departure notice. Refusals during a detached job are ignored, since
 there is no source left to report them to.
 
-Observer barriers are watermarks. Each session records the queue sequence up
-to which its notices have been flushed. When a global observer clears a
-listener bit, the relay submits that observer's pending notices before the
-acknowledgement and advances the watermark, so deferred jobs skip those
-notices afterwards and re-subscribing does not replay them.
+Observer barriers are watermarks on two axes. Each observer records the queue
+sequence up to which its notices have been flushed and the listener generation
+at which it last revoked. When a global observer clears a listener bit, the
+relay submits that observer's pending notices before the acknowledgement and
+advances both watermarks, so deferred jobs skip those notices afterwards,
+re-subscribing does not replay them, and a job captured concurrently with the
+revocation is skipped instead of arriving late.
 
 ## Pressure policy
 

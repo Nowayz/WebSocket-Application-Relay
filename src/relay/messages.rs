@@ -12,7 +12,7 @@ pub(super) struct MessageFanouts {
 }
 
 #[derive(Default)]
-struct Index {
+pub(super) struct Index {
     sequence: u64,
     jobs: BTreeMap<u64, Weak<Mutex<RoomFanout>>>,
 }
@@ -37,10 +37,12 @@ impl Publication {
         source: &Peer,
         recipients: MessageRecipients,
         frame: Frame,
+        generation: u64,
     ) -> Result<(), Disconnect> {
         debug_assert!(!self.active());
-        // The caller holds the listener read lock through registration, so a
-        // revocation's write lock observes every older capture.
+        // Registration happens under the index mutex, which a revocation also
+        // holds while scanning; the recorded generation covers a capture that
+        // raced the revocation and registers only afterwards.
         let mut index = self.registry.index.lock();
         let sequence = index
             .sequence
@@ -48,6 +50,7 @@ impl Publication {
             .ok_or(Disconnect::OVERLOADED)?;
         let mut work = self.work.lock();
         work.begin(source, FanoutRecipients::Message(recipients), frame, 0)?;
+        work.generation = generation;
         index.sequence = sequence;
         index.jobs.insert(sequence, Arc::downgrade(&self.work));
         self.sequence = Some(sequence);
@@ -96,12 +99,17 @@ impl Drop for Publication {
 }
 
 impl MessageFanouts {
+    /// Hold off revocation barriers while the caller delivers to observers
+    /// directly, so no delivery can land after a revocation's acknowledgement.
+    pub(super) fn exclude_barriers(&self) -> parking_lot::MutexGuard<'_, Index> {
+        self.index.lock()
+    }
+
     /// Collect the observer's pending captured messages and advance its
-    /// watermark. The caller submits them after releasing every lock.
-    pub(super) fn flush(&self, observer: &Peer) -> Vec<Frame> {
-        // Caller holds the listener write lock. Publication takes listeners ->
-        // index -> job; progress takes only job, then releases it before
-        // unregistering.
+    /// watermarks. The caller submits them after releasing every lock.
+    pub(super) fn flush(&self, observer: &Peer, revoked_at: u64) -> Vec<Frame> {
+        // Publication takes index -> job; progress takes only the job lock,
+        // then releases it before unregistering.
         let mut pending = Vec::new();
         let index = self.index.lock();
         let previous = observer.message_barrier.load(Relaxed);
@@ -116,6 +124,10 @@ impl MessageFanouts {
                 continue;
             };
             let work = job.lock();
+            // Captured after the revocation: the observer is not in its view.
+            if work.generation > revoked_at {
+                continue;
+            }
             if let (Some(FanoutRecipients::Message(message)), Some(packet)) =
                 (&work.recipients, &work.packet)
             {
@@ -142,6 +154,9 @@ impl MessageFanouts {
             observer.message_barrier.store(sequence, Relaxed);
         }
         observer.message_barrier.store(index.sequence, Relaxed);
+        // A publication captured before the revocation but registered after
+        // this scan skips the observer instead of arriving after its ACK.
+        observer.message_revoked.store(revoked_at, Relaxed);
         pending
     }
 }
