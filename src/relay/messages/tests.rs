@@ -52,7 +52,7 @@ fn data(output: &Recorded) -> Vec<Frame> {
 }
 
 #[test]
-fn failed_observer_work_counts_only_this_turn_across_both_segments() {
+fn observer_pressure_drops_output_without_failing_the_source() {
     for first_turn in [0, 1] {
         let relay = Relay::new(Config {
             auth_password: Some("messages".into()),
@@ -93,12 +93,16 @@ fn failed_observer_work_counts_only_this_turn_across_both_segments() {
                 first_turn,
             )
             .unwrap();
-        let failure = pending
+        pending
             .as_mut()
             .unwrap()
             .resume_routing(FANOUT_QUANTUM)
-            .unwrap_err();
-        assert_eq!(failure.reason, Disconnect::OVERLOADED);
+            .unwrap();
+        pending
+            .as_mut()
+            .unwrap()
+            .resume_routing(usize::MAX)
+            .unwrap();
         let mut packets = vec![reader.outgoing.try_recv().unwrap()];
         let mut observer_count = 0;
         for observer in &mut observers {
@@ -107,10 +111,12 @@ fn failed_observer_work_counts_only_this_turn_across_both_segments() {
                 packets.push(packet);
             }
         }
-        assert!(observer_count > 0 && observer_count < FANOUT_QUANTUM);
-        // Two room handles include the skipped source. The failed observer
-        // consumes a visit, while the preceding turn must not be charged again.
-        assert_eq!(failure.work, 2 - first_turn + observer_count + 1);
+        // Retained observer output exhausts the shared budget part way through.
+        // Later observers miss this message; nobody is closed for it.
+        assert!(observer_count > 0 && observer_count < observers.len());
+        assert!(relay.metrics.global_pressure.load(Relaxed) >= 1);
+        assert!(!source.registration.peer.closing.load(Relaxed));
+        assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 0);
         for packet in &packets {
             assert_eq!(packet.frame.payload().as_ptr(), pointer);
             assert_eq!(
@@ -307,14 +313,11 @@ fn observer_views_invalidate_by_class_and_pending_eligibility_excludes_late_subs
             0,
         )
         .unwrap();
-    let view = relay.state.read().message_snapshots[0]
-        .get()
-        .unwrap()
-        .clone();
+    let view = relay.message_snapshot_cached(0).unwrap();
     let (late, late_output) = peer(&relay, GLOBAL_CHANNEL, PRIVATE_MESSAGE);
     assert!(Arc::ptr_eq(
         &view,
-        relay.state.read().message_snapshots[0].get().unwrap()
+        &relay.message_snapshot_cached(0).unwrap()
     ));
     relay
         .receive(
@@ -322,7 +325,7 @@ fn observer_views_invalidate_by_class_and_pending_eligibility_excludes_late_subs
             protocol::request(1, &protocol::uint(u64::from(CHANNEL_MESSAGE))),
         )
         .unwrap();
-    assert!(relay.state.read().message_snapshots[0].get().is_none());
+    assert!(relay.message_snapshot_cached(0).is_none());
     pending.as_mut().unwrap().resume(usize::MAX).unwrap();
     assert_eq!(data(&output).len(), 1);
     assert!(data(&late_output).is_empty());
@@ -339,14 +342,7 @@ fn observer_views_invalidate_by_class_and_pending_eligibility_excludes_late_subs
     pending.as_mut().unwrap().resume(usize::MAX).unwrap();
     assert_eq!(data(&late_output).len(), 1);
     relay.begin_shutdown();
-    assert!(
-        relay
-            .state
-            .read()
-            .message_snapshots
-            .iter()
-            .all(|cache| cache.get().is_none())
-    );
+    assert!((0..2).all(|index| relay.message_snapshot_cached(index).is_none()));
     drop(observer);
 }
 
@@ -398,16 +394,18 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         1,
         "maximum sequence replayed at a second barrier"
     );
-    assert_eq!(
-        relay.receive_batch().receive_bounded(
+    // Exhausted publication numbering delivers immediately instead.
+    relay
+        .receive_batch()
+        .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
             0,
             &mut pending,
-            0
-        ),
-        Err(Disconnect::OVERLOADED.into())
-    );
+            0,
+        )
+        .unwrap();
+    assert_eq!(data(&output).len(), 2);
     assert!(relay.messages.index.lock().jobs.is_empty());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
@@ -426,16 +424,20 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         .map(|_| peer(&constrained, GLOBAL_CHANNEL, CHANNEL_MESSAGE))
         .collect();
     let mut pending = None;
-    assert_eq!(
-        constrained.receive_batch().receive_bounded(
+    // An unfunded observer view is visited immediately instead of staged.
+    constrained
+        .receive_batch()
+        .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, &protocol::byte_string(&[0x22; 512])),
             0,
             &mut pending,
-            1
-        ),
-        Err(Disconnect::OVERLOADED.into())
-    );
+            1,
+        )
+        .unwrap();
+    assert!(constrained.metrics.global_pressure.load(Relaxed) >= 1);
+    assert!(observers.iter().any(|(_, output)| !data(output).is_empty()));
+    assert!(!source.peer.closing.load(Relaxed));
     assert!(constrained.messages.index.lock().jobs.is_empty());
     assert_eq!(constrained.metrics.queued_bytes.load(Relaxed), 0);
     constrained.begin_shutdown();
@@ -458,22 +460,26 @@ fn private_primary_delivery_precedes_an_unfunded_observer_snapshot() {
         .map(|_| peer(&relay, GLOBAL_CHANNEL, PRIVATE_MESSAGE))
         .collect();
     let mut pending = None;
-    assert_eq!(
-        relay.receive_batch().receive_bounded(
+    relay
+        .receive_batch()
+        .receive_bounded(
             &source.peer,
             protocol::envelope(target.peer.id.load(Relaxed), b"\xf5"),
             0,
             &mut pending,
             1,
-        ),
-        Err(Disconnect::OVERLOADED.into())
-    );
+        )
+        .unwrap();
     assert_eq!(
         data(&output).len(),
         1,
         "observer staging prevented the primary private delivery"
     );
-    assert!(observers.iter().all(|(_, output)| data(output).is_empty()));
+    // The unfunded view is visited immediately; some observers still miss the
+    // message under shared pressure, and the source stays open.
+    assert!(observers.iter().any(|(_, output)| !data(output).is_empty()));
+    assert!(relay.metrics.global_pressure.load(Relaxed) >= 1);
+    assert!(!source.peer.closing.load(Relaxed));
     assert!(relay.messages.index.lock().jobs.is_empty());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
@@ -566,10 +572,7 @@ fn captured_observer_eligibility_survives_id_takeover_and_stale_registration_rem
     assert!(data(&replacement_output).is_empty());
     assert_eq!(data(&keeper_output).len(), 1);
     drop(old);
-    assert!(Arc::ptr_eq(
-        relay.state.read().users.get(&id).unwrap(),
-        &replacement.peer
-    ));
+    assert!(Arc::ptr_eq(&relay.user(id).unwrap(), &replacement.peer));
     relay
         .receive_batch()
         .receive_bounded(
@@ -637,9 +640,7 @@ fn alternating_view_cache_distinguishes_equal_sized_generations_and_cached_absen
             )
             .unwrap();
         views.push(Arc::downgrade(
-            relay.state.read().message_snapshots[index % 2]
-                .get()
-                .unwrap(),
+            &relay.message_snapshot_cached(index % 2).unwrap(),
         ));
     }
     relay
@@ -746,11 +747,10 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
     entered_rx
         .recv_timeout(std::time::Duration::from_secs(5))
         .unwrap();
-    let registry = relay
-        .state
-        .try_write()
-        .expect("output submission retained membership lock");
-    drop(registry);
+    assert!(
+        relay.registry_unlocked(),
+        "output submission retained a membership lock"
+    );
     let barrier_relay = relay.clone();
     let observer = last.peer.clone();
     let barrier = std::thread::spawn(move || {
@@ -759,7 +759,7 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
             .unwrap();
     });
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while relay.state.try_read().is_some() {
+    while !relay.listeners_locked() {
         assert!(
             std::time::Instant::now() < deadline,
             "barrier did not acquire membership"

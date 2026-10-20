@@ -112,7 +112,7 @@ The candidate is locally verified and has not been published or deployed.
 | Receipt integrity | All three archive digests passed; changed digest rejected before server startup; existing output refused |
 
 The short mixed 100,000-user and native departure/fanout checks in
-[rejection-accounting.md](rejection-accounting.md) apply to identical Rust inputs.
+[rejection-accounting.md](reports/rejection-accounting.md) apply to identical Rust inputs.
 The packaged binary is a separate compiler-baseline build; those timing results
 are not represented as measurements of this executable. No further performance
 changes are required for this release baseline.

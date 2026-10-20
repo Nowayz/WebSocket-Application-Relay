@@ -1,6 +1,6 @@
 //! Large observer publications are owned and advanced by their source worker.
 //! The index is used only for registration, retirement and revocation; worker
-//! turns lock one publication, never the index or membership registry.
+//! turns lock one publication, never the index or any membership lock.
 use super::*;
 use std::collections::BTreeMap;
 
@@ -37,24 +37,17 @@ impl Publication {
         source: &Peer,
         recipients: MessageRecipients,
         frame: Frame,
-        timeout: std::time::Duration,
     ) -> Result<(), Disconnect> {
         debug_assert!(!self.active());
-        // The caller retains its registry read guard through registration.
-        // Revocation's write guard therefore observes every older capture.
+        // The caller holds the listener read lock through registration, so a
+        // revocation's write lock observes every older capture.
         let mut index = self.registry.index.lock();
         let sequence = index
             .sequence
             .checked_add(1)
             .ok_or(Disconnect::OVERLOADED)?;
         let mut work = self.work.lock();
-        work.begin(
-            source,
-            FanoutRecipients::Message(recipients),
-            frame,
-            timeout,
-            0,
-        )?;
+        work.begin(source, FanoutRecipients::Message(recipients), frame, 0)?;
         index.sequence = sequence;
         index.jobs.insert(sequence, Arc::downgrade(&self.work));
         self.sequence = Some(sequence);
@@ -65,8 +58,8 @@ impl Publication {
         self.sequence.is_some()
     }
 
-    pub(super) fn deadline(&self) -> Option<std::time::Instant> {
-        self.sequence.and_then(|_| self.work.lock().deadline)
+    pub(super) fn detach(&mut self) {
+        self.work.lock().tolerant = true;
     }
 
     pub(super) fn resume(&mut self, quantum: usize) -> Result<(), RoutingFailure> {
@@ -74,7 +67,7 @@ impl Publication {
             return Ok(());
         };
         let mut work = self.work.lock();
-        let result = work.resume_with::<false>(quantum, Some(sequence));
+        let result = work.resume_with(quantum, Some(sequence));
         if result.is_err() {
             work.clear();
         }
@@ -104,8 +97,9 @@ impl Drop for Publication {
 
 impl MessageFanouts {
     pub(super) fn flush(&self, observer: &Peer) {
-        // Caller holds registry write. Publication takes registry -> index ->
-        // job; progress takes only job, then releases it before unregistering.
+        // Caller holds the listener write lock. Publication takes listeners ->
+        // index -> job; progress takes only job, then releases it before
+        // unregistering.
         let index = self.index.lock();
         let previous = observer.message_barrier.load(Relaxed);
         let mut searched: Option<(Weak<ObserverView>, Option<usize>)> = None;

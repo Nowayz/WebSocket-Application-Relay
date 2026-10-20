@@ -8,7 +8,7 @@ traffic mix and offered rate. Connected population alone is not a capacity claim
 
 ## Product boundary
 
-The [consolidation](consolidation.md) removed the C/C++ implementations, temporary
+The [consolidation](reports/consolidation.md) removed the C/C++ implementations, temporary
 native comparison dependencies, Binary/Text clients, compatibility bridge and
 their dedicated build and benchmark machinery from the maintained tree. Those
 wire formats are retired; CBOR strings and byte arrays are ordinary typed values
@@ -35,11 +35,11 @@ Finish bounding routing work that can monopolize a worker or membership lock.
 Large native room, global and observer broadcasts now
 advance through immutable recipient views outside the registry lock. Native
 live fanout uses 1,024-recipient turns; deferred departures use 128. The
-[global broadcast report](global-broadcasts.md) records the latest measured win.
+[global broadcast report](reports/global-broadcasts.md) records the latest measured win.
 
-The [native observer-message screen](observer-messages.md) established membership
+The [native observer-message screen](reports/observer-messages.md) established membership
 and independent-witness stalls at 100,000 observers. Its
-[bounded-publication follow-up](observer-publications.md) captures eligibility,
+[bounded-publication follow-up](reports/observer-publications.md) captures eligibility,
 registers pending work for revocation and keeps one charged body across room and
 observer segments. Preserve message-before-unsubscribe-ACK ordering, source FIFO,
 cancellation, ID takeover and output-budget refusal as this design evolves.
@@ -50,13 +50,13 @@ captures all addressable owners under a registry read lock. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
 Observer barriers also still scan distinct captured views under the membership
-write lock. The [concurrent-publisher follow-up](concurrent-observers.md) rejected
+write lock. The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
 a two-entry scan cache: a large component win did not produce a clear native
-eight-worker improvement. The [worker-scheduling follow-up](worker-scheduling.md)
+eight-worker improvement. The [worker-scheduling follow-up](reports/worker-scheduling.md)
 now separates fresh readiness from buffered work and bounds aggregate routing
 work in both phases. Its short native and mixed-population checks preserve the
 source cutoff, FIFO and storage contracts while improving responsiveness.
-Failed initial routing attempts now [charge their visited handles](rejection-accounting.md)
+Failed initial routing attempts now [charge their visited handles](reports/rejection-accounting.md)
 to the aggregate allowance. Changing/cold captured
 generations under churn are the next lock-hold target. Do not add a recipient
 index from the earlier component result alone.

@@ -1960,3 +1960,80 @@ async fn private_routing_keeps_progress_through_registry_growth_and_retirement()
     );
     server.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_recipient_that_stops_reading_is_closed_as_a_slow_consumer_and_the_sender_survives() {
+    use std::time::Instant;
+    let server = Server::new(Config {
+        max_message_bytes: 64 * 1024,
+        queue_bytes: 256 * 1024,
+        total_queue_bytes: 16 * 1024 * 1024,
+        write_timeout_secs: 5,
+        ..config()
+    })
+    .await;
+    let (mut sender, sender_id) = server.join("slow-consumer").await;
+    let (mut slow, slow_id) = server.join("slow-consumer").await;
+    // Read the sender's next application message, skipping the slow peer's
+    // departure notice, which may arrive at any point once it is closed.
+    async fn echo(ws: &mut Socket, expected: &Bytes) {
+        let departure_prefix = protocol::envelope(BROADCAST, &[]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let packet = data(ws).await;
+            if packet == *expected {
+                return;
+            }
+            assert!(
+                packet.starts_with(&departure_prefix[..departure_prefix.len() - 1]),
+                "unexpected packet {packet:?}"
+            );
+            assert!(Instant::now() < deadline);
+        }
+    }
+    // The slow peer never reads. Its kernel window fills first, then its
+    // per-session output allowance; the relay must close it, not the sender.
+    let value = protocol::byte_string(&vec![0x5a; 32 * 1024]);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while server.relay.metrics.slow_consumers.load(Relaxed) == 0 {
+        assert!(Instant::now() < deadline, "slow consumer was never closed");
+        send(&mut sender, slow_id, &value).await;
+        // Routing stays responsive for the sender throughout.
+        send(&mut sender, sender_id, &[7]).await;
+        echo(&mut sender, &protocol::envelope(sender_id, &[7])).await;
+    }
+    assert_eq!(server.relay.metrics.slow_consumers.load(Relaxed), 1);
+    // The slow peer observes either a 1013 Close or, when a frame was blocked
+    // part way through, a dropped transport. Either way it is gone.
+    let outcome = timeout(Duration::from_secs(5), async {
+        loop {
+            match slow.next().await {
+                Some(Ok(Message::Close(frame))) => {
+                    assert_eq!(u16::from(frame.unwrap().code), 1013);
+                    return;
+                }
+                Some(Ok(_)) => continue,
+                Some(Err(_)) | None => return,
+            }
+        }
+    })
+    .await;
+    assert!(outcome.is_ok(), "slow peer was not retired");
+    drop(slow);
+    wait_counter(&server.relay.metrics.disconnected, 1).await;
+    // The sender was never penalized for its peer's slowness.
+    send(&mut sender, sender_id, &[8]).await;
+    echo(&mut sender, &protocol::envelope(sender_id, &[8])).await;
+    sender.close(None).await.unwrap();
+    let acknowledged = timeout(Duration::from_secs(3), async {
+        while let Some(Ok(message)) = sender.next().await {
+            if matches!(message, Message::Close(_)) {
+                return true;
+            }
+        }
+        false
+    })
+    .await;
+    assert_eq!(acknowledged, Ok(true), "sender must still close normally");
+    server.stop().await;
+}

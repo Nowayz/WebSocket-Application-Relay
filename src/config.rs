@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use anyhow::{Result, bail, ensure};
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 
 pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
 
@@ -93,8 +93,13 @@ pub struct Config {
 }
 
 impl Default for Config {
+    /// Built-in defaults only. Unlike [`Config::parse`], this never reads the
+    /// process environment, so embedded relays and tests are reproducible
+    /// regardless of any `WAR_*` variables set in the calling shell.
     fn default() -> Self {
-        Self::parse_from(["war-relay"])
+        let command = Self::command().mut_args(|arg| arg.env(None::<&str>));
+        Self::from_arg_matches(&command.get_matches_from(["war-relay"]))
+            .expect("built-in defaults parse")
     }
 }
 

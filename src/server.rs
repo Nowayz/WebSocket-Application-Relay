@@ -64,6 +64,10 @@ use timers::Timers;
 
 const LISTENER: Token = Token(0);
 const WAKE: Token = Token(1);
+/// Upper bound on one blocking poll. Readiness and wakeups normally end a
+/// poll much sooner; the bound only limits how long a missed notification can
+/// stall a worker, so a stop signal or queued output never waits forever.
+const POLL_TICK: Duration = Duration::from_secs(1);
 const READ_QUANTUM: usize = 256;
 const ACCEPT_QUANTUM: usize = 16;
 const READY_QUANTUM: usize = 1024;
@@ -686,6 +690,7 @@ impl Worker {
             {
                 timeout = Some(Duration::ZERO);
             }
+            let timeout = Some(timeout.map_or(POLL_TICK, |t| t.min(POLL_TICK)));
             match self.poll.poll(&mut events, timeout) {
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 result => result?,
@@ -843,9 +848,6 @@ impl Connection {
                 deadline
             }
         };
-        if let Some(next) = self.room_fanout.as_ref().and_then(|f| f.deadline()) {
-            deadline = Some(deadline.map_or(next, |d| d.min(next)));
-        }
         for next in [
             self.pong_deadline,
             self.reclaim_deadline,
@@ -964,8 +966,12 @@ impl Connection {
         if self.closing.is_some() {
             return Drive::Wait;
         }
-        if let Some(fanout) = &mut self.room_fanout {
-            fanout.clear();
+        // An unfinished publication outlives its source: the remaining
+        // recipients still receive it, ahead of this session's departure.
+        if let Some(fanout) = self.room_fanout.take()
+            && let Some(registration) = &self.registration
+        {
+            registration.detach_fanout(fanout);
         }
         if reason.code == 1002 && self.registration.is_some() {
             relay.metrics.protocol_errors.fetch_add(1, Relaxed);
@@ -1068,13 +1074,7 @@ impl Connection {
                 }
                 return self.start_close(reason, relay, false, now);
             }
-            if self.socket.deadline().is_some_and(|d| d <= now)
-                || self
-                    .room_fanout
-                    .as_ref()
-                    .and_then(|f| f.deadline())
-                    .is_some_and(|d| d <= now)
-            {
+            if self.socket.deadline().is_some_and(|d| d <= now) {
                 relay.metrics.write_timeouts.fetch_add(1, Relaxed);
                 return Drive::Drop;
             }
@@ -1385,7 +1385,11 @@ impl Drop for Connection {
         // This may be the last strong peer/socket reference. Disable output
         // before retiring membership and releasing queued byte reservations.
         self.socket.end_output();
-        self.room_fanout.take();
+        if let Some(fanout) = self.room_fanout.take()
+            && let Some(registration) = &self.registration
+        {
+            registration.detach_fanout(fanout);
+        }
         self.registration.take();
     }
 }

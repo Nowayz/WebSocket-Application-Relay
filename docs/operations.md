@@ -64,7 +64,7 @@ Global decoder/output budgets still apply, so concurrent large transfers and
 large multicast audiences must fit available credit. Payload bodies are shared
 across recipients, while per-recipient pending delivery remains conservatively
 charged. Use backpressure or reduce the offered rate when these budgets fill.
-The [large-file check](large-files.md) records the acceptance and socket-buffer
+The [large-file check](reports/large-files.md) records the acceptance and socket-buffer
 comparison behind this profile.
 
 The base [systemd unit](../deploy/war-relay.service) has lower limits and is not
@@ -120,24 +120,24 @@ Watch queue occupancy and changes in `war_global_pressure_total`. The pressure
 counter can include refused metadata even when fallback delivery succeeds; it is
 not a missing-message count. Verify the expected recipient matrix. A departing
 source's normal Close does not prove its recipients received departure events.
-The [snapshot ownership report](retirement-snapshots.md) checks an eight-departure
+The [snapshot ownership report](reports/retirement-snapshots.md) checks an eight-departure
 burst against 100,000 observers with the same constrained shared credit.
 
 Large native room, global and observer publications advance
 in 1,024-recipient turns outside the registry lock. The first global publication
 after a membership/ID-ownership change still builds a full owner view under a
 read lock. The current cached index is bounded by admitted population; captured
-jobs retain their own charged views. See [global broadcast checks](global-broadcasts.md).
+jobs retain their own charged views. See [global broadcast checks](reports/global-broadcasts.md).
 Observer publications register captured room/observer views for revocation and
 advance under a per-publication mutex. A combined room/observer publication
 reserves one body and both views; it does not copy a combined recipient list.
 Private primary submission precedes observer capture, including when remaining
 observer work cannot obtain staging credit. Already submitted output is not
-rolled back by a subsequent overload close. See [observer publications](observer-publications.md).
+rolled back by a subsequent overload close. See [observer publications](reports/observer-publications.md).
 Deferred departures
 use 128-recipient native worker turns so publication and other ready sockets can
 interleave more promptly. This trades some bulk-work CPU efficiency for shorter
-control stalls; see the [measured scheduling comparison](retirement-turns.md).
+control stalls; see the [measured scheduling comparison](reports/retirement-turns.md).
 Native departures with more than 128 recipients use deferred work too; the
 same constant sets that cutoff and the normal worker visit budget. Smaller
 departures can deliver directly when no older job needs ordering. Outputs that
@@ -153,15 +153,15 @@ control turn longer. Queue-budget fallback is also synchronous, but finishes
 preceding jobs only for the overlapping recipient channel. Disjoint rooms keep
 their turns and reservations. Large overlapping jobs and long job queues remain
 known limits, not fixed control-turn guarantees. See the
-[observer-barrier report](observer-barriers.md) and
-[cross-room fallback check](retirement-fallback.md).
+[observer-barrier report](reports/observer-barriers.md) and
+[cross-room fallback check](reports/retirement-fallback.md).
 
 ## Lifecycle and deadlines
 
 Terminal membership removal discards each room's cached recipient index instead
 of maintaining it for future broadcasts. Captured fanouts keep their own owners;
 reversible drain retains ordinary cache maintenance. The
-[warmed-room shutdown check](shutdown-views.md) covers a large room after real
+[warmed-room shutdown check](reports/shutdown-views.md) covers a large room after real
 delivery, all shutdown Close frames and transport EOFs.
 
 Handshake, join, write, heartbeat, application-idle and shutdown deadlines are
@@ -208,5 +208,5 @@ arenas/queues stay warm for reconnects.
 Use [short recipes](performance-guide.md) to check the workload on its intended
 host. Test normal Close, EOF, exact payloads/FIFO and final resource release.
 Do not overlap compilation, profiling or multiple timed generators. Record failed
-runs as failures. [Historical findings](performance-history.md) explain selected
+runs as failures. [Historical findings](reports/performance-history.md) explain selected
 changes, rejected optimizations and their scope.

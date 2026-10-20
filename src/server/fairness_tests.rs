@@ -253,12 +253,17 @@ fn check_fanout_allowance(
     }
     if cancel {
         assert!(connection.room_fanout.as_ref().unwrap().active());
-        assert!(connection.deadline(&relay).is_some());
         let delivered: usize = outputs.iter().map(|out| out.messages.load(Relaxed)).sum();
         // Production publishes terminal shutdown before retiring connections.
+        // A stopping relay discards the unfinished publication with its staging.
         relay.begin_shutdown();
         connection.start_close(Disconnect::SHUTDOWN, &relay, false, Instant::now());
-        assert!(!connection.room_fanout.as_ref().unwrap().active());
+        assert!(
+            connection
+                .room_fanout
+                .as_ref()
+                .is_none_or(|job| !job.active())
+        );
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
         assert_eq!(
             outputs

@@ -20,7 +20,7 @@ fn routing_validation_and_permission_failures_charge_one_attempt() {
 }
 
 #[test]
-fn routing_overload_charges_refusals_and_attempted_partial_fanout() {
+fn routing_pressure_drops_output_and_keeps_the_source_registered() {
     for failure in [Failure::Partial, Failure::Staging, Failure::ClosingPrefix] {
         for allowance in [1, 17, FANOUT_QUANTUM * 4] {
             check(failure, allowance);
@@ -154,6 +154,16 @@ fn check(failure: Failure, allowance: usize) {
         ),
         Drive::Again | Drive::Drop
     ));
+    let pressure = matches!(
+        failure,
+        Failure::Partial | Failure::Staging | Failure::ClosingPrefix
+    );
+    if pressure {
+        // Finish the bounded continuation so only delivered output stays charged.
+        if let Some(job) = connection.room_fanout.as_mut() {
+            let _ = job.resume(usize::MAX);
+        }
+    }
     let mut packets = Vec::new();
     for observer in &mut observers {
         while let Ok(packet) = observer.outgoing.try_recv() {
@@ -164,37 +174,51 @@ fn check(failure: Failure, allowance: usize) {
             packets.push(packet);
         }
     }
-    if matches!(failure, Failure::Partial) {
-        assert!(
-            !packets.is_empty() && packets.len() < FANOUT_QUANTUM,
-            "diagnostic did not fail after a real partial native turn"
-        );
-    } else {
-        assert!(packets.is_empty());
+    match failure {
+        Failure::Partial | Failure::Staging => assert!(
+            !packets.is_empty() && packets.len() < count,
+            "shared pressure must drop some observer output, not all of it"
+        ),
+        // 1,043 closing handles are skipped without credit; the one live
+        // observer then meets the exhausted shared budget and is refused.
+        Failure::ClosingPrefix => assert!(packets.is_empty()),
+        _ => assert!(packets.is_empty()),
     }
-    let charge = if matches!(failure, Failure::Partial) {
-        // The primary visit, submitted observer prefix and refused observer.
-        packets.len() + 2
-    } else if matches!(failure, Failure::ClosingPrefix) {
-        // One primary, 1,000 skipped handles, then the refused live observer.
-        1002
-    } else {
-        1
+    let charge = match failure {
+        // One bounded native turn for a staged publication.
+        Failure::Partial | Failure::ClosingPrefix => FANOUT_QUANTUM,
+        // An unfunded view is visited in full within this turn.
+        Failure::Staging => count + 1,
+        _ => 1,
     };
     assert_eq!(
         remaining,
         allowance.saturating_sub(charge),
-        "failed routing escaped the worker allowance after {} observer deliveries",
+        "routing escaped the worker allowance after {} observer deliveries",
         packets.len()
     );
     assert_eq!(relay.metrics.incoming_messages.load(Relaxed), before + 1);
-    assert!(connection.registration.is_none());
+    if pressure {
+        assert!(
+            connection.registration.is_some(),
+            "recipient pressure must never close the source"
+        );
+        assert!(relay.metrics.global_pressure.load(Relaxed) >= 1);
+    } else {
+        assert!(connection.registration.is_none());
+    }
     assert!(
         !connection
             .room_fanout
             .as_ref()
             .is_some_and(|job| job.active())
     );
+    // A surviving source still holds its own queued private echo.
+    let echo = if pressure {
+        protocol::envelope(source.id.load(Relaxed), &value).len()
+    } else {
+        0
+    };
     assert_eq!(
         relay.metrics.queued_bytes.load(Relaxed),
         packets
@@ -202,10 +226,11 @@ fn check(failure: Failure, allowance: usize) {
             .chain(&held)
             .map(|p| p.frame.len())
             .sum::<usize>()
+            + echo
     );
     drop(packets);
     drop(held);
-    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), echo);
     relay.begin_shutdown();
     drop(observers);
     drop(fillers);
@@ -213,5 +238,6 @@ fn check(failure: Failure, allowance: usize) {
     drop(connection);
     drop(socket);
     drop(client);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.connections.load(Relaxed), 0);
 }

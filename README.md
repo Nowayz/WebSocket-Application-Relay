@@ -79,7 +79,7 @@ can import `Relay` from the generated `relay.js` ES module.
 - [Native I/O](src/server.rs): fixed Mio readiness workers own decoding and
   timers. Idle sockets need no task, message channel or private receive slab.
   Fresh readiness and buffered/output work receive separate bounded turns;
-  [scheduling measurements](docs/worker-scheduling.md) document the latency/CPU
+  [scheduling measurements](docs/reports/worker-scheduling.md) document the latency/CPU
   tradeoff. Tokio handles management and process signals.
 - [Routing](src/relay.rs): a registry read/write lock protects membership and
   ID ownership. Large native room, global and observer publications retain
@@ -114,9 +114,9 @@ npm run build:browser --prefix clients/js
 
 [Protocol](docs/protocol.md), [operations](docs/operations.md),
 [short performance recipes](docs/performance-guide.md),
-[historical findings](docs/performance-history.md) and
-[stability checks](docs/stability.md) describe the contracts and measurement limits.
-The [consolidation record](docs/consolidation.md) lists this migration's local
+[historical findings](docs/reports/performance-history.md) and
+[stability checks](docs/reports/stability.md) describe the contracts and measurement limits.
+The [consolidation record](docs/reports/consolidation.md) lists this migration's local
 acceptance checks and the next performance milestone.
 The [roadmap](docs/roadmap.md) defines the Rust/CBOR product boundary and the
 next latency and operational acceptance work.
@@ -124,22 +124,22 @@ next latency and operational acceptance work.
 Disconnect-listener revocation submits only the affected observer's pending
 notices before its acknowledgment. Other recipients retain their bounded turns;
 a sequence watermark prevents replay after re-subscription. The
-[observer-barrier report](docs/observer-barriers.md) describes the measured benefit
+[observer-barrier report](docs/reports/observer-barriers.md) describes the measured benefit
 and remaining queue-pressure and pending-view scan costs.
-Pending disconnect jobs also [share charged observer snapshots](docs/retirement-snapshots.md),
+Pending disconnect jobs also [share charged observer snapshots](docs/reports/retirement-snapshots.md),
 avoiding repeated list copies and repeated reservations for the same storage.
 An observer barrier reuses its lookup across jobs sharing a captured view.
 When a departure cannot fund deferred work, its synchronous fallback finishes
-only [preceding jobs for overlapping channels](docs/retirement-fallback.md).
+only [preceding jobs for overlapping channels](docs/reports/retirement-fallback.md).
 Unrelated rooms retain their bounded turns, including under source-local pressure.
-Native workers give deferred departures [shorter 128-recipient turns](docs/retirement-turns.md)
+Native workers give deferred departures [shorter 128-recipient turns](docs/reports/retirement-turns.md)
 to reduce Close/control stalls while keeping live fanout at 1,024 recipients.
 Native departures above that 128-recipient budget normally defer at publication.
 Global broadcasts now use the same bounded live-fanout continuation; the
-[global broadcast report](docs/global-broadcasts.md) records short 100,000-reader
+[global broadcast report](docs/reports/global-broadcasts.md) records short 100,000-reader
 checks and the remaining cold-view and observer-path limits.
-The [observer-message baseline](docs/observer-messages.md) records the former
-synchronous publication stalls. [Bounded observer publications](docs/observer-publications.md)
+The [observer-message baseline](docs/reports/observer-messages.md) records the former
+synchronous publication stalls. [Bounded observer publications](docs/reports/observer-publications.md)
 preserve captured eligibility and acknowledgment ordering while yielding within a message.
 
 ## Provenance

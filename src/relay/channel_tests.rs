@@ -110,13 +110,12 @@ fn joined_channel_names_share_canonical_storage_and_own_their_input() {
         let mut second = relay.subscribe(name).unwrap();
         second.outgoing.try_recv().unwrap();
         {
-            let state = relay.state.read();
-            let (canonical, channel) = state.channels.get_key_value(name).unwrap();
-            assert_eq!(channel.members.len(), 2);
+            let channel = relay.channel(name).unwrap();
+            assert_eq!(channel.members_len(), 2);
             for member in [&first, &second] {
                 assert_eq!(
                     member.registration.peer.channel.as_ptr(),
-                    canonical.as_ptr(),
+                    channel.name.as_ptr(),
                     "channel peers must share canonical name storage"
                 );
             }

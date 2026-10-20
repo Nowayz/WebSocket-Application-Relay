@@ -63,5 +63,5 @@ CPU accounting must include the kernel boundary explicitly. Throughput must coun
 verified deliveries. Compare the same protocol work, worker placement, payloads,
 read windows, inspection rate and cleanup contracts. A single fast run, a component
 speedup, or a nominal 100,000-session census cannot establish per-user fairness.
-Future decisions use [short native recipes](performance-guide.md) and prior Rust
+Future decisions use [short native recipes](../performance-guide.md) and prior Rust
 revisions, with the original comparison phase retained in Git history.

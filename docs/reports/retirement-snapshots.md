@@ -137,7 +137,7 @@ Add `--queue-budget-bytes 2097152` for the constrained-credit comparison. This
 allows the pressure counter to change but retains the complete wire matrix,
 other error gates and cleanup checks. `queue_pressure_observed` reports whether
 any refusal occurred; the selected implementation avoids those refusals in this
-case. The [performance guide](performance-guide.md) has the matched mixed command.
+case. The [performance guide](../performance-guide.md) has the matched mixed command.
 
 Frozen server SHA-256 identities are control
 `1668b00176a4b9d5cc1610128108c8e335636f79471afb7b8497d5d0b7b39738`

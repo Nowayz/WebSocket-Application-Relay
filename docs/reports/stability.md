@@ -106,5 +106,5 @@ distinct captured-view scans during observer revocation and queue-pressure fallb
 and pending global-view scans during observer revocation. Faults and failed gates
 belong in the evidence. Source and
 client digests, commands, affinity, measurement windows and cleanup semantics
-must accompany performance claims. See [the guide](performance-guide.md) and
+must accompany performance claims. See [the guide](../performance-guide.md) and
 [historical findings](performance-history.md).

@@ -328,7 +328,10 @@ async fn cancelling_serve_retires_native_workers_admission_and_both_listeners() 
             loop {
                 match socket.bind(&address.into()) {
                     Ok(()) => break,
-                    Err(error) if error.kind() == io::ErrorKind::AddrInUse => {
+                    Err(error)
+                        if error.kind() == io::ErrorKind::AddrInUse
+                            || error.raw_os_error() == Some(10013) =>
+                    {
                         tokio::task::yield_now().await;
                     }
                     Err(error) => panic!("cannot rebind retired listener: {error}"),

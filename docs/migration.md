@@ -33,7 +33,7 @@ git show 587c1cd:cpp/BENCHMARKS.md
 git show 587c1cd:docs/benchmarks/2026-10-19-global-shutdown-indexes/README.md
 ```
 
-The concise [performance history](performance-history.md) retains the useful
+The concise [performance history](reports/performance-history.md) retains the useful
 findings without keeping obsolete binaries, source snapshots, charts and raw
 benchmark dumps in the maintained tree. Future comparisons use previous Rust
 revisions with identical native CBOR clients and workloads.

@@ -1,3 +1,10 @@
+//! Routing registry with fine-grained locking.
+//!
+//! No single lock covers the whole relay. Session ownership lives in a sharded
+//! map, each channel owns its own membership lock and departure queue, global
+//! observers have a separate lock, and admission counters are atomics. No
+//! socket write ever happens while a registry lock is held: output is either
+//! submitted after the guard drops or queued for the owning worker.
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
@@ -37,6 +44,13 @@ pub(crate) const RETIREMENT_QUANTUM: usize = 128;
 
 pub(crate) const MAX_CHANNEL_PAGE_SIZE: usize = 1000;
 
+/// Session IDs are random 64-bit values, so the top bits of a multiplicative
+/// hash spread ownership lookups evenly across independent locks.
+const USER_SHARDS: usize = 64;
+
+/// An immutable recipient view shared between the cache and in-flight work.
+type Recipients = Arc<Vec<Arc<Peer>>>;
+
 #[repr(u8)]
 enum Admission {
     Open,
@@ -44,16 +58,31 @@ enum Admission {
     Stopping,
 }
 
-/// The registry lock protects membership and ID ownership. Output submission is
-/// nonblocking; the transport writes immediately or retains a shared frame.
+/// The relay. Every field is independently synchronized; see the module notes.
 pub struct Relay {
     pub config: Config,
     pub metrics: Arc<Metrics>,
     admission: AtomicU8,
-    state: RwLock<Registry>,
-    retirements: Mutex<Retirements>,
-    retirement_pending: AtomicBool,
+    users: Users,
+    channels: RwLock<HashMap<Bytes, Arc<Channel>>>,
+    /// Incremented on every membership change. A global view built against an
+    /// older generation is used once and never cached.
+    membership_generation: AtomicU64,
+    global_view: Mutex<Option<(u64, Recipients)>>,
+    listeners: RwLock<Listeners>,
+    /// Bits of listener classes that currently have at least one member, so
+    /// the ordinary routing path can skip the listener lock entirely.
+    listener_mask: AtomicU8,
+    disconnect_snapshot: Mutex<Weak<RetirementSnapshot>>,
+    retirements: Retirements,
+    /// Disconnect-observer notices and `re_globl` room departures share one
+    /// queue: both reach `re_globl` members, and one order keeps barriers simple.
+    observer_departures: Arc<DepartureQueue>,
+    /// Live fanouts whose source retired before they finished.
+    detached: Arc<DepartureQueue>,
     messages: Arc<MessageFanouts>,
+    sessions: AtomicUsize,
+    next_key: AtomicU64,
     pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
 
@@ -153,119 +182,174 @@ impl Drop for ReceiveBatch<'_> {
     }
 }
 
-struct Registry {
-    users: HashMap<u64, Arc<Peer>>,
-    // Addressable ID owners at publication. Membership/ownership changes
-    // invalidate the routing index; captured fanouts keep their own view.
-    global_broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
-    channels: HashMap<Bytes, Channel>,
-    // Only authenticated global members opting into each class belong here.
-    // Routing visits eligible listeners, independent of the idle population.
-    listeners: [Vec<Arc<Peer>>; 3],
-    message_snapshots: [OnceLock<Arc<Vec<Arc<Peer>>>>; 2],
-    // Overlapping disconnect jobs can share immutable membership. A weak cache
-    // retains neither recipient handles nor sockets after the jobs drain.
-    disconnect_snapshot: Weak<RetirementSnapshot>,
-    next_key: u64,
-    sessions: usize,
+// ---------------------------------------------------------------------------
+// Session ownership: sharded ID -> peer map.
+
+struct Users {
+    shards: Vec<RwLock<HashMap<u64, Arc<Peer>>>>,
 }
 
-impl Registry {
-    fn set_listener_flags(&mut self, peer: &Peer, flags: u8) {
-        let previous = peer.listener.load(Relaxed);
-        peer.listener.store(flags, Relaxed);
-        if (previous ^ flags) & DISCONNECT_MESSAGE != 0 {
-            self.disconnect_snapshot = Weak::new();
-        }
-        for (bit, listeners) in self.listeners.iter_mut().enumerate() {
-            let mask = 1 << bit;
-            if (previous ^ flags) & mask == 0 {
-                continue;
-            }
-            if bit < 2 {
-                self.message_snapshots[bit].take();
-            }
-            if flags & mask != 0 {
-                if let Some(member) = self.channels[GLOBAL_CHANNEL].members.get(&peer.key) {
-                    listeners.push(member.clone());
-                }
-            } else if let Some(position) = listeners.iter().position(|p| p.key == peer.key) {
-                listeners.swap_remove(position);
-                if listeners.capacity() > 256 && listeners.len() <= listeners.capacity() / 8 {
-                    listeners.shrink_to(listeners.len() * 2);
-                }
-            }
+impl Users {
+    fn new() -> Self {
+        Self {
+            shards: (0..USER_SHARDS)
+                .map(|_| RwLock::new(HashMap::new()))
+                .collect(),
         }
     }
 
-    fn listeners(&self, flag: u8) -> &[Arc<Peer>] {
-        &self.listeners[flag.trailing_zeros() as usize]
+    fn index(id: u64) -> usize {
+        (id.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - USER_SHARDS.trailing_zeros())) as usize
     }
 
-    fn disconnect_recipients(
-        &mut self,
-        metrics: &Arc<Metrics>,
-        limit: usize,
-    ) -> Option<Arc<RetirementSnapshot>> {
-        if let Some(snapshot) = self.disconnect_snapshot.upgrade() {
-            return Some(snapshot);
+    fn shard(&self, id: u64) -> &RwLock<HashMap<u64, Arc<Peer>>> {
+        &self.shards[Self::index(id)]
+    }
+
+    fn get(&self, id: u64) -> Option<Arc<Peer>> {
+        self.shard(id).read().get(&id).cloned()
+    }
+
+    fn try_insert(&self, id: u64, peer: &Arc<Peer>) -> bool {
+        let mut shard = self.shard(id).write();
+        if shard.contains_key(&id) {
+            return false;
         }
-        let members = self.listeners(DISCONNECT_MESSAGE).to_vec();
-        let bytes = members
-            .capacity()
-            .checked_mul(std::mem::size_of::<Arc<Peer>>())
-            .and_then(|n| {
-                n.checked_add(
-                    std::mem::size_of::<RetirementSnapshot>() + 2 * std::mem::size_of::<usize>(),
-                )
-            })?;
-        if metrics
-            .queued_bytes
-            .fetch_update(Relaxed, Relaxed, |used| {
-                used.checked_add(bytes).filter(|&next| next <= limit)
-            })
-            .is_err()
-        {
-            metrics.global_pressure.fetch_add(1, Relaxed);
+        shard.insert(id, peer.clone());
+        true
+    }
+
+    /// Remove `id` only while `key` still owns it. A displaced session must
+    /// never erase the new owner of its previous ID.
+    fn remove_owned(&self, id: u64, key: u64) {
+        let mut shard = self.shard(id).write();
+        if shard.get(&id).is_some_and(|owner| owner.key == key) {
+            shard.remove(&id);
+            shrink_sparse_map(&mut shard);
+        }
+    }
+
+    /// Move ownership of `old` to `new` atomically with respect to routing.
+    /// Returns the displaced owner of `new`, or `None` when `peer` no longer
+    /// owns `old`.
+    fn reassign(&self, peer: &Peer, old: u64, new: u64) -> Option<Option<Arc<Peer>>> {
+        let (a, b) = (Self::index(old), Self::index(new));
+        let (mut first, mut second);
+        let (from, to) = if a == b {
+            first = self.shards[a].write();
+            let shard = &mut *first;
+            if shard.get(&old).is_none_or(|owner| owner.key != peer.key) {
+                return None;
+            }
+            let owner = shard.remove(&old).expect("verified owner");
+            let previous = shard.insert(new, owner);
+            shrink_sparse_map(shard);
+            return Some(previous);
+        } else if a < b {
+            first = self.shards[a].write();
+            second = self.shards[b].write();
+            (&mut *first, &mut *second)
+        } else {
+            second = self.shards[b].write();
+            first = self.shards[a].write();
+            (&mut *first, &mut *second)
+        };
+        if from.get(&old).is_none_or(|owner| owner.key != peer.key) {
             return None;
         }
-        let snapshot = Arc::new(RetirementSnapshot {
-            members,
-            bytes,
-            metrics: metrics.clone(),
-        });
-        self.disconnect_snapshot = Arc::downgrade(&snapshot);
-        Some(snapshot)
+        let owner = from.remove(&old).expect("verified owner");
+        shrink_sparse_map(from);
+        Some(to.insert(new, owner))
+    }
+
+    #[cfg(test)]
+    fn capacity(&self) -> usize {
+        self.shards
+            .iter()
+            .map(|shard| shard.read().capacity())
+            .sum()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.shards.iter().map(|shard| shard.read().len()).sum()
     }
 }
 
-fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
-    // HashMap iteration scans spare buckets too. After substantial retirement,
-    // release excess slots in ownership, membership and channel-name indexes.
-    // Keep small maps and 2x headroom to avoid churn. Rehashing moves metadata;
-    // peers, queues, name/variable bytes and shared bodies keep their storage.
-    let remaining = map.len();
-    let capacity = map.capacity();
-    if capacity > 256 && remaining <= capacity / 8 {
-        map.shrink_to(remaining * 2);
-    }
+// ---------------------------------------------------------------------------
+// Channels.
+
+/// One room. Membership, variables and the cached recipient view share one
+/// lock; departure jobs have their own queue so a large room's notifications
+/// never delay another room's.
+pub(crate) struct Channel {
+    pub(crate) name: Bytes,
+    state: RwLock<ChannelState>,
+    /// Admission reservations, taken before the welcome is sent and released
+    /// on removal, so a refused join never receives a welcome.
+    reserved: AtomicUsize,
+    departures: Arc<DepartureQueue>,
 }
 
 #[derive(Default)]
-struct Channel {
+struct ChannelState {
     members: HashMap<u64, Arc<Peer>>,
     // Membership metadata only. Uncaptured views update in place; a membership
     // change invalidates a captured view while its routing owners finish.
     broadcast: OnceLock<Arc<Vec<Arc<Peer>>>>,
     variables: HashMap<Bytes, Bytes>,
     variable_bytes: usize,
+    /// Set once the empty room leaves the index. A joiner that raced the
+    /// retirement creates a fresh room instead of resurrecting this one.
+    retired: bool,
 }
 
 impl Channel {
+    fn new(name: Bytes) -> Arc<Self> {
+        Arc::new(Self {
+            name,
+            state: RwLock::new(ChannelState::default()),
+            reserved: AtomicUsize::new(0),
+            departures: Arc::new(DepartureQueue::default()),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cached_view(&self) -> Option<Arc<Vec<Arc<Peer>>>> {
+        self.state.read().broadcast.get().cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn members_len(&self) -> usize {
+        self.state.read().members.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn members_capacity(&self) -> usize {
+        self.state.read().members.capacity()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn member(&self, key: u64) -> Option<Arc<Peer>> {
+        self.state.read().members.get(&key).cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn variable(&self, key: &[u8]) -> Option<Bytes> {
+        self.state.read().variables.get(key).cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn departure_queue(&self) -> &Arc<DepartureQueue> {
+        &self.departures
+    }
+}
+
+impl ChannelState {
     fn insert(&mut self, peer: Arc<Peer>) {
         if let Some(view) = self.broadcast.get_mut().and_then(Arc::get_mut) {
-            // The registry write lock excludes new captures. A unique view
-            // has no routing owner, so retain its allocation across churn.
+            // The write lock excludes new captures. A unique view has no
+            // routing owner, so retain its allocation across churn.
             view.push(peer.clone());
         } else {
             // Active broadcasts keep their immutable membership snapshot.
@@ -294,32 +378,122 @@ impl Channel {
         }
         true
     }
+
+    fn view(&self) -> Arc<Vec<Arc<Peer>>> {
+        self.broadcast
+            .get_or_init(|| Arc::new(self.members.values().cloned().collect()))
+            .clone()
+    }
 }
 
-pub(crate) struct Peer {
-    key: u64,
-    pub id: AtomicU64,
-    channel: Bytes,
-    authenticated: AtomicBool,
-    listener: AtomicU8,
-    closing: AtomicBool,
-    // Accessed only under the retirement mutex. A barrier can submit this
-    // observer's pending notices without advancing everyone else's cursors.
-    retirement_barrier: AtomicU64,
-    message_barrier: AtomicU64,
-    output: Arc<dyn PeerOutput>,
-    budget: Arc<Budget>,
+// ---------------------------------------------------------------------------
+// Global observers.
+
+#[derive(Default)]
+struct Listeners {
+    // Only authenticated global members opting into each class belong here.
+    // Routing visits eligible listeners, independent of the idle population.
+    lists: [Vec<Arc<Peer>>; 3],
+    message_snapshots: [OnceLock<Arc<Vec<Arc<Peer>>>>; 2],
+}
+
+impl Listeners {
+    fn of(&self, flag: u8) -> &[Arc<Peer>] {
+        &self.lists[flag.trailing_zeros() as usize]
+    }
+
+    fn mask(&self) -> u8 {
+        self.lists
+            .iter()
+            .enumerate()
+            .filter(|(_, list)| !list.is_empty())
+            .fold(0, |mask, (bit, _)| mask | (1 << bit))
+    }
+
+    /// Returns whether the disconnect class changed.
+    fn set_flags(&mut self, peer: &Peer, flags: u8, member: Option<&Arc<Peer>>) -> bool {
+        let previous = peer.listener.load(Relaxed);
+        peer.listener.store(flags, Relaxed);
+        for (bit, list) in self.lists.iter_mut().enumerate() {
+            let mask = 1 << bit;
+            if (previous ^ flags) & mask == 0 {
+                continue;
+            }
+            if bit < 2 {
+                self.message_snapshots[bit].take();
+            }
+            if flags & mask != 0 {
+                if let Some(member) = member {
+                    list.push(member.clone());
+                }
+            } else if let Some(position) = list.iter().position(|p| p.key == peer.key) {
+                list.swap_remove(position);
+                if list.capacity() > 256 && list.len() <= list.capacity() / 8 {
+                    list.shrink_to(list.len() * 2);
+                }
+            }
+        }
+        (previous ^ flags) & DISCONNECT_MESSAGE != 0
+    }
+
+    fn message_snapshot(&self, flag: u8) -> Arc<Vec<Arc<Peer>>> {
+        self.message_snapshots[flag.trailing_zeros() as usize]
+            .get_or_init(|| Arc::new(self.of(flag).to_vec()))
+            .clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Deferred departure work.
+
+/// FIFO of bounded jobs for one recipient population. Each room has one, the
+/// global observers share one, and orphaned live fanouts have one.
+#[derive(Default)]
+pub(crate) struct DepartureQueue {
+    state: Mutex<QueueState>,
 }
 
 #[derive(Default)]
-struct Retirements {
+struct QueueState {
     jobs: VecDeque<Box<RoomFanout>>,
     // Never reset when the queue empties: peers retain their barrier watermark.
     sequence: u64,
+    /// Whether this queue is currently listed for worker progress.
+    queued: bool,
+}
+
+impl DepartureQueue {
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.state.lock().jobs.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sequence(&self) -> u64 {
+        self.state.lock().sequence
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_sequence(&self, sequence: u64) {
+        self.state.lock().sequence = sequence;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_jobs<T>(&self, f: impl FnOnce(&VecDeque<Box<RoomFanout>>) -> T) -> T {
+        f(&self.state.lock().jobs)
+    }
+}
+
+/// Round-robin list of queues with pending work. Workers only ever `try_lock`
+/// it, so a busy worker never waits here.
+#[derive(Default)]
+struct Retirements {
+    active: Mutex<VecDeque<Arc<DepartureQueue>>>,
+    pending: AtomicBool,
 }
 
 /// Shared disconnect membership is charged once while any departure retains it.
-/// The registry holds only a weak cache; the last job releases both handles and
+/// The relay holds only a weak cache; the last job releases both handles and
 /// credit. Jobs and recipient output retain their independent reservations.
 struct RetirementSnapshot {
     members: Vec<Arc<Peer>>,
@@ -333,6 +507,12 @@ impl Drop for RetirementSnapshot {
         drop(std::mem::take(&mut self.members));
         self.metrics.queued_bytes.fetch_sub(self.bytes, Relaxed);
     }
+}
+
+/// How one departure notice reaches the room it leaves.
+enum Departure {
+    Direct(Vec<Arc<Peer>>),
+    Deferred(Arc<Vec<Arc<Peer>>>),
 }
 
 enum FanoutRecipients {
@@ -386,19 +566,11 @@ impl FanoutRecipients {
             _ => self.single_slice().len(),
         }
     }
-
-    fn first(&self) -> Option<&Arc<Peer>> {
-        match self {
-            Self::Message(message) => message.room().first().or_else(|| message.observers.first()),
-            _ => self.single_slice().first(),
-        }
-    }
 }
 
 /// One immutable membership snapshot and one charged shared body. Publisher
-/// slots reuse their box; retirement jobs belong to the shared work queue.
-/// Empty slots retain no payload or peer ownership; metadata is bounded by the
-/// admitted connection count and staged bodies share the normal queue budget.
+/// slots reuse their box; departure jobs belong to a departure queue. Empty
+/// slots retain no payload or peer ownership.
 #[derive(Default)]
 pub(crate) struct RoomFanout {
     recipients: Option<FanoutRecipients>,
@@ -406,9 +578,12 @@ pub(crate) struct RoomFanout {
     cursor: usize,
     source: u64,
     snapshot_bytes: usize,
-    deadline: Option<std::time::Instant>,
     // Zero denotes a live publisher; positive values order departure jobs.
     retirement_sequence: u64,
+    /// Jobs in the observer queue honour each observer's revocation watermark.
+    checks_barrier: bool,
+    /// A refused recipient never aborts a job that outlives its source.
+    tolerant: bool,
     // Reused only by sources publishing to a large observer audience. The
     // indexed job has no Publication of its own, so ownership is acyclic.
     observed: Option<Publication>,
@@ -420,17 +595,10 @@ impl RoomFanout {
         source: &Peer,
         recipients: FanoutRecipients,
         frame: Frame,
-        timeout: std::time::Duration,
         retirement_sequence: u64,
     ) -> Result<(), Disconnect> {
         debug_assert!(!self.active());
-        let packet = if retirement_sequence != 0 {
-            source.charge(&frame)?
-        } else {
-            source.reserve(&frame)?
-        }
-        .ok_or(Disconnect::OVERLOADED)?
-        .into_owned();
+        let packet = source.charge_strict(&frame)?.into_owned();
         let job_bytes = if retirement_sequence != 0 {
             std::mem::size_of::<Self>() + 2 * std::mem::size_of::<Box<Self>>()
         } else {
@@ -462,24 +630,20 @@ impl RoomFanout {
             return Err(Disconnect::OVERLOADED);
         }
         self.retirement_sequence = retirement_sequence;
+        self.checks_barrier = false;
+        self.tolerant = retirement_sequence != 0;
         self.snapshot_bytes = snapshot_bytes;
         self.packet = Some(packet);
         self.recipients = Some(recipients);
         self.cursor = 0;
         self.source = source.key;
-        self.deadline = Some(std::time::Instant::now() + timeout);
         Ok(())
     }
 
     pub(crate) fn active(&self) -> bool {
         self.packet.is_some() || self.observed.as_ref().is_some_and(Publication::active)
     }
-    pub(crate) fn deadline(&self) -> Option<std::time::Instant> {
-        self.deadline
-            .into_iter()
-            .chain(self.observed.as_ref().and_then(Publication::deadline))
-            .min()
-    }
+
     pub(crate) fn clear(&mut self) {
         if let Some(observed) = &mut self.observed {
             observed.clear();
@@ -502,7 +666,15 @@ impl RoomFanout {
             self.snapshot_bytes = 0;
         }
         self.packet = None;
-        self.deadline = None;
+    }
+
+    /// Mark a live publication as outliving its source. Remaining recipients
+    /// are still visited; refusals no longer have a source to report to.
+    fn detach(&mut self) {
+        self.tolerant = true;
+        if let Some(observed) = &mut self.observed {
+            observed.detach();
+        }
     }
 
     pub(crate) fn resume(&mut self, quantum: usize) -> Result<(), Disconnect> {
@@ -514,11 +686,7 @@ impl RoomFanout {
             quantum.min(view.len().saturating_sub(self.cursor))
         });
         if self.packet.is_some() {
-            if self.retirement_sequence != 0 {
-                self.resume_with::<true>(visits, None)?;
-            } else {
-                self.resume_with::<false>(visits, None)?;
-            }
+            self.resume_with(visits, None)?;
         }
         if self.packet.is_none()
             && let Some(observed) = &mut self.observed
@@ -530,7 +698,7 @@ impl RoomFanout {
         Ok(())
     }
 
-    fn resume_with<const RETIREMENT: bool>(
+    fn resume_with(
         &mut self,
         quantum: usize,
         message_sequence: Option<u64>,
@@ -538,29 +706,44 @@ impl RoomFanout {
         let recipients = self.recipients.as_ref().expect("live fanout snapshot");
         let frame = &self.packet.as_ref().expect("charged fanout body").frame;
         let end = self.cursor.saturating_add(quantum).min(recipients.len());
+        let tolerant = self.tolerant;
         if let FanoutRecipients::Message(message) = recipients {
             let room = message.room();
             let room_end = end.min(room.len());
             if self.cursor < room_end {
-                Self::submit::<false, false>(&room[self.cursor..room_end], self.source, frame, 0)?;
+                Self::submit(
+                    &room[self.cursor..room_end],
+                    self.source,
+                    frame,
+                    None,
+                    tolerant,
+                )?;
             }
             let observer_start = self.cursor.saturating_sub(room.len());
             let observer_end = end.saturating_sub(room.len());
             if observer_start < observer_end {
-                Self::submit::<false, true>(
+                Self::submit(
                     &message.observers[observer_start..observer_end],
                     message.excluded_observer,
                     frame,
-                    message_sequence.expect("observer jobs have a publication sequence"),
+                    Some((
+                        BarrierKind::Message,
+                        message_sequence.expect("observer jobs have a publication sequence"),
+                    )),
+                    tolerant,
                 )
                 .map_err(|error| error.after(room_end.saturating_sub(self.cursor)))?;
             }
         } else {
-            Self::submit::<RETIREMENT, false>(
+            let barrier = self
+                .checks_barrier
+                .then_some((BarrierKind::Retirement, self.retirement_sequence));
+            Self::submit(
                 &recipients.single_slice()[self.cursor..end],
                 self.source,
                 frame,
-                self.retirement_sequence,
+                barrier,
+                tolerant,
             )?;
         }
         self.cursor = end;
@@ -570,25 +753,39 @@ impl RoomFanout {
         Ok(())
     }
 
-    fn submit<const RETIREMENT: bool, const MESSAGE: bool>(
+    fn submit(
         recipients: &[Arc<Peer>],
         excluded: u64,
         frame: &Frame,
-        sequence: u64,
+        barrier: Option<(BarrierKind, u64)>,
+        tolerant: bool,
     ) -> Result<(), RoutingFailure> {
         for (index, recipient) in recipients.iter().enumerate() {
-            if recipient.key != excluded
-                && (!RETIREMENT || recipient.retirement_barrier.load(Relaxed) < sequence)
-                && (!MESSAGE || recipient.message_barrier.load(Relaxed) < sequence)
-            {
-                let result = recipient.enqueue_fanout(frame);
-                if !RETIREMENT {
-                    result.map_err(|reason| RoutingFailure::visited(reason, index + 1))?;
+            if recipient.key == excluded {
+                continue;
+            }
+            if let Some((kind, sequence)) = barrier {
+                let watermark = match kind {
+                    BarrierKind::Retirement => &recipient.retirement_barrier,
+                    BarrierKind::Message => &recipient.message_barrier,
+                };
+                if watermark.load(Relaxed) >= sequence {
+                    continue;
                 }
+            }
+            let result = recipient.enqueue_fanout(frame);
+            if !tolerant {
+                result.map_err(|reason| RoutingFailure::visited(reason, index + 1))?;
             }
         }
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+enum BarrierKind {
+    Retirement,
+    Message,
 }
 
 impl Drop for RoomFanout {
@@ -612,6 +809,9 @@ fn deliver_room(
     }
     Ok(work)
 }
+
+// ---------------------------------------------------------------------------
+// Peers and output accounting.
 
 struct Budget {
     used: AtomicUsize,
@@ -706,6 +906,23 @@ impl Drop for Envelope {
     }
 }
 
+pub(crate) struct Peer {
+    key: u64,
+    pub id: AtomicU64,
+    /// Canonical name storage shared with the room.
+    pub(crate) channel: Bytes,
+    room: Arc<Channel>,
+    authenticated: AtomicBool,
+    listener: AtomicU8,
+    closing: AtomicBool,
+    // Watermarks let a barrier submit this observer's pending notices without
+    // advancing everyone else's cursors, and prevent replay afterwards.
+    retirement_barrier: AtomicU64,
+    message_barrier: AtomicU64,
+    output: Arc<dyn PeerOutput>,
+    budget: Arc<Budget>,
+}
+
 impl Peer {
     pub(crate) fn close(&self, reason: Disconnect) -> bool {
         if self.closing.swap(true, Relaxed) {
@@ -715,26 +932,43 @@ impl Peer {
         true
     }
 
+    fn is_global(&self) -> bool {
+        self.channel.as_ref() == GLOBAL_CHANNEL
+    }
+
+    /// Output addressed to this peer by routing: dropped under pressure.
     fn enqueue_frame(&self, frame: &Frame) -> Result<(), Disconnect> {
-        self.enqueue::<false, false>(frame)
+        self.enqueue::<false, false, false>(frame)
     }
 
     fn enqueue_fanout(&self, frame: &Frame) -> Result<(), Disconnect> {
-        self.enqueue::<true, false>(frame)
+        self.enqueue::<true, false, false>(frame)
     }
 
     fn enqueue_barrier(&self, frame: &Frame) -> Result<(), Disconnect> {
-        self.enqueue::<false, true>(frame)
+        self.enqueue::<false, true, true>(frame)
+    }
+
+    /// A reply to this peer's own command. A peer that cannot even receive
+    /// its reply is closed rather than left waiting for one.
+    fn enqueue_reply(&self, frame: &Frame) -> Result<(), Disconnect> {
+        self.enqueue::<false, false, true>(frame)
+    }
+
+    /// The welcome is submitted before the peer is published anywhere, and
+    /// with no registry lock held, so it may be written inline like a reply.
+    fn enqueue_welcome(&self, frame: &Frame) -> Result<(), Disconnect> {
+        self.enqueue::<false, false, true>(frame)
     }
 
     // Select the output method at compile time. Ordinary private submissions
     // carry no multicast flag, extra branch or different frame representation.
     #[inline(always)]
-    fn enqueue<const FANOUT: bool, const BARRIER: bool>(
+    fn enqueue<const FANOUT: bool, const BARRIER: bool, const REPLY: bool>(
         &self,
         frame: &Frame,
     ) -> Result<(), Disconnect> {
-        let Some(packet) = self.reserve(frame)? else {
+        let Some(packet) = self.reserve(frame, REPLY)? else {
             return Ok(());
         };
         let accepted = if BARRIER {
@@ -751,15 +985,28 @@ impl Peer {
     }
 
     #[inline(always)]
-    fn reserve<'a>(&'a self, frame: &'a Frame) -> Result<Option<Submission<'a>>, Disconnect> {
+    fn reserve<'a>(
+        &'a self,
+        frame: &'a Frame,
+        reply: bool,
+    ) -> Result<Option<Submission<'a>>, Disconnect> {
         if self.closing.load(Relaxed) {
             return Ok(None);
         }
-        self.charge(frame)
+        self.charge(frame, reply)
     }
 
-    // Retirement notifications remain chargeable after the source has closed.
-    fn charge<'a>(&'a self, frame: &'a Frame) -> Result<Option<Submission<'a>>, Disconnect> {
+    /// Reserve output credit for one frame addressed to this peer.
+    ///
+    /// Per-session exhaustion closes this peer: it is the slow consumer. Global
+    /// exhaustion never punishes the sender; the frame is dropped, the pressure
+    /// counter advances, and this peer is closed only when it holds a large
+    /// share of its own allowance or the frame is its own command reply.
+    fn charge<'a>(
+        &'a self,
+        frame: &'a Frame,
+        reply: bool,
+    ) -> Result<Option<Submission<'a>>, Disconnect> {
         let size = frame.len();
         if self
             .budget
@@ -783,14 +1030,53 @@ impl Peer {
             })
             .is_err()
         {
-            self.budget.used.fetch_sub(size, Relaxed);
+            let held = self.budget.used.fetch_sub(size, Relaxed) - size;
             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
-            return Err(Disconnect::OVERLOADED);
+            if reply || held >= self.budget.limit / 4 {
+                self.overloaded();
+            }
+            return Ok(None);
         }
         Ok(Some(Submission {
             frame,
             budget: Some(&self.budget),
         }))
+    }
+
+    /// Staging reservations for deferred work report refusal to the caller,
+    /// which then falls back to immediate delivery. Closed sources can still
+    /// stage their own departure notice.
+    fn charge_strict<'a>(&'a self, frame: &'a Frame) -> Result<Submission<'a>, Disconnect> {
+        let size = frame.len();
+        if self
+            .budget
+            .used
+            .fetch_update(Relaxed, Relaxed, |used| {
+                used.checked_add(size)
+                    .filter(|&next| next <= self.budget.limit)
+            })
+            .is_err()
+        {
+            return Err(Disconnect::OVERLOADED);
+        }
+        if self
+            .budget
+            .metrics
+            .queued_bytes
+            .fetch_update(Relaxed, Relaxed, |used| {
+                used.checked_add(size)
+                    .filter(|&next| next <= self.budget.global_limit)
+            })
+            .is_err()
+        {
+            self.budget.used.fetch_sub(size, Relaxed);
+            self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
+            return Err(Disconnect::OVERLOADED);
+        }
+        Ok(Submission {
+            frame,
+            budget: Some(&self.budget),
+        })
     }
 
     fn overloaded(&self) {
@@ -805,6 +1091,13 @@ pub(crate) struct Registration {
     relay: Arc<Relay>,
 }
 
+impl Registration {
+    /// Hand an unfinished publication to the relay before this session leaves.
+    pub(crate) fn detach_fanout(&self, work: Box<RoomFanout>) {
+        self.relay.detach_fanout(&self.peer, work);
+    }
+}
+
 impl Drop for Registration {
     fn drop(&mut self) {
         self.relay.remove(&self.peer);
@@ -817,6 +1110,9 @@ pub(crate) struct Subscription {
     pub outgoing: mpsc::Receiver<Envelope>,
     pub close: watch::Receiver<Option<Disconnect>>,
 }
+
+// ---------------------------------------------------------------------------
+// Inspection types.
 
 #[derive(Serialize)]
 pub struct ChannelInfo {
@@ -868,6 +1164,18 @@ pub(crate) struct ChannelSnapshot {
     variable_bytes: usize,
 }
 
+impl ChannelSnapshot {
+    fn of(channel: &Channel) -> Self {
+        let state = channel.state.read();
+        Self {
+            name: SnapshotName::new(&channel.name),
+            members: state.members.len(),
+            variables: state.variables.len(),
+            variable_bytes: state.variable_bytes,
+        }
+    }
+}
+
 impl Serialize for ChannelSnapshot {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
@@ -886,13 +1194,29 @@ impl Serialize for ChannelSnapshot {
     }
 }
 
+fn shrink_sparse_map<K: Eq + Hash, V>(map: &mut HashMap<K, V>) {
+    // HashMap iteration scans spare buckets too. After substantial retirement,
+    // release excess slots in ownership, membership and channel-name indexes.
+    // Keep small maps and 2x headroom to avoid churn. Rehashing moves metadata;
+    // peers, queues, name/variable bytes and shared bodies keep their storage.
+    let remaining = map.len();
+    let capacity = map.capacity();
+    if capacity > 256 && remaining <= capacity / 8 {
+        map.shrink_to(remaining * 2);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The relay.
+
 impl Relay {
     pub fn new(config: Config) -> Result<Arc<Self>> {
         config.validate()?;
         // Verify entropy availability before listening, never silently use predictable IDs.
         let _ = random_id()?;
         let mut channels = HashMap::new();
-        channels.insert(Bytes::from_static(GLOBAL_CHANNEL), Channel::default());
+        let global = Bytes::from_static(GLOBAL_CHANNEL);
+        channels.insert(global.clone(), Channel::new(global));
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
         Ok(Arc::new(Self {
@@ -903,25 +1227,24 @@ impl Relay {
                 ..Metrics::default()
             }),
             admission: AtomicU8::new(Admission::Open as u8),
-            retirements: Mutex::new(Retirements::default()),
-            retirement_pending: AtomicBool::new(false),
+            users: Users::new(),
+            channels: RwLock::new(channels),
+            membership_generation: AtomicU64::new(0),
+            global_view: Mutex::new(None),
+            listeners: RwLock::new(Listeners::default()),
+            listener_mask: AtomicU8::new(0),
+            disconnect_snapshot: Mutex::new(Weak::new()),
+            retirements: Retirements::default(),
+            observer_departures: Arc::new(DepartureQueue::default()),
+            detached: Arc::new(DepartureQueue::default()),
             messages: Arc::new(MessageFanouts::default()),
-            state: RwLock::new(Registry {
-                users: HashMap::new(),
-                global_broadcast: OnceLock::new(),
-                channels,
-                listeners: Default::default(),
-                message_snapshots: Default::default(),
-                disconnect_snapshot: Weak::new(),
-                next_key: 1,
-                sessions: 0,
-            }),
+            sessions: AtomicUsize::new(0),
+            next_key: AtomicU64::new(1),
         }))
     }
 
     pub fn counts(&self) -> (usize, usize) {
-        let state = self.state.read();
-        (state.sessions, state.channels.len())
+        (self.sessions.load(Relaxed), self.channels.read().len())
     }
 
     /// Manual drain and terminal shutdown both refuse new admission.
@@ -956,39 +1279,37 @@ impl Relay {
         self.admission.store(Admission::Stopping as u8, Relaxed);
         // Terminal shutdown sends no departure notices. Release listener views
         // once instead of searching them for every retiring global session.
-        // Drop the registry guard before taking the retirement queue lock.
         {
-            let mut state = self.state.write();
-            state.listeners = Default::default();
-            state.message_snapshots = Default::default();
-            state.disconnect_snapshot = Weak::new();
-            state.global_broadcast.take();
+            let mut listeners = self.listeners.write();
+            *listeners = Listeners::default();
+            self.listener_mask.store(0, Relaxed);
         }
-        let mut pending = self.retirements.lock();
-        pending.jobs.clear();
-        self.retirement_pending.store(false, Relaxed);
+        *self.disconnect_snapshot.lock() = Weak::new();
+        *self.global_view.lock() = None;
+        // Lock order is queue state, then the active list. Take the list
+        // first on its own, then clear each queue without holding the list.
+        let queues: Vec<Arc<DepartureQueue>> = {
+            let mut active = self.retirements.active.lock();
+            self.retirements.pending.store(false, Relaxed);
+            active.drain(..).collect()
+        };
+        for queue in queues {
+            let mut state = queue.state.lock();
+            state.jobs.clear();
+            state.queued = false;
+        }
     }
 
     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
-        let state = self.state.read();
-        state
-            .channels
-            .iter()
-            .map(|(name, channel)| ChannelSnapshot {
-                name: SnapshotName::new(name),
-                members: channel.members.len(),
-                variables: channel.variables.len(),
-                variable_bytes: channel.variable_bytes,
-            })
-            .collect()
+        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        channels.iter().map(|c| ChannelSnapshot::of(c)).collect()
     }
 
     fn channel_members_snapshot(&self) -> Vec<(SnapshotName, usize)> {
-        let state = self.state.read();
-        state
-            .channels
+        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        channels
             .iter()
-            .map(|(name, channel)| (SnapshotName::new(name), channel.members.len()))
+            .map(|c| (SnapshotName::new(&c.name), c.state.read().members.len()))
             .collect()
     }
 
@@ -1014,14 +1335,12 @@ impl Relay {
         let mut channels = self.channel_snapshot();
         // Base64 contains no zero bytes. Zero padding therefore preserves text
         // ordering, including empty names and keys that prefix another key.
-        // Cache one bounded key per row while sorting, without another vector
-        // of full metadata rows. Serialization encodes into a stack buffer.
         channels.sort_by_cached_key(|channel| channel.name.base64());
         channels
     }
 
     pub fn disconnect(&self, id: u64) -> bool {
-        self.state.read().users.get(&id).is_some_and(|p| {
+        self.users.get(id).is_some_and(|p| {
             p.close(Disconnect {
                 code: 4000,
                 reason: "Administrative Disconnect",
@@ -1042,6 +1361,27 @@ impl Relay {
         })
     }
 
+    /// Find a live room or create it. The index read lock is the fast path;
+    /// creation takes the write lock and re-checks under it.
+    fn room(&self, name: &[u8]) -> Result<Arc<Channel>, Disconnect> {
+        if let Some(channel) = self.channels.read().get(name) {
+            return Ok(channel.clone());
+        }
+        let mut channels = self.channels.write();
+        if let Some(channel) = channels.get(name) {
+            return Ok(channel.clone());
+        }
+        if channels.len() >= self.config.max_channels {
+            return Err(Disconnect::OVERLOADED);
+        }
+        // Copy a bounded name once per channel. Peers in an existing channel
+        // share its canonical storage instead of allocating another name.
+        let name = Bytes::copy_from_slice(name);
+        let channel = Channel::new(name.clone());
+        channels.insert(name, channel.clone());
+        Ok(channel)
+    }
+
     pub(crate) fn subscribe_with_output(
         self: &Arc<Self>,
         channel: &[u8],
@@ -1050,57 +1390,150 @@ impl Relay {
         if channel.len() > 16 {
             return Err(Disconnect::CHANNEL_LENGTH);
         }
-        let mut state = self.state.write();
-        let existing = state.channels.get_key_value(channel);
+        let refused = |relay: &Relay| {
+            relay.metrics.rejected.fetch_add(1, Relaxed);
+            Disconnect::OVERLOADED
+        };
         if self.is_draining()
-            || state.sessions >= self.config.max_connections
-            || (existing.is_none() && state.channels.len() >= self.config.max_channels)
-            || existing.is_some_and(|(_, c)| c.members.len() >= self.config.max_channel_members)
+            || self
+                .sessions
+                .fetch_update(Relaxed, Relaxed, |sessions| {
+                    (sessions < self.config.max_connections).then_some(sessions + 1)
+                })
+                .is_err()
         {
-            self.metrics.rejected.fetch_add(1, Relaxed);
-            return Err(Disconnect::OVERLOADED);
+            return Err(refused(self));
         }
-        // Copy a bounded name once per channel. Peers in an existing channel
-        // share its canonical storage instead of allocating another name.
-        let channel =
-            existing.map_or_else(|| Bytes::copy_from_slice(channel), |(name, _)| name.clone());
-        let id = loop {
+        let mut lease = SessionLease {
+            relay: self,
+            room: None,
+            id: None,
+        };
+        // Reserve room capacity before anything is sent, so a refused join
+        // never receives a welcome. A room retired by a concurrent last
+        // departure is replaced by a fresh one.
+        let room = loop {
+            let room = match self.room(channel) {
+                Ok(room) => room,
+                Err(reason) => {
+                    self.metrics.rejected.fetch_add(1, Relaxed);
+                    return Err(reason);
+                }
+            };
+            if room
+                .reserved
+                .fetch_update(Relaxed, Relaxed, |count| {
+                    (count < self.config.max_channel_members).then_some(count + 1)
+                })
+                .is_err()
+            {
+                return Err(refused(self));
+            }
+            if room.state.read().retired {
+                room.reserved.fetch_sub(1, Relaxed);
+                continue;
+            }
+            break room;
+        };
+        lease.room = Some(room.clone());
+        let key = self.next_key.fetch_add(1, Relaxed);
+        let (id, peer) = loop {
             let id = random_id().map_err(|_| Disconnect::OVERLOADED)?;
-            if id != 0 && id != BROADCAST && !state.users.contains_key(&id) {
-                break id;
+            if id == 0 || id == BROADCAST {
+                continue;
+            }
+            let peer = Arc::new(Peer {
+                key,
+                id: AtomicU64::new(id),
+                channel: room.name.clone(),
+                room: room.clone(),
+                authenticated: AtomicBool::new(false),
+                listener: AtomicU8::new(0),
+                closing: AtomicBool::new(false),
+                retirement_barrier: AtomicU64::new(0),
+                message_barrier: AtomicU64::new(0),
+                output: output.clone(),
+                budget: Arc::new(Budget {
+                    used: AtomicUsize::new(0),
+                    limit: self.config.queue_bytes,
+                    global_limit: self.config.total_queue_bytes,
+                    metrics: self.metrics.clone(),
+                }),
+            });
+            if self.users.try_insert(id, &peer) {
+                break (id, peer);
             }
         };
-        let key = state.next_key;
-        state.next_key = key.checked_add(1).ok_or(Disconnect::OVERLOADED)?;
-        let peer = Arc::new(Peer {
-            key,
-            id: AtomicU64::new(id),
-            channel,
-            authenticated: AtomicBool::new(false),
-            listener: AtomicU8::new(0),
-            closing: AtomicBool::new(false),
-            retirement_barrier: AtomicU64::new(0),
-            message_barrier: AtomicU64::new(0),
-            output,
-            budget: Arc::new(Budget {
-                used: AtomicUsize::new(0),
-                limit: self.config.queue_bytes,
-                global_limit: self.config.total_queue_bytes,
-                metrics: self.metrics.clone(),
-            }),
-        });
-        // Publish only after the welcome packet is first in this session's FIFO.
-        peer.enqueue_frame(&Frame::integer(id))?;
-        state.global_broadcast.take();
-        state.users.insert(id, peer.clone());
-        let channel = state.channels.entry(peer.channel.clone()).or_default();
-        channel.insert(peer.clone());
-        state.sessions += 1;
+        lease.id = Some((id, key));
+        // The welcome is first in this session's FIFO: nothing can address the
+        // peer through its room before the insert below. No lock is held here,
+        // so the inline socket write cannot delay any other session.
+        peer.enqueue_welcome(&Frame::integer(id))?;
+        {
+            let mut state = room.state.write();
+            if state.retired {
+                // Lost a race with the last departure after the welcome went
+                // out. Start over against the replacement room; the welcome
+                // carries the same ID either way.
+                drop(state);
+                lease.room = None;
+                room.reserved.fetch_sub(1, Relaxed);
+                self.users.remove_owned(id, key);
+                lease.id = None;
+                self.sessions.fetch_sub(1, Relaxed);
+                return self.subscribe_with_output(channel, output);
+            }
+            state.insert(peer.clone());
+        }
+        self.membership_changed();
         self.metrics.joined.fetch_add(1, Relaxed);
+        lease.room = None;
+        lease.id = None;
+        std::mem::forget(lease);
         Ok(Registration {
             peer,
             relay: self.clone(),
         })
+    }
+
+    fn membership_changed(&self) {
+        self.membership_generation.fetch_add(1, Relaxed);
+        *self.global_view.lock() = None;
+    }
+
+    /// Every current room member. Cached until the next membership change; a
+    /// view built during a change is used once and not cached.
+    fn global_recipients(&self) -> Arc<Vec<Arc<Peer>>> {
+        let generation = self.membership_generation.load(Relaxed);
+        if let Some((cached, view)) = &*self.global_view.lock()
+            && *cached == generation
+        {
+            return view.clone();
+        }
+        let channels: Vec<Arc<Channel>> = self.channels.read().values().cloned().collect();
+        let mut members = Vec::new();
+        for channel in &channels {
+            members.extend(
+                channel
+                    .state
+                    .read()
+                    .members
+                    .values()
+                    .filter(|peer| !peer.closing.load(Relaxed))
+                    .cloned(),
+            );
+        }
+        let view = Arc::new(members);
+        if self.membership_generation.load(Relaxed) == generation {
+            let mut cache = self.global_view.lock();
+            if cache
+                .as_ref()
+                .is_none_or(|(cached, _)| *cached < generation)
+            {
+                *cache = Some((generation, view.clone()));
+            }
+        }
+        view
     }
 
     #[cfg(test)]
@@ -1143,12 +1576,8 @@ impl Relay {
         if target == 0 {
             return self.control(peer, value).map(|_| 1).map_err(Into::into);
         }
-        let state = self.state.read();
-        if peer.closing.load(Relaxed) {
-            return Ok(1);
-        }
         let private_recipient = if target == BROADCAST {
-            if peer.channel.as_ref() == GLOBAL_CHANNEL
+            if peer.is_global()
                 && self.config.disable_global_broadcast
                 && !peer.authenticated.load(Relaxed)
             {
@@ -1160,7 +1589,7 @@ impl Relay {
             }
             None
         } else {
-            match state.users.get(&target) {
+            match self.users.get(target) {
                 Some(recipient) => Some(recipient),
                 None => return Ok(1),
             }
@@ -1176,111 +1605,81 @@ impl Relay {
             &mut totals.reused
         };
         *counter = counter.wrapping_add(frame.payload().len() as u64);
-        if let Some(recipient) = private_recipient
-            && state.listeners(PRIVATE_MESSAGE).is_empty()
+        let mask = self.listener_mask.load(Relaxed);
+        if let Some(recipient) = &private_recipient
+            && mask & PRIVATE_MESSAGE == 0
         {
-            // Lookup and sender identity form one registry snapshot. The
+            // The ownership lookup above was atomic with reassignment. The
             // retained target owns its lifetime through the socket write.
-            let recipient = recipient.clone();
-            drop(state);
             return recipient
                 .enqueue_frame(&frame)
                 .map(|_| 1)
                 .map_err(Into::into);
         }
-        if target == BROADCAST && peer.channel.as_ref() == GLOBAL_CHANNEL {
-            let recipients = state
-                .global_broadcast
-                .get_or_init(|| Arc::new(state.users.values().cloned().collect()))
-                .clone();
-            drop(state);
+        if target == BROADCAST && peer.is_global() {
+            return self.deliver_room(peer, self.global_recipients(), frame, native);
+        }
+        if target == BROADCAST && mask & CHANNEL_MESSAGE == 0 {
+            let recipients = peer.room.state.read().view();
             return self.deliver_room(peer, recipients, frame, native);
         }
-        if target == BROADCAST
-            && peer.channel.as_ref() != GLOBAL_CHANNEL
-            && state.listeners(CHANNEL_MESSAGE).is_empty()
-        {
-            let Some(channel) = state.channels.get(&peer.channel) else {
-                return Ok(1);
-            };
-            let recipients = channel
-                .broadcast
-                .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
-                .clone();
-            drop(state);
-            return self.deliver_room(peer, recipients, frame, native);
-        }
+        // Observers are present. Hold the listener lock through capture so a
+        // concurrent revocation sees either the registered job or none.
+        let listeners = self.listeners.read();
+        let flag = if target == BROADCAST {
+            CHANNEL_MESSAGE
+        } else {
+            PRIVATE_MESSAGE
+        };
+        let room = (target == BROADCAST).then(|| peer.room.state.read().view());
+        let observers = listeners.of(flag);
         // Charge every fanout path by recipient visits, including global
         // observers. One complete message remains atomic with respect to this
         // source's FIFO; the connection yields before its next buffered frame.
         // Counts conservatively include the sender or duplicate primary target.
-        let work = if target == BROADCAST {
-            state
-                .channels
-                .get(&peer.channel)
-                .map_or(0, |c| c.members.len())
-                .saturating_add(state.listeners(CHANNEL_MESSAGE).len())
-        } else {
-            state.listeners(PRIVATE_MESSAGE).len().saturating_add(1)
-        };
+        let work = room
+            .as_ref()
+            .map_or(1, |room| room.len())
+            .saturating_add(observers.len());
         if let Some((pending, quantum)) = native
             && work > quantum
         {
             // Preserve the primary private delivery before observer work,
             // including when a large captured view cannot obtain staging credit.
-            if let Some(recipient) = private_recipient {
+            if let Some(recipient) = &private_recipient {
                 recipient.enqueue_fanout(&frame)?;
             }
-            let flag = if target == BROADCAST {
-                CHANNEL_MESSAGE
-            } else {
-                PRIVATE_MESSAGE
-            };
-            let observers = state.message_snapshots[flag.trailing_zeros() as usize]
-                .get_or_init(|| Arc::new(state.listeners(flag).to_vec()))
-                .clone();
-            let room = if target == BROADCAST {
-                state
-                    .channels
-                    .get(&peer.channel)
-                    .filter(|room| room.members.len() > 1)
-                    .map(|room| {
-                        room.broadcast
-                            .get_or_init(|| Arc::new(room.members.values().cloned().collect()))
-                            .clone()
-                    })
-            } else {
-                None
-            };
+            let snapshot = listeners.message_snapshot(flag);
+            let room = room.as_ref().filter(|room| room.len() > 1).cloned();
             let publisher = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
             let observed = publisher
                 .observed
                 .get_or_insert_with(|| Publication::new(self.messages.clone()));
-            let prepared = observed.begin(
-                peer,
-                MessageRecipients {
-                    room,
-                    observers,
-                    excluded_observer: private_recipient.map_or(0, |p| p.key),
-                },
-                frame,
-                self.config.write_timeout(),
-            );
-            if let Err(error) = prepared {
-                publisher.clear();
-                return Err(error.into());
-            }
             let direct_visits = usize::from(private_recipient.is_some());
-            drop(state);
-            publisher
-                .resume_routing(quantum.saturating_sub(direct_visits))
-                .map_err(|error| error.after(direct_visits))?;
-            return Ok(quantum.max(direct_visits));
-        }
-        let mut visited = 0;
-        if target == BROADCAST {
-            if let Some(channel) = state.channels.get(&peer.channel) {
-                for recipient in channel.members.values() {
+            if observed
+                .begin(
+                    peer,
+                    MessageRecipients {
+                        room: room.clone(),
+                        observers: snapshot,
+                        excluded_observer: private_recipient.as_ref().map_or(0, |p| p.key),
+                    },
+                    frame.clone(),
+                )
+                .is_ok()
+            {
+                drop(listeners);
+                publisher
+                    .resume_routing(quantum.saturating_sub(direct_visits))
+                    .map_err(|error| error.after(direct_visits))?;
+                return Ok(quantum.max(direct_visits));
+            }
+            // Staging credit was refused: deliver immediately instead. The
+            // primary recipient was already served above.
+            publisher.clear();
+            let mut visited = direct_visits;
+            if let Some(room) = &room {
+                for recipient in room.iter() {
                     visited += 1;
                     if recipient.key != peer.key {
                         recipient
@@ -1289,16 +1688,37 @@ impl Relay {
                     }
                 }
             }
-            for recipient in state.listeners(CHANNEL_MESSAGE) {
+            let excluded = private_recipient.as_ref().map_or(0, |p| p.key);
+            for recipient in observers {
+                visited += 1;
+                if recipient.key != excluded {
+                    recipient
+                        .enqueue_fanout(&frame)
+                        .map_err(|reason| RoutingFailure::visited(reason, visited))?;
+                }
+            }
+            return Ok(work.max(1));
+        }
+        let mut visited = 0;
+        if let Some(room) = &room {
+            for recipient in room.iter() {
+                visited += 1;
+                if recipient.key != peer.key {
+                    recipient
+                        .enqueue_fanout(&frame)
+                        .map_err(|reason| RoutingFailure::visited(reason, visited))?;
+                }
+            }
+            for recipient in observers {
                 visited += 1;
                 recipient
                     .enqueue_fanout(&frame)
                     .map_err(|reason| RoutingFailure::visited(reason, visited))?;
             }
-        } else if let Some(recipient) = private_recipient {
+        } else if let Some(recipient) = &private_recipient {
             visited = 1;
             recipient.enqueue_fanout(&frame)?;
-            for listener in state.listeners(PRIVATE_MESSAGE) {
+            for listener in observers {
                 visited += 1;
                 if listener.key != recipient.key {
                     listener
@@ -1321,18 +1741,36 @@ impl Relay {
             && recipients.len() > quantum
         {
             let work = pending.get_or_insert_with(|| Box::new(RoomFanout::default()));
-            work.begin(
-                source,
-                FanoutRecipients::Room(recipients),
-                frame,
-                self.config.write_timeout(),
-                0,
-            )?;
-            work.resume_routing(quantum)?;
-            Ok(quantum)
-        } else {
-            deliver_room(source, recipients, frame)
+            if work
+                .begin(
+                    source,
+                    FanoutRecipients::Room(recipients.clone()),
+                    frame.clone(),
+                    0,
+                )
+                .is_ok()
+            {
+                work.resume_routing(quantum)?;
+                return Ok(quantum);
+            }
+            // Refused staging credit: one longer turn beats a lost message.
         }
+        deliver_room(source, recipients, frame)
+    }
+
+    /// A publisher's connection ended with an unfinished fanout. The remaining
+    /// recipients still receive the message through a departure queue, ahead
+    /// of the source's own departure notice.
+    pub(crate) fn detach_fanout(&self, source: &Peer, mut work: Box<RoomFanout>) {
+        if !work.active() || self.is_stopping() {
+            return;
+        }
+        work.detach();
+        let queue = match &work.recipients {
+            Some(FanoutRecipients::Room(_)) if !source.is_global() => &source.room.departures,
+            _ => &self.detached,
+        };
+        self.push_job(queue, work, &*source.output);
     }
 
     fn control(&self, peer: &Peer, value: &[u8]) -> Result<(), Disconnect> {
@@ -1341,15 +1779,16 @@ impl Relay {
                 if protocol::secret_matches(self.config.auth_password.as_deref(), password) {
                     peer.authenticated.store(true, Relaxed);
                 }
-                peer.enqueue_frame(&Frame::reply_bool(0, peer.authenticated.load(Relaxed)))?;
+                peer.enqueue_reply(&Frame::reply_bool(0, peer.authenticated.load(Relaxed)))?;
             }
             Command::Listen(flags) => {
                 if !peer.authenticated.load(Relaxed) {
                     return self.unauthorized();
                 }
                 let mut barrier = false;
-                if peer.channel.as_ref() == GLOBAL_CHANNEL {
-                    let mut state = self.state.write();
+                if peer.is_global() {
+                    let member = peer.room.state.read().members.get(&peer.key).cloned();
+                    let mut listeners = self.listeners.write();
                     if peer.closing.load(Relaxed) {
                         return Ok(());
                     }
@@ -1363,12 +1802,13 @@ impl Relay {
                         && flags & DISCONNECT_MESSAGE == 0
                     {
                         // Older deferred notices must precede revocation's ACK.
-                        // Match the registry -> retirement lock order used by
-                        // removal; retirement output never reacquires registry.
                         self.flush_observer_retirements(peer);
                         barrier = true;
                     }
-                    state.set_listener_flags(peer, flags & 7);
+                    if listeners.set_flags(peer, flags & 7, member.as_ref()) {
+                        *self.disconnect_snapshot.lock() = Weak::new();
+                    }
+                    self.listener_mask.store(listeners.mask(), Relaxed);
                 } else {
                     peer.listener.store(flags & 7, Relaxed);
                 }
@@ -1376,7 +1816,7 @@ impl Relay {
                 if barrier {
                     peer.enqueue_barrier(&reply)?;
                 } else {
-                    peer.enqueue_frame(&reply)?;
+                    peer.enqueue_reply(&reply)?;
                 }
             }
             Command::Channels => {
@@ -1408,7 +1848,7 @@ impl Relay {
                         .and_then(|e| e.u64(members as u64))
                         .expect("Vec encoding");
                 }
-                peer.enqueue_frame(&Frame::reply(2, e.into_writer().into()))?;
+                peer.enqueue_reply(&Frame::reply(2, e.into_writer().into()))?;
             }
             Command::Assign(id) => {
                 if !peer.authenticated.load(Relaxed) {
@@ -1417,69 +1857,62 @@ impl Relay {
                 if id == 0 || id == BROADCAST {
                     return Err(Disconnect::RESERVED);
                 }
-                let mut state = self.state.write();
-                let old = peer.id.load(Relaxed);
-                // Takeover may have happened after receive's initial closing check.
-                // The map entry must still belong to this immutable session key.
-                if peer.closing.load(Relaxed)
-                    || state
-                        .users
-                        .get(&old)
-                        .is_none_or(|owner| owner.key != peer.key)
-                {
-                    return Ok(());
-                }
-                if old != id {
-                    state.global_broadcast.take();
-                    let owner = state.users.remove(&old).ok_or(Disconnect::PROTOCOL)?;
-                    if let Some(previous) = state.users.insert(id, owner) {
-                        previous.close(Disconnect::TAKEN);
-                        shrink_sparse_map(&mut state.users);
-                    }
-                    peer.id.store(id, Relaxed);
-                }
-                peer.enqueue_frame(&Frame::reply_uint(3, id))?;
-            }
-            Command::SetVariable { key, value } => {
-                let mut state = self.state.write();
                 if peer.closing.load(Relaxed) {
                     return Ok(());
                 }
-                let channel = state
-                    .channels
-                    .get_mut(&peer.channel)
-                    .ok_or(Disconnect::PROTOCOL)?;
-                let previous_size = channel
-                    .variables
-                    .get(key)
-                    .map_or(0, |v| key.len() + v.len());
-                let next = channel.variable_bytes - previous_size + key.len() + value.len();
-                let total = self.metrics.variable_bytes.load(Relaxed) - previous_size
-                    + key.len()
-                    + value.len();
-                if next > self.config.max_variable_bytes
-                    || total > self.config.total_variable_bytes
-                    || (previous_size == 0 && channel.variables.len() >= self.config.max_variables)
-                {
-                    return Err(Disconnect::OVERLOADED);
+                let old = peer.id.load(Relaxed);
+                if old != id {
+                    // Takeover may have happened after receive's initial
+                    // closing check. The map entry must still belong to this
+                    // immutable session key.
+                    let Some(displaced) = self.users.reassign(peer, old, id) else {
+                        return Ok(());
+                    };
+                    peer.id.store(id, Relaxed);
+                    if let Some(previous) = displaced {
+                        previous.close(Disconnect::TAKEN);
+                        self.membership_changed();
+                    }
                 }
-                // Copy the retained value, so a tiny variable cannot pin a large input frame.
-                channel
-                    .variables
-                    .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
-                channel.variable_bytes = next;
-                self.metrics.variable_bytes.store(total, Relaxed);
-                peer.enqueue_frame(&Frame::reply_bool(4, true))?;
+                peer.enqueue_reply(&Frame::reply_uint(3, id))?;
+            }
+            Command::SetVariable { key, value } => {
+                if peer.closing.load(Relaxed) {
+                    return Ok(());
+                }
+                {
+                    let mut state = peer.room.state.write();
+                    if state.retired {
+                        return Err(Disconnect::PROTOCOL);
+                    }
+                    let previous_size = state.variables.get(key).map_or(0, |v| key.len() + v.len());
+                    let added = key.len() + value.len();
+                    let next = state.variable_bytes - previous_size + added;
+                    if next > self.config.max_variable_bytes
+                        || (previous_size == 0
+                            && state.variables.len() >= self.config.max_variables)
+                        || self
+                            .metrics
+                            .variable_bytes
+                            .fetch_update(Relaxed, Relaxed, |total| {
+                                (total - previous_size + added <= self.config.total_variable_bytes)
+                                    .then_some(total - previous_size + added)
+                            })
+                            .is_err()
+                    {
+                        return Err(Disconnect::OVERLOADED);
+                    }
+                    // Copy the retained value, so a tiny variable cannot pin a large input frame.
+                    state
+                        .variables
+                        .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
+                    state.variable_bytes = next;
+                }
+                peer.enqueue_reply(&Frame::reply_bool(4, true))?;
             }
             Command::GetVariable(key) => {
-                let value = self
-                    .state
-                    .read()
-                    .channels
-                    .get(&peer.channel)
-                    .and_then(|c| c.variables.get(key))
-                    .cloned();
-                peer.enqueue_frame(&Frame::variable(value))?;
+                let value = peer.room.state.read().variables.get(key).cloned();
+                peer.enqueue_reply(&Frame::variable(value))?;
             }
         }
         Ok(())
@@ -1493,50 +1926,95 @@ impl Relay {
     }
 
     pub(crate) fn has_retirements(&self) -> bool {
-        self.retirement_pending.load(Relaxed)
+        self.retirements.pending.load(Relaxed)
     }
 
+    /// Advance one queue by one bounded turn. Queues rotate so a large job in
+    /// one room cannot delay another room's notices. Never blocks a worker.
     pub(crate) fn progress_retirements(&self, quantum: usize) {
-        // Serialize the retirement sequence, but never make another worker wait
-        // for this turn. No registry lock is acquired during output submission.
-        let Some(mut pending) = self.retirements.try_lock() else {
+        let queue = {
+            let Some(mut active) = self.retirements.active.try_lock() else {
+                return;
+            };
+            let Some(queue) = active.pop_front() else {
+                self.retirements.pending.store(false, Relaxed);
+                return;
+            };
+            self.retirements.pending.store(!active.is_empty(), Relaxed);
+            queue
+        };
+        let Some(mut state) = queue.state.try_lock() else {
+            self.requeue(queue);
             return;
         };
-        if let Some(work) = pending.jobs.front_mut() {
+        if let Some(work) = state.jobs.front_mut() {
             let _ = work.resume(quantum);
             if !work.active() {
-                pending.jobs.pop_front();
+                state.jobs.pop_front();
             }
         }
-        if pending.jobs.is_empty() && pending.jobs.capacity() > 32 {
-            pending.jobs = VecDeque::new();
+        if state.jobs.is_empty() {
+            state.queued = false;
+            if state.jobs.capacity() > 32 {
+                state.jobs = VecDeque::new();
+            }
+        } else {
+            drop(state);
+            self.requeue(queue);
         }
-        self.retirement_pending
-            .store(!pending.jobs.is_empty(), Relaxed);
     }
 
-    fn flush_observer_retirements(&self, observer: &Peer) {
-        if !self.has_retirements() {
-            return;
+    fn requeue(&self, queue: Arc<DepartureQueue>) {
+        let mut active = self.retirements.active.lock();
+        active.push_back(queue);
+        self.retirements.pending.store(true, Relaxed);
+    }
+
+    /// Append a job and make sure its queue is scheduled. Returns whether a
+    /// worker needs waking: only an idle retirement system does.
+    fn push_job(
+        &self,
+        queue: &Arc<DepartureQueue>,
+        work: Box<RoomFanout>,
+        output: &dyn PeerOutput,
+    ) {
+        let mut state = queue.state.lock();
+        state.jobs.push_back(work);
+        if !state.queued {
+            state.queued = true;
+            let mut active = self.retirements.active.lock();
+            let wake = active.is_empty();
+            active.push_back(queue.clone());
+            self.retirements.pending.store(true, Relaxed);
+            drop(active);
+            drop(state);
+            if wake {
+                output.wake_retirement();
+            }
         }
-        let pending = self.retirements.lock();
+    }
+
+    /// Submit this observer's still-pending captured notices before its
+    /// revocation acknowledgement, and record a watermark so deferred jobs
+    /// cannot replay them after re-subscription. Only the observer queue is
+    /// scanned; it holds every job that can reach a `re_globl` member.
+    fn flush_observer_retirements(&self, observer: &Peer) {
+        let pending = self.observer_departures.state.lock();
         let previous = observer.retirement_barrier.load(Relaxed);
-        // Publication holds the registry write lock too, so the queue tail is
-        // this revocation's boundary. Send only still-unvisited notices for this
-        // exact peer, in FIFO order. Adjacent jobs often share an immutable view;
-        // reuse its lookup within this barrier, but check each job's own cursor.
-        // No recipient index or peer reference survives the locked traversal.
+        // Adjacent jobs often share an immutable view; reuse its lookup within
+        // this barrier, but check each job's own cursor.
         let mut searched: Option<(&[Arc<Peer>], Option<usize>)> = None;
         for work in &pending.jobs {
-            let recipients = work.recipients.as_ref().expect("live retirement view");
-            if work.retirement_sequence <= previous
-                || recipients
-                    .first()
-                    .is_none_or(|peer| peer.channel.as_ref() != GLOBAL_CHANNEL)
-            {
+            let Some(recipients) = work.recipients.as_ref() else {
+                continue;
+            };
+            if work.retirement_sequence <= previous {
                 continue;
             }
-            let view = recipients.single_slice();
+            let view = match recipients {
+                FanoutRecipients::Message(_) => continue,
+                other => other.single_slice(),
+            };
             let position = match searched {
                 Some((previous_view, position)) if std::ptr::eq(previous_view, view) => position,
                 _ => {
@@ -1557,152 +2035,340 @@ impl Relay {
         observer.retirement_barrier.store(pending.sequence, Relaxed);
     }
 
-    fn flush_retirements(&self, channel: &[u8]) {
-        if !self.has_retirements() {
-            return;
+    /// Budget refusal fallback: finish this queue's older jobs synchronously
+    /// so a direct notice cannot overtake them. Other queues keep their turns.
+    fn flush_queue(&self, queue: &Arc<DepartureQueue>) {
+        let mut state = queue.state.lock();
+        for work in state.jobs.iter_mut() {
+            let _ = work.resume(usize::MAX);
         }
-        // Every captured view contains peers from one channel. Finish only
-        // overlapping jobs before synchronous best-effort fallback; disjoint
-        // rooms need no ordering barrier and retain their bounded turns.
-        let mut pending = self.retirements.lock();
-        pending.jobs.retain_mut(|work| {
-            let overlaps = work
-                .recipients
-                .as_ref()
-                .expect("live retirement view")
-                .first()
-                .is_some_and(|peer| peer.channel.as_ref() == channel);
-            if overlaps {
-                let _ = work.resume(usize::MAX);
-            }
-            !overlaps
-        });
-        if pending.jobs.is_empty() && pending.jobs.capacity() > 32 {
-            pending.jobs = VecDeque::new();
+        state.jobs.clear();
+        if state.jobs.capacity() > 32 {
+            state.jobs = VecDeque::new();
         }
-        self.retirement_pending
-            .store(!pending.jobs.is_empty(), Relaxed);
+        if state.queued {
+            state.queued = false;
+            let mut active = self.retirements.active.lock();
+            active.retain(|listed| !Arc::ptr_eq(listed, queue));
+            self.retirements.pending.store(!active.is_empty(), Relaxed);
+        }
     }
 
-    fn defer_retirement(&self, source: &Peer, recipients: FanoutRecipients, frame: &Frame) -> bool {
-        if !source.output.supports_retirement() {
-            return false;
-        }
-        let mut pending = self.retirements.lock();
+    /// Queue a departure notice as a bounded job. Returns false when staging
+    /// credit or numbering is exhausted: the caller then finishes this queue
+    /// synchronously and delivers directly, preserving order.
+    fn defer_departure(
+        &self,
+        queue: &Arc<DepartureQueue>,
+        source: &Peer,
+        recipients: FanoutRecipients,
+        frame: &Frame,
+        checks_barrier: bool,
+    ) -> bool {
+        let mut state = queue.state.lock();
         if self.is_stopping() {
             return true;
         }
         // Exhaustion falls back to ordered synchronous delivery rather than
         // wrapping and making older observer watermarks suppress new notices.
-        let Some(sequence) = pending.sequence.checked_add(1) else {
+        let Some(sequence) = state.sequence.checked_add(1) else {
             return false;
         };
         let mut work = Box::<RoomFanout>::default();
         if work
-            .begin(
-                source,
-                recipients,
-                frame.clone(),
-                self.config.write_timeout(),
-                sequence,
-            )
+            .begin(source, recipients, frame.clone(), sequence)
             .is_err()
         {
             return false;
         }
-        // Registry removal serializes publication. One queue preserves that
-        // sequence across workers, including causally ordered client closes.
-        let wake = pending.jobs.is_empty();
-        pending.sequence = sequence;
-        pending.jobs.push_back(work);
-        self.retirement_pending.store(true, Relaxed);
-        drop(pending);
+        work.checks_barrier = checks_barrier;
+        state.sequence = sequence;
+        state.jobs.push_back(work);
+        let wake = if state.queued {
+            false
+        } else {
+            state.queued = true;
+            let mut active = self.retirements.active.lock();
+            let wake = active.is_empty();
+            active.push_back(queue.clone());
+            self.retirements.pending.store(true, Relaxed);
+            wake
+        };
+        drop(state);
         if wake {
             source.output.wake_retirement();
         }
         true
     }
 
-    fn remove(&self, peer: &Peer) {
-        let mut state = self.state.write();
-        let Some(channel) = state.channels.get_mut(&peer.channel) else {
-            return;
-        };
-        if self.is_stopping() {
-            // Terminal removals do not need a future routing index. Drop its
-            // cache once; captured fanouts keep their own immutable owners.
-            channel.broadcast.take();
+    fn disconnect_recipients(&self, listeners: &Listeners) -> Option<Arc<RetirementSnapshot>> {
+        let mut cache = self.disconnect_snapshot.lock();
+        if let Some(snapshot) = cache.upgrade() {
+            return Some(snapshot);
         }
-        if !channel.remove(peer.key) {
-            return;
-        }
-        peer.closing.store(true, Relaxed);
-        let id = peer.id.load(Relaxed);
-        let notify = !self.is_stopping();
-        let frame = notify.then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
-        if let Some(frame) = &frame {
-            let mut deferred = false;
-            if !channel.members.is_empty()
-                && (channel.members.len() > RETIREMENT_QUANTUM || self.has_retirements())
-                && peer.output.supports_retirement()
-            {
-                let recipients = channel
-                    .broadcast
-                    .get_or_init(|| Arc::new(channel.members.values().cloned().collect()))
-                    .clone();
-                deferred = self.defer_retirement(peer, FanoutRecipients::Room(recipients), frame);
-            }
-            if !deferred && !channel.members.is_empty() {
-                self.flush_retirements(&peer.channel);
-                for recipient in channel.members.values() {
-                    let _ = recipient.enqueue_fanout(frame);
-                }
-            }
-        }
-        if channel.members.is_empty() && peer.channel.as_ref() != GLOBAL_CHANNEL {
-            self.metrics
-                .variable_bytes
-                .fetch_sub(channel.variable_bytes, Relaxed);
-            state.channels.remove(&peer.channel);
-            shrink_sparse_map(&mut state.channels);
-        } else {
-            // Empty ordinary rooms drop the complete map; retained rooms and
-            // the persistent global room can release spare membership slots.
-            shrink_sparse_map(&mut channel.members);
-        }
-        if peer.channel.as_ref() == GLOBAL_CHANNEL {
-            state.set_listener_flags(peer, 0);
-        }
-        if notify && peer.channel.as_ref() != GLOBAL_CHANNEL {
-            let frame = frame.as_ref().expect("notifications enabled");
-            let count = state.listeners(DISCONNECT_MESSAGE).len();
-            let deferred = count != 0
-                && (count > RETIREMENT_QUANTUM || self.has_retirements())
-                && peer.output.supports_retirement()
-                && state
-                    .disconnect_recipients(&self.metrics, self.config.total_queue_bytes)
-                    .is_some_and(|recipients| {
-                        self.defer_retirement(peer, FanoutRecipients::Disconnect(recipients), frame)
-                    });
-            if !deferred && count != 0 {
-                self.flush_retirements(GLOBAL_CHANNEL);
-                for recipient in state.listeners(DISCONNECT_MESSAGE) {
-                    let _ = recipient.enqueue_fanout(frame);
-                }
-            }
-        }
-        // A displaced session must never erase the new owner of its previous ID.
-        if state
-            .users
-            .get(&id)
-            .is_some_and(|owner| owner.key == peer.key)
+        let members = listeners.of(DISCONNECT_MESSAGE).to_vec();
+        let bytes = members
+            .capacity()
+            .checked_mul(std::mem::size_of::<Arc<Peer>>())
+            .and_then(|n| {
+                n.checked_add(
+                    std::mem::size_of::<RetirementSnapshot>() + 2 * std::mem::size_of::<usize>(),
+                )
+            })?;
+        if self
+            .metrics
+            .queued_bytes
+            .fetch_update(Relaxed, Relaxed, |used| {
+                used.checked_add(bytes)
+                    .filter(|&next| next <= self.config.total_queue_bytes)
+            })
+            .is_err()
         {
-            state.global_broadcast.take();
-            state.users.remove(&id);
-            shrink_sparse_map(&mut state.users);
+            self.metrics.global_pressure.fetch_add(1, Relaxed);
+            return None;
         }
-        state.sessions -= 1;
+        let snapshot = Arc::new(RetirementSnapshot {
+            members,
+            bytes,
+            metrics: self.metrics.clone(),
+        });
+        *cache = Arc::downgrade(&snapshot);
+        Some(snapshot)
+    }
+
+    fn remove(&self, peer: &Peer) {
+        let room = &peer.room;
+        let stopping = self.is_stopping();
+        // Global room departures share the observer queue; see its notes.
+        let queue = if peer.is_global() {
+            &self.observer_departures
+        } else {
+            &room.departures
+        };
+        let remaining = {
+            let mut state = room.state.write();
+            if stopping {
+                // Terminal removals do not need a future routing index. Drop its
+                // cache once; captured fanouts keep their own immutable owners.
+                state.broadcast.take();
+            }
+            if !state.remove(peer.key) {
+                return;
+            }
+            peer.closing.store(true, Relaxed);
+            if state.members.is_empty() || stopping {
+                None
+            } else if peer.output.supports_retirement()
+                && (state.members.len() > RETIREMENT_QUANTUM || !queue.state.lock().jobs.is_empty())
+            {
+                // Large, or ordered behind older work: capture the shared view.
+                Some(Departure::Deferred(state.view()))
+            } else {
+                // Small and nothing older ahead: a short copy, no cached view.
+                Some(Departure::Direct(state.members.values().cloned().collect()))
+            }
+        };
+        room.reserved.fetch_sub(1, Relaxed);
+        self.membership_changed();
+        let id = peer.id.load(Relaxed);
+        let frame = (!stopping).then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
+        match (&frame, remaining) {
+            (Some(frame), Some(Departure::Direct(recipients))) => {
+                for recipient in &recipients {
+                    let _ = recipient.enqueue_fanout(frame);
+                }
+            }
+            (Some(frame), Some(Departure::Deferred(recipients))) => {
+                if !self.defer_departure(
+                    queue,
+                    peer,
+                    FanoutRecipients::Room(recipients.clone()),
+                    frame,
+                    peer.is_global(),
+                ) {
+                    self.flush_queue(queue);
+                    for recipient in recipients.iter() {
+                        let _ = recipient.enqueue_fanout(frame);
+                    }
+                }
+            }
+            _ => {}
+        }
+        // An empty ordinary room leaves the index. Re-check under both locks:
+        // a joiner may have arrived between the membership update and here.
+        if !peer.is_global() {
+            let empty = room.state.read().members.is_empty();
+            if empty {
+                let mut channels = self.channels.write();
+                let mut state = room.state.write();
+                if state.members.is_empty()
+                    && !state.retired
+                    && channels
+                        .get(&room.name)
+                        .is_some_and(|current| Arc::ptr_eq(current, room))
+                {
+                    state.retired = true;
+                    self.metrics
+                        .variable_bytes
+                        .fetch_sub(state.variable_bytes, Relaxed);
+                    channels.remove(&room.name);
+                    shrink_sparse_map(&mut channels);
+                }
+            } else {
+                shrink_sparse_map(&mut room.state.write().members);
+            }
+        } else {
+            shrink_sparse_map(&mut room.state.write().members);
+            let member_flags = peer.listener.load(Relaxed);
+            if member_flags != 0 {
+                let mut listeners = self.listeners.write();
+                if listeners.set_flags(peer, 0, None) {
+                    *self.disconnect_snapshot.lock() = Weak::new();
+                }
+                self.listener_mask.store(listeners.mask(), Relaxed);
+            }
+        }
+        if let Some(frame) = &frame
+            && !peer.is_global()
+            && self.listener_mask.load(Relaxed) & DISCONNECT_MESSAGE != 0
+        {
+            // Hold the listener lock through capture and queueing, so a
+            // concurrent revocation observes the job or never sees this notice.
+            let listeners = self.listeners.read();
+            let observers = listeners.of(DISCONNECT_MESSAGE);
+            if !observers.is_empty() {
+                let queue = &self.observer_departures;
+                let deferred = peer.output.supports_retirement()
+                    && (observers.len() > RETIREMENT_QUANTUM
+                        || !queue.state.lock().jobs.is_empty());
+                let queued = deferred
+                    && self
+                        .disconnect_recipients(&listeners)
+                        .is_some_and(|snapshot| {
+                            self.defer_departure(
+                                queue,
+                                peer,
+                                FanoutRecipients::Disconnect(snapshot),
+                                frame,
+                                true,
+                            )
+                        });
+                if !queued {
+                    if deferred {
+                        self.flush_queue(queue);
+                    }
+                    for recipient in observers {
+                        let _ = recipient.enqueue_fanout(frame);
+                    }
+                }
+            }
+        }
+        self.users.remove_owned(id, peer.key);
+        self.sessions.fetch_sub(1, Relaxed);
         self.metrics.disconnected.fetch_add(1, Relaxed);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn channel(&self, name: &[u8]) -> Option<Arc<Channel>> {
+        self.channels.read().get(name).cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn user(&self, id: u64) -> Option<Arc<Peer>> {
+        self.users.get(id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cached_global_view(&self) -> Option<Arc<Vec<Arc<Peer>>>> {
+        self.global_view
+            .lock()
+            .as_ref()
+            .map(|(_, view)| view.clone())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn listeners_of(&self, flag: u8) -> Vec<Arc<Peer>> {
+        self.listeners.read().of(flag).to_vec()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn listener_capacities(&self) -> [usize; 3] {
+        let listeners = self.listeners.read();
+        [0, 1, 2].map(|i| listeners.lists[i].capacity())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn message_snapshot_cached(&self, index: usize) -> Option<Arc<Vec<Arc<Peer>>>> {
+        self.listeners.read().message_snapshots[index]
+            .get()
+            .cloned()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn disconnect_snapshot_cached(&self) -> bool {
+        self.disconnect_snapshot.lock().upgrade().is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observer_queue(&self) -> &Arc<DepartureQueue> {
+        &self.observer_departures
+    }
+
+    #[cfg(test)]
+    pub(crate) fn detached_queue(&self) -> &Arc<DepartureQueue> {
+        &self.detached
+    }
+
+    /// Whether no registry lock is currently held by anyone. Output paths
+    /// must run with this true.
+    #[cfg(test)]
+    pub(crate) fn registry_unlocked(&self) -> bool {
+        self.channels.try_write().is_some()
+            && self.listeners.try_write().is_some()
+            && self
+                .channels
+                .read()
+                .values()
+                .all(|channel| channel.state.try_write().is_some())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn listeners_locked(&self) -> bool {
+        self.listeners.try_read().is_none()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn users_capacity(&self) -> usize {
+        self.users.capacity()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn users_len(&self) -> usize {
+        self.users.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn channels_capacity(&self) -> usize {
+        self.channels.read().capacity()
+    }
+}
+
+/// Undo partial admission when a join fails after reserving capacity.
+struct SessionLease<'a> {
+    relay: &'a Relay,
+    room: Option<Arc<Channel>>,
+    id: Option<(u64, u64)>,
+}
+
+impl Drop for SessionLease<'_> {
+    fn drop(&mut self) {
+        if let Some(room) = &self.room {
+            room.reserved.fetch_sub(1, Relaxed);
+        }
+        if let Some((id, key)) = self.id {
+            self.relay.users.remove_owned(id, key);
+        }
+        self.relay.sessions.fetch_sub(1, Relaxed);
     }
 }
 
@@ -1718,854 +2384,8 @@ mod broadcast_tests;
 mod channel_tests;
 #[cfg(test)]
 mod listener_tests;
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
-        let relay = Relay::new(config()).unwrap();
-        let mut sender = relay.subscribe(b"batch").unwrap();
-        let mut recipient = relay.subscribe(b"batch").unwrap();
-        sender.outgoing.try_recv().unwrap();
-        recipient.outgoing.try_recv().unwrap();
-        let bytes = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf5]);
-        let mut batch = relay.receive_batch();
-        batch
-            .receive(&sender.registration.peer, bytes.clone(), 4096)
-            .unwrap();
-        let held = recipient.outgoing.try_recv().unwrap();
-        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 0);
-        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 0);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-        assert_eq!(
-            recipient.registration.peer.budget.used.load(Relaxed),
-            held.frame.len()
-        );
-        assert_eq!(
-            batch.receive(&sender.registration.peer, Bytes::from_static(b"\xff"), 4096),
-            Err(Disconnect::PROTOCOL)
-        );
-        batch.publish();
-        batch.publish();
-        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 2);
-        assert_eq!(
-            relay.metrics.incoming_bytes.load(Relaxed),
-            bytes.len() as u64 + 1
-        );
-        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 1);
-        batch
-            .receive(&sender.registration.peer, bytes.clone(), 4096)
-            .unwrap();
-        drop(batch);
-        assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 3);
-        assert_eq!(
-            relay.metrics.incoming_bytes.load(Relaxed),
-            bytes.len() as u64 * 2 + 1
-        );
-        assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 2);
-        drop((sender, recipient));
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-        drop(held);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn input_batches_keep_instance_identity_and_publish_during_unwind() {
-        let first = Relay::new(config()).unwrap();
-        let second = Relay::new(config()).unwrap();
-        let mut one = first.subscribe(b"batch").unwrap();
-        let mut two = second.subscribe(b"batch").unwrap();
-        one.outgoing.try_recv().unwrap();
-        two.outgoing.try_recv().unwrap();
-        assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let mut a = first.receive_batch();
-                let mut b = second.receive_batch();
-                a.receive(
-                    &one.registration.peer,
-                    protocol::envelope(one.registration.peer.id.load(Relaxed), &[0xf5]),
-                    4096,
-                )
-                .unwrap();
-                b.receive(
-                    &two.registration.peer,
-                    protocol::envelope(two.registration.peer.id.load(Relaxed), &[0xf5]),
-                    4096,
-                )
-                .unwrap();
-                b.publish();
-                assert_eq!(first.metrics.incoming_messages.load(Relaxed), 0);
-                assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
-                panic!("interrupted ready batch");
-            }))
-            .is_err()
-        );
-        assert_eq!(first.metrics.incoming_messages.load(Relaxed), 1);
-        assert_eq!(second.metrics.incoming_messages.load(Relaxed), 1);
-        drop((one, two));
-        assert_eq!(first.metrics.queued_bytes.load(Relaxed), 0);
-        assert_eq!(second.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    fn config() -> Config {
-        Config {
-            auth_password: Some("test-password".into()),
-            ..Config::default()
-        }
-    }
-
-    #[test]
-    fn variable_reply_keeps_stored_bytes_after_replacement_and_channel_retirement() {
-        let relay = Relay::new(config()).unwrap();
-        let mut sub = relay.subscribe(b"variables").unwrap();
-        sub.outgoing.try_recv().unwrap();
-        let value = protocol::byte_string(&vec![0xa5; 32768]);
-        let mut input = b"\x82\x44body".to_vec();
-        input.extend_from_slice(&value);
-        relay
-            .receive(&sub.registration.peer, protocol::request(4, &input))
-            .unwrap();
-        sub.outgoing.try_recv().unwrap();
-        let pointer = relay.state.read().channels[b"variables".as_slice()].variables
-            [b"body".as_slice()]
-        .as_ptr();
-        relay
-            .receive(&sub.registration.peer, protocol::request(5, b"\x44body"))
-            .unwrap();
-        let held = sub.outgoing.try_recv().unwrap();
-        assert_eq!(held.frame.payload().as_ptr(), pointer);
-        assert_eq!(held.frame.payload(), value.as_ref());
-        assert_eq!(held.frame.prefix(), b"\x82\x00\x82\x18\xc8\x82\xf5");
-        relay
-            .receive(
-                &sub.registration.peer,
-                protocol::request(4, b"\x82\x44body\xf5"),
-            )
-            .unwrap();
-        sub.outgoing.try_recv().unwrap();
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 5);
-        drop(sub);
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
-        assert_eq!(held.frame.payload().as_ptr(), pointer);
-        assert_eq!(held.frame.payload(), value.as_ref());
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-        drop(held);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns() {
-        let relay = Relay::new(config()).unwrap();
-        let mut sender = relay.subscribe(b"a").unwrap();
-        let mut first = relay.subscribe(b"a").unwrap();
-        let mut second = relay.subscribe(b"a").unwrap();
-        for subscription in [&mut sender, &mut first, &mut second] {
-            subscription.outgoing.try_recv().unwrap();
-        }
-        let value = protocol::byte_string(&[0x5a; 2048]);
-        let input = protocol::envelope(BROADCAST, &value);
-        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&sender.registration.peer, input).unwrap();
-        let first_frame = first.outgoing.try_recv().unwrap();
-        let second_frame = second.outgoing.try_recv().unwrap();
-        assert_eq!(first_frame.frame.payload().as_ptr(), pointer);
-        assert_eq!(second_frame.frame.payload().as_ptr(), pointer);
-        assert_eq!(first_frame.frame.payload(), value.as_ref());
-        assert_eq!(
-            relay.metrics.routing_reused_bytes.load(Relaxed),
-            value.len() as u64
-        );
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
-        drop(sender);
-        drop(first);
-        drop(second);
-        // In-flight envelopes still own their byte reservations and receive storage.
-        assert_eq!(first_frame.frame.payload(), value.as_ref());
-        assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
-        drop(first_frame);
-        drop(second_frame);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn tiny_views_of_a_large_current_allocation_are_compacted() {
-        let relay = Relay::new(config()).unwrap();
-        let mut sender = relay.subscribe(b"a").unwrap();
-        let mut recipient = relay.subscribe(b"a").unwrap();
-        sender.outgoing.try_recv().unwrap();
-        recipient.outgoing.try_recv().unwrap();
-        let small = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf6]);
-        let mut read_slab = bytes::BytesMut::with_capacity(65536);
-        read_slab.extend_from_slice(&small);
-        let input = read_slab.split().freeze();
-        let backing = input.clone();
-        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay
-            .receive_with_storage(&sender.registration.peer, input, 65536)
-            .unwrap();
-        let packet = recipient.outgoing.try_recv().unwrap();
-        assert_ne!(packet.frame.payload().as_ptr(), pointer);
-        assert_eq!(packet.frame.payload(), [0xf6]);
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 1);
-        assert!(!backing.is_empty());
-        drop(packet);
-        drop(sender);
-        drop(recipient);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn slow_consumer_is_closed_and_every_byte_reservation_is_released() {
-        let relay = Relay::new(Config {
-            queue_messages: 1,
-            ..config()
-        })
-        .unwrap();
-        let sender = relay.subscribe(b"a").unwrap();
-        let recipient = relay.subscribe(b"a").unwrap();
-        // Recipient queue still holds its welcome; the next routed frame exceeds its message budget.
-        relay
-            .receive(
-                &sender.registration.peer,
-                protocol::envelope(BROADCAST, &[1]),
-            )
-            .unwrap();
-        assert_eq!(*recipient.close.borrow(), Some(Disconnect::OVERLOADED));
-        assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 1);
-        drop(recipient);
-        drop(sender);
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn takeover_cleanup_cannot_remove_new_id_owner() {
-        let relay = Relay::new(config()).unwrap();
-        let mut first = relay.subscribe(b"a").unwrap();
-        let mut next = relay.subscribe(b"a").unwrap();
-        first.outgoing.try_recv().unwrap();
-        next.outgoing.try_recv().unwrap();
-        let id = first.registration.peer.id.load(Relaxed);
-        let new_peer = &next.registration.peer;
-        relay
-            .receive(
-                new_peer,
-                protocol::request(0, &protocol::text("test-password")),
-            )
-            .unwrap();
-        relay
-            .receive(new_peer, protocol::request(3, &protocol::uint(id)))
-            .unwrap();
-        assert_eq!(*first.close.borrow(), Some(Disconnect::TAKEN));
-        drop(first);
-        assert!(
-            relay
-                .state
-                .read()
-                .users
-                .get(&id)
-                .is_some_and(|p| p.key == new_peer.key)
-        );
-        drop(next);
-        assert_eq!(relay.counts(), (0, 1));
-    }
-
-    #[test]
-    fn sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads() {
-        let relay = Relay::new(config()).unwrap();
-        let mut old = relay.subscribe(b"old").unwrap();
-        let mut owner = relay.subscribe(b"owner").unwrap();
-        let mut source = relay.subscribe(b"source").unwrap();
-        for subscription in [&mut old, &mut owner, &mut source] {
-            subscription.outgoing.try_recv().unwrap();
-        }
-        let id = old.registration.peer.id.load(Relaxed);
-        let source_id = source.registration.peer.id.load(Relaxed);
-        relay
-            .receive(
-                &owner.registration.peer,
-                protocol::request(0, &protocol::text("test-password")),
-            )
-            .unwrap();
-        relay
-            .receive(
-                &owner.registration.peer,
-                protocol::request(3, &protocol::uint(id)),
-            )
-            .unwrap();
-        assert_eq!(*old.close.borrow(), Some(Disconnect::TAKEN));
-        owner.outgoing.try_recv().unwrap();
-        owner.outgoing.try_recv().unwrap();
-        let fillers: Vec<_> = (0..1024)
-            .map(|i| {
-                let mut subscription = relay.subscribe(format!("burst-{i}").as_bytes()).unwrap();
-                subscription.outgoing.try_recv().unwrap();
-                subscription
-            })
-            .collect();
-        let peak_capacity = relay.state.read().users.capacity();
-        assert!(peak_capacity >= 1026);
-        let value = protocol::byte_string(&[0x5a; 8192]);
-        let input = protocol::envelope(id, &value);
-        let payload_pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&source.registration.peer, input).unwrap();
-        let packet = owner.outgoing.try_recv().unwrap();
-        assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
-        drop(fillers);
-        {
-            let state = relay.state.read();
-            assert_eq!(state.users.len(), 2);
-            assert!(state.users.capacity() <= 256);
-            assert!(state.users.capacity() < peak_capacity / 4);
-            assert!(Arc::ptr_eq(&state.users[&id], &owner.registration.peer));
-            assert!(Arc::ptr_eq(
-                &state.users[&source_id],
-                &source.registration.peer
-            ));
-        }
-        // The displaced owner is still registered. Its delayed cleanup cannot
-        // erase the replacement after rehashing the ownership table.
-        drop(old);
-        assert!(Arc::ptr_eq(
-            &relay.state.read().users[&id],
-            &owner.registration.peer
-        ));
-        relay
-            .receive(
-                &owner.registration.peer,
-                protocol::envelope(source_id, &[0x18, 42]),
-            )
-            .unwrap();
-        let reply = source.outgoing.try_recv().unwrap();
-        assert_eq!(
-            [reply.frame.prefix(), reply.frame.payload()].concat(),
-            protocol::envelope(id, &[0x18, 42])
-        );
-        drop(reply);
-        drop(source);
-        drop(owner);
-        assert_eq!(relay.counts(), (0, 1));
-        assert!(relay.state.read().users.is_empty());
-        assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
-        assert_eq!(packet.frame.payload(), value.as_ref());
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), packet.frame.len());
-        drop(packet);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn takeovers_reclaim_sparse_id_slots_before_displaced_sessions_finish() {
-        let relay = Relay::new(config()).unwrap();
-        let mut subscriptions: Vec<_> = (0..1024)
-            .map(|i| {
-                let mut sub = relay.subscribe(format!("owner-{i}").as_bytes()).unwrap();
-                sub.outgoing.try_recv().unwrap();
-                sub
-            })
-            .collect();
-        let id = subscriptions[0].registration.peer.id.load(Relaxed);
-        assert!(relay.state.read().users.capacity() >= 1024);
-        for i in 1..subscriptions.len() {
-            let peer = subscriptions[i].registration.peer.clone();
-            relay
-                .receive(
-                    &peer,
-                    protocol::request(0, &protocol::text("test-password")),
-                )
-                .unwrap();
-            subscriptions[i].outgoing.try_recv().unwrap();
-            relay
-                .receive(&peer, protocol::request(3, &protocol::uint(id)))
-                .unwrap();
-            subscriptions[i].outgoing.try_recv().unwrap();
-            assert_eq!(
-                *subscriptions[i - 1].close.borrow(),
-                Some(Disconnect::TAKEN)
-            );
-        }
-        {
-            let state = relay.state.read();
-            assert_eq!(state.sessions, 1024);
-            assert_eq!(state.users.len(), 1);
-            assert!(state.users.capacity() <= 256);
-            assert!(Arc::ptr_eq(
-                &state.users[&id],
-                &subscriptions.last().unwrap().registration.peer
-            ));
-        }
-        // All displaced registrations still exist until this point.
-        drop(subscriptions);
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn sparse_membership_keeps_peers_variables_and_published_payloads_alive() {
-        for room in [b"kept-room".as_slice(), GLOBAL_CHANNEL] {
-            let relay = Relay::new(config()).unwrap();
-            let mut source = relay.subscribe(room).unwrap();
-            let mut target = relay.subscribe(room).unwrap();
-            source.outgoing.try_recv().unwrap();
-            target.outgoing.try_recv().unwrap();
-            let source_id = source.registration.peer.id.load(Relaxed);
-            let target_id = target.registration.peer.id.load(Relaxed);
-            let mut argument = Encoder::new(Vec::new());
-            argument
-                .array(2)
-                .unwrap()
-                .bytes(b"kept")
-                .unwrap()
-                .bool(true)
-                .unwrap();
-            relay
-                .receive(
-                    &source.registration.peer,
-                    protocol::request(4, &argument.into_writer()),
-                )
-                .unwrap();
-            source.outgoing.try_recv().unwrap();
-            let variable_pointer =
-                relay.state.read().channels[room].variables[b"kept".as_slice()].as_ptr();
-            let fillers: Vec<_> = (0..1024)
-                .map(|_| {
-                    let mut sub = relay.subscribe(room).unwrap();
-                    sub.outgoing.try_recv().unwrap();
-                    sub
-                })
-                .collect();
-            let peak_capacity = relay.state.read().channels[room].members.capacity();
-            assert!(peak_capacity >= 1026);
-            // Exercise real administrative close signals. Registrations remain
-            // until cleanup, while healthy peers keep their output queues.
-            for sub in &fillers {
-                assert!(relay.disconnect(sub.registration.peer.id.load(Relaxed)));
-            }
-            let value = protocol::byte_string(&[0x5a; 8192]);
-            let input = protocol::envelope(target_id, &value);
-            let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-            relay.receive(&source.registration.peer, input).unwrap();
-            let held = target.outgoing.try_recv().unwrap();
-            assert_eq!(held.frame.payload().as_ptr(), pointer);
-            for sub in fillers {
-                let id = sub.registration.peer.id.load(Relaxed);
-                drop(sub);
-                let expected = protocol::envelope(BROADCAST, &protocol::uint(id));
-                for survivor in [&mut source, &mut target] {
-                    let departure = survivor.outgoing.try_recv().unwrap();
-                    assert_eq!(departure.frame.to_vec(), expected.as_ref());
-                }
-            }
-            {
-                let state = relay.state.read();
-                let channel = &state.channels[room];
-                assert_eq!(channel.members.len(), 2);
-                assert!(channel.members.capacity() <= 256);
-                assert!(channel.members.capacity() < peak_capacity / 4);
-                assert!(Arc::ptr_eq(
-                    &channel.members[&source.registration.peer.key],
-                    &source.registration.peer
-                ));
-                assert!(Arc::ptr_eq(
-                    &channel.members[&target.registration.peer.key],
-                    &target.registration.peer
-                ));
-                assert_eq!(
-                    channel.variables[b"kept".as_slice()].as_ptr(),
-                    variable_pointer
-                );
-                assert_eq!(channel.variables[b"kept".as_slice()].as_ref(), &[0xf5]);
-            }
-            assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 5);
-            relay
-                .receive(
-                    &source.registration.peer,
-                    protocol::envelope(target_id, &[0x18, 42]),
-                )
-                .unwrap();
-            let after = target.outgoing.try_recv().unwrap();
-            assert_eq!(
-                [after.frame.prefix(), after.frame.payload()].concat(),
-                protocol::envelope(source_id, &[0x18, 42])
-            );
-            drop(after);
-            drop(source);
-            drop(target);
-            assert_eq!(relay.counts(), (0, 1));
-            assert_eq!(
-                relay.metrics.variable_bytes.load(Relaxed),
-                if room == GLOBAL_CHANNEL { 5 } else { 0 }
-            );
-            assert_eq!(held.frame.payload().as_ptr(), pointer);
-            assert_eq!(held.frame.payload(), value.as_ref());
-            assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
-            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-            drop(held);
-            assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-        }
-    }
-
-    #[test]
-    fn sparse_channel_registry_preserves_names_variables_and_published_storage() {
-        let relay = Relay::new(config()).unwrap();
-        let mut source = relay.subscribe(b"\xff\0").unwrap();
-        let mut target = relay.subscribe(b"kept").unwrap();
-        let mut global = relay.subscribe(GLOBAL_CHANNEL).unwrap();
-        for sub in [&mut source, &mut target, &mut global] {
-            sub.outgoing.try_recv().unwrap();
-            relay
-                .receive(
-                    &sub.registration.peer,
-                    protocol::request(4, b"\x82\x44kept\x18\x2a"),
-                )
-                .unwrap();
-            sub.outgoing.try_recv().unwrap();
-        }
-        relay
-            .receive(
-                &source.registration.peer,
-                protocol::request(0, &protocol::text("test-password")),
-            )
-            .unwrap();
-        source.outgoing.try_recv().unwrap();
-        let expected =
-            b"\x82\x00\x82\x02\x83\x82\x44kept\x01\x82\x48re_globl\x01\x82\x42\xff\0\x01";
-        let names = [b"\xff\0".as_slice(), b"kept", GLOBAL_CHANNEL];
-        let pointers: Vec<_> = {
-            let state = relay.state.read();
-            names
-                .iter()
-                .map(|name| {
-                    let (key, channel) = state.channels.get_key_value(*name).unwrap();
-                    (key.as_ptr(), channel.variables[b"kept".as_slice()].as_ptr())
-                })
-                .collect()
-        };
-        let fillers: Vec<_> = (0..1024)
-            .map(|i| {
-                let mut sub = relay.subscribe(format!("room-{i}").as_bytes()).unwrap();
-                sub.outgoing.try_recv().unwrap();
-                sub
-            })
-            .collect();
-        let peak_capacity = relay.state.read().channels.capacity();
-        assert!(peak_capacity >= 1027);
-        let value = protocol::byte_string(&[0x5a; 8192]);
-        let input = protocol::envelope(target.registration.peer.id.load(Relaxed), &value);
-        let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&source.registration.peer, input).unwrap();
-        let held = target.outgoing.try_recv().unwrap();
-        drop(fillers);
-        {
-            let state = relay.state.read();
-            assert_eq!(state.channels.len(), 3);
-            assert!(state.channels.capacity() <= 256);
-            assert!(state.channels.capacity() < peak_capacity / 4);
-            for ((name, (key_pointer, value_pointer)), sub) in
-                names.iter().zip(&pointers).zip([&source, &target, &global])
-            {
-                let (key, channel) = state.channels.get_key_value(*name).unwrap();
-                assert_eq!(key.as_ptr(), *key_pointer);
-                assert_eq!(
-                    channel.variables[b"kept".as_slice()].as_ptr(),
-                    *value_pointer
-                );
-                assert!(Arc::ptr_eq(
-                    &channel.members[&sub.registration.peer.key],
-                    &sub.registration.peer
-                ));
-            }
-        }
-        // The two inspection interfaces intentionally sort by different keys:
-        // raw channel bytes on CBOR, base64 text on the management listener.
-        relay
-            .receive(&source.registration.peer, protocol::request(2, &[0xf6]))
-            .unwrap();
-        assert_eq!(source.outgoing.try_recv().unwrap().frame.to_vec(), expected);
-        assert_eq!(
-            serde_json::to_value(relay.channels()).unwrap(),
-            serde_json::json!([
-                {"name":null,"name_base64":"/wA=","members":1,"variables":1,"variable_bytes":6},
-                {"name":"kept","name_base64":"a2VwdA==","members":1,"variables":1,"variable_bytes":6},
-                {"name":"re_globl","name_base64":"cmVfZ2xvYmw=","members":1,"variables":1,"variable_bytes":6}
-            ])
-        );
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 18);
-        drop(global);
-        drop(source);
-        drop(target);
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 6);
-        let mut rejoined = relay.subscribe(b"kept").unwrap();
-        rejoined.outgoing.try_recv().unwrap();
-        relay
-            .receive(
-                &rejoined.registration.peer,
-                protocol::request(5, b"\x44kept"),
-            )
-            .unwrap();
-        assert_eq!(
-            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),
-            b"\x82\x00\x82\x18\xc8\x82\xf4\xf6"
-        );
-        drop(rejoined);
-        let mut rejoined = relay.subscribe(GLOBAL_CHANNEL).unwrap();
-        rejoined.outgoing.try_recv().unwrap();
-        relay
-            .receive(
-                &rejoined.registration.peer,
-                protocol::request(5, b"\x44kept"),
-            )
-            .unwrap();
-        assert_eq!(
-            rejoined.outgoing.try_recv().unwrap().frame.to_vec(),
-            b"\x82\x00\x82\x18\xc8\x82\xf5\x18\x2a"
-        );
-        drop(rejoined);
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(held.frame.payload().as_ptr(), pointer);
-        assert_eq!(held.frame.payload(), value.as_ref());
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-        drop(held);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn channel_snapshots_own_metadata_and_leave_the_registry_writable() {
-        let relay = Relay::new(config()).unwrap();
-        let name = b"\xff\0".as_slice();
-        let mut source = relay.subscribe(name).unwrap();
-        let mut target = relay.subscribe(name).unwrap();
-        source.outgoing.try_recv().unwrap();
-        target.outgoing.try_recv().unwrap();
-        relay
-            .receive(
-                &source.registration.peer,
-                protocol::request(4, b"\x82\x45ready\xf5"),
-            )
-            .unwrap();
-        source.outgoing.try_recv().unwrap();
-        let name_pointer = relay
-            .state
-            .read()
-            .channels
-            .get_key_value(name)
-            .unwrap()
-            .0
-            .as_ptr();
-        let peer = Arc::downgrade(&source.registration.peer);
-        let value = protocol::byte_string(&[0x5a; 8192]);
-        let input = protocol::envelope(target.registration.peer.id.load(Relaxed), &value);
-        let body_pointer = protocol::parse(&input).unwrap().1.as_ptr();
-        relay.receive(&source.registration.peer, input).unwrap();
-        let held = target.outgoing.try_recv().unwrap();
-
-        let snapshot = relay.channel_snapshot();
-        assert!(
-            relay.state.try_write().is_some(),
-            "snapshot retained the guard"
-        );
-        let captured = snapshot.iter().find(|c| c.name.as_bytes() == name).unwrap();
-        assert_ne!(captured.name.as_bytes().as_ptr(), name_pointer);
-        let members = relay.channel_members_snapshot();
-        assert!(relay.state.try_write().is_some());
-        assert_eq!(
-            members.iter().find(|c| c.0.as_bytes() == name).unwrap().1,
-            2
-        );
-        assert_eq!(
-            (
-                captured.members,
-                captured.variables,
-                captured.variable_bytes
-            ),
-            (2, 1, 6)
-        );
-        let mut joined = relay.subscribe(name).unwrap();
-        joined.outgoing.try_recv().unwrap();
-        relay
-            .receive(
-                &joined.registration.peer,
-                protocol::request(4, b"\x82\x45ready\x18\x2a"),
-            )
-            .unwrap();
-        joined.outgoing.try_recv().unwrap();
-        assert_eq!(
-            relay
-                .channels()
-                .iter()
-                .find(|c| c.name.is_none())
-                .unwrap()
-                .members,
-            3
-        );
-        assert_eq!(
-            (
-                captured.members,
-                captured.variables,
-                captured.variable_bytes
-            ),
-            (2, 1, 6)
-        );
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 7);
-        drop(source);
-        drop(target);
-        drop(joined);
-        assert!(peer.upgrade().is_none(), "snapshot retained a peer");
-        assert_eq!(relay.counts(), (0, 1));
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
-        assert_eq!(captured.name.as_bytes(), name);
-        assert_eq!(
-            members.iter().find(|c| c.0.as_bytes() == name).unwrap().1,
-            2
-        );
-        assert_eq!(captured.members, 2);
-        assert_eq!(held.frame.payload().as_ptr(), body_pointer);
-        assert_eq!(held.frame.payload(), value.as_ref());
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
-        drop(held);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn global_queue_pressure_refuses_producer_without_closing_unrelated_recipient() {
-        let relay = Relay::new(Config {
-            max_message_bytes: 32,
-            queue_bytes: 64,
-            total_queue_bytes: 64,
-            ..config()
-        })
-        .unwrap();
-        let mut sender = relay.subscribe(b"a").unwrap();
-        let mut busy = relay.subscribe(b"b").unwrap();
-        let mut empty = relay.subscribe(b"c").unwrap();
-        sender.outgoing.try_recv().unwrap();
-        busy.outgoing.try_recv().unwrap();
-        empty.outgoing.try_recv().unwrap();
-        let payload = protocol::byte_string(&[0; 20]);
-        let busy_id = busy.registration.peer.id.load(Relaxed);
-        let empty_id = empty.registration.peer.id.load(Relaxed);
-        for _ in 0..2 {
-            relay
-                .receive(
-                    &sender.registration.peer,
-                    protocol::envelope(busy_id, &payload),
-                )
-                .unwrap();
-        }
-        assert_eq!(
-            relay.receive(
-                &sender.registration.peer,
-                protocol::envelope(empty_id, &payload)
-            ),
-            Err(Disconnect::OVERLOADED)
-        );
-        assert!(!empty.registration.peer.closing.load(Relaxed));
-        assert!(!busy.registration.peer.closing.load(Relaxed));
-        assert!(relay.metrics.queued_bytes.load(Relaxed) <= 64);
-        drop(sender);
-        drop(busy);
-        drop(empty);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn global_variable_budget_is_released_by_channel_cleanup() {
-        let relay = Relay::new(Config {
-            max_variable_bytes: 16,
-            total_variable_bytes: 16,
-            ..config()
-        })
-        .unwrap();
-        let first = relay.subscribe(b"first").unwrap();
-        let second = relay.subscribe(b"second").unwrap();
-        let mut e = Encoder::new(Vec::new());
-        e.array(2)
-            .unwrap()
-            .str("x")
-            .unwrap()
-            .bytes(&[0; 8])
-            .unwrap();
-        let request = protocol::request(4, &e.into_writer());
-        relay
-            .receive(&first.registration.peer, request.clone())
-            .unwrap();
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 10);
-        assert_eq!(
-            relay.receive(&second.registration.peer, request.clone()),
-            Err(Disconnect::OVERLOADED)
-        );
-        drop(first);
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
-        relay.receive(&second.registration.peer, request).unwrap();
-        drop(second);
-        assert_eq!(relay.metrics.variable_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn synchronous_submission_borrows_owners_and_releases_charged_bytes() {
-        struct BorrowProbe;
-        impl PeerOutput for BorrowProbe {
-            fn send(&self, packet: Submission<'_>) -> bool {
-                let budget = packet.budget.expect("charged submission");
-                assert_eq!(
-                    Arc::strong_count(budget),
-                    1,
-                    "synchronous budget was cloned"
-                );
-                assert_eq!(budget.used.load(Relaxed), packet.frame.len());
-                assert_eq!(
-                    budget.metrics.queued_bytes.load(Relaxed),
-                    packet.frame.len()
-                );
-                if !packet.frame.payload().is_empty() {
-                    assert!(
-                        packet.frame.has_unique_payload(),
-                        "synchronous body was cloned"
-                    );
-                }
-                true
-            }
-            fn close(&self, _: Disconnect) {}
-        }
-        let relay = Relay::new(config()).unwrap();
-        let registration = relay
-            .subscribe_with_output(b"borrow", Arc::new(BorrowProbe))
-            .unwrap();
-        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
-        registration.peer.enqueue_frame(&frame).unwrap();
-        assert!(frame.has_unique_payload());
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    }
-
-    #[test]
-    fn deferred_submission_promotes_same_body_and_holds_reservation_through_retirement() {
-        let relay = Relay::new(config()).unwrap();
-        let mut subscription = relay.subscribe(b"defer").unwrap();
-        drop(subscription.outgoing.try_recv().unwrap());
-        let frame = Frame::envelope(1, Bytes::from(vec![0; 64]));
-        let pointer = frame.payload().as_ptr();
-        subscription
-            .registration
-            .peer
-            .enqueue_frame(&frame)
-            .unwrap();
-        let held = subscription.outgoing.try_recv().unwrap();
-        assert_eq!(held.frame.payload().as_ptr(), pointer);
-        assert_eq!(Arc::strong_count(&held.budget), 2);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
-        drop(subscription);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), frame.len());
-        drop(held);
-        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-        assert!(frame.has_unique_payload());
-    }
-}
+mod tests;
 
 #[cfg(test)]
 mod continuation_tests;

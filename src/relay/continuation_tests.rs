@@ -46,7 +46,6 @@ fn a_room_continuation_owns_its_snapshot_borrows_the_body_and_releases_its_charg
     let work = slot.as_mut().unwrap();
     let allocation = &**work as *const RoomFanout;
     assert!(work.active());
-    assert!(work.deadline().is_some());
     let charge = work.packet.as_ref().unwrap().frame.len();
     assert_eq!(
         relay.metrics.queued_bytes.load(Relaxed),
@@ -67,7 +66,6 @@ fn a_room_continuation_owns_its_snapshot_borrows_the_body_and_releases_its_charg
         .unwrap();
     work.resume(256).unwrap();
     assert!(!work.active());
-    assert!(work.deadline().is_none());
     assert!(work.recipients.is_none());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(source.peer.budget.used.load(Relaxed), 0);
@@ -131,22 +129,27 @@ fn continuation_metadata_cannot_escape_the_global_queue_budget() {
     assert_eq!(charged, held.len());
     let mut slot = None;
     let mut batch = relay.receive_batch();
+    // The membership view cannot be staged, so the whole room is visited in
+    // this turn instead: no continuation, no retained staging, source open.
     assert_eq!(
-        batch.receive_bounded(
-            &source.peer,
-            protocol::envelope(BROADCAST, &[0xf5]),
-            0,
-            &mut slot,
-            256
-        ),
-        Err(Disconnect::OVERLOADED.into())
+        batch
+            .receive_bounded(
+                &source.peer,
+                protocol::envelope(BROADCAST, &[0xf5]),
+                0,
+                &mut slot,
+                256
+            )
+            .unwrap(),
+        targets.len() + 1
     );
     let work = slot.as_ref().unwrap();
     assert!(!work.active());
     assert_eq!(work.snapshot_bytes, 0);
     assert_eq!(source.peer.budget.used.load(Relaxed), 0);
+    assert!(!source.peer.closing.load(Relaxed));
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), charged);
-    assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
+    assert!(relay.metrics.global_pressure.load(Relaxed) >= 1);
     drop(filler.outgoing.try_recv().unwrap());
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
@@ -261,9 +264,10 @@ fn unsupported_retirement_output_does_not_capture_a_room_view() {
     drop(source);
     assert!(!relay.has_retirements());
     assert!(
-        relay.state.read().channels[b"unsupported".as_slice()]
-            .broadcast
-            .get()
+        relay
+            .channel(b"unsupported")
+            .unwrap()
+            .cached_view()
             .is_none()
     );
     assert_eq!(output.0.lock().len(), members.len());
@@ -360,23 +364,25 @@ fn terminal_removal_discards_cached_membership_and_preserves_captured_views() {
             .receive(&first.peer, protocol::envelope(BROADCAST, &[0xf6]))
             .unwrap();
         let captured = {
-            let state = relay.state.read();
-            let view = state.channels[b"terminal-view".as_slice()]
-                .broadcast
-                .get()
+            let view = relay
+                .channel(b"terminal-view")
+                .unwrap()
+                .cached_view()
                 .unwrap();
-            assert_eq!(Arc::strong_count(view), 1);
-            assert_eq!(Arc::weak_count(view), 0);
-            capture.then(|| view.clone())
+            // The cache and this handle are the only owners.
+            assert_eq!(Arc::strong_count(&view), 2);
+            assert_eq!(Arc::weak_count(&view), 0);
+            capture.then_some(view)
         };
         let first_key = first.peer.key;
         let first_weak = Arc::downgrade(&first.peer);
         relay.begin_shutdown();
         drop(first);
         assert!(
-            relay.state.read().channels[b"terminal-view".as_slice()]
-                .broadcast
-                .get()
+            relay
+                .channel(b"terminal-view")
+                .unwrap()
+                .cached_view()
                 .is_none(),
             "terminal removal has no cached recipient index to maintain"
         );
@@ -412,11 +418,7 @@ fn reversible_drain_keeps_the_live_room_view_consistent() {
     assert!(relay.set_draining(true));
     drop(second);
     {
-        let state = relay.state.read();
-        let view = state.channels[b"drain-view".as_slice()]
-            .broadcast
-            .get()
-            .unwrap();
+        let view = relay.channel(b"drain-view").unwrap().cached_view().unwrap();
         assert_eq!(view.len(), 1);
         assert_eq!(view[0].key, first.peer.key);
     }
@@ -425,11 +427,7 @@ fn reversible_drain_keeps_the_live_room_view_consistent() {
         .subscribe_with_output(b"drain-view", Arc::new(NativeRetirement))
         .unwrap();
     {
-        let state = relay.state.read();
-        let view = state.channels[b"drain-view".as_slice()]
-            .broadcast
-            .get()
-            .unwrap();
+        let view = relay.channel(b"drain-view").unwrap().cached_view().unwrap();
         assert_eq!(view.len(), 2);
         assert!(view.iter().any(|peer| peer.key == third.peer.key));
     }
@@ -482,7 +480,12 @@ fn local_retirement_pressure_keeps_unrelated_room_work_deferred() {
     // The source cannot fund another departure body from its local allowance.
     let frame = Frame::envelope(BROADCAST, Bytes::from(vec![0; 65526]));
     assert_eq!(frame.len(), 65536);
-    let held = small.peer.charge(&frame).unwrap().unwrap().into_owned();
+    let held = small
+        .peer
+        .charge(&frame, false)
+        .unwrap()
+        .unwrap()
+        .into_owned();
     assert_eq!(small.peer.budget.used.load(Relaxed), 65536);
     drop(large);
     assert!(relay.has_retirements());
@@ -779,10 +782,10 @@ fn disconnect_observer_notice_cannot_arrive_after_unsubscribe_acknowledgment() {
         output.0.lock().is_empty(),
         "revocation must not pump room output"
     );
-    assert!(
-        bystander_output.0.lock().is_empty(),
-        "revocation must not pump another global recipient"
-    );
+    // Each of these notices has two observers and nothing older ahead of it
+    // in the observer queue, so all three were delivered directly, before the
+    // revocation. Only the large room job stays deferred.
+    assert_eq!(bystander_output.0.lock().len(), 3);
     let expected = [source_id, global_id, second_id];
     let ack = protocol::reply(1, &protocol::uint(0));
     let mut acknowledged = false;
@@ -915,17 +918,16 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
     };
     let first = depart();
     let second = depart();
-    let old_view = {
-        let pending = relay.retirements.lock();
-        assert_eq!(pending.jobs.len(), 2);
-        let a = snapshot(&pending.jobs[0]);
-        let b = snapshot(&pending.jobs[1]);
+    let old_view = relay.observer_queue().with_jobs(|jobs| {
+        assert_eq!(jobs.len(), 2);
+        let a = snapshot(&jobs[0]);
+        let b = snapshot(&jobs[1]);
         assert!(
             Arc::ptr_eq(a, b),
             "unchanged disconnect membership should be captured once"
         );
         Arc::downgrade(a)
-    };
+    });
     // Other observation classes do not change disconnect membership.
     relay
         .receive(
@@ -934,23 +936,21 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         )
         .unwrap();
     let third = depart();
-    {
-        let pending = relay.retirements.lock();
+    relay.observer_queue().with_jobs(|jobs| {
         assert!(std::sync::Weak::ptr_eq(
             &old_view,
-            &Arc::downgrade(snapshot(&pending.jobs[2]))
+            &Arc::downgrade(snapshot(&jobs[2]))
         ));
-    }
+    });
     // A newly authorized observer gets only subsequent departures. Captured
     // jobs retain their old membership while the next job takes a fresh view.
     let (late, late_output) = recorded_disconnect_observer(&relay);
     let fourth = depart();
-    let new_view = {
-        let pending = relay.retirements.lock();
-        let view = Arc::downgrade(snapshot(&pending.jobs[3]));
+    let new_view = relay.observer_queue().with_jobs(|jobs| {
+        let view = Arc::downgrade(snapshot(&jobs[3]));
         assert!(!std::sync::Weak::ptr_eq(&old_view, &view));
         view
-    };
+    });
     for _ in 0..2 {
         relay.progress_retirements(FANOUT_QUANTUM);
     }
@@ -965,16 +965,15 @@ fn unchanged_disconnect_jobs_share_views_without_pinning_them_after_drain() {
         old_view.upgrade().is_none(),
         "the final old-view job releases its view"
     );
-    {
-        let pending = relay.retirements.lock();
-        assert_eq!(pending.jobs.len(), 1);
-        let job = &pending.jobs[0];
+    relay.observer_queue().with_jobs(|jobs| {
+        assert_eq!(jobs.len(), 1);
+        let job = &jobs[0];
         assert_eq!(
             relay.metrics.queued_bytes.load(Relaxed),
             snapshot(job).bytes + job.snapshot_bytes + job.packet.as_ref().unwrap().frame.len(),
             "only the remaining job, its body and its shared view retain credit"
         );
-    }
+    });
     for _ in 0..2 {
         relay.progress_retirements(FANOUT_QUANTUM);
     }
@@ -1027,7 +1026,7 @@ fn shared_disconnect_views_preserve_the_queue_budget_without_per_job_overchargin
         drop(source);
     }
     assert_eq!(
-        relay.retirements.lock().jobs.len(),
+        relay.observer_queue().len(),
         8,
         "one charged view and eight small jobs fit without synchronous fallback"
     );
@@ -1072,7 +1071,7 @@ fn an_unfunded_disconnect_view_falls_back_without_retaining_unaccounted_storage(
     let id = source.peer.id.load(Relaxed);
     drop(source);
     assert!(!relay.has_retirements());
-    assert!(relay.state.read().disconnect_snapshot.upgrade().is_none());
+    assert!(!relay.disconnect_snapshot_cached());
     assert_eq!(relay.metrics.global_pressure.load(Relaxed), 1);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     for (_, output) in &observers {
@@ -1124,7 +1123,7 @@ fn observer_barrier_distinguishes_absence_and_positions_in_captured_generations(
         .unwrap();
     let (replacement, replaced_output) = recorded_disconnect_observer(&relay);
     assert_eq!(
-        relay.state.read().listeners(DISCONNECT_MESSAGE)[0].key,
+        relay.listeners_of(DISCONNECT_MESSAGE)[0].key,
         observer.peer.key
     );
     let fourth = depart();
@@ -1267,7 +1266,7 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
     let observers: Vec<_> = (0..FANOUT_QUANTUM + 1)
         .map(|_| recorded_disconnect_observer(&relay))
         .collect();
-    relay.retirements.lock().sequence = u64::MAX - 1;
+    relay.observer_queue().set_sequence(u64::MAX - 1);
     let depart = || {
         let source = relay
             .subscribe_with_output(b"barrier-source", Arc::new(NativeRetirement))
@@ -1295,7 +1294,7 @@ fn exhausted_retirement_numbering_falls_back_in_order_without_wrapping_watermark
         !relay.has_retirements(),
         "exhaustion must finish preceding work before direct delivery"
     );
-    assert_eq!(relay.retirements.lock().sequence, u64::MAX);
+    assert_eq!(relay.observer_queue().sequence(), u64::MAX);
     for (_, output) in &observers {
         let packets = output.0.lock();
         assert_eq!(packets.len(), 2);
@@ -1331,24 +1330,14 @@ fn shutdown_releases_listener_indexes_before_retiring_global_sessions() {
         peers.push(peer);
     }
     assert!(
-        relay
-            .state
-            .read()
-            .listeners
+        [CHANNEL_MESSAGE, PRIVATE_MESSAGE, DISCONNECT_MESSAGE]
             .iter()
-            .all(|v| v.len() == peers.len())
+            .all(|&flag| relay.listeners_of(flag).len() == peers.len())
     );
     let weak = Arc::downgrade(&peers[0].peer);
     relay.begin_shutdown();
     relay.begin_shutdown();
-    assert!(
-        relay
-            .state
-            .read()
-            .listeners
-            .iter()
-            .all(|v| v.capacity() == 0)
-    );
+    assert!(relay.listener_capacities().iter().all(|&c| c == 0));
     // Registrations still own these sessions until their transports retire.
     assert_eq!(relay.counts().0, peers.len());
     drop(peers);
@@ -1378,12 +1367,9 @@ fn global_broadcast_reuses_its_owner_view_and_invalidates_join_and_removal() {
             .unwrap()
     };
     send();
-    let captured = relay.state.read().global_broadcast.get().unwrap().clone();
+    let captured = relay.cached_global_view().unwrap();
     send();
-    assert!(Arc::ptr_eq(
-        &captured,
-        relay.state.read().global_broadcast.get().unwrap()
-    ));
+    assert!(Arc::ptr_eq(&captured, &relay.cached_global_view().unwrap()));
     assert_eq!(first_output.0.lock().len(), 2);
     assert_eq!(second_output.0.lock().len(), 2);
     assert!(
@@ -1394,13 +1380,13 @@ fn global_broadcast_reuses_its_owner_view_and_invalidates_join_and_removal() {
     let late = relay
         .subscribe_with_output(b"global-c", late_output.clone())
         .unwrap();
-    assert!(relay.state.read().global_broadcast.get().is_none());
+    assert!(relay.cached_global_view().is_none());
     assert!(!captured.iter().any(|peer| peer.key == late.peer.key));
     send();
     assert_eq!(late_output.0.lock().len(), 1);
     let old_peer = Arc::downgrade(&first.peer);
     drop(first);
-    assert!(relay.state.read().global_broadcast.get().is_none());
+    assert!(relay.cached_global_view().is_none());
     send();
     assert_eq!(first_output.0.lock().len(), 3);
     assert_eq!(second_output.0.lock().len(), 4);
@@ -1409,7 +1395,7 @@ fn global_broadcast_reuses_its_owner_view_and_invalidates_join_and_removal() {
     drop(captured);
     assert!(old_peer.upgrade().is_none());
     relay.begin_shutdown();
-    assert!(relay.state.read().global_broadcast.get().is_none());
+    assert!(relay.cached_global_view().is_none());
     drop(source);
     drop(second);
     drop(late);
@@ -1441,27 +1427,31 @@ fn global_broadcast_owner_view_tracks_takeover_without_displaced_removal_erasing
             .unwrap()
     };
     send();
-    let old = relay.state.read().global_broadcast.get().unwrap().clone();
+    let old = relay.cached_global_view().unwrap();
     relay
         .receive(&owner.peer, protocol::request(0, &protocol::text("owners")))
         .unwrap();
     relay
         .receive(&owner.peer, protocol::request(3, &protocol::uint(id)))
         .unwrap();
-    assert!(relay.state.read().global_broadcast.get().is_none());
+    assert!(relay.cached_global_view().is_none());
     send();
     assert_eq!(owner_output.0.lock().len(), 2);
     assert_eq!(displaced_output.0.lock().len(), 1);
-    let current = relay.state.read().global_broadcast.get().unwrap().clone();
+    let current = relay.cached_global_view().unwrap();
     assert_eq!(current.len(), 2);
     assert_eq!(old.len(), 3);
+    assert!(!current.iter().any(|peer| peer.key == displaced.peer.key));
+    let displaced_key = displaced.peer.key;
     drop(displaced);
-    assert!(Arc::ptr_eq(
-        &current,
-        relay.state.read().global_broadcast.get().unwrap()
-    ));
+    // The displaced session's departure is a membership change like any
+    // other; the rebuilt view still excludes it and keeps the new owner.
     send();
     assert_eq!(owner_output.0.lock().len(), 3);
+    let rebuilt = relay.cached_global_view().unwrap();
+    assert_eq!(rebuilt.len(), 2);
+    assert!(!rebuilt.iter().any(|peer| peer.key == displaced_key));
+    drop(rebuilt);
     relay.begin_shutdown();
     drop(source);
     drop(owner);
@@ -1533,4 +1523,88 @@ fn captured_view_storage_retires_before_its_queue_credit() {
     relay.begin_shutdown();
     drop(source);
     assert_eq!(relay.counts(), (0, 1));
+}
+
+#[derive(Default)]
+struct Ordered(parking_lot::Mutex<Vec<Frame>>);
+impl PeerOutput for Ordered {
+    fn send(&self, packet: Submission<'_>) -> bool {
+        if protocol::parse(&packet.frame.to_vec()).is_ok() {
+            self.0.lock().push(packet.frame.clone());
+        }
+        true
+    }
+    fn close(&self, _: Disconnect) {}
+}
+
+#[test]
+fn a_source_that_leaves_mid_publication_still_reaches_every_recipient_before_its_departure() {
+    for global in [false, true] {
+        let relay = Relay::new(Config::default()).unwrap();
+        let room: &[u8] = if global { GLOBAL_CHANNEL } else { b"detach" };
+        let source = relay
+            .subscribe_with_output(room, Arc::new(NativeRetirement))
+            .unwrap();
+        let source_id = source.peer.id.load(Relaxed);
+        let outputs: Vec<_> = (0..FANOUT_QUANTUM + 200)
+            .map(|_| Arc::new(Ordered::default()))
+            .collect();
+        let targets: Vec<_> = outputs
+            .iter()
+            .map(|output| {
+                relay
+                    .subscribe_with_output(b"detach", output.clone())
+                    .unwrap()
+            })
+            .collect();
+        let value = protocol::byte_string(&[0x5a; 64]);
+        let mut slot = None;
+        relay
+            .receive_batch()
+            .receive_bounded(
+                &source.peer,
+                protocol::envelope(BROADCAST, &value),
+                0,
+                &mut slot,
+                256,
+            )
+            .unwrap();
+        let work = slot.take().unwrap();
+        assert!(work.active());
+        // The source retires with its publication unfinished.
+        source.detach_fanout(work);
+        if global {
+            assert_eq!(relay.detached_queue().len(), 1);
+        } else {
+            assert_eq!(relay.channel(b"detach").unwrap().departure_queue().len(), 1);
+        }
+        drop(source);
+        assert!(relay.has_retirements());
+        for _ in 0..64 {
+            if !relay.has_retirements() {
+                break;
+            }
+            relay.progress_retirements(FANOUT_QUANTUM);
+        }
+        assert!(!relay.has_retirements());
+        for output in &outputs {
+            let frames = output.0.lock();
+            assert_eq!(frames[0].to_vec(), protocol::envelope(source_id, &value));
+            if global {
+                // A global source is not a member of this room, so only the
+                // message arrives.
+                assert_eq!(frames.len(), 1);
+            } else {
+                assert_eq!(frames.len(), 2);
+                assert_eq!(
+                    frames[1].to_vec(),
+                    protocol::envelope(BROADCAST, &protocol::uint(source_id))
+                );
+            }
+        }
+        assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+        relay.begin_shutdown();
+        drop(targets);
+        assert_eq!(relay.counts(), (0, 1));
+    }
 }

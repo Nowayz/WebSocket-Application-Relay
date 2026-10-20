@@ -11,7 +11,7 @@ impl PeerOutput for Probe {
         if packet.frame.payload().len() > 100 {
             let relay = self.relay.upgrade().unwrap();
             assert!(
-                relay.state.try_write().is_some(),
+                relay.registry_unlocked(),
                 "broadcast output must run after releasing the registry"
             );
             self.received.lock().replace(packet.into_owned());
@@ -59,11 +59,7 @@ fn membership_changes_invalidate_views_without_changing_captured_owners() {
     let pointer = protocol::parse(&input).unwrap().1.as_ptr();
     relay.receive(&source.registration.peer, input).unwrap();
     let held = target.outgoing.try_recv().unwrap();
-    let original = relay.state.read().channels[b"view".as_slice()]
-        .broadcast
-        .get()
-        .unwrap()
-        .clone();
+    let original = relay.channel(b"view").unwrap().cached_view().unwrap();
     relay
         .receive(
             &source.registration.peer,
@@ -73,19 +69,11 @@ fn membership_changes_invalidate_views_without_changing_captured_owners() {
     drop(target.outgoing.try_recv().unwrap());
     assert!(Arc::ptr_eq(
         &original,
-        relay.state.read().channels[b"view".as_slice()]
-            .broadcast
-            .get()
-            .unwrap()
+        &relay.channel(b"view").unwrap().cached_view().unwrap()
     ));
     let mut late = relay.subscribe(b"view").unwrap();
     late.outgoing.try_recv().unwrap();
-    assert!(
-        relay.state.read().channels[b"view".as_slice()]
-            .broadcast
-            .get()
-            .is_none()
-    );
+    assert!(relay.channel(b"view").unwrap().cached_view().is_none());
     relay
         .receive(
             &source.registration.peer,
@@ -94,22 +82,13 @@ fn membership_changes_invalidate_views_without_changing_captured_owners() {
         .unwrap();
     drop(target.outgoing.try_recv().unwrap());
     drop(late.outgoing.try_recv().unwrap());
-    let replacement = relay.state.read().channels[b"view".as_slice()]
-        .broadcast
-        .get()
-        .unwrap()
-        .clone();
+    let replacement = relay.channel(b"view").unwrap().cached_view().unwrap();
     assert!(!Arc::ptr_eq(&original, &replacement));
     assert_eq!(original.len(), 2);
     assert_eq!(replacement.len(), 3);
     let removed = Arc::downgrade(&target.registration.peer);
     drop(target);
-    assert!(
-        relay.state.read().channels[b"view".as_slice()]
-            .broadcast
-            .get()
-            .is_none()
-    );
+    assert!(relay.channel(b"view").unwrap().cached_view().is_none());
     assert!(
         removed.upgrade().is_some(),
         "captured views must keep their owners"
@@ -142,19 +121,16 @@ fn uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners() {
         )
         .unwrap();
     let held = target.outgoing.try_recv().unwrap();
-    let view = {
-        let state = relay.state.read();
-        Arc::as_ptr(state.channels[b"reuse".as_slice()].broadcast.get().unwrap())
-    };
+    let view = Arc::as_ptr(&relay.channel(b"reuse").unwrap().cached_view().unwrap());
     let mut late = relay.subscribe(b"reuse").unwrap();
     late.outgoing.try_recv().unwrap();
     {
-        let state = relay.state.read();
-        let current = state.channels[b"reuse".as_slice()]
-            .broadcast
-            .get()
+        let current = relay
+            .channel(b"reuse")
+            .unwrap()
+            .cached_view()
             .expect("an uncaptured view must survive a membership update");
-        assert_eq!(Arc::as_ptr(current), view);
+        assert_eq!(Arc::as_ptr(&current), view);
         assert_eq!(current.len(), 3);
     }
     relay
@@ -172,9 +148,8 @@ fn uncaptured_membership_updates_reuse_metadata_and_retire_departed_owners() {
         "the cache must retire a departed peer"
     );
     {
-        let state = relay.state.read();
-        let current = state.channels[b"reuse".as_slice()].broadcast.get().unwrap();
-        assert_eq!(Arc::as_ptr(current), view);
+        let current = relay.channel(b"reuse").unwrap().cached_view().unwrap();
+        assert_eq!(Arc::as_ptr(&current), view);
         assert_eq!(current.len(), 2);
     }
     assert_eq!(held.frame.payload(), &[7]);
@@ -208,23 +183,20 @@ fn a_retained_room_releases_sparse_recipient_capacity_after_a_membership_wave() 
         .receive(&source.peer, protocol::envelope(BROADCAST, &[7]))
         .unwrap();
     let late = relay.subscribe_with_output(b"capacity", output).unwrap();
-    let peak = relay.state.read().channels[b"capacity".as_slice()]
-        .broadcast
-        .get()
+    let peak = relay
+        .channel(b"capacity")
+        .unwrap()
+        .cached_view()
         .expect("a unique view must grow in place")
         .capacity();
     drop(late);
     while peers.len() > 1 {
         peers.pop();
     }
-    let state = relay.state.read();
-    let current = state.channels[b"capacity".as_slice()]
-        .broadcast
-        .get()
-        .unwrap();
+    let current = relay.channel(b"capacity").unwrap().cached_view().unwrap();
     assert_eq!(current.len(), 2);
     assert!(current.capacity() <= 256 && current.capacity() < peak);
-    drop(state);
+    drop(current);
     drop((source, peers));
     assert_eq!(relay.counts(), (0, 1));
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
