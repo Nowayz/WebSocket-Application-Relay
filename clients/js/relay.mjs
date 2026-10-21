@@ -75,6 +75,7 @@ export class Relay extends EventTarget {
     this.userId = wireId(userId, true);
     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
     const message = event => {
+      if (ws.readyState === 2) return;
       try {
         const envelope = decodeMessage(event.data);
         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
@@ -126,7 +127,7 @@ export class Relay extends EventTarget {
     // Capture the channel before asynchronous socket setup lets its owner reuse it.
     const subscription = encode(channel);
     const LegacySocket = WebSocketClass ?? (/^wss?:/.test(String(url)) ? globalThis.WebSocket : undefined);
-    const ws = LegacySocket ? new LegacySocket(url, 'war.cbor.v1') : new WebTransportChannel(url, transportOptions);
+    const ws = LegacySocket ? new LegacySocket(url, 'war.cbor.v1') : new WebTransportChannel(url, { closeTimeoutMs: requestTimeoutMs, ...transportOptions });
     ws.binaryType = 'arraybuffer';
     return new Promise((resolve, reject) => {
       const cleanup = () => {

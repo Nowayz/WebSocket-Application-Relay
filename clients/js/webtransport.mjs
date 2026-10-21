@@ -6,8 +6,12 @@ export class WebTransportChannel extends EventTarget {
   #datagrams;
   #writes = Promise.resolve();
   #closed = false;
-  constructor(url, { WebTransportClass = globalThis.WebTransport, ...options } = {}) {
+  #closing;
+  #closeTimer;
+  #closeTimeoutMs;
+  constructor(url, { WebTransportClass = globalThis.WebTransport, closeTimeoutMs = 10_000, ...options } = {}) {
     super();
+    this.#closeTimeoutMs = closeTimeoutMs;
     if (!WebTransportClass) throw new Error('WebTransport is unavailable');
     this.transport = new WebTransportClass(url, options);
     this.transport.closed.then(info => this.#finish(info.closeCode ?? 0, info.reason ?? ''), error => this.#fail(error));
@@ -43,7 +47,11 @@ export class WebTransportChannel extends EventTarget {
             headerBytes += count; offset += count;
             if (headerBytes !== 4) continue;
             size = new DataView(header.buffer).getUint32(0);
-            if (size === 0) throw new Error('Empty relay record');
+            if (size === 0) {
+              if (!this.#closing) throw new Error('Unexpected close acknowledgement');
+              this.transport.close(this.#closing);
+              return;
+            }
             // Grow only as bytes arrive, never allocate an untrusted announced size.
             body = new Uint8Array(Math.min(size, 4096)); used = 0;
           }
@@ -92,15 +100,26 @@ export class WebTransportChannel extends EventTarget {
     // Own encoder storage before waiting for congestion-control backpressure.
     const packet = Uint8Array.from(bytes);
     await this.#datagrams.ready;
+    if (this.readyState !== 1) throw new Error('Relay transport is closed');
     await this.#datagrams.write(packet);
   }
   close(code = 0, reason = '') {
-    if (this.#closed) return;
+    if (this.#closed || (this.#closing && code === 1000)) return;
+    const wasReady = this.readyState === 1;
     this.readyState = 2;
-    this.transport.close({ closeCode: code, reason });
+    if (code !== 1000 || !wasReady) {
+      this.transport.close({ closeCode: code, reason });
+      return;
+    }
+    if (this.#closing) return;
+    this.#closing = { closeCode: code, reason };
+    this.#closeTimer = setTimeout(() => this.#fail(new Error('Graceful close timeout')), this.#closeTimeoutMs);
+    this.#writes = this.#writes.then(() => this.#writer.write(new Uint8Array(4)));
+    this.#writes.catch(error => this.#fail(error));
   }
   #finish(code, reason) {
     if (this.#closed) return;
+    clearTimeout(this.#closeTimer);
     this.#closed = true; this.readyState = 3;
     const event = new Event('close');
     Object.assign(event, { code, reason });

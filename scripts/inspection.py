@@ -4,6 +4,7 @@
 Build --release --bins --example inspection first. Phases are gated to separate
 population setup/teardown from the mixed workload. Profiles are diagnostic only.
 """
+import benchmark_transport
 import argparse
 import csv
 import datetime
@@ -151,7 +152,8 @@ def run(args):
                            "--tcp-send-buffer-bytes", "16384", "--tcp-receive-buffer-bytes", "65536"]
     if getattr(args, "pin_workers", False):
         server_command.append("--pin-workers")
-    command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}", "--admin", f"127.0.0.1:{admin}",
+    data_url = benchmark_transport.prepare(args, server_command, server_environment, port)
+    command = [str(args.client.resolve()), "--url", data_url, "--admin", f"127.0.0.1:{admin}",
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
                "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
@@ -192,12 +194,12 @@ def run(args):
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_root": str(source_root.resolve()),
               "client_source_attribution": "Source snapshot only; binary/source association requires the caller's build record.",
-              "client_source_sha256": digest(source_root / "examples/inspection.rs"), "runner_sha256": digest(__file__),
+              "client_source_sha256": digest(source_root / "examples/inspection.rs"), "runner_sha256": digest(__file__), "transport_runner_sha256": digest(ROOT / "scripts/benchmark_transport.py"),
               "client_sources_sha256": {str(p.relative_to(source_root)): digest(p) for p in
-                                       [source_root / "examples/inspection.rs"] + sorted((source_root / "examples/inspection").glob("*.rs"))},
+                                       [source_root / "examples/inspection.rs"] + sorted((source_root / "examples/inspection").glob("*.rs")) + sorted((source_root / "examples/support").glob("*.rs"))},
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
               "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "thread_affinity": [], "passed": False,
-              "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic private templates at args.private_payload_bytes (default 1 KiB) and 16-message windows; fanout remains 1 KiB; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback, no TLS, rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
+              "transport": getattr(args, "transport", "websocket"), "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic private templates at args.private_payload_bytes (default 1 KiB) and 16-message windows; fanout remains 1 KiB; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback; WebTransport uses pinned TLS, legacy WebSocket is plaintext. Rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
     if args.heap_profile:
         result["heap_profiler"] = {"library": str(args.heap_library.resolve()),
                                    "library_sha256": digest(args.heap_library),
@@ -221,6 +223,7 @@ def run(args):
                     if time.monotonic() - started > 5:
                         raise
                     time.sleep(.02)
+            command += benchmark_transport.certificate(args, logs)
             client = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=client_errors, text=True, env=environment)
             ready = None
@@ -342,6 +345,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--transport", choices=["webtransport", "websocket"], default="webtransport")
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
     parser.add_argument("--client-source-root", type=Path,

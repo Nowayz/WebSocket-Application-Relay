@@ -9,6 +9,8 @@ use tungstenite::protocol::ReadBudget;
 
 #[derive(Default)]
 pub struct Metrics {
+    pub webtransport_endpoint:
+        std::sync::OnceLock<Arc<wtransport::Endpoint<wtransport::endpoint::endpoint_side::Server>>>,
     pub datagrams_received: AtomicU64,
     pub datagrams_submitted: AtomicU64,
     pub datagram_bytes_submitted: AtomicU64,
@@ -84,6 +86,14 @@ impl Metrics {
         let mut text = String::with_capacity(8192);
         let budget = self.read_budget.as_deref();
         for (prefix, value) in [
+            sample!(
+                "quic_connections",
+                "gauge",
+                self.webtransport_endpoint
+                    .get()
+                    .map_or(0, |endpoint| endpoint.open_connections()) as u64,
+                "Open QUIC connections reported independently by the transport endpoint."
+            ),
             sample!(
                 "datagrams_received",
                 "counter",

@@ -21,11 +21,17 @@ export interface RelayEventMap {
   error: CustomEvent<unknown>;
 }
 
-/** Browser and Node 22+ client for war.cbor.v1. All received IDs are bigint. */
+export interface RelayTransport extends EventTarget {
+  readonly readyState: number;
+  send(bytes: Uint8Array): void;
+  close(code?: number, reason?: string): void;
+}
+
+/** WebTransport client; explicit ws URLs retain the legacy comparison path. */
 export class Relay extends EventTarget {
-  constructor(ws: WebSocket, userId: UserId, requestTimeoutMs?: number);
+  constructor(ws: RelayTransport, userId: UserId, requestTimeoutMs?: number);
   static connect(url: string | URL, channel: Channel, options?: RelayOptions): Promise<Relay>;
-  readonly ws: WebSocket;
+  readonly ws: RelayTransport;
   readonly userId: bigint;
   readonly ready: boolean;
   requestTimeoutMs: number;

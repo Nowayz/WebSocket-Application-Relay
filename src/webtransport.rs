@@ -29,6 +29,7 @@ struct Output {
     scratch: Mutex<Vec<u8>>,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
+    activity: Option<Arc<Mutex<Instant>>>,
 }
 impl Output {
     fn submit(&self, packet: Submission<'_>, queue: &mpsc::Sender<Envelope>) -> bool {
@@ -50,6 +51,9 @@ impl Output {
         scratch.extend_from_slice(frame.prefix());
         scratch.extend_from_slice(frame.payload());
         if self.connection.send_datagram(scratch.as_slice()).is_ok() {
+            if let Some(activity) = &self.activity {
+                *activity.lock() = Instant::now();
+            }
             self.relay.metrics.datagrams_submitted.fetch_add(1, Relaxed);
             self.relay
                 .metrics
@@ -97,7 +101,7 @@ async fn read_record_budgeted(
     let mut header = [0; 4];
     stream.read_exact(&mut header).await?;
     let size = u32::from_be_bytes(header) as usize;
-    anyhow::ensure!(size > 0 && size <= maximum, "invalid record length");
+    anyhow::ensure!(size <= maximum, "invalid record length");
     // Reserve the full announced record plus growth headroom before allocating.
     // The lease is released when immutable ownership passes to routing.
     let _lease = budget
@@ -133,6 +137,15 @@ pub async fn serve(
     relay: Arc<Relay>,
     shutdown: CancellationToken,
 ) -> Result<()> {
+    let endpoint = Arc::new(endpoint);
+    anyhow::ensure!(
+        relay
+            .metrics
+            .webtransport_endpoint
+            .set(endpoint.clone())
+            .is_ok(),
+        "relay already has a WebTransport endpoint"
+    );
     let mut sessions = JoinSet::new();
     let retirement = Arc::new(Notify::new());
     loop {
@@ -218,6 +231,8 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
             Ok::<_, anyhow::Error>(((send, receive), join))
         })
         .await??;
+    let activity =
+        (relay.config.idle_timeout_secs != 0).then(|| Arc::new(Mutex::new(Instant::now())));
     let (queue, mut outgoing) = mpsc::channel(relay.config.queue_messages);
     let output = Arc::new(Output {
         connection: connection.clone(),
@@ -225,6 +240,7 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
         scratch: Mutex::new(Vec::new()),
         relay: relay.clone(),
         retirement,
+        activity: activity.clone(),
     });
     let registration = relay
         .subscribe_with_output(
@@ -232,98 +248,162 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
             output,
         )
         .map_err(|e| anyhow::anyhow!(e.reason))?;
-    let limiter = Mutex::new(RateLimiter::new(
-        relay.config.messages_per_second,
-        relay.config.bytes_per_second,
-        Instant::now(),
-    ));
-    let route = async |bytes: Bytes, unreliable: bool| {
-        if !limiter.lock().allow(bytes.len(), Instant::now()) {
-            relay.metrics.rate_limited.fetch_add(1, Relaxed);
-            registration.peer.close(Disconnect::RATE);
-            return Err(anyhow::anyhow!("rate exceeded"));
-        }
-        let mut pending = Pending {
-            registration: &registration,
-            work: None,
-        };
-        let mut batch = relay.receive_batch();
-        let result = if unreliable {
-            batch.receive_datagram(&registration.peer, bytes, &mut pending.work, FANOUT_QUANTUM)
-        } else {
-            let size = bytes.len();
-            batch.receive_bounded(
-                &registration.peer,
-                bytes,
-                size,
-                &mut pending.work,
-                FANOUT_QUANTUM,
-            )
-        };
-        batch.publish();
-        drop(batch);
-        while let Some(work) = pending.work.as_mut().filter(|work| work.active()) {
-            tokio::task::yield_now().await;
-            work.resume(FANOUT_QUANTUM)
-                .map_err(|e| anyhow::anyhow!(e.reason))?;
-        }
-        result.map(|_| ()).map_err(|error| {
-            registration.peer.close(error.reason);
-            anyhow::anyhow!(error.reason.reason)
-        })
-    };
-    let reliable = async {
-        loop {
-            route(
-                read_record_budgeted(
-                    &mut receive,
-                    relay.config.max_message_bytes,
-                    relay.metrics.read_budget.as_ref(),
-                )
-                .await?,
-                false,
-            )
-            .await?;
-            tokio::task::yield_now().await;
-        }
-        #[allow(unreachable_code)]
-        Ok::<(), anyhow::Error>(())
-    };
-    let datagrams = async {
-        loop {
-            let bytes = connection.receive_datagram().await?.payload();
-            relay.metrics.datagrams_received.fetch_add(1, Relaxed);
-            if bytes.len() > relay.config.max_message_bytes {
-                registration.peer.close(Disconnect::PROTOCOL);
-                bail!("datagram exceeds message limit");
-            }
-            route(bytes, true).await?;
-            tokio::task::yield_now().await;
-        }
-        #[allow(unreachable_code)]
-        Ok::<(), anyhow::Error>(())
-    };
+    let finishing = CancellationToken::new();
     let writer = async {
-        while let Some(packet) = outgoing.recv().await {
+        loop {
+            let packet = if finishing.is_cancelled() {
+                outgoing.close();
+                outgoing.recv().await
+            } else {
+                tokio::select! {
+                    packet = outgoing.recv() => packet,
+                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv().await }
+                }
+            };
+            let Some(packet) = packet else {
+                break;
+            };
             tokio::time::timeout(
                 Duration::from_secs(relay.config.write_timeout_secs),
                 write_frame(&mut send, &packet.frame),
             )
-            .await??;
+            .await
+            .inspect_err(|_| {
+                relay.metrics.write_timeouts.fetch_add(1, Relaxed);
+            })?
+            .inspect_err(|_| {
+                relay.metrics.write_errors.fetch_add(1, Relaxed);
+            })?;
+            if let Some(activity) = &activity {
+                *activity.lock() = Instant::now();
+            }
             relay.metrics.deliveries.fetch_add(1, Relaxed);
             relay
                 .metrics
                 .delivered_bytes
                 .fetch_add(packet.frame.len() as u64, Relaxed);
         }
+        if finishing.is_cancelled() {
+            write_record(&mut send, &[]).await?;
+        }
         Ok::<(), anyhow::Error>(())
     };
-    tokio::select! {
-        result = reliable => result,
-        result = datagrams => result,
-        result = writer => result,
-        _ = connection.closed() => Ok(()),
+    tokio::pin!(writer);
+    let result = {
+        let limiter = Mutex::new(RateLimiter::new(
+            relay.config.messages_per_second,
+            relay.config.bytes_per_second,
+            Instant::now(),
+        ));
+        let route = async |bytes: Bytes, unreliable: bool| {
+            if let Some(activity) = &activity {
+                *activity.lock() = Instant::now();
+            }
+            if !limiter.lock().allow(bytes.len(), Instant::now()) {
+                relay.metrics.rate_limited.fetch_add(1, Relaxed);
+                registration.peer.close(Disconnect::RATE);
+                return Err(anyhow::anyhow!("rate exceeded"));
+            }
+            let mut pending = Pending {
+                registration: &registration,
+                work: None,
+            };
+            let mut batch = relay.receive_batch();
+            let result = if unreliable {
+                batch.receive_datagram(&registration.peer, bytes, &mut pending.work, FANOUT_QUANTUM)
+            } else {
+                let size = bytes.len();
+                batch.receive_bounded(
+                    &registration.peer,
+                    bytes,
+                    size,
+                    &mut pending.work,
+                    FANOUT_QUANTUM,
+                )
+            };
+            batch.publish();
+            drop(batch);
+            while let Some(work) = pending.work.as_mut().filter(|work| work.active()) {
+                tokio::task::yield_now().await;
+                work.resume(FANOUT_QUANTUM)
+                    .map_err(|e| anyhow::anyhow!(e.reason))?;
+            }
+            result.map(|_| ()).map_err(|error| {
+                registration.peer.close(error.reason);
+                anyhow::anyhow!(error.reason.reason)
+            })
+        };
+        let reliable = async {
+            loop {
+                let bytes = read_record_budgeted(
+                    &mut receive,
+                    relay.config.max_message_bytes,
+                    relay.metrics.read_budget.as_ref(),
+                )
+                .await?;
+                if bytes.is_empty() {
+                    return Ok::<_, anyhow::Error>(());
+                }
+                route(bytes, false).await?;
+                tokio::task::yield_now().await;
+            }
+        };
+        let datagrams = async {
+            loop {
+                let bytes = connection.receive_datagram().await?.payload();
+                relay.metrics.datagrams_received.fetch_add(1, Relaxed);
+                if bytes.len() > relay.config.max_message_bytes {
+                    registration.peer.close(Disconnect::PROTOCOL);
+                    bail!("datagram exceeds message limit");
+                }
+                route(bytes, true).await?;
+                tokio::task::yield_now().await;
+            }
+            #[allow(unreachable_code)]
+            Ok::<(), anyhow::Error>(())
+        };
+        let idle = async {
+            let Some(activity) = &activity else {
+                return std::future::pending::<Result<()>>().await;
+            };
+            let duration = Duration::from_secs(relay.config.idle_timeout_secs);
+            loop {
+                let deadline = *activity.lock() + duration;
+                tokio::time::sleep_until(deadline.into()).await;
+                if activity.lock().elapsed() >= duration {
+                    relay.metrics.idle_timeouts.fetch_add(1, Relaxed);
+                    registration.peer.close(Disconnect::IDLE);
+                    return Ok(());
+                }
+            }
+        };
+        tokio::select! {
+            result = idle => result.map(|_| false),
+            result = reliable => result.map(|_| true),
+            result = datagrams => result.map(|_| false),
+            result = &mut writer => result.map(|_| false),
+            _ = connection.closed() => Ok(false),
+        }
+    };
+    // Routing futures are gone before registration: cancelled publications have
+    // transferred their continuation to retirement, and no later input is admitted.
+    drop(registration);
+    if result? {
+        finishing.cancel();
+        tokio::time::timeout(
+            Duration::from_secs(relay.config.write_timeout_secs),
+            &mut writer,
+        )
+        .await??;
+        // Keep the ACK deliverable until the client closes QUIC, or a bounded deadline.
+        let _ = tokio::time::timeout(
+            Duration::from_secs(relay.config.write_timeout_secs),
+            connection.closed(),
+        )
+        .await;
+        connection.close(VarInt::from_u32(1000), b"Graceful close complete");
     }
+    Ok(())
 }
 
 // Preserve an already accepted publication when any session future is cancelled.

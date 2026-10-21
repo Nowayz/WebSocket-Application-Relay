@@ -5,6 +5,7 @@ Build --release --bins --example capacity. Runs one fresh server at a time.
 The source-IP pool avoids the single-client ephemeral-port ceiling. No sysctls
 or machine-wide descriptor limits are changed. Gate scans are outside traffic.
 """
+import benchmark_transport
 import argparse
 import datetime
 import errno
@@ -188,7 +189,8 @@ def run(args):
         server_command += ["--tcp-send-buffer-bytes", str(args.tcp_send_buffer_bytes)]
     if args.tcp_receive_buffer_bytes:
         server_command += ["--tcp-receive-buffer-bytes", str(args.tcp_receive_buffer_bytes)]
-    client_command = [str(args.client.resolve()), "--url", f"ws://127.0.0.1:{port}"]
+    data_url = benchmark_transport.prepare(args, server_command, server_environment, port)
+    client_command = [str(args.client.resolve()), "--url", data_url]
     for name in ("users", "room_size", "concurrency", "source_addresses", "seconds",
                  "payload_bytes", "active_percent", "client_workers", "messages_per_second", "churn_workers", "waves"):
         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
@@ -205,14 +207,14 @@ def run(args):
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_sha256": digest(ROOT / "examples/capacity.rs"), "runner_sha256": digest(__file__),
               "runner_sources_sha256": {name: digest(ROOT / name) for name in
-                  ("scripts/capacity.py", "scripts/capacity_pressure.py", "scripts/benchmark.py")},
+                  ("scripts/capacity.py", "scripts/capacity_pressure.py", "scripts/benchmark.py", "scripts/benchmark_transport.py", "examples/support/socket.rs")},
               "source_attribution": "Source snapshot; binary association requires the accompanying build record.",
               "fd_limit": resource.getrlimit(resource.RLIMIT_NOFILE),
               "ephemeral_ports": Path("/proc/sys/net/ipv4/ip_local_port_range").read_text().strip(),
               "profile_diagnostic": args.profile,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
-              "scope": "Loopback, no TLS. Real TCP/WebSocket/CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
+              "scope": "Loopback. WebTransport uses pinned TLS and graceful stream close; legacy WebSocket uses plaintext and Close/EOF. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP or independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
         server = client = None
@@ -233,6 +235,7 @@ def run(args):
                     time.sleep(.02)
             result["baseline"] = {"server": process(server.pid), "machine": machine(), "metrics": observed}
             result["server_preload"] = runtime.preload_metadata(args.server_preload, server.pid)
+            client_command += benchmark_transport.certificate(args, logs)
             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
             events = []
@@ -299,6 +302,8 @@ def run(args):
                     observed = metrics(admin)
                     try:
                         check(observed, event, args, pressure_result)
+                        if getattr(args, "transport", "websocket") == "webtransport":
+                            assert observed["war_quic_connections"] == (0 if event["event"] == "done" else args.users)
                         break
                     except AssertionError:
                         if time.monotonic() >= deadline:
@@ -313,14 +318,23 @@ def run(args):
                 event.update(tcp_census=census, established_server_sockets=census["owned_established"])
                 expected_population = 0 if event["event"] == "done" else args.users
                 result["events"].append(event)
-                assert event["established_server_sockets"] == expected_population, (
-                    event["event"], event["established_server_sockets"], expected_population)
-                assert event["server"]["socket_fd_count"] >= expected_population
-                assert event["client"]["socket_fd_count"] >= expected_population
+                if getattr(args, "transport", "websocket") == "webtransport":
+                    assert observed["war_quic_connections"] == expected_population
+                    assert event["established_server_sockets"] == 0
+                    assert event["server"]["socket_fd_count"] >= 1
+                    assert event["client"]["socket_fd_count"] >= 1
+                else:
+                    assert event["established_server_sockets"] == expected_population, (
+                        event["event"], event["established_server_sockets"], expected_population)
+                    assert event["server"]["socket_fd_count"] >= expected_population
+                    assert event["client"]["socket_fd_count"] >= expected_population
                 if event["event"] == "done":
                     assert event["server"]["fd_count"] <= result["baseline"]["server"]["fd_count"] + 2
                     connected = result["events"][-5]["client"]["fd_count"]
-                    assert event["client"]["fd_count"] <= connected - args.users + 2
+                    if getattr(args, "transport", "websocket") == "webtransport":
+                        assert event["client"]["fd_count"] <= connected + 2
+                    else:
+                        assert event["client"]["fd_count"] <= connected - args.users + 2
                 events.append(event["event"])
                 print(json.dumps({"event":event["event"],"server_pid":server.pid,"client_pid":client.pid,"sessions":observed["war_sessions"],
                                   "rss_mib":event["server"]["VmRSS"]/1024,
@@ -434,6 +448,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--transport", choices=["webtransport", "websocket"], default="webtransport")
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")
     parser.add_argument("--server-preload", type=runtime.preload_library,

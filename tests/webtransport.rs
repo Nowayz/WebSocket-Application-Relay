@@ -69,6 +69,23 @@ async fn fixture() -> (
     CancellationToken,
     tokio::task::JoinHandle<anyhow::Result<()>>,
 ) {
+    fixture_with(Config {
+        auth_password: Some("test".into()),
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..Config::default()
+    })
+    .await
+}
+async fn fixture_with(
+    config: Config,
+) -> (
+    Arc<Relay>,
+    Endpoint<wtransport::endpoint::endpoint_side::Client>,
+    String,
+    CancellationToken,
+    tokio::task::JoinHandle<anyhow::Result<()>>,
+) {
     let identity = Identity::self_signed(["localhost", "127.0.0.1"]).unwrap();
     let hash = identity.certificate_chain().as_slice()[0].hash();
     let server = Endpoint::server(
@@ -89,13 +106,7 @@ async fn fixture() -> (
             .build(),
     )
     .unwrap();
-    let relay = Relay::new(Config {
-        auth_password: Some("test".into()),
-        messages_per_second: 0,
-        bytes_per_second: 0,
-        ..Config::default()
-    })
-    .unwrap();
+    let relay = Relay::new(config).unwrap();
     let stop = CancellationToken::new();
     let task = tokio::spawn(war_relay::webtransport::serve(
         server,
@@ -216,4 +227,186 @@ async fn large_fanout_and_departures_progress_across_scheduler_quanta() {
             .load(std::sync::atomic::Ordering::Relaxed),
         0
     );
+}
+
+#[tokio::test]
+async fn application_activity_refreshes_idle_deadline_then_inactive_peer_expires() {
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        idle_timeout_secs: 1,
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        ..Config::default()
+    })
+    .await;
+    let mut client = Client::open(&endpoint, &url, "idle").await;
+    // Continue past the original deadline; each received self-route resets it.
+    for _ in 0..3 {
+        tokio::time::sleep(Duration::from_millis(450)).await;
+        write_record(&mut client.send, &route(client.id, b"active"))
+            .await
+            .unwrap();
+        verify(&client.read().await, client.id, b"active");
+    }
+    assert_eq!(
+        relay
+            .metrics
+            .idle_timeouts
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    tokio::time::timeout(Duration::from_secs(3), client.connection.closed())
+        .await
+        .unwrap();
+    assert_eq!(
+        relay
+            .metrics
+            .idle_timeouts
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(relay.counts().0, 0);
+}
+
+#[tokio::test]
+async fn read_admission_rejects_announced_growth_and_releases_all_credit() {
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        total_read_buffer_bytes: 40960,
+        ..Config::default()
+    })
+    .await;
+    let mut client = Client::open(&endpoint, &url, "budget").await;
+    // Header alone exceeds the shared staging budget; no body need be allocated.
+    client
+        .send
+        .write_all(&(32768u32.to_be_bytes()))
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), client.connection.closed())
+        .await
+        .unwrap();
+    let budget = relay.metrics.read_budget.as_ref().unwrap();
+    assert_eq!(budget.rejected(), 1);
+    assert_eq!(budget.reserved(), 0);
+    stop.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn refused_origins_and_connection_admission_preserve_the_live_session() {
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        max_connections: 1,
+        origin_policy: war_relay::origin::OriginPolicy {
+            allowed: vec!["https://allowed.example".into()],
+        },
+        ..Config::default()
+    })
+    .await;
+    let options = wtransport::endpoint::ConnectOptions::builder(&url)
+        .add_header("origin", "https://denied.example")
+        .build();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3), endpoint.connect(options))
+            .await
+            .unwrap()
+            .is_err()
+    );
+    assert_eq!(
+        relay
+            .metrics
+            .origin_rejected
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while relay
+            .metrics
+            .connections
+            .load(std::sync::atomic::Ordering::Relaxed)
+            != 0
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let mut client = Client::open(&endpoint, &url, "admit").await;
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3), endpoint.connect(&url))
+            .await
+            .unwrap()
+            .is_err()
+    );
+    write_record(&mut client.send, &route(client.id, b"still live"))
+        .await
+        .unwrap();
+    verify(&client.read().await, client.id, b"still live");
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(
+        relay
+            .metrics
+            .connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+}
+
+#[tokio::test]
+async fn unreliable_and_reliable_input_share_the_same_rate_budget() {
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        messages_per_second: 1,
+        ..Config::default()
+    })
+    .await;
+    let mut client = Client::open(&endpoint, &url, "rate").await;
+    write_record(&mut client.send, &route(client.id, b"first"))
+        .await
+        .unwrap();
+    verify(&client.read().await, client.id, b"first");
+    client
+        .connection
+        .send_datagram(route(client.id, b"second"))
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), client.connection.closed())
+        .await
+        .unwrap();
+    assert_eq!(
+        relay
+            .metrics
+            .rate_limited
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    stop.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn graceful_close_ack_follows_delivery_and_registration_removal() {
+    let (relay, endpoint, url, stop, task) = fixture().await;
+    let mut source = Client::open(&endpoint, &url, "graceful").await;
+    let mut recipient = Client::open(&endpoint, &url, "graceful").await;
+    for _ in 0..16 {
+        write_record(&mut source.send, &route(recipient.id, b"before close"))
+            .await
+            .unwrap();
+    }
+    write_record(&mut source.send, &[]).await.unwrap();
+    assert!(source.read().await.is_empty());
+    assert_eq!(relay.counts().0, 1, "ACK must follow registration removal");
+    for _ in 0..16 {
+        verify(&recipient.read().await, source.id, b"before close");
+    }
+    let departed = recipient.read().await;
+    let mut d = minicbor::Decoder::new(&departed);
+    assert_eq!(d.array().unwrap(), Some(2));
+    assert_eq!(d.u64().unwrap(), u64::MAX);
+    assert_eq!(d.u64().unwrap(), source.id);
+    source
+        .connection
+        .close(VarInt::from_u32(1000), b"ack received");
+    stop.cancel();
+    task.await.unwrap().unwrap();
 }

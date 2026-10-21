@@ -9,6 +9,7 @@ use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 use clap::{Parser, ValueEnum};
+#[cfg(test)]
 use futures_util::{SinkExt, StreamExt};
 use minicbor::Decoder;
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,7 @@ use tokio::{
     time::{MissedTickBehavior, timeout},
 };
 use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream, connect_async_with_config,
+    MaybeTlsStream, connect_async_with_config,
     tungstenite::{
         Message,
         protocol::{CloseFrame, WebSocketConfig},
@@ -32,7 +33,9 @@ use tokio_tungstenite::{
 };
 use war_relay::protocol;
 
-type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+#[path = "support/socket.rs"]
+mod transport_socket;
+use transport_socket::Socket;
 const TOKEN: &str = "inspection-benchmark";
 const WINDOW: usize = 16;
 static AUDITED_IDS: OnceLock<parking_lot::Mutex<HashSet<u64>>> = OnceLock::new();
@@ -76,6 +79,8 @@ impl ValueKind {
 
 #[derive(Parser)]
 struct Args {
+    #[arg(long)]
+    certificate: Option<String>,
     #[arg(long)]
     url: String,
     #[arg(long)]
@@ -412,6 +417,10 @@ async fn data(socket: &mut Socket) -> Result<Bytes> {
     }
 }
 async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
+    if url.starts_with("https://") {
+        let socket = timeout(Duration::from_secs(5), Socket::connect(url)).await??;
+        return joined(socket, name, counts).await;
+    }
     let (socket, _) = timeout(
         Duration::from_secs(5),
         connect_async_with_config(
@@ -421,7 +430,7 @@ async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u
         ),
     )
     .await??;
-    joined(socket, name, counts).await
+    joined(Socket::websocket(socket), name, counts).await
 }
 
 async fn join_bound(
@@ -430,6 +439,9 @@ async fn join_bound(
     counts: &mut Counts,
     index: usize,
 ) -> Result<(Socket, u64)> {
+    if url.starts_with("https://") {
+        return join(url, name, counts).await;
+    }
     let uri: tokio_tungstenite::tungstenite::http::Uri = url.parse()?;
     ensure!(
         uri.scheme_str() == Some("ws") && uri.host() == Some("127.0.0.1"),
@@ -454,7 +466,7 @@ async fn join_bound(
         Some(WebSocketConfig::default().read_buffer_size(4096)),
     )
     .await?;
-    joined(socket, name, counts).await
+    joined(Socket::websocket(socket), name, counts).await
 }
 
 async fn joined(mut socket: Socket, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
@@ -494,6 +506,10 @@ async fn authenticate(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
     Ok(())
 }
 async fn close(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
+    if timeout(Duration::from_secs(5), socket.close_transport()).await?? {
+        counts.normal_closes += 1;
+        return Ok(());
+    }
     let frame = CloseFrame {
         code: 1000.into(),
         reason: "inspection".into(),
@@ -689,6 +705,7 @@ fn main() -> Result<()> {
 }
 
 async fn run(args: Args) -> Result<()> {
+    transport_socket::initialize(args.certificate.as_deref())?;
     if args.audit_ids {
         ensure!(
             AUDITED_IDS

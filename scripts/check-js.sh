@@ -39,7 +39,7 @@ mapfile -t binaries <"$task_logs/binaries"
 npm ci --prefix clients/js --omit=optional --ignore-scripts --no-audit --no-fund
 start_relay() {
   WAR_AUTH_PASSWORD=js-test-host WAR_ADMIN_TOKEN='' "${binaries[0]}" \
-    --bind 127.0.0.1:19138 --admin-bind 127.0.0.1:19139 --workers 4 --idle-timeout-secs 1 >>"$task_logs/relay.log" 2>&1 &
+    --legacy-websocket --bind 127.0.0.1:19138 --admin-bind 127.0.0.1:19139 --workers 4 --idle-timeout-secs 1 >>"$task_logs/relay.log" 2>&1 &
   relay_pid=$!
 }
 wait_services() {

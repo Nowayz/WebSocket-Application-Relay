@@ -132,3 +132,45 @@ median peak server RSS increasing from 17,508 to 19,296 KiB. The experiment was
 **reverted**, rather than adding complexity on this evidence. The patch, binaries,
 all twelve raw samples, CPU seconds and RSS are retained under
 `artifacts/webtransport/chunks-*` and `binaries/`.
+
+## Maintained-client and lifecycle checkpoint
+
+Reliable framing now reserves an empty record for graceful close. After a joined
+client sends that record, the server stops admitting input, transfers cancelled
+publications to retirement, removes the registration, drains accepted reliable
+output, and replies with an empty record. The client reads that acknowledgement
+before closing QUIC. Local QUIC close alone does not prove server-side retirement.
+Before joining, an empty record remains an invalid subscription. This transport
+exchange does not add or change CBOR commands.
+
+Application idle deadlines reset on application input or submitted output. QUIC
+keepalives and idle detection replace transport Ping/Pong policy. Rate admission is
+shared across the reliable and unreliable lanes. Read reservations, origin rejection,
+connection admission, graceful close ordering, and idle refresh/expiry are covered
+by eight real HTTP3 integration tests. Three JS stream tests exercise split/coalesced
+records, truncated records, datagram limits, and a real acknowledgement dependency
+for graceful close (using a deterministic stream fixture).
+
+The maintained inspection and capacity clients now select HTTPS WebTransport with
+a verified certificate pin. Their traffic generation, full payload assertions,
+per-user checks, and exact resource/counter checks remain shared with the WebSocket
+path. Capacity checks use the endpoint's independent QUIC connection census instead
+of assuming one TCP socket per session. The application connection/session gauges
+are checked separately. One UDP socket can serve many QUIC connections.
+
+A maintained mixed smoke run passed with 16 stable rooms, four private pairs, 64
+fanout readers, one CBOR inspector and one churn worker. It checked 1,532,684 delivered
+messages during the measurement and completed 3,242 churn lifecycles. A subsequent
+10,000-session capacity run passed every gate: 30,000 paced routing checks, RTT p99
+bound 0.262144 ms, maximum 0.641324 ms, and zero sessions/connections/queued resources
+at final cleanup. Server RSS at the measured gate was 762.77 MiB; memory use is a
+material regression against the WebSocket architecture. These are bring-up/correctness
+runs, not final matched performance acceptance.
+
+The first 100,000-session attempt failed before its connected gate with HTTP3 error
+261 (`H3_FRAME_UNEXPECTED`). It is recorded as a failure, not capacity evidence. Stack
+inspection found that wtransport's driver cancels a control-stream future when other
+branches become ready, while the nested frame reader keeps partial frame state in
+that cancelled future. This is a plausible mechanism requiring a controlled check;
+the failure alone does not prove causation. A single-session adapter that retains
+control-read state and avoids the additional datagram relay task is the next candidate.
