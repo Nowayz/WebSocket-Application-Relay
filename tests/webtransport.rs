@@ -540,3 +540,51 @@ fn ingress_bind_failure_returns_and_joins_its_runtime() {
         .build();
     assert!(war_relay::webtransport::EndpointIngress::bind(&config, transport).is_err());
 }
+
+#[tokio::test]
+async fn partially_written_private_record_resumes_before_the_next_record() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let mut transport = wtransport::quinn::TransportConfig::default();
+    transport.stream_receive_window(wtransport::quinn::VarInt::from_u32(64 * 1024));
+    let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
+        Config {
+            messages_per_second: 0,
+            bytes_per_second: 0,
+            ..Config::default()
+        },
+        Some(transport),
+    )
+    .await;
+    let mut source = Client::open(&endpoint, &url, "partial-source").await;
+    let mut recipient = Client::open(&endpoint, &url, "partial-sink").await;
+    // Exceed the QUIC send window while the application is not reading.
+    let body = vec![0x5a; 12 * 1024 * 1024];
+    write_record(&mut source.send, &route(recipient.id, &body))
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while relay.metrics.queued_bytes.load(Relaxed) == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    write_record(&mut source.send, &route(recipient.id, b"after partial"))
+        .await
+        .unwrap();
+    let packet = tokio::time::timeout(
+        Duration::from_secs(5),
+        read_record(&mut recipient.receive, 16 * 1024 * 1024),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    verify(&packet, source.id, &body);
+    verify(&recipient.read().await, source.id, b"after partial");
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(relay.metrics.write_errors.load(Relaxed), 0);
+    assert_eq!(relay.metrics.write_timeouts.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+}

@@ -21,7 +21,10 @@ One additional `war-ingress` thread owns a current-thread runtime for the shared
 UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
 `--pin-workers` pins the application workers and does not reserve an extra CPU
 for ingress. Session shutdown completes before this runtime is stopped and joined.
-Startup failure also stops and joins it. The TCP/WebSocket details below apply to
+Startup failure also stops and joins it. Reliable private/control output attempts
+an immediate chunk write when there is no older output; partial writes retain
+FIFO position, charged credit, and their write deadline. Fanout remains queued
+for recipient batching. The TCP/WebSocket details below apply to
 `--legacy-websocket`. See the [measured endpoint-servicing comparison](reports/webtransport-dedicated-ingress-2026-10-21.json)
 for the mixed-load gain and reliable-only throughput tradeoffs.
 

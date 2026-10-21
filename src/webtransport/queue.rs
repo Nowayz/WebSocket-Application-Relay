@@ -89,7 +89,16 @@ impl<T> Receiver<'_, T> {
 
     // Report an actual empty-queue wait so the writer can start a fresh work quantum
     // after sleeping, rather than carrying an old partial quantum into a burst.
+    #[cfg(test)]
     pub async fn recv_with_idle(&mut self) -> (Option<T>, bool) {
+        self.recv_with_idle_map(|value| value).await
+    }
+
+    // Transform under the queue lock when ownership must move with dequeue.
+    pub async fn recv_with_idle_map<U>(
+        &mut self,
+        mut map: impl FnMut(T) -> U,
+    ) -> (Option<U>, bool) {
         let mut was_idle = false;
         loop {
             // Most active writers already have output. Avoid registering and
@@ -97,7 +106,7 @@ impl<T> Receiver<'_, T> {
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return (Some(value), was_idle);
+                    return (Some(map(value)), was_idle);
                 }
                 if state.closed {
                     return (None, was_idle);
@@ -110,7 +119,7 @@ impl<T> Receiver<'_, T> {
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return (Some(value), was_idle);
+                    return (Some(map(value)), was_idle);
                 }
                 if state.closed {
                     return (None, was_idle);
@@ -144,6 +153,20 @@ mod tests {
         Arc,
         atomic::{AtomicUsize, Ordering::Relaxed},
     };
+
+    #[tokio::test]
+    async fn dequeue_transfers_external_ownership_under_the_submission_gate() {
+        let queue = Queue::new(2);
+        assert!(queue.state.lock().try_push(42));
+        let mut receiver = queue.receiver();
+        let result = receiver
+            .recv_with_idle_map(|value| {
+                assert!(queue.state.try_lock().is_none());
+                value + 1
+            })
+            .await;
+        assert_eq!(result, (Some(43), false));
+    }
 
     #[tokio::test]
     async fn idle_wait_is_distinguished_from_an_already_queued_burst() {

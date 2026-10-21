@@ -14,7 +14,9 @@ use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use parking_lot::Mutex;
 use std::{
+    future::Future,
     sync::{Arc, atomic::Ordering::Relaxed},
+    task::{Context as TaskContext, Poll, Waker},
     time::{Duration, Instant},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -25,22 +27,67 @@ use wtransport::quinn::{Endpoint, VarInt};
 
 mod queue;
 
+struct QueuedOutput {
+    packet: Envelope,
+    offset: usize,
+    started: Option<Instant>,
+}
+
 struct Output {
     // Session includes HTTP metadata and per-clone polling state. These users
     // call its shared async API, so keep one handle rather than copying it into
     // each long-lived future and output sink.
     connection: Arc<Connection>,
-    queue: queue::Queue<Envelope>,
+    queue: queue::Queue<QueuedOutput>,
+    send: Mutex<Option<SendStream>>,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
     activity: Option<Arc<Mutex<Instant>>>,
 }
 impl Output {
-    fn submit(&self, packet: Submission<'_>, queue: &mut queue::State<Envelope>) -> bool {
+    fn submit(
+        &self,
+        packet: Submission<'_>,
+        queue: &mut queue::State<QueuedOutput>,
+        immediate: bool,
+    ) -> bool {
         if !packet.frame.unreliable {
+            if queue.is_closed() {
+                return false;
+            }
             let wake = queue.is_empty();
+            let mut offset = 0;
+            let mut started = None;
+            if immediate && wake {
+                let mut send = self.send.lock();
+                if let Some(send) = send.as_mut() {
+                    let mut chunks = frame_chunks(packet.frame, 0);
+                    // One cancel-safe poll: Pending consumes no bytes. The queue
+                    // notification wakes the owning writer, which polls again with
+                    // its real waker; this producer never waits for write readiness.
+                    let attempt = send.write_chunks(&mut chunks);
+                    tokio::pin!(attempt);
+                    if let Poll::Ready(Ok(written)) = attempt
+                        .as_mut()
+                        .poll(&mut TaskContext::from_waker(Waker::noop()))
+                    {
+                        offset = written.bytes;
+                        if offset == 4 + packet.frame.len() {
+                            self.delivered(packet.frame);
+                            return true;
+                        }
+                        if offset != 0 {
+                            started = Some(Instant::now());
+                        }
+                    }
+                }
+            }
             let allocated = queue.allocated_bytes();
-            let accepted = queue.try_push(packet.into_owned());
+            let accepted = queue.try_push(QueuedOutput {
+                packet: packet.into_owned(),
+                offset,
+                started,
+            });
             let growth = queue.allocated_bytes() - allocated;
             if growth != 0 {
                 self.relay
@@ -84,6 +131,18 @@ impl Output {
         true
     }
 }
+impl Output {
+    fn delivered(&self, frame: &Frame) {
+        if let Some(activity) = &self.activity {
+            *activity.lock() = Instant::now();
+        }
+        self.relay.metrics.deliveries.fetch_add(1, Relaxed);
+        self.relay
+            .metrics
+            .delivered_bytes
+            .fetch_add(frame.len() as u64, Relaxed);
+    }
+}
 impl Drop for Output {
     fn drop(&mut self) {
         self.relay
@@ -100,7 +159,10 @@ impl PeerOutput for Output {
         self.retirement.notify_one();
     }
     fn send(&self, packet: Submission<'_>) -> bool {
-        self.submit(packet, &mut self.queue.state.lock())
+        self.submit(packet, &mut self.queue.state.lock(), true)
+    }
+    fn send_fanout(&self, packet: Submission<'_>) -> bool {
+        self.submit(packet, &mut self.queue.state.lock(), false)
     }
     fn close(&self, reason: Disconnect) {
         self.connection
@@ -108,7 +170,7 @@ impl PeerOutput for Output {
     }
     fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
         let mut queue = self.queue.state.lock();
-        !gate() || self.submit(packet, &mut queue)
+        !gate() || self.submit(packet, &mut queue, false)
     }
 }
 
@@ -153,17 +215,27 @@ pub async fn write_record<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -
     stream.write_all(bytes).await?;
     Ok(())
 }
-async fn write_frame(stream: &mut SendStream, frame: &Frame) -> Result<()> {
-    let size = u32::try_from(frame.len()).context("record exceeds u32 framing")?;
+fn frame_chunks(frame: &Frame, offset: usize) -> [Bytes; 2] {
+    let size = u32::try_from(frame.len()).expect("validated message length");
     let mut prefix = [0; 18];
     prefix[..4].copy_from_slice(&size.to_be_bytes());
     let header_len = 4 + frame.prefix().len();
     prefix[4..header_len].copy_from_slice(frame.prefix());
-    let mut chunks = [
-        Bytes::copy_from_slice(&prefix[..header_len]),
-        frame.shared_payload(),
-    ];
-    stream.write_all_chunks(&mut chunks).await?;
+    [
+        if offset < header_len {
+            Bytes::copy_from_slice(&prefix[offset..header_len])
+        } else {
+            Bytes::new()
+        },
+        frame
+            .shared_payload()
+            .slice(offset.saturating_sub(header_len)..),
+    ]
+}
+async fn write_frame_from(stream: &mut SendStream, frame: &Frame, offset: usize) -> Result<()> {
+    stream
+        .write_all_chunks(&mut frame_chunks(frame, offset))
+        .await?;
     Ok(())
 }
 
@@ -309,7 +381,7 @@ async fn session(
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
 ) -> Result<()> {
-    let ((mut send, mut receive), join) =
+    let ((send, mut receive), join) =
         tokio::time::timeout(Duration::from_secs(relay.config.join_timeout_secs), async {
             let (send, mut receive) = connection.accept_bi().await?;
             let join = read_record_budgeted(
@@ -326,6 +398,7 @@ async fn session(
     let output = Arc::new(Output {
         connection: connection.clone(),
         queue: queue::Queue::new(relay.config.queue_messages),
+        send: Mutex::new(Some(send)),
         relay: relay.clone(),
         retirement,
         activity: activity.clone(),
@@ -342,26 +415,41 @@ async fn session(
     // an entire recipient queue. Use admission as the smaller fairness bound.
     let record_quantum = INPUT_QUANTUM.min(relay.config.queue_messages);
     let writer = async {
+        // Queue dequeue and stream ownership transfer share the submission gate.
+        // No producer can overtake a packet between dequeue and the first write.
+        let take = |packet| {
+            (
+                packet,
+                output.send.lock().take().expect("writer owns idle stream"),
+            )
+        };
         let mut remaining = record_quantum;
         loop {
             let (packet, was_idle) = if finishing.is_cancelled() {
                 outgoing.close();
-                outgoing.recv_with_idle().await
+                outgoing.recv_with_idle_map(take).await
             } else {
                 tokio::select! {
-                    packet = outgoing.recv_with_idle() => packet,
-                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv_with_idle().await }
+                    packet = outgoing.recv_with_idle_map(take) => packet,
+                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv_with_idle_map(take).await }
                 }
             };
-            let Some(packet) = packet else {
+            let Some((queued, mut send)) = packet else {
                 break;
             };
             if was_idle {
                 remaining = record_quantum;
             }
+            let packet = queued.packet;
+            let remaining_time = Duration::from_secs(relay.config.write_timeout_secs)
+                .saturating_sub(
+                    queued
+                        .started
+                        .map_or(Duration::ZERO, |started| started.elapsed()),
+                );
             tokio::time::timeout(
-                Duration::from_secs(relay.config.write_timeout_secs),
-                write_frame(&mut send, &packet.frame),
+                remaining_time,
+                write_frame_from(&mut send, &packet.frame, queued.offset),
             )
             .await
             .inspect_err(|_| {
@@ -370,14 +458,8 @@ async fn session(
             .inspect_err(|_| {
                 relay.metrics.write_errors.fetch_add(1, Relaxed);
             })?;
-            if let Some(activity) = &activity {
-                *activity.lock() = Instant::now();
-            }
-            relay.metrics.deliveries.fetch_add(1, Relaxed);
-            relay
-                .metrics
-                .delivered_bytes
-                .fetch_add(packet.frame.len() as u64, Relaxed);
+            *output.send.lock() = Some(send);
+            output.delivered(&packet.frame);
             remaining -= 1;
             if remaining == 0 {
                 tokio::task::yield_now().await;
@@ -385,7 +467,13 @@ async fn session(
             }
         }
         if finishing.is_cancelled() {
+            let mut send = output
+                .send
+                .lock()
+                .take()
+                .expect("finished writer owns stream");
             write_record(&mut send, &[]).await?;
+            *output.send.lock() = Some(send);
         }
         Ok::<(), anyhow::Error>(())
     };
@@ -530,6 +618,24 @@ impl Drop for Pending<'_> {
     fn drop(&mut self) {
         if let Some(work) = self.work.take() {
             self.registration.detach_fanout(work);
+        }
+    }
+}
+
+#[cfg(test)]
+mod immediate_output_tests {
+    use super::*;
+
+    #[test]
+    fn every_partial_record_offset_reconstructs_the_exact_remaining_bytes() {
+        for frame in [
+            Frame::integer(u64::MAX),
+            Frame::envelope(u64::MAX, Bytes::from_static(b"\x44body")),
+        ] {
+            let original = frame_chunks(&frame, 0).concat();
+            for offset in 0..=original.len() {
+                assert_eq!(frame_chunks(&frame, offset).concat(), original[offset..]);
+            }
         }
     }
 }
