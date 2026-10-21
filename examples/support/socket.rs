@@ -165,6 +165,31 @@ impl Socket {
             ),
         }
     }
+    #[allow(dead_code)] // Used by the open-loop load client, not reliable-only fixtures.
+    pub fn send_datagram(&self, bytes: Bytes) -> Result<()> {
+        let Self::WebTransport(socket) = self else {
+            bail!("datagrams require WebTransport")
+        };
+        ensure!(
+            bytes.len() <= socket.connection.max_datagram_size(),
+            "datagram exceeds negotiated maximum"
+        );
+        Ok(socket.connection.send_datagram(bytes)?)
+    }
+
+    #[allow(dead_code)]
+    pub async fn next_datagram_checked(&mut self) -> Result<Bytes> {
+        let Self::WebTransport(socket) = self else {
+            bail!("datagrams require WebTransport")
+        };
+        tokio::select! {
+            packet = socket.connection.read_datagram() => Ok(packet?),
+            record = socket.reader.next(&mut socket.receive) => {
+                bail!("unexpected reliable record on datagram load lane: {} bytes", record?.len())
+            }
+        }
+    }
+
     pub async fn flush(&mut self) -> Result<()> {
         match self {
             Self::WebSocket(socket) => Ok(socket.flush().await?),

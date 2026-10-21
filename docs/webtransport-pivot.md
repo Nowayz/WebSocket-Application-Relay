@@ -1478,3 +1478,15 @@ corrected checks, packet statistics and scope. Overall parity remains unmet.
 Continue worker-owned explicit input/application/transmit phases, full datagram
 private/fanout/mixed load, 100k memory parity and the remaining behavior, kernel
 and packaging acceptance. The goal remains active; no pivot acceptance is claimed.
+
+### 2026-10-21: matched open-loop load and reliable scheduling diagnosis
+
+Added a maintained verified open-loop client and runner ([contract and commands](datagram-load.md)). The [90-row evidence report](reports/webtransport-datagram-load-2026-10-21.json) retains all failed reliable rows as well as successful observations. These are paced offered-load points, not maximum-capacity proofs. The provisional scheduling binary and the final actual-Pending idle-wait amendment are explicitly distinguished. Original receipts retain hashes, complete recipient results, process resources, and logs.
+
+The retained implementation serves approximately 1.02 million verified private datagram deliveries per second at the corresponding offered point, and approximately 1.02 million fanout deliveries per second separately. High mixed load remains deficient: the final scheduling candidate delivered 85,074 private and 991,213 fanout deliveries per second, with 651,432 private and 116,447 fanout updates unreceived within the observation window. A successful integrity/cleanup receipt does not mean the offered traffic was all delivered. Reliable high private and mixed runs still reject slow consumers. Throughput parity is not achieved.
+
+A distinct deterministic scheduling bug was reproduced with a coalesced reliable self-route burst: input could exhaust admission before its session writer ran. Writer-first polling and queue-derived bounded work quanta fix this case without raising queue or byte budgets. A fresh writer quantum is allowed only after an actual Pending empty-queue wait, preserving the fairness bound when a notification races. The final implementation passes the 10 WebTransport integration tests, the complete all-target test suite, and Clippy with warnings denied. Broader cross-peer overload remains unresolved.
+
+The provisional candidate's 100,000-session RSS was 2,694.63 MiB versus 2,691.99 MiB for the retained implementation in one matched pair; both checked 400,000 deliveries. This is not statistical memory equivalence or memory parity with native WebSocket. The final amendment requires its own resource and whole-workload confirmation. Goal remains active; no release or acceptance is implied.
+
+Final-binary confirmation ([receipts](reports/webtransport-reliable-scheduling-2026-10-21.json)): 1,472,179 private deliveries/s; 1,473,816 fanout deliveries/s; mixed 352,737 private plus 1,040,431 fanout deliveries/s. These are single confirmations using the fixed reliable client, not repeated comparative gains. At 100,000 sessions the final binary used 2,694.79 MiB measured RSS, verified all 400,000 measured deliveries, and retired with zero final resource gauges. Final-binary browser and loss/freshness verification remain pending. All-target tests: 270 passed.

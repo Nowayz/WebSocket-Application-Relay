@@ -1,7 +1,11 @@
 //! One consumer, serialized producers. Keep the first queued packet inline so
 //! an idle peer does not retain Tokio mpsc's initial 32-message allocation.
 use parking_lot::Mutex;
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    future::{Future, poll_fn},
+    task::Poll,
+};
 use tokio::sync::Notify;
 
 pub(super) struct Queue<T> {
@@ -78,17 +82,25 @@ impl<T> Receiver<'_, T> {
         self.queue.ready.notify_one();
     }
 
+    #[cfg(test)]
     pub async fn recv(&mut self) -> Option<T> {
+        self.recv_with_idle().await.0
+    }
+
+    // Report an actual empty-queue wait so the writer can start a fresh work quantum
+    // after sleeping, rather than carrying an old partial quantum into a burst.
+    pub async fn recv_with_idle(&mut self) -> (Option<T>, bool) {
+        let mut was_idle = false;
         loop {
             // Most active writers already have output. Avoid registering and
             // unregistering a wakeup for each ready packet in a burst.
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return Some(value);
+                    return (Some(value), was_idle);
                 }
                 if state.closed {
-                    return None;
+                    return (None, was_idle);
                 }
             }
             let notified = self.queue.ready.notified();
@@ -98,13 +110,20 @@ impl<T> Receiver<'_, T> {
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return Some(value);
+                    return (Some(value), was_idle);
                 }
                 if state.closed {
-                    return None;
+                    return (None, was_idle);
                 }
             }
-            notified.await;
+            poll_fn(|cx| match notified.as_mut().poll(cx) {
+                Poll::Pending => {
+                    was_idle = true;
+                    Poll::Pending
+                }
+                Poll::Ready(()) => Poll::Ready(()),
+            })
+            .await;
         }
     }
 }
@@ -125,6 +144,21 @@ mod tests {
         Arc,
         atomic::{AtomicUsize, Ordering::Relaxed},
     };
+
+    #[tokio::test]
+    async fn idle_wait_is_distinguished_from_an_already_queued_burst() {
+        let queue = Queue::new(2);
+        let mut receiver = queue.receiver();
+        let producer = async {
+            tokio::task::yield_now().await;
+            assert!(queue.state.lock().try_push(1));
+            queue.ready.notify_one();
+        };
+        let (_, first) = tokio::join!(producer, receiver.recv_with_idle());
+        assert_eq!(first, (Some(1), true));
+        assert!(queue.state.lock().try_push(2));
+        assert_eq!(receiver.recv_with_idle().await, (Some(2), false));
+    }
 
     #[tokio::test]
     async fn fifo_capacity_close_and_inline_idle_storage() {

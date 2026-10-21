@@ -129,6 +129,7 @@ npm run build:browser --prefix clients/js
 
 [Protocol](docs/protocol.md), [operations](docs/operations.md),
 [short performance recipes](docs/performance-guide.md),
+[verified open-loop transport loads](docs/datagram-load.md),
 [historical findings](docs/reports/performance-history.md) and
 [stability checks](docs/reports/stability.md) describe the contracts and measurement limits.
 The [consolidation record](docs/reports/consolidation.md) lists this migration's local

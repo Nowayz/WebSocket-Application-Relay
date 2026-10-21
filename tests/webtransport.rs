@@ -472,3 +472,57 @@ async fn blocked_shared_output_times_out_without_stalling_other_sessions_or_leak
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
 }
+
+#[tokio::test]
+async fn active_self_route_consumer_survives_a_coalesced_reliable_burst() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
+        Config {
+            queue_messages: 8,
+            messages_per_second: 0,
+            bytes_per_second: 0,
+            ..Config::default()
+        },
+        None,
+    )
+    .await;
+    let mut client = Client::open(&endpoint, &url, "self-burst").await;
+    let payloads: Vec<_> = (0u64..128)
+        .map(|seq| {
+            let mut body = vec![0x5a; 64];
+            body[..8].copy_from_slice(&seq.to_be_bytes());
+            body
+        })
+        .collect();
+    // Submit complete records in one write so incidental socket waits do not
+    // provide application scheduling between already-buffered input records.
+    let mut wire = Vec::new();
+    for body in &payloads {
+        let packet = route(client.id, body);
+        wire.extend_from_slice(&(packet.len() as u32).to_be_bytes());
+        wire.extend_from_slice(&packet);
+    }
+    tokio::time::timeout(Duration::from_secs(3), async {
+        let sent = async {
+            client.send.write_all(&wire).await.unwrap();
+        };
+        let read = async {
+            for expected in &payloads {
+                let packet = read_record(&mut client.receive, 1024).await.unwrap();
+                verify(&packet, client.id, expected);
+            }
+        };
+        tokio::join!(sent, read);
+    })
+    .await
+    .unwrap();
+    assert_eq!(relay.metrics.slow_consumers.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    client
+        .connection
+        .close(VarInt::from_u32(1000), b"burst checked");
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(relay.counts().0, 0);
+    assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+}

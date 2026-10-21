@@ -335,20 +335,27 @@ async fn session(
         .map_err(|e| anyhow::anyhow!(e.reason))?;
     let finishing = CancellationToken::new();
     let mut outgoing = output.queue.receiver();
+    // A ready input burst must let writers run before one producer can fill
+    // an entire recipient queue. Use admission as the smaller fairness bound.
+    let record_quantum = INPUT_QUANTUM.min(relay.config.queue_messages);
     let writer = async {
+        let mut remaining = record_quantum;
         loop {
-            let packet = if finishing.is_cancelled() {
+            let (packet, was_idle) = if finishing.is_cancelled() {
                 outgoing.close();
-                outgoing.recv().await
+                outgoing.recv_with_idle().await
             } else {
                 tokio::select! {
-                    packet = outgoing.recv() => packet,
-                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv().await }
+                    packet = outgoing.recv_with_idle() => packet,
+                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv_with_idle().await }
                 }
             };
             let Some(packet) = packet else {
                 break;
             };
+            if was_idle {
+                remaining = record_quantum;
+            }
             tokio::time::timeout(
                 Duration::from_secs(relay.config.write_timeout_secs),
                 write_frame(&mut send, &packet.frame),
@@ -368,6 +375,11 @@ async fn session(
                 .metrics
                 .delivered_bytes
                 .fetch_add(packet.frame.len() as u64, Relaxed);
+            remaining -= 1;
+            if remaining == 0 {
+                tokio::task::yield_now().await;
+                remaining = record_quantum;
+            }
         }
         if finishing.is_cancelled() {
             write_record(&mut send, &[]).await?;
@@ -420,7 +432,7 @@ async fn session(
             })
         };
         let reliable = async {
-            let mut remaining = INPUT_QUANTUM;
+            let mut remaining = record_quantum;
             loop {
                 let bytes = read_record_budgeted(
                     &mut receive,
@@ -435,7 +447,7 @@ async fn session(
                 remaining -= 1;
                 if remaining == 0 {
                     tokio::task::yield_now().await;
-                    remaining = INPUT_QUANTUM;
+                    remaining = record_quantum;
                 }
             }
         };
@@ -474,11 +486,15 @@ async fn session(
             }
         };
         tokio::select! {
+            biased;
             result = idle => result.map(|_| false),
+            _ = connection.closed() => Ok(false),
+            // Flush already admitted output before another ready input batch.
+            // Both record loops yield at record_quantum, so priority cannot
+            // turn a continuously ready writer into input starvation.
+            result = &mut writer => result.map(|_| false),
             result = reliable => result.map(|_| true),
             result = datagrams => result.map(|_| false),
-            result = &mut writer => result.map(|_| false),
-            _ = connection.closed() => Ok(false),
         }
     };
     // Routing futures are gone before registration: cancelled publications have
