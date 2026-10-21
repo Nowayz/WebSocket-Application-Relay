@@ -15,26 +15,41 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::{
-    sync::{Notify, mpsc},
-    task::JoinSet,
-};
+use tokio::{sync::Notify, task::JoinSet};
 use tokio_util::sync::CancellationToken;
 use web_transport_quinn::{SendStream, Session as Connection};
 use wtransport::quinn::{Endpoint, VarInt};
 
+mod queue;
+
 struct Output {
     connection: Connection,
-    queue: Mutex<mpsc::Sender<Envelope>>,
+    queue: queue::Queue<Envelope>,
     scratch: Mutex<Vec<u8>>,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
     activity: Option<Arc<Mutex<Instant>>>,
 }
 impl Output {
-    fn submit(&self, packet: Submission<'_>, queue: &mpsc::Sender<Envelope>) -> bool {
+    fn submit(&self, packet: Submission<'_>, queue: &mut queue::State<Envelope>) -> bool {
         if !packet.frame.unreliable {
-            return queue.try_send(packet.into_owned()).is_ok();
+            let wake = queue.is_empty();
+            let allocated = queue.allocated_bytes();
+            let accepted = queue.try_push(packet.into_owned());
+            let growth = queue.allocated_bytes() - allocated;
+            if growth != 0 {
+                self.relay
+                    .metrics
+                    .output_queue_capacity_bytes
+                    .fetch_add(growth, Relaxed);
+            }
+            if accepted && wake {
+                self.queue.ready.notify_one();
+            }
+            return accepted;
+        }
+        if queue.is_closed() {
+            return false;
         }
         let frame = packet.frame;
         let maximum = self.connection.max_datagram_size();
@@ -67,6 +82,14 @@ impl Output {
         true
     }
 }
+impl Drop for Output {
+    fn drop(&mut self) {
+        self.relay
+            .metrics
+            .output_queue_capacity_bytes
+            .fetch_sub(self.queue.state.get_mut().allocated_bytes(), Relaxed);
+    }
+}
 impl PeerOutput for Output {
     fn supports_retirement(&self) -> bool {
         true
@@ -75,15 +98,15 @@ impl PeerOutput for Output {
         self.retirement.notify_one();
     }
     fn send(&self, packet: Submission<'_>) -> bool {
-        self.submit(packet, &self.queue.lock())
+        self.submit(packet, &mut self.queue.state.lock())
     }
     fn close(&self, reason: Disconnect) {
         self.connection
             .close(u32::from(reason.code), reason.reason.as_bytes());
     }
     fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
-        let queue = self.queue.lock();
-        !gate() || self.submit(packet, &queue)
+        let mut queue = self.queue.state.lock();
+        !gate() || self.submit(packet, &mut queue)
     }
 }
 
@@ -247,6 +270,10 @@ impl Drop for ConnectionLease {
     }
 }
 
+// Match the native receive fairness quantum: amortize scheduling while bounding
+// ready input admitted in one turn. Large fanout keeps its separate work quantum.
+const INPUT_QUANTUM: usize = 256;
+
 async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Notify>) -> Result<()> {
     let ((mut send, mut receive), join) =
         tokio::time::timeout(Duration::from_secs(relay.config.join_timeout_secs), async {
@@ -262,10 +289,9 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
         .await??;
     let activity =
         (relay.config.idle_timeout_secs != 0).then(|| Arc::new(Mutex::new(Instant::now())));
-    let (queue, mut outgoing) = mpsc::channel(relay.config.queue_messages);
     let output = Arc::new(Output {
         connection: connection.clone(),
-        queue: Mutex::new(queue),
+        queue: queue::Queue::new(relay.config.queue_messages),
         scratch: Mutex::new(Vec::new()),
         relay: relay.clone(),
         retirement,
@@ -274,10 +300,11 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
     let registration = relay
         .subscribe_with_output(
             protocol::join(&join).map_err(|e| anyhow::anyhow!(e.reason))?,
-            output,
+            output.clone(),
         )
         .map_err(|e| anyhow::anyhow!(e.reason))?;
     let finishing = CancellationToken::new();
+    let mut outgoing = output.queue.receiver();
     let writer = async {
         loop {
             let packet = if finishing.is_cancelled() {
@@ -363,6 +390,7 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
             })
         };
         let reliable = async {
+            let mut remaining = INPUT_QUANTUM;
             loop {
                 let bytes = read_record_budgeted(
                     &mut receive,
@@ -374,10 +402,15 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
                     return Ok::<_, anyhow::Error>(());
                 }
                 route(bytes, false).await?;
-                tokio::task::yield_now().await;
+                remaining -= 1;
+                if remaining == 0 {
+                    tokio::task::yield_now().await;
+                    remaining = INPUT_QUANTUM;
+                }
             }
         };
         let datagrams = async {
+            let mut remaining = INPUT_QUANTUM;
             loop {
                 let bytes = connection.read_datagram().await?;
                 relay.metrics.datagrams_received.fetch_add(1, Relaxed);
@@ -386,7 +419,11 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
                     bail!("datagram exceeds message limit");
                 }
                 route(bytes, true).await?;
-                tokio::task::yield_now().await;
+                remaining -= 1;
+                if remaining == 0 {
+                    tokio::task::yield_now().await;
+                    remaining = INPUT_QUANTUM;
+                }
             }
             #[allow(unreachable_code)]
             Ok::<(), anyhow::Error>(())

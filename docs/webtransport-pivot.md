@@ -240,3 +240,144 @@ than changing this workload to discard messages to produce a higher rate.
 CPU/RSS/latency, capacity results, source and frozen-binary hashes. Complete receipts
 and exact commands are under `artifacts/webtransport/`. The source/binary association
 is the explicit frozen `buffered-direct-*` build, not any later optimization.
+
+## Parity work after the explicit acceptance decision
+
+The user requires continued pursuit of throughput and memory parity before
+accepting this pivot. Datagram freshness alone does not satisfy that requirement.
+The current candidate remains **unaccepted**.
+
+Two measured changes are retained. Input now yields after the same 256-message
+fairness quantum used by the native listener, instead of yielding after every
+message; large fanouts retain their independent recipient-work quantum. In two
+alternating runs per case, that change increased private throughput from about
+642k to 1,393k deliveries/s, room fanout from 894k to 1,037k, and mixed combined
+traffic from 764k to 1,065k. Exact content, FIFO, counters and cleanup passed in all
+12 runs. These are four-second local workloads, not production capacity claims.
+
+The output queue now keeps one packet inline and allocates overflow only when
+needed, rather than retaining Tokio mpsc's initial 32-packet block for every peer.
+Producers still serialize observer gates and FIFO insertion under the same lock.
+Closing refuses later output, drains already accepted output before the genuine
+close ACK, and dropping the receiver releases every queued reservation. Ready
+output avoids wakeup registration; empty-to-nonempty transitions wake the receiver.
+Overflow allocation is exposed through the output-capacity gauge. Three focused
+tests exercise capacity/FIFO/drain, receive cancellation/concurrent wakeups, and
+reservation release on receiver drop. No stream limits or application message
+limits changed.
+
+The final comparison uses three rotated fresh-process runs per case and mode,
+four pinned relay workers on CPUs 0–3, eight pinned client workers on CPUs 8–15,
+1 KiB values, 32 private pairs, and 1,024 room readers with fanout window four.
+The TLS WebSocket fixture includes a TLS 1.3 frontend plus a loopback TCP hop;
+both processes share CPUs 0–3 and both CPU/RSS totals are included. Its extra
+hop, tasks and buffering prevent treating it as an intrinsic native WSS ceiling.
+The earlier TLS screen allowed the frontend CPUs 0–7 and is kept separately;
+those numbers must not be merged into these medians. All 27 final runs passed.
+
+| Reliable workload | Plain WebSocket deliveries/s | TLS WebSocket fixture deliveries/s | Current WebTransport deliveries/s |
+| --- | ---: | ---: | ---: |
+| Private only | 1,293,729 | 1,054,499 | 1,382,190 |
+| Room fanout only | 1,648,225 | 936,767 | 1,065,243 |
+| Mixed, combined | 1,537,475 | 987,395 | 1,104,088 |
+| Mixed, private component | 803,874 | 421,760 | 295,758 |
+| Mixed, fanout component | 733,600 | 565,634 | 808,023 |
+
+Combined medians are calculated per run before aggregation; they need not equal
+the sum of the two component medians. WebTransport's private-only rate is 6.8%
+above plain WebSocket, but WebTransport room fanout remains 35.4% below plain
+WebSocket, and mixed combined throughput is 28.2% below plain WebSocket. Mixed private traffic is also 29.9% below the encrypted fixture while
+fanout competes. Aggregating the lanes would hide this remaining fairness gap.
+
+| Workload | Plain WS CPU cores / RSS MiB | TLS fixture CPU cores / RSS MiB | WebTransport CPU cores / RSS MiB |
+| --- | ---: | ---: | ---: |
+| Private only | 2.11 / 7.09 | 2.40 / 14.23 | 3.52 / 15.16 |
+| Room fanout only | 1.66 / 8.42 | 1.98 / 39.30 | 3.30 / 75.59 |
+| Mixed | 2.06 / 8.40 | 2.34 / 41.61 | 3.43 / 81.01 |
+
+Higher throughput in the encrypted fixture comparison does not establish lower
+CPU cost. RSS is measured at phase gates and excludes kernel socket memory; it
+is neither continuous peak memory nor requested live heap. The machine-readable
+report includes every sample, ranges, client resources, both lane latency
+distributions, source hashes and frozen executable hashes.
+
+The current 100,000-session run and a fresh plaintext control used the same
+candidate executable, maintained verifier, population, payload and offered rate.
+Each completed all 400,000 independently checked deliveries, plus population-wide
+pre/post routing proofs and exact departure/closure checks.
+
+| 100k metric | Plain WebSocket | Current WebTransport |
+| --- | ---: | ---: |
+| Offered rate | 100,000/s | 100,000/s |
+| Achieved rate | 99,789.6/s | 99,636.6/s |
+| Timed elapsed | 4.0084 s | 4.0146 s |
+| RTT p50 upper bound | 0.262 ms | 0.524 ms |
+| RTT p99 upper bound | 0.524 ms | 1.049 ms |
+| Maximum observed RTT | 2.761 ms | 11.934 ms |
+| Server CPU cores over timed work | 0.486 | 2.160 |
+| Server RSS at measured gate | 112.83 MiB | 4,653.48 MiB |
+| Population setup | 0.678 s | 11.511 s |
+| Population retirement | 0.625 s | 2.393 s |
+
+WebTransport RSS fell 201.69 MiB (4.15%) from the buffered direct-stack checkpoint's
+4,855.17 MiB. It is still about 41 times the plaintext server RSS. Neither this
+improvement nor meeting the offered message count establishes memory parity.
+The timed phase added no server/client UDP receive drops; the earlier population
+proof burst did incur drops. Final sessions, physical QUIC connections, queued
+payload, read reservations, variables and output metadata all reached zero.
+
+Diagnostic gperftools profiles with 8,194 sessions show about 390 MiB of requested
+live allocations before the queue change and 374 MiB in the queue experiment.
+These replacement-allocator runs are excluded from ordinary timings and RSS
+comparisons. Frame pointers identify approximately 62% of retained bytes under
+QUIC accept/setup, including about 28% directly in QUIC connection state and 19%
+in stream maps. Quinn's default remote stream credits prepopulate maps for 100
+bidirectional and 100 unidirectional streams. HTTP/3, crypto and relay task state
+add further cost. These are measured targets for further work, not proof that
+removing any one structure can close the gap.
+
+The new freshness verifier generates 360 independently stamped 1 KiB states at
+60 Hz alongside a reliable 1 MiB bulk value. Probes include the initial period
+before the first state arrives; old datagrams cannot replace a newer sequence.
+Netem affects only the external transport port in a temporary namespace, in both
+directions. It uses matching impairment parameters and seeds, not identical
+packet-loss patterns across protocols. The internal TLS proxy hop is unimpaired.
+
+All nine final-candidate clean/loss/reordering checks passed. The clean runs
+received every state with p99 freshest-state age around 17 ms. With 20 ms
+one-way delay and 2% packet loss, the candidate datagram run had p99 state age
+79 ms and 12/360 states unreceived; reliable WebTransport was 622 ms and the TLS
+WebSocket fixture 1,061 ms, with all states received. The datagram run's bulk
+value arrived after 1.905 s versus 0.665 s for the reliable-stream run and 1.128 s
+for TLS WebSocket. With added jitter/reordering, 36 datagrams arrived out of order,
+the newest-state check held, p99 state age was 127 ms, and 5/360 states were
+unreceived. Its bulk value took 7.321 s. These one-run-per-profile candidate checks
+show correctness and the freshness/bulk tradeoff; they do not establish a general
+loss-performance ranking. The prior buffered-stack screen has three clean/loss
+repetitions per mode and is reported separately. Missing datagrams mean unreceived
+within the observation window, not a count attributed solely to network loss.
+
+Validation: 264 Rust tests passed, one ignored; all-target Clippy with warnings
+denied passed; 70 JS tests, TypeScript and the browser bundle build passed.
+Chromium 155 exercised the actual bundle, including datagrams, typed values,
+cross-room delivery, 128 KiB and 5 MiB payloads, concurrent variables, departure
+and graceful close; all seven final connection/storage gauges were zero.
+The first browser launch lost its fixture when its launcher exited; that negative
+receipt is retained separately, and the live-fixture rerun passed.
+
+Full per-sample results and provenance are in
+`docs/reports/webtransport-parity-2026-10-21.json`; raw receipts and exact commands
+are under `artifacts/webtransport/`. The retained candidate executable is
+`artifacts/webtransport/binaries/parity-queue-relay`. Test-only TLS support is in
+`examples/tls_front.rs`; `scripts/freshness-matrix.py --help` documents isolated
+impairment runs. Build the maintained tools with:
+
+```sh
+cargo build --locked --release --bin war-relay --example inspection --example capacity --example tls_front --example state_freshness
+```
+
+Further acceptance work remains: mixed-traffic fairness and retained connection
+memory, observer cancellation/re-subscribe checks, the full concurrent 100k/8192
+inspection workload, broader overload/shutdown acceptance, QUIC buffer accounting,
+and final packaging/deployment documentation. The datagram benefit is established
+for the exercised freshness workloads; the requested overall parity is not.

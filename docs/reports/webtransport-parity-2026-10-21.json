@@ -1,0 +1,3981 @@
+{
+  "status": "in progress; user requires throughput and memory parity before acceptance",
+  "scope": "Local Linux loopback. Final throughput comparisons rotate three modes across three fresh-process repetitions per case. Server and every TLS proxy thread share CPUs 0-3; four pinned relay I/O workers; client eight pinned workers on CPUs 8-15. TLS fixture adds one loopback TCP hop and four proxy workers, with both processes included in CPU/RSS. A proxy fixture is not an in-process native WSS implementation. Four-second saturation workloads, 1 KiB application values, 32 private pairs, 1024 room readers with window four. All individual messages, sender, payload, FIFO, exact counters, closure and cleanup checked. Latency histogram percentiles are upper bounds. Event-boundary RSS excludes kernel socket memory and is not continuous peak or total allocation.",
+  "matched": {
+    "private": {
+      "websocket": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-1.json",
+            "passed": true,
+            "private_per_second": 1352998.2258625494,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1352998.2258625494,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 3.160525,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.1046487983073505,
+            "client_cpu_cores": 3.6793860226940858,
+            "server_rss_kib": 7316,
+            "client_rss_kib": 11780,
+            "verified_private": 5412896,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-2.json",
+            "passed": true,
+            "private_per_second": 1293729.4564531026,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1293729.4564531026,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.415581,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.1122737997671934,
+            "client_cpu_cores": 4.169553488771218,
+            "server_rss_kib": 7260,
+            "client_rss_kib": 11884,
+            "verified_private": 5175472,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-3.json",
+            "passed": true,
+            "private_per_second": 1286747.3502666564,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1286747.3502666564,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.255457,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.129747343280735,
+            "client_cpu_cores": 4.162006251833831,
+            "server_rss_kib": 7260,
+            "client_rss_kib": 11820,
+            "verified_private": 5147600,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1293729.4564531026,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1293729.4564531026,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 0.524288,
+          "private_max_ms": 1.415581,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 2.1122737997671934,
+          "client_cpu_cores": 4.162006251833831,
+          "server_rss_kib": 7260,
+          "client_rss_kib": 11820,
+          "verified_private": 5175472,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1286747.3502666564,
+            1352998.2258625494
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1286747.3502666564,
+            1352998.2258625494
+          ],
+          "server_cpu_cores": [
+            2.1046487983073505,
+            2.129747343280735
+          ],
+          "server_rss_kib": [
+            7260,
+            7316
+          ]
+        }
+      },
+      "websocket-tls": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-tls-1.json",
+            "passed": true,
+            "private_per_second": 1062988.0130035598,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1062988.0130035598,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 6.791906,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.4022921146489935,
+            "client_cpu_cores": 3.484698447263993,
+            "server_rss_kib": 14476,
+            "client_rss_kib": 13948,
+            "verified_private": 4252320,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-tls-2.json",
+            "passed": true,
+            "private_per_second": 1054499.469293095,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1054499.469293095,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 5.696466,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.39977121781095,
+            "client_cpu_cores": 3.5621604014381294,
+            "server_rss_kib": 14576,
+            "client_rss_kib": 13892,
+            "verified_private": 4218400,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-websocket-tls-3.json",
+            "passed": true,
+            "private_per_second": 1038651.9532572525,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1038651.9532572525,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 5.607699,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 2.3722806292795084,
+            "client_cpu_cores": 3.529673602257815,
+            "server_rss_kib": 14772,
+            "client_rss_kib": 13924,
+            "verified_private": 4154992,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1054499.469293095,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1054499.469293095,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 2.097152,
+          "private_max_ms": 5.696466,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 2.39977121781095,
+          "client_cpu_cores": 3.529673602257815,
+          "server_rss_kib": 14576,
+          "client_rss_kib": 13924,
+          "verified_private": 4218400,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1038651.9532572525,
+            1062988.0130035598
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1038651.9532572525,
+            1062988.0130035598
+          ],
+          "server_cpu_cores": [
+            2.3722806292795084,
+            2.4022921146489935
+          ],
+          "server_rss_kib": [
+            14476,
+            14772
+          ]
+        }
+      },
+      "webtransport": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-webtransport-1.json",
+            "passed": true,
+            "private_per_second": 1382189.8710858065,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1382189.8710858065,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 4.10999,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.504629480933544,
+            "client_cpu_cores": 4.954476199151415,
+            "server_rss_kib": 15524,
+            "client_rss_kib": 19280,
+            "verified_private": 5529344,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-webtransport-2.json",
+            "passed": true,
+            "private_per_second": 1388192.7887117073,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1388192.7887117073,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 3.621242,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5171675590808995,
+            "client_cpu_cores": 5.069520831425773,
+            "server_rss_kib": 15500,
+            "client_rss_kib": 19188,
+            "verified_private": 5553296,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-private-webtransport-3.json",
+            "passed": true,
+            "private_per_second": 1357901.1695796938,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1357901.1695796938,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 3.135925,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.529649529626843,
+            "client_cpu_cores": 4.794523936136178,
+            "server_rss_kib": 15752,
+            "client_rss_kib": 19148,
+            "verified_private": 5432144,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1382189.8710858065,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1382189.8710858065,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 1.048576,
+          "private_max_ms": 3.621242,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.5171675590808995,
+          "client_cpu_cores": 4.954476199151415,
+          "server_rss_kib": 15524,
+          "client_rss_kib": 19188,
+          "verified_private": 5529344,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1357901.1695796938,
+            1388192.7887117073
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1357901.1695796938,
+            1388192.7887117073
+          ],
+          "server_cpu_cores": [
+            3.504629480933544,
+            3.529649529626843
+          ],
+          "server_rss_kib": [
+            15500,
+            15752
+          ]
+        }
+      }
+    },
+    "room-only": {
+      "websocket": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1598121.6168266896,
+            "combined_per_second": 1598121.6168266896,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 4.404161,
+            "server_cpu_cores": 1.6321503264819044,
+            "client_cpu_cores": 3.984146432484159,
+            "server_rss_kib": 8624,
+            "client_rss_kib": 15964,
+            "verified_private": 0,
+            "verified_fanout": 6393856,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1687059.7644636978,
+            "combined_per_second": 1687059.7644636978,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 1.048576,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 4.358995,
+            "server_cpu_cores": 1.7095012166931292,
+            "client_cpu_cores": 3.9988332554225243,
+            "server_rss_kib": 8552,
+            "client_rss_kib": 15768,
+            "verified_private": 0,
+            "verified_fanout": 6750208,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1648225.2121757232,
+            "combined_per_second": 1648225.2121757232,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 1.048576,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 3.867397,
+            "server_cpu_cores": 1.6595823540686268,
+            "client_cpu_cores": 4.231435128671965,
+            "server_rss_kib": 8744,
+            "client_rss_kib": 16608,
+            "verified_private": 0,
+            "verified_fanout": 6594560,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1648225.2121757232,
+          "combined_per_second": 1648225.2121757232,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 1.048576,
+          "fanout_p99_upper_ms": 4.194304,
+          "fanout_max_ms": 4.358995,
+          "server_cpu_cores": 1.6595823540686268,
+          "client_cpu_cores": 3.9988332554225243,
+          "server_rss_kib": 8624,
+          "client_rss_kib": 15964,
+          "verified_private": 0,
+          "verified_fanout": 6594560
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1598121.6168266896,
+            1687059.7644636978
+          ],
+          "combined_per_second": [
+            1598121.6168266896,
+            1687059.7644636978
+          ],
+          "server_cpu_cores": [
+            1.6321503264819044,
+            1.7095012166931292
+          ],
+          "server_rss_kib": [
+            8552,
+            8744
+          ]
+        }
+      },
+      "websocket-tls": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-tls-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 948302.2302108948,
+            "combined_per_second": 948302.2302108948,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.867936,
+            "server_cpu_cores": 1.9980073283502198,
+            "client_cpu_cores": 2.5374693070047796,
+            "server_rss_kib": 40164,
+            "client_rss_kib": 47444,
+            "verified_private": 0,
+            "verified_fanout": 3796992,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-tls-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 936766.6366269544,
+            "combined_per_second": 936766.6366269544,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.801598,
+            "server_cpu_cores": 1.9849205213479888,
+            "client_cpu_cores": 2.619096386030239,
+            "server_rss_kib": 40244,
+            "client_rss_kib": 47176,
+            "verified_private": 0,
+            "verified_fanout": 3751936,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-websocket-tls-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 898692.7024761296,
+            "combined_per_second": 898692.7024761296,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 11.737626,
+            "server_cpu_cores": 1.9691689029109742,
+            "client_cpu_cores": 2.371499097541262,
+            "server_rss_kib": 40352,
+            "client_rss_kib": 46816,
+            "verified_private": 0,
+            "verified_fanout": 3596288,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 936766.6366269544,
+          "combined_per_second": 936766.6366269544,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 10.867936,
+          "server_cpu_cores": 1.9849205213479888,
+          "client_cpu_cores": 2.5374693070047796,
+          "server_rss_kib": 40244,
+          "client_rss_kib": 47176,
+          "verified_private": 0,
+          "verified_fanout": 3751936
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            898692.7024761296,
+            948302.2302108948
+          ],
+          "combined_per_second": [
+            898692.7024761296,
+            948302.2302108948
+          ],
+          "server_cpu_cores": [
+            1.9691689029109742,
+            1.9980073283502198
+          ],
+          "server_rss_kib": [
+            40164,
+            40352
+          ]
+        }
+      },
+      "webtransport": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-webtransport-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1065243.4488794887,
+            "combined_per_second": 1065243.4488794887,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.014218,
+            "server_cpu_cores": 3.3052022424059926,
+            "client_cpu_cores": 4.8191497548005735,
+            "server_rss_kib": 77404,
+            "client_rss_kib": 62740,
+            "verified_private": 0,
+            "verified_fanout": 4263936,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-webtransport-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1045599.2454246525,
+            "combined_per_second": 1045599.2454246525,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.005659,
+            "server_cpu_cores": 3.3020669357422605,
+            "client_cpu_cores": 4.728300082723221,
+            "server_rss_kib": 77348,
+            "client_rss_kib": 62940,
+            "verified_private": 0,
+            "verified_fanout": 4186112,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-only-webtransport-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1098017.7659510775,
+            "combined_per_second": 1098017.7659510775,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 6.077024,
+            "server_cpu_cores": 3.290299807776388,
+            "client_cpu_cores": 4.796792430471272,
+            "server_rss_kib": 77616,
+            "client_rss_kib": 62760,
+            "verified_private": 0,
+            "verified_fanout": 4395008,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1065243.4488794887,
+          "combined_per_second": 1065243.4488794887,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.077024,
+          "server_cpu_cores": 3.3020669357422605,
+          "client_cpu_cores": 4.796792430471272,
+          "server_rss_kib": 77404,
+          "client_rss_kib": 62760,
+          "verified_private": 0,
+          "verified_fanout": 4263936
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1045599.2454246525,
+            1098017.7659510775
+          ],
+          "combined_per_second": [
+            1045599.2454246525,
+            1098017.7659510775
+          ],
+          "server_cpu_cores": [
+            3.290299807776388,
+            3.3052022424059926
+          ],
+          "server_rss_kib": [
+            77348,
+            77616
+          ]
+        }
+      }
+    },
+    "room-mixed": {
+      "websocket": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-1.json",
+            "passed": true,
+            "private_per_second": 741045.784633249,
+            "fanout_per_second": 987570.6721392543,
+            "combined_per_second": 1728616.4567725034,
+            "private_p50_upper_ms": 1.048576,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 2.379033,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 5.162495,
+            "server_cpu_cores": 2.0612699474652,
+            "client_cpu_cores": 4.364895270571763,
+            "server_rss_kib": 8588,
+            "client_rss_kib": 21332,
+            "verified_private": 2965952,
+            "verified_fanout": 3952640,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-2.json",
+            "passed": true,
+            "private_per_second": 844807.5028627897,
+            "fanout_per_second": 652885.0185841474,
+            "combined_per_second": 1497692.5214469372,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 3.730859,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.884688,
+            "server_cpu_cores": 2.0686471218486497,
+            "client_cpu_cores": 4.334665164743246,
+            "server_rss_kib": 8696,
+            "client_rss_kib": 20136,
+            "verified_private": 3381440,
+            "verified_fanout": 2613248,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-3.json",
+            "passed": true,
+            "private_per_second": 803874.2068637122,
+            "fanout_per_second": 733600.4097658194,
+            "combined_per_second": 1537474.6166295316,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 2.097152,
+            "private_max_ms": 3.994242,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 8.794495,
+            "server_cpu_cores": 2.063291119364563,
+            "client_cpu_cores": 4.338906385394972,
+            "server_rss_kib": 8600,
+            "client_rss_kib": 22068,
+            "verified_private": 3218160,
+            "verified_fanout": 2936832,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 803874.2068637122,
+          "fanout_per_second": 733600.4097658194,
+          "combined_per_second": 1537474.6166295316,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 2.097152,
+          "private_max_ms": 3.730859,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 7.884688,
+          "server_cpu_cores": 2.063291119364563,
+          "client_cpu_cores": 4.338906385394972,
+          "server_rss_kib": 8600,
+          "client_rss_kib": 21332,
+          "verified_private": 3218160,
+          "verified_fanout": 2936832
+        },
+        "ranges": {
+          "private_per_second": [
+            741045.784633249,
+            844807.5028627897
+          ],
+          "fanout_per_second": [
+            652885.0185841474,
+            987570.6721392543
+          ],
+          "combined_per_second": [
+            1497692.5214469372,
+            1728616.4567725034
+          ],
+          "server_cpu_cores": [
+            2.0612699474652,
+            2.0686471218486497
+          ],
+          "server_rss_kib": [
+            8588,
+            8696
+          ]
+        }
+      },
+      "websocket-tls": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-tls-1.json",
+            "passed": true,
+            "private_per_second": 404726.67311458813,
+            "fanout_per_second": 592460.7568513146,
+            "combined_per_second": 997187.4299659027,
+            "private_p50_upper_ms": 1.048576,
+            "private_p99_upper_ms": 8.388608,
+            "private_max_ms": 9.688245,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 16.777216,
+            "fanout_max_ms": 14.544757,
+            "server_cpu_cores": 2.3357840483658987,
+            "client_cpu_cores": 3.352537104713407,
+            "server_rss_kib": 42604,
+            "client_rss_kib": 50196,
+            "verified_private": 1620096,
+            "verified_fanout": 2371584,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-tls-2.json",
+            "passed": true,
+            "private_per_second": 421760.4113617372,
+            "fanout_per_second": 565634.1753489367,
+            "combined_per_second": 987394.5867106739,
+            "private_p50_upper_ms": 1.048576,
+            "private_p99_upper_ms": 8.388608,
+            "private_max_ms": 12.187984,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 16.777216,
+            "fanout_max_ms": 14.368721,
+            "server_cpu_cores": 2.3398615078175937,
+            "client_cpu_cores": 3.5659789041232908,
+            "server_rss_kib": 42512,
+            "client_rss_kib": 49156,
+            "verified_private": 1688944,
+            "verified_fanout": 2265088,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-websocket-tls-3.json",
+            "passed": true,
+            "private_per_second": 425379.39714832907,
+            "fanout_per_second": 521626.1302872719,
+            "combined_per_second": 947005.527435601,
+            "private_p50_upper_ms": 1.048576,
+            "private_p99_upper_ms": 8.388608,
+            "private_max_ms": 7.918377,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 16.777216,
+            "fanout_max_ms": 14.404818,
+            "server_cpu_cores": 2.347237680329138,
+            "client_cpu_cores": 3.4359564341839297,
+            "server_rss_kib": 42620,
+            "client_rss_kib": 51840,
+            "verified_private": 1703520,
+            "verified_fanout": 2088960,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 421760.4113617372,
+          "fanout_per_second": 565634.1753489367,
+          "combined_per_second": 987394.5867106739,
+          "private_p50_upper_ms": 1.048576,
+          "private_p99_upper_ms": 8.388608,
+          "private_max_ms": 9.688245,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 16.777216,
+          "fanout_max_ms": 14.404818,
+          "server_cpu_cores": 2.3398615078175937,
+          "client_cpu_cores": 3.4359564341839297,
+          "server_rss_kib": 42604,
+          "client_rss_kib": 50196,
+          "verified_private": 1688944,
+          "verified_fanout": 2265088
+        },
+        "ranges": {
+          "private_per_second": [
+            404726.67311458813,
+            425379.39714832907
+          ],
+          "fanout_per_second": [
+            521626.1302872719,
+            592460.7568513146
+          ],
+          "combined_per_second": [
+            947005.527435601,
+            997187.4299659027
+          ],
+          "server_cpu_cores": [
+            2.3357840483658987,
+            2.347237680329138
+          ],
+          "server_rss_kib": [
+            42512,
+            42620
+          ]
+        }
+      },
+      "webtransport": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-webtransport-1.json",
+            "passed": true,
+            "private_per_second": 296064.7358098293,
+            "fanout_per_second": 808023.1595662719,
+            "combined_per_second": 1104087.8953761011,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.56828,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.130387,
+            "server_cpu_cores": 3.4310219950431966,
+            "client_cpu_cores": 4.684568604585907,
+            "server_rss_kib": 82764,
+            "client_rss_kib": 73192,
+            "verified_private": 1185632,
+            "verified_fanout": 3235840,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-webtransport-2.json",
+            "passed": true,
+            "private_per_second": 283510.7247074967,
+            "fanout_per_second": 776905.5912555418,
+            "combined_per_second": 1060416.3159630385,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 6.379305,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.090365,
+            "server_cpu_cores": 3.4436241172020923,
+            "client_cpu_cores": 4.70312089156338,
+            "server_rss_kib": 83184,
+            "client_rss_kib": 73196,
+            "verified_private": 1134496,
+            "verified_fanout": 3108864,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/parity-fixed-cpus-room-mixed-webtransport-3.json",
+            "passed": true,
+            "private_per_second": 295758.35808195465,
+            "fanout_per_second": 813580.3343493872,
+            "combined_per_second": 1109338.6924313419,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.638637,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 8.177991,
+            "server_cpu_cores": 3.4129039428596175,
+            "client_cpu_cores": 4.577188889691668,
+            "server_rss_kib": 82956,
+            "client_rss_kib": 73084,
+            "verified_private": 1183760,
+            "verified_fanout": 3256320,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 295758.35808195465,
+          "fanout_per_second": 808023.1595662719,
+          "combined_per_second": 1104087.8953761011,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.638637,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 8.177991,
+          "server_cpu_cores": 3.4310219950431966,
+          "client_cpu_cores": 4.684568604585907,
+          "server_rss_kib": 82956,
+          "client_rss_kib": 73192,
+          "verified_private": 1183760,
+          "verified_fanout": 3235840
+        },
+        "ranges": {
+          "private_per_second": [
+            283510.7247074967,
+            296064.7358098293
+          ],
+          "fanout_per_second": [
+            776905.5912555418,
+            813580.3343493872
+          ],
+          "combined_per_second": [
+            1060416.3159630385,
+            1109338.6924313419
+          ],
+          "server_cpu_cores": [
+            3.4129039428596175,
+            3.4436241172020923
+          ],
+          "server_rss_kib": [
+            82764,
+            83184
+          ]
+        }
+      }
+    }
+  },
+  "capacity": {
+    "capacity-100k-buffered": {
+      "receipt": "artifacts/webtransport/capacity-100k-buffered.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.012818734,
+      "deliveries": 400000,
+      "achieved_per_second": 99680.55536893834,
+      "round_trip": {
+        "max_ms": 3.354113,
+        "p50_upper_ms": 0.524288,
+        "p99_upper_ms": 1.048576,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 2.719549,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 4971692,
+      "client_rss_kib": 4406604,
+      "server_cpu_cores": 2.205432287537761,
+      "client_cpu_cores": 1.9038986075467215,
+      "setup_seconds": 11.294242145,
+      "retirement_seconds": 2.460668967,
+      "timed_udp_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+    },
+    "capacity-100k-parity-queue": {
+      "receipt": "artifacts/webtransport/capacity-100k-parity-queue.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.014587952,
+      "deliveries": 400000,
+      "achieved_per_second": 99636.6264190891,
+      "round_trip": {
+        "max_ms": 11.933618,
+        "p50_upper_ms": 0.524288,
+        "p99_upper_ms": 1.048576,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.013204,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 4765164,
+      "client_rss_kib": 4405864,
+      "server_cpu_cores": 2.1596238776337557,
+      "client_cpu_cores": 1.8906049863022145,
+      "setup_seconds": 11.51110971,
+      "retirement_seconds": 2.393390431,
+      "timed_udp_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+    },
+    "capacity-100k-parity-websocket": {
+      "receipt": "artifacts/webtransport/capacity-100k-parity-websocket.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.008431372,
+      "deliveries": 400000,
+      "achieved_per_second": 99789.65906566604,
+      "round_trip": {
+        "max_ms": 2.760842,
+        "p50_upper_ms": 0.262144,
+        "p99_upper_ms": 0.524288,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.054531,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 115540,
+      "client_rss_kib": 797956,
+      "server_cpu_cores": 0.48647458794512194,
+      "client_cpu_cores": 0.6037274373472794,
+      "setup_seconds": 0.677947131,
+      "retirement_seconds": 0.624616538,
+      "timed_udp_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+      "client_sha256": "856a3ecda3b8f36975037b8d911bc8dca35a622e7e39bdf15018b5d699b9c46e"
+    }
+  },
+  "freshness": {
+    "freshness-matrix": [
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1.536349,
+            "p50_ms": 0.323921,
+            "p99_ms": 1.020313,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.143623,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.001958152,
+          "freshest_state_age": {
+            "max_ms": 17.075778,
+            "p50_ms": 10.216449,
+            "p99_ms": 16.729218,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.3258300000000003,
+            "p50_ms": 1.231374,
+            "p99_ms": 2.1494,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 1
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 360,
+          "war_datagrams_submitted": 360,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-datagram-2.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1.615927,
+            "p50_ms": 0.312142,
+            "p99_ms": 1.365874,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.450675,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.001907675,
+          "freshest_state_age": {
+            "max_ms": 16.954981,
+            "p50_ms": 10.093903,
+            "p99_ms": 16.777175,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.551137,
+            "p50_ms": 1.180324,
+            "p99_ms": 2.103265,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 1
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 360,
+          "war_datagrams_submitted": 360,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-datagram-3.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1.353984,
+            "p50_ms": 0.345041,
+            "p99_ms": 1.189298,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.598651,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.001748503,
+          "freshest_state_age": {
+            "max_ms": 16.954721,
+            "p50_ms": 10.261998,
+            "p99_ms": 16.846004,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.353936,
+            "p50_ms": 1.1141510000000001,
+            "p99_ms": 2.019805,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 1
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 360,
+          "war_datagrams_submitted": 360,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.579712,
+            "p50_ms": 0.38631,
+            "p99_ms": 2.054656,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.513153,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.001224249,
+          "freshest_state_age": {
+            "max_ms": 17.165466,
+            "p50_ms": 9.962287,
+            "p99_ms": 16.840525,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.674892,
+            "p50_ms": 1.315558,
+            "p99_ms": 2.3291929999999996,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-stream-2.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.380717,
+            "p50_ms": 0.333331,
+            "p99_ms": 1.227458,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.442776,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.000532142,
+          "freshest_state_age": {
+            "max_ms": 17.116137,
+            "p50_ms": 9.939047,
+            "p99_ms": 16.724448,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.714536,
+            "p50_ms": 1.403851,
+            "p99_ms": 2.428614,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-stream-3.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.330178,
+            "p50_ms": 0.309282,
+            "p99_ms": 1.88863,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.395406,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.001284757,
+          "freshest_state_age": {
+            "max_ms": 17.501956,
+            "p50_ms": 10.343835,
+            "p99_ms": 16.96323,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.791775,
+            "p50_ms": 1.368978,
+            "p99_ms": 2.697418,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.27993,
+            "p50_ms": 0.317982,
+            "p99_ms": 1.375824,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1.4354120000000001,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.001967046,
+          "freshest_state_age": {
+            "max_ms": 18.055842,
+            "p50_ms": 10.23053,
+            "p99_ms": 17.553045,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.486616,
+            "p50_ms": 1.310049,
+            "p99_ms": 2.3261879999999997,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-websocket-tls-2.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.430165,
+            "p50_ms": 0.326851,
+            "p99_ms": 1.304476,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1.324424,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.001117792,
+          "freshest_state_age": {
+            "max_ms": 18.360754,
+            "p50_ms": 9.989475,
+            "p99_ms": 18.016792,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.666004,
+            "p50_ms": 1.101257,
+            "p99_ms": 2.277612,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/clean-websocket-tls-3.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1.534499,
+            "p50_ms": 0.338391,
+            "p99_ms": 1.170479,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1.452872,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.002318322,
+          "freshest_state_age": {
+            "max_ms": 17.840157,
+            "p50_ms": 9.763151,
+            "p99_ms": 17.7451,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.488734,
+            "p50_ms": 1.327447,
+            "p99_ms": 2.449946,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 80.906853,
+            "p50_ms": 40.777128,
+            "p99_ms": 74.293529,
+            "samples": 345
+          },
+          "bulk_arrival_ms": 2407.888613,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.002054586,
+          "freshest_state_age": {
+            "max_ms": 113.175528,
+            "p50_ms": 52.836938,
+            "p99_ms": 85.622148,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.617565,
+            "p50_ms": 1.1057720000000002,
+            "p99_ms": 2.257332,
+            "samples": 360
+          },
+          "missing": 15,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 5,
+          "rate": 60,
+          "received_unique": 345,
+          "updates_before_bulk": 138
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 354,
+          "war_datagrams_submitted": 354,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-datagram-2.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 79.774622,
+            "p50_ms": 40.647821,
+            "p99_ms": 63.142004,
+            "samples": 353
+          },
+          "bulk_arrival_ms": 637.897185,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.002323166,
+          "freshest_state_age": {
+            "max_ms": 81.010769,
+            "p50_ms": 50.300044,
+            "p99_ms": 69.899514,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.6355329999999997,
+            "p50_ms": 1.3433659999999998,
+            "p99_ms": 2.409587,
+            "samples": 360
+          },
+          "missing": 7,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 5,
+          "rate": 60,
+          "received_unique": 353,
+          "updates_before_bulk": 36
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 359,
+          "war_datagrams_submitted": 359,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-datagram-3.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 80.495732,
+            "p50_ms": 40.738027,
+            "p99_ms": 69.014046,
+            "samples": 341
+          },
+          "bulk_arrival_ms": 1642.9791649999997,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.001980465,
+          "freshest_state_age": {
+            "max_ms": 82.920607,
+            "p50_ms": 50.719763,
+            "p99_ms": 80.793403,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.322288,
+            "p50_ms": 1.237441,
+            "p99_ms": 2.156601,
+            "samples": 360
+          },
+          "missing": 19,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 5,
+          "rate": 60,
+          "received_unique": 341,
+          "updates_before_bulk": 89
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 348,
+          "war_datagrams_submitted": 348,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 681.828025,
+            "p50_ms": 40.801387,
+            "p99_ms": 631.689355,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 682.8348279999999,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.033861262,
+          "freshest_state_age": {
+            "max_ms": 680.688495,
+            "p50_ms": 52.489717,
+            "p99_ms": 620.974959,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.396633,
+            "p50_ms": 1.208515,
+            "p99_ms": 2.2366099999999998,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 35,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-stream-2.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2822.144716,
+            "p50_ms": 81.028829,
+            "p99_ms": 2770.492326,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2820.208987,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.036822082,
+          "freshest_state_age": {
+            "max_ms": 2820.714953,
+            "p50_ms": 85.688115,
+            "p99_ms": 2760.954069,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.51061,
+            "p50_ms": 1.354384,
+            "p99_ms": 2.4320470000000003,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 142,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-stream-3.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 983.8075,
+            "p50_ms": 40.776966,
+            "p99_ms": 934.373984,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 981.721966,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.10258351,
+          "freshest_state_age": {
+            "max_ms": 981.447893,
+            "p50_ms": 53.095849,
+            "p99_ms": 921.509387,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.594632,
+            "p50_ms": 1.348208,
+            "p99_ms": 2.489977,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 50,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1089.040753,
+            "p50_ms": 40.808838,
+            "p99_ms": 1039.576084,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1089.798532,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.035150912,
+          "freshest_state_age": {
+            "max_ms": 1080.592926,
+            "p50_ms": 52.724972,
+            "p99_ms": 1021.480644,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.2249000000000003,
+            "p50_ms": 1.127666,
+            "p99_ms": 2.069574,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 55,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-websocket-tls-2.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 43,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1141.012858,
+            "p50_ms": 40.798277,
+            "p99_ms": 1090.333494,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1141.8853740000002,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.03499239,
+          "freshest_state_age": {
+            "max_ms": 1141.799816,
+            "p50_ms": 53.973406,
+            "p99_ms": 1081.885748,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.3845,
+            "p50_ms": 1.21365,
+            "p99_ms": 2.1132,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 58,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-matrix/loss-websocket-tls-3.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 44,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1247.590698,
+            "p50_ms": 41.016161,
+            "p99_ms": 1196.510215,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1248.336708,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.034917949,
+          "freshest_state_age": {
+            "max_ms": 1241.771373,
+            "p50_ms": 55.133095,
+            "p99_ms": 1181.629521,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.450368,
+            "p50_ms": 1.379799,
+            "p99_ms": 2.321958,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 63,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      }
+    ],
+    "freshness-reorder": [
+      {
+        "receipt": "artifacts/webtransport/freshness-reorder/reorder-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 127.32641,
+            "p50_ms": 51.689103,
+            "p99_ms": 116.934706,
+            "samples": 354
+          },
+          "bulk_arrival_ms": 7492.303588000001,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 9.49379824,
+          "freshest_state_age": {
+            "max_ms": 129.836833,
+            "p50_ms": 62.192434,
+            "p99_ms": 116.05505,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.32518,
+            "p50_ms": 1.0120019999999998,
+            "p99_ms": 2.020439,
+            "samples": 360
+          },
+          "missing": 6,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 56,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 2,
+          "rate": 60,
+          "received_unique": 354,
+          "updates_before_bulk": 354
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 356,
+          "war_datagrams_submitted": 356,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-reorder/reorder-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 5906.359919,
+            "p50_ms": 3472.44006,
+            "p99_ms": 5855.261409,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 5907.0299110000005,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 7.13222015,
+          "freshest_state_age": {
+            "max_ms": 5900.975992,
+            "p50_ms": 3001.527966,
+            "p99_ms": 5841.431658,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.419883,
+            "p50_ms": 1.310446,
+            "p99_ms": 2.269073,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 296,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-reorder/reorder-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 778.864151,
+            "p50_ms": 42.515088,
+            "p99_ms": 728.588369,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 779.722919,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.145951307,
+          "freshest_state_age": {
+            "max_ms": 761.002557,
+            "p50_ms": 50.74061,
+            "p99_ms": 701.253297,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.265208,
+            "p50_ms": 1.021391,
+            "p99_ms": 2.080467,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 39,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": null
+      }
+    ],
+    "freshness-parity-queue": [
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/clean-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.262573,
+            "p50_ms": 0.313963,
+            "p99_ms": 1.526592,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.350802,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.003421032,
+          "freshest_state_age": {
+            "max_ms": 17.966805,
+            "p50_ms": 9.981643,
+            "p99_ms": 17.917906,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.731663,
+            "p50_ms": 1.282156,
+            "p99_ms": 2.283864,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 1
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 360,
+          "war_datagrams_submitted": 360,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/clean-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 2.430299,
+            "p50_ms": 0.338212,
+            "p99_ms": 1.754916,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 2.436119,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.000665412,
+          "freshest_state_age": {
+            "max_ms": 16.931811,
+            "p50_ms": 10.190688,
+            "p99_ms": 16.599729,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.280032,
+            "p50_ms": 1.301902,
+            "p99_ms": 2.2579919999999998,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/clean-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1.979451,
+            "p50_ms": 0.310452,
+            "p99_ms": 1.63921,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1.3590060000000002,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.000270739,
+          "freshest_state_age": {
+            "max_ms": 16.663688,
+            "p50_ms": 10.075661,
+            "p99_ms": 16.609949,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.369824,
+            "p50_ms": 1.0522699999999998,
+            "p99_ms": 2.013326,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 1,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/loss-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 80.605177,
+            "p50_ms": 40.841815,
+            "p99_ms": 64.821569,
+            "samples": 348
+          },
+          "bulk_arrival_ms": 1904.7347260000001,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 8.003182843,
+          "freshest_state_age": {
+            "max_ms": 81.294101,
+            "p50_ms": 52.529905,
+            "p99_ms": 79.236339,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.044191,
+            "p50_ms": 1.176302,
+            "p99_ms": 2.0021739999999997,
+            "samples": 360
+          },
+          "missing": 12,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 5,
+          "rate": 60,
+          "received_unique": 348,
+          "updates_before_bulk": 110
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 353,
+          "war_datagrams_submitted": 353,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/loss-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 664.030849,
+            "p50_ms": 40.68854,
+            "p99_ms": 614.572317,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 665.012974,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.050568547,
+          "freshest_state_age": {
+            "max_ms": 661.103921,
+            "p50_ms": 53.705937,
+            "p99_ms": 621.500194,
+            "samples": 300
+          },
+          "generation_lag": {
+            "max_ms": 22.922015000000002,
+            "p50_ms": 1.080724,
+            "p99_ms": 1.941575,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 34,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/loss-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 1127.349347,
+            "p50_ms": 40.965144,
+            "p99_ms": 1077.874364,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 1128.116208,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.034622283,
+          "freshest_state_age": {
+            "max_ms": 1121.230089,
+            "p50_ms": 53.541572,
+            "p99_ms": 1061.249236,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.567901,
+            "p50_ms": 1.233865,
+            "p99_ms": 2.308558,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 57,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/reorder-datagram-1.json",
+        "passed": true,
+        "mode": "datagram",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 151.198518,
+            "p50_ms": 52.717314,
+            "p99_ms": 121.287804,
+            "samples": 355
+          },
+          "bulk_arrival_ms": 7320.729343,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 9.330567095,
+          "freshest_state_age": {
+            "max_ms": 153.51085,
+            "p50_ms": 60.96473,
+            "p99_ms": 127.295574,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.513707,
+            "p50_ms": 1.298849,
+            "p99_ms": 2.2163489999999997,
+            "samples": 360
+          },
+          "missing": 5,
+          "mode": "datagram",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 36,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 3,
+          "rate": 60,
+          "received_unique": 355,
+          "updates_before_bulk": 355
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 359,
+          "war_datagrams_submitted": 359,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/reorder-stream-1.json",
+        "passed": true,
+        "mode": "stream",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 5413.271294,
+            "p50_ms": 3279.99704,
+            "p99_ms": 5378.128509,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 5414.24808,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.914789438,
+          "freshest_state_age": {
+            "max_ms": 5420.052255,
+            "p50_ms": 3002.04581,
+            "p99_ms": 5361.394827,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.506676,
+            "p50_ms": 1.364948,
+            "p99_ms": 2.416235,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "stream",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 271,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      },
+      {
+        "receipt": "artifacts/webtransport/freshness-parity-queue/reorder-websocket-tls-1.json",
+        "passed": true,
+        "mode": "websocket-tls",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+        "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+        "measurement": {
+          "arrival_age": {
+            "max_ms": 788.741125,
+            "p50_ms": 41.803999,
+            "p99_ms": 738.339899,
+            "samples": 360
+          },
+          "bulk_arrival_ms": 789.505406,
+          "bulk_bytes": 1048576,
+          "duplicates": 0,
+          "elapsed_seconds": 6.023606517,
+          "freshest_state_age": {
+            "max_ms": 780.713245,
+            "p50_ms": 51.158897,
+            "p99_ms": 720.842525,
+            "samples": 301
+          },
+          "generation_lag": {
+            "max_ms": 2.410302,
+            "p50_ms": 1.2083000000000002,
+            "p99_ms": 2.1486840000000003,
+            "samples": 360
+          },
+          "missing": 0,
+          "mode": "websocket-tls",
+          "offered": 360,
+          "offered_seconds": 6,
+          "out_of_order": 0,
+          "payload_bytes": 1024,
+          "probes_before_first_state": 40,
+          "rate": 60,
+          "received_unique": 360,
+          "updates_before_bulk": 0
+        },
+        "after": {
+          "war_quic_connections": 0,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 0,
+          "war_sessions": 0,
+          "war_queued_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_exit_code": 0
+      }
+    ]
+  },
+  "diagnostics": {
+    "quantum": {
+      "private": {
+        "buffered-direct": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-private-buffered-direct-1.json",
+              "passed": true,
+              "private_per_second": 663039.88139131,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 663039.88139131,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 1.85807,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.2346871928097065,
+              "client_cpu_cores": 4.304583729535019,
+              "server_rss_kib": 15516,
+              "client_rss_kib": 17500,
+              "verified_private": 2652416,
+              "verified_fanout": 0,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-private-buffered-direct-2.json",
+              "passed": true,
+              "private_per_second": 620998.0175529477,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 620998.0175529477,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 1.889659,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.172101660161923,
+              "client_cpu_cores": 5.08936089841582,
+              "server_rss_kib": 15492,
+              "client_rss_kib": 17072,
+              "verified_private": 2484304,
+              "verified_fanout": 0,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 642018.9494721289,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 642018.9494721289,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.8738645,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.203394426485815,
+            "client_cpu_cores": 4.69697231397542,
+            "server_rss_kib": 15504.0,
+            "client_rss_kib": 17286.0,
+            "verified_private": 2568360.0,
+            "verified_fanout": 0.0
+          },
+          "ranges": {
+            "private_per_second": [
+              620998.0175529477,
+              663039.88139131
+            ],
+            "fanout_per_second": [
+              0.0,
+              0.0
+            ],
+            "combined_per_second": [
+              620998.0175529477,
+              663039.88139131
+            ],
+            "server_cpu_cores": [
+              3.172101660161923,
+              3.2346871928097065
+            ],
+            "server_rss_kib": [
+              15492,
+              15516
+            ]
+          }
+        },
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-private-quantum-1.json",
+              "passed": true,
+              "private_per_second": 1398624.2668806533,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1398624.2668806533,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 1.822231,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.52463778178676,
+              "client_cpu_cores": 4.849501628841358,
+              "server_rss_kib": 15820,
+              "client_rss_kib": 18708,
+              "verified_private": 5595072,
+              "verified_fanout": 0,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-private-quantum-2.json",
+              "passed": true,
+              "private_per_second": 1386885.2491644088,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1386885.2491644088,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 2.055025,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.5221273122621755,
+              "client_cpu_cores": 4.89948156993177,
+              "server_rss_kib": 15776,
+              "client_rss_kib": 18832,
+              "verified_private": 5548128,
+              "verified_fanout": 0,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 1392754.758022531,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1392754.758022531,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.938628,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5233825470244677,
+            "client_cpu_cores": 4.874491599386564,
+            "server_rss_kib": 15798.0,
+            "client_rss_kib": 18770.0,
+            "verified_private": 5571600.0,
+            "verified_fanout": 0.0
+          },
+          "ranges": {
+            "private_per_second": [
+              1386885.2491644088,
+              1398624.2668806533
+            ],
+            "fanout_per_second": [
+              0.0,
+              0.0
+            ],
+            "combined_per_second": [
+              1386885.2491644088,
+              1398624.2668806533
+            ],
+            "server_cpu_cores": [
+              3.5221273122621755,
+              3.52463778178676
+            ],
+            "server_rss_kib": [
+              15776,
+              15820
+            ]
+          }
+        }
+      },
+      "roomonly": {
+        "buffered-direct": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-roomonly-buffered-direct-1.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 889409.3124057353,
+              "combined_per_second": 889409.3124057353,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 9.194743,
+              "server_cpu_cores": 3.253366063588567,
+              "client_cpu_cores": 4.989993877869715,
+              "server_rss_kib": 80956,
+              "client_rss_kib": 62596,
+              "verified_private": 0,
+              "verified_fanout": 3559424,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-roomonly-buffered-direct-2.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 897703.455129997,
+              "combined_per_second": 897703.455129997,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 6.637551,
+              "server_cpu_cores": 3.2412559832648316,
+              "client_cpu_cores": 5.018074028061512,
+              "server_rss_kib": 80736,
+              "client_rss_kib": 62460,
+              "verified_private": 0,
+              "verified_fanout": 3592192,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 0.0,
+            "fanout_per_second": 893556.3837678661,
+            "combined_per_second": 893556.3837678661,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.9161470000000005,
+            "server_cpu_cores": 3.2473110234266995,
+            "client_cpu_cores": 5.004033952965614,
+            "server_rss_kib": 80846.0,
+            "client_rss_kib": 62528.0,
+            "verified_private": 0.0,
+            "verified_fanout": 3575808.0
+          },
+          "ranges": {
+            "private_per_second": [
+              0.0,
+              0.0
+            ],
+            "fanout_per_second": [
+              889409.3124057353,
+              897703.455129997
+            ],
+            "combined_per_second": [
+              889409.3124057353,
+              897703.455129997
+            ],
+            "server_cpu_cores": [
+              3.2412559832648316,
+              3.253366063588567
+            ],
+            "server_rss_kib": [
+              80736,
+              80956
+            ]
+          }
+        },
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-roomonly-quantum-1.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1053257.1972527665,
+              "combined_per_second": 1053257.1972527665,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 5.921861,
+              "server_cpu_cores": 3.298625743036065,
+              "client_cpu_cores": 4.972928203516491,
+              "server_rss_kib": 80860,
+              "client_rss_kib": 62700,
+              "verified_private": 0,
+              "verified_fanout": 4214784,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-roomonly-quantum-2.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1020579.3190756378,
+              "combined_per_second": 1020579.3190756378,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 6.783148,
+              "server_cpu_cores": 3.3113686708935894,
+              "client_cpu_cores": 4.96830257942374,
+              "server_rss_kib": 81068,
+              "client_rss_kib": 62740,
+              "verified_private": 0,
+              "verified_fanout": 4083712,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 0.0,
+            "fanout_per_second": 1036918.2581642021,
+            "combined_per_second": 1036918.2581642021,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.3525045,
+            "server_cpu_cores": 3.3049972069648272,
+            "client_cpu_cores": 4.970615391470115,
+            "server_rss_kib": 80964.0,
+            "client_rss_kib": 62720.0,
+            "verified_private": 0.0,
+            "verified_fanout": 4149248.0
+          },
+          "ranges": {
+            "private_per_second": [
+              0.0,
+              0.0
+            ],
+            "fanout_per_second": [
+              1020579.3190756378,
+              1053257.1972527665
+            ],
+            "combined_per_second": [
+              1020579.3190756378,
+              1053257.1972527665
+            ],
+            "server_cpu_cores": [
+              3.298625743036065,
+              3.3113686708935894
+            ],
+            "server_rss_kib": [
+              80860,
+              81068
+            ]
+          }
+        }
+      },
+      "mixed": {
+        "buffered-direct": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-mixed-buffered-direct-1.json",
+              "passed": true,
+              "private_per_second": 94325.57738588544,
+              "fanout_per_second": 681071.1744371288,
+              "combined_per_second": 775396.7518230142,
+              "private_p50_upper_ms": 4.194304,
+              "private_p99_upper_ms": 8.388608,
+              "private_max_ms": 11.86894,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 8.637897,
+              "server_cpu_cores": 3.263126499262913,
+              "client_cpu_cores": 4.998300881043881,
+              "server_rss_kib": 85376,
+              "client_rss_kib": 71644,
+              "verified_private": 377808,
+              "verified_fanout": 2727936,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-mixed-buffered-direct-2.json",
+              "passed": true,
+              "private_per_second": 91796.59110772722,
+              "fanout_per_second": 661811.3074934741,
+              "combined_per_second": 753607.8986012014,
+              "private_p50_upper_ms": 4.194304,
+              "private_p99_upper_ms": 8.388608,
+              "private_max_ms": 11.597758,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 8.659287,
+              "server_cpu_cores": 3.2614680722417666,
+              "client_cpu_cores": 4.802299466248788,
+              "server_rss_kib": 85920,
+              "client_rss_kib": 71624,
+              "verified_private": 367584,
+              "verified_fanout": 2650112,
+              "server_sha256": "372b9276c274f7ef87459ea4720d5a93bf783f55217a9b26799704a381b3b9e6",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 93061.08424680633,
+            "fanout_per_second": 671441.2409653014,
+            "combined_per_second": 764502.3252121077,
+            "private_p50_upper_ms": 4.194304,
+            "private_p99_upper_ms": 8.388608,
+            "private_max_ms": 11.733349,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 8.648592,
+            "server_cpu_cores": 3.26229728575234,
+            "client_cpu_cores": 4.900300173646334,
+            "server_rss_kib": 85648.0,
+            "client_rss_kib": 71634.0,
+            "verified_private": 372696.0,
+            "verified_fanout": 2689024.0
+          },
+          "ranges": {
+            "private_per_second": [
+              91796.59110772722,
+              94325.57738588544
+            ],
+            "fanout_per_second": [
+              661811.3074934741,
+              681071.1744371288
+            ],
+            "combined_per_second": [
+              753607.8986012014,
+              775396.7518230142
+            ],
+            "server_cpu_cores": [
+              3.2614680722417666,
+              3.263126499262913
+            ],
+            "server_rss_kib": [
+              85376,
+              85920
+            ]
+          }
+        },
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/quantum-mixed-quantum-1.json",
+              "passed": true,
+              "private_per_second": 292571.57971141394,
+              "fanout_per_second": 778836.9549356931,
+              "combined_per_second": 1071408.5346471071,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 5.306648,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 9.802296,
+              "server_cpu_cores": 3.4131285432220553,
+              "client_cpu_cores": 4.617468190244772,
+              "server_rss_kib": 86924,
+              "client_rss_kib": 73216,
+              "verified_private": 1170928,
+              "verified_fanout": 3117056,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/quantum-mixed-quantum-2.json",
+              "passed": true,
+              "private_per_second": 290867.0099112196,
+              "fanout_per_second": 768112.9604204694,
+              "combined_per_second": 1058979.9703316889,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 4.962527,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 8.369445,
+              "server_cpu_cores": 3.42094250561765,
+              "client_cpu_cores": 4.65198239997495,
+              "server_rss_kib": 86852,
+              "client_rss_kib": 73100,
+              "verified_private": 1164848,
+              "verified_fanout": 3076096,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 291719.29481131677,
+            "fanout_per_second": 773474.9576780812,
+            "combined_per_second": 1065194.252489398,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.1345875,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 9.0858705,
+            "server_cpu_cores": 3.4170355244198527,
+            "client_cpu_cores": 4.634725295109861,
+            "server_rss_kib": 86888.0,
+            "client_rss_kib": 73158.0,
+            "verified_private": 1167888.0,
+            "verified_fanout": 3096576.0
+          },
+          "ranges": {
+            "private_per_second": [
+              290867.0099112196,
+              292571.57971141394
+            ],
+            "fanout_per_second": [
+              768112.9604204694,
+              778836.9549356931
+            ],
+            "combined_per_second": [
+              1058979.9703316889,
+              1071408.5346471071
+            ],
+            "server_cpu_cores": [
+              3.4131285432220553,
+              3.42094250561765
+            ],
+            "server_rss_kib": [
+              86852,
+              86924
+            ]
+          }
+        }
+      }
+    },
+    "inline-ready": {
+      "private": {
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-private-quantum-1.json",
+              "passed": true,
+              "private_per_second": 1450714.6445922416,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1450714.6445922416,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 2.042585,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.554624239782957,
+              "client_cpu_cores": 4.097066898033941,
+              "server_rss_kib": 15760,
+              "client_rss_kib": 18916,
+              "verified_private": 5803472,
+              "verified_fanout": 0,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-private-quantum-2.json",
+              "passed": true,
+              "private_per_second": 1391805.7965666673,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1391805.7965666673,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 3.105636,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.517100219131567,
+              "client_cpu_cores": 5.099420360361333,
+              "server_rss_kib": 15828,
+              "client_rss_kib": 18784,
+              "verified_private": 5567856,
+              "verified_fanout": 0,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 1421260.2205794544,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1421260.2205794544,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.5741104999999997,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.535862229457262,
+            "client_cpu_cores": 4.598243629197637,
+            "server_rss_kib": 15794.0,
+            "client_rss_kib": 18850.0,
+            "verified_private": 5685664.0,
+            "verified_fanout": 0.0
+          },
+          "ranges": {
+            "private_per_second": [
+              1391805.7965666673,
+              1450714.6445922416
+            ],
+            "fanout_per_second": [
+              0.0,
+              0.0
+            ],
+            "combined_per_second": [
+              1391805.7965666673,
+              1450714.6445922416
+            ],
+            "server_cpu_cores": [
+              3.517100219131567,
+              3.554624239782957
+            ],
+            "server_rss_kib": [
+              15760,
+              15828
+            ]
+          }
+        },
+        "inline-ready": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-private-inline-ready-1.json",
+              "passed": true,
+              "private_per_second": 1390246.4358968488,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1390246.4358968488,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 2.128433,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.522161618008494,
+              "client_cpu_cores": 4.8970295313546055,
+              "server_rss_kib": 15552,
+              "client_rss_kib": 19036,
+              "verified_private": 5561520,
+              "verified_fanout": 0,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-private-inline-ready-2.json",
+              "passed": true,
+              "private_per_second": 1400577.0233848942,
+              "fanout_per_second": 0.0,
+              "combined_per_second": 1400577.0233848942,
+              "private_p50_upper_ms": 0.524288,
+              "private_p99_upper_ms": 1.048576,
+              "private_max_ms": 2.049075,
+              "fanout_p50_upper_ms": 0.0,
+              "fanout_p99_upper_ms": 0.0,
+              "fanout_max_ms": 0.0,
+              "server_cpu_cores": 3.5171911756667136,
+              "client_cpu_cores": 5.06955487153667,
+              "server_rss_kib": 15488,
+              "client_rss_kib": 18836,
+              "verified_private": 5602800,
+              "verified_fanout": 0,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 1395411.7296408715,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1395411.7296408715,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.0887539999999998,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5196763968376037,
+            "client_cpu_cores": 4.983292201445638,
+            "server_rss_kib": 15520.0,
+            "client_rss_kib": 18936.0,
+            "verified_private": 5582160.0,
+            "verified_fanout": 0.0
+          },
+          "ranges": {
+            "private_per_second": [
+              1390246.4358968488,
+              1400577.0233848942
+            ],
+            "fanout_per_second": [
+              0.0,
+              0.0
+            ],
+            "combined_per_second": [
+              1390246.4358968488,
+              1400577.0233848942
+            ],
+            "server_cpu_cores": [
+              3.5171911756667136,
+              3.522161618008494
+            ],
+            "server_rss_kib": [
+              15488,
+              15552
+            ]
+          }
+        }
+      },
+      "roomonly": {
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-roomonly-quantum-1.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1047497.3189477416,
+              "combined_per_second": 1047497.3189477416,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 5.415834,
+              "server_cpu_cores": 3.2991026838540236,
+              "client_cpu_cores": 4.944907883445091,
+              "server_rss_kib": 81408,
+              "client_rss_kib": 62744,
+              "verified_private": 0,
+              "verified_fanout": 4194304,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-roomonly-quantum-2.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1027393.1179880182,
+              "combined_per_second": 1027393.1179880182,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 6.858665,
+              "server_cpu_cores": 3.297743877381548,
+              "client_cpu_cores": 4.961605560969511,
+              "server_rss_kib": 81268,
+              "client_rss_kib": 62760,
+              "verified_private": 0,
+              "verified_fanout": 4112384,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 0.0,
+            "fanout_per_second": 1037445.2184678799,
+            "combined_per_second": 1037445.2184678799,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.1372495,
+            "server_cpu_cores": 3.2984232806177856,
+            "client_cpu_cores": 4.953256722207302,
+            "server_rss_kib": 81338.0,
+            "client_rss_kib": 62752.0,
+            "verified_private": 0.0,
+            "verified_fanout": 4153344.0
+          },
+          "ranges": {
+            "private_per_second": [
+              0.0,
+              0.0
+            ],
+            "fanout_per_second": [
+              1027393.1179880182,
+              1047497.3189477416
+            ],
+            "combined_per_second": [
+              1027393.1179880182,
+              1047497.3189477416
+            ],
+            "server_cpu_cores": [
+              3.297743877381548,
+              3.2991026838540236
+            ],
+            "server_rss_kib": [
+              81268,
+              81408
+            ]
+          }
+        },
+        "inline-ready": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-roomonly-inline-ready-1.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1098354.8659090123,
+              "combined_per_second": 1098354.8659090123,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 4.194304,
+              "fanout_max_ms": 5.903091,
+              "server_cpu_cores": 3.2863117625049854,
+              "client_cpu_cores": 4.900728035188043,
+              "server_rss_kib": 77800,
+              "client_rss_kib": 62960,
+              "verified_private": 0,
+              "verified_fanout": 4395008,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-roomonly-inline-ready-2.json",
+              "passed": true,
+              "private_per_second": 0.0,
+              "fanout_per_second": 1067604.5418175017,
+              "combined_per_second": 1067604.5418175017,
+              "private_p50_upper_ms": 0.0,
+              "private_p99_upper_ms": 0.0,
+              "private_max_ms": 0.0,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 6.177513,
+              "server_cpu_cores": 3.296180242392748,
+              "client_cpu_cores": 4.863052882256474,
+              "server_rss_kib": 77340,
+              "client_rss_kib": 62764,
+              "verified_private": 0,
+              "verified_fanout": 4272128,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 0.0,
+            "fanout_per_second": 1082979.703863257,
+            "combined_per_second": 1082979.703863257,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 6.291456,
+            "fanout_max_ms": 6.0403020000000005,
+            "server_cpu_cores": 3.291246002448867,
+            "client_cpu_cores": 4.881890458722259,
+            "server_rss_kib": 77570.0,
+            "client_rss_kib": 62862.0,
+            "verified_private": 0.0,
+            "verified_fanout": 4333568.0
+          },
+          "ranges": {
+            "private_per_second": [
+              0.0,
+              0.0
+            ],
+            "fanout_per_second": [
+              1067604.5418175017,
+              1098354.8659090123
+            ],
+            "combined_per_second": [
+              1067604.5418175017,
+              1098354.8659090123
+            ],
+            "server_cpu_cores": [
+              3.2863117625049854,
+              3.296180242392748
+            ],
+            "server_rss_kib": [
+              77340,
+              77800
+            ]
+          }
+        }
+      },
+      "mixed": {
+        "quantum": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-mixed-quantum-1.json",
+              "passed": true,
+              "private_per_second": 294842.62550468056,
+              "fanout_per_second": 773353.5138057878,
+              "combined_per_second": 1068196.1393104685,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 4.866489,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 7.443729,
+              "server_cpu_cores": 3.4240001454113678,
+              "client_cpu_cores": 4.7676267524363976,
+              "server_rss_kib": 86916,
+              "client_rss_kib": 73148,
+              "verified_private": 1180576,
+              "verified_fanout": 3096576,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-mixed-quantum-2.json",
+              "passed": true,
+              "private_per_second": 281407.9163571212,
+              "fanout_per_second": 741524.941802821,
+              "combined_per_second": 1022932.8581599422,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 5.667547,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 12.561121,
+              "server_cpu_cores": 3.4159688859989865,
+              "client_cpu_cores": 4.442257783766226,
+              "server_rss_kib": 87156,
+              "client_rss_kib": 73316,
+              "verified_private": 1126960,
+              "verified_fanout": 2969600,
+              "server_sha256": "c76fac88af2b9bfbeb873aa9553c50e0abe206820eb4664114f121d9854ff00d",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 288125.2709309009,
+            "fanout_per_second": 757439.2278043043,
+            "combined_per_second": 1045564.4987352053,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.267018,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.002425,
+            "server_cpu_cores": 3.419984515705177,
+            "client_cpu_cores": 4.604942268101311,
+            "server_rss_kib": 87036.0,
+            "client_rss_kib": 73232.0,
+            "verified_private": 1153768.0,
+            "verified_fanout": 3033088.0
+          },
+          "ranges": {
+            "private_per_second": [
+              281407.9163571212,
+              294842.62550468056
+            ],
+            "fanout_per_second": [
+              741524.941802821,
+              773353.5138057878
+            ],
+            "combined_per_second": [
+              1022932.8581599422,
+              1068196.1393104685
+            ],
+            "server_cpu_cores": [
+              3.4159688859989865,
+              3.4240001454113678
+            ],
+            "server_rss_kib": [
+              86916,
+              87156
+            ]
+          }
+        },
+        "inline-ready": {
+          "samples": [
+            {
+              "receipt": "artifacts/webtransport/inline-ready-mixed-inline-ready-1.json",
+              "passed": true,
+              "private_per_second": 295074.1863511211,
+              "fanout_per_second": 805912.881996195,
+              "combined_per_second": 1100987.068347316,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 6.707639,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 7.217765,
+              "server_cpu_cores": 3.4157653578419787,
+              "client_cpu_cores": 4.616776422989634,
+              "server_rss_kib": 82812,
+              "client_rss_kib": 73232,
+              "verified_private": 1181760,
+              "verified_fanout": 3227648,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            },
+            {
+              "receipt": "artifacts/webtransport/inline-ready-mixed-inline-ready-2.json",
+              "passed": true,
+              "private_per_second": 295957.5129726044,
+              "fanout_per_second": 798173.9085679316,
+              "combined_per_second": 1094131.421540536,
+              "private_p50_upper_ms": 2.097152,
+              "private_p99_upper_ms": 4.194304,
+              "private_max_ms": 5.126572,
+              "fanout_p50_upper_ms": 4.194304,
+              "fanout_p99_upper_ms": 8.388608,
+              "fanout_max_ms": 7.309673,
+              "server_cpu_cores": 3.4051702642293007,
+              "client_cpu_cores": 4.576868616337548,
+              "server_rss_kib": 82824,
+              "client_rss_kib": 73200,
+              "verified_private": 1184640,
+              "verified_fanout": 3194880,
+              "server_sha256": "fafc598c8069a6d6bbcd4ea9ade1c93cda55e4c87b756dcc5a4dc841ce59bb1a",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+            }
+          ],
+          "medians": {
+            "private_per_second": 295515.84966186277,
+            "fanout_per_second": 802043.3952820633,
+            "combined_per_second": 1097559.244943926,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.9171055,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.263719,
+            "server_cpu_cores": 3.4104678110356397,
+            "client_cpu_cores": 4.596822519663592,
+            "server_rss_kib": 82818.0,
+            "client_rss_kib": 73216.0,
+            "verified_private": 1183200.0,
+            "verified_fanout": 3211264.0
+          },
+          "ranges": {
+            "private_per_second": [
+              295074.1863511211,
+              295957.5129726044
+            ],
+            "fanout_per_second": [
+              798173.9085679316,
+              805912.881996195
+            ],
+            "combined_per_second": [
+              1094131.421540536,
+              1100987.068347316
+            ],
+            "server_cpu_cores": [
+              3.4051702642293007,
+              3.4157653578419787
+            ],
+            "server_rss_kib": [
+              82812,
+              82824
+            ]
+          }
+        }
+      }
+    },
+    "excluded_trial": "inline-queue initial receiver registered a wakeup even for already queued packets; corrected before the retained candidate. Its final two mixed runs overlapped a correctness test run and are excluded from timing conclusions. No such overlap in the quantum, inline-ready, or final fixed-CPU comparisons.",
+    "heap": {
+      "scope": "gperftools replacement allocator, live requested bytes at ready gate with 8192 single-member rooms plus one private pair (8194 sessions). Diagnostic RSS/timing excluded from ordinary performance medians. Frame-pointer build repeats baseline to obtain complete caller stacks.",
+      "baseline_requested_bytes": 409380715,
+      "inline_queue_requested_bytes": 392344586,
+      "baseline_receipt": "artifacts/webtransport/heap-parity-frames.json",
+      "queue_receipt": "artifacts/webtransport/heap-parity-inline-queue.json",
+      "quinn_accept_cumulative_fraction": 0.616,
+      "quinn_connection_flat_fraction": 0.284,
+      "quinn_stream_map_flat_fraction": 0.188,
+      "note": "Quinn prepopulates remote stream maps for default 100 bidirectional and 100 unidirectional stream credits; retained task/queue/HTTP3/crypto state adds further cost. No stream limits changed in this candidate."
+    }
+  },
+  "validation": {
+    "rust_passed": 264,
+    "rust_ignored": 1,
+    "clippy": "all targets -D warnings passed",
+    "javascript": "70 passed; all six legacy fixture resource gauges retired",
+    "typescript": "passed",
+    "browser": "Chromium 155 delivered bundle passed typed values, cross-room private routing, datagrams, 128 KiB and 5 MiB values, variables, departure and genuine graceful-close ACK; all seven final connection/storage gauges zero. Receipt artifacts/webtransport/parity-browser-check.txt and screenshot output/playwright/webtransport-parity.png. Initial failed browser attempt had no live fixture process after launcher exit; preserved separately and corrected by keeping the fixture launcher alive.",
+    "remaining": "observer forced-cancellation/re-subscribe acceptance, full mixed 100k/8192 observer workload, broader overload/shutdown acceptance, QUIC buffer accounting, and packaging/deployment documentation remain outstanding; parity not accepted"
+  },
+  "freshness_scope": "360 offered state updates at 60 Hz for six seconds, 1 KiB each, alongside one reliable 1 MiB bulk value. Independently stamped and validated. Freshest-state probes include the pre-first-update interval at initial state t0. Older datagrams cannot overwrite a newer sequence. Missing datagrams means unreceived within observation window, not an attributed network-loss rate. Netem applies to the external transport port in a temporary isolated namespace, both directions. TLS internal proxy hop is unimpaired. Three clean/loss repetitions for buffered direct stack, one reordering sample per mode; candidate rerun has one sample per mode/profile and is a regression check, not a statistically established loss ranking.",
+  "source_hashes": {
+    "Cargo.toml": "bd63e5c2d1d381c78873815d001b6f6bb184dd8c59c4e49681cfa4d8809a09fb",
+    "Cargo.lock": "7b8798c9d9bf3f88f31b36dfb6a74caa3373f2715e269351983f49bf762ec0f0",
+    "src/webtransport.rs": "b774779eb4b75fe5c4746f78c9c79b2046c8c580d6cc8bfd78cbe8f638866ce2",
+    "src/webtransport/queue.rs": "45062a8a9d56e0743901a093337e422965d5aff7c3d3d9a434f2c0e613a5f641",
+    "examples/capacity.rs": "d1f89fb1e1e43724023d45941b49c4bc402fee5a3aa969929d23fe7cf142d0d8",
+    "examples/inspection.rs": "8150b3ec94d1b7ccb254c2c89121708afecaf8f2748c45b3e4a30ed027328c30",
+    "examples/support/socket.rs": "4d324f90561d04750248048e4cf7eb8c7ebacaf7de24a84840ae272eb82acadb",
+    "examples/state_freshness.rs": "ad128b3026e2ba2d6429a63be79bcb3b83cc1ee3da7a22b842b4d9910f5b6057",
+    "examples/tls_front.rs": "971e117bb37af7fe43747515733c3bd016d0484102a9559c84bfc026377df571",
+    "scripts/inspection.py": "637acd47201d43b1134e4066ab591e4f3967a292255066b9dfd862c17d34dd26",
+    "scripts/benchmark_transport.py": "50bd9737ccee884779633a9c825f930c314097709bc1ae10914bfc1389da6986",
+    "scripts/freshness.py": "74b280190351c67beff67d135f14f38a2c5377582c3de8af4c285a302ec22587",
+    "scripts/freshness-matrix.py": "5f9404737c7bbe909fed03e2a51d03f84390a41b2d5bed64e1f3129cf257100c"
+  },
+  "binary_hashes": {
+    "artifacts/webtransport/binaries/parity-queue-relay": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+    "target/release/examples/inspection": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+    "target/release/examples/capacity": "856a3ecda3b8f36975037b8d911bc8dca35a622e7e39bdf15018b5d699b9c46e",
+    "target/release/examples/state_freshness": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a",
+    "target/release/examples/tls_front": "c0260d3600d8bb86e970142cec74512904f3c1ee25a43b50a219bbadba6fc5cd"
+  }
+}
