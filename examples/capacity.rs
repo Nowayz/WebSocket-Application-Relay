@@ -36,6 +36,8 @@ const DEADLINE: Duration = Duration::from_secs(15);
 struct Args {
     #[arg(long)]
     certificate: Option<String>,
+    #[arg(long)]
+    ca_certificate: Option<std::path::PathBuf>,
     /// Shared QUIC socket receive buffer; zero selects the OS default.
     #[arg(long, default_value_t = 4 * 1024 * 1024)]
     udp_receive_buffer_bytes: usize,
@@ -325,6 +327,7 @@ fn main() -> Result<()> {
     let authority = args
         .url
         .strip_prefix("ws://")
+        .or_else(|| args.url.strip_prefix("wss://"))
         .or_else(|| args.url.strip_prefix("https://"))
         .context("requires ws:// or https:// IPv4 loopback URL")?
         .split('/')
@@ -391,20 +394,24 @@ async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result
             socket.bind((source, 0).into())?;
             let stream = timeout(DEADLINE, socket.connect(destination)).await??;
             stream.set_nodelay(true)?;
-            let (socket, _) = timeout(
-                DEADLINE,
-                client_async_with_config(
-                    &args.url,
-                    MaybeTlsStream::Plain(stream),
-                    Some(
-                        WebSocketConfig::default()
-                            .read_buffer_size(256)
-                            .write_buffer_size(0),
+            if args.url.starts_with("wss://") {
+                timeout(DEADLINE, Socket::connect_tls(&args.url, Some(stream))).await??
+            } else {
+                let (socket, _) = timeout(
+                    DEADLINE,
+                    client_async_with_config(
+                        &args.url,
+                        MaybeTlsStream::Plain(stream),
+                        Some(
+                            WebSocketConfig::default()
+                                .read_buffer_size(256)
+                                .write_buffer_size(0),
+                        ),
                     ),
-                ),
-            )
-            .await??;
-            Socket::websocket(socket)
+                )
+                .await??;
+                Socket::websocket(socket)
+            }
         };
         socket.send(Message::Binary(name.clone())).await?;
         let welcome = data(&mut socket).await?;
@@ -782,7 +789,11 @@ async fn prove_rooms(
 }
 
 async fn run(args: Args, destination: SocketAddr) -> Result<()> {
-    transport_socket::initialize(args.certificate.as_deref(), args.udp_receive_buffer_bytes)?;
+    transport_socket::initialize(
+        args.certificate.as_deref(),
+        args.udp_receive_buffer_bytes,
+        args.ca_certificate.as_deref(),
+    )?;
     let args = std::sync::Arc::new(args);
     let mut cumulative = Counts::default();
     for wave in 1..=args.waves {

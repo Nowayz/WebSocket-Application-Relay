@@ -39,7 +39,8 @@ web-transport-quinn = { version = "=0.13.3", default-features = false, features 
 [dev-dependencies]
 url = "2"
 futures-util = { version = "0.3", features = ["sink"] }
-tokio-tungstenite = "0.30.0"
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 
 [profile.release]
 lto = "thin"

@@ -81,6 +81,8 @@ impl ValueKind {
 struct Args {
     #[arg(long)]
     certificate: Option<String>,
+    #[arg(long)]
+    ca_certificate: Option<std::path::PathBuf>,
     /// Shared QUIC socket receive buffer; zero selects the OS default.
     #[arg(long, default_value_t = 4 * 1024 * 1024)]
     udp_receive_buffer_bytes: usize,
@@ -420,6 +422,14 @@ async fn data(socket: &mut Socket) -> Result<Bytes> {
     }
 }
 async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
+    if url.starts_with("wss://") {
+        return joined(
+            timeout(Duration::from_secs(5), Socket::connect_tls(url, None)).await??,
+            name,
+            counts,
+        )
+        .await;
+    }
     if url.starts_with("https://") {
         let socket = timeout(Duration::from_secs(5), Socket::connect(url)).await??;
         return joined(socket, name, counts).await;
@@ -708,7 +718,11 @@ fn main() -> Result<()> {
 }
 
 async fn run(args: Args) -> Result<()> {
-    transport_socket::initialize(args.certificate.as_deref(), args.udp_receive_buffer_bytes)?;
+    transport_socket::initialize(
+        args.certificate.as_deref(),
+        args.udp_receive_buffer_bytes,
+        args.ca_certificate.as_deref(),
+    )?;
     if args.audit_ids {
         ensure!(
             AUDITED_IDS

@@ -23,6 +23,7 @@ def certificate(args, logs):
         return []
     # pread does not move the descriptor offset shared with the server logger.
     text = os.pread(logs.fileno(), os.fstat(logs.fileno()).st_size, 0).decode()
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
     match = re.search(r'certificate_sha256=([0-9a-fA-F:]{95})', text)
     if match is None:
         raise RuntimeError('server did not report its development certificate pin')

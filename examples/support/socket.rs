@@ -3,12 +3,35 @@
 use anyhow::{Context, Result, bail, ensure};
 use bytes::{Bytes, BytesMut};
 use futures_util::{SinkExt, StreamExt};
-use std::sync::OnceLock;
+use std::{
+    path::Path,
+    sync::{Arc, OnceLock},
+};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use web_transport_quinn::{Client, RecvStream, SendStream, Session as Connection};
 static ENDPOINT: OnceLock<Client> = OnceLock::new();
-pub fn initialize(pin: Option<&str>, receive_buffer_bytes: usize) -> Result<()> {
+static TLS_CONFIG: OnceLock<Arc<tokio_rustls::rustls::ClientConfig>> = OnceLock::new();
+pub fn initialize(
+    pin: Option<&str>,
+    receive_buffer_bytes: usize,
+    ca_certificate: Option<&Path>,
+) -> Result<()> {
+    if let Some(path) = ca_certificate {
+        let mut roots = tokio_rustls::rustls::RootCertStore::empty();
+        roots.add(tokio_rustls::rustls::pki_types::CertificateDer::from(
+            std::fs::read(path)?,
+        ))?;
+        let tls = tokio_rustls::rustls::ClientConfig::builder_with_protocol_versions(&[
+            &tokio_rustls::rustls::version::TLS13,
+        ])
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+        ensure!(
+            TLS_CONFIG.set(Arc::new(tls)).is_ok(),
+            "TLS fixture already initialized"
+        );
+    }
     if let Some(pin) = pin {
         let hash = pin.parse::<wtransport::tls::Sha256Digest>()?;
         let config = wtransport::ClientConfig::builder()
@@ -89,6 +112,21 @@ impl Reader {
 impl Socket {
     pub fn websocket(socket: WebSocketStream<MaybeTlsStream<TcpStream>>) -> Self {
         Self::WebSocket(Box::new(socket))
+    }
+    pub async fn connect_tls(url: &str, bound: Option<TcpStream>) -> Result<Self> {
+        let config = TLS_CONFIG
+            .get()
+            .context("wss fixture requires --ca-certificate DER")?
+            .clone();
+        let connector = Some(tokio_tungstenite::Connector::Rustls(config));
+        let options =
+            Some(tungstenite::protocol::WebSocketConfig::default().read_buffer_size(4096));
+        let (socket, _) = if let Some(stream) = bound {
+            tokio_tungstenite::client_async_tls_with_config(url, stream, options, connector).await?
+        } else {
+            tokio_tungstenite::connect_async_tls_with_config(url, options, true, connector).await?
+        };
+        Ok(Self::websocket(socket))
     }
     pub async fn connect(url: &str) -> Result<Self> {
         let connection = ENDPOINT
