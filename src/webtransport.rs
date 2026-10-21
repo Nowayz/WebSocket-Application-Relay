@@ -23,7 +23,10 @@ use wtransport::quinn::{Endpoint, VarInt};
 mod queue;
 
 struct Output {
-    connection: Connection,
+    // Session includes HTTP metadata and per-clone polling state. These users
+    // call its shared async API, so keep one handle rather than copying it into
+    // each long-lived future and output sink.
+    connection: Arc<Connection>,
     queue: queue::Queue<Envelope>,
     scratch: Mutex<Vec<u8>>,
     relay: Arc<Relay>,
@@ -222,20 +225,13 @@ pub async fn serve(
                 relay.metrics.accepted.fetch_add(1, Relaxed);
                 let relay = relay.clone();
                 let retirement = retirement.clone();
+                let lease = ConnectionLease(relay.clone());
+                // The larger admission future is cold. Release its storage after
+                // the handshake instead of retaining it in every live task.
+                let handshake = Box::pin(accept_connection(incoming, relay.clone()));
                 sessions.spawn(async move {
-                    let _lease = ConnectionLease(relay.clone());
+                    let _lease = lease;
                     let _permit = permit;
-                    let handshake = async {
-                        let quic = incoming.await?;
-                        let request = web_transport_quinn::Request::accept(quic).await?;
-                        if request.url.path() != "/war" { request.reject(axum::http::StatusCode::NOT_FOUND).await?; bail!("unknown WebTransport path"); }
-                        if !relay.config.origin_policy.allows(&request.headers) {
-                            relay.metrics.origin_rejected.fetch_add(1, Relaxed);
-                            request.reject(axum::http::StatusCode::FORBIDDEN).await?;
-                            bail!("origin rejected");
-                        }
-                        request.ok().await.context("accept WebTransport")
-                    };
                     let connection = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
                         Ok(Ok(connection)) => connection,
                         _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return; }
@@ -263,6 +259,29 @@ pub async fn serve(
     }
     Ok(())
 }
+
+async fn accept_connection(
+    incoming: wtransport::quinn::Incoming,
+    relay: Arc<Relay>,
+) -> Result<Arc<Connection>> {
+    let quic = incoming.await?;
+    let request = web_transport_quinn::Request::accept(quic).await?;
+    if request.url.path() != "/war" {
+        request.reject(axum::http::StatusCode::NOT_FOUND).await?;
+        bail!("unknown WebTransport path");
+    }
+    if !relay.config.origin_policy.allows(&request.headers) {
+        relay.metrics.origin_rejected.fetch_add(1, Relaxed);
+        request.reject(axum::http::StatusCode::FORBIDDEN).await?;
+        bail!("origin rejected");
+    }
+    request
+        .ok()
+        .await
+        .map(Arc::new)
+        .context("accept WebTransport")
+}
+
 struct ConnectionLease(Arc<Relay>);
 impl Drop for ConnectionLease {
     fn drop(&mut self) {
@@ -274,7 +293,11 @@ impl Drop for ConnectionLease {
 // ready input admitted in one turn. Large fanout keeps its separate work quantum.
 const INPUT_QUANTUM: usize = 256;
 
-async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Notify>) -> Result<()> {
+async fn session(
+    connection: Arc<Connection>,
+    relay: Arc<Relay>,
+    retirement: Arc<Notify>,
+) -> Result<()> {
     let ((mut send, mut receive), join) =
         tokio::time::timeout(Duration::from_secs(relay.config.join_timeout_secs), async {
             let (send, mut receive) = connection.accept_bi().await?;

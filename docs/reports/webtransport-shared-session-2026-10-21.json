@@ -1,0 +1,2585 @@
+{
+  "status": "in progress; overall throughput and memory parity not achieved",
+  "acceptance": "Keep pursuing throughput and memory parity before accepting the pivot.",
+  "base_commit": "c7ae8c0",
+  "implementation": "One Arc-owned WebTransport Session is shared by the application task and output sink. Only shared async/immutable methods are used; per-clone poll state is not used. The larger, cold HTTP3 admission future is boxed outside the spawned task and released when the handshake completes. Its result is already Arc-owned, keeping the full Session out of the persistent frame. The connection-count lease is captured before spawning, so cancellation before first poll also releases ownership. Framing, transport parameters, queue limits, delivery, observer ordering, routing, crypto and congestion control are unchanged.",
+  "tradeoffs": "One persistent Arc allocation and a transient admission-future allocation per physical connection replace copied Session handles/metadata and larger task frames. No per-message allocation was introduced. HTTP3 async APIs retain their own waiter registrations.",
+  "scope": "Local Linux loopback; ordinary release builds, frozen verifying clients, sequential benchmark processes. Three alternating fresh-process throughput runs per case/variant. Four pinned server workers on CPUs 0-3, eight pinned client workers on CPUs 8-15, four seconds, 1 KiB payloads, 32 private pairs, 1024 room readers, fanout window four. Capacity uses eight server workers on CPUs 0-7, 100000 physical QUIC connections, four offered seconds and 400000 exactly verified deliveries. Latency percentiles are logarithmic upper bounds. RSS is sampled at gates and excludes kernel socket memory; it is neither continuous peak nor requested live heap.",
+  "build": {
+    "timestamp_utc": "2026-10-21T17:34:13.441831+00:00",
+    "base_commit": "c7ae8c0e983223b2867d586b65006e2016dca565",
+    "binary": "artifacts/webtransport/binaries/shared-session-relay",
+    "sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+    "source_sha256": {
+      "Cargo.toml": "98e8551493326e19e22fa5687f735b328310c3089a080146e2a3256987289176",
+      "Cargo.lock": "2baf7b389068c826fd565fd9226d881f4ba4c3e3a828b489340d3dd92b5ed595",
+      "src/webtransport.rs": "ad28aadd9d51e3ce877f49e6a53514619908028019b9f28a7c9b19566ab38184"
+    },
+    "diff": "diff --git a/src/webtransport.rs b/src/webtransport.rs\nindex fa80d91..e0b04f2 100644\n--- a/src/webtransport.rs\n+++ b/src/webtransport.rs\n@@ -23,7 +23,10 @@ use wtransport::quinn::{Endpoint, VarInt};\n mod queue;\n \n struct Output {\n-    connection: Connection,\n+    // Session includes HTTP metadata and per-clone polling state. These users\n+    // call its shared async API, so keep one handle rather than copying it into\n+    // each long-lived future and output sink.\n+    connection: Arc<Connection>,\n     queue: queue::Queue<Envelope>,\n     scratch: Mutex<Vec<u8>>,\n     relay: Arc<Relay>,\n@@ -222,20 +225,13 @@ pub async fn serve(\n                 relay.metrics.accepted.fetch_add(1, Relaxed);\n                 let relay = relay.clone();\n                 let retirement = retirement.clone();\n+                let lease = ConnectionLease(relay.clone());\n+                // The larger admission future is cold. Release its storage after\n+                // the handshake instead of retaining it in every live task.\n+                let handshake = Box::pin(accept_connection(incoming, relay.clone()));\n                 sessions.spawn(async move {\n-                    let _lease = ConnectionLease(relay.clone());\n+                    let _lease = lease;\n                     let _permit = permit;\n-                    let handshake = async {\n-                        let quic = incoming.await?;\n-                        let request = web_transport_quinn::Request::accept(quic).await?;\n-                        if request.url.path() != \"/war\" { request.reject(axum::http::StatusCode::NOT_FOUND).await?; bail!(\"unknown WebTransport path\"); }\n-                        if !relay.config.origin_policy.allows(&request.headers) {\n-                            relay.metrics.origin_rejected.fetch_add(1, Relaxed);\n-                            request.reject(axum::http::StatusCode::FORBIDDEN).await?;\n-                            bail!(\"origin rejected\");\n-                        }\n-                        request.ok().await.context(\"accept WebTransport\")\n-                    };\n                     let connection = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {\n                         Ok(Ok(connection)) => connection,\n                         _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return; }\n@@ -263,6 +259,29 @@ pub async fn serve(\n     }\n     Ok(())\n }\n+\n+async fn accept_connection(\n+    incoming: wtransport::quinn::Incoming,\n+    relay: Arc<Relay>,\n+) -> Result<Arc<Connection>> {\n+    let quic = incoming.await?;\n+    let request = web_transport_quinn::Request::accept(quic).await?;\n+    if request.url.path() != \"/war\" {\n+        request.reject(axum::http::StatusCode::NOT_FOUND).await?;\n+        bail!(\"unknown WebTransport path\");\n+    }\n+    if !relay.config.origin_policy.allows(&request.headers) {\n+        relay.metrics.origin_rejected.fetch_add(1, Relaxed);\n+        request.reject(axum::http::StatusCode::FORBIDDEN).await?;\n+        bail!(\"origin rejected\");\n+    }\n+    request\n+        .ok()\n+        .await\n+        .map(Arc::new)\n+        .context(\"accept WebTransport\")\n+}\n+\n struct ConnectionLease(Arc<Relay>);\n impl Drop for ConnectionLease {\n     fn drop(&mut self) {\n@@ -274,7 +293,11 @@ impl Drop for ConnectionLease {\n // ready input admitted in one turn. Large fanout keeps its separate work quantum.\n const INPUT_QUANTUM: usize = 256;\n \n-async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Notify>) -> Result<()> {\n+async fn session(\n+    connection: Arc<Connection>,\n+    relay: Arc<Relay>,\n+    retirement: Arc<Notify>,\n+) -> Result<()> {\n     let ((mut send, mut receive), join) =\n         tokio::time::timeout(Duration::from_secs(relay.config.join_timeout_secs), async {\n             let (send, mut receive) = connection.accept_bi().await?;\n",
+    "build": "cargo build --locked --release --bin war-relay; ordinary flags, no RUSTC_BOOTSTRAP or -Z",
+    "build_log": "artifacts/webtransport/shared-session-build-final.log"
+  },
+  "matched": {
+    "private": {
+      "quinn-event-reclaim": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-quinn-event-reclaim-1.json",
+            "passed": true,
+            "private_per_second": 1472796.730847898,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1472796.730847898,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 4.235303,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.544693691497863,
+            "client_cpu_cores": 4.304628023102482,
+            "server_rss_kib": 14496,
+            "client_rss_kib": 19272,
+            "verified_private": 5891696,
+            "verified_fanout": 0,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-quinn-event-reclaim-2.json",
+            "passed": true,
+            "private_per_second": 1396370.7960006571,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1396370.7960006571,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.127246,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5121649640475847,
+            "client_cpu_cores": 5.139509726748636,
+            "server_rss_kib": 14428,
+            "client_rss_kib": 18760,
+            "verified_private": 5586016,
+            "verified_fanout": 0,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-quinn-event-reclaim-3.json",
+            "passed": true,
+            "private_per_second": 1398618.7758677255,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1398618.7758677255,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.033178,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.517144859814925,
+            "client_cpu_cores": 4.944500733982887,
+            "server_rss_kib": 14240,
+            "client_rss_kib": 18788,
+            "verified_private": 5595040,
+            "verified_fanout": 0,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1398618.7758677255,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1398618.7758677255,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 1.048576,
+          "private_max_ms": 2.127246,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.517144859814925,
+          "client_cpu_cores": 4.944500733982887,
+          "server_rss_kib": 14428,
+          "client_rss_kib": 18788,
+          "verified_private": 5595040,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1396370.7960006571,
+            1472796.730847898
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1396370.7960006571,
+            1472796.730847898
+          ],
+          "server_cpu_cores": [
+            3.5121649640475847,
+            3.544693691497863
+          ],
+          "server_rss_kib": [
+            14240,
+            14496
+          ]
+        }
+      },
+      "shared-session": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-shared-session-1.json",
+            "passed": true,
+            "private_per_second": 1398386.3525519979,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1398386.3525519979,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.261332,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5121442426171607,
+            "client_cpu_cores": 4.986994849837178,
+            "server_rss_kib": 13776,
+            "client_rss_kib": 18688,
+            "verified_private": 5594112,
+            "verified_fanout": 0,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-shared-session-2.json",
+            "passed": true,
+            "private_per_second": 1391872.0281540193,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1391872.0281540193,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 2.098067,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5196763930331523,
+            "client_cpu_cores": 4.777060786282922,
+            "server_rss_kib": 13840,
+            "client_rss_kib": 18876,
+            "verified_private": 5568000,
+            "verified_fanout": 0,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-private-shared-session-3.json",
+            "passed": true,
+            "private_per_second": 1396456.7876260683,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1396456.7876260683,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 3.442983,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.514699957972663,
+            "client_cpu_cores": 4.959576612103673,
+            "server_rss_kib": 14000,
+            "client_rss_kib": 18868,
+            "verified_private": 5586304,
+            "verified_fanout": 0,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1396456.7876260683,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1396456.7876260683,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 1.048576,
+          "private_max_ms": 2.261332,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.514699957972663,
+          "client_cpu_cores": 4.959576612103673,
+          "server_rss_kib": 13840,
+          "client_rss_kib": 18868,
+          "verified_private": 5586304,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1391872.0281540193,
+            1398386.3525519979
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1391872.0281540193,
+            1398386.3525519979
+          ],
+          "server_cpu_cores": [
+            3.5121442426171607,
+            3.5196763930331523
+          ],
+          "server_rss_kib": [
+            13776,
+            14000
+          ]
+        }
+      }
+    },
+    "roomonly": {
+      "quinn-event-reclaim": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-quinn-event-reclaim-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1080688.3512404002,
+            "combined_per_second": 1080688.3512404002,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 9.188108,
+            "server_cpu_cores": 3.2805097295094003,
+            "client_cpu_cores": 4.844560826746937,
+            "server_rss_kib": 56712,
+            "client_rss_kib": 62936,
+            "verified_private": 0,
+            "verified_fanout": 4325376,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-quinn-event-reclaim-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1096300.6883115135,
+            "combined_per_second": 1096300.6883115135,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.006968,
+            "server_cpu_cores": 3.2832254555081954,
+            "client_cpu_cores": 4.908609312189439,
+            "server_rss_kib": 56560,
+            "client_rss_kib": 62744,
+            "verified_private": 0,
+            "verified_fanout": 4390912,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-quinn-event-reclaim-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1078981.9264341623,
+            "combined_per_second": 1078981.9264341623,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 5.888791,
+            "server_cpu_cores": 3.279045524771751,
+            "client_cpu_cores": 4.988547917259464,
+            "server_rss_kib": 56356,
+            "client_rss_kib": 64592,
+            "verified_private": 0,
+            "verified_fanout": 4317184,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1080688.3512404002,
+          "combined_per_second": 1080688.3512404002,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.006968,
+          "server_cpu_cores": 3.2805097295094003,
+          "client_cpu_cores": 4.908609312189439,
+          "server_rss_kib": 56560,
+          "client_rss_kib": 62936,
+          "verified_private": 0,
+          "verified_fanout": 4325376
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1078981.9264341623,
+            1096300.6883115135
+          ],
+          "combined_per_second": [
+            1078981.9264341623,
+            1096300.6883115135
+          ],
+          "server_cpu_cores": [
+            3.279045524771751,
+            3.2832254555081954
+          ],
+          "server_rss_kib": [
+            56356,
+            56712
+          ]
+        }
+      },
+      "shared-session": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-shared-session-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1114812.677568001,
+            "combined_per_second": 1114812.677568001,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 6.002858,
+            "server_cpu_cores": 3.2690518964927713,
+            "client_cpu_cores": 4.996051025297439,
+            "server_rss_kib": 53764,
+            "client_rss_kib": 62600,
+            "verified_private": 0,
+            "verified_fanout": 4460544,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-shared-session-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1084821.4323784097,
+            "combined_per_second": 1084821.4323784097,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.039547,
+            "server_cpu_cores": 3.230657871612626,
+            "client_cpu_cores": 5.012142065317036,
+            "server_rss_kib": 53844,
+            "client_rss_kib": 62872,
+            "verified_private": 0,
+            "verified_fanout": 4341760,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-roomonly-shared-session-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1099968.1936023,
+            "combined_per_second": 1099968.1936023,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 9.757694,
+            "server_cpu_cores": 3.2625328416710664,
+            "client_cpu_cores": 4.901293595221004,
+            "server_rss_kib": 53896,
+            "client_rss_kib": 62860,
+            "verified_private": 0,
+            "verified_fanout": 4403200,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1099968.1936023,
+          "combined_per_second": 1099968.1936023,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 2.097152,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.039547,
+          "server_cpu_cores": 3.2625328416710664,
+          "client_cpu_cores": 4.996051025297439,
+          "server_rss_kib": 53844,
+          "client_rss_kib": 62860,
+          "verified_private": 0,
+          "verified_fanout": 4403200
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1084821.4323784097,
+            1114812.677568001
+          ],
+          "combined_per_second": [
+            1084821.4323784097,
+            1114812.677568001
+          ],
+          "server_cpu_cores": [
+            3.230657871612626,
+            3.2690518964927713
+          ],
+          "server_rss_kib": [
+            53764,
+            53896
+          ]
+        }
+      }
+    },
+    "mixed": {
+      "quinn-event-reclaim": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-quinn-event-reclaim-1.json",
+            "passed": true,
+            "private_per_second": 316671.28552664135,
+            "fanout_per_second": 843273.46656734,
+            "combined_per_second": 1159944.7520939813,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.593124,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.933505,
+            "server_cpu_cores": 3.400473549846611,
+            "client_cpu_cores": 4.947051894707047,
+            "server_rss_kib": 60592,
+            "client_rss_kib": 73084,
+            "verified_private": 1267440,
+            "verified_fanout": 3375104,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-quinn-event-reclaim-2.json",
+            "passed": true,
+            "private_per_second": 281949.6668004466,
+            "fanout_per_second": 746803.9647320169,
+            "combined_per_second": 1028753.6315324635,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 7.330335,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 12.349538,
+            "server_cpu_cores": 3.424216862584263,
+            "client_cpu_cores": 4.488196719229701,
+            "server_rss_kib": 60604,
+            "client_rss_kib": 73412,
+            "verified_private": 1128880,
+            "verified_fanout": 2990080,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-quinn-event-reclaim-3.json",
+            "passed": true,
+            "private_per_second": 318115.5455676795,
+            "fanout_per_second": 848617.3533097256,
+            "combined_per_second": 1166732.898877405,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.720421,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.72106,
+            "server_cpu_cores": 3.3963847843196255,
+            "client_cpu_cores": 4.855905545204586,
+            "server_rss_kib": 60724,
+            "client_rss_kib": 72876,
+            "verified_private": 1272880,
+            "verified_fanout": 3395584,
+            "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 316671.28552664135,
+          "fanout_per_second": 843273.46656734,
+          "combined_per_second": 1159944.7520939813,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.720421,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.933505,
+          "server_cpu_cores": 3.400473549846611,
+          "client_cpu_cores": 4.855905545204586,
+          "server_rss_kib": 60604,
+          "client_rss_kib": 73084,
+          "verified_private": 1267440,
+          "verified_fanout": 3375104
+        },
+        "ranges": {
+          "private_per_second": [
+            281949.6668004466,
+            318115.5455676795
+          ],
+          "fanout_per_second": [
+            746803.9647320169,
+            848617.3533097256
+          ],
+          "combined_per_second": [
+            1028753.6315324635,
+            1166732.898877405
+          ],
+          "server_cpu_cores": [
+            3.3963847843196255,
+            3.424216862584263
+          ],
+          "server_rss_kib": [
+            60592,
+            60724
+          ]
+        }
+      },
+      "shared-session": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-shared-session-1.json",
+            "passed": true,
+            "private_per_second": 314382.42110747297,
+            "fanout_per_second": 849710.3203830803,
+            "combined_per_second": 1164092.7414905531,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.73146,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.588448,
+            "server_cpu_cores": 3.391663052875094,
+            "client_cpu_cores": 4.871297929295179,
+            "server_rss_kib": 57356,
+            "client_rss_kib": 73028,
+            "verified_private": 1257840,
+            "verified_fanout": 3399680,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-shared-session-2.json",
+            "passed": true,
+            "private_per_second": 313383.790745267,
+            "fanout_per_second": 843118.9862508399,
+            "combined_per_second": 1156502.7769961068,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.887941,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 9.466201,
+            "server_cpu_cores": 3.389858399451957,
+            "client_cpu_cores": 4.756293583313578,
+            "server_rss_kib": 57548,
+            "client_rss_kib": 73048,
+            "verified_private": 1254512,
+            "verified_fanout": 3375104,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-session-mixed-shared-session-3.json",
+            "passed": true,
+            "private_per_second": 313677.1521858915,
+            "fanout_per_second": 846516.4721934922,
+            "combined_per_second": 1160193.6243793839,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.826867,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.625893,
+            "server_cpu_cores": 3.3936709103604263,
+            "client_cpu_cores": 4.7881247895806895,
+            "server_rss_kib": 57388,
+            "client_rss_kib": 73136,
+            "verified_private": 1255200,
+            "verified_fanout": 3387392,
+            "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 313677.1521858915,
+          "fanout_per_second": 846516.4721934922,
+          "combined_per_second": 1160193.6243793839,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.826867,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 7.588448,
+          "server_cpu_cores": 3.391663052875094,
+          "client_cpu_cores": 4.7881247895806895,
+          "server_rss_kib": 57388,
+          "client_rss_kib": 73048,
+          "verified_private": 1255200,
+          "verified_fanout": 3387392
+        },
+        "ranges": {
+          "private_per_second": [
+            313383.790745267,
+            314382.42110747297
+          ],
+          "fanout_per_second": [
+            843118.9862508399,
+            849710.3203830803
+          ],
+          "combined_per_second": [
+            1156502.7769961068,
+            1164092.7414905531
+          ],
+          "server_cpu_cores": [
+            3.389858399451957,
+            3.3936709103604263
+          ],
+          "server_rss_kib": [
+            57356,
+            57548
+          ]
+        }
+      }
+    }
+  },
+  "capacity": {
+    "quinn-event-reclaim": {
+      "samples": [
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-1.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.01466235,
+          "deliveries": 400000,
+          "achieved_per_second": 99634.77999588185,
+          "round_trip": {
+            "max_ms": 11.684254,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 3.307696,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3374724,
+          "client_rss_kib": 4406320,
+          "server_cpu_cores": 1.9852229914179464,
+          "client_cpu_cores": 1.9403873404197987,
+          "server_rss_after_retirement_kib": 3378952,
+          "max_gate_server_rss_kib": 3378952,
+          "setup_seconds": 11.212123942,
+          "retirement_seconds": 2.227105202,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        },
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-2.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.013807244,
+          "deliveries": 400000,
+          "achieved_per_second": 99656.00630123334,
+          "round_trip": {
+            "max_ms": 3.001638,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 3.286652,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3374152,
+          "client_rss_kib": 4405716,
+          "server_cpu_cores": 2.0927761323259007,
+          "client_cpu_cores": 1.9233609216138041,
+          "server_rss_after_retirement_kib": 3378088,
+          "max_gate_server_rss_kib": 3378088,
+          "setup_seconds": 11.475149726,
+          "retirement_seconds": 2.230848123,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        },
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-3.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.013913722,
+          "deliveries": 400000,
+          "achieved_per_second": 99653.36270374374,
+          "round_trip": {
+            "max_ms": 11.556388,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 2.097152,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 3.370003,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3375424,
+          "client_rss_kib": 4404304,
+          "server_cpu_cores": 2.1226166255897416,
+          "client_cpu_cores": 1.9581885771285634,
+          "server_rss_after_retirement_kib": 3379632,
+          "max_gate_server_rss_kib": 3379632,
+          "setup_seconds": 11.375204811,
+          "retirement_seconds": 2.212234321,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        }
+      ],
+      "medians": {
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.013913722,
+        "deliveries": 400000,
+        "achieved_per_second": 99653.36270374374,
+        "server_rss_kib": 3374724,
+        "client_rss_kib": 4405716,
+        "server_cpu_cores": 2.0927761323259007,
+        "client_cpu_cores": 1.9403873404197987,
+        "server_rss_after_retirement_kib": 3378952,
+        "max_gate_server_rss_kib": 3378952,
+        "setup_seconds": 11.375204811,
+        "retirement_seconds": 2.227105202
+      },
+      "ranges": {
+        "offered_seconds": [
+          4,
+          4
+        ],
+        "elapsed_seconds": [
+          4.013807244,
+          4.01466235
+        ],
+        "deliveries": [
+          400000,
+          400000
+        ],
+        "achieved_per_second": [
+          99634.77999588185,
+          99656.00630123334
+        ],
+        "server_rss_kib": [
+          3374152,
+          3375424
+        ],
+        "client_rss_kib": [
+          4404304,
+          4406320
+        ],
+        "server_cpu_cores": [
+          1.9852229914179464,
+          2.1226166255897416
+        ],
+        "client_cpu_cores": [
+          1.9233609216138041,
+          1.9581885771285634
+        ],
+        "server_rss_after_retirement_kib": [
+          3378088,
+          3379632
+        ],
+        "max_gate_server_rss_kib": [
+          3378088,
+          3379632
+        ],
+        "setup_seconds": [
+          11.212123942,
+          11.475149726
+        ],
+        "retirement_seconds": [
+          2.212234321,
+          2.230848123
+        ]
+      }
+    },
+    "shared-session": {
+      "samples": [
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.012721108,
+          "deliveries": 400000,
+          "achieved_per_second": 99682.98050979325,
+          "round_trip": {
+            "max_ms": 10.615781,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 2.842478,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3123372,
+          "client_rss_kib": 4405424,
+          "server_cpu_cores": 2.0036279082468433,
+          "client_cpu_cores": 1.9288656728645,
+          "server_rss_after_retirement_kib": 3126676,
+          "max_gate_server_rss_kib": 3126676,
+          "setup_seconds": 11.067357311,
+          "retirement_seconds": 2.334275071,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        },
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session-shared-session-2.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.013363897,
+          "deliveries": 400000,
+          "achieved_per_second": 99667.01506907985,
+          "round_trip": {
+            "max_ms": 4.062704,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 3.218288,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3122564,
+          "client_rss_kib": 4405544,
+          "server_cpu_cores": 2.090515641073949,
+          "client_cpu_cores": 1.936031767716876,
+          "server_rss_after_retirement_kib": 3126932,
+          "max_gate_server_rss_kib": 3126932,
+          "setup_seconds": 11.417603392,
+          "retirement_seconds": 2.425944417,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        },
+        {
+          "receipt": "artifacts/webtransport/capacity-100k-shared-session-shared-session-3.json",
+          "passed": true,
+          "offered_seconds": 4,
+          "elapsed_seconds": 4.01348332,
+          "deliveries": 400000,
+          "achieved_per_second": 99664.04943225229,
+          "round_trip": {
+            "max_ms": 11.330191,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 2.946799,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "server_rss_kib": 3123836,
+          "client_rss_kib": 4405716,
+          "server_cpu_cores": 2.073012228190848,
+          "client_cpu_cores": 1.9235161540424688,
+          "server_rss_after_retirement_kib": 3126756,
+          "max_gate_server_rss_kib": 3126756,
+          "setup_seconds": 11.375198606,
+          "retirement_seconds": 2.253412229,
+          "timed_udp_receive_drops": {
+            "server": 0,
+            "client": 0
+          },
+          "all_done_gauges": {
+            "war_sessions": 0,
+            "war_connections": 0,
+            "war_quic_connections": 0,
+            "war_queued_bytes": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_variable_bytes": 0,
+            "war_output_queue_capacity_bytes": 0
+          },
+          "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+          "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+        }
+      ],
+      "medians": {
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.013363897,
+        "deliveries": 400000,
+        "achieved_per_second": 99667.01506907985,
+        "server_rss_kib": 3123372,
+        "client_rss_kib": 4405544,
+        "server_cpu_cores": 2.073012228190848,
+        "client_cpu_cores": 1.9288656728645,
+        "server_rss_after_retirement_kib": 3126756,
+        "max_gate_server_rss_kib": 3126756,
+        "setup_seconds": 11.375198606,
+        "retirement_seconds": 2.334275071
+      },
+      "ranges": {
+        "offered_seconds": [
+          4,
+          4
+        ],
+        "elapsed_seconds": [
+          4.012721108,
+          4.01348332
+        ],
+        "deliveries": [
+          400000,
+          400000
+        ],
+        "achieved_per_second": [
+          99664.04943225229,
+          99682.98050979325
+        ],
+        "server_rss_kib": [
+          3122564,
+          3123836
+        ],
+        "client_rss_kib": [
+          4405424,
+          4405716
+        ],
+        "server_cpu_cores": [
+          2.0036279082468433,
+          2.090515641073949
+        ],
+        "client_cpu_cores": [
+          1.9235161540424688,
+          1.936031767716876
+        ],
+        "server_rss_after_retirement_kib": [
+          3126676,
+          3126932
+        ],
+        "max_gate_server_rss_kib": [
+          3126676,
+          3126932
+        ],
+        "setup_seconds": [
+          11.067357311,
+          11.417603392
+        ],
+        "retirement_seconds": [
+          2.253412229,
+          2.425944417
+        ]
+      }
+    }
+  },
+  "freshness": [
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/clean-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/clean-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1.696655,
+          "p50_ms": 0.252731,
+          "p99_ms": 1.274909,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.283617,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.00155705,
+        "freshest_state_age": {
+          "max_ms": 18.030861,
+          "p50_ms": 10.191253,
+          "p99_ms": 17.775879,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.962878,
+          "p50_ms": 1.093976,
+          "p99_ms": 2.3071260000000002,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 1
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 360,
+        "war_datagrams_submitted": 360,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/clean-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/clean-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.054954,
+          "p50_ms": 0.262572,
+          "p99_ms": 1.408285,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.287876,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001032906,
+        "freshest_state_age": {
+          "max_ms": 18.468856,
+          "p50_ms": 10.195942,
+          "p99_ms": 17.908533,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.510693,
+          "p50_ms": 1.178622,
+          "p99_ms": 2.328414,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/clean-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/clean-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.200799,
+          "p50_ms": 0.353139,
+          "p99_ms": 1.578039,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1.381915,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001706885,
+        "freshest_state_age": {
+          "max_ms": 18.017229,
+          "p50_ms": 9.983448,
+          "p99_ms": 17.718278,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 3.048458,
+          "p50_ms": 1.3021179999999999,
+          "p99_ms": 2.354295,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/loss-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/loss-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 79.916831,
+          "p50_ms": 40.563536,
+          "p99_ms": 54.466663,
+          "samples": 345
+        },
+        "bulk_arrival_ms": 988.558752,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.00145232,
+        "freshest_state_age": {
+          "max_ms": 81.151812,
+          "p50_ms": 50.130225,
+          "p99_ms": 73.212368,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.53442,
+          "p50_ms": 1.2737969999999998,
+          "p99_ms": 2.274153,
+          "samples": 360
+        },
+        "missing": 15,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 345,
+        "updates_before_bulk": 55
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 351,
+        "war_datagrams_submitted": 351,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/loss-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/loss-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1797.161129,
+          "p50_ms": 48.456763,
+          "p99_ms": 1747.660812,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1780.8888789999999,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.035544472,
+        "freshest_state_age": {
+          "max_ms": 1781.350364,
+          "p50_ms": 59.869538,
+          "p99_ms": 1721.122968,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.359054,
+          "p50_ms": 1.022588,
+          "p99_ms": 2.0818350000000003,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 90,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/loss-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/loss-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1045.674327,
+          "p50_ms": 40.994168,
+          "p99_ms": 995.721918,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1046.4286730000001,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.035389224,
+        "freshest_state_age": {
+          "max_ms": 1041.190711,
+          "p50_ms": 53.197917,
+          "p99_ms": 981.202612,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.2892759999999996,
+          "p50_ms": 1.08706,
+          "p99_ms": 1.9873450000000001,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 53,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/reorder-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/reorder-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 123.714817,
+          "p50_ms": 50.867762,
+          "p99_ms": 100.767972,
+          "samples": 358
+        },
+        "bulk_arrival_ms": 7166.878933,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 9.174839003,
+        "freshest_state_age": {
+          "max_ms": 130.701206,
+          "p50_ms": 59.941155,
+          "p99_ms": 109.043976,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.700891,
+          "p50_ms": 1.274407,
+          "p99_ms": 2.180063,
+          "samples": 360
+        },
+        "missing": 2,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 28,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 4,
+        "rate": 60,
+        "received_unique": 358,
+        "updates_before_bulk": 358
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 359,
+        "war_datagrams_submitted": 359,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/reorder-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/reorder-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 6137.217563,
+          "p50_ms": 3643.136355,
+          "p99_ms": 6109.038978,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 6137.280401,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 7.184603259,
+        "freshest_state_age": {
+          "max_ms": 6000.485874,
+          "p50_ms": 3000.554611,
+          "p99_ms": 5940.782565,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.491324,
+          "p50_ms": 1.314646,
+          "p99_ms": 2.421625,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 301,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-shared-session/reorder-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/shared-session-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-a84c3fb94a8a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-shared-session/reorder-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 802.766672,
+          "p50_ms": 41.727284,
+          "p99_ms": 752.448662,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 803.542987,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.308504366,
+        "freshest_state_age": {
+          "max_ms": 801.072236,
+          "p50_ms": 50.485146,
+          "p99_ms": 740.928048,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.834752,
+          "p50_ms": 1.116206,
+          "p99_ms": 2.038677,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 41,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    }
+  ],
+  "validation": {
+    "application_rust_passed": 264,
+    "application_ignored": 1,
+    "clippy": "all targets -D warnings passed",
+    "vendor": "152 files verified against the four original archives and three declared patches; no dependency source changed in this checkpoint",
+    "browser_receipt": "artifacts/webtransport/shared-session-browser-check.txt",
+    "browser_screenshot": "output/playwright/webtransport-shared-session.png",
+    "browser": "Chromium actual delivered bundle passed all nine checks: typed values, private/broadcast, datagrams, 128 KiB/5 MiB payloads, variables, departure and genuine graceful close; seven final gauges zero."
+  },
+  "diagnostics": {
+    "compiler_layout": {
+      "scope": "Rust -Zprint-type-sizes diagnostic builds; ordinary binary rebuilt separately before timing. Bytes of concrete types, not whole retained-heap totals. Intermediate shared-only build was not used in timing.",
+      "baseline": {
+        "task_cell_bytes": 4736,
+        "session_future_bytes": 3304,
+        "output_bytes": 976
+      },
+      "shared_only": {
+        "task_cell_bytes": 3200,
+        "session_future_bytes": 1768,
+        "output_bytes": 208
+      },
+      "final": {
+        "task_cell_bytes": 2048,
+        "session_future_bytes": 1768,
+        "output_bytes": 208
+      },
+      "logs": [
+        "artifacts/webtransport/task-layout-baseline.log",
+        "artifacts/webtransport/task-layout-shared.log",
+        "artifacts/webtransport/task-layout-shared-admission.log"
+      ]
+    },
+    "heap-quinn-event-reclaim": {
+      "scope": "8194 real sessions; replacement gperftools allocator, excluded from ordinary timing/RSS medians. Original three phase gates plus observations at 1/5 seconds while completed client is held at done.",
+      "receipt": "artifacts/webtransport/heap-quinn-event-reclaim-settle.json",
+      "ready": {
+        "live_allocations": 812482,
+        "requested_live_bytes": 275587957,
+        "heap": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0001.heap",
+          "sha256": "6ba224d82caa8535d49db5cd1bcaa36a51f11daf087f6a8f9bcee974aaa5b75c",
+          "header": "heap profile: 812482: 275587957 [3159280: 623436788] @ heapprofile"
+        }
+      },
+      "done": {
+        "live_allocations": 68064,
+        "requested_live_bytes": 35549596,
+        "heap": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0003.heap",
+          "sha256": "5597baedcd2e6f5db5d6cb2a335c44c870d651c3291c9ef17d441770766f3086",
+          "header": "heap profile:  68064: 35549596 [5709648: 1936178889] @ heapprofile",
+          "settled": [
+            {
+              "requested_offset_seconds": 1,
+              "actual_offset_seconds": 1.0000733159977244,
+              "heap": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0004.heap",
+                "sha256": "8e387df0871a90b0c05624f341073be354d60ecee6abfc11856cca8c077db665",
+                "header": "heap profile:   1694:  9731291 [5709648: 1936178889] @ heapprofile"
+              },
+              "process": {
+                "VmSize": 385520,
+                "VmRSS": 366244,
+                "RssAnon": 356832,
+                "Threads": 5,
+                "cpu_seconds": 5.69,
+                "user_cpu_seconds": 3.91,
+                "system_cpu_seconds": 1.78,
+                "thread_cpu_seconds": {
+                  "192411": 0.06,
+                  "192412": 1.37,
+                  "192413": 1.36,
+                  "192414": 1.44,
+                  "192415": 1.42
+                }
+              },
+              "metrics": {
+                "war_quic_connections": 0,
+                "war_datagrams_received": 0,
+                "war_datagrams_submitted": 0,
+                "war_datagram_bytes_submitted": 0,
+                "war_datagrams_dropped": 0,
+                "war_datagrams_oversized": 0,
+                "war_read_buffer_reserved_bytes": 0,
+                "war_read_buffer_peak_reserved_bytes": 2074,
+                "war_read_buffer_limit_bytes": 1073741824,
+                "war_read_buffer_reservations_rejected_total": 0,
+                "war_accept_errors_total": 0,
+                "war_setup_errors_total": 0,
+                "war_ip_rejected_total": 0,
+                "war_read_buffer_reclaims_total": 0,
+                "war_read_buffer_reclaim_header_bytes_total": 0,
+                "war_read_buffer_reclaims_deferred_total": 0,
+                "war_idle_timeouts_total": 0,
+                "war_unstarted_writes_cancelled_total": 0,
+                "war_routing_reused_bytes_total": 390588640,
+                "war_routing_copied_bytes_total": 0,
+                "war_write_timeouts_total": 0,
+                "war_write_errors_total": 0,
+                "war_aborted_writes_total": 0,
+                "war_close_failures_total": 0,
+                "war_transport_disconnects_total": 0,
+                "war_global_pressure_total": 0,
+                "war_accepted_total": 8194,
+                "war_rejected_total": 0,
+                "war_origin_rejected_total": 0,
+                "war_handshake_errors_total": 0,
+                "war_joined_total": 8194,
+                "war_join_rejected_total": 0,
+                "war_disconnected_total": 8194,
+                "war_incoming_messages_total": 380321,
+                "war_incoming_bytes_total": 394391852,
+                "war_deliveries_total": 388516,
+                "war_delivered_bytes_total": 394465610,
+                "war_slow_consumers_total": 0,
+                "war_protocol_errors_total": 0,
+                "war_rate_limited_total": 0,
+                "war_variable_bytes": 0,
+                "war_connections": 0,
+                "war_sessions": 0,
+                "war_channels": 1,
+                "war_queued_bytes": 0,
+                "war_draining": 0,
+                "war_native_connection_slots": 0,
+                "war_output_queue_capacity_bytes": 0,
+                "war_output_queue_peak_capacity_bytes": 0
+              }
+            },
+            {
+              "requested_offset_seconds": 5,
+              "actual_offset_seconds": 5.000055149997934,
+              "heap": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0005.heap",
+                "sha256": "a32aca9c9cc29838ec61f6f19890c3b6245114179aa1425f3efae5b23d9216f0",
+                "header": "heap profile:   1694:  9731291 [5709697: 1936248421] @ heapprofile"
+              },
+              "process": {
+                "VmSize": 385520,
+                "VmRSS": 366244,
+                "RssAnon": 356832,
+                "Threads": 5,
+                "cpu_seconds": 5.7,
+                "user_cpu_seconds": 3.92,
+                "system_cpu_seconds": 1.78,
+                "thread_cpu_seconds": {
+                  "192411": 0.06,
+                  "192412": 1.37,
+                  "192413": 1.36,
+                  "192414": 1.44,
+                  "192415": 1.42
+                }
+              },
+              "metrics": {
+                "war_quic_connections": 0,
+                "war_datagrams_received": 0,
+                "war_datagrams_submitted": 0,
+                "war_datagram_bytes_submitted": 0,
+                "war_datagrams_dropped": 0,
+                "war_datagrams_oversized": 0,
+                "war_read_buffer_reserved_bytes": 0,
+                "war_read_buffer_peak_reserved_bytes": 2074,
+                "war_read_buffer_limit_bytes": 1073741824,
+                "war_read_buffer_reservations_rejected_total": 0,
+                "war_accept_errors_total": 0,
+                "war_setup_errors_total": 0,
+                "war_ip_rejected_total": 0,
+                "war_read_buffer_reclaims_total": 0,
+                "war_read_buffer_reclaim_header_bytes_total": 0,
+                "war_read_buffer_reclaims_deferred_total": 0,
+                "war_idle_timeouts_total": 0,
+                "war_unstarted_writes_cancelled_total": 0,
+                "war_routing_reused_bytes_total": 390588640,
+                "war_routing_copied_bytes_total": 0,
+                "war_write_timeouts_total": 0,
+                "war_write_errors_total": 0,
+                "war_aborted_writes_total": 0,
+                "war_close_failures_total": 0,
+                "war_transport_disconnects_total": 0,
+                "war_global_pressure_total": 0,
+                "war_accepted_total": 8194,
+                "war_rejected_total": 0,
+                "war_origin_rejected_total": 0,
+                "war_handshake_errors_total": 0,
+                "war_joined_total": 8194,
+                "war_join_rejected_total": 0,
+                "war_disconnected_total": 8194,
+                "war_incoming_messages_total": 380321,
+                "war_incoming_bytes_total": 394391852,
+                "war_deliveries_total": 388516,
+                "war_delivered_bytes_total": 394465610,
+                "war_slow_consumers_total": 0,
+                "war_protocol_errors_total": 0,
+                "war_rate_limited_total": 0,
+                "war_variable_bytes": 0,
+                "war_connections": 0,
+                "war_sessions": 0,
+                "war_channels": 1,
+                "war_queued_bytes": 0,
+                "war_draining": 0,
+                "war_native_connection_slots": 0,
+                "war_output_queue_capacity_bytes": 0,
+                "war_output_queue_peak_capacity_bytes": 0
+              }
+            }
+          ]
+        }
+      },
+      "observations": [
+        {
+          "requested_offset_seconds": 1,
+          "actual_offset_seconds": 1.0000733159977244,
+          "heap": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0004.heap",
+            "sha256": "8e387df0871a90b0c05624f341073be354d60ecee6abfc11856cca8c077db665",
+            "header": "heap profile:   1694:  9731291 [5709648: 1936178889] @ heapprofile"
+          },
+          "process": {
+            "VmSize": 385520,
+            "VmRSS": 366244,
+            "RssAnon": 356832,
+            "Threads": 5,
+            "cpu_seconds": 5.69,
+            "user_cpu_seconds": 3.91,
+            "system_cpu_seconds": 1.78,
+            "thread_cpu_seconds": {
+              "192411": 0.06,
+              "192412": 1.37,
+              "192413": 1.36,
+              "192414": 1.44,
+              "192415": 1.42
+            }
+          },
+          "metrics": {
+            "war_quic_connections": 0,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 2074,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 390588640,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 0,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 8194,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 8194,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 8194,
+            "war_incoming_messages_total": 380321,
+            "war_incoming_bytes_total": 394391852,
+            "war_deliveries_total": 388516,
+            "war_delivered_bytes_total": 394465610,
+            "war_slow_consumers_total": 0,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 0,
+            "war_sessions": 0,
+            "war_channels": 1,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 0,
+            "war_output_queue_peak_capacity_bytes": 0
+          },
+          "live_allocations": 1694,
+          "requested_live_bytes": 9731291
+        },
+        {
+          "requested_offset_seconds": 5,
+          "actual_offset_seconds": 5.000055149997934,
+          "heap": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-quinn-event-reclaim-settle/relay_192411.0005.heap",
+            "sha256": "a32aca9c9cc29838ec61f6f19890c3b6245114179aa1425f3efae5b23d9216f0",
+            "header": "heap profile:   1694:  9731291 [5709697: 1936248421] @ heapprofile"
+          },
+          "process": {
+            "VmSize": 385520,
+            "VmRSS": 366244,
+            "RssAnon": 356832,
+            "Threads": 5,
+            "cpu_seconds": 5.7,
+            "user_cpu_seconds": 3.92,
+            "system_cpu_seconds": 1.78,
+            "thread_cpu_seconds": {
+              "192411": 0.06,
+              "192412": 1.37,
+              "192413": 1.36,
+              "192414": 1.44,
+              "192415": 1.42
+            }
+          },
+          "metrics": {
+            "war_quic_connections": 0,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 2074,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 390588640,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 0,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 8194,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 8194,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 8194,
+            "war_incoming_messages_total": 380321,
+            "war_incoming_bytes_total": 394391852,
+            "war_deliveries_total": 388516,
+            "war_delivered_bytes_total": 394465610,
+            "war_slow_consumers_total": 0,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 0,
+            "war_sessions": 0,
+            "war_channels": 1,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 0,
+            "war_output_queue_peak_capacity_bytes": 0
+          },
+          "live_allocations": 1694,
+          "requested_live_bytes": 9731291
+        }
+      ]
+    },
+    "heap-shared-session": {
+      "scope": "8194 real sessions; replacement gperftools allocator, excluded from ordinary timing/RSS medians. Original three phase gates plus observations at 1/5 seconds while completed client is held at done.",
+      "receipt": "artifacts/webtransport/heap-shared-session-settle.json",
+      "ready": {
+        "live_allocations": 804274,
+        "requested_live_bytes": 253317298,
+        "heap": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0001.heap",
+          "sha256": "94b1b266319b3564effa1c2a4a2d9852fa86554affd79279d97a5ce76e15fde8",
+          "header": "heap profile: 804274: 253317298 [3161465: 621914194] @ heapprofile"
+        }
+      },
+      "done": {
+        "live_allocations": 66862,
+        "requested_live_bytes": 35012938,
+        "heap": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0003.heap",
+          "sha256": "815fa1f767c97ed2308330706a57e8057f84d63aa2ec05d394584c4e11c2babd",
+          "header": "heap profile:  66862: 35012938 [5699570: 1929457756] @ heapprofile",
+          "settled": [
+            {
+              "requested_offset_seconds": 1,
+              "actual_offset_seconds": 1.0001039760027197,
+              "heap": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0004.heap",
+                "sha256": "ce9d3cc59f877cfc85a61c7a765c43bcbe68779e5b8d46f0ea36743150ca1373",
+                "header": "heap profile:   1954:  9753018 [5699570: 1929457756] @ heapprofile"
+              },
+              "process": {
+                "VmSize": 358904,
+                "VmRSS": 337856,
+                "RssAnon": 328196,
+                "Threads": 5,
+                "cpu_seconds": 5.64,
+                "user_cpu_seconds": 3.83,
+                "system_cpu_seconds": 1.81,
+                "thread_cpu_seconds": {
+                  "208889": 0.06,
+                  "208890": 1.38,
+                  "208891": 1.4,
+                  "208892": 1.4,
+                  "208893": 1.35
+                }
+              },
+              "metrics": {
+                "war_quic_connections": 0,
+                "war_datagrams_received": 0,
+                "war_datagrams_submitted": 0,
+                "war_datagram_bytes_submitted": 0,
+                "war_datagrams_dropped": 0,
+                "war_datagrams_oversized": 0,
+                "war_read_buffer_reserved_bytes": 0,
+                "war_read_buffer_peak_reserved_bytes": 2074,
+                "war_read_buffer_limit_bytes": 1073741824,
+                "war_read_buffer_reservations_rejected_total": 0,
+                "war_accept_errors_total": 0,
+                "war_setup_errors_total": 0,
+                "war_ip_rejected_total": 0,
+                "war_read_buffer_reclaims_total": 0,
+                "war_read_buffer_reclaim_header_bytes_total": 0,
+                "war_read_buffer_reclaims_deferred_total": 0,
+                "war_idle_timeouts_total": 0,
+                "war_unstarted_writes_cancelled_total": 0,
+                "war_routing_reused_bytes_total": 388616800,
+                "war_routing_copied_bytes_total": 0,
+                "war_write_timeouts_total": 0,
+                "war_write_errors_total": 0,
+                "war_aborted_writes_total": 0,
+                "war_close_failures_total": 0,
+                "war_transport_disconnects_total": 0,
+                "war_global_pressure_total": 0,
+                "war_accepted_total": 8194,
+                "war_rejected_total": 0,
+                "war_origin_rejected_total": 0,
+                "war_handshake_errors_total": 0,
+                "war_joined_total": 8194,
+                "war_join_rejected_total": 0,
+                "war_disconnected_total": 8194,
+                "war_incoming_messages_total": 378401,
+                "war_incoming_bytes_total": 392400812,
+                "war_deliveries_total": 386596,
+                "war_delivered_bytes_total": 392474570,
+                "war_slow_consumers_total": 0,
+                "war_protocol_errors_total": 0,
+                "war_rate_limited_total": 0,
+                "war_variable_bytes": 0,
+                "war_connections": 0,
+                "war_sessions": 0,
+                "war_channels": 1,
+                "war_queued_bytes": 0,
+                "war_draining": 0,
+                "war_native_connection_slots": 0,
+                "war_output_queue_capacity_bytes": 0,
+                "war_output_queue_peak_capacity_bytes": 0
+              }
+            },
+            {
+              "requested_offset_seconds": 5,
+              "actual_offset_seconds": 5.000122960998851,
+              "heap": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0005.heap",
+                "sha256": "17017da9298e032c97f18187f0cc58e1a53236be9c92467870bda38e4bda3f6b",
+                "header": "heap profile:   1954:  9753018 [5699619: 1929527288] @ heapprofile"
+              },
+              "process": {
+                "VmSize": 358904,
+                "VmRSS": 337856,
+                "RssAnon": 328196,
+                "Threads": 5,
+                "cpu_seconds": 5.65,
+                "user_cpu_seconds": 3.84,
+                "system_cpu_seconds": 1.81,
+                "thread_cpu_seconds": {
+                  "208889": 0.07,
+                  "208890": 1.38,
+                  "208891": 1.4,
+                  "208892": 1.4,
+                  "208893": 1.35
+                }
+              },
+              "metrics": {
+                "war_quic_connections": 0,
+                "war_datagrams_received": 0,
+                "war_datagrams_submitted": 0,
+                "war_datagram_bytes_submitted": 0,
+                "war_datagrams_dropped": 0,
+                "war_datagrams_oversized": 0,
+                "war_read_buffer_reserved_bytes": 0,
+                "war_read_buffer_peak_reserved_bytes": 2074,
+                "war_read_buffer_limit_bytes": 1073741824,
+                "war_read_buffer_reservations_rejected_total": 0,
+                "war_accept_errors_total": 0,
+                "war_setup_errors_total": 0,
+                "war_ip_rejected_total": 0,
+                "war_read_buffer_reclaims_total": 0,
+                "war_read_buffer_reclaim_header_bytes_total": 0,
+                "war_read_buffer_reclaims_deferred_total": 0,
+                "war_idle_timeouts_total": 0,
+                "war_unstarted_writes_cancelled_total": 0,
+                "war_routing_reused_bytes_total": 388616800,
+                "war_routing_copied_bytes_total": 0,
+                "war_write_timeouts_total": 0,
+                "war_write_errors_total": 0,
+                "war_aborted_writes_total": 0,
+                "war_close_failures_total": 0,
+                "war_transport_disconnects_total": 0,
+                "war_global_pressure_total": 0,
+                "war_accepted_total": 8194,
+                "war_rejected_total": 0,
+                "war_origin_rejected_total": 0,
+                "war_handshake_errors_total": 0,
+                "war_joined_total": 8194,
+                "war_join_rejected_total": 0,
+                "war_disconnected_total": 8194,
+                "war_incoming_messages_total": 378401,
+                "war_incoming_bytes_total": 392400812,
+                "war_deliveries_total": 386596,
+                "war_delivered_bytes_total": 392474570,
+                "war_slow_consumers_total": 0,
+                "war_protocol_errors_total": 0,
+                "war_rate_limited_total": 0,
+                "war_variable_bytes": 0,
+                "war_connections": 0,
+                "war_sessions": 0,
+                "war_channels": 1,
+                "war_queued_bytes": 0,
+                "war_draining": 0,
+                "war_native_connection_slots": 0,
+                "war_output_queue_capacity_bytes": 0,
+                "war_output_queue_peak_capacity_bytes": 0
+              }
+            }
+          ]
+        }
+      },
+      "observations": [
+        {
+          "requested_offset_seconds": 1,
+          "actual_offset_seconds": 1.0001039760027197,
+          "heap": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0004.heap",
+            "sha256": "ce9d3cc59f877cfc85a61c7a765c43bcbe68779e5b8d46f0ea36743150ca1373",
+            "header": "heap profile:   1954:  9753018 [5699570: 1929457756] @ heapprofile"
+          },
+          "process": {
+            "VmSize": 358904,
+            "VmRSS": 337856,
+            "RssAnon": 328196,
+            "Threads": 5,
+            "cpu_seconds": 5.64,
+            "user_cpu_seconds": 3.83,
+            "system_cpu_seconds": 1.81,
+            "thread_cpu_seconds": {
+              "208889": 0.06,
+              "208890": 1.38,
+              "208891": 1.4,
+              "208892": 1.4,
+              "208893": 1.35
+            }
+          },
+          "metrics": {
+            "war_quic_connections": 0,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 2074,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 388616800,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 0,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 8194,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 8194,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 8194,
+            "war_incoming_messages_total": 378401,
+            "war_incoming_bytes_total": 392400812,
+            "war_deliveries_total": 386596,
+            "war_delivered_bytes_total": 392474570,
+            "war_slow_consumers_total": 0,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 0,
+            "war_sessions": 0,
+            "war_channels": 1,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 0,
+            "war_output_queue_peak_capacity_bytes": 0
+          },
+          "live_allocations": 1954,
+          "requested_live_bytes": 9753018
+        },
+        {
+          "requested_offset_seconds": 5,
+          "actual_offset_seconds": 5.000122960998851,
+          "heap": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-shared-session-settle/relay_208889.0005.heap",
+            "sha256": "17017da9298e032c97f18187f0cc58e1a53236be9c92467870bda38e4bda3f6b",
+            "header": "heap profile:   1954:  9753018 [5699619: 1929527288] @ heapprofile"
+          },
+          "process": {
+            "VmSize": 358904,
+            "VmRSS": 337856,
+            "RssAnon": 328196,
+            "Threads": 5,
+            "cpu_seconds": 5.65,
+            "user_cpu_seconds": 3.84,
+            "system_cpu_seconds": 1.81,
+            "thread_cpu_seconds": {
+              "208889": 0.07,
+              "208890": 1.38,
+              "208891": 1.4,
+              "208892": 1.4,
+              "208893": 1.35
+            }
+          },
+          "metrics": {
+            "war_quic_connections": 0,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 2074,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 388616800,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 0,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 8194,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 8194,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 8194,
+            "war_incoming_messages_total": 378401,
+            "war_incoming_bytes_total": 392400812,
+            "war_deliveries_total": 386596,
+            "war_delivered_bytes_total": 392474570,
+            "war_slow_consumers_total": 0,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 0,
+            "war_sessions": 0,
+            "war_channels": 1,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 0,
+            "war_output_queue_peak_capacity_bytes": 0
+          },
+          "live_allocations": 1954,
+          "requested_live_bytes": 9753018
+        }
+      ]
+    }
+  },
+  "capacity_order": [
+    {
+      "variant": "shared-session",
+      "repetition": 1,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session.json",
+      "passed": true,
+      "outer_wrapper_exit_code": 1,
+      "wrapper_note": "capacity.run returns None after writing the successful authoritative receipt; initial wrapper incorrectly subscripted it. No child failure. Corrected for subsequent invocations."
+    },
+    {
+      "variant": "quinn-event-reclaim",
+      "repetition": 1,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-1.json",
+      "passed": true,
+      "wall_seconds": 19.160378833999857
+    },
+    {
+      "variant": "quinn-event-reclaim",
+      "repetition": 2,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-2.json",
+      "passed": true,
+      "wall_seconds": 19.5108534960018
+    },
+    {
+      "variant": "shared-session",
+      "repetition": 2,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session-shared-session-2.json",
+      "passed": true,
+      "wall_seconds": 19.649048813000263
+    },
+    {
+      "variant": "shared-session",
+      "repetition": 3,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session-shared-session-3.json",
+      "passed": true,
+      "wall_seconds": 19.374084592003783
+    },
+    {
+      "variant": "quinn-event-reclaim",
+      "repetition": 3,
+      "receipt": "artifacts/webtransport/capacity-100k-shared-session-quinn-event-reclaim-3.json",
+      "passed": true,
+      "wall_seconds": 19.339234523002233
+    }
+  ],
+  "historical_controls": {
+    "scope": "Earlier measured controls, not rerun during this checkpoint. Plaintext is the existing acceptance baseline. TLS control includes both proxy and backend CPU/RSS and an extra loopback hop; it is not native-WSS performance or a general protocol ceiling.",
+    "plaintext_capacity": {
+      "receipt": "artifacts/webtransport/capacity-100k-parity-websocket.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.008431372,
+      "deliveries": 400000,
+      "achieved_per_second": 99789.65906566604,
+      "round_trip": {
+        "max_ms": 2.760842,
+        "p50_upper_ms": 0.262144,
+        "p99_upper_ms": 0.524288,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.054531,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 115540,
+      "client_rss_kib": 797956,
+      "server_cpu_cores": 0.48647458794512194,
+      "client_cpu_cores": 0.6037274373472794,
+      "server_rss_after_retirement_kib": 59520,
+      "max_gate_server_rss_kib": 115556,
+      "setup_seconds": 0.677947131,
+      "retirement_seconds": 0.624616538,
+      "timed_udp_receive_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+      "client_sha256": "856a3ecda3b8f36975037b8d911bc8dca35a622e7e39bdf15018b5d699b9c46e"
+    },
+    "reliable_comparison_report": "docs/reports/webtransport-parity-2026-10-21.json",
+    "reliable_comparison_report_sha256": "5661ec40ad01ec585ec0c71570945b680117d5e1de9ee6ee6bd8cb04aede73e3"
+  },
+  "freshness_scope": "One final candidate check per clean/loss/reorder mode. 360 offered 1 KiB states at 60 Hz over six seconds plus reliable 1 MiB bulk. Loss profile: 20 ms one-way and 2% packet loss; reorder additionally 8 ms jitter and 25% reordering. External port only, both directions, temporary isolated namespace; TLS proxy internal hop unimpaired. Same seeds/parameters are not identical packet-loss trajectories. Probes include initial state before first update; stale sequences cannot replace new state. Unreceived updates are not attributed exclusively to network loss. Single samples do not establish statistical protocol rankings.",
+  "source_hashes": {
+    "Cargo.toml": "98e8551493326e19e22fa5687f735b328310c3089a080146e2a3256987289176",
+    "Cargo.lock": "2baf7b389068c826fd565fd9226d881f4ba4c3e3a828b489340d3dd92b5ed595",
+    "src/webtransport.rs": "ad28aadd9d51e3ce877f49e6a53514619908028019b9f28a7c9b19566ab38184",
+    "src/webtransport/queue.rs": "45062a8a9d56e0743901a093337e422965d5aff7c3d3d9a434f2c0e613a5f641",
+    "examples/inspection.rs": "8150b3ec94d1b7ccb254c2c89121708afecaf8f2748c45b3e4a30ed027328c30",
+    "examples/capacity.rs": "d1f89fb1e1e43724023d45941b49c4bc402fee5a3aa969929d23fe7cf142d0d8",
+    "examples/support/socket.rs": "4d324f90561d04750248048e4cf7eb8c7ebacaf7de24a84840ae272eb82acadb",
+    "examples/state_freshness.rs": "ad128b3026e2ba2d6429a63be79bcb3b83cc1ee3da7a22b842b4d9910f5b6057",
+    "scripts/inspection.py": "637acd47201d43b1134e4066ab591e4f3967a292255066b9dfd862c17d34dd26",
+    "scripts/capacity.py": "0e3ca1043d6a1140a7bd563886c9d586a4bf8a7282401eb18f22f20a65e31527",
+    "scripts/benchmark_transport.py": "50bd9737ccee884779633a9c825f930c314097709bc1ae10914bfc1389da6986",
+    "scripts/freshness.py": "74b280190351c67beff67d135f14f38a2c5377582c3de8af4c285a302ec22587",
+    "scripts/freshness-matrix.py": "5f9404737c7bbe909fed03e2a51d03f84390a41b2d5bed64e1f3129cf257100c"
+  },
+  "binary_hashes": {
+    "artifacts/webtransport/binaries/quinn-event-reclaim-relay": "26de4e616e2966dd388d38100f66614e2320de9be1608b88534fabfa15a788c2",
+    "artifacts/webtransport/binaries/shared-session-relay": "5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40",
+    "target/release/examples/inspection": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+    "artifacts/webtransport/binaries/buffered-direct-capacity": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+    "target/release/examples/state_freshness": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+  },
+  "remaining": "Overall parity remains unmet: memory and room/mixed throughput remain behind the plaintext control, mixed private traffic remains behind the earlier encrypted fixture. Continue active QUIC connection/HTTP3 storage and reliable scheduling work. Observer cancellation/re-subscribe, full concurrent 100k/8192 inspection, broader overload/shutdown, QUIC buffer accounting, final packaging and deployment documentation remain required. No acceptance, push, release or deployment claim."
+}

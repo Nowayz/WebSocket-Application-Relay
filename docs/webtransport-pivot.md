@@ -574,3 +574,115 @@ measurements, earlier trials, provenance hashes and validation scopes. The
 room/mixed throughput and mixed private-lane parity are still unmet. Continue
 with active task/connection storage and reliable scheduling, plus the previously
 listed acceptance work. This checkpoint does not accept or release the pivot.
+
+## Shared session ownership and shorter-lived admission storage
+
+Compiler layout and the replacement-allocator profile identified the application
+connection task as the next memory target: 4,736 bytes per task at the previous
+checkpoint. `web-transport-quinn::Session` is a 776-byte handle containing HTTP
+metadata and per-clone polling state. Moving and cloning it through nested async
+functions reserved multiple copies of that inline storage for each live session.
+The adapter uses its shared async APIs, which own their waiter registrations,
+rather than the per-clone `poll_*` operations.
+
+The application task and output sink now share one `Arc<Session>`. The larger
+admission future is allocated separately before spawning and released when the
+handshake completes; its result is already Arc-owned. This reduces the persistent
+Tokio task cell from 4,736 to 2,048 bytes, the inner session future from 3,304 to
+1,768 bytes, and the output sink from 976 to 208 bytes. These are compiler layout
+measurements, not whole-process totals. One persistent Arc allocation and one
+transient admission allocation per connection replace the copied handles and
+larger task storage. There is no new per-message allocation. The admission lease
+is captured before spawning so that cancellation before the task's first poll
+also releases its connection count. Wire behavior, routing, transport parameters,
+queue limits, timeouts, crypto and congestion control are unchanged.
+
+The ordinary release build is separately frozen as
+`artifacts/webtransport/binaries/shared-session-relay`, SHA256
+`5f5e91e06fe06bb265d26082fdb076f345e02c160971fc6a20c4a1cd0fbcdc40`.
+The build manifest records the source diff and hashes. Diagnostic `-Z` compiler
+flags were not used for the timed executable. Three alternating fresh-process
+runs per reliable case use the same frozen client and previous server executable,
+four pinned server workers, eight client workers, 1 KiB values, 32 private pairs,
+1,024 fanout readers and window four. All 18 runs pass full payload, sender, FIFO,
+counter, close and cleanup checks.
+
+| Reliable workload | Previous candidate deliveries/s | Shared-session candidate deliveries/s |
+| --- | ---: | ---: |
+| Private only | 1,398,619 | 1,396,457 |
+| Room fanout only | 1,080,688 | 1,099,968 |
+| Mixed, combined | 1,159,945 | 1,160,194 |
+| Mixed, private component | 316,671 | 313,677 |
+| Mixed, fanout component | 843,273 | 846,516 |
+
+The useful result is lower storage with essentially unchanged private/mixed
+throughput. Room fanout is 1.8% higher in this local sample. Fanout RSS decreases
+from 55.23 to 52.58 MiB, mixed RSS from 59.18 to 56.04 MiB. Individual repetitions,
+latency bounds, CPU, client RSS and ranges remain in the report; no production
+latency or general speedup claim follows from these short loopback screens.
+
+The 100k population comparison was expanded to three fresh runs per executable
+in alternating order after an initial candidate sample showed a higher maximum
+RTT. Similar spikes appeared in the control. All six runs complete 400,000 timed
+deliveries plus independent all-user pre/post routing proofs, exact departures
+and genuine close acknowledgements. All seven final connection/storage gauges
+reach zero. Timed client/server UDP receive drops are zero; the untimed proof
+bursts can still drop UDP packets. The first Python wrapper incorrectly treated
+`capacity.run()`'s `None` return as a result object after it wrote its successful
+receipt. Both child exit codes and that receipt passed; the wrapper was corrected,
+and its post-validation exception is preserved in the comparison manifest.
+
+| 100k metric (median of three runs unless noted) | Previous candidate | Shared-session candidate |
+| --- | ---: | ---: |
+| Verified timed deliveries in each run | 400,000 | 400,000 |
+| Timed elapsed | 4.0139 s | 4.0134 s |
+| Achieved delivery rate | 99,653.4/s | 99,667.0/s |
+| RTT p50 upper bound | 0.524 ms | 0.524 ms |
+| RTT p99 upper bound range | 1.049–2.097 ms | 1.049 ms |
+| Maximum RTT across all three runs | 11.684 ms | 11.330 ms |
+| Scheduling-lag p99 upper bound in each run | 2.097 ms | 2.097 ms |
+| Server CPU over measured interval | 2.093 cores | 2.073 cores |
+| Server RSS at measured gate | 3,295.63 MiB | 3,050.17 MiB |
+| Server RSS range | 3,295.07–3,296.31 MiB | 3,049.38–3,050.62 MiB |
+| Server RSS after retirement | 3,299.76 MiB | 3,053.47 MiB |
+| Population setup | 11.375 s | 11.375 s |
+| Population retirement | 2.227 s | 2.334 s |
+
+Median measured RSS decreases by 245.46 MiB (7.45%). RSS excludes kernel socket
+memory and is sampled at phase gates. The separate 8,194-session replacement-
+allocator diagnostic corroborates lower active storage: requested live bytes at
+ready decrease from 275,587,957 to 253,317,298 (8.08%). After logical cleanup, the
+new run settles to 9,753,018 requested live bytes at one second and remains there
+at five seconds. Instrumented allocator RSS is excluded from ordinary comparisons.
+This does not claim that production process RSS immediately returns to the OS.
+
+All nine final clean/loss/reorder checks pass, including full bulk/payload checks,
+stale-state suppression and zero final gauges. Under 20 ms one-way delay and 2%
+loss, the datagram sample receives 345/360 states with p99 newest-state age 73 ms;
+the reliable WebTransport sample receives 360/360 with p99 age 1,721 ms, and the
+TLS fixture receives 360/360 with p99 age 981 ms. With jitter/reordering added,
+datagram p99 newest-state age is 109 ms with 358/360 updates, while reliable
+WebTransport is 5,941 ms and TLS 741 ms. Bulk completion in those reordering
+samples is respectively 7,167, 6,137 and 804 ms. The datagram freshness benefit
+does not establish better reliable bulk progress. Each is one candidate sample;
+matching seeds and impairment parameters do not impose identical loss trajectories.
+Missing updates are unreceived observations, not all attributed to network loss.
+
+Chromium 155 passes all nine actual delivered-bundle checks: three sessions,
+typed broadcast, cross-room private delivery, datagrams, 128 KiB and 5 MiB values,
+concurrent variables, unsafe-number rejection, departure and real graceful close.
+All seven final gauges are zero; the screenshot is
+`output/playwright/webtransport-shared-session.png`. The product's 264 Rust tests
+pass with one ignored, Clippy with warnings denied passes, and all 152 vendored
+files verify against their declared archives/patches. No dependency source was
+changed at this checkpoint. Browser, HTTP, benchmark and network-namespace fixtures
+were stopped and removed after verification.
+
+`docs/reports/webtransport-shared-session-2026-10-21.json` retains individual
+samples, ranges, complete freshness/bulk/generation-lag measurements, source and
+binary provenance, diagnostics, and validation scopes. The 3,050.17 MiB median
+RSS is still approximately 27 times the earlier 112.83 MiB plaintext control.
+Room/mixed throughput and mixed private-lane parity remain unmet. Continue active
+QUIC/HTTP3 connection storage and reliable scheduling work, plus the previously
+listed acceptance work. This measured memory improvement does not accept or
+release the pivot.
