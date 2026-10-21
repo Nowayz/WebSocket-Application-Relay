@@ -28,7 +28,6 @@ struct Output {
     // each long-lived future and output sink.
     connection: Arc<Connection>,
     queue: queue::Queue<Envelope>,
-    scratch: Mutex<Vec<u8>>,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
     activity: Option<Arc<Mutex<Instant>>>,
@@ -61,15 +60,12 @@ impl Output {
             self.relay.metrics.datagrams_dropped.fetch_add(1, Relaxed);
             return true;
         }
-        let mut scratch = self.scratch.lock();
-        scratch.clear();
-        scratch.extend_from_slice(frame.prefix());
-        scratch.extend_from_slice(frame.payload());
-        if self
-            .connection
-            .send_datagram(Bytes::copy_from_slice(scratch.as_slice()))
-            .is_ok()
-        {
+        // Quinn retains an owned contiguous datagram until transmission. Build
+        // that allocation directly instead of copying through per-peer scratch.
+        let mut datagram = Vec::with_capacity(frame.len());
+        datagram.extend_from_slice(frame.prefix());
+        datagram.extend_from_slice(frame.payload());
+        if self.connection.send_datagram(Bytes::from(datagram)).is_ok() {
             if let Some(activity) = &self.activity {
                 *activity.lock() = Instant::now();
             }
@@ -327,7 +323,6 @@ async fn session(
     let output = Arc::new(Output {
         connection: connection.clone(),
         queue: queue::Queue::new(relay.config.queue_messages),
-        scratch: Mutex::new(Vec::new()),
         relay: relay.clone(),
         retirement,
         activity: activity.clone(),

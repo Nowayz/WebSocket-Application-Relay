@@ -1007,6 +1007,8 @@ pub(crate) struct State {
     socket: Arc<dyn AsyncUdpSocket>,
     io_poller: Pin<Box<dyn UdpPoller>>,
     runtime: Arc<dyn Runtime>,
+    /// Owns bytes only while a transmit is blocked on socket writability.
+    /// Completed sends return their scratch allocation to the current thread.
     send_buffer: Vec<u8>,
     /// We buffer a transmit when the underlying I/O would block
     buffered_transmit: Option<proto::Transmit>,
@@ -1014,6 +1016,7 @@ pub(crate) struct State {
 
 impl State {
     fn drive_transmit(&mut self, cx: &mut Context) -> io::Result<bool> {
+        let mut send_buffer = crate::transmit_buffer::TransmitBuffer::take(&mut self.send_buffer);
         let now = self.runtime.now();
         let mut transmits = 0;
 
@@ -1027,11 +1030,11 @@ impl State {
             let t = match self.buffered_transmit.take() {
                 Some(t) => t,
                 None => {
-                    self.send_buffer.clear();
-                    self.send_buffer.reserve(self.inner.current_mtu() as usize);
+                    send_buffer.clear();
+                    send_buffer.reserve(self.inner.current_mtu() as usize);
                     match self
                         .inner
-                        .poll_transmit(now, max_datagrams, &mut self.send_buffer)
+                        .poll_transmit(now, max_datagrams, &mut send_buffer)
                     {
                         Some(t) => {
                             transmits += match t.segment_size {
@@ -1048,13 +1051,14 @@ impl State {
             if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
                 // Retry after a future wakeup
                 self.buffered_transmit = Some(t);
+                send_buffer.retain(&mut self.send_buffer);
                 return Ok(false);
             }
 
             let len = t.size;
             let retry = match self
                 .socket
-                .try_send(&udp_transmit(&t, &self.send_buffer[..len]))
+                .try_send(&udp_transmit(&t, &send_buffer[..len]))
             {
                 Ok(()) => false,
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => true,

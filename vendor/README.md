@@ -23,12 +23,37 @@ declares that minimum and enables `rt` for the API. The relay already uses Tokio
 the channel to retain its executor-independent polling contract.
 
 The modified package files are `Cargo.toml`, `Cargo.toml.orig`, `src/lib.rs`,
-`src/endpoint.rs` and `src/connection.rs`; `src/event_queue.rs` is added. The
+`src/endpoint.rs` and `src/connection.rs`; `src/event_queue.rs` and
+`src/transmit_buffer.rs` are added. The
 published archive, licenses and remaining source files are preserved. The complete
 diff is `quinn-event-channel.patch`, with original checksum and Git revision in
 `provenance.json`. Tests exercise FIFO/bursts, concurrent wakeups, cancelled polls,
 sender/receiver retirement, and cooperative scheduling alongside the upstream
 runtime tests and real relay integration workloads.
+
+## QUIC packet-construction storage
+
+The same Quinn runtime patch reuses packet-construction buffers per runtime
+thread instead of retaining their high-water allocation in every connection.
+A synchronous transmit turn owns a `TransmitBuffer` lease. After successful
+socket submission, its cleared allocation returns to that thread for the next
+connection. One cached allocation per thread replaces per-idle-connection storage;
+no queue depth, message size, flow-control window or congestion setting changes.
+Nested/custom socket callbacks borrow an independent buffer. Thread teardown and
+an already borrowed cache fall back to releasing the allocation without panicking.
+
+An unsent packet is different: when socket writability returns Pending, the
+connection keeps the exact encrypted bytes and transmit metadata until retry.
+That allocation is never placed in the shared cache while the socket is blocked.
+Existing socket error handling, transmit quanta, timers and protocol ownership
+remain unchanged. This does not share a mutable buffer across async waits.
+
+`tests/quic_transmit_buffer.rs` wraps a real UDP socket to force WouldBlock and a
+subsequent Pending poll. It constructs a second connection's packet on the same
+runtime thread before releasing the first, then checks the first packet's exact
+ciphertext and both delivered payloads. Upstream runtime/window tests, relay
+integration workloads and actual Chromium checks provide broader verification.
+The complete archive-relative patch remains `quinn-event-channel.patch`.
 
 ## QUIC stream-credit storage
 

@@ -27,7 +27,7 @@ index 145ff32..01f9135 100644
 
  [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
 diff --git a/quinn/src/connection.rs b/quinn/src/connection.rs
-index ff449dd..1a704e9 100644
+index ff449dd..6fc7fea 100644
 --- a/quinn/src/connection.rs
 +++ b/quinn/src/connection.rs
 @@ -45,7 +45,7 @@ impl Connecting {
@@ -57,6 +57,54 @@ index ff449dd..1a704e9 100644
      endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
      pub(crate) blocked_writers: FxHashMap<StreamId, Waker>,
      pub(crate) blocked_readers: FxHashMap<StreamId, Waker>,
+@@ -1007,6 +1007,8 @@ pub(crate) struct State {
+     socket: Arc<dyn AsyncUdpSocket>,
+     io_poller: Pin<Box<dyn UdpPoller>>,
+     runtime: Arc<dyn Runtime>,
++    /// Owns bytes only while a transmit is blocked on socket writability.
++    /// Completed sends return their scratch allocation to the current thread.
+     send_buffer: Vec<u8>,
+     /// We buffer a transmit when the underlying I/O would block
+     buffered_transmit: Option<proto::Transmit>,
+@@ -1014,6 +1016,7 @@ pub(crate) struct State {
+
+ impl State {
+     fn drive_transmit(&mut self, cx: &mut Context) -> io::Result<bool> {
++        let mut send_buffer = crate::transmit_buffer::TransmitBuffer::take(&mut self.send_buffer);
+         let now = self.runtime.now();
+         let mut transmits = 0;
+
+@@ -1027,11 +1030,11 @@ impl State {
+             let t = match self.buffered_transmit.take() {
+                 Some(t) => t,
+                 None => {
+-                    self.send_buffer.clear();
+-                    self.send_buffer.reserve(self.inner.current_mtu() as usize);
++                    send_buffer.clear();
++                    send_buffer.reserve(self.inner.current_mtu() as usize);
+                     match self
+                         .inner
+-                        .poll_transmit(now, max_datagrams, &mut self.send_buffer)
++                        .poll_transmit(now, max_datagrams, &mut send_buffer)
+                     {
+                         Some(t) => {
+                             transmits += match t.segment_size {
+@@ -1048,13 +1051,14 @@ impl State {
+             if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
+                 // Retry after a future wakeup
+                 self.buffered_transmit = Some(t);
++                send_buffer.retain(&mut self.send_buffer);
+                 return Ok(false);
+             }
+
+             let len = t.size;
+             let retry = match self
+                 .socket
+-                .try_send(&udp_transmit(&t, &self.send_buffer[..len]))
++                .try_send(&udp_transmit(&t, &send_buffer[..len]))
+             {
+                 Ok(()) => false,
+                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => true,
 diff --git a/quinn/src/endpoint.rs b/quinn/src/endpoint.rs
 index 1bf82c0..ed66178 100644
 --- a/quinn/src/endpoint.rs
@@ -79,7 +127,7 @@ index 1bf82c0..ed66178 100644
          if let Some((error_code, ref reason)) = self.close {
              send.send(ConnectionEvent::Close {
                  error_code,
-diff --git a/quinn/src/event_queue.rs b/quinn/src/event_queue.rs
+diff --git a/modified/quinn/src/event_queue.rs b/quinn/src/event_queue.rs
 new file mode 100644
 index 0000000..667661e
 --- /dev/null
@@ -332,10 +380,18 @@ index 0000000..667661e
 +    }
 +}
 diff --git a/quinn/src/lib.rs b/quinn/src/lib.rs
-index 82becdb..ba5267d 100644
+index 82becdb..6bdcaa9 100644
 --- a/quinn/src/lib.rs
 +++ b/quinn/src/lib.rs
-@@ -93,6 +93,8 @@ pub use crate::send_stream::{SendStream, StoppedError, WriteError};
+@@ -50,6 +50,7 @@ mod mutex;
+ mod recv_stream;
+ mod runtime;
+ mod send_stream;
++mod transmit_buffer;
+ mod work_limiter;
+
+ #[cfg(not(wasm_browser))]
+@@ -93,6 +94,8 @@ pub use crate::send_stream::{SendStream, StoppedError, WriteError};
  #[cfg(test)]
  mod tests;
 
@@ -344,3 +400,75 @@ index 82becdb..ba5267d 100644
  #[derive(Debug)]
  enum ConnectionEvent {
      Close {
+diff --git a/modified/quinn/src/transmit_buffer.rs b/quinn/src/transmit_buffer.rs
+new file mode 100644
+index 0000000..e91c0d9
+--- /dev/null
++++ b/quinn/src/transmit_buffer.rs
+@@ -0,0 +1,66 @@
++//! Packet construction is synchronous, so an unblocked connection can return
++//! its scratch allocation for reuse by the next connection on this thread.
++//! A socket-blocked transmit keeps its bytes with its own connection instead.
++use std::{
++    cell::RefCell,
++    mem,
++    ops::{Deref, DerefMut},
++};
++
++thread_local! {
++    static SCRATCH: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
++}
++
++pub(crate) struct TransmitBuffer(Vec<u8>);
++
++impl TransmitBuffer {
++    pub(crate) fn take(retained: &mut Vec<u8>) -> Self {
++        let mut bytes = mem::take(retained);
++        if bytes.capacity() == 0 {
++            if let Ok(Some(scratch)) = SCRATCH.try_with(|slot| {
++                slot.try_borrow_mut()
++                    .ok()
++                    .map(|mut slot| mem::take(&mut *slot))
++            }) {
++                bytes = scratch;
++            }
++        }
++        Self(bytes)
++    }
++
++    pub(crate) fn retain(&mut self, pending: &mut Vec<u8>) {
++        *pending = mem::take(&mut self.0);
++    }
++}
++
++impl Deref for TransmitBuffer {
++    type Target = Vec<u8>;
++
++    fn deref(&self) -> &Self::Target {
++        &self.0
++    }
++}
++
++impl DerefMut for TransmitBuffer {
++    fn deref_mut(&mut self) -> &mut Self::Target {
++        &mut self.0
++    }
++}
++
++impl Drop for TransmitBuffer {
++    fn drop(&mut self) {
++        if self.0.capacity() == 0 {
++            return;
++        }
++        self.0.clear();
++        // A nested/custom socket callback or thread-local teardown must not
++        // panic or share a live construction buffer. In that case just free it.
++        let _ = SCRATCH.try_with(|slot| {
++            if let Ok(mut spare) = slot.try_borrow_mut() {
++                if spare.capacity() < self.0.capacity() {
++                    mem::swap(&mut *spare, &mut self.0);
++                }
++            }
++        });
++    }
++}

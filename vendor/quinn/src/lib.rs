@@ -50,6 +50,7 @@ mod mutex;
 mod recv_stream;
 mod runtime;
 mod send_stream;
+mod transmit_buffer;
 mod work_limiter;
 
 #[cfg(not(wasm_browser))]

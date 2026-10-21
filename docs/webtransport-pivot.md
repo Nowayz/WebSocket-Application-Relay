@@ -955,3 +955,150 @@ fanout, browser or 100k acceptance. No product implementation changed.
 See [the causal report](reports/webtransport-causal-profile-2026-10-21.md) and
 [complete measurements](reports/webtransport-causal-profile-2026-10-21.json).
 Throughput and memory parity remain unmet; the pivot is not accepted.
+
+## Reuse QUIC packet-construction storage by runtime thread
+
+The causal follow-up tested two proposed costs separately. Removing the relay's
+per-peer datagram scratch buffer removes one full payload copy and one retained
+mutex/Vec. Three alternating echo comparisons show essentially unchanged
+throughput; this is simpler ownership, not a claimed throughput fix. The
+WebTransport wrapper's separate framing allocation/copy remains.
+
+A second experiment opportunistically processed input from the endpoint when a
+connection driver was idle, then published application events and woke the normal
+driver for transmit/timers. One-worker echo throughput rose from 232,429 to
+246,236/s (5.9%), but four-worker throughput was effectively unchanged at
+591,614 versus 592,180/s and CPU/completion rose from 4.834 to 5.009 us (3.6%).
+That experiment was rejected and fully reverted. Its patch and all 12 receipts
+remain in artifacts; it does not establish that a larger worker-owned redesign
+would fail or succeed.
+
+The retained Quinn change targets an independently identified storage cost:
+`State::send_buffer` previously retained packet-construction high-water capacity
+for every connection even after successful UDP submission. A synchronous transmit
+turn now owns a `TransmitBuffer` lease, reusing one cached allocation per runtime
+thread. Successful submissions return the cleared allocation for the next
+connection. If socket writability becomes Pending, exact ciphertext ownership
+moves back into that connection with its pending transmit metadata. The buffer
+is not shared across an async wait. Nested/custom socket calls get independent
+owned buffers; thread-local teardown and an already borrowed cache do not panic.
+No queue-depth, flow-credit, packet-number, crypto, congestion, timer, framing,
+FIFO or fairness limit changes.
+
+The frozen ordinary release executable is
+`artifacts/webtransport/binaries/shared-transmit-final-relay`, SHA256
+`1a4c8830cc5e0ecf814f385a6de5023d45799d74e3beffdd69703fb6cbe9f5ad`.
+The baseline `direct-datagram-relay` already contains only the scratch-copy
+cleanup, so the matched comparison isolates Quinn buffer reuse. The build
+manifest records the source hashes, diff and exact verifier hashes. Earlier
+exploratory capacity receipts use a pre-final binary hash and are excluded from
+final medians. One exploratory run also overlapped test compilation during setup;
+it is preserved but excluded entirely. Final capacity repetitions 4–6 and all
+ordinary throughput runs have no concurrent builds/tests/browser jobs.
+
+All 18 WT comparisons and nine refreshed plaintext WS controls pass full content,
+sender, FIFO, counters, close and cleanup checks. WT cases alternate three times
+per variant; WS controls are a subsequent block, not interleaved protocol
+comparisons. Four pinned server workers on CPUs 0–3, eight pinned client workers
+on CPUs 8–15, four seconds, 1 KiB values, 32 private pairs, 1,024 room readers and
+fanout window four:
+
+| Reliable workload | Before deliveries/s | Reused-buffer deliveries/s | Fresh plaintext WS deliveries/s |
+| --- | ---: | ---: | ---: |
+| Private | 1,470,291 | 1,461,602 | 1,254,258 |
+| Room only | 1,311,483 | 1,365,453 | 1,661,900 |
+| Mixed aggregate | 1,352,470 | 1,400,383 | 1,487,889 |
+
+Private throughput is effectively unchanged; room and mixed medians rise 4.1%
+and 3.5% in this local screen. Those short-run gains are not a general protocol
+ranking. Median server RSS falls from 13.71 to 13.09 MiB private, 48.40 to
+39.00 MiB room-only, and 52.83 to 43.91 MiB mixed. Server CPU medians are
+3.497, 3.134 and 3.324 cores respectively. Private p99 remains bounded by
+1.049 ms, room p99 by 4.194 ms, and mixed private/fanout p99 by 4.194/8.389 ms.
+
+Aggregate mixed traffic must not hide private-lane fairness: its new independent
+private median is 356,655/s versus 791,957/s for WS, while fanout medians are
+1,041,940/s versus 718,254/s. Component and aggregate medians are independently
+computed and need not sum. The private lane still has a major scheduling deficit.
+The fixed direct-client datagram echo comparison is unchanged at 583,121 versus
+581,699/s; server CPU/completion is 4.854 versus 4.826 us. These 32-session,
+one-outstanding-request diagnostics are not datagram saturation/fanout acceptance.
+
+All nine final 100k runs pass: three before, three reused-buffer, three refreshed
+WS. They use eight pinned server and eight pinned client workers, 100,000
+independently counted physical connections, 400,000 timed deliveries, all-user
+pre/post routing proofs and exact retirement:
+
+| 100k metric, median | Before | Reused buffers | Fresh plaintext WS |
+| --- | ---: | ---: | ---: |
+| Server RSS at measured gate | 3,045.78 MiB | 2,815.90 MiB | 113.07 MiB |
+| Server CPU over timed work | 2.088 cores | 2.068 cores | 0.487 cores |
+| Achieved deliveries/s | 99,688.7 | 99,679.6 | 99,816.3 |
+| RTT p50 upper bound | 0.524 ms | 0.524 ms | 0.262 ms |
+| RTT p99 upper bound | 1.049 ms | 1.049 ms | 0.524 ms |
+| Population setup | 11.383 s | 11.426 s | 0.668 s |
+| Population retirement | 2.172 s | 2.155 s | 0.621 s |
+
+The median RSS reduction is 229.88 MiB (7.55%). Reused-buffer samples are
+2,814.58–2,816.82 MiB versus 3,045.40–3,047.23 MiB before. The observed reused-buffer
+100k p99 upper bound is the same in all new runs, not a production tail SLA.
+Timed UDP receive-drop deltas are zero; untimed population-proof bursts still
+incur drops. All seven final connection/storage gauges are zero. Full receipts
+separately retain TCP ownership census, UDP queues/drops and machine CPU samples;
+RSS excludes kernel allocations. Complete TCP/UDP kernel allocation bytes were
+not measured, so this is not total-system memory parity. Server RSS remains about
+25 times the new plaintext control.
+
+A matched diagnostic with 8,194 real ready sessions and the same replacement
+allocator confirms requested live bytes decrease from 253,051,118 to 233,398,064
+(19,653,054 bytes, 7.77%); live allocation counts decrease from 804,224 to 796,042.
+The former approximately 22.4 MB packet-buffer growth allocation group disappears.
+These are requested live allocations, not ordinary RSS or timing measurements;
+net change includes other small phase-dependent allocation differences.
+
+Two separate eight-second mixed CPU captures pass the full verifier and report
+zero lost samples. Packet construction, encryption, stream reads, connection
+polling, Notify and timers remain prominent; scratch reuse does not eliminate
+those costs. Captures are excluded from ordinary medians.
+
+After timing, the formatter collapsed one multiline `if` expression. The
+measured source snapshot and executable remain frozen. Applying the same
+formatter to that snapshot reproduces the current source exactly. The formatted
+release is separately frozen as `shared-transmit-formatted-relay`, SHA256
+`9e52547dc6d340761207fba4e9e860fa04c8dccfde4f7f78562a83a51098ca82`.
+It independently passes all 266 tests, Clippy, a full 100k capacity run
+(2,815.56 MiB, 400,000 checked deliveries), a full mixed run (1,409,380/s),
+and all nine Chromium checks with final gauges zero. Those single verification
+runs are not pooled into the repeated medians above. The report preserves both
+build identities and the complete formatting-only diff.
+
+Validation: 266 relay tests pass with one existing ignored test; all-target
+Clippy with warnings denied passes. All 28 Quinn default runtime/channel tests
+and three explicitly forced receive-window stress tests pass in a standalone
+copy with the seven modified files byte-identical to the vendor tree, pinned to
+product quinn-proto 0.11.19 and Tokio 1.53.3. The archive/patch check verifies
+153 files against four original packages and three patches. The new real-UDP
+regression forces WouldBlock followed by Pending, constructs another connection's
+packet on the same runtime thread, then verifies the retained ciphertext and
+both received payloads before endpoint retirement.
+
+Actual Chromium 156 passes all nine delivered-bundle checks, including typed
+values, private/broadcast/datagrams, 128 KiB and 5 MiB messages, variables, unsafe
+Number rejection, departure and real graceful closure. Seven final gauges are
+zero. All nine clean/loss/reorder freshness checks pass. In this one sample per
+mode/profile, loss datagrams have 75.6 ms p99 newest-state age and receive 345/360
+updates, versus 640.7 ms and all updates for the stream and 1,061.0 ms and all
+updates for the TLS WS fixture. Under reordering the corresponding ages are
+230.7, 5,561.6 and 701.3 ms; datagrams receive 352/360 updates with 31 arriving out
+of order, and their reliable bulk takes 7.414 seconds. Content, stale-sequence
+rejection, bulk and cleanup checks pass. Matching impairment seeds do not create
+identical packet-loss trajectories; these single samples are not a statistical
+ranking or evidence that buffer reuse caused a network-performance change.
+
+The complete source/binary provenance, all medians/ranges and receipts are in
+[the shared-transmit report](reports/webtransport-shared-transmit-2026-10-21.json).
+Overall acceptance remains unmet. Continue worker/connection dispatch and mixed
+private-lane scheduling, active QUIC/HTTP3 state, and datagram load measurement;
+full observer/re-subscribe/cancellation, concurrent 100k/8192 inspection, broader
+overload/shutdown, QUIC allocation accounting and final packaging/deployment
+work also remain. This checkpoint does not accept, publish or deploy the pivot.
