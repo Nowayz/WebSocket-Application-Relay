@@ -1,4 +1,30 @@
-# WebSocket decoder storage and scheduling patch
+# Protocol storage and scheduling patches
+
+## QUIC stream-credit storage
+
+The `quinn-proto` **0.11.19** sources retain upstream stream credits and stream
+lifecycle behavior while representing unused remote stream IDs as compact ranges.
+Upstream creates hash-map placeholders for every remotely available stream credit.
+`SparseMap` materializes a placeholder when mutable stream state is needed; immutable
+lookup still distinguishes a valid unopened stream from a closed or unknown one.
+Locally initiated and initialized stream state retains its ordinary hash-map owner.
+Transport-parameter updates visit initialized send state without materializing empty
+placeholders. No advertised stream counts, flow-control windows, crypto, packet
+processing, congestion control, or stream validation rules are changed.
+
+The modified upstream files are `src/connection/streams/mod.rs` and
+`src/connection/streams/state.rs`; `src/connection/streams/sparse.rs` is added.
+`quinn-sparse-streams.patch` is the complete diff against the verified published
+archive. `provenance.json` records the package checksum and upstream Git commit.
+All other archive files, including licenses, are retained unchanged.
+
+The dependency's protocol tests and the relay's real UDP/TLS integration tests
+exercise the change. Additional map tests compare mixed operations with an
+independent standard hash map and confirm that unused stream credits need no hash
+slots. Performance and resource results, including unresolved parity requirements,
+are recorded in `docs/webtransport-pivot.md` and its linked benchmark reports.
+
+## WebSocket decoder storage and scheduling
 
 The relay uses the published `tungstenite` and `tokio-tungstenite` **0.30.0**
 sources with explicit storage reclamation, admission and bounded parsing APIs. The native
@@ -61,8 +87,8 @@ cached source files were compared with those archives. Original package sources,
 manifests, README files, and original license files are retained. `Cargo.toml` selects these
 copies using `[patch.crates-io]`; no separately published fork is required.
 
-`python3 scripts/check-vendor.py` verifies both original archive checksums,
-applies the declared patch in a temporary directory, and compares every resulting
+`python3 scripts/check-vendor.py` verifies every declared archive checksum,
+applies the declared patches in a temporary directory, and compares every resulting
 file with these copies. It caches the original archives under `target` and needs
 network access on the first run. CI runs this check so unrelated dependency
 changes or a stale patch cannot pass silently.

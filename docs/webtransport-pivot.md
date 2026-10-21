@@ -381,3 +381,96 @@ memory, observer cancellation/re-subscribe checks, the full concurrent 100k/8192
 inspection workload, broader overload/shutdown acceptance, QUIC buffer accounting,
 and final packaging/deployment documentation. The datagram benefit is established
 for the exercised freshness workloads; the requested overall parity is not.
+
+## Compact unused QUIC stream credits
+
+Quinn's eager map entry for every unused remote stream credit was the next
+measured memory target. Lowering credits would change the transport allowance;
+this change preserves the logical map with compact ranges and creates an entry
+when mutable stream state is needed. Closed and unknown streams remain absent;
+a valid unopened stream still reads as an empty slot. Active lookups check
+initialized state first. Parameter updates visit initialized send state without
+materializing empty placeholders. Advertised credits, flow-control windows,
+crypto, congestion control, validation and the application wire contract remain
+unchanged.
+
+The patch changes three files in published `quinn-proto` 0.11.19. Its archive
+checksum, upstream Git commit and complete patch are recorded in
+`vendor/provenance.json` and `vendor/quinn-sparse-streams.patch`. The vendor checker
+now supports each package's declared patch and verifies all 121 vendored files
+against three original archives and two patches. Other package files and licenses
+are unchanged.
+
+The dependency passed 315 protocol/map tests in a standalone copy whose three
+modified files match the vendored candidate byte for byte. A copy avoids mutating
+the published lockfile in the vendor tree. Added tests compare 20,000 mixed map
+operations with an independent standard hash map and confirm that 2,000 unused
+credits need no hash slots. The relay's 264 Rust tests passed with the candidate,
+one was ignored, and all-target Clippy with warnings denied passed. Chromium 155
+passed all nine delivered-bundle checks, including datagrams, a 5 MiB value,
+variables, departure and graceful close. All seven final connection/storage
+gauges were zero.
+
+Three alternating runs per case compared `parity-queue` with `quinn-sparse-active`,
+using the same frozen client, four pinned server workers on CPUs 0–3, eight client
+workers on CPUs 8–15, 1 KiB values, 32 private pairs and 1,024 room readers with
+fanout window four. All 18 runs passed content, FIFO, counter and cleanup checks.
+
+| Reliable workload | Prior candidate deliveries/s | Compact-credit candidate deliveries/s |
+| --- | ---: | ---: |
+| Private only | 1,410,836 | 1,399,870 |
+| Room fanout only | 1,079,549 | 1,068,377 |
+| Mixed, combined | 1,112,477 | 1,112,644 |
+| Mixed, private component | 299,171 | 296,449 |
+| Mixed, fanout component | 813,306 | 816,196 |
+
+Private and room medians are about 1% lower in this screen; mixed throughput is
+effectively unchanged. This is a memory improvement without a throughput-gain
+claim. Room-fanout RSS fell from 75.48 to 67.75 MiB; mixed RSS fell from 80.79 to
+72.65 MiB. The report retains all samples, ranges, CPU and lane latency metrics.
+
+| 100k metric | Prior candidate | Compact-credit candidate |
+| --- | ---: | ---: |
+| Verified timed deliveries | 400,000 | 400,000 |
+| Timed elapsed | 4.0146 s | 4.0125 s |
+| Achieved delivery rate | 99,636.6/s | 99,687.3/s |
+| RTT p99 upper bound | 1.049 ms | 1.049 ms |
+| Maximum observed RTT | 11.934 ms | 3.451 ms |
+| Server CPU over measured interval | 2.160 cores | 2.131 cores |
+| Server RSS at measured gate | 4,653.48 MiB | 3,876.73 MiB |
+| Population setup | 11.511 s | 11.278 s |
+| Population retirement | 2.393 s | 2.343 s |
+
+The population run saves 776.75 MiB, about 16.7%. All users pass pre/post routing
+proofs and exact departure/close checks. Timed server/client UDP receive drops
+remain zero; earlier proof bursts still incur drops. Application and independent
+QUIC connection counts, queued payload, read reservations, variables and output
+metadata finish at zero. That does not mean RSS returned to the OS: the candidate
+still reports 3,903.33 MiB at the post-retirement gate. Logical counters, requested
+live heap and process RSS are separate measurements.
+
+An 8,194-session gperftools experiment reduced requested live bytes from
+392,344,586 to 325,430,253, about 17.1%. Replacement-allocator timings/RSS are
+excluded from ordinary comparisons. The final revision changes active lookup
+without changing the representation and is measured separately above. Large
+connection, event-delivery and application-task allocations remain targets.
+
+All nine clean/loss/reordering candidate checks passed. Under 20 ms one-way delay
+and 2% loss, datagrams received 347/360 states and had p99 newest-state age 73 ms;
+reliable streams received all states, with p99 ages 661 ms for WebTransport and
+1,061 ms for the TLS WebSocket fixture. With added jitter/reordering, 21 datagrams
+arrived out of order, the newest-state check held, 355 states arrived and p99 age
+was 120 ms. These single candidate checks are not a statistical protocol ranking;
+the report also records reliable bulk completion and the freshness/bulk tradeoff.
+
+The exact executable is `artifacts/webtransport/binaries/quinn-sparse-active-relay`.
+`docs/reports/webtransport-sparse-streams-2026-10-21.json` contains the samples,
+hashes and validation scopes. Earlier trials and the initial range-first lookup
+variant remain separately recorded. Prior plain/encrypted comparisons are not
+redefined by this memory experiment.
+
+Acceptance is still unproven: 3,876.73 MiB remains roughly 34 times the measured
+plaintext server RSS, and the room/mixed throughput and mixed private-lane gaps
+remain. Continue with event/task storage and reliable scheduling; the previously
+listed observer, full-load, buffer-accounting, lifecycle and packaging work also
+remains outstanding.

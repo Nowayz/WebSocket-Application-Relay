@@ -1,0 +1,1592 @@
+{
+  "status": "in progress; requested throughput and memory parity not achieved",
+  "base_commit": "de7fe5c",
+  "implementation": "Published quinn-proto 0.11.19 plus narrow SparseMap patch. Unused remote stream credits retain their logical presence as inline ranges. Mutable access materializes a map entry. Transport parameter updates visit initialized state only. Advertised credits, flow-control windows, framing, congestion control and crypto rules are unchanged. Active stream lookup checks initialized state first.",
+  "scope": "Local Linux loopback; same application and frozen maintained verifier. Three alternating fresh-process repetitions per variant/case, four pinned server I/O workers on CPUs 0-3 and eight pinned client workers on CPUs 8-15. Four-second saturation, 1 KiB values, 32 private pairs, 1024 room readers with fanout window four. Exact content, sender, FIFO, counters, departures, close/EOF or genuine close ACK, and cleanup checked. Logarithmic percentile values are upper bounds, not exact quantiles. RSS is sampled at gates, excludes kernel socket memory, and is not requested live heap or continuous peak. Higher post-retirement RSS is recorded explicitly; zero logical gauges do not prove RSS returned to the OS.",
+  "matched": {
+    "private": {
+      "parity-queue": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-parity-queue-1.json",
+            "passed": true,
+            "private_per_second": 1495144.0186363992,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1495144.0186363992,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.979427,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.557166963800181,
+            "client_cpu_cores": 3.9321318580869185,
+            "server_rss_kib": 15560,
+            "client_rss_kib": 18900,
+            "verified_private": 5981136,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-parity-queue-2.json",
+            "passed": true,
+            "private_per_second": 1405290.76965197,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1405290.76965197,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.766223,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.519666313635553,
+            "client_cpu_cores": 5.12701392703588,
+            "server_rss_kib": 15480,
+            "client_rss_kib": 18732,
+            "verified_private": 5621696,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-parity-queue-3.json",
+            "passed": true,
+            "private_per_second": 1410836.4807651357,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1410836.4807651357,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.965168,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5246714274860262,
+            "client_cpu_cores": 5.1295218221286,
+            "server_rss_kib": 15996,
+            "client_rss_kib": 18828,
+            "verified_private": 5643872,
+            "verified_fanout": 0,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1410836.4807651357,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1410836.4807651357,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 1.048576,
+          "private_max_ms": 1.965168,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.5246714274860262,
+          "client_cpu_cores": 5.12701392703588,
+          "server_rss_kib": 15560,
+          "client_rss_kib": 18828,
+          "verified_private": 5643872,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1405290.76965197,
+            1495144.0186363992
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1405290.76965197,
+            1495144.0186363992
+          ],
+          "server_cpu_cores": [
+            3.519666313635553,
+            3.557166963800181
+          ],
+          "server_rss_kib": [
+            15480,
+            15996
+          ]
+        }
+      },
+      "quinn-sparse-active": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-quinn-sparse-active-1.json",
+            "passed": true,
+            "private_per_second": 1406980.1898748719,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1406980.1898748719,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.946228,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5171705009159626,
+            "client_cpu_cores": 5.139518514487007,
+            "server_rss_kib": 15088,
+            "client_rss_kib": 20484,
+            "verified_private": 5628448,
+            "verified_fanout": 0,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-quinn-sparse-active-2.json",
+            "passed": true,
+            "private_per_second": 1399870.0470064778,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1399870.0470064778,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 3.509337,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5221529023979277,
+            "client_cpu_cores": 5.116995735421262,
+            "server_rss_kib": 15152,
+            "client_rss_kib": 18776,
+            "verified_private": 5600032,
+            "verified_fanout": 0,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-private-quinn-sparse-active-3.json",
+            "passed": true,
+            "private_per_second": 1399386.8019633554,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1399386.8019633554,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 1.048576,
+            "private_max_ms": 1.88488,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.524674585300081,
+            "client_cpu_cores": 4.989539342027632,
+            "server_rss_kib": 15104,
+            "client_rss_kib": 18756,
+            "verified_private": 5598064,
+            "verified_fanout": 0,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1399870.0470064778,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1399870.0470064778,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 1.048576,
+          "private_max_ms": 1.946228,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.5221529023979277,
+          "client_cpu_cores": 5.116995735421262,
+          "server_rss_kib": 15104,
+          "client_rss_kib": 18776,
+          "verified_private": 5600032,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1399386.8019633554,
+            1406980.1898748719
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1399386.8019633554,
+            1406980.1898748719
+          ],
+          "server_cpu_cores": [
+            3.5171705009159626,
+            3.524674585300081
+          ],
+          "server_rss_kib": [
+            15088,
+            15152
+          ]
+        }
+      }
+    },
+    "roomonly": {
+      "parity-queue": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-parity-queue-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1091660.983550939,
+            "combined_per_second": 1091660.983550939,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 5.983471,
+            "server_cpu_cores": 3.2996375627644827,
+            "client_cpu_cores": 4.970687925739076,
+            "server_rss_kib": 77280,
+            "client_rss_kib": 62824,
+            "verified_private": 0,
+            "verified_fanout": 4370432,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-parity-queue-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1079549.291947915,
+            "combined_per_second": 1079549.291947915,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.114037,
+            "server_cpu_cores": 3.280158240909204,
+            "client_cpu_cores": 4.966454366281414,
+            "server_rss_kib": 77288,
+            "client_rss_kib": 62712,
+            "verified_private": 0,
+            "verified_fanout": 4321280,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-parity-queue-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1076708.9822561387,
+            "combined_per_second": 1076708.9822561387,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.272793,
+            "server_cpu_cores": 3.283356299302868,
+            "client_cpu_cores": 4.955019437989031,
+            "server_rss_kib": 77644,
+            "client_rss_kib": 62840,
+            "verified_private": 0,
+            "verified_fanout": 4308992,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1079549.291947915,
+          "combined_per_second": 1079549.291947915,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.114037,
+          "server_cpu_cores": 3.283356299302868,
+          "client_cpu_cores": 4.966454366281414,
+          "server_rss_kib": 77288,
+          "client_rss_kib": 62824,
+          "verified_private": 0,
+          "verified_fanout": 4321280
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1076708.9822561387,
+            1091660.983550939
+          ],
+          "combined_per_second": [
+            1076708.9822561387,
+            1091660.983550939
+          ],
+          "server_cpu_cores": [
+            3.280158240909204,
+            3.2996375627644827
+          ],
+          "server_rss_kib": [
+            77280,
+            77644
+          ]
+        }
+      },
+      "quinn-sparse-active": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-quinn-sparse-active-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1079280.397188054,
+            "combined_per_second": 1079280.397188054,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 5.99639,
+            "server_cpu_cores": 3.2843364056536277,
+            "client_cpu_cores": 4.90027986911971,
+            "server_rss_kib": 69352,
+            "client_rss_kib": 62744,
+            "verified_private": 0,
+            "verified_fanout": 4321280,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-quinn-sparse-active-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1054986.2956551318,
+            "combined_per_second": 1054986.2956551318,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 11.25922,
+            "server_cpu_cores": 3.2751477479480764,
+            "client_cpu_cores": 4.881494049954647,
+            "server_rss_kib": 69608,
+            "client_rss_kib": 62792,
+            "verified_private": 0,
+            "verified_fanout": 4222976,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-roomonly-quinn-sparse-active-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1068376.9089208539,
+            "combined_per_second": 1068376.9089208539,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 5.734297,
+            "server_cpu_cores": 3.290408521744334,
+            "client_cpu_cores": 4.97433816764842,
+            "server_rss_kib": 69376,
+            "client_rss_kib": 62732,
+            "verified_private": 0,
+            "verified_fanout": 4276224,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1068376.9089208539,
+          "combined_per_second": 1068376.9089208539,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 5.99639,
+          "server_cpu_cores": 3.2843364056536277,
+          "client_cpu_cores": 4.90027986911971,
+          "server_rss_kib": 69376,
+          "client_rss_kib": 62744,
+          "verified_private": 0,
+          "verified_fanout": 4276224
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1054986.2956551318,
+            1079280.397188054
+          ],
+          "combined_per_second": [
+            1054986.2956551318,
+            1079280.397188054
+          ],
+          "server_cpu_cores": [
+            3.2751477479480764,
+            3.290408521744334
+          ],
+          "server_rss_kib": [
+            69352,
+            69608
+          ]
+        }
+      }
+    },
+    "mixed": {
+      "parity-queue": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-parity-queue-1.json",
+            "passed": true,
+            "private_per_second": 299171.13836676686,
+            "fanout_per_second": 813305.5952180539,
+            "combined_per_second": 1112476.7335848208,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.886729,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.648686,
+            "server_cpu_cores": 3.4242395435459416,
+            "client_cpu_cores": 4.762964850140124,
+            "server_rss_kib": 82576,
+            "client_rss_kib": 73036,
+            "verified_private": 1197824,
+            "verified_fanout": 3256320,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-parity-queue-2.json",
+            "passed": true,
+            "private_per_second": 303041.55645005754,
+            "fanout_per_second": 823389.5518976329,
+            "combined_per_second": 1126431.1083476904,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.014866,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 8.316618,
+            "server_cpu_cores": 3.4036537971797167,
+            "client_cpu_cores": 4.802073552440642,
+            "server_rss_kib": 83072,
+            "client_rss_kib": 73096,
+            "verified_private": 1213536,
+            "verified_fanout": 3297280,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-parity-queue-3.json",
+            "passed": true,
+            "private_per_second": 295449.8535273709,
+            "fanout_per_second": 802277.9440734582,
+            "combined_per_second": 1097727.797600829,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.323018,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 10.85864,
+            "server_cpu_cores": 3.420206203652407,
+            "client_cpu_cores": 4.724331578602412,
+            "server_rss_kib": 82732,
+            "client_rss_kib": 73056,
+            "verified_private": 1182592,
+            "verified_fanout": 3211264,
+            "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 299171.13836676686,
+          "fanout_per_second": 813305.5952180539,
+          "combined_per_second": 1112476.7335848208,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 5.014866,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 8.316618,
+          "server_cpu_cores": 3.420206203652407,
+          "client_cpu_cores": 4.762964850140124,
+          "server_rss_kib": 82732,
+          "client_rss_kib": 73056,
+          "verified_private": 1197824,
+          "verified_fanout": 3256320
+        },
+        "ranges": {
+          "private_per_second": [
+            295449.8535273709,
+            303041.55645005754
+          ],
+          "fanout_per_second": [
+            802277.9440734582,
+            823389.5518976329
+          ],
+          "combined_per_second": [
+            1097727.797600829,
+            1126431.1083476904
+          ],
+          "server_cpu_cores": [
+            3.4036537971797167,
+            3.4242395435459416
+          ],
+          "server_rss_kib": [
+            82576,
+            83072
+          ]
+        }
+      },
+      "quinn-sparse-active": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-quinn-sparse-active-1.json",
+            "passed": true,
+            "private_per_second": 302284.1595314672,
+            "fanout_per_second": 834778.0628930962,
+            "combined_per_second": 1137062.2224245635,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 5.112394,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.76978,
+            "server_cpu_cores": 3.3967206335168303,
+            "client_cpu_cores": 4.752911298222447,
+            "server_rss_kib": 74192,
+            "client_rss_kib": 73140,
+            "verified_private": 1210304,
+            "verified_fanout": 3342336,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-quinn-sparse-active-2.json",
+            "passed": true,
+            "private_per_second": 296448.6617751499,
+            "fanout_per_second": 816195.6928896862,
+            "combined_per_second": 1112644.354664836,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.637947,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.269217,
+            "server_cpu_cores": 3.4234888213935712,
+            "client_cpu_cores": 4.821850411459509,
+            "server_rss_kib": 74460,
+            "client_rss_kib": 73128,
+            "verified_private": 1187184,
+            "verified_fanout": 3268608,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/quinn-sparse-active-mixed-quinn-sparse-active-3.json",
+            "passed": true,
+            "private_per_second": 295301.91306757386,
+            "fanout_per_second": 813369.1344906298,
+            "combined_per_second": 1108671.0475582036,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.790633,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.943085,
+            "server_cpu_cores": 3.4295026952376753,
+            "client_cpu_cores": 4.805799843872752,
+            "server_rss_kib": 74392,
+            "client_rss_kib": 73144,
+            "verified_private": 1182240,
+            "verified_fanout": 3256320,
+            "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 296448.6617751499,
+          "fanout_per_second": 816195.6928896862,
+          "combined_per_second": 1112644.354664836,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.790633,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.943085,
+          "server_cpu_cores": 3.4234888213935712,
+          "client_cpu_cores": 4.805799843872752,
+          "server_rss_kib": 74392,
+          "client_rss_kib": 73140,
+          "verified_private": 1187184,
+          "verified_fanout": 3268608
+        },
+        "ranges": {
+          "private_per_second": [
+            295301.91306757386,
+            302284.1595314672
+          ],
+          "fanout_per_second": [
+            813369.1344906298,
+            834778.0628930962
+          ],
+          "combined_per_second": [
+            1108671.0475582036,
+            1137062.2224245635
+          ],
+          "server_cpu_cores": [
+            3.3967206335168303,
+            3.4295026952376753
+          ],
+          "server_rss_kib": [
+            74192,
+            74460
+          ]
+        }
+      }
+    }
+  },
+  "capacity": {
+    "capacity-100k-parity-websocket": {
+      "receipt": "artifacts/webtransport/capacity-100k-parity-websocket.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.008431372,
+      "deliveries": 400000,
+      "achieved_per_second": 99789.65906566604,
+      "round_trip": {
+        "max_ms": 2.760842,
+        "p50_upper_ms": 0.262144,
+        "p99_upper_ms": 0.524288,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.054531,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 115540,
+      "client_rss_kib": 797956,
+      "server_cpu_cores": 0.48647458794512194,
+      "client_cpu_cores": 0.6037274373472794,
+      "server_rss_after_retirement_kib": 59520,
+      "max_gate_server_rss_kib": 115556,
+      "setup_seconds": 0.677947131,
+      "retirement_seconds": 0.624616538,
+      "timed_udp_receive_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+      "client_sha256": "856a3ecda3b8f36975037b8d911bc8dca35a622e7e39bdf15018b5d699b9c46e"
+    },
+    "capacity-100k-parity-queue": {
+      "receipt": "artifacts/webtransport/capacity-100k-parity-queue.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.014587952,
+      "deliveries": 400000,
+      "achieved_per_second": 99636.6264190891,
+      "round_trip": {
+        "max_ms": 11.933618,
+        "p50_upper_ms": 0.524288,
+        "p99_upper_ms": 1.048576,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.013204,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 4765164,
+      "client_rss_kib": 4405864,
+      "server_cpu_cores": 2.1596238776337557,
+      "client_cpu_cores": 1.8906049863022145,
+      "server_rss_after_retirement_kib": 4790288,
+      "max_gate_server_rss_kib": 4790288,
+      "setup_seconds": 11.51110971,
+      "retirement_seconds": 2.393390431,
+      "timed_udp_receive_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+    },
+    "capacity-100k-quinn-sparse": {
+      "receipt": "artifacts/webtransport/capacity-100k-quinn-sparse.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.01311407,
+      "deliveries": 400000,
+      "achieved_per_second": 99673.21960524286,
+      "round_trip": {
+        "max_ms": 11.054615,
+        "p50_upper_ms": 0.524288,
+        "p99_upper_ms": 1.048576,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 2.63266,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 3966424,
+      "client_rss_kib": 4405072,
+      "server_cpu_cores": 2.1280232385719358,
+      "client_cpu_cores": 1.9087421554404007,
+      "server_rss_after_retirement_kib": 3993908,
+      "max_gate_server_rss_kib": 3993908,
+      "setup_seconds": 11.137990248,
+      "retirement_seconds": 2.364510296,
+      "timed_udp_receive_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "3ec61d85e7c1693cbc16e67c3033126c59a03c4b89c722421854c5dc0b102109",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+    },
+    "capacity-100k-quinn-sparse-active": {
+      "receipt": "artifacts/webtransport/capacity-100k-quinn-sparse-active.json",
+      "passed": true,
+      "offered_seconds": 4,
+      "elapsed_seconds": 4.012546703,
+      "deliveries": 400000,
+      "achieved_per_second": 99687.31322203379,
+      "round_trip": {
+        "max_ms": 3.450628,
+        "p50_upper_ms": 0.524288,
+        "p99_upper_ms": 1.048576,
+        "samples": 400000
+      },
+      "schedule_lag": {
+        "max_ms": 3.187384,
+        "p50_upper_ms": 1.048576,
+        "p99_upper_ms": 2.097152,
+        "samples": 25000
+      },
+      "server_rss_kib": 3969772,
+      "client_rss_kib": 4406880,
+      "server_cpu_cores": 2.1308163201209718,
+      "client_cpu_cores": 1.899043316879744,
+      "server_rss_after_retirement_kib": 3997008,
+      "max_gate_server_rss_kib": 3997008,
+      "setup_seconds": 11.277894274,
+      "retirement_seconds": 2.34295496,
+      "timed_udp_receive_drops": {
+        "server": 0,
+        "client": 0
+      },
+      "all_done_gauges": {
+        "war_sessions": 0,
+        "war_connections": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+    }
+  },
+  "freshness": [
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/clean-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/clean-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1.403843,
+          "p50_ms": 0.230764,
+          "p99_ms": 1.032432,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.0939539999999996,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.002600303,
+        "freshest_state_age": {
+          "max_ms": 17.693088,
+          "p50_ms": 10.11974,
+          "p99_ms": 17.476734,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.276862,
+          "p50_ms": 1.137756,
+          "p99_ms": 2.046039,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 1
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 360,
+        "war_datagrams_submitted": 360,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/clean-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/clean-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.347628,
+          "p50_ms": 0.335661,
+          "p99_ms": 1.535519,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.345218,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.000339179,
+        "freshest_state_age": {
+          "max_ms": 16.842481,
+          "p50_ms": 10.072652,
+          "p99_ms": 16.538779,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.177769,
+          "p50_ms": 1.2024640000000002,
+          "p99_ms": 2.084588,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/clean-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 0,
+        "jitter_ms": 0,
+        "loss_percent": 0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/clean-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.490104,
+          "p50_ms": 0.37293,
+          "p99_ms": 1.710905,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1.3837030000000001,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001858374,
+        "freshest_state_age": {
+          "max_ms": 17.651279,
+          "p50_ms": 9.892796,
+          "p99_ms": 17.472874,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.234908,
+          "p50_ms": 1.287115,
+          "p99_ms": 2.163791,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/loss-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/loss-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 79.4897,
+          "p50_ms": 40.588257,
+          "p99_ms": 55.785742,
+          "samples": 347
+        },
+        "bulk_arrival_ms": 1056.347334,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.001469216,
+        "freshest_state_age": {
+          "max_ms": 86.040835,
+          "p50_ms": 50.106394,
+          "p99_ms": 73.169699,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.89874,
+          "p50_ms": 1.34327,
+          "p99_ms": 2.410207,
+          "samples": 360
+        },
+        "missing": 13,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 347,
+        "updates_before_bulk": 59
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 352,
+        "war_datagrams_submitted": 352,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/loss-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/loss-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 724.870857,
+          "p50_ms": 40.593748,
+          "p99_ms": 674.551879,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 724.907356,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.035435584,
+        "freshest_state_age": {
+          "max_ms": 720.980771,
+          "p50_ms": 52.282116,
+          "p99_ms": 661.02824,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.47824,
+          "p50_ms": 1.196468,
+          "p99_ms": 2.290324,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 37,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/loss-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 0,
+        "loss_percent": 2.0,
+        "reorder_percent": 0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/loss-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1125.443374,
+          "p50_ms": 40.743633,
+          "p99_ms": 1075.441808,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1126.205793,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.035493967,
+        "freshest_state_age": {
+          "max_ms": 1121.06196,
+          "p50_ms": 53.929841,
+          "p99_ms": 1061.215156,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.38898,
+          "p50_ms": 1.292632,
+          "p99_ms": 2.2565910000000002,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 57,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/reorder-datagram-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "datagram",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/reorder-datagram-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 128.612649,
+          "p50_ms": 52.359193,
+          "p99_ms": 107.138582,
+          "samples": 355
+        },
+        "bulk_arrival_ms": 7422.994722,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 9.424081489,
+        "freshest_state_age": {
+          "max_ms": 139.576826,
+          "p50_ms": 60.574834,
+          "p99_ms": 119.975009,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.3922079999999997,
+          "p50_ms": 1.016448,
+          "p99_ms": 2.144229,
+          "samples": 360
+        },
+        "missing": 5,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 21,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 4,
+        "rate": 60,
+        "received_unique": 355,
+        "updates_before_bulk": 355
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 357,
+        "war_datagrams_submitted": 357,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/reorder-stream-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "stream",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": null,
+        "tls_key": null,
+        "tls_ca": null,
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/reorder-stream-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 5941.229778,
+          "p50_ms": 3671.608409,
+          "p99_ms": 5891.384357,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 5942.145213,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 7.39003307,
+        "freshest_state_age": {
+          "max_ms": 5941.791163,
+          "p50_ms": 3001.467367,
+          "p99_ms": 5881.343985,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.84252,
+          "p50_ms": 1.254268,
+          "p99_ms": 2.347753,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 298,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-quinn-sparse/reorder-websocket-tls-1.json",
+      "passed": true,
+      "args": {
+        "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/quinn-sparse-active-relay",
+        "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/state_freshness",
+        "mode": "websocket-tls",
+        "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+        "tls_cert": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.pem",
+        "tls_key": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/key.pem",
+        "tls_ca": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/tls-fixture/cert.der",
+        "seconds": 6,
+        "rate": 60,
+        "payload_bytes": 1024,
+        "bulk_bytes": 1048576,
+        "server_cpus": "0-3",
+        "client_cpus": "8-11",
+        "isolated_namespace": "war-state-ee6e0982fc7a",
+        "delay_ms": 20.0,
+        "jitter_ms": 8.0,
+        "loss_percent": 2.0,
+        "reorder_percent": 25.0,
+        "seed": 42,
+        "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/freshness-quinn-sparse/reorder-websocket-tls-1.json"
+      },
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 762.648327,
+          "p50_ms": 44.166742,
+          "p99_ms": 712.943103,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 763.450196,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.022861005,
+        "freshest_state_age": {
+          "max_ms": 761.118118,
+          "p50_ms": 52.86839,
+          "p99_ms": 700.883705,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.227357,
+          "p50_ms": 1.0106449999999998,
+          "p99_ms": 1.93793,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 39,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      },
+      "server_exit_code": 0,
+      "client_exit_code": 0,
+      "netem_cleanup_exit_code": 0,
+      "after": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_queued_bytes": 0,
+        "war_output_queue_capacity_bytes": 0
+      },
+      "server_sha256": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+      "client_sha256": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+    }
+  ],
+  "validation": {
+    "application_rust_passed": 264,
+    "application_ignored": 1,
+    "quinn_protocol_passed": 315,
+    "quinn_protocol_scope": "Standalone published-crate copy with all three modified source files byte-identical to the vendored candidate. Includes two new map tests and the original protocol tests. Root Cargo cannot run a non-workspace dependency package with dev-dependencies; standalone copy avoids mutating vendored archive metadata.",
+    "quinn_standalone_lock_sha256": "2024eb87f6e9c73a1f53a3ca286c280c6443c58143c20313b0ca4934d9b2cf30",
+    "clippy": "all targets, -D warnings passed",
+    "vendor": "121 files checked against 3 original archive checksums and 2 declared patches",
+    "browser": "Chromium 155 passed all 9 actual delivered-bundle checks, including typed values, cross-room private/broadcast, datagrams, 128 KiB and 5 MiB payloads, concurrent variables, departure and graceful close. Seven connection/storage gauges zero after close.",
+    "browser_receipt": "artifacts/webtransport/quinn-sparse-browser-check.txt",
+    "browser_screenshot": "output/playwright/webtransport-sparse-streams.png"
+  },
+  "diagnostics": {
+    "heap": {
+      "scope": "8194 sessions; gperftools replacement allocator; requested live bytes at ready gate, not ordinary RSS/timings. Prototype sparse implementation has same data layout; final active-lookup revision is separately benchmarked without instrumentation.",
+      "previous_requested_live_bytes": 392344586,
+      "sparse_requested_live_bytes": 325430253,
+      "previous_receipt": "artifacts/webtransport/heap-parity-inline-queue.json",
+      "sparse_receipt": "artifacts/webtransport/heap-quinn-sparse.json"
+    },
+    "layout": {
+      "scope": "Public types compiled against the candidate library; full source and build-library association in artifacts/webtransport/quinn-layout.rs and quinn-sparse-active-build.jsonl. These sizes alone do not establish retained allocation causation.",
+      "connection_size_bytes": 6400,
+      "protocol_connection_event_size_bytes": 208,
+      "endpoint_event_size_bytes": 48,
+      "large_per_session_allocation_sizes_bytes": [
+        7088,
+        6688,
+        4736
+      ],
+      "next_work": "Profile the connection event channel and application task retention, along with mixed private/fanout scheduling. Do not reduce stream credits to claim a memory win."
+    },
+    "initial_sparse_trial": "The first map version consulted deferred ranges on each mutable lookup. Its two-run medians were about 4% lower for private traffic with large control variation; receipts quinn-sparse-*.json and v1 patch retained. Final map checks initialized state first and uses three alternating repetitions per case. Private and room medians remain about 1% below control; mixed is effectively unchanged, so this is a memory improvement without a throughput-gain claim."
+  },
+  "freshness_scope": "One candidate regression sample per mode/profile, 360 prepared 1 KiB states at 60 Hz for six seconds with reliable 1 MiB bulk. Clean; 20 ms one-way delay plus 2% loss; then also 8 ms jitter and 25% reordering. External transport port only in temporary isolated namespace, both directions. TLS proxy internal hop unimpaired. Identical parameters/seeds are not identical packet-loss trajectories. Newest-state probes include the initial period before the first state; stale datagrams cannot replace newer state. Missing means unreceived in observation window, not exclusively attributed network loss. No statistically established cross-protocol ranking from single runs.",
+  "source_hashes": {
+    "Cargo.toml": "a466684e31bf66710ed384446f362c6450fd4df3893792f93a1c29dde3303bcd",
+    "Cargo.lock": "db13255c7401caa9116a03e5227c2cfa394a24de838a3e4f1b752d5a2e849687",
+    "src/webtransport.rs": "b774779eb4b75fe5c4746f78c9c79b2046c8c580d6cc8bfd78cbe8f638866ce2",
+    "src/webtransport/queue.rs": "45062a8a9d56e0743901a093337e422965d5aff7c3d3d9a434f2c0e613a5f641",
+    "vendor/provenance.json": "710faf5cda8e7cf38426510e9699bb8ccae89a729cd4116b20c911e38de999d0",
+    "vendor/quinn-sparse-streams.patch": "a288be129112de68a91bf86bd0dc5d16e5fd62695eb8e6aea420efbb4eea2289",
+    "vendor/quinn-proto/src/connection/streams/mod.rs": "6e5dc50af928ff5e95932122bd56b122cfee075bbdc4c6b3c783a83afd011d05",
+    "vendor/quinn-proto/src/connection/streams/state.rs": "75eccbda9d6cb25918504c75cd8821da2624c1be0230a51602b7c57d4012f387",
+    "vendor/quinn-proto/src/connection/streams/sparse.rs": "e82aa08273edab8a7741c5e2cdc1edc7e64a25a4838f632db4d182b78285e5c8",
+    "scripts/check-vendor.py": "472d220b2807db7da0d33ee52befb70a7095b8a883b81152c766ff504cd1201b",
+    "scripts/inspection.py": "637acd47201d43b1134e4066ab591e4f3967a292255066b9dfd862c17d34dd26",
+    "scripts/capacity.py": "0e3ca1043d6a1140a7bd563886c9d586a4bf8a7282401eb18f22f20a65e31527",
+    "scripts/freshness.py": "74b280190351c67beff67d135f14f38a2c5377582c3de8af4c285a302ec22587",
+    "scripts/freshness-matrix.py": "5f9404737c7bbe909fed03e2a51d03f84390a41b2d5bed64e1f3129cf257100c",
+    "examples/support/socket.rs": "4d324f90561d04750248048e4cf7eb8c7ebacaf7de24a84840ae272eb82acadb",
+    "examples/inspection.rs": "8150b3ec94d1b7ccb254c2c89121708afecaf8f2748c45b3e4a30ed027328c30",
+    "examples/capacity.rs": "d1f89fb1e1e43724023d45941b49c4bc402fee5a3aa969929d23fe7cf142d0d8",
+    "examples/state_freshness.rs": "ad128b3026e2ba2d6429a63be79bcb3b83cc1ee3da7a22b842b4d9910f5b6057"
+  },
+  "binary_hashes": {
+    "artifacts/webtransport/binaries/parity-queue-relay": "82b7b76ac3fb5cc09c9964aded5a49f2763b1da280859cf06332610fc420d795",
+    "artifacts/webtransport/binaries/quinn-sparse-vendor-relay": "3ec61d85e7c1693cbc16e67c3033126c59a03c4b89c722421854c5dc0b102109",
+    "artifacts/webtransport/binaries/quinn-sparse-active-relay": "b3761e5d2d5252b2d7dc7fb902fcb8f3d062cd8a0dd6533b00db0a0a9f6f4b6c",
+    "target/release/examples/inspection": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+    "artifacts/webtransport/binaries/buffered-direct-capacity": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+    "target/release/examples/state_freshness": "c80eafd06bb411ea832e03a29bd1d53073a2f824a443a72c29d32ae4eb96c79a"
+  },
+  "remaining": "Overall acceptance remains unproven: memory is still far above the fresh plaintext control, room/mixed throughput trails plaintext, private traffic under fanout trails the encrypted fixture. Observer cancellation/re-subscribe acceptance, full concurrent 100k/8192 inspection workload, broader overload/shutdown acceptance, QUIC buffer accounting and final packaging/deployment documentation remain outstanding."
+}
