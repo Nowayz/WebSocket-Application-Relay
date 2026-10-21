@@ -110,3 +110,25 @@ first shared a room (departure notices could be mistaken for data), then failed 
 handle WebSocket Ping frames. The final probe isolates client rooms and handles Ping.
 The browser bundle builds correctly with piped stdout; redirecting esbuild-wasm's
 Node output directly to a regular file exposed an upstream loader recursion error.
+
+## First profile and rejected write experiment
+
+Privileged read-only perf captures of the initial executable (199 Hz, separate
+8-second runs) are retained in `artifacts/webtransport/profile-*.data` and `.txt`.
+No host performance or security settings were changed. In the datagram capture the
+WebTransport driver's dispatch loop accounted for 6.86% self samples, clock reads
+4.01%, application session polling 2.43%, and AES-GCM encryption/decryption about
+3.1% combined. Sampling does not establish how much speedup removing any one cost
+would yield. The driver source forwards each datagram through an additional task,
+a one-slot channel, and an async mutex; a direct single-session QUIC adapter is a
+candidate for a separately measured experiment.
+
+A zero-copy QUIC chunk-write experiment passed native correctness but did not show
+a compelling whole-operation win. Three matched runs per size compared checkpoint
+`9f82ba0` with only the output writer changed; clients were frozen. At 1 KiB,
+median throughput was 523,881 versus 530,875/s (+1.3%), with p99 about 171 us for
+both. At 64 KiB it was 35,367 versus 35,727/s (+1.0%), with p99 about 27 ms and
+median peak server RSS increasing from 17,508 to 19,296 KiB. The experiment was
+**reverted**, rather than adding complexity on this evidence. The patch, binaries,
+all twelve raw samples, CPU seconds and RSS are retained under
+`artifacts/webtransport/chunks-*` and `binaries/`.
