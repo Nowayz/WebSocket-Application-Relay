@@ -1348,3 +1348,59 @@ Continue the worker/connection ownership redesign and mixed fairness, full
 datagram private/fanout/mixed saturation, remaining observer/concurrent/overload
 acceptance, complete kernel peak accounting and final packaging requirements.
 No pivot acceptance, push, release or deployment is claimed.
+
+### Reprofile mixed traffic and reject deferred timer resets
+
+Fresh dual-endpoint mixed profiles on retained `45a0aeb` sampled user and kernel
+cycles with PID-relative attribution. QUIC server samples were 56.95% in the
+relay/library binary, 33.33% kernel and 8.49% libc; native WS was 8.56% binary,
+90.85% kernel. Client shares also differed: QUIC 57.41% binary/32.62% kernel,
+WS 24.39% binary/72.49% kernel. These relative shares are not absolute service
+costs, and the saturating workloads have different delivered traffic composition.
+QUIC self costs are distributed: AES-GCM encryption, packet construction, stream
+reads, Notify/waker/scheduler, memory routines and kernel UDP processing. No
+single dominant removable function is established.
+
+A bounded experiment retained an already armed earlier wake when a logical
+protocol deadline moved later, rearmed immediately for earlier deadlines, and
+used the protocol clock to prevent premature or delayed timeout reporting. A
+clock/wake regression plus 29 standalone Quinn tests passed (three existing
+ignored tests). The final standalone fixture explicitly selected patched local
+proto 0.11.19, Tokio 1.53.3, rustls 0.23.46 and bytes 1.12.1; earlier registry-graph
+results are not final graph evidence. The project lockfile was unchanged.
+
+The timer-reset symbol went from 1.18% to below the 0.3% displayed self-symbol
+threshold, but the repeated ordinary whole-workload rates did not improve.
+Private medians were 1,393,350 to 1,386,812/s, room 1,473,998 to 1,456,057/s,
+and mixed 1,395,792 to 1,367,851/s (mixed private 350,791 to 346,342/s). Component
+profile shares cannot prove an absolute reset-cost reduction, and the measured
+rates do not support retaining the experiment. Both tracked dependency files
+were restored byte-identically; the added timer module was removed. The binary
+in target/release was restored from the frozen retained build and hashes match.
+Complete 153-file archive/patch verification passes. Rejected source, patch,
+binary and test/measurement receipts remain local for reproducibility.
+
+An independent unprofiled three-run native-control block with alternating order
+now gives WT/native WS medians of 1,432,929/1,439,602 combined deliveries/s,
+360,812/776,191 private messages/s, and 1,072,117/621,167 room deliveries/s.
+Component medians are independent and need not sum to the aggregate median.
+Server CPU was 3.476/2.106 cores, private p99 histogram upper bounds 4.194/2.097 ms.
+This is near aggregate parity with a major private-traffic deficit and higher
+observed CPU use, not mixed parity. Different delivered composition prevents
+calling the CPU ratio an equal-per-message cost comparison. All content/order,
+close/counter and final-gauge checks pass. Profiles are excluded from these rates.
+
+The first WS profile lost 143 samples and was excluded. A clean retry produced
+zero-lost reports for both PIDs. The requested lower frequency in its Namespace
+was ignored by inspection.py's hardcoded perf command: all retained profiles
+actually use 499 Hz, and the report records the actual setting. The original
+and candidate QUIC profiles also have zero lost samples.
+
+[Complete profile/control/negative-experiment evidence](reports/webtransport-worker-layout-2026-10-21.json)
+records hashes, all ordinary samples, latency/CPU/RSS, both endpoint DSO shares,
+validation and limits. No product optimization is retained from this experiment.
+The evidence supports moving the next prototype to worker-owned protocol and
+application processing rather than accepting timer-only wins; that redesign is
+not implemented or proven faster. Full datagram saturation/fanout/mixed measurement
+and all previous memory/behavior/packaging/kernel acceptance requirements remain.
+The goal remains active; no pivot acceptance or release is claimed.
