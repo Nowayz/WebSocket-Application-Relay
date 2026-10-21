@@ -1404,3 +1404,77 @@ application processing rather than accepting timer-only wins; that redesign is
 not implemented or proven faster. Full datagram saturation/fanout/mixed measurement
 and all previous memory/behavior/packaging/kernel acceptance requirements remain.
 The goal remains active; no pivot acceptance or release is claimed.
+
+### Co-drive application and connection I/O: reject regressions, identify batching cost
+
+An opt-in prototype transferred Quinn connection driving from its background task
+to the existing application session task. Driver epochs retired stale background
+futures, ownership began only on first poll, and completion/cancellation restored
+background I/O for retirement. Protocol implementation, TLS, stream credits,
+mutex/event ownership and transport settings stayed intact. This was a partial
+integration experiment, not a worker-owned protocol implementation.
+
+Three independent fixed-client comparison blocks, each three fresh alternating
+runs per variant and private/room/mixed workload, rejected all variants:
+
+| Prototype | Private/s before → after | Room deliveries/s before → after | Mixed deliveries/s before → after | Mixed private/s before → after |
+| --- | ---: | ---: | ---: | ---: |
+| I/O before and after application poll | 1,386,200 → 1,397,209 | 1,478,353 → 1,086,799 | 1,413,165 → 1,104,734 | 356,246 → 342,606 |
+| Skip idle I/O with valid readiness | 1,427,260 → 1,437,616 | 1,571,671 → 1,182,180 | 1,541,535 → 1,233,396 | 383,653 → 376,368 |
+| Defer post-write transmit to scheduled turn | 1,419,653 → 1,413,076 | 1,568,947 → 1,195,325 | 1,527,489 → 1,264,296 | 380,227 → 425,517 |
+
+These are block-specific medians, not cross-block rankings; component medians
+need not sum to mixed aggregate medians. Common contract: four server workers
+pinned CPUs 0–3, eight client workers CPUs 8–15, 4s, 1 KiB values, 32 private pairs
+and/or 1,024 room readers with four updates in flight. All independent content,
+sender, FIFO, counter, close and final-gauge checks passed in these ordinary runs.
+The deferred version shifted service toward private traffic but still lost about
+24% room and 17% aggregate mixed throughput. No variant satisfied acceptance.
+
+The initial idle-readiness gate failed the large-fanout integration test. An
+empty event queue could lack a reader registration after a cooperative yield;
+a stale idle waker could also suppress quantum-limited continuation. The corrected
+gate required valid matching wake registration, handled buffered sends/deadlines,
+and cleared the idle marker during active driving. All nine real UDP/TLS/HTTP3
+integration checks then passed, including for the deferred variant. Thirty
+standalone Quinn tests passed (three existing ignored), covering registration,
+duplicate ownership, an unpolled wrapper, cancellation, completion and resumed
+background delivery. This is not general-purpose shutdown/unwind acceptance.
+
+A separate retirement-counter diagnostic compared instrumented retained/deferred
+builds. It read existing Quinn statistics once per Output retirement, adding no
+per-packet counter updates. Every run accounted for all 1,025 room-only or 1,089
+mixed sessions. For the three room/window-four runs, median datagrams per transmit
+batch fell from 2.244 to 1.860; wire bytes per batch fell from 2,684 to 1,926.
+Generated transmit batches per wire MiB rose from 390.71 to 544.49, about 39%.
+This identifies lost packet filling/batching as one mechanism. The single
+window-one pair had exactly one datagram per batch for both versions but still
+favored the retained implementation, so batching does not explain all overhead.
+These are Quinn-generated batch counters, not independent kernel syscall counts.
+They cover handshake/application lifetime and warmup until Output retirement,
+exclude subsequent draining, and are not pure timed per-message counters. All
+instrumented runs are marked diagnostic and excluded ordinary rate medians.
+No MTU override, added sleep or client change was used.
+
+Separate profiles sampled both server and client for retained/deferred builds at
+249 Hz with user+kernel cycles, DWARF stacks and zero lost samples for both PIDs.
+Server self samples for ConnectionDriver::poll rose 2.03% → 2.67%, Notify polling
+1.43% → 2.10%, and packet population 2.37% → 2.70%; these relative shares are not
+absolute per-message costs. The profiles and counters support preserving explicit
+readiness and packet batching in the next worker-owned design, not simply merging
+arbitrary futures and assuming that fewer tasks are faster.
+
+All six changed product/dependency source files were restored byte-identically
+from retained HEAD; the frozen retained binary was restored in target/release,
+and archive/patch verification passes for all 153 vendor files. No prototype API,
+temporary counter or diagnostic admin response remains. Rejected source patches,
+binaries and receipts remain local. No 100,000-session memory saving, browser or
+freshness acceptance is claimed for these rejected prototypes. The retained
+implementation and its prior verification remain unchanged.
+
+[Complete prototype, counter and profile evidence](reports/webtransport-application-driver-2026-10-21.json)
+records all three blocks, resource/latency measurements, hashes, failed and
+corrected checks, packet statistics and scope. Overall parity remains unmet.
+Continue worker-owned explicit input/application/transmit phases, full datagram
+private/fanout/mixed load, 100k memory parity and the remaining behavior, kernel
+and packaging acceptance. The goal remains active; no pivot acceptance is claimed.
