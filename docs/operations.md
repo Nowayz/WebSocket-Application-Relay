@@ -14,6 +14,17 @@ The relay defaults to `127.0.0.1:1338` and management to `127.0.0.1:1339`.
 Deploy behind a TLS WebSocket ingress; [Caddyfile.example](../deploy/Caddyfile.example)
 shows the native route.
 
+### WebTransport endpoint servicing
+
+In WebTransport mode, `--workers` controls the connection and application runtime.
+One additional `war-ingress` thread owns a current-thread runtime for the shared
+UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
+`--pin-workers` pins the application workers and does not reserve an extra CPU
+for ingress. Session shutdown completes before this runtime is stopped and joined.
+Startup failure also stops and joins it. The TCP/WebSocket details below apply to
+`--legacy-websocket`. See the [measured endpoint-servicing comparison](reports/webtransport-dedicated-ingress-2026-10-21.json)
+for the mixed-load gain and reliable-only throughput tradeoffs.
+
 ### Browser origin admission
 
 `WAR_ALLOWED_ORIGINS` (or repeated `--allowed-origin`) lists exact browser
@@ -230,7 +241,7 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--idle-timeout-secs` | `WAR_IDLE_TIMEOUT_SECS` | `0` | 0 to 86400 | Close joined sessions with no application input or output; 0 disables |
 | `--shutdown-timeout-secs` | `WAR_SHUTDOWN_TIMEOUT_SECS` | `10` | 1 to 86400 | Worker grace to send `1001` and retire sockets at terminal shutdown |
 | `--disable-global-broadcast` | `WAR_DISABLE_GLOBAL_BROADCAST` | off | Flag | `re_globl` broadcasts require an authenticated sender |
-| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Number of native I/O worker threads |
+| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Native I/O workers, or WebTransport connection/application workers (plus one ingress thread) |
 | `--pin-workers` | `WAR_PIN_WORKERS` | off | Flag; needs one allowed CPU per worker | Pin each worker thread to one CPU |
 
 Two secrets are environment-only and never appear in `--help` or logs:

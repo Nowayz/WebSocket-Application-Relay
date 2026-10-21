@@ -49,7 +49,8 @@ fn main() -> Result<()> {
             .keep_alive_interval((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.ping_interval_secs)))
             .max_idle_timeout((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.pong_timeout_secs)))?
             .build();
-        let endpoint = war_relay::webtransport::bind_endpoint(&relay.config, &transport).context("cannot bind relay listener")?;
+        let (endpoint, _ingress) = war_relay::webtransport::EndpointIngress::bind(&relay.config, transport)
+            .context("cannot bind relay listener")?;
         let admin_task = admin.map(|listener| {
             let router = war_relay::server::admin_router(relay.clone());
             let stop = shutdown.clone();

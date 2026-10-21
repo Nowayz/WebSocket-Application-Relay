@@ -84,7 +84,7 @@ async fn fixture_with(config: Config) -> Fixture {
 }
 
 async fn fixture_with_client_transport(
-    config: Config,
+    mut config: Config,
     transport: Option<wtransport::quinn::TransportConfig>,
 ) -> Fixture {
     let identity = Identity::self_signed(["localhost", "127.0.0.1"]).unwrap();
@@ -93,11 +93,9 @@ async fn fixture_with_client_transport(
         .with_bind_address("127.0.0.1:0".parse().unwrap())
         .with_identity(identity)
         .build();
-    let server = wtransport::quinn::Endpoint::server(
-        server_config.quic_config().clone(),
-        "127.0.0.1:0".parse().unwrap(),
-    )
-    .unwrap();
+    config.bind = "127.0.0.1:0".parse().unwrap();
+    let (server, ingress) =
+        war_relay::webtransport::EndpointIngress::bind(&config, server_config).unwrap();
     let url = format!(
         "https://127.0.0.1:{}/war",
         server.local_addr().unwrap().port()
@@ -114,11 +112,13 @@ async fn fixture_with_client_transport(
     let client = Endpoint::client(client_config).unwrap();
     let relay = Relay::new(config).unwrap();
     let stop = CancellationToken::new();
-    let task = tokio::spawn(war_relay::webtransport::serve(
-        server,
-        relay.clone(),
-        stop.clone(),
-    ));
+    let task_relay = relay.clone();
+    let task_stop = stop.clone();
+    let task = tokio::spawn(async move {
+        let outcome = war_relay::webtransport::serve(server, task_relay, task_stop).await;
+        drop(ingress);
+        outcome
+    });
     (relay, client, url, stop, task)
 }
 #[tokio::test]
@@ -525,4 +525,18 @@ async fn active_self_route_consumer_survives_a_coalesced_reliable_burst() {
     task.await.unwrap().unwrap();
     assert_eq!(relay.counts().0, 0);
     assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+}
+
+#[test]
+fn ingress_bind_failure_returns_and_joins_its_runtime() {
+    let occupied = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let config = Config {
+        bind: occupied.local_addr().unwrap(),
+        ..Config::default()
+    };
+    let transport = wtransport::ServerConfig::builder()
+        .with_bind_address(config.bind)
+        .with_identity(Identity::self_signed(["localhost"]).unwrap())
+        .build();
+    assert!(war_relay::webtransport::EndpointIngress::bind(&config, transport).is_err());
 }

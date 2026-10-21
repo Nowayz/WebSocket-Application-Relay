@@ -1,5 +1,8 @@
 //! HTTP/3 transport. One reliable bidirectional stream carries length-prefixed
 //! CBOR records; datagrams carry complete, explicitly unreliable CBOR routes.
+mod ingress;
+pub use ingress::EndpointIngress;
+
 use crate::{
     Relay,
     frame::Frame,
