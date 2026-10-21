@@ -939,3 +939,19 @@ Mixed private traffic also remains below the earlier encrypted fixture. Continue
 active QUIC/HTTP3 storage, receive framing and reliable scheduling work, alongside
 the previously listed observer, overload, combined-population, accounting and
 packaging acceptance gates. This checkpoint does not accept or release the pivot.
+
+## Causal profiling of the datagram comparison
+
+The 2026-10-21 profiling pass separates reliable-stream results from datagram
+results and identifies a benchmark-client confounder. In a controlled six-run
+client swap with the server unchanged, datagram echo rate rises from 495,437 to
+588,120/s (18.7%). Server/client perf recordings also identify substantial
+Quinn/Tokio dispatch, scheduling and timer work; crypto accounts for about 7.3%
+of server self-cycle samples with the direct client. The adapter and library
+perform avoidable contiguous datagram copies, but their individual cost has not
+yet been isolated. These are 32-session closed-loop diagnostics, not saturation,
+fanout, browser or 100k acceptance. No product implementation changed.
+
+See [the causal report](reports/webtransport-causal-profile-2026-10-21.md) and
+[complete measurements](reports/webtransport-causal-profile-2026-10-21.json).
+Throughput and memory parity remain unmet; the pivot is not accepted.
