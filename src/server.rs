@@ -1492,20 +1492,20 @@ impl Drop for Connection {
     }
 }
 
-struct RateLimiter {
+pub(crate) struct RateLimiter {
     rates: [u64; 2],
     tokens: [f64; 2],
     updated: Instant,
 }
 impl RateLimiter {
-    fn new(messages: u64, bytes: u64, now: Instant) -> Self {
+    pub(crate) fn new(messages: u64, bytes: u64, now: Instant) -> Self {
         Self {
             rates: [messages, bytes],
             tokens: [messages as f64, bytes as f64],
             updated: now,
         }
     }
-    fn allow(&mut self, bytes: usize, now: Instant) -> bool {
+    pub(crate) fn allow(&mut self, bytes: usize, now: Instant) -> bool {
         if self.rates == [0, 0] {
             return true;
         }

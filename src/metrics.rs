@@ -9,6 +9,11 @@ use tungstenite::protocol::ReadBudget;
 
 #[derive(Default)]
 pub struct Metrics {
+    pub datagrams_received: AtomicU64,
+    pub datagrams_submitted: AtomicU64,
+    pub datagram_bytes_submitted: AtomicU64,
+    pub datagrams_dropped: AtomicU64,
+    pub datagrams_oversized: AtomicU64,
     pub read_budget: Option<Arc<ReadBudget>>,
     pub accepted: AtomicU64,
     pub accept_errors: AtomicU64,
@@ -79,6 +84,36 @@ impl Metrics {
         let mut text = String::with_capacity(8192);
         let budget = self.read_budget.as_deref();
         for (prefix, value) in [
+            sample!(
+                "datagrams_received",
+                "counter",
+                self.datagrams_received.load(Relaxed),
+                "Unreliable application datagrams received from QUIC."
+            ),
+            sample!(
+                "datagrams_submitted",
+                "counter",
+                self.datagrams_submitted.load(Relaxed),
+                "Datagrams accepted by local QUIC output; not confirmed remote delivery."
+            ),
+            sample!(
+                "datagram_bytes_submitted",
+                "counter",
+                self.datagram_bytes_submitted.load(Relaxed),
+                "Application datagram bytes accepted by local QUIC output; not confirmed remote delivery."
+            ),
+            sample!(
+                "datagrams_dropped",
+                "counter",
+                self.datagrams_dropped.load(Relaxed),
+                "Application datagram outputs dropped by size, pressure or transport error; excludes network losses and QUIC queue eviction."
+            ),
+            sample!(
+                "datagrams_oversized",
+                "counter",
+                self.datagrams_oversized.load(Relaxed),
+                "Datagram outputs larger than the recipient negotiated maximum."
+            ),
             sample!(
                 "read_buffer_reserved_bytes",
                 "gauge",
@@ -303,7 +338,7 @@ impl Metrics {
                 "connections",
                 "gauge",
                 self.connections.load(Relaxed),
-                "Open TCP connections admitted to the relay, including handshakes."
+                "Open transport connections admitted to the relay, including handshakes."
             ),
             sample!(
                 "sessions",

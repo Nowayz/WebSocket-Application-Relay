@@ -149,7 +149,7 @@ impl ReceiveBatch<'_> {
         storage_capacity: usize,
     ) -> Result<usize, Disconnect> {
         self.relay
-            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals, None)
+            .receive_with_totals::<false>(peer, bytes, storage_capacity, &mut self.totals, None)
             .map_err(|error| error.reason)
     }
 
@@ -162,10 +162,27 @@ impl ReceiveBatch<'_> {
         pending: &mut Option<Box<RoomFanout>>,
         quantum: usize,
     ) -> Result<usize, RoutingFailure> {
-        self.relay.receive_with_totals(
+        self.relay.receive_with_totals::<false>(
             peer,
             bytes,
             storage_capacity,
+            &mut self.totals,
+            Some((pending, quantum)),
+        )
+    }
+
+    pub(crate) fn receive_datagram(
+        &mut self,
+        peer: &Peer,
+        bytes: Bytes,
+        pending: &mut Option<Box<RoomFanout>>,
+        quantum: usize,
+    ) -> Result<usize, RoutingFailure> {
+        let size = bytes.len();
+        self.relay.receive_with_totals::<true>(
+            peer,
+            bytes,
+            size,
             &mut self.totals,
             Some((pending, quantum)),
         )
@@ -1126,7 +1143,11 @@ impl Peer {
             })
             .is_err()
         {
-            self.overloaded();
+            if frame.unreliable {
+                self.budget.metrics.datagrams_dropped.fetch_add(1, Relaxed);
+            } else {
+                self.overloaded();
+            }
             return Ok(None);
         }
         if self
@@ -1141,7 +1162,9 @@ impl Peer {
         {
             let held = self.budget.used.fetch_sub(size, Relaxed) - size;
             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
-            if reply || held >= self.budget.limit / 4 {
+            if frame.unreliable {
+                self.budget.metrics.datagrams_dropped.fetch_add(1, Relaxed);
+            } else if reply || held >= self.budget.limit / 4 {
                 self.overloaded();
             }
             return Ok(None);
@@ -1730,7 +1753,7 @@ impl Relay {
         self.receive_batch().receive(peer, bytes, storage_capacity)
     }
 
-    fn receive_with_totals(
+    fn receive_with_totals<const UNRELIABLE: bool>(
         &self,
         peer: &Peer,
         bytes: Bytes,
@@ -1745,6 +1768,9 @@ impl Relay {
         totals.bytes = totals.bytes.wrapping_add(bytes.len() as u64);
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
+            if UNRELIABLE {
+                return Err(Disconnect::PROTOCOL.into());
+            }
             return self.control(peer, value).map(|_| 1).map_err(Into::into);
         }
         let private_recipient = if target == BROADCAST {
@@ -1769,7 +1795,8 @@ impl Relay {
         let compact = storage_capacity > self.config.read_buffer_bytes
             && bytes.len().saturating_mul(8) < storage_capacity
             && !bytes.is_unique();
-        let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        let mut frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        frame.unreliable = UNRELIABLE;
         let counter = if compact {
             &mut totals.copied
         } else {

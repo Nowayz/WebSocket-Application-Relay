@@ -20,10 +20,10 @@ fn main() -> Result<()> {
             .map_or(2, usize::from)
             .min(16)
     });
-    tokio::runtime::Builder::new_current_thread().enable_all().build()?.block_on(async move {
-        let listener = TcpListener::bind(config.bind).await.context("cannot bind relay listener")?;
+    tokio::runtime::Builder::new_multi_thread().worker_threads(workers).enable_all().build()?.block_on(async move {
+        let listener = if config.legacy_websocket { Some(TcpListener::bind(config.bind).await.context("cannot bind relay listener")?) } else { None };
         let admin = if config.no_admin { None } else { Some(TcpListener::bind(config.admin_bind).await.context("cannot bind admin listener")?) };
-        info!(address = %listener.local_addr()?, workers, listen_backlog = config.listen_backlog, protocol = "war.cbor.v1", "relay listening");
+        info!(address = %config.bind, workers, listen_backlog = config.listen_backlog, protocol = "war.cbor.v1", "relay listening");
         if let Some(admin) = &admin { info!(address = %admin.local_addr()?, "admin listening"); }
         let relay = Relay::new(config)?;
         let shutdown = CancellationToken::new();
@@ -36,6 +36,25 @@ fn main() -> Result<()> {
             #[cfg(not(unix))] { let _ = tokio::signal::ctrl_c().await; }
             signal.cancel();
         });
-        serve(listener, admin, relay, shutdown).await
+        if let Some(listener) = listener { return serve(listener, admin, relay, shutdown).await; }
+        let identity = match (&relay.config.tls_cert, &relay.config.tls_key) {
+            (Some(cert), Some(key)) => wtransport::Identity::load_pemfiles(cert, key).await?,
+            _ if relay.config.dev_cert => wtransport::Identity::self_signed(["localhost", "127.0.0.1", "::1"] )?,
+            _ => anyhow::bail!("WebTransport requires --tls-cert and --tls-key (or --dev-cert for localhost)"),
+        };
+        if relay.config.dev_cert {
+            info!(certificate_sha256 = %identity.certificate_chain().as_slice()[0].hash(), "development certificate pin");
+        }
+        let transport = wtransport::ServerConfig::builder().with_bind_address(relay.config.bind).with_identity(identity).build();
+        let endpoint = wtransport::Endpoint::server(transport)?;
+        let admin_task = admin.map(|listener| {
+            let router = war_relay::server::admin_router(relay.clone());
+            let stop = shutdown.clone();
+            tokio::spawn(async move { axum::serve(listener, router).with_graceful_shutdown(stop.cancelled_owned()).await })
+        });
+        let outcome = war_relay::webtransport::serve(endpoint, relay, shutdown.clone()).await;
+        shutdown.cancel();
+        if let Some(task) = admin_task { task.await??; }
+        outcome
     })
 }

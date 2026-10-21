@@ -9,6 +9,19 @@ pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
 #[derive(Clone, Parser)]
 #[command(version, about = "WebSocket Application Relay (Rust)")]
 pub struct Config {
+    /// Explicit legacy comparison listener; normal operation uses WebTransport.
+    #[arg(long, env = "WAR_LEGACY_WEBSOCKET")]
+    pub legacy_websocket: bool,
+    /// TLS certificate chain in PEM format.
+    #[arg(long, env = "WAR_TLS_CERT", requires = "tls_key")]
+    pub tls_cert: Option<std::path::PathBuf>,
+    /// TLS private key in PEM format.
+    #[arg(long, env = "WAR_TLS_KEY", requires = "tls_cert")]
+    pub tls_key: Option<std::path::PathBuf>,
+    /// Generate an ephemeral localhost certificate and log its public SHA256 pin.
+    #[arg(long, env = "WAR_DEV_CERT", conflicts_with = "tls_cert")]
+    pub dev_cert: bool,
+
     #[arg(long, env = "WAR_BIND", default_value = "127.0.0.1:1338")]
     pub bind: SocketAddr,
     #[arg(long, env = "WAR_ADMIN_BIND", default_value = "127.0.0.1:1339")]

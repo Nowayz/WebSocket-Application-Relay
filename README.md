@@ -1,5 +1,16 @@
 # WebSocket Application Relay
 
+> **WebTransport migration branch — in progress.** The default data listener now uses
+> HTTP/3 at `https://127.0.0.1:1338/war`. Start locally with
+> `cargo run --release -- --dev-cert`; supply the logged SHA256 certificate pin to
+> the browser client. Production certificates use `--tls-cert` and `--tls-key`.
+> The previous listener remains explicitly available with `--legacy-websocket` for
+> comparisons. Performance parity and the full migration acceptance suite are not
+> yet established. See [the implementation and acceptance ledger](docs/webtransport-pivot.md).
+> Sections below that describe WebSocket deployment are the baseline documentation
+> and are still being migrated.
+
+
 A Rust WebSocket relay with a native CBOR JavaScript client. Clients join a
 channel, receive a 64-bit session ID, and send typed values to another session or
 their channel. Applications own message meaning, game logic and application state.

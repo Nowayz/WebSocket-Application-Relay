@@ -9,10 +9,13 @@ export type VariableResult<T = unknown> = { found: false; value: null } | { foun
 export type ChannelListing = Array<[Uint8Array, number | bigint]>;
 export interface RelayOptions {
   requestTimeoutMs?: number;
+  WebTransportClass?: typeof WebTransport;
+  serverCertificateHashes?: WebTransportHash[];
+  congestionControl?: WebTransportCongestionControl;
   WebSocketClass?: new (url: string | URL, protocols?: string | string[]) => WebSocket;
 }
 export interface RelayEventMap {
-  message: CustomEvent<{ sender: bigint; value: unknown }>;
+  message: CustomEvent<{ sender: bigint; value: unknown; unreliable?: true }>;
   disconnect: CustomEvent<{ userId: bigint }>;
   close: CustomEvent<{ code: number; reason: string }>;
   error: CustomEvent<unknown>;
@@ -28,6 +31,9 @@ export class Relay extends EventTarget {
   requestTimeoutMs: number;
   send(target: UserId, value: unknown): void;
   broadcast(value: unknown): void;
+  sendUnreliable(target: UserId, value: unknown): Promise<void>;
+  broadcastUnreliable(value: unknown): Promise<void>;
+  readonly maxDatagramSize: number;
   close(): void;
   request(op: number, value: unknown): Promise<unknown>;
   authenticate(password: string | Uint8Array): Promise<boolean>;
