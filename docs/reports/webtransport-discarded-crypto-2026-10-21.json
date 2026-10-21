@@ -1,0 +1,903 @@
+{
+  "status": "active; overall parity unproved and unmet",
+  "baseline_commit": "9f9f5fe",
+  "implementation": "At Initial/Handshake key retirement, reset pending retransmits and release crypto assembler heap. Preserve assembler consumed offset/order state and packet-number/ACK scalars. Data space unchanged; no flow limit, cipher, loss recovery or scheduling changes.",
+  "scope": "Linux loopback; fixed independently checking client binaries. Three fresh runs per variant/workload, alternating order. Four server workers CPUs0-3, eight client workers CPUs8-15, 4s, 1KiB values, 32 private pairs and/or 1024 room readers/window4. Capacity two runs per variant reverse order, 100000 sessions, eight server/client workers CPUs0-7/8-15, 400000 checked timed messages/run. Heap diagnostic 8194 sessions uses replacement allocator, excluded ordinary timing/RSS. Percentile histogram values are upper bounds; RSS phase-gate samples exclude kernel costs, not continuous peak.",
+  "matched": {
+    "private": {
+      "event-every-task": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-event-every-task-1.json",
+            "passed": true,
+            "private_per_second": 1467928.7075109798,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1467928.7075109798,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.355425,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.53716435670561,
+            "client_cpu_cores": 4.157105530177688,
+            "server_rss_kib": 15316,
+            "client_rss_kib": 19180,
+            "verified_private": 5872272,
+            "verified_fanout": 0,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-event-every-task-2.json",
+            "passed": true,
+            "private_per_second": 1394142.3681920771,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1394142.3681920771,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.656828,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.504704287947176,
+            "client_cpu_cores": 5.062072883803874,
+            "server_rss_kib": 13592,
+            "client_rss_kib": 18748,
+            "verified_private": 5577040,
+            "verified_fanout": 0,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-event-every-task-3.json",
+            "passed": true,
+            "private_per_second": 1376424.589509986,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1376424.589509986,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.414674,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.504614482769205,
+            "client_cpu_cores": 5.031946472050221,
+            "server_rss_kib": 13340,
+            "client_rss_kib": 18772,
+            "verified_private": 5506304,
+            "verified_fanout": 0,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1394142.3681920771,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1394142.3681920771,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 0.524288,
+          "private_max_ms": 1.414674,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.504704287947176,
+          "client_cpu_cores": 5.031946472050221,
+          "server_rss_kib": 13592,
+          "client_rss_kib": 18772,
+          "verified_private": 5577040,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1376424.589509986,
+            1467928.7075109798
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1376424.589509986,
+            1467928.7075109798
+          ],
+          "server_cpu_cores": [
+            3.504614482769205,
+            3.53716435670561
+          ],
+          "server_rss_kib": [
+            13340,
+            15316
+          ]
+        }
+      },
+      "discarded-crypto": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-discarded-crypto-1.json",
+            "passed": true,
+            "private_per_second": 1370078.3471495642,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1370078.3471495642,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.450513,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.497220103486238,
+            "client_cpu_cores": 5.0770936598860255,
+            "server_rss_kib": 13168,
+            "client_rss_kib": 18844,
+            "verified_private": 5480752,
+            "verified_fanout": 0,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-discarded-crypto-2.json",
+            "passed": true,
+            "private_per_second": 1386247.3832241877,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1386247.3832241877,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.162351,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5046444993759165,
+            "client_cpu_cores": 4.899503009113263,
+            "server_rss_kib": 13520,
+            "client_rss_kib": 18820,
+            "verified_private": 5545552,
+            "verified_fanout": 0,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-private-discarded-crypto-3.json",
+            "passed": true,
+            "private_per_second": 1373892.190669839,
+            "fanout_per_second": 0.0,
+            "combined_per_second": 1373892.190669839,
+            "private_p50_upper_ms": 0.524288,
+            "private_p99_upper_ms": 0.524288,
+            "private_max_ms": 1.375036,
+            "fanout_p50_upper_ms": 0.0,
+            "fanout_p99_upper_ms": 0.0,
+            "fanout_max_ms": 0.0,
+            "server_cpu_cores": 3.5046433622344937,
+            "client_cpu_cores": 4.897001673764175,
+            "server_rss_kib": 13352,
+            "client_rss_kib": 18640,
+            "verified_private": 5496128,
+            "verified_fanout": 0,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 1373892.190669839,
+          "fanout_per_second": 0.0,
+          "combined_per_second": 1373892.190669839,
+          "private_p50_upper_ms": 0.524288,
+          "private_p99_upper_ms": 0.524288,
+          "private_max_ms": 1.375036,
+          "fanout_p50_upper_ms": 0.0,
+          "fanout_p99_upper_ms": 0.0,
+          "fanout_max_ms": 0.0,
+          "server_cpu_cores": 3.5046433622344937,
+          "client_cpu_cores": 4.899503009113263,
+          "server_rss_kib": 13352,
+          "client_rss_kib": 18820,
+          "verified_private": 5496128,
+          "verified_fanout": 0
+        },
+        "ranges": {
+          "private_per_second": [
+            1370078.3471495642,
+            1386247.3832241877
+          ],
+          "fanout_per_second": [
+            0.0,
+            0.0
+          ],
+          "combined_per_second": [
+            1370078.3471495642,
+            1386247.3832241877
+          ],
+          "server_cpu_cores": [
+            3.497220103486238,
+            3.5046444993759165
+          ],
+          "server_rss_kib": [
+            13168,
+            13520
+          ]
+        }
+      }
+    },
+    "roomonly": {
+      "event-every-task": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-event-every-task-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1582833.6543860815,
+            "combined_per_second": 1582833.6543860815,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 4.493496,
+            "server_cpu_cores": 3.349427922734939,
+            "client_cpu_cores": 4.574218730302192,
+            "server_rss_kib": 39984,
+            "client_rss_kib": 63244,
+            "verified_private": 0,
+            "verified_fanout": 6332416,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-event-every-task-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1452207.4635613812,
+            "combined_per_second": 1452207.4635613812,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 4.466053,
+            "server_cpu_cores": 3.335551010859946,
+            "client_cpu_cores": 5.082030528905715,
+            "server_rss_kib": 39988,
+            "client_rss_kib": 63016,
+            "verified_private": 0,
+            "verified_fanout": 5812224,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-event-every-task-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1411786.5580663471,
+            "combined_per_second": 1411786.5580663471,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 5.63609,
+            "server_cpu_cores": 3.3468388880790467,
+            "client_cpu_cores": 4.980296076738522,
+            "server_rss_kib": 39892,
+            "client_rss_kib": 63244,
+            "verified_private": 0,
+            "verified_fanout": 5652480,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1452207.4635613812,
+          "combined_per_second": 1452207.4635613812,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 2.097152,
+          "fanout_p99_upper_ms": 4.194304,
+          "fanout_max_ms": 4.493496,
+          "server_cpu_cores": 3.3468388880790467,
+          "client_cpu_cores": 4.980296076738522,
+          "server_rss_kib": 39984,
+          "client_rss_kib": 63244,
+          "verified_private": 0,
+          "verified_fanout": 5812224
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1411786.5580663471,
+            1582833.6543860815
+          ],
+          "combined_per_second": [
+            1411786.5580663471,
+            1582833.6543860815
+          ],
+          "server_cpu_cores": [
+            3.335551010859946,
+            3.349427922734939
+          ],
+          "server_rss_kib": [
+            39892,
+            39988
+          ]
+        }
+      },
+      "discarded-crypto": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-discarded-crypto-1.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1451675.8066623467,
+            "combined_per_second": 1451675.8066623467,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 5.630067,
+            "server_cpu_cores": 3.3416800619882303,
+            "client_cpu_cores": 4.948785731291469,
+            "server_rss_kib": 38852,
+            "client_rss_kib": 63328,
+            "verified_private": 0,
+            "verified_fanout": 5808128,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-discarded-crypto-2.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1449668.9967122802,
+            "combined_per_second": 1449668.9967122802,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 6.114265,
+            "server_cpu_cores": 3.33427548444359,
+            "client_cpu_cores": 4.963921373392031,
+            "server_rss_kib": 38908,
+            "client_rss_kib": 63172,
+            "verified_private": 0,
+            "verified_fanout": 5799936,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-roomonly-discarded-crypto-3.json",
+            "passed": true,
+            "private_per_second": 0.0,
+            "fanout_per_second": 1473145.0262051863,
+            "combined_per_second": 1473145.0262051863,
+            "private_p50_upper_ms": 0.0,
+            "private_p99_upper_ms": 0.0,
+            "private_max_ms": 0.0,
+            "fanout_p50_upper_ms": 2.097152,
+            "fanout_p99_upper_ms": 4.194304,
+            "fanout_max_ms": 4.916889,
+            "server_cpu_cores": 3.3341151233456774,
+            "client_cpu_cores": 5.018668041737721,
+            "server_rss_kib": 38896,
+            "client_rss_kib": 63068,
+            "verified_private": 0,
+            "verified_fanout": 5894144,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 0.0,
+          "fanout_per_second": 1451675.8066623467,
+          "combined_per_second": 1451675.8066623467,
+          "private_p50_upper_ms": 0.0,
+          "private_p99_upper_ms": 0.0,
+          "private_max_ms": 0.0,
+          "fanout_p50_upper_ms": 2.097152,
+          "fanout_p99_upper_ms": 4.194304,
+          "fanout_max_ms": 5.630067,
+          "server_cpu_cores": 3.33427548444359,
+          "client_cpu_cores": 4.963921373392031,
+          "server_rss_kib": 38896,
+          "client_rss_kib": 63172,
+          "verified_private": 0,
+          "verified_fanout": 5808128
+        },
+        "ranges": {
+          "private_per_second": [
+            0.0,
+            0.0
+          ],
+          "fanout_per_second": [
+            1449668.9967122802,
+            1473145.0262051863
+          ],
+          "combined_per_second": [
+            1449668.9967122802,
+            1473145.0262051863
+          ],
+          "server_cpu_cores": [
+            3.3341151233456774,
+            3.3416800619882303
+          ],
+          "server_rss_kib": [
+            38852,
+            38908
+          ]
+        }
+      }
+    },
+    "mixed": {
+      "event-every-task": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-event-every-task-1.json",
+            "passed": true,
+            "private_per_second": 354103.14883196907,
+            "fanout_per_second": 1051695.3037176286,
+            "combined_per_second": 1405798.4525495977,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 8.834456,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 13.633594,
+            "server_cpu_cores": 3.4642827639007,
+            "client_cpu_cores": 4.9354165403516825,
+            "server_rss_kib": 44772,
+            "client_rss_kib": 73220,
+            "verified_private": 1417728,
+            "verified_fanout": 4210688,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-event-every-task-2.json",
+            "passed": true,
+            "private_per_second": 334985.89915095025,
+            "fanout_per_second": 993823.085530531,
+            "combined_per_second": 1328808.9846814813,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.815761,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.554162,
+            "server_cpu_cores": 3.4558277128743433,
+            "client_cpu_cores": 4.740206197630245,
+            "server_rss_kib": 44844,
+            "client_rss_kib": 73084,
+            "verified_private": 1340592,
+            "verified_fanout": 3977216,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-event-every-task-3.json",
+            "passed": true,
+            "private_per_second": 363909.54401904676,
+            "fanout_per_second": 1087277.4938353347,
+            "combined_per_second": 1451187.0378543814,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 3.756964,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 5.321835,
+            "server_cpu_cores": 3.4693283085501743,
+            "client_cpu_cores": 5.046522950261385,
+            "server_rss_kib": 44784,
+            "client_rss_kib": 73228,
+            "verified_private": 1455920,
+            "verified_fanout": 4349952,
+            "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 354103.14883196907,
+          "fanout_per_second": 1051695.3037176286,
+          "combined_per_second": 1405798.4525495977,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.815761,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.554162,
+          "server_cpu_cores": 3.4642827639007,
+          "client_cpu_cores": 4.9354165403516825,
+          "server_rss_kib": 44784,
+          "client_rss_kib": 73220,
+          "verified_private": 1417728,
+          "verified_fanout": 4210688
+        },
+        "ranges": {
+          "private_per_second": [
+            334985.89915095025,
+            363909.54401904676
+          ],
+          "fanout_per_second": [
+            993823.085530531,
+            1087277.4938353347
+          ],
+          "combined_per_second": [
+            1328808.9846814813,
+            1451187.0378543814
+          ],
+          "server_cpu_cores": [
+            3.4558277128743433,
+            3.4693283085501743
+          ],
+          "server_rss_kib": [
+            44772,
+            44844
+          ]
+        }
+      },
+      "discarded-crypto": {
+        "samples": [
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-discarded-crypto-1.json",
+            "passed": true,
+            "private_per_second": 346668.3354306745,
+            "fanout_per_second": 1016375.616602783,
+            "combined_per_second": 1363043.9520334573,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.411239,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 5.89999,
+            "server_cpu_cores": 3.4709414422964304,
+            "client_cpu_cores": 4.940281664089303,
+            "server_rss_kib": 44200,
+            "client_rss_kib": 73252,
+            "verified_private": 1387296,
+            "verified_fanout": 4067328,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-discarded-crypto-2.json",
+            "passed": true,
+            "private_per_second": 353772.1836408571,
+            "fanout_per_second": 1045150.0262375263,
+            "combined_per_second": 1398922.2098783834,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.295621,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 6.257333,
+            "server_cpu_cores": 3.466326016905361,
+            "client_cpu_cores": 4.955821551206438,
+            "server_rss_kib": 43968,
+            "client_rss_kib": 73132,
+            "verified_private": 1415568,
+            "verified_fanout": 4182016,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/discarded-crypto-mixed-discarded-crypto-3.json",
+            "passed": true,
+            "private_per_second": 348993.434344872,
+            "fanout_per_second": 1031687.7770425992,
+            "combined_per_second": 1380681.2113874713,
+            "private_p50_upper_ms": 2.097152,
+            "private_p99_upper_ms": 4.194304,
+            "private_max_ms": 4.007735,
+            "fanout_p50_upper_ms": 4.194304,
+            "fanout_p99_upper_ms": 8.388608,
+            "fanout_max_ms": 7.233001,
+            "server_cpu_cores": 3.465806135772427,
+            "client_cpu_cores": 4.987562398703507,
+            "server_rss_kib": 44052,
+            "client_rss_kib": 73224,
+            "verified_private": 1396656,
+            "verified_fanout": 4128768,
+            "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "medians": {
+          "private_per_second": 348993.434344872,
+          "fanout_per_second": 1031687.7770425992,
+          "combined_per_second": 1380681.2113874713,
+          "private_p50_upper_ms": 2.097152,
+          "private_p99_upper_ms": 4.194304,
+          "private_max_ms": 4.295621,
+          "fanout_p50_upper_ms": 4.194304,
+          "fanout_p99_upper_ms": 8.388608,
+          "fanout_max_ms": 6.257333,
+          "server_cpu_cores": 3.466326016905361,
+          "client_cpu_cores": 4.955821551206438,
+          "server_rss_kib": 44052,
+          "client_rss_kib": 73224,
+          "verified_private": 1396656,
+          "verified_fanout": 4128768
+        },
+        "ranges": {
+          "private_per_second": [
+            346668.3354306745,
+            353772.1836408571
+          ],
+          "fanout_per_second": [
+            1016375.616602783,
+            1045150.0262375263
+          ],
+          "combined_per_second": [
+            1363043.9520334573,
+            1398922.2098783834
+          ],
+          "server_cpu_cores": [
+            3.465806135772427,
+            3.4709414422964304
+          ],
+          "server_rss_kib": [
+            43968,
+            44200
+          ]
+        }
+      }
+    }
+  },
+  "capacity": {
+    "event-every-task": [
+      {
+        "receipt": "artifacts/webtransport/discarded-crypto-capacity-event-every-task-1.json",
+        "passed": true,
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.014633207,
+        "deliveries": 400000,
+        "achieved_per_second": 99635.503264047,
+        "round_trip": {
+          "max_ms": 2.558245,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.757644,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        },
+        "server_rss_kib": 2884056,
+        "client_rss_kib": 4405408,
+        "server_cpu_cores": 2.2218717227882485,
+        "client_cpu_cores": 2.0275824914233556,
+        "server_rss_after_retirement_kib": 2888308,
+        "max_gate_server_rss_kib": 2888308,
+        "setup_seconds": 11.679354776,
+        "retirement_seconds": 2.393554574,
+        "timed_udp_receive_drops": {
+          "server": 0,
+          "client": 0
+        },
+        "all_done_gauges": {
+          "war_sessions": 0,
+          "war_connections": 0,
+          "war_quic_connections": 0,
+          "war_queued_bytes": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+        "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+      },
+      {
+        "receipt": "artifacts/webtransport/discarded-crypto-capacity-event-every-task-2.json",
+        "passed": true,
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.014739183,
+        "deliveries": 400000,
+        "achieved_per_second": 99632.8732122273,
+        "round_trip": {
+          "max_ms": 5.658636,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.340854,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        },
+        "server_rss_kib": 2881064,
+        "client_rss_kib": 4407220,
+        "server_cpu_cores": 2.418587997226818,
+        "client_cpu_cores": 2.333900054996425,
+        "server_rss_after_retirement_kib": 2884568,
+        "max_gate_server_rss_kib": 2884568,
+        "setup_seconds": 12.318379372,
+        "retirement_seconds": 2.537256305,
+        "timed_udp_receive_drops": {
+          "server": 0,
+          "client": 0
+        },
+        "all_done_gauges": {
+          "war_sessions": 0,
+          "war_connections": 0,
+          "war_quic_connections": 0,
+          "war_queued_bytes": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+        "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+      }
+    ],
+    "discarded-crypto": [
+      {
+        "receipt": "artifacts/webtransport/discarded-crypto-capacity-discarded-crypto-1.json",
+        "passed": true,
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.014103172,
+        "deliveries": 400000,
+        "achieved_per_second": 99648.65945403757,
+        "round_trip": {
+          "max_ms": 11.631285,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.001496,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        },
+        "server_rss_kib": 2801924,
+        "client_rss_kib": 4409124,
+        "server_cpu_cores": 2.2719894355520567,
+        "client_cpu_cores": 2.110060363939246,
+        "server_rss_after_retirement_kib": 2805896,
+        "max_gate_server_rss_kib": 2805896,
+        "setup_seconds": 12.037733537,
+        "retirement_seconds": 2.4689882020000002,
+        "timed_udp_receive_drops": {
+          "server": 0,
+          "client": 0
+        },
+        "all_done_gauges": {
+          "war_sessions": 0,
+          "war_connections": 0,
+          "war_quic_connections": 0,
+          "war_queued_bytes": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+        "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+      },
+      {
+        "receipt": "artifacts/webtransport/discarded-crypto-capacity-discarded-crypto-2.json",
+        "passed": true,
+        "offered_seconds": 4,
+        "elapsed_seconds": 4.013507515,
+        "deliveries": 400000,
+        "achieved_per_second": 99663.44861820946,
+        "round_trip": {
+          "max_ms": 3.324043,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.09224,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        },
+        "server_rss_kib": 2799680,
+        "client_rss_kib": 4406708,
+        "server_cpu_cores": 2.3620237322515645,
+        "client_cpu_cores": 2.0455922828887494,
+        "server_rss_after_retirement_kib": 2804052,
+        "max_gate_server_rss_kib": 2804052,
+        "setup_seconds": 11.903498613,
+        "retirement_seconds": 2.356345192,
+        "timed_udp_receive_drops": {
+          "server": 0,
+          "client": 0
+        },
+        "all_done_gauges": {
+          "war_sessions": 0,
+          "war_connections": 0,
+          "war_quic_connections": 0,
+          "war_queued_bytes": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_variable_bytes": 0,
+          "war_output_queue_capacity_bytes": 0
+        },
+        "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d",
+        "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27"
+      }
+    ]
+  },
+  "heap": {
+    "event-every-task": {
+      "receipt": "artifacts/webtransport/heap-discarded-crypto-event-every-task.json",
+      "passed": true,
+      "gates": {
+        "ready": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-event-every-task/relay_301709.0001.heap",
+          "sha256": "503c2cf191a8703969e9d488b4aecfbfd07f6a3586ef5ca894552ea4544a29ee",
+          "header": "heap profile: 796358: 233425785 [3136216: 591985695] @ heapprofile"
+        },
+        "measured": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-event-every-task/relay_301709.0002.heap",
+          "sha256": "e063ee841855c571eca28ea2af068293aae46468453298c6359ac48e5591434f",
+          "header": "heap profile: 796354: 233485921 [4948289: 1696920479] @ heapprofile"
+        },
+        "done": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-event-every-task/relay_301709.0003.heap",
+          "sha256": "68b81735969353a483daccd6811087c4aeee8af6c9bab9d53fb6b76196f320de",
+          "header": "heap profile:  63535: 31855551 [5097047: 1706848520] @ heapprofile"
+        }
+      },
+      "server_sha256": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24"
+    },
+    "discarded-crypto": {
+      "receipt": "artifacts/webtransport/heap-discarded-crypto-discarded-crypto.json",
+      "passed": true,
+      "gates": {
+        "ready": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-discarded-crypto/relay_301730.0001.heap",
+          "sha256": "9aadfeef8dc03a94e4d21c812627f56013ec1793707e516b0bc72244953cdd24",
+          "header": "heap profile: 763563: 227135902 [3136747: 591975248] @ heapprofile"
+        },
+        "measured": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-discarded-crypto/relay_301730.0002.heap",
+          "sha256": "51cf68404949b2170cf5f3df54072930e24ff3c31d060ef1f71f924480c0d82a",
+          "header": "heap profile: 763553: 227193817 [4972115: 1709905220] @ heapprofile"
+        },
+        "done": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/heap-discarded-crypto-discarded-crypto/relay_301730.0003.heap",
+          "sha256": "396ba69df1161b7059b3e4b35cee298790d5835945c3a44e23b19c1024ef4dee",
+          "header": "heap profile:  59633: 31046270 [5120882: 1719832642] @ heapprofile"
+        }
+      },
+      "server_sha256": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d"
+    }
+  },
+  "validation": {
+    "protocol_tests": 316,
+    "protocol_log": "artifacts/webtransport/discarded-crypto-protocol-tests.log",
+    "udp_tls_integration_tests": 9,
+    "integration_log": "artifacts/webtransport/discarded-crypto-integration.log",
+    "vendor": "153 files verified against four archives and three complete patches",
+    "assembler_regression": "Confirms owner drop and zero staging capacity while retaining consumed offset, so a retransmitted consumed prefix cannot be delivered again.",
+    "application_tests_passed": 266,
+    "application_tests_ignored": 1,
+    "application_log": "artifacts/webtransport/discarded-crypto-all-tests.log",
+    "fmt": "passed",
+    "diff_check": "passed",
+    "clippy": "all targets -D warnings passed",
+    "clippy_log": "artifacts/webtransport/discarded-crypto-clippy.log"
+  },
+  "source_hashes": {
+    "vendor/quinn-proto/src/connection/mod.rs": "3321cedc035174e6752ed8bc324459d7a069d515059499846fd786ca65cd0ea8",
+    "vendor/quinn-proto/src/connection/assembler.rs": "024d67fc87eadb5818015ec2b040879cb05cad9bedbbd8e95b1906fabd5f4757",
+    "vendor/quinn-sparse-streams.patch": "78fadf27ff5529fe230ca0b6771a321c47bf527e1bf0fb3f5d7e68f746da3660",
+    "vendor/provenance.json": "171134559bff1014337e43f3bad25e147d7a3205223520d6d08f6fb133273e0a",
+    "scripts/capacity.py": "e8f00913f25e16039d5f81bf151383f093567b11cb48c13f083efa47ac041e74",
+    "scripts/inspection.py": "637acd47201d43b1134e4066ab591e4f3967a292255066b9dfd862c17d34dd26"
+  },
+  "binary_hashes": {
+    "event-every-task": "39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24",
+    "discarded-crypto": "41d69b37e5f88a9237acd56c40f6d4dca9b2d483094774e915cbc32fd27fee7d"
+  },
+  "interpretation": "Confirmed removable library storage: ready diagnostic live bytes233425785->227135902 (6289883 fewer, about768/session). Two ordinary capacity RSS comparisons2816.4609375->2736.25390625 and2813.5390625->2734.0625 MiB. All timed deliveries checked, zero timed UDP drops and seven final gauges zero. No throughput speedup claimed; medians slightly lower and ranges overlap. This does not establish complete non-regression or statistical equivalence.",
+  "remaining": "100k RSS still about2.67GiB versus earlier native WS about113MiB, not a fresh cross-protocol comparison. Inline retired packet spaces, connection/task/HTTP3/crypto state remain; whole architecture and mixed fairness still require work. Full datagram saturation/fanout/mixed, broad observer/concurrent/overload/packaging acceptance, fresh browser/freshness verification for this candidate and complete kernel peak accounting remain unproved. Goal stays active."
+}

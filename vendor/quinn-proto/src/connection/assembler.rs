@@ -37,6 +37,14 @@ impl Assembler {
         self.data.clear();
     }
 
+    /// Release buffered data and its staging allocation without resetting the
+    /// consumed offset or ordering history. Used when a crypto space retires.
+    pub(super) fn discard_buffer(&mut self) {
+        self.data = BinaryHeap::new();
+        self.buffered = 0;
+        self.allocated = 0;
+    }
+
     pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
         if ordered && !self.state.is_ordered() {
             return Err(IllegalOrderedRead);
@@ -376,6 +384,31 @@ const COMPACT_THRESHOLD: usize = 2 * MAX_CHUNKS;
 mod test {
     use super::*;
     use assert_matches::assert_matches;
+
+    #[test]
+    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
+        struct Owned(Arc<AtomicUsize>);
+        impl AsRef<[u8]> for Owned {
+            fn as_ref(&self) -> &[u8] { b"later" }
+        }
+        impl Drop for Owned {
+            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }
+        }
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let mut x = Assembler::new();
+        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
+        drop(x.read(usize::MAX, true).unwrap());
+        x.insert(5, Bytes::from_owner(Owned(dropped.clone())), 5).unwrap();
+        assert_eq!(dropped.load(SeqCst), 0);
+        x.discard_buffer();
+        assert_eq!(dropped.load(SeqCst), 1);
+        assert_eq!(x.bytes_read(), 5);
+        assert_eq!(x.data.capacity(), 0);
+        // A retransmitted consumed prefix must not become application data again.
+        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
+        assert!(x.read(usize::MAX, true).is_none());
+    }
 
     #[test]
     fn assemble_ordered() {

@@ -1252,3 +1252,42 @@ throughput/memory parity remains unmet. Continue worker/connection dispatch and
 mixed private fairness, retained QUIC/HTTP3 state and full datagram load measurement,
 plus the previously listed observer/concurrent-inspection/overload/packaging
 acceptance. No pivot acceptance, push, release or deployment is claimed.
+
+### Release crypto staging storage when handshake keys retire
+
+The established-connection heap showed surviving Initial/Handshake crypto
+retransmission and assembler allocations. Quinn's key retirement cleared keys and
+sent packets but retained those containers. The patch resets pending retransmits
+and releases the assembler heap at that existing retirement boundary. Consumed
+crypto offsets/order state and packet-number/ACK scalars remain intact. Retry
+retains upstream ClientHello reconstruction and next packet number; the Data
+space, stream credits, ciphers and congestion control are unchanged.
+
+A fixed-client replacement-allocator diagnostic with 8,194 sessions reduced ready
+live bytes from 233,425,785 to 227,135,902: 6,289,883 fewer, approximately 768 per
+session. Two ordinary 100,000-session capacity comparisons, with reverse order in
+the second block, reduced measured server RSS from 2,816.46 to 2,736.25 MiB and
+2,813.54 to 2,734.06 MiB. Each run verified 400,000 timed messages, zero timed UDP
+receive drops and all seven final resource gauges at zero. P50/p99 histogram upper
+bounds remained 0.524/2.097 ms. CPU cores were 2.222/2.419 baseline and 2.272/2.362
+candidate; setup 11.679/12.318 versus 12.038/11.903 s, retirement 2.394/2.537 versus
+2.469/2.356 s. These gate RSS samples exclude kernel memory and are not continuous
+peak measurements. Heap profiling is diagnostic and excluded from ordinary runs.
+
+Three fixed-client runs per version/case produced median verified rates of
+1,394,142 to 1,373,892 private messages/s, 1,452,207 to 1,451,676 room deliveries/s,
+and 1,405,798 to 1,380,681 mixed deliveries/s. Mixed private medians were 354,103
+to 348,993/s. Ranges overlap; no throughput improvement or statistical equivalence
+is claimed. This is retained for its repeatable whole-workload memory reduction.
+
+All 316 standalone protocol tests and 266 application tests passed (one existing
+ignored test). A new owner-lifetime regression proves staging is released without
+allowing consumed crypto bytes to be delivered again. The nine real UDP/TLS
+integration checks pass, as do formatting, clippy and archive/patch verification.
+[Complete measurements](reports/webtransport-discarded-crypto-2026-10-21.json)
+include fixed binary hashes, latency/CPU/RSS/setup/retirement and cleanup evidence.
+This candidate has not yet repeated browser or impaired-network freshness checks.
+Memory remains about 2.67 GiB; the earlier native WS result was about 113 MiB and
+is not a fresh cross-protocol comparison. Overall parity remains unmet. Continue
+connection/packet-space storage and worker ownership, mixed private fairness,
+full datagram private/fanout/mixed load and the remaining acceptance requirements.

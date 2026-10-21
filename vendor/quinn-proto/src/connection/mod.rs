@@ -2218,6 +2218,10 @@ impl Connection {
         }
         let space = &mut self.spaces[space_id];
         space.crypto = None;
+        // No packet in this space can be sent or authenticated again. Keep its
+        // scalar packet-number/ACK history, but release handshake-only storage.
+        space.pending = Retransmits::default();
+        space.crypto_stream.discard_buffer();
         space.time_of_last_ack_eliciting_packet = None;
         space.loss_time = None;
         let sent_packets = mem::take(&mut space.sent_packets);

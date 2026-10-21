@@ -64,11 +64,18 @@ Upstream creates hash-map placeholders for every remotely available stream credi
 lookup still distinguishes a valid unopened stream from a closed or unknown one.
 Locally initiated and initialized stream state retains its ordinary hash-map owner.
 Transport-parameter updates visit initialized send state without materializing empty
-placeholders. No advertised stream counts, flow-control windows, crypto, packet
-processing, congestion control, or stream validation rules are changed.
+placeholders. No advertised stream counts, flow-control windows, congestion
+control, or stream validation rules are changed.
+
+When Initial or Handshake packet keys retire, the connection also releases pending
+crypto retransmission storage and the crypto assembler staging heap. Consumed
+offsets and packet-number/ACK history remain intact; the Data packet space is
+unchanged. Retry rebuilds Initial state using the saved ClientHello and existing
+next packet number, as upstream does.
 
 The modified upstream files are `src/connection/streams/mod.rs` and
-`src/connection/streams/state.rs`; `src/connection/streams/sparse.rs` is added.
+`src/connection/streams/state.rs`, plus `src/connection/mod.rs` and
+`src/connection/assembler.rs`; `src/connection/streams/sparse.rs` is added.
 `quinn-sparse-streams.patch` is the complete diff against the verified published
 archive. `provenance.json` records the package checksum and upstream Git commit.
 All other archive files, including licenses, are retained unchanged.

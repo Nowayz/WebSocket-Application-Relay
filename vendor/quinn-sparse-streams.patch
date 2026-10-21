@@ -1,3 +1,69 @@
+diff --git a/quinn-proto/src/connection/assembler.rs b/quinn-proto/src/connection/assembler.rs
+index 93268e1..cd7afec 100644
+--- a/quinn-proto/src/connection/assembler.rs
++++ b/quinn-proto/src/connection/assembler.rs
+@@ -37,6 +37,14 @@ impl Assembler {
+         self.data.clear();
+     }
+
++    /// Release buffered data and its staging allocation without resetting the
++    /// consumed offset or ordering history. Used when a crypto space retires.
++    pub(super) fn discard_buffer(&mut self) {
++        self.data = BinaryHeap::new();
++        self.buffered = 0;
++        self.allocated = 0;
++    }
++
+     pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
+         if ordered && !self.state.is_ordered() {
+             return Err(IllegalOrderedRead);
+@@ -377,6 +385,31 @@ mod test {
+     use super::*;
+     use assert_matches::assert_matches;
+
++    #[test]
++    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
++        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
++        struct Owned(Arc<AtomicUsize>);
++        impl AsRef<[u8]> for Owned {
++            fn as_ref(&self) -> &[u8] { b"later" }
++        }
++        impl Drop for Owned {
++            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }
++        }
++        let dropped = Arc::new(AtomicUsize::new(0));
++        let mut x = Assembler::new();
++        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
++        drop(x.read(usize::MAX, true).unwrap());
++        x.insert(5, Bytes::from_owner(Owned(dropped.clone())), 5).unwrap();
++        assert_eq!(dropped.load(SeqCst), 0);
++        x.discard_buffer();
++        assert_eq!(dropped.load(SeqCst), 1);
++        assert_eq!(x.bytes_read(), 5);
++        assert_eq!(x.data.capacity(), 0);
++        // A retransmitted consumed prefix must not become application data again.
++        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
++        assert!(x.read(usize::MAX, true).is_none());
++    }
++
+     #[test]
+     fn assemble_ordered() {
+         let mut x = Assembler::new();
+diff --git a/quinn-proto/src/connection/mod.rs b/quinn-proto/src/connection/mod.rs
+index 5155740..e47724c 100644
+--- a/quinn-proto/src/connection/mod.rs
++++ b/quinn-proto/src/connection/mod.rs
+@@ -2218,6 +2218,10 @@ impl Connection {
+         }
+         let space = &mut self.spaces[space_id];
+         space.crypto = None;
++        // No packet in this space can be sent or authenticated again. Keep its
++        // scalar packet-number/ACK history, but release handshake-only storage.
++        space.pending = Retransmits::default();
++        space.crypto_stream.discard_buffer();
+         space.time_of_last_ack_eliciting_packet = None;
+         space.loss_time = None;
+         let sent_packets = mem::take(&mut space.sent_packets);
 diff --git a/quinn-proto/src/connection/streams/mod.rs b/quinn-proto/src/connection/streams/mod.rs
 index fe41e73..7254bfe 100644
 --- a/quinn-proto/src/connection/streams/mod.rs
@@ -10,7 +76,7 @@ index fe41e73..7254bfe 100644
  mod state;
  #[allow(unreachable_pub)] // fuzzing only
  pub use state::StreamsState;
-diff --git a/quinn-proto/src/connection/streams/sparse.rs b/quinn-proto/src/connection/streams/sparse.rs
+diff --git a/modified/quinn-proto/src/connection/streams/sparse.rs b/quinn-proto/src/connection/streams/sparse.rs
 new file mode 100644
 index 0000000..35e098f
 --- /dev/null
