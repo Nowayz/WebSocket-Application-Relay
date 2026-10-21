@@ -150,9 +150,15 @@ pub async fn write_record<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -
 }
 async fn write_frame(stream: &mut SendStream, frame: &Frame) -> Result<()> {
     let size = u32::try_from(frame.len()).context("record exceeds u32 framing")?;
-    stream.write_all(&size.to_be_bytes()).await?;
-    stream.write_all(frame.prefix()).await?;
-    stream.write_all(frame.payload()).await?;
+    let mut prefix = [0; 18];
+    prefix[..4].copy_from_slice(&size.to_be_bytes());
+    let header_len = 4 + frame.prefix().len();
+    prefix[4..header_len].copy_from_slice(frame.prefix());
+    let mut chunks = [
+        Bytes::copy_from_slice(&prefix[..header_len]),
+        frame.shared_payload(),
+    ];
+    stream.write_all_chunks(&mut chunks).await?;
     Ok(())
 }
 

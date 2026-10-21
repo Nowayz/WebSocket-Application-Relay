@@ -686,3 +686,134 @@ Room/mixed throughput and mixed private-lane parity remain unmet. Continue activ
 QUIC/HTTP3 connection storage and reliable scheduling work, plus the previously
 listed acceptance work. This measured memory improvement does not accept or
 release the pivot.
+
+## Shared-body chunk writes on the direct engine
+
+The refreshed current-executable profile identifies repeated stream writes,
+QUIC packet construction, buffer ownership and crypto as substantial costs.
+`write_all` contributes 4.85% of private and 4.30% of mixed self samples in separate
+8-second, 499 Hz user-cycle captures. These are sampled costs, not a promised
+speedup. The earlier rejected chunk-write experiment used the old driver and a
+32-client private probe; it did not cover the current direct engine's larger
+fanout/mixed workloads.
+
+The reliable writer now combines its four-byte record length and small inline
+CBOR prefix into one owned header, then submits that and a shared immutable body
+through the direct stream's `write_all_chunks` API. QUIC owns the chunks through
+retransmission instead of copying the payload for each recipient. This still
+allocates a small header, increments shared ownership, and incurs packet/crypto
+copies; it is not an end-to-end zero-copy or zero-allocation claim. Framing, FIFO,
+routing, reservation lifetime, per-record deadlines, transport parameters and
+crypto remain unchanged. Empty graceful-close ACK records retain their format.
+
+The final release executable is byte-identical to the timed candidate, SHA256
+`8feaec3e5986c0c72299d38d106543579587d47587e3ba7e17f6b6728c1a2b7d`,
+retained as both `binaries/direct-chunks-relay` and
+`binaries/direct-chunks-final-relay` under `artifacts/webtransport/`. The manifest
+checks final product source hashes and rebuilt executable equality. Only a real
+write-pressure fixture/test was added after the throughput measurements.
+
+All 18 main comparison runs pass full payload, sender, FIFO, counter, lifecycle
+and cleanup checks. Three alternating fresh processes per case/variant use the
+same frozen client, four pinned server workers on CPUs 0–3 and eight client
+workers on CPUs 8–15, four seconds, 1 KiB values, 32 private pairs, 1,024 fanout
+readers and fanout window four.
+
+| Reliable workload | Previous deliveries/s | Chunk-write deliveries/s | Change |
+| --- | ---: | ---: | ---: |
+| Private only | 1,404,079 | 1,481,922 | +5.5% |
+| Room fanout only | 1,119,984 | 1,315,752 | +17.5% |
+| Mixed, combined | 1,163,520 | 1,362,269 | +17.1% |
+| Mixed, private component | 314,795 | 356,607 | +13.3% |
+| Mixed, fanout component | 850,140 | 1,006,568 | +18.4% |
+
+Component and combined medians are computed independently. Server CPU medians
+are 3.515 → 3.497 cores private, 3.259 → 3.155 fanout and 3.392 → 3.354 mixed.
+Server RSS medians are 13.81 → 13.34 MiB private, 52.50 → 48.31 MiB fanout and
+56.32 → 53.45 MiB mixed. These are whole-workload observations at differing
+completed-work rates, not isolated CPU cost per message. The candidate's p99
+upper bounds remain 1.049 ms private-only, 4.194 ms fanout-only, and respectively
+4.194/8.389 ms for mixed private/fanout. All individual samples, ranges, client
+CPU/RSS and observed maxima are retained in the report.
+
+Sharing can extend a backing allocation's lifetime, so large records were checked
+separately with another 12 passing alternating runs. These use the same four-
+second workload and frozen verifier, 32 private pairs at 64 KiB and four pairs at
+1 MiB. All payload bytes and lifecycle/resource counts are checked.
+
+| Private content size | Previous deliveries/s | Chunk-write deliveries/s | Previous RSS | Chunk-write RSS |
+| --- | ---: | ---: | ---: | ---: |
+| 64 KiB | 40,123 | 40,650 | 36.12 MiB | 40.16 MiB |
+| 1 MiB | 2,177 | 2,156 | 95.08 MiB | 52.23 MiB |
+
+Large-record throughput is effectively unchanged in this screen. The 64 KiB RSS
+increase is a tradeoff requiring follow-up, not a memory win. Its samples are
+33.63–36.36 versus 36.08–42.94 MiB. The 1 MiB samples are 88.60–98.17 versus
+32.99–58.66 MiB; the larger payload is retained once while transmission proceeds.
+Both sizes retain a 33.55 ms p99 upper bound. The read assembler's geometric
+capacity and shared lifetime are next targets; do not infer universal memory
+savings from the small-message fanout result.
+
+All six fresh 100k runs pass, with 400,000 verified timed deliveries each,
+independent physical-connection counts, all-user pre/post routing proofs, exact
+close/departure checks, zero timed UDP receive drops on both endpoints and seven
+final gauges zero. Median results are:
+
+| 100k metric | Previous candidate | Chunk-write candidate |
+| --- | ---: | ---: |
+| Timed elapsed | 4.0141 s | 4.0136 s |
+| Achieved deliveries/s | 99,648.6 | 99,660.8 |
+| RTT p50 / p99 upper bound in every run | 0.524 / 1.049 ms | 0.524 / 1.049 ms |
+| Maximum observed RTT across three runs | 12.309 ms | 10.937 ms |
+| Server CPU | 2.014 cores | 2.051 cores |
+| Server RSS at measured gate | 3,049.25 MiB | 3,048.38 MiB |
+| Server RSS after retirement | 3,054.08 MiB | 3,052.57 MiB |
+| Setup | 11.399 s | 11.577 s |
+| Retirement | 2.244 s | 2.200 s |
+
+Capacity RSS and latency are essentially unchanged. The small capacity CPU
+increase is reported rather than claiming a CPU improvement across all workloads.
+RSS excludes kernel socket memory and is gate-sampled, not a continuous peak.
+The 8,194-session replacement-allocator ready snapshots also remain essentially
+unchanged at 253.32 MB requested live bytes. The new run settles to 9,751,260
+requested live bytes after one second and remains there at five seconds; these
+instrumented results are excluded from ordinary timing/RSS comparisons.
+
+A new real-transport pressure test advertises 64 KiB client stream receive credit
+and leaves a 12 MiB delivery unread, exceeding the default 10 MB QUIC send window.
+The writer must stay pending, then hit its configured one-second deadline. The
+test verifies exactly one timeout, release of application queued/read-budget
+credit, continued private routing in another room before and after the timeout,
+and zero connection/output metadata credit after shutdown. The focused run and
+full suite pass. This covers one concrete partial-write cancellation path;
+broader overload, fanout cancellation and shutdown/retirement fallback acceptance
+remain required.
+
+All nine clean/loss/reorder regression samples pass. With 20 ms one-way delay and
+2% loss, datagrams receive 348/360 updates with p99 newest-state age 71 ms; reliable
+WebTransport receives 360/360 at 1,102 ms and the TLS fixture 360/360 at 981 ms.
+Adding jitter/reordering gives datagrams 354/360 at 117 ms, reliable WebTransport
+360/360 at 5,342 ms and TLS 360/360 at 741 ms. Reliable 1 MiB bulk completion in
+those reordering samples is 7,239, 5,394 and 810 ms respectively. Freshness and
+bulk progress remain separate outcomes. One sample per mode is regression
+evidence, not a statistical ranking; matching impairment parameters/seeds are
+not identical loss trajectories, and missing updates are unreceived observations.
+
+The current bundle passes all nine Chromium 155 checks, including typed values,
+datagrams, a 5 MiB message, concurrent variables, departure and real graceful
+close; seven final gauges are zero. Screenshot:
+`output/playwright/webtransport-direct-chunks.png`. The product has 265 passing
+Rust tests, one ignored; all-target Clippy with warnings denied and the 152-file
+vendor verifier pass. Browser/HTTP/relay fixtures and impairment namespaces were
+stopped and removed. No dependency source changed.
+
+A new candidate profile confirms that crypto and packet construction lead the
+visible self samples; it is retained alongside the baseline captures. The full
+record is `docs/reports/webtransport-direct-chunks-2026-10-21.json`, with all
+samples, ranges, large-payload tradeoffs, full freshness/bulk/generation-lag
+metrics, provenance and validation scopes. Reliable fanout/mixed throughput is
+closer to, but still below, the earlier plaintext control. Mixed private traffic
+still trails the earlier encrypted fixture, and 100k server RSS remains about
+27 times the plaintext control. Continue receive framing/retained capacity,
+active QUIC/HTTP3 state and reliable scheduling work. This checkpoint does not
+accept or release the pivot.

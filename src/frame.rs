@@ -115,6 +115,10 @@ impl Frame {
         &self.payload
     }
 
+    pub(crate) fn shared_payload(&self) -> Bytes {
+        self.payload.clone()
+    }
+
     pub(crate) fn len(&self) -> usize {
         usize::from(self.prefix_len) + self.payload.len()
     }

@@ -62,13 +62,15 @@ fn verify(bytes: &[u8], sender: u64, payload: &[u8]) {
     assert_eq!(d.bytes().unwrap(), payload);
     assert_eq!(d.position(), bytes.len());
 }
-async fn fixture() -> (
+type Fixture = (
     Arc<Relay>,
     Endpoint<wtransport::endpoint::endpoint_side::Client>,
     String,
     CancellationToken,
     tokio::task::JoinHandle<anyhow::Result<()>>,
-) {
+);
+
+async fn fixture() -> Fixture {
     fixture_with(Config {
         auth_password: Some("test".into()),
         messages_per_second: 0,
@@ -77,15 +79,14 @@ async fn fixture() -> (
     })
     .await
 }
-async fn fixture_with(
+async fn fixture_with(config: Config) -> Fixture {
+    fixture_with_client_transport(config, None).await
+}
+
+async fn fixture_with_client_transport(
     config: Config,
-) -> (
-    Arc<Relay>,
-    Endpoint<wtransport::endpoint::endpoint_side::Client>,
-    String,
-    CancellationToken,
-    tokio::task::JoinHandle<anyhow::Result<()>>,
-) {
+    transport: Option<wtransport::quinn::TransportConfig>,
+) -> Fixture {
     let identity = Identity::self_signed(["localhost", "127.0.0.1"]).unwrap();
     let hash = identity.certificate_chain().as_slice()[0].hash();
     let server_config = wtransport::ServerConfig::builder()
@@ -101,13 +102,16 @@ async fn fixture_with(
         "https://127.0.0.1:{}/war",
         server.local_addr().unwrap().port()
     );
-    let client = Endpoint::client(
-        wtransport::ClientConfig::builder()
-            .with_bind_default()
-            .with_server_certificate_hashes([hash])
-            .build(),
-    )
-    .unwrap();
+    let mut client_config = wtransport::ClientConfig::builder()
+        .with_bind_default()
+        .with_server_certificate_hashes([hash])
+        .build();
+    if let Some(transport) = transport {
+        client_config
+            .quic_config_mut()
+            .transport_config(Arc::new(transport));
+    }
+    let client = Endpoint::client(client_config).unwrap();
     let relay = Relay::new(config).unwrap();
     let stop = CancellationToken::new();
     let task = tokio::spawn(war_relay::webtransport::serve(
@@ -411,4 +415,60 @@ async fn graceful_close_ack_follows_delivery_and_registration_removal() {
         .close(VarInt::from_u32(1000), b"ack received");
     stop.cancel();
     task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn blocked_shared_output_times_out_without_stalling_other_sessions_or_leaking_credit() {
+    use std::sync::atomic::Ordering::Relaxed;
+
+    let mut transport = wtransport::quinn::TransportConfig::default();
+    // Stop replenishing the recipient's reliable stream credit while leaving
+    // HTTP3 control traffic and the independent source connection operational.
+    transport.stream_receive_window(wtransport::quinn::VarInt::from_u32(64 * 1024));
+    let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
+        Config {
+            write_timeout_secs: 1,
+            messages_per_second: 0,
+            bytes_per_second: 0,
+            ..Config::default()
+        },
+        Some(transport),
+    )
+    .await;
+    let mut source = Client::open(&endpoint, &url, "pressure-source").await;
+    let recipient = Client::open(&endpoint, &url, "pressure-sink").await;
+    // Exceed the transport's 10,000,000-byte send window so the write must
+    // remain pending, rather than merely buffering the entire record in QUIC.
+    let packet = route(recipient.id, &vec![42; 12 * 1024 * 1024]);
+    write_record(&mut source.send, &packet).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while relay.metrics.queued_bytes.load(Relaxed) == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(relay.metrics.write_timeouts.load(Relaxed), 0);
+
+    write_record(&mut source.send, &route(source.id, b"still responsive"))
+        .await
+        .unwrap();
+    verify(&source.read().await, source.id, b"still responsive");
+    tokio::time::timeout(Duration::from_secs(4), recipient.connection.closed())
+        .await
+        .unwrap();
+    assert_eq!(relay.metrics.write_timeouts.load(Relaxed), 1);
+    assert_eq!(relay.counts().0, 1);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
+    write_record(&mut source.send, &route(source.id, b"survived timeout"))
+        .await
+        .unwrap();
+    verify(&source.read().await, source.id, b"survived timeout");
+
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(relay.metrics.connections.load(Relaxed), 0);
+    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
+    assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
 }
