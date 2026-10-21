@@ -23,7 +23,7 @@ pub(super) struct PacketSpace {
     pub(super) rx_packet: u64,
 
     /// Data to send
-    pub(super) pending: Retransmits,
+    pub(super) pending: ThinRetransmits,
     /// Packet numbers to acknowledge
     pub(super) pending_acks: PendingAcks,
 
@@ -76,7 +76,7 @@ impl PacketSpace {
             dedup: Dedup::new(),
             rx_packet: 0,
 
-            pending: Retransmits::default(),
+            pending: ThinRetransmits::default(),
             pending_acks: PendingAcks::new(),
 
             next_packet_number: 0,
@@ -429,6 +429,24 @@ impl ::std::iter::FromIterator<Self> for Retransmits {
 #[derive(Debug, Default, Clone)]
 pub(super) struct ThinRetransmits {
     retransmits: Option<Box<Retransmits>>,
+}
+
+impl std::ops::BitOrAssign for ThinRetransmits {
+    fn bitor_assign(&mut self, rhs: Self) {
+        let Some(rhs) = rhs.retransmits else {
+            return;
+        };
+        match self.retransmits.as_mut() {
+            Some(pending) => **pending |= *rhs,
+            None => self.retransmits = Some(rhs),
+        }
+    }
+}
+
+impl std::ops::BitOrAssign<Retransmits> for ThinRetransmits {
+    fn bitor_assign(&mut self, rhs: Retransmits) {
+        *self.get_or_create() |= rhs;
+    }
 }
 
 impl ThinRetransmits {
@@ -926,6 +944,36 @@ const MAX_ACK_BLOCKS: usize = 64;
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn thin_pending_moves_storage_and_preserves_crypto_retransmit_priority() {
+        let mut pending = ThinRetransmits::default();
+        pending |= ThinRetransmits::default();
+        assert!(pending.get().is_none());
+        let mut first = ThinRetransmits::default();
+        first.get_or_create().crypto.push_back(frame::Crypto {
+            offset: 2,
+            data: bytes::Bytes::from_static(b"new"),
+        });
+        let storage = first.get().unwrap() as *const Retransmits;
+        pending |= first;
+        assert_eq!(pending.get().unwrap() as *const Retransmits, storage);
+        let mut lost = Retransmits::default();
+        lost.crypto.push_back(frame::Crypto {
+            offset: 0,
+            data: bytes::Bytes::from_static(b"old"),
+        });
+        lost.handshake_done = true;
+        pending |= lost;
+        let retained = pending.get().unwrap();
+        assert!(retained.handshake_done);
+        assert_eq!(
+            retained.crypto.iter().map(|x| x.offset).collect::<Vec<_>>(),
+            [0, 2]
+        );
+        drop(std::mem::take(&mut pending));
+        assert!(pending.get().is_none());
+    }
 
     #[test]
     fn sanity() {

@@ -1291,3 +1291,60 @@ Memory remains about 2.67 GiB; the earlier native WS result was about 113 MiB an
 is not a fresh cross-protocol comparison. Overall parity remains unmet. Continue
 connection/packet-space storage and worker ownership, mixed private fairness,
 full datagram private/fanout/mixed load and the remaining acceptance requirements.
+
+### Materialize pending retransmission storage only when needed
+
+`PacketSpace` embedded three full `Retransmits` containers in every connection,
+including the retired Initial and Handshake spaces. Pending retransmissions now
+use Quinn's existing `ThinRetransmits`, already used for sent-packet tracking.
+Read-only inspection and merging absent queues allocate nothing. Mutation calls
+`get_or_create` explicitly; a populated box moves into an absent destination.
+Merging populated queues keeps upstream CRYPTO retransmit priority. Retirement
+releases the pending box while packet-number/ACK/deduplication/assembler history
+remains inline. No stream credits, cipher or congestion-control behavior changes.
+
+The 8,194-session replacement-allocator diagnostic reduced ready live bytes from
+227,126,986 to 223,459,858, about 448 bytes per session. Live allocations increased
+by 8,213, approximately one additional Data-space owner per connection. In two
+ordinary 100,000-session comparisons, RSS changed from 2,737.02 to 2,692.98 MiB and
+2,734.64 to 2,692.85 MiB. Each run checked all 400,000 timed deliveries, had no timed
+UDP drops, and ended with seven resource gauges at zero. P50/p99 histogram upper
+bounds remained 0.524/2.097 ms. CPU was 2.339/2.325 baseline versus 2.401/2.408
+candidate cores, roughly 3.1% more by median: an explicit memory/CPU tradeoff.
+Setup was 12.363/12.365 versus 12.172/12.372 s; retirement 2.510/2.459 versus
+2.501/2.651 s. Gate-sampled RSS excludes kernel memory and is not continuous peak.
+
+Initial three-run medians changed from 1,346,008 to 1,349,975 private messages/s,
+1,384,899 to 1,390,510 room deliveries/s, and 1,362,336 to 1,313,630 mixed
+received deliveries/s. The independent mixed confirmation block changed from
+1,424,832 to 1,444,822/s. Neither a consistent throughput improvement nor penalty
+is established; statistical equivalence is not proved. Both blocks are retained,
+not combined with earlier protocol-control measurements. The memory reduction
+is retained with its observed CPU cost; it does not satisfy overall parity.
+
+After rustfmt reflow/trailing commas, the separately hashed final build passed
+another ordinary mixed check (1,517,927 verified deliveries/s) and capacity run
+(2,694.78 MiB RSS, 2.332 CPU cores, all 400,000 messages checked, seven final gauges
+zero). These single final-build checks are not matched performance comparisons.
+All 317 protocol and 266 application tests pass (one existing ignored test), plus
+clippy, formatting and complete vendored archive/patch provenance. A new merge
+regression checks allocation transfer and CRYPTO priority. Actual Chromium 156
+passed all nine delivered-bundle checks, including typed values, explicit
+datagrams, 5 MiB payload, concurrent controls and genuine close; seven gauges
+returned to zero and the screenshot was inspected.
+
+All nine clean/loss/reorder freshness cases passed. In the single loss cases,
+datagram p99 state age was 73.1 ms with 347/360 updates; reliable WT was 701.2 ms
+and TLS WS 901.9 ms, both receiving all updates. Datagram reliable bulk arrived
+in 738 ms. With reordering, datagram age was 123.6 ms with 353/360 updates and
+7.310 s bulk; reliable WT was 5,761.5 ms with 5.825 s bulk; TLS WS was 840.9 ms
+with 877 ms bulk. This retains the freshness benefit and exposes the bulk
+tradeoff; single seeded trajectories do not establish statistical rankings.
+
+[Full measurements, hashes and validation](reports/webtransport-thin-pending-2026-10-21.json)
+retain every run and its scope. Overall memory remains about 2.63 GiB versus the
+earlier native WS result around 113 MiB, not a fresh cross-protocol comparison.
+Continue the worker/connection ownership redesign and mixed fairness, full
+datagram private/fanout/mixed saturation, remaining observer/concurrent/overload
+acceptance, complete kernel peak accounting and final packaging requirements.
+No pivot acceptance, push, release or deployment is claimed.

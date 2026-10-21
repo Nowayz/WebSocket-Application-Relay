@@ -73,9 +73,16 @@ offsets and packet-number/ACK history remain intact; the Data packet space is
 unchanged. Retry rebuilds Initial state using the saved ClientHello and existing
 next packet number, as upstream does.
 
+Pending retransmits use the existing `ThinRetransmits` representation, as sent
+packets already do. Mutation explicitly calls `get_or_create`; empty reads and
+merging an absent queue allocate nothing. A merge into an absent destination moves
+the existing box, while merging two populated queues retains upstream CRYPTO
+retransmission priority. Retiring a packet space releases its pending box; scalar
+packet-number, ACK, deduplication and assembler history remain inline.
+
 The modified upstream files are `src/connection/streams/mod.rs` and
 `src/connection/streams/state.rs`, plus `src/connection/mod.rs` and
-`src/connection/assembler.rs`; `src/connection/streams/sparse.rs` is added.
+`src/connection/assembler.rs` and `src/connection/spaces.rs`; `src/connection/streams/sparse.rs` is added.
 `quinn-sparse-streams.patch` is the complete diff against the verified published
 archive. `provenance.json` records the package checksum and upstream Git commit.
 All other archive files, including licenses, are retained unchanged.

@@ -70,8 +70,6 @@ mod send_buffer;
 mod spaces;
 #[cfg(fuzzing)]
 pub use spaces::Retransmits;
-#[cfg(not(fuzzing))]
-use spaces::Retransmits;
 use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
 
 mod stats;
@@ -431,7 +429,7 @@ impl Connection {
         RecvStream {
             id,
             state: &mut self.streams,
-            pending: &mut self.spaces[SpaceId::Data].pending,
+            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
         }
     }
 
@@ -442,7 +440,7 @@ impl Connection {
         SendStream {
             id,
             state: &mut self.streams,
-            pending: &mut self.spaces[SpaceId::Data].pending,
+            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
             conn_state: &self.state,
         }
     }
@@ -508,10 +506,14 @@ impl Connection {
 
         // Check whether we need to send an ACK_FREQUENCY frame
         if let Some(config) = &self.config.ack_frequency_config {
-            self.spaces[SpaceId::Data].pending.ack_frequency = self
-                .ack_frequency
-                .should_send_ack_frequency(self.path.rtt.get(), config, &self.peer_params)
-                && self.highest_space == SpaceId::Data
+            self.spaces[SpaceId::Data]
+                .pending
+                .get_or_create()
+                .ack_frequency = self.ack_frequency.should_send_ack_frequency(
+                self.path.rtt.get(),
+                config,
+                &self.peer_params,
+            ) && self.highest_space == SpaceId::Data
                 && self.peer_supports_ack_frequency();
         }
 
@@ -1168,7 +1170,11 @@ impl Connection {
             NewIdentifiers(ids, now) => {
                 self.local_cid_state.new_cids(&ids, now);
                 ids.into_iter().rev().for_each(|frame| {
-                    self.spaces[SpaceId::Data].pending.new_cids.push(frame);
+                    self.spaces[SpaceId::Data]
+                        .pending
+                        .get_or_create()
+                        .new_cids
+                        .push(frame);
                 });
                 // Update Timer::PushNewCid
                 if self.timers.get(Timer::PushNewCid).is_none_or(|x| x <= now) {
@@ -1437,7 +1443,7 @@ impl Connection {
         self.streams.set_max_concurrent(dir, count);
         // If the limit was reduced, then a flow control update previously deemed insignificant may
         // now be significant.
-        let pending = &mut self.spaces[SpaceId::Data].pending;
+        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
         self.streams.queue_max_stream_id(pending);
     }
 
@@ -1458,7 +1464,7 @@ impl Connection {
     /// See [`TransportConfig::receive_window()`]
     pub fn set_receive_window(&mut self, receive_window: VarInt) {
         if self.streams.set_receive_window(receive_window) {
-            self.spaces[SpaceId::Data].pending.max_data = true;
+            self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
         }
     }
 
@@ -2175,10 +2181,14 @@ impl Connection {
             }
             self.spaces[space].crypto_offset += outgoing.len() as u64;
             trace!("wrote {} {:?} CRYPTO bytes", outgoing.len(), space);
-            self.spaces[space].pending.crypto.push_back(frame::Crypto {
-                offset,
-                data: outgoing,
-            });
+            self.spaces[space]
+                .pending
+                .get_or_create()
+                .crypto
+                .push_back(frame::Crypto {
+                    offset,
+                    data: outgoing,
+                });
         }
     }
 
@@ -2220,7 +2230,7 @@ impl Connection {
         space.crypto = None;
         // No packet in this space can be sent or authenticated again. Keep its
         // scalar packet-number/ACK history, but release handshake-only storage.
-        space.pending = Retransmits::default();
+        space.pending = ThinRetransmits::default();
         space.crypto_stream.discard_buffer();
         space.time_of_last_ack_eliciting_packet = None;
         space.loss_time = None;
@@ -2522,6 +2532,7 @@ impl Connection {
                 };
                 self.spaces[SpaceId::Initial]
                     .pending
+                    .get_or_create()
                     .crypto
                     .push_back(frame::Crypto {
                         offset: 0,
@@ -2591,7 +2602,7 @@ impl Connection {
                             self.streams.zero_rtt_rejected();
 
                             // Discard already-queued frames
-                            self.spaces[SpaceId::Data].pending = Retransmits::default();
+                            self.spaces[SpaceId::Data].pending = ThinRetransmits::default();
 
                             // Discard 0-RTT packets
                             let sent_packets =
@@ -2612,7 +2623,10 @@ impl Connection {
                     self.issue_first_cids(now);
                 } else {
                     // Server-only
-                    self.spaces[SpaceId::Data].pending.handshake_done = true;
+                    self.spaces[SpaceId::Data]
+                        .pending
+                        .get_or_create()
+                        .handshake_done = true;
                     self.discard_space(now, SpaceId::Handshake);
                 }
 
@@ -2812,7 +2826,7 @@ impl Connection {
                 }
                 Frame::Stream(frame) => {
                     if self.streams.received(frame, payload_len)?.should_transmit() {
-                        self.spaces[SpaceId::Data].pending.max_data = true;
+                        self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
                     }
                 }
                 Frame::Ack(ack) => {
@@ -2858,7 +2872,7 @@ impl Connection {
                 }
                 Frame::ResetStream(frame) => {
                     if self.streams.received_reset(frame)?.should_transmit() {
-                        self.spaces[SpaceId::Data].pending.max_data = true;
+                        self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
                     }
                 }
                 Frame::DataBlocked { offset } => {
@@ -2934,7 +2948,10 @@ impl Connection {
                     match self.rem_cids.insert(frame) {
                         Ok(None) => {}
                         Ok(Some((retired, reset_token))) => {
-                            self.spaces[SpaceId::Data].pending.retire_cids(retired)?;
+                            self.spaces[SpaceId::Data]
+                                .pending
+                                .get_or_create()
+                                .retire_cids(retired)?;
                             self.set_reset_token(reset_token);
                         }
                         Err(InsertError::ExceedsLimit) => {
@@ -2947,6 +2964,7 @@ impl Connection {
                             // was retired all at once via retire_prior_to.
                             self.spaces[SpaceId::Data]
                                 .pending
+                                .get_or_create()
                                 .retire_cids(frame.sequence..frame.sequence.saturating_add(1))?;
                             continue;
                         }
@@ -3035,7 +3053,7 @@ impl Connection {
         // on stopped streams. Incoming finishes/resets on open streams are not handled here as they
         // are only freed, and hence only issue credit, once the application has been notified
         // during a read on the stream.
-        let pending = &mut self.spaces[SpaceId::Data].pending;
+        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
         self.streams.queue_max_stream_id(pending);
 
         if let Some(reason) = close {
@@ -3122,6 +3140,7 @@ impl Connection {
         // Retire the current remote CID and any CIDs we had to skip.
         self.spaces[SpaceId::Data]
             .pending
+            .get_or_create()
             .retire_cids
             .extend(retired);
         self.set_reset_token(reset_token);
@@ -3170,7 +3189,7 @@ impl Connection {
         let pre_payload_len = buf.len();
 
         // HANDSHAKE_DONE
-        if !is_0rtt && mem::replace(&mut space.pending.handshake_done, false) {
+        if !is_0rtt && mem::replace(&mut space.pending.get_or_create().handshake_done, false) {
             buf.write(frame::FrameType::HANDSHAKE_DONE);
             sent.retransmits.get_or_create().handshake_done = true;
             // This is just a u8 counter and the frame is typically just sent once
@@ -3208,7 +3227,7 @@ impl Connection {
         }
 
         // ACK_FREQUENCY
-        if mem::replace(&mut space.pending.ack_frequency, false) {
+        if mem::replace(&mut space.pending.get_or_create().ack_frequency, false) {
             let sequence_number = self.ack_frequency.next_sequence_number();
 
             // Safe to unwrap because this is always provided when ACK frequency is enabled
@@ -3266,7 +3285,7 @@ impl Connection {
 
         // CRYPTO
         while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
-            let mut frame = match space.pending.crypto.pop_front() {
+            let mut frame = match space.pending.get_or_create().crypto.pop_front() {
                 Some(x) => x,
                 None => break,
             };
@@ -3302,14 +3321,14 @@ impl Connection {
             sent.retransmits.get_or_create().crypto.push_back(truncated);
             if !frame.data.is_empty() {
                 frame.offset += len as u64;
-                space.pending.crypto.push_front(frame);
+                space.pending.get_or_create().crypto.push_front(frame);
             }
         }
 
         if space_id == SpaceId::Data {
             self.streams.write_control_frames(
                 buf,
-                &mut space.pending,
+                space.pending.get_or_create(),
                 &mut sent.retransmits,
                 &mut self.stats.frame_tx,
                 max_size,
@@ -3318,7 +3337,7 @@ impl Connection {
 
         // NEW_CONNECTION_ID
         while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
-            let issued = match space.pending.new_cids.pop() {
+            let issued = match space.pending.get_or_create().new_cids.pop() {
                 Some(x) => x,
                 None => break,
             };
@@ -3340,7 +3359,7 @@ impl Connection {
 
         // RETIRE_CONNECTION_ID
         while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
-            let seq = match space.pending.retire_cids.pop() {
+            let seq = match space.pending.get_or_create().retire_cids.pop() {
                 Some(x) => x,
                 None => break,
             };
@@ -3369,7 +3388,7 @@ impl Connection {
         }
 
         // NEW_TOKEN
-        while let Some(remote_addr) = space.pending.new_tokens.pop() {
+        while let Some(remote_addr) = space.pending.get_or_create().new_tokens.pop() {
             debug_assert_eq!(space_id, SpaceId::Data);
             let ConnectionSide::Server { server_config } = &self.side else {
                 panic!("NEW_TOKEN frames should not be enqueued by clients");
@@ -3395,7 +3414,7 @@ impl Connection {
             };
 
             if buf.len() + new_token.size() >= max_size {
-                space.pending.new_tokens.push(remote_addr);
+                space.pending.get_or_create().new_tokens.push(remote_addr);
                 break;
             }
 
@@ -3796,7 +3815,10 @@ impl Connection {
         let ConnectionSide::Server { server_config } = &self.side else {
             return;
         };
-        let new_tokens = &mut self.spaces[SpaceId::Data as usize].pending.new_tokens;
+        let new_tokens = &mut self.spaces[SpaceId::Data as usize]
+            .pending
+            .get_or_create()
+            .new_tokens;
         new_tokens.clear();
         for _ in 0..server_config.validation_token.sent {
             new_tokens.push(self.path.remote);
