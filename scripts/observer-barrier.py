@@ -21,6 +21,23 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 wire = fixture.wire
 
+def notice_id(body):
+    assert body and body[0] == 0x82, body.hex()
+    sender, offset = wire.uint(body, 1)
+    value, end = wire.uint(body, offset)
+    assert sender == 2 ** 64 - 1 and end == len(body), body.hex()
+    return value
+
+
+def consume_notice(body, pending):
+    """Cross-room notices are unordered, but none may be lost or duplicated."""
+    departed = notice_id(body)
+    assert departed in pending, {'unexpected_or_duplicate_departure': departed,
+                                 'pending_departures': sorted(pending)}
+    pending.remove(departed)
+    return departed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, required=True)
@@ -102,11 +119,9 @@ def main():
         notice(body, source)
 
     def notice(body, source):
-        assert body[0] == 0x82
-        sender, offset = wire.uint(body, 1)
-        value, end = wire.uint(body, offset)
-        assert sender == 2 ** 64 - 1 and value == source and (end == len(body)), {
-            'sender': sender, 'expected_departure': source,
+        value = notice_id(body)
+        assert value == source, {
+            'expected_departure': source,
             'received_departure': value, 'encoded': body.hex(),
         }
     with args.output.open('x') as output, tempfile.TemporaryFile() as log:
@@ -175,15 +190,17 @@ def main():
             began = time.monotonic_ns()
             result['barrier_start_ns'] = began
             observer.socket.sendall(wire.frame(0x82, b'\x82\x00\x82\x01\x00'))
-            notices = 0
+            expected_departures = {source.id for source in sources}
+            pending = expected_departures.copy()
+            result['departure_ids'] = []
             for _ in range(args.departures + 1):
                 opcode, body = observer.receive()
                 assert opcode == 2, (opcode, body.hex())
                 if body == b'\x82\x00\x82\x01\x00':
+                    assert not pending, {'missing_before_unsubscribe_ack': sorted(pending)}
                     result['sequence'].append('unsubscribe_ack')
                     break
-                notice(body, sources[notices].id)
-                notices += 1
+                result['departure_ids'].append(str(consume_notice(body, pending)))
                 result['sequence'].append('departure')
             else:
                 raise AssertionError('missing unsubscribe acknowledgment')
@@ -202,23 +219,25 @@ def main():
             result['probe_max_ms'] = max(((x['received_ns'] - x['sent_ns']) / 1000000.0 for x in probe_samples))
             result['probe_overlap_max_ms'] = max(((x['received_ns'] - x['sent_ns']) / 1000000.0 for x in overlap), default=None)
             for peer in audience:
-                for source in sources:
-                    departure(peer, source.id)
+                pending = expected_departures.copy()
+                for _ in sources:
+                    opcode, body = peer.receive()
+                    assert opcode == 2, (opcode, body.hex())
+                    consume_notice(body, pending)
+                assert not pending
                 if peer is audience[0]:
-                    # Later jobs cannot pass earlier jobs' recipient traversal.
-                    # This reader's final notice therefore follows all earlier
-                    # jobs' submissions, without timing a serial audience drain.
+                    # This reader has received the complete cross-room set;
+                    # its order need not match another reader's shard order.
                     result['first_audience_burst_complete_ns'] = time.monotonic_ns()
             observer.socket.settimeout(0.1)
             try:
                 opcode, body = observer.receive()
                 assert opcode == 2, (opcode, body.hex())
-                notices += 1
                 result['sequence'].append('late_departure')
+                raise AssertionError(f'frame after unsubscribe acknowledgement: {body.hex()}')
             except TimeoutError:
                 pass
             observer.socket.settimeout(5)
-            assert notices == args.departures, 'original notice missing or duplicated'
             request(observer, b'\x82\x00\x82\x01\x04', b'\x82\x00\x82\x01\x04')
             fresh = join(b'revocation')
             fresh.close()
@@ -232,12 +251,19 @@ def main():
             # pressure diagnostic and may legitimately overload that setting.
             if args.burst_teardown:
                 probe.close()
-            for peer in audience:
-                departure(peer, observer.id)
-            if not args.burst_teardown:
+                for peer in audience:
+                    pending = {observer.id, probe.id}
+                    for _ in range(2):
+                        opcode, body = peer.receive()
+                        assert opcode == 2, (opcode, body.hex())
+                        consume_notice(body, pending)
+                    assert not pending
+            else:
+                for peer in audience:
+                    departure(peer, observer.id)
                 probe.close()
-            for peer in audience:
-                departure(peer, probe.id)
+                for peer in audience:
+                    departure(peer, probe.id)
             for _ in range(100):
                 metrics = wire.runtime.metrics(admin)
                 if (int(metrics['war_sessions']) == retained_users

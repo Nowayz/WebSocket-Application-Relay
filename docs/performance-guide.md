@@ -114,6 +114,9 @@ messages, departures, all process exits and final resource gauges.
   client/server cores for the measured case, or 2,048 peers and two workers in CI.
 - `scripts/observer-barrier.py` checks native unsubscribe ordering, re-subscription,
   an independent echo witness and every audience member's departure/Close matrix.
+  Distinct source rooms may arrive in any order; the checker requires their
+  exact set once each before the unsubscribe acknowledgement and rejects late
+  frames. Same-room FIFO is covered separately by the relay tests.
   Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client
   pinned to separate physical cores. Default teardown serializes follow-up
   departures; `--burst-teardown` separately probes queue-pressure behavior.

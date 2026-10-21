@@ -122,12 +122,13 @@ reply to its own command. Senders are never closed because of their recipients.
 Delivery under pressure is best-effort: later recipients of one broadcast may
 miss a frame that earlier recipients received.
 
-Departure notices use one queue per room, plus one shared queue for `re_globl`
-departures and disconnect-observer notices and one for broadcasts whose source
-left mid-delivery. Notices to at most 128 recipients are delivered immediately
+Departure notices use one queue per ordinary room, sixteen source-room-hashed
+queues for `re_globl` departures and disconnect-observer notices, and one for
+detached global/observer publications. Different rooms' observer notices have
+no shared order. Notices to at most 128 recipients are delivered immediately
 when the room's queue is idle. Larger ones become jobs that workers advance in
-128-recipient turns, rotating across queues, so one large room cannot delay
-another room's notices. Live broadcasts above 1,024 recipients advance in
+128-recipient turns, rotating across queues so a large room need not finish
+before another queue receives service. Live broadcasts above 1,024 recipients advance in
 1,024-recipient turns owned by the source. Each job reserves staging credit for
 its captured view from the global budget; a refused reservation falls back to
 synchronous delivery, in order, and counts in `war_global_pressure_total`, so

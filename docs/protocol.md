@@ -114,6 +114,13 @@ connection stays authenticated after another attempt.
 | `4` set channel variable | `[key_text_or_bytes, value]` | `true` | No, matching upstream |
 | `5` get channel variable | Key text/bytes | Reply opcode `200`: `[found: bool, value]` | No, matching upstream |
 
+Channel listings (command `2` and HTTP inspection) read each room independently.
+During concurrent joins and departures they are not a point-in-time snapshot.
+Ordinary rooms with no members, or already marked retired, are omitted at the
+metadata read; `re_globl` remains visible even when empty. Stable rooms retain
+their exact metadata and the documented response ordering. A concurrent room
+may appear or disappear between pages.
+
 For an authenticated global listener, clearing a message-observer bit (`1` or
 `2`) submits its previously captured observer messages before the listener-flags
 reply. Clearing disconnect bit `4` does the same for captured disconnect-observer

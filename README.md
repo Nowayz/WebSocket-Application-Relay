@@ -81,12 +81,13 @@ can import `Relay` from the generated `relay.js` ES module.
   Fresh readiness and buffered/output work receive separate bounded turns;
   [scheduling measurements](docs/reports/worker-scheduling.md) document the latency/CPU
   tradeoff. Tokio handles management and process signals.
-- [Routing](src/relay.rs): no global registry lock. ID ownership is a 64-way
-  sharded map, each channel has its own lock for membership, variables and its
-  cached recipient view, global observers have a separate lock, and admission
-  counters are atomics. No socket write happens while a registry lock is held.
+- [Routing](src/relay.rs): no global registry lock. Session and channel indexes
+  are concurrent maps; each channel locks its own membership, variables and
+  cached recipient view. Global observers use atomic immutable snapshots, and
+  admission counters are atomics. No socket write happens while a registry lock is held.
   Large broadcasts capture an immutable recipient view and advance in bounded
-  turns; each room has its own departure queue. See
+  turns; ordinary rooms have their own departure queues and observer notices
+  use sixteen shards. See
   [docs/architecture.md](docs/architecture.md).
 - [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
   multicast uses recipient-owner output and bounded vectored batches. Each socket

@@ -46,11 +46,13 @@ their sockets. The supervisor waits one extra second for their reports.
 ## Locking model
 
 There is no global registry lock. [src/relay.rs](../src/relay.rs) splits state
-into independently locked pieces:
+into concurrent indexes, atomic snapshots and independently locked objects:
 
 - Session ownership (ID to session) is a lock-free concurrent map
-  (`papaya`). Lookups, joins and departures are single-key operations that
-  never wait. An ID takeover publishes the new key before retiring the old
+  (`papaya`). Lookups, joins and departures are single-key operations without
+  a registry mutex. Contention and reclamation still have costs; lock-free
+  does not promise bounded completion time for an individual operation.
+  An ID takeover publishes the new key before retiring the old
   one, so a route that still finds the old key during that step reaches the
   session that owned it, and a route begun after the assignment reply uses
   the new key. The map holds weak handles: a lock-free map reclaims removed
@@ -86,7 +88,7 @@ into independently locked pieces:
   each channel's reservation count.
 - The list of departure queues with pending work is a lock-free queue.
   Workers pop an entry, run one bounded turn and push it back while it has
-  work; nobody waits on it.
+  work, without a relay-owned mutex around the list.
 - Each departure queue is a mutex around a FIFO of jobs. Disconnect notices
   and `re_globl` departures use sixteen such queues, chosen by the departing
   session's room.
@@ -116,20 +118,21 @@ session is inserted into its channel, with no registry lock held, so nothing
 can address the session before the welcome and the welcome is first in the
 session's FIFO. Revocation barriers follow the same rule: when a global
 observer clears a listener bit, its still pending notices are collected and its
-watermark is advanced under the listener lock, and the notices are submitted to
-the observer's socket only after that lock is released, ahead of the
+watermarks are advanced under each affected queue or publication-job lock.
+The notices are submitted to the observer's socket after those locks are released, ahead of the
 acknowledgement.
 
 ### Shared locks that remain, and what bounds them
 
-Some state is inherently process-wide. All of it is now lock-free; the
-per-object and per-shard locks that remain are held for a bounded, small
-amount of work and never across socket I/O:
+Process-wide routing indexes and observer snapshots have no registry mutex.
+Queue and publication work is chunked, but cold view construction and snapshot
+updates still scale with population. Registry guards never span socket I/O:
 
-- The listener snapshot is lock-free to read and to replace. Routing never
-  waits on observer
-  changes. The barrier guarantee (a revocation flushes every job that captured
-  the observer before acknowledging, and nothing arrives afterwards) no longer
+- The listener snapshot is loaded and replaced atomically. Routing does not
+  acquire an observer-list mutex. Flag changes clone the observer lists and
+  may rebuild them again after a lost compare-and-swap race. The barrier
+  guarantee (registered pending work is flushed before acknowledging and no
+  revoked work arrives afterwards) no longer
   comes from a lock. Each snapshot carries a generation. Every observer job
   records the generation it captured. A revocation publishes the next snapshot
   first, then scans the queued jobs for that observer one observer shard,
@@ -145,31 +148,35 @@ amount of work and never across socket I/O:
   either precedes the acknowledgement in that observer's FIFO or is dropped.
 - Session ownership is a lock-free map. A private message's target lookup
   is a lock-free read; a join, a departure or a takeover is a single-key
-  write that never blocks a reader.
+  write without a session-registry mutex.
 - The channel index is a lock-free map (`papaya`) with an atomic channel
   count. Finding a room is a lock-free read; creating or retiring one is a
   single-key write. Walks of the index (the global recipient view, the
-  admin listing and the channel-list command) never block a writer and are
-  never blocked by one; a channel present throughout a walk is seen once,
-  one created or retired meanwhile may or may not appear. The index is
-  pre-sized to the channel limit (capped at 65,536 slots), so it does not
-  resize in ordinary operation; a retired channel's slot is reused rather
-  than released, which bounds the index at the channel limit. That matters
-  because a resize is the one thing that can delay a lock-free map walk:
+  admin listing and the channel-list command) use no index mutex; a channel
+  present throughout a walk is seen once, and one created or retired meanwhile
+  may or may not appear. Metadata is read under one channel lock at a time.
+  Listings omit ordinary rooms with no members or a retirement mark at that
+  read, including handles captured before retirement; the permanent `re_globl`
+  room is included when empty. Each row is coherent, but the entire listing
+  is not a point-in-time snapshot. The index is pre-sized to the channel
+  limit, capped at 65,536 requested entries, to reduce resize work. The
+  admission count bounds live channels, not the table's allocated capacity.
   `papaya` finishes an in-progress resize before iterating. The session
   map and the publication index are pre-sized the same way (to the
   connection limit capped at 65,536, and to 4,096 publications), and
-  neither the session map nor anything else is walked on the routing path.
-  Beyond those sizes a map grows incrementally, at most once per doubling,
-  and the work is one copy of the table.
+  the session map is not walked on the private-routing path. A cold global
+  broadcast view does walk the channel index and each room's members.
+  Beyond the initial capacities maps can grow; lock-free access does not
+  remove resize or memory-reclamation costs.
 - The global recipient-view cache and the disconnect-snapshot cache are
   atomic pointer swaps (`arc_swap`). Reads and publication are lock-free; the
-  views themselves are built outside any lock, and a lost publication race
+  global views are built under one room read lock at a time, while disconnect
+  views are built from an immutable observer snapshot. A lost publication race
   stores an identical view or defers to the one already published.
 - The active list of departure queues is a lock-free queue
   (`crossbeam_queue::SegQueue`). Workers pop an entry and push it back while
   it has work; departures append one entry when a queue becomes non-empty.
-  Nobody waits on it.
+  There is no relay-owned mutex around that list.
 - Observer notices (disconnect notices and `re_globl` departures) are spread
   over sixteen departure queues by the departing session's room. A
   departure, a worker turn or a revocation barrier locks one of them at a
@@ -216,10 +223,12 @@ On the development machine roughly 5,000 rooms were created and retired in
 2.5 s under 157 global broadcasts and about 1,500 listing pages, and the
 worst echo was under 5 ms.
 
-What the remaining per-object mutexes protect, and why they cannot stall
-unrelated work: a channel's lock is held for one map insert or removal, or
-for cloning one handle to the cached view, with no I/O inside, and only that
-room's traffic ever takes it; a departure queue's lock is held for one
+The remaining locks isolate objects rather than imposing a process-wide
+critical section. A channel's lock protects membership, variables and cached
+views. A cache hit clones one handle, but a cold view scans the members, and
+removing a member from a uniquely owned cached view searches that view.
+Inspection and global-view construction also read channel state. Those costs
+scale with the room, with no socket I/O inside. A departure queue's lock is held for one
 bounded turn of at most 128 recipient submissions, which are queue pushes,
 never socket writes; a publication job's lock is held for one bounded turn or
 one barrier inspection; an observer shard's lock is held for one push, one
@@ -230,14 +239,13 @@ its own: one non-blocking write of at most 256 KiB to that socket, which a
 sender performs on the recipient's behalf when the queue is empty. Only
 other senders to that same socket can wait on it.
 
-These per-object locks are the fine-grained locking that replaced the
-global ones; they are not a remaining problem to remove. A room's
+These per-object locks preserve necessary invariants. A room's
 membership must be a consistent set when a broadcast view is built, a
 queue must hand out jobs in order, a job's cursor must advance under one
 owner and a socket's FIFO must be written by one thread at a time. Each
-lock is contended only by work on that one object, held for a bounded
-amount of work, and never nested with another of its kind, so no object
-can stall work on a different object.
+lock is associated with one object and never nested with another of its kind.
+This removes global lock contention; it does not eliminate scheduling delays
+for other sockets sharing a worker or CPU, or make every operation constant-time.
 
 ## The data path of one message
 
@@ -246,7 +254,7 @@ can stall work on a different object.
 2. `Relay::receive` parses the CBOR envelope `[target, value]`. The value is
    validated but never materialized as an object graph.
 3. Target `0` is a relay command. It is handled inline and gets one reply.
-4. Another target is looked up in the ownership shard. An unknown target drops
+4. Another target is looked up in the concurrent ownership map. An unknown target drops
    the message. The lookup and an ID reassignment are atomic with respect to
    each other.
 5. The relay builds a routed frame. The sender prefix is stored separately and
@@ -278,10 +286,11 @@ A departure notice is the frame `[18446744073709551615, departed_id]` sent to
 the remaining members of the departed session's room, and to disconnect
 observers in `re_globl`.
 
-Each room has its own departure queue. `re_globl` room departures and
-disconnect-observer notices share one queue, because both reach `re_globl`
-members and one order keeps barriers simple. A third queue, the detached
-queue, holds live broadcasts whose source left before the broadcast finished.
+Each ordinary room has its own departure queue. Disconnect-observer notices
+and `re_globl` departures use sixteen queues selected by the source room's
+hash. Notices from one room retain their order; different rooms have no shared
+ordering guarantee. The detached queue holds global broadcasts and observer
+publications whose source left before the broadcast finished.
 
 When a session leaves, the relay removes it from its room under the room lock
 and captures the remaining members. If there are at most 128 of them and the
@@ -291,8 +300,8 @@ captured view, one charged copy of the frame and a cursor.
 
 Workers rotate across queues that have work. One turn advances the front job
 of one queue by 128 recipients and then moves the queue to the back of the
-rotation. A large job in one room therefore cannot delay another room's
-notices. A job that cannot reserve staging credit makes the relay finish that
+rotation. A large job need not finish before another queue gets a turn;
+observer rooms that hash to one shard still share that queue. A job that cannot reserve staging credit makes the relay finish that
 queue's older jobs synchronously and then deliver the notice directly, so a
 direct notice never overtakes an older queued one.
 
@@ -305,8 +314,8 @@ publication goes into the detached queue and is not ordered against the
 source's departure notice. Refusals during a detached job are ignored, since
 there is no source left to report them to.
 
-Observer barriers are watermarks on two axes. Each observer records the queue
-sequence up to which its notices have been flushed and the listener generation
+Observer barriers use sequence watermarks and generations. Each observer records
+one departure watermark per shard, a publication watermark, and the listener generation
 at which it last revoked. When a global observer clears a listener bit, the
 relay submits that observer's pending notices before the acknowledgement and
 advances both watermarks, so deferred jobs skip those notices afterwards,

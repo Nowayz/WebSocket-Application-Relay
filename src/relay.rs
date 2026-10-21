@@ -1274,14 +1274,22 @@ pub(crate) struct ChannelSnapshot {
 }
 
 impl ChannelSnapshot {
-    fn of(channel: &Channel) -> Self {
+    fn of(channel: &Channel) -> Option<Self> {
         let state = channel.state.read();
-        Self {
+        // The index walk and this metadata read are separate. A newly
+        // published room may not have its first member yet, or the last
+        // member may have left after the walk captured its handle. Neither
+        // is a live ordinary room in a listing. The permanent global room
+        // remains visible even when empty.
+        if state.retired || (state.members.is_empty() && channel.name.as_ref() != GLOBAL_CHANNEL) {
+            return None;
+        }
+        Some(Self {
             name: SnapshotName::new(&channel.name),
             members: state.members.len(),
             variables: state.variables.len(),
             variable_bytes: state.variable_bytes,
-        }
+        })
     }
 }
 
@@ -1420,14 +1428,21 @@ impl Relay {
 
     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
         let channels = self.live_channels();
-        channels.iter().map(|c| ChannelSnapshot::of(c)).collect()
+        channels
+            .iter()
+            .filter_map(|c| ChannelSnapshot::of(c))
+            .collect()
     }
 
+    // Keep the inspection-only index walk out of the per-message dispatch.
+    // Inlining this collector enlarged receive_with_totals enough to prevent
+    // its inlining into the native receive batch in the release build.
+    #[inline(never)]
     fn channel_members_snapshot(&self) -> Vec<(SnapshotName, usize)> {
         let channels = self.live_channels();
         channels
             .iter()
-            .map(|c| (SnapshotName::new(&c.name), c.state.read().members.len()))
+            .filter_map(|c| ChannelSnapshot::of(c).map(|row| (row.name, row.members)))
             .collect()
     }
 

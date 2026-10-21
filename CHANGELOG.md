@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+- HTTP and CBOR channel listings omit empty or retired ordinary rooms captured
+  during concurrent admission or departure; the permanent `re_globl` room
+  remains visible when empty. The metadata collector stays out of line so
+  the pinned release compiler preserves native routing specialization.
+- The observer-barrier acceptance fixture checks each cross-room departure
+  exactly once before acknowledgement without imposing a global order, and
+  rejects duplicate, missing or late notices. Same-room FIFO remains covered
+  by the relay tests. See the [acceptance and fanout measurements](docs/reports/acceptance-fanout-2026-10-21.md).
 - The routing registry no longer has a global lock. Session ownership and
-  the channel index are lock-free concurrent maps, pre-sized so they do not
-  resize in ordinary operation, each channel has its own
+  the channel index are lock-free concurrent maps, pre-sized to reduce resize
+  work, each channel has its own
   lock, global observers are an atomically swapped snapshot and admission
   counters are atomics, including an exact channel count that enforces
   `WAR_MAX_CHANNELS` under concurrent creation. No socket write happens
@@ -35,12 +43,12 @@
   `re_globl` departures and disconnect-observer notices are spread over
   sixteen queues by the departing session's room; a revocation barrier
   scans them one at a time, at most 128 jobs per hold, with one watermark
-  per queue, so nothing holds two of them and a long queue cannot stall
-  departures on its shard. The synchronous fallback a departure takes when
+  per queue, so nothing holds two of them and a long scan releases the shard
+  between chunks. The synchronous fallback a departure takes when
   staging credit is refused drains the queue in holds of at most eight
   turns. Workers rotate across queues in bounded turns (128
-  recipients for departures, 1,024 for live broadcasts), so a large room's
-  notices cannot delay another room's. Notices for different rooms, including
+  recipients for departures, 1,024 for live broadcasts), allowing other queues
+  to receive service before a large room finishes. Notices for different rooms, including
   disconnect notices for sessions of different rooms, are no longer ordered
   relative to each other.
 - A session that closes with an unfinished broadcast (more than 1,024
