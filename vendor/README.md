@@ -1,5 +1,35 @@
 # Protocol storage and scheduling patches
 
+## QUIC connection event storage
+
+Published `quinn` **0.11.12** uses one endpoint-to-connection event channel per
+connection. The local patch keeps the first event inline and grows an overflow
+queue only when events accumulate, avoiding an initial 32-event block for each
+idle connection. There is one endpoint-owned sender and one connection-owned
+receiver. The endpoint continues to serialize producers. FIFO, close/rebind
+events, pending-reader wakeups and receiver retirement remain explicit; no
+channel-depth cap or event-discard policy is introduced.
+
+After a large burst drains, oversized overflow storage is released. Small buffers
+are reused up to the original mpsc block-retention size (32 slots on 64-bit
+targets, 16 otherwise); this threshold controls reuse, not queue depth. Receiver
+and sender retirement also recover a poisoned queue lock during unwinding so
+cleanup releases retained events without causing a second panic.
+
+Receiving consumes Tokio's cooperative budget as the original mpsc receiver did.
+The public `poll_proceed` API was introduced in Tokio 1.47, so the patched manifest
+declares that minimum and enables `rt` for the API. The relay already uses Tokio
+1.53.3 with `rt`. Outside a Tokio budget context the API is unconstrained, allowing
+the channel to retain its executor-independent polling contract.
+
+The modified package files are `Cargo.toml`, `Cargo.toml.orig`, `src/lib.rs`,
+`src/endpoint.rs` and `src/connection.rs`; `src/event_queue.rs` is added. The
+published archive, licenses and remaining source files are preserved. The complete
+diff is `quinn-event-channel.patch`, with original checksum and Git revision in
+`provenance.json`. Tests exercise FIFO/bursts, concurrent wakeups, cancelled polls,
+sender/receiver retirement, and cooperative scheduling alongside the upstream
+runtime tests and real relay integration workloads.
+
 ## QUIC stream-credit storage
 
 The `quinn-proto` **0.11.19** sources retain upstream stream credits and stream

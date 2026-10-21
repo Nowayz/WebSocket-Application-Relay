@@ -474,3 +474,103 @@ plaintext server RSS, and the room/mixed throughput and mixed private-lane gaps
 remain. Continue with event/task storage and reliable scheduling; the previously
 listed observer, full-load, buffer-accounting, lifecycle and packaging work also
 remains outstanding.
+
+## Lazy per-connection event storage
+
+The next profile target was the runtime's per-connection event channel. Published
+`quinn` 0.11.12 uses a Tokio unbounded mpsc channel whose first block holds 32 large
+events on this 64-bit machine. The local channel keeps its first event inline and
+allocates overflow only when needed. There is one endpoint-owned sender and one
+connection-owned receiver; endpoint serialization, FIFO, close/rebind events,
+pending-reader wakeups and receiver retirement retain their contracts. Receiving
+still consumes Tokio's cooperative budget. The public API used for that requires
+Tokio 1.47 and `rt`, now declared in the patched manifest; the product already
+uses Tokio 1.53.3 with `rt`.
+
+An initial burst check found that a drained 10,000-event burst retained 16,384
+overflow slots. The final implementation releases oversized empty buffers while
+retaining small buffers for reuse. The reuse threshold matches the original mpsc
+block size (32 on 64-bit, 16 otherwise); it is not a queue-depth limit. The negative
+test also exposed a second panic if cleanup encountered a poisoned queue lock.
+Cold retirement now releases events safely during unwinding, and both behaviors
+have regression checks. Reliable events are not discarded to raise throughput.
+
+The complete package patch is `vendor/quinn-event-channel.patch`. Six original or
+added package files are declared in `vendor/provenance.json`; the verifier checks
+all 152 vendored files against four published archives and three patches. Original
+licenses and other package files are preserved.
+
+The final source passed 28 default runtime/channel tests plus all three explicitly
+run receive-window stress tests. Their standalone copy matches all six changed
+files byte for byte and explicitly pins the product's patched `quinn-proto`
+0.11.19 and Tokio 1.53.3. Early prototype tests used the archive's older lockfile
+and are kept separately, not cited as the final pinned-version evidence. The
+application's 264 Rust tests passed, one was ignored, and all-target Clippy with
+warnings denied passed. A legacy WebSocket fixture failure was traced to valid
+global traffic preceding an authentication reply: commit `f75bcd5` waits for the
+actual reply and validates interleaved data, leaving product ordering unchanged.
+Three targeted repetitions and the full suite pass after that correction.
+
+Final timing uses three alternating fresh-process runs per case with the same
+frozen verifier, four pinned server workers on CPUs 0–3, eight client workers on
+CPUs 8–15, 1 KiB values, 32 private pairs, 1,024 room readers and fanout window four.
+All 18 runs pass content, sender, FIFO, exact counters and cleanup checks.
+
+| Reliable workload | Prior candidate deliveries/s | Event-channel candidate deliveries/s |
+| --- | ---: | ---: |
+| Private only | 1,402,391 | 1,400,630 |
+| Room fanout only | 1,068,535 | 1,109,825 |
+| Mixed, combined | 1,110,660 | 1,153,385 |
+| Mixed, private component | 295,117 | 314,225 |
+| Mixed, fanout component | 814,502 | 839,160 |
+
+Private throughput is effectively unchanged in this screen. Room and mixed
+throughput improve about 3.9%. Room-fanout RSS falls from 68.00 to 55.24 MiB;
+mixed RSS falls from 72.50 to 59.27 MiB. CPU, latency distributions, individual
+samples and ranges are retained in the report; these short local workloads do
+not establish production capacity or a latency SLA.
+
+| 100k metric | Prior candidate | Event-channel candidate |
+| --- | ---: | ---: |
+| Verified timed deliveries | 400,000 | 400,000 |
+| Timed elapsed | 4.0125 s | 4.0125 s |
+| Achieved delivery rate | 99,687.3/s | 99,688.3/s |
+| RTT p99 upper bound | 1.049 ms | 1.049 ms |
+| Maximum observed RTT | 3.451 ms | 2.342 ms |
+| Server CPU over measured interval | 2.131 cores | 2.054 cores |
+| Server RSS at measured gate | 3,876.73 MiB | 3,293.20 MiB |
+| Population setup | 11.278 s | 10.999 s |
+| Population retirement | 2.343 s | 2.237 s |
+
+The final population run saves 583.53 MiB, about 15.1%. Both complete all-user
+pre/post routing proofs and exact departure/close checks. Timed UDP receive drops
+are zero on client and server; earlier proof bursts still incur drops. All seven
+checked final connection/storage gauges reach zero. RSS excludes kernel socket
+memory and is measured at gates, not as continuous peak or requested live heap.
+
+The replacement-allocator 8,194-session diagnostic reduces requested live bytes
+from 325,430,253 to 275,587,957, about 15.3%. After logical gauges reach zero,
+requested live bytes continue falling to 9,731,291 at one second and remain there
+at five seconds, while instrumented process RSS remains much higher. That is
+evidence to distinguish asynchronous cleanup and allocator retention from active
+connection storage. These allocator-replaced timings/RSS are excluded from
+ordinary medians and are not generalized to production allocator reclamation.
+
+All nine final clean/loss/reordering regression checks pass. Under 20 ms one-way
+delay and 2% loss, datagrams receive 347/360 states with p99 newest-state age 73 ms;
+reliable WebTransport receives all states with p99 age 661 ms, and the TLS fixture
+receives all states with p99 age 1,181 ms. Reordering still leaves the newest-state
+check intact. These are single candidate samples per profile; full bulk timing,
+losses, reorder counts, freshness and generation-lag metrics are reported without
+claiming a statistical protocol ranking. Chromium 155 passes all nine delivered
+bundle checks, including typed values, datagrams, a 5 MiB value, variables,
+departure and genuine graceful close, with seven final gauges zero.
+
+The retained executable is
+`artifacts/webtransport/binaries/quinn-event-reclaim-relay`.
+`docs/reports/webtransport-event-channel-2026-10-21.json` contains the final
+measurements, earlier trials, provenance hashes and validation scopes. The
+3,293.20 MiB RSS remains roughly 29 times the last measured plaintext control;
+room/mixed throughput and mixed private-lane parity are still unmet. Continue
+with active task/connection storage and reliable scheduling, plus the previously
+listed acceptance work. This checkpoint does not accept or release the pivot.
