@@ -8,7 +8,7 @@ use crate::{
     server::RateLimiter,
 };
 use anyhow::{Context, Result, bail};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use parking_lot::Mutex;
 use std::{
     sync::{Arc, atomic::Ordering::Relaxed},
@@ -132,14 +132,20 @@ async fn read_record_budgeted<S: AsyncRead + Unpin>(
     let _lease = budget
         .map(|budget| budget.try_lease(size.saturating_mul(2)))
         .transpose()?;
-    let mut body = BytesMut::with_capacity(size.min(4096));
+    let mut body = Vec::with_capacity(size.min(4096));
     while body.len() < size {
         let count = (size - body.len()).min(4096);
         let start = body.len();
+        if start + count > body.capacity() {
+            // Keep geometric growth without retaining a power-of-two allocation
+            // larger than the complete record (including its CBOR envelope).
+            let capacity = body.capacity().saturating_mul(2).min(size);
+            body.reserve_exact(capacity.max(start + count) - start);
+        }
         body.resize(start + count, 0);
         stream.read_exact(&mut body[start..]).await?;
     }
-    Ok(body.freeze())
+    Ok(Bytes::from(body))
 }
 
 pub async fn write_record<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -> Result<()> {

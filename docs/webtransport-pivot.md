@@ -817,3 +817,125 @@ still trails the earlier encrypted fixture, and 100k server RSS remains about
 27 times the plaintext control. Continue receive framing/retained capacity,
 active QUIC/HTTP3 state and reliable scheduling work. This checkpoint does not
 accept or release the pivot.
+
+## Bound record growth by its announced size
+
+The reliable reader's geometric `BytesMut` growth can retain the next power of
+two even when that exceeds the complete record size. This is especially visible
+just above a payload-size boundary, after CBOR envelope bytes are included. An
+independent capacity diagnostic reproduces the actual old/new growth loops:
+
+| Announced record bytes | Previous requested capacity | Capped requested capacity |
+| --- | ---: | ---: |
+| 0 | 0 | 0 |
+| 1,038 | 1,038 | 1,038 |
+| 65,550 | 131,072 | 65,550 |
+| 1,048,590 | 2,097,152 | 1,048,590 |
+| 5,242,894 | 8,388,608 | 5,242,894 |
+
+The reader now assembles into a `Vec`, explicitly growing geometrically up to the
+announced size with `reserve_exact`, then transferring immutable ownership into
+`Bytes`. It still admits the full existing two-times-size read lease before
+allocation, retaining headroom for transient reallocations. The initial/staged
+read size remains 4,096 bytes; a large announcement still does not allocate the
+whole body before data arrives. No message limit, byte budget, framing, delivery,
+FIFO, deadline or transport/crypto setting changes. This still allocates and
+copies input; it is not a borrowed-chunk decoder. Requested capacity is separate
+from allocator rounding, live heap and whole-process RSS.
+
+The ordinary release executable is
+`artifacts/webtransport/binaries/capped-record-relay`, SHA256
+`3a8e08cd36d9a064f1a42371cb5dcd3c5f42e967ba20df6fd55a3448dc0818fd`.
+Its build manifest records product/test source hashes and the complete source
+diff from `da80024`. The same frozen client verifies all comparison variants.
+No benchmark process runs concurrently with builds, tests or browser fixtures.
+
+All 12 large-payload runs pass full content, sender, FIFO, counter, close and
+cleanup checks. They alternate fresh control/candidate processes three times per
+size, four seconds, four pinned server workers, eight client workers, with 32
+private pairs at 64 KiB and four pairs at 1 MiB:
+
+| Private payload | Previous deliveries/s | Capped deliveries/s | Previous RSS | Capped RSS |
+| --- | ---: | ---: | ---: | ---: |
+| 64 KiB | 40,619 | 41,379 | 33.59 MiB | 33.48 MiB |
+| 1 MiB | 2,195 | 2,228 | 60.71 MiB | 41.41 MiB |
+
+The 1 MiB gate-sampled RSS reduction is 19.30 MiB (31.8%); samples are
+58.12–69.37 versus 36.60–43.06 MiB. The 64 KiB RSS screen is effectively unchanged,
+so do not attribute the prior checkpoint's entire 64 KiB variation to this one
+capacity effect. Both sizes retain a 33.55 ms p99 upper bound. CPU and throughput
+are effectively unchanged in these short local samples; the retained improvement
+is lower large-record capacity and measured working memory, not a general speedup.
+
+All 18 main 1 KiB runs also pass. Placement, duration and workload remain the same
+as the previous checkpoint: CPUs 0–3 for four server workers, CPUs 8–15 for eight
+client workers, 32 private pairs, 1,024 fanout readers and window four.
+
+| Reliable workload | Previous deliveries/s | Capped deliveries/s | Capped CPU | Capped RSS |
+| --- | ---: | ---: | ---: | ---: |
+| Private only | 1,482,191 | 1,483,036 | 3.497 cores | 13.67 MiB |
+| Room fanout only | 1,312,314 | 1,326,331 | 3.170 cores | 48.28 MiB |
+| Mixed, combined | 1,358,356 | 1,362,212 | 3.354 cores | 53.12 MiB |
+
+These small differences do not establish a meaningful throughput change. Current
+mixed component medians are 356,840 private and 1,002,073 fanout deliveries/s,
+computed independently from the combined median. P99 upper bounds remain
+1.049 ms private-only, 4.194 ms fanout-only and 4.194/8.389 ms mixed private/fanout.
+
+All six fresh 100k comparisons pass: 100,000 independently counted physical QUIC
+connections, 400,000 verified timed deliveries, all-user pre/post routing proofs,
+exact close/departure checks and seven final gauges zero. Timed client/server UDP
+receive drops are zero; untimed proof bursts can still incur drops.
+
+| 100k metric (median except noted) | Previous candidate | Capped candidate |
+| --- | ---: | ---: |
+| Timed elapsed | 4.0133 s | 4.0135 s |
+| Achieved deliveries/s | 99,668.8 | 99,663.5 |
+| RTT p50 / p99 upper bound in each run | 0.524 / 1.049 ms | 0.524 / 1.049 ms |
+| Maximum RTT across three runs | 10.701 ms | 11.604 ms |
+| Server CPU | 2.078 cores | 2.048 cores |
+| Server RSS at measured gate | 3,049.06 MiB | 3,050.28 MiB |
+| Server RSS after retirement | 3,053.20 MiB | 3,054.11 MiB |
+| Population setup | 11.370 s | 11.505 s |
+| Population retirement | 2.189 s | 2.201 s |
+
+Capacity memory and performance are effectively unchanged; this is not a
+population-memory win. RSS excludes kernel socket memory, is sampled at phase
+gates and is not continuous peak or requested live heap. Individual samples,
+client CPU/RSS, latency bounds/maxima and ranges remain in the report.
+
+All nine clean/loss/reordering checks pass. Under 20 ms one-way delay and 2% loss,
+the datagram sample receives 340/360 states with p99 newest-state age 114 ms;
+reliable WebTransport receives 360/360 at 601 ms and the TLS fixture 360/360 at
+1,061 ms. With jitter/reordering added, datagrams receive 356/360 at 120 ms,
+reliable WebTransport 360/360 at 5,941 ms and TLS 360/360 at 501 ms. Reliable 1 MiB
+bulk completion in those reordering samples is 7,997, 6,351 and 569 ms respectively.
+The datagram freshness benefit remains a loss tradeoff and does not establish
+better reliable bulk progress. One sample per mode is regression evidence, not a
+statistical ranking. Matching seeds/parameters do not force identical loss
+trajectories, and missing updates are unreceived observations.
+
+The actual Chromium 155 bundle passes all nine checks, including typed values,
+datagrams, a 5 MiB message, variables, departure and genuine graceful close, with
+seven final gauges zero. Screenshot: `output/playwright/webtransport-capped-record.png`.
+All 265 Rust tests pass with one ignored, including the existing 12 MiB blocked-
+write deadline/cleanup test. All-target Clippy with warnings denied and the
+152-file vendor verifier pass. No dependency source changed. Browser/HTTP/relay
+fixtures and network namespaces were stopped and removed after verification.
+
+Read-only upstream research supplies two next-step leads:
+[driver scheduling overhead](https://github.com/quinn-rs/quinn/issues/914) and
+[a reported packet-reordering window limitation](https://github.com/quinn-rs/quinn/issues/2710).
+The pinned source independently still uses the `u128` dedup window. Neither the
+reported bulk-stall cause nor the proposed scheduling improvement has been
+verified for this branch. Measure a local reproducer/profile before changing
+those algorithms or adding memory/complexity.
+
+`docs/reports/webtransport-capped-record-2026-10-21.json` records all samples,
+ranges, capacity diagnostics, full freshness/bulk/generation-lag data, provenance
+and validation scopes. Overall throughput and memory parity remain unmet against
+the earlier plaintext control; 100k RSS remains approximately 27 times higher.
+Mixed private traffic also remains below the earlier encrypted fixture. Continue
+active QUIC/HTTP3 storage, receive framing and reliable scheduling work, alongside
+the previously listed observer, overload, combined-population, accounting and
+packaging acceptance gates. This checkpoint does not accept or release the pivot.
