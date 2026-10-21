@@ -67,6 +67,14 @@ def metrics(port):
                 (row.split() for row in response.read().decode().splitlines() if row.startswith("war_"))}
 
 
+def udp_counters():
+    rows = Path("/proc/net/snmp").read_text().splitlines()
+    for headers, values in zip(rows, rows[1:]):
+        if headers.startswith("Udp:") and values.startswith("Udp:"):
+            return dict(zip(headers.split()[1:], map(int, values.split()[1:])))
+    return {}
+
+
 def machine():
     return {"socket_memory_global": Path("/proc/net/sockstat").read_text(),
             "memory_kib": {key.rstrip(":"): int(value.split()[0]) for key, value in
@@ -112,6 +120,21 @@ def established(port, owned_inodes):
             "raw_matching_rows": rows, "unique_matching_inodes": len(matching),
             "foreign_matching_inodes": len(matching - owned_inodes),
             "duplicate_rows": rows - len(matching)}
+
+
+def udp_census(owned_inodes):
+    total = {"owned_sockets": 0, "receive_queue_bytes": 0, "send_queue_bytes": 0, "receive_drops": 0}
+    for name in ("udp", "udp6"):
+        for row in Path("/proc/net/" + name).read_text().splitlines()[1:]:
+            columns = row.split()
+            if columns[9] not in owned_inodes:
+                continue
+            sent, received = (int(value, 16) for value in columns[4].split(":"))
+            total["owned_sockets"] += 1
+            total["receive_queue_bytes"] += received
+            total["send_queue_bytes"] += sent
+            total["receive_drops"] += int(columns[-1])
+    return total
 
 
 def check(observed, event, args, pressure=None):
@@ -236,6 +259,8 @@ def run(args):
             result["baseline"] = {"server": process(server.pid), "machine": machine(), "metrics": observed}
             result["server_preload"] = runtime.preload_metadata(args.server_preload, server.pid)
             client_command += benchmark_transport.certificate(args, logs)
+            if getattr(args, "transport", "websocket") == "webtransport":
+                client_command += ["--udp-receive-buffer-bytes", str(args.udp_receive_buffer_bytes)]
             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
             events = []
@@ -310,11 +335,14 @@ def run(args):
                             raise
                         time.sleep(.02)
                 server_inodes = set()
+                client_inodes = set()
                 event.update(metrics=observed, server_pid=server.pid, client_pid=client.pid,
-                             server=process(server.pid, server_inodes), client=process(client.pid),
-                             machine=machine(), seconds=time.monotonic() - started)
+                             server=process(server.pid, server_inodes), client=process(client.pid, client_inodes),
+                             machine=machine(), udp_counters=udp_counters(), seconds=time.monotonic() - started)
                 census = established(port, server_inodes)
-                del server_inodes  # Release gate-only storage before traffic resumes.
+                event["udp_server_census"] = udp_census(server_inodes)
+                event["udp_client_census"] = udp_census(client_inodes)
+                del server_inodes, client_inodes  # Release gate-only storage before traffic resumes.
                 event.update(tcp_census=census, established_server_sockets=census["owned_established"])
                 expected_population = 0 if event["event"] == "done" else args.users
                 result["events"].append(event)
@@ -448,6 +476,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--udp-receive-buffer-bytes", type=int, default=4 * 1024 * 1024)
     parser.add_argument("--transport", choices=["webtransport", "websocket"], default="webtransport")
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")

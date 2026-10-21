@@ -31,6 +31,12 @@ pub struct Config {
     /// Requested pending TCP queue per native listener; the OS may cap it.
     #[arg(long, env = "WAR_LISTEN_BACKLOG", default_value_t = 1024, value_parser = clap::value_parser!(u16).range(1..))]
     pub listen_backlog: u16,
+    /// Requested shared QUIC UDP receive buffer; zero keeps the OS default.
+    #[arg(long, env = "WAR_UDP_RECEIVE_BUFFER_BYTES", default_value_t = 4 * 1024 * 1024)]
+    pub udp_receive_buffer_bytes: usize,
+    /// Requested shared QUIC UDP send buffer; zero keeps the OS default.
+    #[arg(long, env = "WAR_UDP_SEND_BUFFER_BYTES", default_value_t = 0)]
+    pub udp_send_buffer_bytes: usize,
     /// Requested per-socket kernel send buffer; zero keeps OS autotuning/defaults.
     #[arg(long, env = "WAR_TCP_SEND_BUFFER_BYTES", default_value_t = 0)]
     pub tcp_send_buffer_bytes: usize,

@@ -174,3 +174,69 @@ branches become ready, while the nested frame reader keeps partial frame state i
 that cancelled future. This is a plausible mechanism requiring a controlled check;
 the failure alone does not prove causation. A single-session adapter that retains
 control-read state and avoids the additional datagram relay task is the next candidate.
+
+## Direct HTTP3 stack and shared-socket buffer investigation
+
+The selected candidate uses `web-transport-quinn 0.13.3` for the single HTTP3 session
+and its stream/datagram I/O. It retains `wtransport` for certificate/configuration
+helpers and independent interoperability clients. The relay's room/ID/control logic
+is shared as before. Eight native transport tests and the Chromium 156 browser
+check pass on this candidate, including the 5 MiB file and graceful-close exchange.
+The complete Rust all-target run passes 259 tests (one ignored); Clippy with warnings
+denied and TypeScript pass. Browser completion also leaves the independent QUIC,
+application connection/session, queue, input reservation and variable gauges at zero.
+
+Both an old-client interoperability run and a direct-client run completed 100,000
+sessions with the new server. They exposed a separate queueing problem: one UDP socket
+now aggregates traffic from the entire population, while its OS default receive
+buffer was sized like one ordinary socket. QUIC recovered the dropped packets, but
+the nominal four-second phase stretched to almost eight seconds. Delivery/count
+success alone therefore did not establish offered-load performance.
+
+The controlled comparison uses the **same server/client executables** and changes
+only the shared UDP receive-buffer request at both endpoints. Native clients and the
+server expose a zero (OS default) setting and a 4 MiB request. The latter is a measured
+burst allowance, not a message/population cap. Linux reported 8 MiB including its
+buffer-accounting factor. No sysctl or host-wide networking setting was changed.
+The harness captures owned-socket UDP drops independently of application metrics.
+
+| 100,000-session case | OS-default buffers | Requested 4 MiB buffers |
+| --- | ---: | ---: |
+| Verified delivered messages | 400,000 | 400,000 |
+| Measured phase seconds | 7.657257 | 4.012819 |
+| Achieved deliveries/s | 52,238 | 99,681 |
+| RTT p99 bound | 4,294.967296 ms | 1.048576 ms |
+| Maximum RTT | 7,281.622028 ms | 3.354113 ms |
+| New server receive drops during phase | 468,617 | 0 |
+| New client receive drops during phase | 235,750 | 0 |
+
+The buffered run passed every delivery, per-user, departure, counter and cleanup
+check. Setup was 11.29 seconds and retirement 2.46 seconds (exact receipts retain
+the measured values). Server RSS was 4,855.17 MiB at the measured gate. This is a
+substantial retained-memory cost compared with the former plaintext WebSocket
+implementation, and performance parity has not been established across metrics.
+The initial population-wide proof burst still incurred receive drops before the
+timed phase; the zero-drop statement applies specifically to measurement.
+
+The first maintained throughput screen used identical clients and payload checks,
+three alternating-order runs per transport/case, four workers, disjoint CPU groups,
+1 KiB values, 32 private pairs, 1,024 fanout readers and a four-message fanout window.
+All 18 runs passed their correctness and exact counter checks. Values are medians.
+
+| Reliable workload | Plaintext WebSocket deliveries/s | WebTransport stream deliveries/s |
+| --- | ---: | ---: |
+| Private only | 1,288,462 | 627,196 |
+| Room fanout only | 1,671,963 | 918,117 |
+| Mixed, combined private + fanout | 1,587,788 | 762,742 |
+| Mixed, private component | 781,693 | 92,503 |
+| Mixed, fanout component | 806,284 | 670,722 |
+
+These results contradict a general equal-throughput claim. They also compare
+plaintext TCP with encrypted QUIC, so an encrypted control and controlled-loss/
+freshness tests remain required. Reliable message semantics were retained rather
+than changing this workload to discard messages to produce a higher rate.
+
+`docs/reports/webtransport-buffered-2026-10-21.json` contains each sample, medians,
+CPU/RSS/latency, capacity results, source and frozen-binary hashes. Complete receipts
+and exact commands are under `artifacts/webtransport/`. The source/binary association
+is the explicit frozen `buffered-direct-*` build, not any later optimization.

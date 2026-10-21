@@ -81,6 +81,9 @@ impl ValueKind {
 struct Args {
     #[arg(long)]
     certificate: Option<String>,
+    /// Shared QUIC socket receive buffer; zero selects the OS default.
+    #[arg(long, default_value_t = 4 * 1024 * 1024)]
+    udp_receive_buffer_bytes: usize,
     #[arg(long)]
     url: String,
     #[arg(long)]
@@ -705,7 +708,7 @@ fn main() -> Result<()> {
 }
 
 async fn run(args: Args) -> Result<()> {
-    transport_socket::initialize(args.certificate.as_deref())?;
+    transport_socket::initialize(args.certificate.as_deref(), args.udp_receive_buffer_bytes)?;
     if args.audit_ids {
         ensure!(
             AUDITED_IDS

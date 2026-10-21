@@ -10,7 +10,7 @@ def prepare(args, server_command, environment, port):
     if transport == 'webtransport':
         if '--dev-cert' not in help_text:
             raise ValueError('selected server does not support WebTransport')
-        server_command.append('--dev-cert')
+        server_command += ['--dev-cert', '--udp-receive-buffer-bytes', str(getattr(args, 'udp_receive_buffer_bytes', 4 * 1024 * 1024))]
         environment['RUST_LOG'] = 'war_relay=info'
         return f'https://127.0.0.1:{port}/war'
     if '--legacy-websocket' in help_text:

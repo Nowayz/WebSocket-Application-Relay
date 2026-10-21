@@ -224,6 +224,8 @@ def run(args):
                         raise
                     time.sleep(.02)
             command += benchmark_transport.certificate(args, logs)
+            if getattr(args, "transport", "websocket") == "webtransport":
+                command += ["--udp-receive-buffer-bytes", str(args.udp_receive_buffer_bytes)]
             client = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=client_errors, text=True, env=environment)
             ready = None
@@ -345,6 +347,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--udp-receive-buffer-bytes", type=int, default=4 * 1024 * 1024)
     parser.add_argument("--transport", choices=["webtransport", "websocket"], default="webtransport")
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")

@@ -88,11 +88,13 @@ async fn fixture_with(
 ) {
     let identity = Identity::self_signed(["localhost", "127.0.0.1"]).unwrap();
     let hash = identity.certificate_chain().as_slice()[0].hash();
-    let server = Endpoint::server(
-        wtransport::ServerConfig::builder()
-            .with_bind_address("127.0.0.1:0".parse().unwrap())
-            .with_identity(identity)
-            .build(),
+    let server_config = wtransport::ServerConfig::builder()
+        .with_bind_address("127.0.0.1:0".parse().unwrap())
+        .with_identity(identity)
+        .build();
+    let server = wtransport::quinn::Endpoint::server(
+        server_config.quic_config().clone(),
+        "127.0.0.1:0".parse().unwrap(),
     )
     .unwrap();
     let url = format!(

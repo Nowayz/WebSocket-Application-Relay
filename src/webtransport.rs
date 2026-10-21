@@ -14,14 +14,14 @@ use std::{
     sync::{Arc, atomic::Ordering::Relaxed},
     time::{Duration, Instant},
 };
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::{
     sync::{Notify, mpsc},
     task::JoinSet,
 };
 use tokio_util::sync::CancellationToken;
-use wtransport::{
-    Connection, Endpoint, RecvStream, SendStream, VarInt, endpoint::endpoint_side::Server,
-};
+use web_transport_quinn::{SendStream, Session as Connection};
+use wtransport::quinn::{Endpoint, VarInt};
 
 struct Output {
     connection: Connection,
@@ -37,10 +37,7 @@ impl Output {
             return queue.try_send(packet.into_owned()).is_ok();
         }
         let frame = packet.frame;
-        let Some(maximum) = self.connection.max_datagram_size() else {
-            self.relay.metrics.datagrams_dropped.fetch_add(1, Relaxed);
-            return true;
-        };
+        let maximum = self.connection.max_datagram_size();
         if frame.len() > maximum {
             self.relay.metrics.datagrams_oversized.fetch_add(1, Relaxed);
             self.relay.metrics.datagrams_dropped.fetch_add(1, Relaxed);
@@ -50,7 +47,11 @@ impl Output {
         scratch.clear();
         scratch.extend_from_slice(frame.prefix());
         scratch.extend_from_slice(frame.payload());
-        if self.connection.send_datagram(scratch.as_slice()).is_ok() {
+        if self
+            .connection
+            .send_datagram(Bytes::copy_from_slice(scratch.as_slice()))
+            .is_ok()
+        {
             if let Some(activity) = &self.activity {
                 *activity.lock() = Instant::now();
             }
@@ -77,10 +78,8 @@ impl PeerOutput for Output {
         self.submit(packet, &self.queue.lock())
     }
     fn close(&self, reason: Disconnect) {
-        self.connection.close(
-            VarInt::from_u32(reason.code.into()),
-            reason.reason.as_bytes(),
-        );
+        self.connection
+            .close(u32::from(reason.code), reason.reason.as_bytes());
     }
     fn send_gated(&self, packet: Submission<'_>, gate: &dyn Fn() -> bool) -> bool {
         let queue = self.queue.lock();
@@ -90,11 +89,11 @@ impl PeerOutput for Output {
 
 /// Read one record without allocating its declared size before data arrives.
 /// Keep this future alive across select branches: partial reads are not cancelled.
-pub async fn read_record(stream: &mut RecvStream, maximum: usize) -> Result<Bytes> {
+pub async fn read_record<S: AsyncRead + Unpin>(stream: &mut S, maximum: usize) -> Result<Bytes> {
     read_record_budgeted(stream, maximum, None).await
 }
-async fn read_record_budgeted(
-    stream: &mut RecvStream,
+async fn read_record_budgeted<S: AsyncRead + Unpin>(
+    stream: &mut S,
     maximum: usize,
     budget: Option<&Arc<tungstenite::protocol::ReadBudget>>,
 ) -> Result<Bytes> {
@@ -117,7 +116,7 @@ async fn read_record_budgeted(
     Ok(body.freeze())
 }
 
-pub async fn write_record(stream: &mut SendStream, bytes: &[u8]) -> Result<()> {
+pub async fn write_record<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -> Result<()> {
     let size = u32::try_from(bytes.len()).context("record exceeds u32 framing")?;
     stream.write_all(&size.to_be_bytes()).await?;
     stream.write_all(bytes).await?;
@@ -131,9 +130,37 @@ async fn write_frame(stream: &mut SendStream, frame: &Frame) -> Result<()> {
     Ok(())
 }
 
+/// Bind the shared UDP socket explicitly so bursts from many sessions do not
+/// compete for a small per-socket OS default. The OS may cap requested sizes.
+pub fn bind_endpoint(
+    config: &crate::Config,
+    transport: &wtransport::ServerConfig,
+) -> Result<Endpoint> {
+    let socket = std::net::UdpSocket::bind(config.bind)?;
+    let settings = socket2::SockRef::from(&socket);
+    if config.udp_receive_buffer_bytes != 0 {
+        settings.set_recv_buffer_size(config.udp_receive_buffer_bytes)?;
+    }
+    if config.udp_send_buffer_bytes != 0 {
+        settings.set_send_buffer_size(config.udp_send_buffer_bytes)?;
+    }
+    tracing::info!(
+        receive_buffer_bytes = settings.recv_buffer_size()?,
+        send_buffer_bytes = settings.send_buffer_size()?,
+        "QUIC UDP socket buffers"
+    );
+    socket.set_nonblocking(true)?;
+    Ok(Endpoint::new(
+        transport.quic_endpoint_config().clone(),
+        Some(transport.quic_config().clone()),
+        socket,
+        Arc::new(wtransport::quinn::TokioRuntime),
+    )?)
+}
+
 /// Run a preconfigured TLS/QUIC endpoint with the existing relay core.
 pub async fn serve(
-    endpoint: Endpoint<Server>,
+    endpoint: Endpoint,
     relay: Arc<Relay>,
     shutdown: CancellationToken,
 ) -> Result<()> {
@@ -157,6 +184,7 @@ pub async fn serve(
             } => relay.progress_retirements(FANOUT_QUANTUM),
             Some(result) = sessions.join_next(), if !sessions.is_empty() => { if let Err(error) = result { tracing::warn!(%error, "WebTransport task failed"); } },
             incoming = endpoint.accept() => {
+                let Some(incoming) = incoming else { break; };
                 if relay.is_draining() || relay.metrics.connections.fetch_update(Relaxed, Relaxed, |n| (n < relay.config.max_connections).then_some(n + 1)).is_err() {
                     incoming.refuse();
                     relay.metrics.rejected.fetch_add(1, Relaxed);
@@ -175,14 +203,15 @@ pub async fn serve(
                     let _lease = ConnectionLease(relay.clone());
                     let _permit = permit;
                     let handshake = async {
-                        let request = incoming.await?;
-                        if request.path() != "/war" { request.not_found().await; bail!("unknown WebTransport path"); }
-                        if request.origin().is_some_and(|origin| !relay.config.origin_policy.allowed.is_empty() && !relay.config.origin_policy.allowed.iter().any(|allowed| allowed == origin)) {
+                        let quic = incoming.await?;
+                        let request = web_transport_quinn::Request::accept(quic).await?;
+                        if request.url.path() != "/war" { request.reject(axum::http::StatusCode::NOT_FOUND).await?; bail!("unknown WebTransport path"); }
+                        if !relay.config.origin_policy.allows(&request.headers) {
                             relay.metrics.origin_rejected.fetch_add(1, Relaxed);
-                            request.forbidden().await;
+                            request.reject(axum::http::StatusCode::FORBIDDEN).await?;
                             bail!("origin rejected");
                         }
-                        request.accept().await.context("accept WebTransport")
+                        request.ok().await.context("accept WebTransport")
                     };
                     let connection = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
                         Ok(Ok(connection)) => connection,
@@ -190,7 +219,7 @@ pub async fn serve(
                     };
                     if let Err(error) = session(connection.clone(), relay, retirement).await {
                         tracing::debug!(%error, "WebTransport session ended");
-                        connection.close(VarInt::from_u32(1002), b"Session ended");
+                        connection.close(1002, b"Session ended");
                     }
                 });
             }
@@ -350,7 +379,7 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
         };
         let datagrams = async {
             loop {
-                let bytes = connection.receive_datagram().await?.payload();
+                let bytes = connection.read_datagram().await?;
                 relay.metrics.datagrams_received.fetch_add(1, Relaxed);
                 if bytes.len() > relay.config.max_message_bytes {
                     registration.peer.close(Disconnect::PROTOCOL);
@@ -401,7 +430,7 @@ async fn session(connection: Connection, relay: Arc<Relay>, retirement: Arc<Noti
             connection.closed(),
         )
         .await;
-        connection.close(VarInt::from_u32(1000), b"Graceful close complete");
+        connection.close(1000, b"Graceful close complete");
     }
     Ok(())
 }

@@ -36,6 +36,9 @@ const DEADLINE: Duration = Duration::from_secs(15);
 struct Args {
     #[arg(long)]
     certificate: Option<String>,
+    /// Shared QUIC socket receive buffer; zero selects the OS default.
+    #[arg(long, default_value_t = 4 * 1024 * 1024)]
+    udp_receive_buffer_bytes: usize,
     #[arg(long)]
     url: String,
     #[arg(long, default_value_t = 100_000)]
@@ -779,7 +782,7 @@ async fn prove_rooms(
 }
 
 async fn run(args: Args, destination: SocketAddr) -> Result<()> {
-    transport_socket::initialize(args.certificate.as_deref())?;
+    transport_socket::initialize(args.certificate.as_deref(), args.udp_receive_buffer_bytes)?;
     let args = std::sync::Arc::new(args);
     let mut cumulative = Counts::default();
     for wave in 1..=args.waves {

@@ -9,8 +9,7 @@ use tungstenite::protocol::ReadBudget;
 
 #[derive(Default)]
 pub struct Metrics {
-    pub webtransport_endpoint:
-        std::sync::OnceLock<Arc<wtransport::Endpoint<wtransport::endpoint::endpoint_side::Server>>>,
+    pub webtransport_endpoint: std::sync::OnceLock<Arc<wtransport::quinn::Endpoint>>,
     pub datagrams_received: AtomicU64,
     pub datagrams_submitted: AtomicU64,
     pub datagram_bytes_submitted: AtomicU64,

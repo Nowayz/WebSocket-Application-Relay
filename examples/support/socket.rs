@@ -6,19 +6,28 @@ use futures_util::{SinkExt, StreamExt};
 use std::sync::OnceLock;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
-use wtransport::{
-    Connection, Endpoint, RecvStream, SendStream, VarInt, endpoint::endpoint_side::Client,
-};
-static ENDPOINT: OnceLock<Endpoint<Client>> = OnceLock::new();
-pub fn initialize(pin: Option<&str>) -> Result<()> {
+use web_transport_quinn::{Client, RecvStream, SendStream, Session as Connection};
+static ENDPOINT: OnceLock<Client> = OnceLock::new();
+pub fn initialize(pin: Option<&str>, receive_buffer_bytes: usize) -> Result<()> {
     if let Some(pin) = pin {
         let hash = pin.parse::<wtransport::tls::Sha256Digest>()?;
-        let endpoint = Endpoint::client(
-            wtransport::ClientConfig::builder()
-                .with_bind_default()
-                .with_server_certificate_hashes([hash])
-                .build(),
+        let config = wtransport::ClientConfig::builder()
+            .with_bind_default()
+            .with_server_certificate_hashes([hash])
+            .build();
+        let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
+        // This one socket receives bursts from the complete connected population.
+        if receive_buffer_bytes != 0 {
+            socket2::SockRef::from(&socket).set_recv_buffer_size(receive_buffer_bytes)?;
+        }
+        socket.set_nonblocking(true)?;
+        let endpoint = wtransport::quinn::Endpoint::new(
+            config.quic_endpoint_config().clone(),
+            None,
+            socket,
+            std::sync::Arc::new(wtransport::quinn::TokioRuntime),
         )?;
+        let endpoint = web_transport_quinn::Client::new(endpoint, config.quic_config().clone());
         ensure!(
             ENDPOINT.set(endpoint).is_ok(),
             "transport already initialized"
@@ -85,9 +94,9 @@ impl Socket {
         let connection = ENDPOINT
             .get()
             .context("WebTransport requires --certificate SHA256 pin")?
-            .connect(url)
+            .connect(url::Url::parse(url)?)
             .await?;
-        let (send, receive) = connection.open_bi().await?.await?;
+        let (send, receive) = connection.open_bi().await?;
         Ok(Self::WebTransport(Box::new(Transport {
             connection,
             send,
@@ -134,9 +143,7 @@ impl Socket {
                 ack.is_empty(),
                 "unconsumed application message before close acknowledgement"
             );
-            socket
-                .connection
-                .close(VarInt::from_u32(1000), b"benchmark complete");
+            socket.connection.close(1000, b"benchmark complete");
             socket.connection.closed().await;
             Ok(true)
         } else {
