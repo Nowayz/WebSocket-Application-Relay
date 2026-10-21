@@ -24,6 +24,7 @@ import urllib.request
 
 import benchmark as runtime
 import capacity_pressure
+import socket_resources
 
 ROOT = runtime.ROOT
 TOKEN = "capacity-benchmark"  # Only the disposable local server.
@@ -190,6 +191,11 @@ def _preflight_outputs(args):
 
 def run(args):
     _preflight_outputs(args)
+    kernel_resources = getattr(args, "kernel_socket_resources", False)
+    slab_file = getattr(args, "kernel_slab_sizes", None)
+    if slab_file and not kernel_resources:
+        raise ValueError("kernel-slab-sizes requires kernel-socket-resources")
+    slab_sizes = json.loads(slab_file.read_text()) if slab_file else None
     assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= args.users + 128, "descriptor limit too low"
     port, admin = runtime.free_port(), runtime.free_port()
     while port == admin:
@@ -230,14 +236,19 @@ def run(args):
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_sha256": digest(ROOT / "examples/capacity.rs"), "runner_sha256": digest(__file__),
               "runner_sources_sha256": {name: digest(ROOT / name) for name in
-                  ("scripts/capacity.py", "scripts/capacity_pressure.py", "scripts/benchmark.py", "scripts/benchmark_transport.py", "examples/support/socket.rs")},
+                  ("scripts/capacity.py", "scripts/capacity_pressure.py", "scripts/socket_resources.py", "scripts/benchmark.py", "scripts/benchmark_transport.py", "examples/support/socket.rs")},
               "source_attribution": "Source snapshot; binary association requires the accompanying build record.",
               "fd_limit": resource.getrlimit(resource.RLIMIT_NOFILE),
               "ephemeral_ports": Path("/proc/sys/net/ipv4/ip_local_port_range").read_text().strip(),
-              "profile_diagnostic": args.profile,
+              "profile_diagnostic": args.profile or kernel_resources,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
               "scope": "Loopback. WebTransport uses pinned TLS and graceful stream close; legacy WebSocket uses plaintext and Close/EOF. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP or independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
+    if kernel_resources:
+        result["kernel_resource_diagnostic"] = {
+            "scope": "Per-process SOCK_DIAG snapshots at quiescent phase gates. Diagnostic scan overhead excludes this run from ordinary timing comparisons. Kernel counters and slab object estimates are separate from RSS and are not a complete kernel allocation total.",
+            "slab_metadata_sha256": digest(slab_file) if slab_file else None,
+        }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
         server = client = None
@@ -342,6 +353,18 @@ def run(args):
                 census = established(port, server_inodes)
                 event["udp_server_census"] = udp_census(server_inodes)
                 event["udp_client_census"] = udp_census(client_inodes)
+                if kernel_resources:
+                    protocol = "udp" if getattr(args, "transport", "websocket") == "webtransport" else "tcp"
+                    event["kernel_sockets"] = {
+                        "server": socket_resources.snapshot(server.pid, protocol, local_port=port, sizes=slab_sizes),
+                        "client": socket_resources.snapshot(client.pid, protocol,
+                            remote_port=port if protocol == "tcp" else None, sizes=slab_sizes),
+                    }
+                    expected = (event["udp_server_census"]["owned_sockets"] if protocol == "udp"
+                                else census["owned_established"])
+                    assert event["kernel_sockets"]["server"]["owned_sockets"] == expected
+                    for snapshot in event["kernel_sockets"].values():
+                        assert snapshot["missing_skmem_sockets"] == 0, "owned socket memory accounting unavailable"
                 del server_inodes, client_inodes  # Release gate-only storage before traffic resumes.
                 event.update(tcp_census=census, established_server_sockets=census["owned_established"])
                 expected_population = 0 if event["event"] == "done" else args.users
@@ -504,6 +527,10 @@ if __name__ == "__main__":
     parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
     parser.add_argument("--pin-client-workers", action="store_true", help="Benchmark intervention: one allowed CPU per client I/O worker")
     parser.add_argument("--profile", action="store_true", help="Separate diagnostic perf capture; not an ordinary timing trial")
+    parser.add_argument("--kernel-socket-resources", action="store_true",
+                        help="Separate diagnostic SOCK_DIAG snapshots at phase gates; excluded from ordinary timing comparisons")
+    parser.add_argument("--kernel-slab-sizes", type=Path,
+                        help="Optional read-only slab-size receipt from socket_resources.py --slab-sizes-only")
     parser.add_argument("--profile-counters", action="store_true",
                         help="With --profile, collect per-thread perf stat instead of stack samples")
     parser.add_argument("--profile-client", action="store_true",

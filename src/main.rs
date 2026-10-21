@@ -69,7 +69,10 @@ fn build_runtime(config: &Config, workers: usize) -> Result<tokio::runtime::Runt
             .build()?);
     }
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    builder.worker_threads(workers).enable_all();
+    builder
+        .worker_threads(workers)
+        .enable_all()
+        .event_interval(1);
     if !config.pin_workers {
         return Ok(builder.build()?);
     }

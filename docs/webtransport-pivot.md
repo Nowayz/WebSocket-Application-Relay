@@ -1102,3 +1102,153 @@ private-lane scheduling, active QUIC/HTTP3 state, and datagram load measurement;
 full observer/re-subscribe/cancellation, concurrent 100k/8192 inspection, broader
 overload/shutdown, QUIC allocation accounting and final packaging/deployment
 work also remain. This checkpoint does not accept, publish or deploy the pivot.
+
+## Poll readiness more frequently and measure kernel socket storage
+
+Tokio 1.53.3's multithreaded builder defaults to checking external events after
+61 task polls. The CLI WebTransport runtime now checks I/O/timers after each
+scheduled task (`event_interval(1)`). Native WS retains its separate Mio workers
+and current-thread management runtime. Embedding callers that provide their own
+runtime keep their own scheduling policy. No protocol, crypto, framing, FIFO,
+resource limits or deadlines change. This is a workload tradeoff, not a fix for
+mixed private-lane fairness or a general reduction in CPU cost.
+
+The frozen executable is `artifacts/webtransport/binaries/event-every-task-relay`,
+SHA256 `39285102fe520164af6db436a686ec608af1a4a8fd752f0957531da8726a2d24`.
+The main source matches `event-every-task-main.rs` byte for byte, including after
+rejection of the separate global-queue experiment. `target/release/war-relay`
+has the same hash. The build manifest records the exact source diff and client
+hashes. No formatter-only source change follows the benchmark freeze.
+
+Two matched before/after blocks each alternate three fresh processes per case and
+variant: four pinned server workers on CPUs 0–3, eight pinned client workers on
+CPUs 8–15, four seconds, 1 KiB, 32 private pairs, 1,024 room readers, window four.
+All 36 runs pass full content, sender, FIFO, counters, closure and cleanup checks.
+The same fixed client is used throughout. No task-owned build, test or browser
+runs alongside ordinary timing trials. Absolute rates vary substantially on this
+shared host; keep the blocks separate rather than pooling or selecting rates.
+
+| Reliable workload | Initial before | Initial after | Confirmation before | Confirmation after |
+| --- | ---: | ---: | ---: | ---: |
+| Private deliveries/s | 1,476,570 | 1,427,873 | 1,392,969 | 1,348,302 |
+| Room deliveries/s | 1,366,005 | 1,587,857 | 1,159,479 | 1,378,602 |
+| Mixed aggregate deliveries/s | 1,423,745 | 1,553,407 | 1,199,237 | 1,246,995 |
+
+Room throughput improves 16.2% and 18.9%; mixed aggregate improves 9.1% and 4.0%.
+Private-only throughput decreases 3.3% and 3.2%. Mixed private throughput changes
+from 357,024 to 386,411/s initially, then 322,098 to 317,502/s in confirmation.
+Thus its initial improvement does not reproduce; retain the policy for its
+fanout/aggregate gains with the private-only and CPU costs explicit, and do not
+present it as a private-lane fairness fix.
+
+A separate **interleaved** WS/WT control uses the candidate executable's explicit
+legacy mode for WS, otherwise the same verifier, placement and workloads. All 18
+runs pass. It still contradicts full reliable parity:
+
+| Interleaved protocol comparison | Plain WS deliveries/s | WT deliveries/s |
+| --- | ---: | ---: |
+| Private | 1,205,019 | 1,327,454 |
+| Room | 1,319,460 | 1,157,606 |
+| Mixed aggregate | 1,396,682 | 1,018,517 |
+| Mixed private component | 681,714 | 269,816 |
+
+Component and aggregate medians are independent. An earlier supplemental WS-only
+block is preserved separately; do not substitute its rates into this comparison.
+This is plaintext WS, not a native-WSS ceiling. Both server/client cycle profiles
+are also captured together in separate eight-second mixed runs, including kernel
+cycles. PID-filtered reports use **relative** percentages within each process;
+absolute percentages of the combined recording would dilute those shares.
+Both profiles pass the full verifier and have zero lost samples. Packet building,
+crypto, stream/endpoint processing and synchronization remain visible. These
+captures are excluded from ordinary medians and do not measure every host softirq.
+
+The `global_queue_interval(1)` experiment is rejected and reverted. Against
+I/O-every-task alone, three mixed runs show median aggregate rate falling from
+1,369,189 to 724,038/s, private from 344,817 to 168,818/s. Its one private-only
+and one room-only screen per variant are also retained, without pretending those
+single samples form a complete matrix. The global-queue policy stays unchanged.
+
+All six ordinary 100k before/after runs pass all 400,000 timed deliveries, all-user
+pre/post proofs and retirement checks. Eight pinned server and eight client
+workers, four offered seconds. Measured-gate median RSS is essentially unchanged:
+2,813.91 versus 2,815.71 MiB. Achieved rate is 99,669.3 versus 99,640.0/s, with the
+same 0.524 ms p50 and 2.097 ms p99 upper bounds in these samples. Server CPU rises
+from 2.263 to 2.433 cores (7.6%); setup is 12.365 versus 12.594 s, retirement
+2.458 versus 2.542 s. Timed UDP receive-drop deltas are zero, and all seven final
+connection/storage gauges are zero. These latency samples differ from earlier
+blocks and are not a production SLA.
+
+The fixed direct-client datagram echo diagnostic also passes all six runs:
+552,357 versus 551,531 received echoes/s, p50 56.079 versus 56.058 us, p99
+159.187 versus 154.636 us. Server CPU per completion rises from 5.096 to 5.514 us
+(8.2%). It uses 32 self-routing sessions with one outstanding echo each, eight
+seconds, 1 KiB, four server/four client workers. It is not datagram saturation,
+private/fanout/mixed acceptance, and its brief setup/teardown contributes to CPU.
+
+### Separate kernel accounting
+
+`scripts/socket_resources.py` reads Linux SOCK_DIAG's INET_DIAG_SKMEMINFO using
+standard-library code and the installed UAPI layouts. It matches socket inodes
+to process-owned fds, rejects different network namespaces, interrupted/truncated
+dumps and duplicate sockets, and reports missing memory attributes explicitly.
+It imposes no population/byte cap. The receive timeout is a diagnostic I/O failure
+deadline. TCP state filtering distinguishes live connected sockets from listeners;
+UDP reports owned bound sockets. Port-matched TIME_WAIT entries have no live fd
+and are counted separately, without assigning object bytes.
+
+Capacity adds optional `--kernel-socket-resources` and `--kernel-slab-sizes PATH`
+flags. These snapshots run at quiescent phase gates and mark the entire run as a
+**diagnostic**, so scan overhead cannot silently enter ordinary CPU/throughput
+medians. Without the flags, no socket dump runs. Slab-size metadata can be captured
+read-only with `sudo -n python scripts/socket_resources.py --slab-sizes-only`;
+the receipt hashes the supplied metadata. Unprivileged reads report unavailable
+slab sizes rather than replacing them with invented values. The helper can also
+be run directly with `--pid PID --protocol tcp|udp --local-port PORT`.
+
+The two 1,024-session smoke checks and two complete 100k diagnostic captures pass.
+Both server and client are measured independently. On this kernel:
+
+| Ready-gate kernel observation, per endpoint | WS | WT |
+| --- | ---: | ---: |
+| Owned data sockets | 100,000 TCP | 1 UDP |
+| Slab object size | 2,432 bytes | 1,344 bytes |
+| Owned socket-object estimate | 243,200,000 bytes (231.93 MiB) | 1,344 bytes |
+| Receive allocation / queued transmit allocation | 0 / 0 | 0 / 0 |
+| Forward allocation | 0 | 4,096 bytes |
+| Missing memory attributes | 0 | 0 |
+
+These paused-gate counters are not active-traffic peaks. Receive/send **limits**
+are reported but are not allocations; some skmem fields overlap, so they are not
+summed into an invented total. The slab object estimate excludes slab overhead,
+other protocol allocations, routes/conntrack and other kernel resources. After
+WS retirement, the server-owned connected count is zero but there are 100,000
+port-matched TIME_WAIT entries. Their bytes are not estimated here. The two
+endpoints' estimates must not be mistaken for one server's cost or counted twice.
+The old approximately 25x process-RSS ratio is therefore not a complete-system
+memory ratio. Kernel costs do not erase the still-large WT userspace footprint,
+and these partial observations do not establish total-memory parity.
+
+Four meaningful helper tests pass: queued UDP allocation and SO_RCVBUF match an
+independent `ss` decode; IPv4 and IPv6 TCP queued data and endpoint ownership are
+checked; malformed/truncated binary messages fail instead of undercounting.
+All 266 relay tests pass (one existing ignored), all-target Clippy with warnings
+denied and formatting pass, and vendor verification still covers 153 files.
+Actual Chromium 156 passes all nine delivered-client checks, including datagrams,
+typed values, 128 KiB/5 MiB messages, variables, departures and real close. Seven
+final gauges are zero; the final screenshot was visually inspected.
+
+All nine clean/loss/reorder freshness checks pass. Single samples per profile
+retain the freshness benefit and explicit missing-update tradeoff: loss datagrams
+have 73.4 ms p99 newest-state age and receive 346/360 updates, versus 2,221.3 ms
+and all updates for the stream and 861.2 ms and all updates for the TLS WS fixture.
+With reordering, ages are 97.8 / 5,941.4 / 681.4 ms; datagrams receive 352/360 and
+their reliable bulk arrives after 7.022 s. Stale updates cannot replace newer
+state, all bulk content is verified, and namespace cleanup succeeds. Matching
+seeds do not mean identical lost packets, and these are not statistical rankings.
+
+[Complete measurements and provenance](reports/webtransport-event-poll-2026-10-21.json)
+include all blocks, rejected experiments, resource counters and scopes. Overall
+throughput/memory parity remains unmet. Continue worker/connection dispatch and
+mixed private fairness, retained QUIC/HTTP3 state and full datagram load measurement,
+plus the previously listed observer/concurrent-inspection/overload/packaging
+acceptance. No pivot acceptance, push, release or deployment is claimed.
