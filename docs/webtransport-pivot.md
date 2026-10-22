@@ -1926,3 +1926,22 @@ second Chrome run passed all nine checks and the corrected cleanup assertions
 passed with exact current metric names. The complete evidence and earlier
 script errors remain in the report. Overall native WebSocket throughput and
 memory parity are still not achieved.
+
+### Rejected event-overflow thread cache
+
+The event queue retained roughly 83 MB of empty overflow storage at 100k
+sessions. A per-thread spare experiment reduced ordinary ready RSS by
+78.04 MiB and requested live memory by 82.74 MB in separate captures. It
+passed both reliable cohorts and full capacity, but one paced private case
+closed 15 slow consumers; four subsequent controls per variant passed, so
+that failure cause remains unproven. Initial throughput medians changed
+-1.09% private, +0.15% room, -1.65% mixed; longer medians +0.56%, -2.03%,
+-0.68%, respectively.
+
+A diagnostic established the actual design flaw: ingress producers requested
+399,888 private-case and 110,447 mixed-case buffers with zero cache hits.
+Connection drivers returned buffers on other runtime threads. The cache
+therefore did not reuse overflow storage across those owners. The experiment
+was rejected and its source/patch archived; retained product source and
+release executable were restored. A cache spanning both owners is a distinct
+future experiment. See `reports/webtransport-event-spare-2026-10-22.json`.

@@ -1,0 +1,518 @@
+{
+  "status": "Rejected; source restored to retained 373e7fb baseline",
+  "hypothesis": "A small empty overflow VecDeque is scratch; one per driver thread can replace persistent per-connection retention. Existing ready allocation site was 99964 objects and 83170048 bytes.",
+  "baseline_commit": "373e7fb",
+  "baseline_binary": "artifacts/webtransport/binaries/handshake-buffer-relay",
+  "change": "Acquire thread-local spare on first overflow; return only an empty drained buffer. One cache slot per driver thread, retaining the existing small-buffer reuse threshold. Large drained bursts free storage. No queue/event delivery cap. Unavailable or borrowed TLS falls back to allocation/free.",
+  "verification": {
+    "relay_suite": "passed; see event-spare-tests.log",
+    "clippy": "passed",
+    "quinn_library": "29 passed, 3 existing ignored; actual production event scratch reuse test passed",
+    "vendor": "272 files, 5 archives, 4 patches verified"
+  },
+  "setup_errors": [
+    "Initial implementation targeted proto::ConnectionEvent rather than crate::ConnectionEvent; compilation rejected it, corrected before benchmarks.",
+    "cargo fmt on the vendor manifest formatted unrelated vendor files; all unrelated formatting restored before final build."
+  ],
+  "pending": [
+    "Design a cache whose ownership spans producer and consumer runtimes, then measure it as a new candidate",
+    "Continue toward full throughput and memory parity"
+  ],
+  "reproduction_script": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['handshake-buffer','event-spare'] if repeat!=2 else ['event-spare','handshake-buffer']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'event-spare-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\nfor v in ['handshake-buffer','event-spare']:\n a=json.loads((out/'owner-poll-capacity-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'event-spare-capacity-{v}-1.json').resolve()))\n for k in ['server','client','output','server_preload','user_latency_output','user_latency_histogram_output','pressure_client','kernel_slab_sizes']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n capacity.run(argparse.Namespace(**a));print('CAPACITY',v,flush=True)\n",
+  "source_sha256": "c2104698666780747a7d6a9b8816376e4437118c7d3e94e1b83adce1cd37792a",
+  "parity": "Not achieved.",
+  "ordinary_reliable": {
+    "private": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-private-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-private-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1470156.4190110327,
+          1417384.705020228,
+          1433508.415395534
+        ],
+        "median": 1433508.415395534
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-private-event-spare-1.json",
+          "artifacts/webtransport/event-spare-private-event-spare-2.json",
+          "artifacts/webtransport/event-spare-private-event-spare-3.json"
+        ],
+        "rates": [
+          1417864.332250358,
+          1408860.4414546057,
+          1441098.1220085272
+        ],
+        "median": 1417864.332250358
+      },
+      "change_percent": -1.0913143569414863
+    },
+    "roomonly": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1429095.8520110357,
+          1425819.368192069,
+          1415513.2550244064
+        ],
+        "median": 1425819.368192069
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-roomonly-event-spare-1.json",
+          "artifacts/webtransport/event-spare-roomonly-event-spare-2.json",
+          "artifacts/webtransport/event-spare-roomonly-event-spare-3.json"
+        ],
+        "rates": [
+          1428013.24887156,
+          1405852.3278911216,
+          1507820.3636492623
+        ],
+        "median": 1428013.24887156
+      },
+      "change_percent": 0.1538680655090774
+    },
+    "mixed": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1386479.1749546353,
+          1360131.8183356917,
+          1409510.888169625
+        ],
+        "median": 1386479.1749546353
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-mixed-event-spare-1.json",
+          "artifacts/webtransport/event-spare-mixed-event-spare-2.json",
+          "artifacts/webtransport/event-spare-mixed-event-spare-3.json"
+        ],
+        "rates": [
+          1436610.6936132757,
+          1363598.5206907035,
+          1360781.541818957
+        ],
+        "median": 1363598.5206907035
+      },
+      "change_percent": -1.6502703161539012
+    }
+  },
+  "capacity": {
+    "handshake-buffer": {
+      "receipt": "artifacts/webtransport/event-spare-capacity-handshake-buffer-1.json",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2435.125,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265906446002191,
+        "server_cpu_seconds": 7.149999999999999,
+        "client_cpu_seconds": 7.120000000000001,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99691.11058304728,
+        "server_user_cpu_seconds": 5.870000000000001,
+        "server_system_cpu_seconds": 1.2800000000000002,
+        "round_trip": {
+          "max_ms": 4.027061,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.549444,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    },
+    "event-spare": {
+      "receipt": "artifacts/webtransport/event-spare-capacity-event-spare-1.json",
+      "server_sha256": "2fa8546bc7d5cfafc151af38d8f2b51b11f988bd1da50116546d840f901359b9",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2357.0859375,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.266381276000175,
+        "server_cpu_seconds": 7.07,
+        "client_cpu_seconds": 7.18,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99680.18604126511,
+        "server_user_cpu_seconds": 5.869999999999997,
+        "server_system_cpu_seconds": 1.2000000000000002,
+        "round_trip": {
+          "max_ms": 4.09967,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.010375,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    }
+  },
+  "candidate_sha256": "2fa8546bc7d5cfafc151af38d8f2b51b11f988bd1da50116546d840f901359b9",
+  "heap": {
+    "receipt": "artifacts/webtransport/event-spare-heap-100000.json",
+    "analysis": "artifacts/webtransport/event-spare-heap-100000-sites.json",
+    "passed": true,
+    "requested_ready_bytes": 2298103376,
+    "unresolved_bytes": 0,
+    "previous_completed_requested_ready_bytes": 2380842704,
+    "scope": "Separate diagnostic allocator captures; ordinary RSS comparison is separate."
+  },
+  "long_reliable": {
+    "private": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-private-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-long-private-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-long-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1403235.7210285927,
+          1415084.642281015,
+          1418373.0565170792
+        ],
+        "median": 1415084.642281015
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-private-event-spare-1.json",
+          "artifacts/webtransport/event-spare-long-private-event-spare-2.json",
+          "artifacts/webtransport/event-spare-long-private-event-spare-3.json"
+        ],
+        "rates": [
+          1414987.399602161,
+          1426991.6713115335,
+          1422958.3844175762
+        ],
+        "median": 1422958.3844175762
+      },
+      "change_percent": 0.556414923977222
+    },
+    "roomonly": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-long-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-long-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1238456.6134177158,
+          1439577.6384492624,
+          1421824.7721137346
+        ],
+        "median": 1421824.7721137346
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-roomonly-event-spare-1.json",
+          "artifacts/webtransport/event-spare-long-roomonly-event-spare-2.json",
+          "artifacts/webtransport/event-spare-long-roomonly-event-spare-3.json"
+        ],
+        "rates": [
+          1392982.3028169954,
+          1493059.8847655698,
+          1392611.6005238406
+        ],
+        "median": 1392982.3028169954
+      },
+      "change_percent": -2.0285530159852905
+    },
+    "mixed": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/event-spare-long-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/event-spare-long-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1390198.3195971914,
+          1374521.7307527969,
+          1399593.7342895702
+        ],
+        "median": 1390198.3195971914
+      },
+      "event-spare": {
+        "receipts": [
+          "artifacts/webtransport/event-spare-long-mixed-event-spare-1.json",
+          "artifacts/webtransport/event-spare-long-mixed-event-spare-2.json",
+          "artifacts/webtransport/event-spare-long-mixed-event-spare-3.json"
+        ],
+        "rates": [
+          1381806.558339072,
+          1380692.8841169267,
+          1351796.9407173744
+        ],
+        "median": 1380692.8841169267
+      },
+      "change_percent": -0.6837467249290685
+    }
+  },
+  "acceptance_failure": {
+    "receipt": "artifacts/webtransport/event-spare-paced-private-high-stream-3.json",
+    "passed": false,
+    "client_error": "session closed code 1013 Try Again Later",
+    "server_slow_consumers": 15,
+    "scope": "Two earlier private paced runs passed. Remaining chained gates were not executed after assertion stopped the sequence. No queue limits or offered rate changed."
+  },
+  "failure_controls": [
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-handshake-buffer-1.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-handshake-buffer-2.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-handshake-buffer-3.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-handshake-buffer-4.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-event-spare-1.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-event-spare-2.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-event-spare-3.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-failure-control-event-spare-4.json",
+      "passed": true,
+      "error": null,
+      "slow_consumers": 0
+    }
+  ],
+  "profiles": [
+    {
+      "path": "artifacts/webtransport/event-spare-reliable-handshake-buffer-server-symbols.txt",
+      "sha256": "bf3b844e797bc826aeb1067edc74095d4914dfbf42789d85df40810bf99ba31a",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.97%  handshake-buffer-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.05%  handshake-buffer-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.40%  [kernel.kallsyms]       [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.12%  [kernel.kallsyms]       [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.04%  handshake-buffer-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.95%  handshake-buffer-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.91%  [kernel.kallsyms]       [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.85%  [kernel.kallsyms]       [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "1.82%  handshake-buffer-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.74%  handshake-buffer-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "1.72%  libc.so.6               [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+        "1.64%  handshake-buffer-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.36%  [kernel.kallsyms]       [k] __udp_enqueue_schedule_skb                                                                                                                                                                                                                                                               -      -",
+        "1.29%  handshake-buffer-relay  [.] quinn_proto::connection::packet_builder::PacketBuilder::new                                                                                                                                                                                                                              -      -",
+        "1.26%  [kernel.kallsyms]       [k] _raw_spin_lock                                                                                                                                                                                                                                                                           -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/event-spare-reliable-handshake-buffer-client-symbols.txt",
+      "sha256": "a5a15de60f48b5db97bf4f541edf48e428860137139104892c0660b0a4d2e391",
+      "lost_samples": 0,
+      "leading_rows": [
+        "4.36%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.90%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "3.26%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "3.04%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "1.87%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.81%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.66%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.61%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.43%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+        "1.37%  inspection         [.] tokio::runtime::time::<impl tokio::runtime::time::handle::Handle>::reregister                                                                                                                                                                                                            -      -",
+        "1.35%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.29%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.27%  [kernel.kallsyms]  [k] __check_object_size                                                                                                                                                                                                                                                                      -      -",
+        "1.22%  inspection         [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.20%  inspection         [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/event-spare-reliable-event-spare-server-symbols.txt",
+      "sha256": "1d6f4edd298f71c1ac1ec052b0b88678104f219a01570da2af0ae0a2714b20ad",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.58%  event-spare-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.01%  event-spare-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.43%  [kernel.kallsyms]  [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.37%  [kernel.kallsyms]  [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.04%  [kernel.kallsyms]  [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "1.98%  event-spare-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.93%  event-spare-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "1.86%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.85%  event-spare-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.74%  event-spare-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.71%  event-spare-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.54%  libc.so.6          [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+        "1.33%  event-spare-relay  [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "1.33%  [kernel.kallsyms]  [k] __udp_enqueue_schedule_skb                                                                                                                                                                                                                                                               -      -",
+        "1.21%  [kernel.kallsyms]  [k] _raw_spin_lock                                                                                                                                                                                                                                                                           -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/event-spare-reliable-event-spare-client-symbols.txt",
+      "sha256": "6ab90d382143ce678d62ce35974c75995d5ec8ca06b85f814dd8a467f8e6fb49",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.80%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.46%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "3.35%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "3.06%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "1.74%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.68%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.62%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.59%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.52%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+        "1.42%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.40%  inspection         [.] tokio::runtime::time::<impl tokio::runtime::time::handle::Handle>::reregister                                                                                                                                                                                                            -      -",
+        "1.36%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.31%  inspection         [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "1.28%  inspection         [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.17%  inspection         [.] bytes::bytes_mut::BytesMut::split_to                                                                                                                                                                                                                                                     -      -"
+      ]
+    }
+  ],
+  "cache_census": [
+    {
+      "receipt": "artifacts/webtransport/event-spare-census-private.json",
+      "passed": true,
+      "server_sha256": "8feda75c9c1539907a476bc5498484fac5afc9a3e290aa04b8418ccc4182b44d",
+      "rows": [
+        {
+          "thread": "ThreadId(6)",
+          "takes": 399888,
+          "hits": 0,
+          "returns": 0
+        },
+        {
+          "thread": "ThreadId(4)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(2)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(3)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(5)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        }
+      ],
+      "total_takes": 399888,
+      "total_hits": 0,
+      "scope": "Instrumented diagnostic; exclude timings and RSS from ordinary performance comparisons."
+    },
+    {
+      "receipt": "artifacts/webtransport/event-spare-census-mixed.json",
+      "passed": true,
+      "server_sha256": "8feda75c9c1539907a476bc5498484fac5afc9a3e290aa04b8418ccc4182b44d",
+      "rows": [
+        {
+          "thread": "ThreadId(6)",
+          "takes": 110447,
+          "hits": 0,
+          "returns": 0
+        },
+        {
+          "thread": "ThreadId(5)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(3)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(2)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        },
+        {
+          "thread": "ThreadId(4)",
+          "takes": 0,
+          "hits": 0,
+          "returns": 3
+        }
+      ],
+      "total_takes": 110447,
+      "total_hits": 0,
+      "scope": "Instrumented diagnostic; exclude timings and RSS from ordinary performance comparisons."
+    }
+  ],
+  "decision": "Thread-local spare ownership does not span the separate ingress and connection-driver runtimes. Diagnostic private and mixed cases recorded zero cache hits across 510335 takes. Memory savings came with repeated overflow allocation, defeating the reuse design. One original paced overload failure remains preserved, but all eight private controls passed and its cause is unproven.",
+  "rejected_source": "artifacts/webtransport/event-spare-rejected.rs",
+  "rejected_patch": "artifacts/webtransport/event-spare-rejected.patch"
+}
