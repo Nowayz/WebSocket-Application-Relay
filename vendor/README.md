@@ -316,3 +316,12 @@ precomputation remain intact. QUIC server layout shrinks by 336 bytes and
 100k ready RSS saves 30.63 MiB. Two temporary handshake allocations are the
 tradeoff; longer mixed throughput fell 0.58% while private/room improved.
 See `docs/reports/webtransport-boxed-quic-secrets-2026-10-22.json`.
+
+
+Rustls QUIC also releases empty handshake-fragment span storage at the
+completed-handshake/no-active-fragment/empty-input guard. Deframer progress
+and ordering remain intact, and TCP/TLS retains its normal staging behavior.
+This removes the 640-byte constructor allocation at 100k sessions and saves
+62.89 MiB ordinary RSS. Longer throughput changes +0.93% private, -0.07%
+room and -0.05% mixed; earlier short runs were worse. See
+`docs/reports/webtransport-handshake-spans-2026-10-22.json`.

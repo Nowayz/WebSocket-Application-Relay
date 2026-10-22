@@ -2184,3 +2184,35 @@ hashes, reproduction scripts and limits are in
 A separate next target is the drained handshake-span vector's preallocated
 storage. It is not changed or counted as a saving here. Overall throughput
 and memory parity remain unmet.
+
+
+### Empty QUIC handshake-span storage released (2026-10-22)
+
+The completed-QUIC-handshake, inactive-deframer, empty-input guard now also
+releases the empty fragment-span vector. It preserves outer_discard and
+ordering state, leaves active/incomplete fragments untouched, and retains
+initial handshake preallocation. TCP/TLS record processing is unchanged.
+A focused test covers incomplete fragments, progress preservation, release,
+and subsequent parsing. Rustls passes 247 tests; the selected Quinn protocol
+suite passes 312. Relay tests, Clippy and pinned vendor verification pass.
+
+The 100k pair checked 400k deliveries each. Ready RSS fell 2,204.26 to
+2,141.37 MiB (-62.89 MiB); setup was 11.37/11.34 seconds, server CPU
+6.59/6.75 seconds. These single-pair times are not confidence intervals.
+Requested-live heap fell 2,142,329,135 to 2,076,389,859 bytes. The prior
+100k x 640-byte constructor allocation site disappeared; TLS sessions
+remain 100k x 1,032 bytes, separating this from the prior boxed-secret gain.
+
+Three short repeats measured -0.87% private, -2.86% room, -4.72% mixed.
+Three twelve-second repeats instead measured +0.93%, -0.07%, -0.05%.
+Retain the memory saving with longer throughput essentially unchanged;
+shared-host variability and the worse short cohort remain in the report.
+Six paced reliable runs had zero missing/duplicate/out-of-order delivery.
+Six paired datagram controls passed; candidate loss was worse in two pairs
+and better in one. Both-endpoint profiles had zero lost samples. All nine
+freshness cases and nine headed Chrome checks passed, including exact
+5 MiB delivery. Cleanup gauges were zero and fixtures stopped.
+
+Source, hashes, reproduction scripts, fixed-client workloads and evidence:
+[`webtransport-handshake-spans-2026-10-22.json`](reports/webtransport-handshake-spans-2026-10-22.json).
+Overall parity remains unmet; refresh native WebSocket comparisons next.

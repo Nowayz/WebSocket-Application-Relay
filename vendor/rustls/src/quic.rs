@@ -429,6 +429,7 @@ mod connection {
                 && self.deframer_buffer.filled().is_empty()
             {
                 self.deframer_buffer = DeframerVecBuffer::default();
+                self.core.hs_deframer.discard_empty_storage();
             }
 
             Ok(())

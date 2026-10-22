@@ -91,6 +91,14 @@ impl HandshakeDeframer {
         !self.spans.is_empty()
     }
 
+    /// Release idle staging storage without resetting offsets or ordering state.
+    /// Active fragments, including incomplete messages, retain their storage.
+    pub(crate) fn discard_empty_storage(&mut self) {
+        if self.spans.is_empty() {
+            self.spans = Vec::new();
+        }
+    }
+
     /// We are "aligned" if there are no pending handshake messages, complete or partial.
     pub(crate) fn is_aligned(&self) -> bool {
         // If we have any handshake spans, either:
@@ -391,6 +399,37 @@ mod tests {
         let locator = Locator::new(within);
         let discard = locator.locate(slice).end;
         hs.input_message(msg, &locator, discard);
+    }
+
+    #[test]
+    fn idle_storage_release_preserves_fragments_progress_and_reuse() {
+        let mut hs = HandshakeDeframer::default();
+        assert!(hs.spans.capacity() >= 16);
+        hs.discard_empty_storage();
+        assert_eq!(hs.spans.capacity(), 0);
+
+        let mut input = vec![0x21, 0, 0, 1, 0x7f];
+        add_bytes(&mut hs, &input[..2], &input);
+        let capacity = hs.spans.capacity();
+        hs.discard_empty_storage();
+        assert_eq!(hs.spans.capacity(), capacity);
+        assert!(hs.is_active());
+        assert_eq!(hs.outer_discard, 2);
+        assert_eq!(hs.spans[0].bounds, 0..2);
+        assert_eq!(hs.spans[0].size, None);
+
+        add_bytes(&mut hs, &input[2..], &input);
+        hs.coalesce(&mut input).unwrap();
+        assert_eq!(hs.iter(&input).next().unwrap().0.payload, &input[..]);
+        assert!(!hs.is_active());
+        let progress = hs.outer_discard;
+        hs.discard_empty_storage();
+        assert_eq!(hs.spans.capacity(), 0);
+        assert_eq!(hs.outer_discard, progress);
+
+        add_bytes(&mut hs, &input, &input);
+        assert_eq!(hs.iter(&input).next().unwrap().0.payload, &input[..]);
+        assert!(!hs.is_active());
     }
 
     #[test]
