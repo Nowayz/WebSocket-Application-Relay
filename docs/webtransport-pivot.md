@@ -2360,3 +2360,26 @@ Source, immutable receipts, distributions, allocation diagnostics, census,
 validation limits and reproduction scripts:
 [`webtransport-receive-cache-geometry-2026-10-22.json`](reports/webtransport-receive-cache-geometry-2026-10-22.json).
 Throughput and memory parity remain unmet; the overall goal remains active.
+
+## Completed QUIC exporter state — rejected (2026-10-22)
+
+Specialized the completed server QUIC TLS state to retain exporter material
+instead of the full TLS traffic schedule; TCP TLS and QUIC packet-key
+state were unchanged. Candidate built; 249 copied Rustls unit tests passed,
+including SHA-256/SHA-384 exporter equivalence with varying contexts and
+lengths. The public API QUIC exporter test passed after a real handshake.
+Original fixture compilation errors and corrected successful logs remain.
+
+All 18 short and 18 longer fixed-client receipts passed, as did both
+100k capacity runs. Longer medians regressed private 1.22%, room 5.09%,
+mixed 0.66%. Ready requested live bytes fell from 2,018,187,005 to
+2,003,818,662 (-13.70 MiB), consistent with 144 bytes removed per server
+TLS state. Ordinary ready RSS also fell roughly 15 MiB. Allocation
+diagnostics do not explain the throughput regression; do not assert an
+instruction/cache-layout cause without measurement.
+
+Rejected: the small memory saving does not justify the observed throughput
+cost. Source and exact retained ordered-ACK executable restored. No broad
+acceptance for this rejected candidate. Full parity remains unmet.
+Evidence and reproduction:
+[`webtransport-quic-exporter-rejected-2026-10-22.json`](reports/webtransport-quic-exporter-rejected-2026-10-22.json).
