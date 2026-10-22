@@ -1993,3 +1993,67 @@ at ready with no unresolved bytes and all five gates passed. This memory
 improvement retains an explicit mixed-throughput cost and does not establish
 overall native WebSocket parity. See
 `reports/webtransport-packet-spaces-2026-10-22.json`.
+
+### Fresh retained native comparison at 455aa94
+
+The same retained executable and fixed inspection/capacity clients were used
+for plaintext native WebSocket and encrypted QUIC/WebTransport. Three rotated
+12-second runs per private/room/mixed workload passed, as did both 100k-session
+capacity runs with 400,000 checked deliveries. Median verified rates were:
+
+| Workload | Native WS deliveries/s | WebTransport deliveries/s | WT change |
+| --- | ---: | ---: | ---: |
+| Private | 1,198,539 | 1,410,552 | +17.69% |
+| Room | 1,513,939 | 1,444,326 | -4.60% |
+| Mixed | 1,505,839 | 1,383,842 | -8.10% |
+
+Private parity is exceeded in this cohort; room/mixed parity and memory parity
+remain unmet. The ordinary capacity pair measured ready RSS 112.69 MiB native
+and 2,254.89 MiB WT, server CPU 2.00/6.86 seconds and client CPU 2.47/7.12
+seconds. P99 round-trip histogram upper bounds were 1.05/2.10 ms. This is one
+capacity pair; timings are not a repeated estimate. Kernel CPU work outside the
+profiled processes is not comprehensively attributed.
+
+Kernel accounting remains separate. Ready snapshots found 100k server TCP
+sockets versus one shared UDP socket. A read-only root slab-size query on the
+same running kernel supplied TCP=2,432 and UDP=1,344 bytes, giving a partial
+TCP object estimate of 231.93 MiB versus 1,344 bytes UDP. Original unprivileged
+size reads were unavailable, not zero memory. These estimates exclude other
+kernel costs. Socket buffer limits are not allocated bytes. Native retirement
+left 100k port-matched TIME_WAIT entries outside process RSS.
+
+Ordinary done-gate RSS was 58.26 MiB native and 2,261.24 MiB WT. A separate
+normal-glibc observer, with no replacement allocator, trim or tunables, found
+WT RSS 2,259.21 MiB five seconds after retirement: 2,294,516,240 bytes free in
+allocator arenas, 11,654,640 bytes used in arenas and 60,985,456 bytes in
+allocated mmap regions, with zero current session/resource gauges. XML
+statistics covered all eleven arenas. Thus the large retired RSS plateau is
+mostly allocator-retained free storage, not multi-gigabyte live sessions. This
+does not resolve the genuine connected-population footprint. The observer
+adds a diagnostic thread and its timing/RSS is excluded from ordinary results.
+
+Matched-rate cycle profiles of both endpoints reported zero lost samples.
+Native server cycles were 83.39% kernel and 15.36% executable; WT server cycles
+were 19.47% kernel and 70.62% executable. Driver polling, task wakeups, event
+dispatch, notification polls and timer resets are prominent WT symbols. These
+are sampled cycles, not exact subsystem elapsed-time attribution. The next
+CPU investigation should target the integration/wakeup path; overall parity
+is still unmet. See `reports/webtransport-retained-parity-2026-10-22.json` for
+all component rates, phases, kernel observations, profiles, observer failures
+and reproduction sources.
+
+The cumulative allocation census strengthens this diagnosis. Both captures
+used the same retained executable and fixed clients, all 100k sessions and
+400k checked deliveries, with bucket/header totals and exact ELF identities
+verified. Native requested 833 allocations (0.00208/delivery) and WT 3,630,150
+(9.075/delivery). WT requested 3,626.58 allocation bytes per checked delivery
+versus native 2.96; these are allocator requests, not copy bytes, and include
+background work in the gated interval. Packet tracking accounted for 419,098
+requests / 486,153,680 bytes, endpoint receive storage 799,885 / 447,594,116,
+and application record buffers 400,000 / 414,800,000. The diagnostic allocator
+can alter batching, so these counts explain sites rather than ordinary timing.
+Exact-build glibc debug symbols also identify prominent allocator/free samples;
+missing caller frames prevent assigning those CPU samples to a Rust call site.
+The next experiment should target shared packet-tree reuse, with actual reuse
+and allocation measurement before acceptance. The earlier one-per-worker tree
+cache remains rejected; it is not evidence that a shared cache will win.
