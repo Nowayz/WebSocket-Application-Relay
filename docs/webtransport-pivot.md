@@ -1870,11 +1870,59 @@ the retained client transport source defaults to30s QUIC idle timing. Retirement
 is consistent with that timing, but individual close reasons were not captured.
 This failed run is preserved and is not a full-scale memory baseline.
 
-A separate full-scale diagnostic now uses the existing five-second server
+A separate full-scale diagnostic used the existing five-second server
 keepalive option and the same frozen binaries. Its source receipt records that
 wire-maintenance traffic differs from the ordinary workload; no product code or
 default changed. All timing and RSS remain excluded from ordinary comparisons.
 The maintained collector did not need a new keepalive option: capacity already
 supports `ping_interval_secs` in its source arguments. An initial convenience
 hook failed before server startup and is also preserved; it was removed. The
-new diagnostic must prove the complete live population and all five gates.
+diagnostic reached 100,000 live sessions at connected and ready, then failed
+the traffic population check at 97,525 sessions. Its ready snapshot supports
+limited caller attribution only; it did not pass the complete benchmark.
+
+### Completed handshake input-buffer candidate
+
+The partial ready stack capture attributed 36,083,460 requested bytes to
+99,515 TLS handshake input vectors. A candidate now releases a consumed input
+vector after handshake completion only when no handshake fragments remain.
+The ordering and progress state is preserved. The first fixed-client cohort
+passed all 18 reliable cases; medians changed -0.58% private, +1.91% room, and
++1.03% mixed, which does not establish a throughput win. Both ordinary 100k
+runs checked 400,000 deliveries. Candidate ready RSS was 2,435.41 MiB versus
+2,473.09 MiB for the baseline. A separate candidate allocation run passed all
+five gates with 2,380,842,704 requested live bytes at ready and zero unresolved
+bytes in the exact-binary site analysis. Longer traffic, datagram, loss, endpoint
+profile, and browser acceptance remain pending; the candidate is not yet
+accepted. Memory and throughput parity remain unproven. See
+`reports/webtransport-handshake-buffer-2026-10-22.json` for the initial receipts.
+
+The longer 12-second cohort also passed all 18 cases, with candidate medians
++0.48% private, -2.29% room, and -3.05% mixed. These results reverse the small
+room/mixed gains in the initial cohort. The throughput cost remains unresolved;
+the candidate is still unaccepted. Paced traffic and both-endpoint profiles
+are the next checks.
+
+The candidate subsequently passed six paced reliable cases with zero missing
+deliveries, six paired datagram cases, nine isolated freshness cases, and nine
+actual Chrome checks including a byte-exact 5 MiB message. Both endpoint CPU
+profiles reported zero lost samples. Datagram loss varied across repetitions;
+no consistent datagram performance improvement is claimed. Under 2% loss, the
+candidate datagram case had p99 freshest-state age 72.68 ms with 7/360 missing
+updates, versus 1,281.24 ms for reliable QUIC and 1,141.48 ms for the TLS
+WebSocket fixture (both zero missing). These are individual cases.
+
+Browser cleanup reads showed all current session and resource gauges at zero.
+Two local assertion mistakes (wrong metric name, then inclusion of historical
+peak) are recorded in the report rather than treated as successful assertions.
+A second 12-second cohort with reversed variant order is running to resolve
+the earlier room/mixed throughput regression before retaining the change.
+
+The reversed-order confirmation passed all 18 cases: +0.69% private, -0.94%
+room, -0.24% mixed median throughput. The buffer reclamation is retained as a
+verified memory reduction with explicit throughput uncertainty; both longer
+cohorts had lower room/mixed medians and no throughput win is claimed. A
+second Chrome run passed all nine checks and the corrected cleanup assertions
+passed with exact current metric names. The complete evidence and earlier
+script errors remain in the report. Overall native WebSocket throughput and
+memory parity are still not achieved.

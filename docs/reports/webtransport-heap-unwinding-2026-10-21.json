@@ -1,5 +1,5 @@
 {
-  "scope": "Profiler attribution improvement only.8192-session full-stack diagnostic passed. Initial100k full-stack run failed population check and is not a memory baseline. A separate keepalive-maintained diagnostic is active.",
+  "scope": "Profiler attribution improvement only. The 8192-session full-stack diagnostic passed. Both 100k full-stack attempts failed full-run acceptance; the maintenance-PING attempt has valid connected and ready snapshots for limited caller attribution only.",
   "server_sha256": "6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f",
   "default_analysis_regression_check": "All first-frame site rows and requested live totals match the existing100k report; analyzer source hash changes as expected.",
   "stacktrace_method": {
@@ -34629,9 +34629,8 @@
   },
   "interpretation": "The original profiles frequently captured only one executable frame. Explicit libunwind selection is confirmed by the real server startup log and produces useful callers for vector, queue, assembler, and TLS allocations. This does not recover omitted/inlined or shared-library frames and does not establish a CPU bottleneck.",
   "next_steps": [
-    "Poll existing session54092; do not restart on observation timeout",
-    "Require all100k live sessions, all5 capture gates, checked deliveries and retirement before accepting full-scale caller attribution",
-    "Preserve failed population and failed setup attempts; no memory reduction or parity claim"
+    "Use partial ready snapshot only for caller attribution; never as a completed capacity benchmark.",
+    "Verify candidate memory changes with a lower-overhead full-run capture and ordinary fixed-client comparisons."
   ],
   "verification": [
     "Real-profiler suppressed-signal recovery test passed",
@@ -34658,10 +34657,17 @@
     {
       "source": "artifacts/webtransport/ack-eight-unwind-ping-100000-source.json",
       "output": "artifacts/webtransport/ack-eight-unwind-ping-100000.json",
-      "status": "Running, exec session54092",
+      "status": "Terminal: failed traffic monitoring after ready",
       "server_keepalive_seconds": 5,
       "same_frozen_binaries": true,
-      "scope": "Diagnostic maintenance traffic differs from ordinary workload. Server45s idle setting remains above source peer30s default. No product code or default policy changed; exclude profiler timing/RSS from ordinary comparisons."
+      "scope": "Diagnostic maintenance traffic differs from ordinary workload. Server45s idle setting remains above source peer30s default. No product code or default policy changed; exclude profiler timing/RSS from ordinary comparisons.",
+      "passed": false,
+      "error": "AssertionError(('live sessions', 97525, 100000, 100000))",
+      "valid_gates": [
+        "connected",
+        "ready"
+      ],
+      "ready_analysis": "artifacts/webtransport/ack-eight-unwind-ping-100000-ready-stacks.json"
     }
   ]
 }

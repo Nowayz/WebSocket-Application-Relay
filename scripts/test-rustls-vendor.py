@@ -47,6 +47,11 @@ def run(directory):
         'fixtures': fixture, 'upstream_git': info['upstream_git'],
         'candidate_source_sha256': hashlib.sha256(
             (project / 'src/tls13/key_schedule.rs').read_bytes()).hexdigest(),
+        'candidate_sources_sha256': {
+            path.relative_to(ROOT / 'vendor/rustls').as_posix():
+                hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted((ROOT / 'vendor/rustls').rglob('*')) if path.is_file()
+        },
         'command': command,
     }, indent=2) + '\n')
     subprocess.run(command, cwd=ROOT, check=True)

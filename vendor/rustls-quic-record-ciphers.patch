@@ -1,3 +1,24 @@
+diff --git a/rustls/src/quic.rs b/rustls/src/quic.rs
+index 099e6ea..1d6294f 100644
+--- a/rustls/src/quic.rs
++++ b/rustls/src/quic.rs
+@@ -421,6 +421,16 @@ mod connection {
+             self.core
+                 .process_new_packets(&mut self.deframer_buffer, &mut self.sendable_plaintext)?;
+ 
++            // Completed QUIC handshakes no longer need their input high-water
++            // allocation. Never discard a partial post-handshake message or
++            // reset the deframer's ordering/progress state.
++            if !self.core.common_state.is_handshaking()
++                && !self.core.hs_deframer.is_active()
++                && self.deframer_buffer.filled().is_empty()
++            {
++                self.deframer_buffer = DeframerVecBuffer::default();
++            }
++
+             Ok(())
+         }
+ 
 diff --git a/rustls/src/tls13/key_schedule.rs b/rustls/src/tls13/key_schedule.rs
 index 7914ae2..1c57a6b 100644
 --- a/rustls/src/tls13/key_schedule.rs

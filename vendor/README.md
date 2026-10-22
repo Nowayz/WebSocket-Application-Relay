@@ -248,3 +248,14 @@ the helper verifies the upstream fixture archive checksum, copies the vendored
 source into that directory, adds fixtures there and uses its locked dependencies.
 It never writes fixtures or lockfile updates into the vendor tree. Relay,
 QUIC key-update/0-RTT, browser and loss tests are separate acceptance checks.
+
+### Consumed QUIC handshake input storage
+
+The same rustls patch also releases the deframer input vector once the QUIC
+handshake is complete, no handshake spans remain active, and the input is
+empty. It preserves deframer ordering/progress, packet keys and TLS state.
+Partial post-handshake messages retain their storage; later messages may
+allocate again. The ordinary 100k comparison saved 37.68 MiB ready RSS.
+Throughput rankings varied across cohorts, with lower room/mixed medians in
+both longer cohorts; this is a memory tradeoff, not a throughput improvement.
+See `docs/reports/webtransport-handshake-buffer-2026-10-22.json`.

@@ -421,6 +421,16 @@ mod connection {
             self.core
                 .process_new_packets(&mut self.deframer_buffer, &mut self.sendable_plaintext)?;
 
+            // Completed QUIC handshakes no longer need their input high-water
+            // allocation. Never discard a partial post-handshake message or
+            // reset the deframer's ordering/progress state.
+            if !self.core.common_state.is_handshaking()
+                && !self.core.hs_deframer.is_active()
+                && self.deframer_buffer.filled().is_empty()
+            {
+                self.deframer_buffer = DeframerVecBuffer::default();
+            }
+
             Ok(())
         }
 
