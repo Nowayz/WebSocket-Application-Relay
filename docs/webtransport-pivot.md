@@ -1757,3 +1757,29 @@ release binary were restored to commit 874983e, SHA256
 `773479940aa1498da90dd62ef3e2b9236e34fb412a2f41b5fba7477b98a8a3f2`.
 No reader change is retained, and no new browser/loss acceptance is claimed for
 the rejected candidate. Full throughput and memory parity remain unachieved.
+
+### Phase-gated packet and ACK census — 2026-10-21
+
+The [protocol census](reports/webtransport-protocol-census-2026-10-21.json)
+used diagnostic-only binaries; the selected implementation and release binary
+were restored before runs. A weak session registry and read-only local counter
+endpoint enabled snapshots while the fixed client paused at ready/measured
+gates. Both snapshots had exactly the same live connection IDs and expected
+population. Diagnostic timings/RSS are excluded from ordinary comparisons.
+All five cases passed integrity and cleanup.
+
+Measured-window received ACK-frame/datagram ratios were 8.76% private, 97.35%
+room fanout, 53.03% mixed reliable, 7.42% paced private and 60.38% paced mixed
+datagrams. These are frame/datagram ratios, not CPU shares or necessarily a
+packet-type partition. No detected packet loss or data/stream-data blocking was
+recorded in those windows. Quinn send datagrams/I/O-group ratios were 4.22,
+2.67, 2.99, 6.36 and 2.69 respectively; batching already exists. These I/O
+counters do not count kernel syscalls. Small ACK tails before the measured-gate
+snapshot remain included.
+
+An initial lifetime census is preserved separately. It includes substantial
+room-departure notification fanout during cleanup; it must not be mistaken for
+steady data traffic. Datagram submissions and verified arrivals are different
+quantities. The phase-gated results support testing ACK-frequency requests on
+fanout/mixed workloads, while providing a private-routing control. They do not
+yet prove an ACK-policy change saves CPU or improves complete workloads.
