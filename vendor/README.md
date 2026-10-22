@@ -220,3 +220,31 @@ and disabled.
 Rebase the patch deliberately when upgrading either package and rerun the
 full relay/client/compatibility checks. Remove these copies when an upstream API
 can provide the same ownership and partial-input guarantees.
+
+## QUIC-only TLS record cipher storage
+
+The published `rustls` **0.23.46** source is pinned in `provenance.json` with the
+archive-relative `rustls-quic-record-ciphers.patch`. QUIC uses TLS for its
+handshake and derives separate packet and header-protection keys; it does not
+send TLS records ([RFC 9001 section 4](https://www.rfc-editor.org/rfc/rfc9001.html#section-4)).
+The upstream key schedule nevertheless constructs TLS record ciphers. The
+patch uses rustls' existing fail-closed, zero-sized record cipher sentinels only
+when `CommonState::is_quic()` is true. It preserves the active encryption state,
+sequence reset and confidentiality-limit state: the active flag labels queued
+QUIC handshake bytes. Server handshake decryption also takes this path when
+TLS trial decryption would otherwise be requested. TCP/TLS takes the original
+cipher derivation path. QUIC packet/header keys, handshake secrets, key logging,
+authentication, key updates and crypto algorithm selection remain unchanged.
+
+The focused unit test checks the active flag and rejection of accidental record
+decryption. Run the full rustls library suite with the exact upstream fixtures:
+
+```sh
+python scripts/test-rustls-vendor.py --directory artifacts/rustls-unit-verification
+```
+
+Use a fresh directory. The published crate omits test data and fuzz corpus;
+the helper verifies the upstream fixture archive checksum, copies the vendored
+source into that directory, adds fixtures there and uses its locked dependencies.
+It never writes fixtures or lockfile updates into the vendor tree. Relay,
+QUIC key-update/0-RTT, browser and loss tests are separate acceptance checks.

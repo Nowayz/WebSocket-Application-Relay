@@ -1,0 +1,84 @@
+diff --git a/rustls/src/tls13/key_schedule.rs b/rustls/src/tls13/key_schedule.rs
+index 7914ae2..1c57a6b 100644
+--- a/rustls/src/tls13/key_schedule.rs
++++ b/rustls/src/tls13/key_schedule.rs
+@@ -5,7 +5,7 @@ use alloc::string::ToString;
+ use core::ops::Deref;
+ 
+ use crate::common_state::{CommonState, Side};
+-use crate::crypto::cipher::{AeadKey, Iv, MessageDecrypter, Tls13AeadAlgorithm};
++use crate::crypto::cipher::{AeadKey, Iv, MessageDecrypter, MessageEncrypter, Tls13AeadAlgorithm};
+ use crate::crypto::tls13::{Hkdf, HkdfExpander, OkmBlock, OutputLengthError, expand};
+ use crate::crypto::{SharedSecret, hash, hmac};
+ use crate::error::Error;
+@@ -289,6 +289,10 @@ impl KeyScheduleHandshake {
+     ) {
+         debug_assert_eq!(common.side, Side::Server);
+         let secret = &self.client_handshake_traffic_secret;
++        if common.is_quic() {
++            self.ks.set_decrypter(secret, common);
++            return;
++        }
+         match skip_requested {
+             None => self.ks.set_decrypter(secret, common),
+             Some(max_early_data_size) => common
+@@ -752,6 +756,15 @@ struct KeyScheduleSuite {
+ 
+ impl KeyScheduleSuite {
+     fn set_encrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
++        if common.is_quic() {
++            // QUIC protects packets using its separate keys, not TLS records.
++            // Keep the active flag: it labels queued handshake encryption levels.
++            common.record_layer.set_message_encrypter(
++                <dyn MessageEncrypter>::invalid(),
++                self.suite.common.confidentiality_limit,
++            );
++            return;
++        }
+         let expander = self
+             .suite
+             .hkdf_provider
+@@ -768,6 +781,13 @@ impl KeyScheduleSuite {
+     }
+ 
+     fn set_decrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
++        if common.is_quic() {
++            // An accidental record operation must still fail closed.
++            common.record_layer.set_message_decrypter(
++                <dyn MessageDecrypter>::invalid(),
++            );
++            return;
++        }
+         common
+             .record_layer
+             .set_message_decrypter(self.derive_decrypter(secret));
+@@ -1053,6 +1073,29 @@ mod tests {
+     use crate::KeyLog;
+     use crate::msgs::enums::HashAlgorithm;
+ 
++    #[test]
++    fn quic_keeps_handshake_encryption_state_without_record_ciphers() {
++        let ks = super::KeyScheduleSuite {
++            suite: &TLS13_AES_128_GCM_SHA256_INTERNAL,
++        };
++        let secret = crate::crypto::tls13::OkmBlock::new(&[0u8; 32]);
++        let mut common = crate::common_state::CommonState::new(crate::common_state::Side::Server);
++        common.protocol = crate::common_state::Protocol::Quic;
++        ks.set_encrypter(&secret, &mut common);
++        ks.set_decrypter(&secret, &mut common);
++        // send_msg uses this state to label QUIC handshake encryption levels.
++        assert!(common.record_layer.is_encrypting());
++        // Unlike an uninitialized record layer, an active sentinel must reject
++        // ciphertext rather than treating it as plaintext.
++        let mut ciphertext = [0u8; 16];
++        let message = crate::msgs::message::InboundOpaqueMessage::new(
++            crate::ContentType::ApplicationData,
++            crate::ProtocolVersion::TLSv1_2,
++            &mut ciphertext,
++        );
++        assert!(common.record_layer.decrypt_incoming(message).is_err());
++    }
++
+     #[test]
+     fn empty_hash() {
+         let sha256 = super::provider::tls13::TLS13_AES_128_GCM_SHA256

@@ -1670,3 +1670,60 @@ the selected relay binary is again SHA256
 No migration representation change is retained. Memory/throughput parity remain
 unachieved. The remaining inline packet-space, stream, crypto and runtime state
 are much larger targets than this optional migration structure.
+
+### Retained QUIC-only TLS record cipher omission — 2026-10-21
+
+The [record-cipher investigation](reports/webtransport-quic-record-ciphers-2026-10-21.json)
+identified 100,000 TLS record encrypters and 100,000 decrypters retaining 112 MB
+in addition to QUIC packet keys. Rustls queues QUIC handshake bytes without TLS
+record encryption, but uses record-layer active state to label encryption
+levels. The narrow patch preserves that state, sequence resets and limits using
+rustls' existing fail-closed zero-sized sentinels only for QUIC. TCP/TLS keeps its
+original cipher derivation; QUIC packet/header protection, authentication,
+handshake secrets, key logging, algorithm selection and key updates are intact.
+Published rustls 0.23.46 is checksum-pinned with a declared one-file patch.
+
+The ordinary matched 100,000-session pair reduced ready RSS from 2,592.40 to
+2,482.66 MiB, saving 109.74 MiB. Both completed 400,000 checked deliveries and
+retirement. This is one resource pair, not a confidence interval. All five heap
+gates completed; ready requested live bytes were 2,425,751,021, and the record
+cipher allocation sites disappeared. Profiler allocator RSS/CPU/latency remain
+excluded from ordinary comparisons. Separate socket accounting is incomplete;
+limits and kernel counters are not added to RSS.
+
+Throughput cohorts disagree. The initial three-run pair block measured -0.29%
+private, +2.28% room and -4.63% mixed. A rotated 27-case comparison included the
+committed build, an unmodified rustls build from the same vendor path and the
+candidate. Candidate medians were 1,438,244 private, 1,343,050 room and 1,310,490
+mixed verified deliveries/s: +0.99%, +1.00%, +2.48% vs committed, and +0.56%,
++0.94%, +4.28% vs vendor control. All used the same fixed client. Both cohorts
+are preserved; no consistent throughput gain is claimed. The initial control
+launch lacked executable permission after copying; no server started. Its log
+is preserved, permissions were corrected without byte changes, and only a
+hash/arguments-verified passed receipt was reused on resume.
+
+All six high-paced reliable cases passed with no unreceived application messages.
+All six paired datagram cases passed integrity/cleanup; the candidate's first
+run had 5,844 private and 13,948 fanout updates unreceived, with 5,604 client UDP
+drops. Two later candidate runs had no missing updates. Server UDP receive drops
+were zero throughout. These results are not labeled loss-free. All nine
+clean/loss/reorder fixture cases passed. Under loss plus bulk traffic, datagram
+p99 state age was 77.32 ms with 16/360 updates missing, versus 720.90 ms for
+reliable stream and 1,061.05 ms for TLS WebSocket with none missing. Datagram bulk
+arrival was 2,143.94 ms. These are single fixture cases, not statistical rankings.
+
+Verification includes 274 relay tests, 247 rustls unit tests, 317 Quinn protocol
+tests linked to the patched rustls, Clippy and 272 vendor files. Both endpoint
+profiles had zero lost samples. Actual Chromium passed all nine checks including
+5 MiB delivery; session/connection/storage gauges retired, with one permanent
+global channel. The published rustls crate omits test fixtures and fuzz corpus;
+`scripts/test-rustls-vendor.py` verifies the exact upstream archive checksum and
+runs all unit tests in a fresh copied project, with locked dependencies. The
+maintained helper itself passed all 247 tests. No tests were skipped to get the
+passing result; initial fixture failures remain recorded.
+
+Retain this as a verified memory improvement. The selected relay SHA256 is
+`773479940aa1498da90dd62ef3e2b9236e34fb412a2f41b5fba7477b98a8a3f2`.
+Requested storage remains about 2.426 GB against the earlier native baseline of
+about 119 MB. Full throughput and memory parity remain unachieved; the pivot is
+not accepted. No push, deployment or PR is part of this change.
