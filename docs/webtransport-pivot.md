@@ -1861,3 +1861,20 @@ and other vectors. An 832-byte event-queue allocation at executable offset
 original full-scale profile. No reclamation policy or product change is inferred
 from that fact alone. The full 100,000-session libunwind capture is running;
 its diagnostic watchdog is extended without changing protocol deadlines.
+
+The initial full-scale `libunwind` run later failed at the connected gate:
+`war_connections` was28,634 instead of100,000, with no valid captured gates.
+An earlier read-only observation saw93,926 joins but31,409 live sessions, without
+handshake or protocol errors. The slow profiler made setup take several minutes;
+the retained client transport source defaults to30s QUIC idle timing. Retirement
+is consistent with that timing, but individual close reasons were not captured.
+This failed run is preserved and is not a full-scale memory baseline.
+
+A separate full-scale diagnostic now uses the existing five-second server
+keepalive option and the same frozen binaries. Its source receipt records that
+wire-maintenance traffic differs from the ordinary workload; no product code or
+default changed. All timing and RSS remain excluded from ordinary comparisons.
+The maintained collector did not need a new keepalive option: capacity already
+supports `ping_interval_secs` in its source arguments. An initial convenience
+hook failed before server startup and is also preserved; it was removed. The
+new diagnostic must prove the complete live population and all five gates.

@@ -1,5 +1,5 @@
 {
-  "scope": "Profiler attribution improvement; no product behavior or memory optimization retained in this change. Small8192-session full-stack diagnostic does not prove100k memory parity. Full100k libunwind capture active in exec session94554.",
+  "scope": "Profiler attribution improvement only.8192-session full-stack diagnostic passed. Initial100k full-stack run failed population check and is not a memory baseline. A separate keepalive-maintained diagnostic is active.",
   "server_sha256": "6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f",
   "default_analysis_regression_check": "All first-frame site rows and requested live totals match the existing100k report; analyzer source hash changes as expected.",
   "stacktrace_method": {
@@ -34629,14 +34629,39 @@
   },
   "interpretation": "The original profiles frequently captured only one executable frame. Explicit libunwind selection is confirmed by the real server startup log and produces useful callers for vector, queue, assembler, and TLS allocations. This does not recover omitted/inlined or shared-library frames and does not establish a CPU bottleneck.",
   "next_steps": [
-    "Wait for existing full100k diagnostic session94554; do not restart on observation timeout",
-    "Analyze completed profile with --stacks after verifying all5 gates and hash matches",
-    "Select a reclamation/representation policy only from attributed live-storage evidence, then benchmark identical workloads before/after"
+    "Poll existing session54092; do not restart on observation timeout",
+    "Require all100k live sessions, all5 capture gates, checked deliveries and retirement before accepting full-scale caller attribution",
+    "Preserve failed population and failed setup attempts; no memory reduction or parity claim"
   ],
   "verification": [
     "Real-profiler suppressed-signal recovery test passed",
     "8192-session diagnostic completed all5 allocation gates and32768 measured checked deliveries",
     "All live allocation buckets resolve; bytes sum to203079200-byte ready header",
     "Existing100k first-frame allocation sites unchanged under refactored analyzer"
+  ],
+  "full_scale_attempts": [
+    {
+      "receipt": "artifacts/webtransport/ack-eight-unwind-100000.json",
+      "sha256": "232a9616d8eefda643a3176f6220b276aef79c85fba827daf86c9fd2c375c695",
+      "passed": false,
+      "error": "AssertionError(('connected', 'war_connections', 28634, 100000))",
+      "valid_gates": 0,
+      "observed_during_setup": {
+        "connections": 31415,
+        "sessions": 31409,
+        "joined_total": 93926,
+        "handshake_errors": 0,
+        "protocol_errors": 0
+      },
+      "interpretation": "Slow allocation unwinding extended setup beyond peer idle timing. Retained transport source defaults to30s; idle retirement is consistent with observed counts, but individual close reasons were not captured."
+    },
+    {
+      "source": "artifacts/webtransport/ack-eight-unwind-ping-100000-source.json",
+      "output": "artifacts/webtransport/ack-eight-unwind-ping-100000.json",
+      "status": "Running, exec session54092",
+      "server_keepalive_seconds": 5,
+      "same_frozen_binaries": true,
+      "scope": "Diagnostic maintenance traffic differs from ordinary workload. Server45s idle setting remains above source peer30s default. No product code or default policy changed; exclude profiler timing/RSS from ordinary comparisons."
+    }
   ]
 }
