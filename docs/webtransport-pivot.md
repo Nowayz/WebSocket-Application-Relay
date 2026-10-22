@@ -1630,3 +1630,43 @@ loss-free delivery: paired runs retain their unreceived counts and client UDP
 drops. Browser cleanup returned all session/connection/storage gauges to zero;
 the permanent global channel remained at one. The browser also verified a
 5 MiB application message. Full memory and throughput parity remain unachieved.
+
+### Rejected lazy migration history — 2026-10-21
+
+The [migration representation experiment](reports/webtransport-lazy-migration-rejected-2026-10-21.json)
+boxed the optional previous path instead of reserving it inline. The measured
+accept-site allocation fell from 6,416 to 5,984 bytes per connection, exactly
+43.2 MB at 100,000 sessions. The ordinary matched pair reduced ready RSS from
+2,595.05 to 2,552.69 MiB; each completed 400,000 checked deliveries and retirement.
+Three-run median reliable throughput changed +0.64% private, -1.88% room and
++0.61% mixed, with substantial variation. Compiler layouts are separate
+standalone default-feature diagnostics; the exact relay heap confirms the
+allocation change independently.
+
+The candidate is rejected for now. Five of six initial high-paced reliable
+cases passed; private case three failed with code 1013 and 20 slow-consumer
+closures, with no global-pressure events. The driver continued after that
+failure; its process exit was not proof of all cases passing. Three subsequent
+baseline and three candidate private runs passed. Both builds also passed the
+targeted private profiles, with zero lost samples on both endpoint reports.
+These controls did not reproduce or explain the initial failure. This does not
+prove the representation caused it, but is insufficient evidence to accept the
+candidate under the high-rate reliable workload requirement. The failed receipt
+is retained and is not replaced by successful retries.
+
+Other completed candidate checks: 317 protocol tests, the full relay suite,
+Clippy, 153 vendor files, six paired datagram cases, nine loss/reordering cases,
+and all nine actual Chromium checks including a 5 MiB message and resource
+cleanup. Both endpoint mixed profiles also had zero lost samples. Datagram
+missing updates and client UDP drops remain in the report. Under the loss
+fixture, datagram p99 freshest-state age was 69.78 ms with 14/360 missing;
+reliable stream was 1,020.85 ms and TLS WebSocket 940.60 ms with no missing.
+Single fixture cases are not statistical rankings. Profiled timings and heap
+allocator RSS are excluded from ordinary comparisons.
+
+Source and complete vendor patch were restored byte-for-byte to commit 1277121;
+the selected relay binary is again SHA256
+`bc23c4bc6e5cee7b03f37c852883c3798a8da6011beb68a57874f4c7a35521ce`.
+No migration representation change is retained. Memory/throughput parity remain
+unachieved. The remaining inline packet-space, stream, crypto and runtime state
+are much larger targets than this optional migration structure.
