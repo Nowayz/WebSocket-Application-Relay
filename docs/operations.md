@@ -23,7 +23,9 @@ UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
 for ingress. Session shutdown completes before this runtime is stopped and joined.
 Startup failure also stops and joins it. Reliable private/control output attempts
 an immediate chunk write when there is no older output; partial writes retain
-FIFO position, charged credit, and their write deadline. Fanout remains queued
+FIFO position, charged credit, and their write deadline. The queue ordering lock
+also protects the stream and in-flight marker; a pending write holds no lock
+across an await and cannot be overtaken. Fanout remains queued
 for recipient batching. The TCP/WebSocket details below apply to
 `--legacy-websocket`. See the [measured endpoint-servicing comparison](reports/webtransport-dedicated-ingress-2026-10-21.json)
 for the mixed-load gain and reliable-only throughput tradeoffs.

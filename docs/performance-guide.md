@@ -162,3 +162,61 @@ performance rankings or production guarantees from loopback diagnostics.
 The full historical data and temporary comparison implementations are available
 through Git history; [the concise history](reports/performance-history.md) records useful
 results and exact retrieval paths. Current work compares Rust revisions.
+
+## Phase-gated capacity allocations
+
+Measure ordinary capacity first and freeze both binaries for revision comparisons.
+Choose valid, separate server/client CPU masks for the host and keep them fixed.
+The following is the 100,000-session, 1 KiB, four-second contract used by the
+[full-scale memory report](reports/webtransport-100k-memory-2026-10-21.json):
+
+```sh
+cargo build --release --bin war-relay --example capacity
+python scripts/capacity.py --transport webtransport \
+  --users 100000 --room-size 16 --concurrency 64 --source-addresses 64 \
+  --seconds 4 --waves 1 --payload-bytes 1024 --messages-per-second 1 \
+  --workers 8 --client-workers 8 --pin-workers --pin-client-workers \
+  --server-cpus 0-7 --client-cpus 8-15 \
+  --output artifacts/capacity-ordinary.json
+```
+
+Use `--transport websocket` for the native control. The runner records its
+explicit message, queue and staging budgets; this capacity contract does not
+replace the separate large-message checks.
+
+Repeat that receipt with the replacement allocator to capture every phase gate:
+
+```sh
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-heap/relay --output artifacts/capacity-heap.json
+python scripts/analyze-capacity-heap.py --receipt artifacts/capacity-heap.json \
+  --phase ready --output artifacts/capacity-allocation-sites.json
+```
+
+The heap tool requires gperftools (`/usr/lib/libtcmalloc.so` by default; select
+another installation with `--library`). It preloads only the server, pauses the
+client at each gate, and waits for the dump's signal handler to finish. The
+`--capture-timeout` watchdog controls the diagnostic collector, not relay
+protocol deadlines. Use fresh output paths and prefixes. The analyzer verifies
+the exact executable and profile hashes, resolves captured executable addresses,
+and checks that all allocation buckets sum to the profile header. Optimized
+inline sites can share function names; this is not complete stack attribution.
+
+Kernel socket counters are collected separately. For socket-object estimates,
+read the current kernel's slab sizes without changing host settings:
+
+```sh
+sudo -n python scripts/socket_resources.py --slab-sizes-only > artifacts/socket-slab-sizes.json
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-heap-with-sockets/relay \
+  --output artifacts/capacity-heap-with-sockets.json \
+  --slab-sizes artifacts/socket-slab-sizes.json
+```
+
+If slab metadata is unavailable, the receipt records that limitation. Buffer
+limits are not allocated bytes, SKMEM counters are not an additive total, and
+socket-object estimates exclude other kernel storage. Requested live bytes are
+already part of process memory; never add them to RSS. The replacement allocator
+and capture overhead exclude heap runs from ordinary CPU, latency and RSS
+comparisons. Logical zero resource gauges can precede deferred QUIC retirement;
+keep the done gate and the separate process-exit profile distinct.

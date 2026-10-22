@@ -1530,3 +1530,66 @@ All three final high mixed datagram confirmations retain zero missing generated 
 The final executable passes274 all-target tests, Clippy warnings denied, and153-file vendor verification. New tests reconstruct every possible offset across record/routing headers and body, verify ownership transfer under the queue gate, and resume a12MiB partial record ahead of a following record. Existing timeout/cancellation tests retain charged credit until completion or abort. Actual Chromium passes all nine browser checks including5MiB payload and cleanup; screenshot inspected and seven gauges zero. All nine clean/loss/reorder freshness cases pass. Under loss, datagram p99 state age77.50ms with14/360 unreceived versus reliable-stream2301.40ms with none missing; single trajectories do not establish a statistical ranking or unchanged reliable bulk behavior. The long reorder stream stall remains present.
 
 Both endpoints were profiled in separate reliable mixed before/after diagnostics at249Hz with zero lost samples, plus a final datagram diagnostic. Profiles are excluded from ordinary timing. The deadline-duration amendment and final binary confirmations are separate from the repeated prototype cohort. The admission improvement is integrated with its measured throughput and memory costs. Full maximum-throughput and memory parity remain unachieved; goal stays active.
+
+### 2026-10-21: borrow the stream under its ordering lock
+
+The [ownership comparison](reports/webtransport-writer-ownership-2026-10-21.json)
+keeps the stream in queue-owned state and marks a dequeued record busy under the
+same lock. Each write poll borrows it briefly. Pending chunk suffixes remain in
+the future, so accepted bytes are not replayed; the lock is released before
+awaiting. No stream is copied into each parked writer future. No queue limit,
+byte budget, input quantum, or maintained client changes. All 274 tests, Clippy,
+153-file vendor checks, nine browser checks and nine freshness cases pass.
+
+A fresh ordinary 100,000-session pair reduces RSS from 2,714.20 to 2,697.14 MiB,
+with all 400,000 measured deliveries verified in both and complete cleanup. A
+separate 8,194-session allocation pair reduces requested live bytes from
+226,355,770 to 223,213,974. Three rotated windowed pairs give private median
+1,431,523 to 1,443,903/s (+0.86%), fanout 1,353,947 to 1,364,167/s (+0.75%), and
+mixed aggregate 1,342,208 to 1,317,022/s (-1.88%). The ranges overlap; this is a
+memory improvement with observed throughput tradeoffs, not a universal speedup.
+All six high paced reliable cases still pass with every generated update FIFO.
+
+Original-client datagram tests retain small missing counts in some candidate
+runs, coinciding with client UDP receive drops. The server receives/submits all
+generated traffic and has zero receive drops. Paired original-client controls
+and a fresh two-server/two-client scheduler experiment are preserved in the
+report. Changing only client event_interval(1) is not a reliable fix and is not
+retained: the maintained example source and binary are restored. Client changes
+are not used to claim a server improvement. All nine loss/reorder cases pass;
+under loss, datagram p99 state age is 70.30 ms with 10/360 unreceived versus
+reliable-stream 1,221.36 ms with all received. Single trajectories are not
+statistical rankings; the long reliable reorder stall remains visible.
+
+### Full-scale allocation and kernel accounting
+
+The [100,000-session memory report](reports/webtransport-100k-memory-2026-10-21.json)
+now contains complete native WebSocket and WebTransport live-heap captures,
+ordinary allocator observations, setup/retirement and socket accounting. Both
+use the same frozen server/client executables with the selected transport,
+100,000 sessions, 6,250 rooms, 1 KiB payloads and 400,000 verified deliveries.
+Fresh ordinary native RSS is 113.79 MiB versus WebTransport 2,697.14 MiB (23.70x).
+Requested live allocations at ready are 118,839,363 versus 2,648,845,537 bytes
+(22.29x). The profiler's RSS and timings are separate diagnostics, not ordinary
+performance. Memory parity is disproven for this measured contract.
+
+Connected TCP socket-object estimates are 243,200,000 bytes per endpoint,
+reported separately from process memory. The shared server UDP socket object is
+1,344 bytes. Buffer limits are not allocations and these estimates exclude other
+kernel metadata/overhead; this is not complete system memory accounting. The
+initial collector's five-second timeout left a QUIC retirement capture
+incomplete; that failed run remains saved. The maintained collector waits for
+SIGUSR2 handler completion and validates all five gates for both transports.
+At logical done, native requested storage is about 1.88 MB and QUIC about
+70.39 MB; process-exit profiles are separate and much smaller. Do not label
+retained RSS or delayed release a leak from those gauges alone.
+
+The [verified allocation-site breakdown](reports/webtransport-100k-heap-sites-2026-10-21.json)
+attributes 641.6 MB to one 6,416-byte endpoint-accept allocation per connection,
+about 230 MB to packet-key allocations, and 116 MB to packet-tracking allocations.
+It identifies the first captured executable frame, not a complete optimized
+call stack or a proven type layout. These larger retained structures are the
+next memory targets. The ownership improvement is retained with the measured
+costs; full throughput and memory parity remain unachieved, and the pivot is not
+accepted. Reproduction commands and the maintained heap collector/analyzer are
+in the [performance guide](performance-guide.md#phase-gated-capacity-allocations).

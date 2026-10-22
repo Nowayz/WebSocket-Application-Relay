@@ -14,7 +14,7 @@ use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use parking_lot::Mutex;
 use std::{
-    future::Future,
+    future::{Future, poll_fn},
     sync::{Arc, atomic::Ordering::Relaxed},
     task::{Context as TaskContext, Poll, Waker},
     time::{Duration, Instant},
@@ -33,13 +33,17 @@ struct QueuedOutput {
     started: Option<Instant>,
 }
 
+struct StreamOutput {
+    stream: SendStream,
+    busy: bool,
+}
+
 struct Output {
     // Session includes HTTP metadata and per-clone polling state. These users
     // call its shared async API, so keep one handle rather than copying it into
     // each long-lived future and output sink.
     connection: Arc<Connection>,
-    queue: queue::Queue<QueuedOutput>,
-    send: Mutex<Option<SendStream>>,
+    queue: queue::Queue<QueuedOutput, StreamOutput>,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
     activity: Option<Arc<Mutex<Instant>>>,
@@ -48,7 +52,7 @@ impl Output {
     fn submit(
         &self,
         packet: Submission<'_>,
-        queue: &mut queue::State<QueuedOutput>,
+        queue: &mut queue::State<QueuedOutput, StreamOutput>,
         immediate: bool,
     ) -> bool {
         if !packet.frame.unreliable {
@@ -58,27 +62,24 @@ impl Output {
             let wake = queue.is_empty();
             let mut offset = 0;
             let mut started = None;
-            if immediate && wake {
-                let mut send = self.send.lock();
-                if let Some(send) = send.as_mut() {
-                    let mut chunks = frame_chunks(packet.frame, 0);
-                    // One cancel-safe poll: Pending consumes no bytes. The queue
-                    // notification wakes the owning writer, which polls again with
-                    // its real waker; this producer never waits for write readiness.
-                    let attempt = send.write_chunks(&mut chunks);
-                    tokio::pin!(attempt);
-                    if let Poll::Ready(Ok(written)) = attempt
-                        .as_mut()
-                        .poll(&mut TaskContext::from_waker(Waker::noop()))
-                    {
-                        offset = written.bytes;
-                        if offset == 4 + packet.frame.len() {
-                            self.delivered(packet.frame);
-                            return true;
-                        }
-                        if offset != 0 {
-                            started = Some(Instant::now());
-                        }
+            if immediate && wake && !queue.owner.busy {
+                let mut chunks = frame_chunks(packet.frame, 0);
+                // One cancel-safe poll: Pending consumes no bytes. The queue
+                // notification wakes the owning writer, which polls again with
+                // its real waker; this producer never waits for write readiness.
+                let attempt = queue.owner.stream.write_chunks(&mut chunks);
+                tokio::pin!(attempt);
+                if let Poll::Ready(Ok(written)) = attempt
+                    .as_mut()
+                    .poll(&mut TaskContext::from_waker(Waker::noop()))
+                {
+                    offset = written.bytes;
+                    if offset == 4 + packet.frame.len() {
+                        self.delivered(packet.frame);
+                        return true;
+                    }
+                    if offset != 0 {
+                        started = Some(Instant::now());
                     }
                 }
             }
@@ -232,11 +233,26 @@ fn frame_chunks(frame: &Frame, offset: usize) -> [Bytes; 2] {
             .slice(offset.saturating_sub(header_len)..),
     ]
 }
-async fn write_frame_from(stream: &mut SendStream, frame: &Frame, offset: usize) -> Result<()> {
-    stream
-        .write_all_chunks(&mut frame_chunks(frame, offset))
-        .await?;
+async fn write_output_chunks(output: &Output, chunks: &mut [Bytes]) -> Result<()> {
+    poll_fn(|cx| {
+        let mut state = output.queue.state.lock();
+        // Chunk suffixes live outside this temporary future, so a Pending poll
+        // preserves all accepted bytes without retaining the stream in a task.
+        let result = {
+            let write = state.owner.stream.write_all_chunks(chunks);
+            tokio::pin!(write);
+            write.as_mut().poll(cx)
+        };
+        if matches!(&result, Poll::Ready(Ok(()))) {
+            state.owner.busy = false;
+        }
+        result
+    })
+    .await?;
     Ok(())
+}
+async fn write_frame_from(output: &Output, frame: &Frame, offset: usize) -> Result<()> {
+    write_output_chunks(output, &mut frame_chunks(frame, offset)).await
 }
 
 /// Bind the shared UDP socket explicitly so bursts from many sessions do not
@@ -397,8 +413,13 @@ async fn session(
         (relay.config.idle_timeout_secs != 0).then(|| Arc::new(Mutex::new(Instant::now())));
     let output = Arc::new(Output {
         connection: connection.clone(),
-        queue: queue::Queue::new(relay.config.queue_messages),
-        send: Mutex::new(Some(send)),
+        queue: queue::Queue::with_owner(
+            relay.config.queue_messages,
+            StreamOutput {
+                stream: send,
+                busy: false,
+            },
+        ),
         relay: relay.clone(),
         retirement,
         activity: activity.clone(),
@@ -415,13 +436,12 @@ async fn session(
     // an entire recipient queue. Use admission as the smaller fairness bound.
     let record_quantum = INPUT_QUANTUM.min(relay.config.queue_messages);
     let writer = async {
-        // Queue dequeue and stream ownership transfer share the submission gate.
-        // No producer can overtake a packet between dequeue and the first write.
-        let take = |packet| {
-            (
-                packet,
-                output.send.lock().take().expect("writer owns idle stream"),
-            )
+        // Mark the writer active while dequeuing under the submission gate.
+        // A popped record still precedes new output even if the queue is empty.
+        let take = |packet, owner: &mut StreamOutput| {
+            assert!(!owner.busy);
+            owner.busy = true;
+            packet
         };
         let mut remaining = record_quantum;
         loop {
@@ -434,7 +454,7 @@ async fn session(
                     _ = finishing.cancelled() => { outgoing.close(); outgoing.recv_with_idle_map(take).await }
                 }
             };
-            let Some((queued, mut send)) = packet else {
+            let Some(queued) = packet else {
                 break;
             };
             if was_idle {
@@ -449,7 +469,7 @@ async fn session(
                 );
             tokio::time::timeout(
                 remaining_time,
-                write_frame_from(&mut send, &packet.frame, queued.offset),
+                write_frame_from(&output, &packet.frame, queued.offset),
             )
             .await
             .inspect_err(|_| {
@@ -458,7 +478,6 @@ async fn session(
             .inspect_err(|_| {
                 relay.metrics.write_errors.fetch_add(1, Relaxed);
             })?;
-            *output.send.lock() = Some(send);
             output.delivered(&packet.frame);
             remaining -= 1;
             if remaining == 0 {
@@ -467,13 +486,7 @@ async fn session(
             }
         }
         if finishing.is_cancelled() {
-            let mut send = output
-                .send
-                .lock()
-                .take()
-                .expect("finished writer owns stream");
-            write_record(&mut send, &[]).await?;
-            *output.send.lock() = Some(send);
+            write_output_chunks(&output, &mut [Bytes::from_static(&[0, 0, 0, 0])]).await?;
         }
         Ok::<(), anyhow::Error>(())
     };

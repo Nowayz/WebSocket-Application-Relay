@@ -8,19 +8,20 @@ use std::{
 };
 use tokio::sync::Notify;
 
-pub(super) struct Queue<T> {
-    pub state: Mutex<State<T>>,
+pub(super) struct Queue<T, O = ()> {
+    pub state: Mutex<State<T, O>>,
     pub ready: Notify,
 }
 
-pub(super) struct State<T> {
+pub(super) struct State<T, O = ()> {
+    pub owner: O,
     first: Option<T>,
     rest: VecDeque<T>,
     maximum: usize,
     closed: bool,
 }
 
-impl<T> State<T> {
+impl<T, O> State<T, O> {
     pub fn allocated_bytes(&self) -> usize {
         self.rest.capacity() * std::mem::size_of::<T>()
     }
@@ -53,9 +54,16 @@ impl<T> State<T> {
 }
 
 impl<T> Queue<T> {
+    #[cfg(test)]
     pub fn new(maximum: usize) -> Self {
+        Self::with_owner(maximum, ())
+    }
+}
+impl<T, O> Queue<T, O> {
+    pub fn with_owner(maximum: usize, owner: O) -> Self {
         Self {
             state: Mutex::new(State {
+                owner,
                 first: None,
                 rest: VecDeque::new(),
                 maximum,
@@ -67,16 +75,16 @@ impl<T> Queue<T> {
 
     // Only the owning session creates a receiver. Dropping it refuses future
     // submissions and releases every queued output reservation.
-    pub fn receiver(&self) -> Receiver<'_, T> {
+    pub fn receiver(&self) -> Receiver<'_, T, O> {
         Receiver { queue: self }
     }
 }
 
-pub(super) struct Receiver<'a, T> {
-    queue: &'a Queue<T>,
+pub(super) struct Receiver<'a, T, O = ()> {
+    queue: &'a Queue<T, O>,
 }
 
-impl<T> Receiver<'_, T> {
+impl<T, O> Receiver<'_, T, O> {
     pub fn close(&self) {
         self.queue.state.lock().closed = true;
         self.queue.ready.notify_one();
@@ -91,13 +99,13 @@ impl<T> Receiver<'_, T> {
     // after sleeping, rather than carrying an old partial quantum into a burst.
     #[cfg(test)]
     pub async fn recv_with_idle(&mut self) -> (Option<T>, bool) {
-        self.recv_with_idle_map(|value| value).await
+        self.recv_with_idle_map(|value, _| value).await
     }
 
-    // Transform under the queue lock when ownership must move with dequeue.
+    // Update the owner under the queue lock when dequeue must be atomic with it.
     pub async fn recv_with_idle_map<U>(
         &mut self,
-        mut map: impl FnMut(T) -> U,
+        mut map: impl FnMut(T, &mut O) -> U,
     ) -> (Option<U>, bool) {
         let mut was_idle = false;
         loop {
@@ -106,7 +114,7 @@ impl<T> Receiver<'_, T> {
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return (Some(map(value)), was_idle);
+                    return (Some(map(value, &mut state.owner)), was_idle);
                 }
                 if state.closed {
                     return (None, was_idle);
@@ -119,7 +127,7 @@ impl<T> Receiver<'_, T> {
             {
                 let mut state = self.queue.state.lock();
                 if let Some(value) = state.pop() {
-                    return (Some(map(value)), was_idle);
+                    return (Some(map(value, &mut state.owner)), was_idle);
                 }
                 if state.closed {
                     return (None, was_idle);
@@ -137,7 +145,7 @@ impl<T> Receiver<'_, T> {
     }
 }
 
-impl<T> Drop for Receiver<'_, T> {
+impl<T, O> Drop for Receiver<'_, T, O> {
     fn drop(&mut self) {
         let mut state = self.queue.state.lock();
         state.closed = true;
@@ -155,17 +163,20 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn dequeue_transfers_external_ownership_under_the_submission_gate() {
-        let queue = Queue::new(2);
+    async fn dequeue_updates_owner_under_the_submission_gate() {
+        let queue = Queue::with_owner(2, false);
         assert!(queue.state.lock().try_push(42));
         let mut receiver = queue.receiver();
         let result = receiver
-            .recv_with_idle_map(|value| {
+            .recv_with_idle_map(|value, busy| {
                 assert!(queue.state.try_lock().is_none());
+                assert!(!*busy);
+                *busy = true;
                 value + 1
             })
             .await;
         assert_eq!(result, (Some(43), false));
+        assert!(queue.state.lock().owner);
     }
 
     #[tokio::test]
