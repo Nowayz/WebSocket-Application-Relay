@@ -2057,3 +2057,29 @@ missing caller frames prevent assigning those CPU samples to a Rust call site.
 The next experiment should target shared packet-tree reuse, with actual reuse
 and allocation measurement before acceptance. The earlier one-per-worker tree
 cache remains rejected; it is not evidence that a shared cache will win.
+
+
+### Shared packet-tree pool rejected (2026-10-22)
+
+The endpoint-owned empty-tree pool reduced ready-to-measured allocator
+requests from 9.075 to 8.030 per checked delivery and requested bytes from
+3,626.58 to 2,416.30, with 100,000 sessions and 400,000 verified deliveries.
+Packet records and scalar connection history stayed with their connection;
+the protocol suite passed 320 tests with paired-endpoint pooling disabled
+and enabled. The relay suite and Clippy passed.
+
+That allocation improvement did not establish a whole-workload win. Three
+rotated four-second repeats gave median throughput changes of -0.43% private,
++0.26% room, and -1.33% mixed. The ordinary capacity pair passed, with ready
+RSS 2,254.73 versus 2,253.89 MiB and server CPU 6.72 versus 7.10 seconds.
+Small timing differences and this single capacity pair do not prove a
+regression, but neither justifies the shared-lock complexity. Synchronization
+is a hypothesis, not a demonstrated cause. The candidate was rejected and
+source plus default executable restored to the retained packet-space version.
+Browser and datagram acceptance were not run for the rejected candidate.
+
+The exact rejected diff, hashes, receipts, allocation sites, validation, and
+measurement limits are preserved in
+[`webtransport-shared-packet-tree-2026-10-22.json`](reports/webtransport-shared-packet-tree-2026-10-22.json).
+UDP receive storage is the next allocation target; throughput and memory
+parity remain unmet.

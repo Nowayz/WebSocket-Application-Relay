@@ -1,0 +1,424 @@
+{
+  "status": "Rejected: allocation reduction without whole-workload improvement; parity remains unmet",
+  "baseline_commit": "9bb0740a0000c953dc47712941bd59a46e4375bb",
+  "candidate_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+  "source_patch": "diff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..3805249 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -70,6 +70,7 @@ mod send_buffer;\n mod spaces;\n #[cfg(fuzzing)]\n pub use spaces::Retransmits;\n+pub(crate) use spaces::SentPacketPool;\n use spaces::{\n     PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames, SentPacket, ThinRetransmits,\n };\n@@ -176,6 +177,7 @@ pub struct Connection {\n     spin: bool,\n     /// Packet number spaces: initial, handshake, 1-RTT\n     spaces: PacketSpaces,\n+    packet_trees: Arc<SentPacketPool>,\n     /// Highest usable packet number space\n     highest_space: SpaceId,\n     /// 1-RTT keys used prior to a key update\n@@ -263,6 +265,7 @@ impl Connection {\n         allow_mtud: bool,\n         rng_seed: [u8; 32],\n         side_args: SideArgs,\n+        packet_trees: Arc<SentPacketPool>,\n     ) -> Self {\n         let pref_addr_cid = side_args.pref_addr_cid();\n         let path_validated = side_args.path_validated();\n@@ -315,6 +318,7 @@ impl Connection {\n             spin_enabled: config.allow_spin && rng.random_ratio(7, 8),\n             spin: false,\n             spaces: PacketSpaces::new(initial_space, now),\n+            packet_trees,\n             highest_space: SpaceId::Initial,\n             prev_crypto: None,\n             next_crypto: None,\n@@ -1512,7 +1516,7 @@ impl Connection {\n \n         let mut ack_eliciting_acked = false;\n         for packet in newly_acked.elts() {\n-            if let Some(info) = self.spaces[space].take(packet) {\n+            if let Some(info) = self.spaces[space].take(packet, &self.packet_trees) {\n                 if let Some(acked) = info.largest_acked {\n                     // Assume ACKs for all packets below the largest acknowledged in `packet` have\n                     // been received. This can cause the peer to spuriously retransmit if some of\n@@ -1784,7 +1788,9 @@ impl Connection {\n             );\n \n             for &packet in &lost_packets {\n-                let info = self.spaces[pn_space].take(packet).unwrap(); // safe: lost_packets is populated just above\n+                let info = self.spaces[pn_space]\n+                    .take(packet, &self.packet_trees)\n+                    .unwrap(); // safe: lost_packets is populated just above\n                 self.config.qlog_sink.emit_packet_lost(\n                     packet,\n                     &info,\n@@ -1825,7 +1831,9 @@ impl Connection {\n \n         // Handle a lost MTU probe\n         if let Some(packet) = lost_mtu_probe {\n-            let info = self.spaces[SpaceId::Data].take(packet).unwrap(); // safe: lost_mtu_probe is omitted from lost_packets, and therefore must not have been removed yet\n+            let info = self.spaces[SpaceId::Data]\n+                .take(packet, &self.packet_trees)\n+                .unwrap(); // safe: lost_mtu_probe is omitted from lost_packets, and therefore must not have been removed yet\n             self.remove_in_flight(&info);\n             self.path.mtud.on_probe_lost();\n             self.stats.path.lost_plpmtud_probes += 1;\n@@ -2535,7 +2543,7 @@ impl Connection {\n                 self.rem_handshake_cid = rem_cid;\n \n                 let space = &mut self.spaces[SpaceId::Initial];\n-                if let Some(info) = space.take(0) {\n+                if let Some(info) = space.take(0, &self.packet_trees) {\n                     self.on_packet_acked(now, info);\n                 };\n \ndiff --git a/vendor/quinn-proto/src/connection/packet_builder.rs b/vendor/quinn-proto/src/connection/packet_builder.rs\nindex d67c85a..3463400 100644\n--- a/vendor/quinn-proto/src/connection/packet_builder.rs\n+++ b/vendor/quinn-proto/src/connection/packet_builder.rs\n@@ -233,8 +233,12 @@ impl PacketBuilder {\n             stream_frames: sent.stream_frames,\n         };\n \n-        conn.path\n-            .sent(exact_number, packet, &mut conn.spaces[space_id]);\n+        conn.path.sent(\n+            exact_number,\n+            packet,\n+            &mut conn.spaces[space_id],\n+            &conn.packet_trees,\n+        );\n         conn.stats.path.sent_packets += 1;\n         conn.reset_keep_alive(now);\n         if size != 0 {\ndiff --git a/vendor/quinn-proto/src/connection/paths.rs b/vendor/quinn-proto/src/connection/paths.rs\nindex 1488575..357986c 100644\n--- a/vendor/quinn-proto/src/connection/paths.rs\n+++ b/vendor/quinn-proto/src/connection/paths.rs\n@@ -5,7 +5,7 @@ use tracing::trace;\n use super::{\n     mtud::MtuDiscovery,\n     pacing::Pacer,\n-    spaces::{PacketSpace, SentPacket},\n+    spaces::{PacketSpace, SentPacket, SentPacketPool},\n };\n use crate::{Duration, Instant, TIMER_GRANULARITY, TransportConfig, congestion, packet::SpaceId};\n \n@@ -166,12 +166,18 @@ impl PathData {\n     }\n \n     /// Account for transmission of `packet` with number `pn` in `space`\n-    pub(super) fn sent(&mut self, pn: u64, packet: SentPacket, space: &mut PacketSpace) {\n+    pub(super) fn sent(\n+        &mut self,\n+        pn: u64,\n+        packet: SentPacket,\n+        space: &mut PacketSpace,\n+        pool: &SentPacketPool,\n+    ) {\n         self.in_flight.insert(&packet);\n         if self.first_packet.is_none() {\n             self.first_packet = Some(pn);\n         }\n-        if let Some(forgotten) = space.sent(pn, packet) {\n+        if let Some(forgotten) = space.sent(pn, packet, pool) {\n             self.remove_in_flight(&forgotten);\n         }\n     }\ndiff --git a/vendor/quinn-proto/src/connection/spaces.rs b/vendor/quinn-proto/src/connection/spaces.rs\nindex e017a65..c386c8b 100644\n--- a/vendor/quinn-proto/src/connection/spaces.rs\n+++ b/vendor/quinn-proto/src/connection/spaces.rs\n@@ -3,6 +3,7 @@ use std::{\n     collections::{BTreeMap, VecDeque},\n     mem,\n     ops::{Bound, Index, IndexMut, Range},\n+    sync::Mutex,\n };\n \n use rand::{Rng, RngExt};\n@@ -16,6 +17,47 @@ use crate::{\n     shared::IssuedCid,\n };\n \n+/// Endpoint-owned scratch. Only empty maps enter the pool; packet records and\n+/// packet-number/ACK history remain owned by their original connection.\n+pub(crate) struct SentPacketPool {\n+    spare: Mutex<Vec<BTreeMap<u64, SentPacket>>>,\n+    capacity: usize,\n+}\n+\n+impl SentPacketPool {\n+    pub(crate) fn new(capacity: usize) -> Self {\n+        Self {\n+            spare: Mutex::new(Vec::new()),\n+            capacity,\n+        }\n+    }\n+\n+    fn take(&self) -> BTreeMap<u64, SentPacket> {\n+        if self.capacity == 0 {\n+            return BTreeMap::new();\n+        }\n+        let tree = self\n+            .spare\n+            .lock()\n+            .unwrap_or_else(|e| e.into_inner())\n+            .pop()\n+            .unwrap_or_default();\n+        assert!(tree.is_empty());\n+        tree\n+    }\n+\n+    fn recycle(&self, tree: BTreeMap<u64, SentPacket>) {\n+        assert!(tree.is_empty());\n+        if self.capacity == 0 {\n+            return;\n+        }\n+        let mut spare = self.spare.lock().unwrap_or_else(|e| e.into_inner());\n+        if spare.len() < self.capacity {\n+            spare.push(tree);\n+        }\n+    }\n+}\n+\n pub(super) struct PacketSpace {\n     pub(super) crypto: Option<Keys>,\n     pub(super) dedup: Dedup,\n@@ -205,12 +247,12 @@ impl PacketSpace {\n     }\n \n     /// Stop tracking sent packet `number`, and return what we knew about it\n-    pub(super) fn take(&mut self, number: u64) -> Option<SentPacket> {\n+    pub(super) fn take(&mut self, number: u64, pool: &SentPacketPool) -> Option<SentPacket> {\n         let packet = self.sent_packets.remove(&number)?;\n-        // BTreeMap retains its empty leaf after the last removal. Idle peers\n-        // need the packet-number history below, not an unused packet-tree node.\n+        // Move the empty leaf to endpoint scratch instead of retaining one\n+        // on every idle peer. No packet records or scalar history move.\n         if self.sent_packets.is_empty() {\n-            self.sent_packets = BTreeMap::new();\n+            pool.recycle(mem::take(&mut self.sent_packets));\n         }\n         if !packet.ack_eliciting && number > self.largest_ack_eliciting_sent {\n             self.unacked_non_ack_eliciting_tail =\n@@ -220,7 +262,12 @@ impl PacketSpace {\n     }\n \n     /// May return a packet that should be forgotten\n-    pub(super) fn sent(&mut self, number: u64, packet: SentPacket) -> Option<SentPacket> {\n+    pub(super) fn sent(\n+        &mut self,\n+        number: u64,\n+        packet: SentPacket,\n+        pool: &SentPacketPool,\n+    ) -> Option<SentPacket> {\n         // Retain state for at most this many non-ACK-eliciting packets sent after the most recently\n         // sent ACK-eliciting packet. We're never guaranteed to receive an ACK for those, and we\n         // can't judge them as lost without an ACK, so to limit memory in applications which receive\n@@ -257,6 +304,9 @@ impl PacketSpace {\n             self.unacked_non_ack_eliciting_tail += 1;\n         }\n \n+        if self.sent_packets.is_empty() {\n+            self.sent_packets = pool.take();\n+        }\n         self.sent_packets.insert(number, packet);\n         forgotten\n     }\n@@ -1000,6 +1050,46 @@ const MAX_ACK_BLOCKS: usize = 64;\n mod test {\n     use super::*;\n \n+    #[cfg(not(target_family = \"wasm\"))]\n+    #[test]\n+    fn shared_tree_reuse_keeps_packet_history_and_records_with_their_connection() {\n+        let pool = std::sync::Arc::new(SentPacketPool::new(1));\n+        let now = Instant::now();\n+        let make_packet = move |size| SentPacket {\n+            path_generation: 0,\n+            time_sent: now,\n+            size,\n+            ack_eliciting: true,\n+            largest_acked: None,\n+            retransmits: ThinRetransmits::default(),\n+            stream_frames: Default::default(),\n+        };\n+        let mut first = PacketSpace::new(now);\n+        first.next_packet_number = 42;\n+        first.crypto_offset = 77;\n+        first.largest_acked_packet = Some(5);\n+        first.dedup.insert(4);\n+        first.sent(12, make_packet(100), &pool);\n+        assert!(first.take(11, &pool).is_none());\n+        assert_eq!(first.take(12, &pool).unwrap().size, 100);\n+        assert_eq!(pool.spare.lock().unwrap().len(), 1);\n+        let other_pool = pool.clone();\n+        std::thread::spawn(move || {\n+            let mut second = PacketSpace::new(now);\n+            second.sent(99, make_packet(200), &other_pool);\n+            assert!(!second.sent_packets.contains_key(&12));\n+            assert_eq!(second.sent_packets.len(), 1);\n+            assert_eq!(second.take(99, &other_pool).unwrap().size, 200);\n+        })\n+        .join()\n+        .unwrap();\n+        assert_eq!(first.next_packet_number, 42);\n+        assert_eq!(first.crypto_offset, 77);\n+        assert_eq!(first.largest_acked_packet, Some(5));\n+        assert!(first.dedup.insert(4));\n+        assert!(first.sent_packets.is_empty());\n+    }\n+\n     #[test]\n     fn retirement_is_terminal_and_preserves_application_history() {\n         let now = Instant::now();\ndiff --git a/vendor/quinn-proto/src/endpoint.rs b/vendor/quinn-proto/src/endpoint.rs\nindex 63ccbd8..d989f6f 100644\n--- a/vendor/quinn-proto/src/endpoint.rs\n+++ b/vendor/quinn-proto/src/endpoint.rs\n@@ -43,6 +43,7 @@ use crate::{\n /// This object performs no I/O whatsoever. Instead, it consumes incoming packets and\n /// connection-generated events via `handle` and `handle_event`.\n pub struct Endpoint {\n+    packet_trees: Arc<crate::connection::SentPacketPool>,\n     rng: StdRng,\n     index: ConnectionIndex,\n     connections: Slab<ConnectionMeta>,\n@@ -59,6 +60,14 @@ pub struct Endpoint {\n }\n \n impl Endpoint {\n+    /// Size empty packet-tree scratch to the I/O adapter's receive batch.\n+    /// Retains at most one empty tree per packet space in that batch. This never\n+    /// limits live packet tracking. Existing connections retain their pool.\n+    pub fn set_packet_tree_cache_batch_size(&mut self, datagrams: usize) {\n+        let capacity = datagrams.saturating_mul(crate::packet::SpaceId::iter().count());\n+        self.packet_trees = Arc::new(crate::connection::SentPacketPool::new(capacity));\n+    }\n+\n     /// Create a new endpoint\n     ///\n     /// `allow_mtud` enables path MTU detection when requested by `Connection` configuration for\n@@ -76,6 +85,7 @@ impl Endpoint {\n         rng_seed: Option<[u8; 32]>,\n     ) -> Self {\n         Self {\n+            packet_trees: Arc::new(crate::connection::SentPacketPool::new(0)),\n             rng: match rng_seed.or(config.rng_seed) {\n                 Some(seed) => StdRng::from_seed(seed),\n                 None => StdRng::try_from_rng(&mut SysRng)\n@@ -843,6 +853,7 @@ impl Endpoint {\n             self.allow_mtud,\n             rng_seed,\n             side_args,\n+            self.packet_trees.clone(),\n         );\n \n         let mut cids_issued = 0;\ndiff --git a/vendor/quinn/src/endpoint.rs b/vendor/quinn/src/endpoint.rs\nindex fbec4c2..9b2943b 100644\n--- a/vendor/quinn/src/endpoint.rs\n+++ b/vendor/quinn/src/endpoint.rs\n@@ -681,10 +681,11 @@ pub(crate) struct EndpointRef(Arc<EndpointInner>);\n impl EndpointRef {\n     pub(crate) fn new(\n         socket: Arc<dyn AsyncUdpSocket>,\n-        inner: proto::Endpoint,\n+        mut inner: proto::Endpoint,\n         ipv6: bool,\n         runtime: Arc<dyn Runtime>,\n     ) -> Self {\n+        inner.set_packet_tree_cache_batch_size(socket.max_receive_segments() * BATCH_SIZE);\n         let (sender, events) = mpsc::unbounded_channel();\n         let recv_state = RecvState::new(sender, socket.max_receive_segments(), &inner);\n         Self(Arc::new(EndpointInner {\n",
+  "throughput": {
+    "private": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-packet-spaces-1.json",
+            "sha256": "3e5de6aa08c2e15e72eaed1e5902e16e41e0c5c2450d17c17252f6dac5277c9a",
+            "verified_per_second": 1521134.2331794181,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-packet-spaces-2.json",
+            "sha256": "b3ecaf85f49facaea0b9f3612157f859ee85709c6bb47b2886333a8c3c42b6dc",
+            "verified_per_second": 1430018.7793330736,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-packet-spaces-3.json",
+            "sha256": "16ef4a72e2dbcdfc66bc4db21d7aff10b84175cbe355192ff378c1c88a37f796",
+            "verified_per_second": 1430994.014929177,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1430994.014929177
+      },
+      "shared-packet-tree": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-shared-packet-tree-1.json",
+            "sha256": "14fcf841e23256424a26ecca2915b0a37a2d42a25ece5bd65969f501817f7821",
+            "verified_per_second": 1420287.9310901216,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-shared-packet-tree-2.json",
+            "sha256": "385b46d29be0aa4a0e0dedb03268a684c87a4733330d291fda5444a9c67f1f36",
+            "verified_per_second": 1424813.546372946,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-private-shared-packet-tree-3.json",
+            "sha256": "3287e29ba397a74979c560ce15c04ff44eb857c47e12c94e9a36edafe61b7420",
+            "verified_per_second": 1448877.339903036,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1424813.546372946
+      },
+      "candidate_delta_percent": -0.43190037776202894
+    },
+    "roomonly": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-packet-spaces-1.json",
+            "sha256": "9b6e68272151b29984d304b7a9dbb9981db049d32d66500dd5197c8da28cd870",
+            "verified_per_second": 1427672.4256710398,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-packet-spaces-2.json",
+            "sha256": "b93a80940edfc61d5117bef603162a8abaaac2c6dc445dc5b32cbfcbd4dd41c6",
+            "verified_per_second": 1438654.9648067583,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-packet-spaces-3.json",
+            "sha256": "314e82353f93bd62d47b7dd32bab0a006df5abe26743e5e9b8a2e7a668cabcad",
+            "verified_per_second": 1443530.522079628,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1438654.9648067583
+      },
+      "shared-packet-tree": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-shared-packet-tree-1.json",
+            "sha256": "ee7b6dd1c85fb0c0b0858f76178aec21eb2754b6d49b5e10ed72a83b72bf296e",
+            "verified_per_second": 1459541.9009719691,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-shared-packet-tree-2.json",
+            "sha256": "761a1a5b2b1b3553f593296e93641afac8427e12f0a32c5b05e3d812af58990d",
+            "verified_per_second": 1442434.0175083515,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-roomonly-shared-packet-tree-3.json",
+            "sha256": "ff5b5f9dc9cd4c175f973f63221b8fc9c31ca2323dcc862ea73887c7c8c80166",
+            "verified_per_second": 1431543.0075129224,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1442434.0175083515
+      },
+      "candidate_delta_percent": 0.26267957182497526
+    },
+    "mixed": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-packet-spaces-1.json",
+            "sha256": "64e6df2831f1897bed89ca128acdb64e34831dbc084f3c8546c0e76870a78104",
+            "verified_per_second": 1406826.3738493696,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-packet-spaces-2.json",
+            "sha256": "7d6f4eedd9b9996e4b2246fd6fd9515e8f7c7f18c5a73a5aaeb64e8c49ff91ca",
+            "verified_per_second": 1405526.6441032225,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-packet-spaces-3.json",
+            "sha256": "27789ca23d661ad849af6a5dfca22fa10644af25197011e7c84768150e6ff12a",
+            "verified_per_second": 1324194.6985482941,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1405526.6441032225
+      },
+      "shared-packet-tree": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-shared-packet-tree-1.json",
+            "sha256": "5236b6f3d3ce0723941fc931b4f0f38b86369dc963066fd94076414de10ffb2a",
+            "verified_per_second": 1386837.5544317882,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-shared-packet-tree-2.json",
+            "sha256": "67a2c81bd8c3435e1fbbaf2adc2d5ff4a115869b979a86f321694ca8af8449ec",
+            "verified_per_second": 1363172.2213654914,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/shared-packet-tree-mixed-shared-packet-tree-3.json",
+            "sha256": "39c312fea1b908b5c303a68419a73617604eed8152ed8bc393e6080b0a969f5c",
+            "verified_per_second": 1421964.4542469925,
+            "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1386837.5544317882
+      },
+      "candidate_delta_percent": -1.3296859045570542
+    }
+  },
+  "capacity": {
+    "packet-spaces": {
+      "receipt": "artifacts/webtransport/shared-packet-tree-capacity-packet-spaces-1.json",
+      "sha256": "94b13d6b21cea39be6c32075d0be9a5703412a111a544731742cd8c6fc265ff4",
+      "phase_rss_mib": {
+        "connected": 2234.9140625,
+        "ready": 2254.734375,
+        "measured": 2258.07421875,
+        "postcheck": 2261.28515625,
+        "done": 2261.28515625
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.266440228995634,
+        "server_cpu_seconds": 6.720000000000002,
+        "client_cpu_seconds": 7.390000000000001,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99670.8913017825,
+        "server_user_cpu_seconds": 5.550000000000001,
+        "server_system_cpu_seconds": 1.17,
+        "round_trip": {
+          "max_ms": 10.887129,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.034555,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      }
+    },
+    "shared-packet-tree": {
+      "receipt": "artifacts/webtransport/shared-packet-tree-capacity-shared-packet-tree-1.json",
+      "sha256": "2d0cadfe53f10ff871133457088663815ebf000c69c3b2c7473a571944b86b20",
+      "phase_rss_mib": {
+        "connected": 2233.5546875,
+        "ready": 2253.890625,
+        "measured": 2255.35546875,
+        "postcheck": 2259.18359375,
+        "done": 2259.20703125
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.266281885997159,
+        "server_cpu_seconds": 7.099999999999998,
+        "client_cpu_seconds": 7.850000000000001,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99676.48466866744,
+        "server_user_cpu_seconds": 6.0,
+        "server_system_cpu_seconds": 1.0999999999999996,
+        "round_trip": {
+          "max_ms": 10.527518,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.21966,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      }
+    }
+  },
+  "allocation": {
+    "baseline": {
+      "receipt": "artifacts/webtransport/packet-spaces-heap-100000.json",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "verified_measured_deliveries": 400000,
+      "allocated_objects": 3630150,
+      "allocated_bytes": 1450632800,
+      "allocations_per_delivery": 9.075375,
+      "allocated_bytes_per_delivery": 3626.582,
+      "scope": "Ready-to-measured cumulative allocator request counters; bucket totals and exact executable/hash/mappings verified. Includes protocol/background allocations during the phase, not exact application-only requests. Diagnostic allocator can change packet batching; not ordinary performance or copy-byte measurement. First executable frame only; optimized sites may merge multiple types.",
+      "leading_sites": [
+        {
+          "offset": "0x287dd3",
+          "allocated_objects": 419098,
+          "allocated_bytes": 486153680,
+          "mean_allocation_bytes": 1160.0,
+          "function": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x25439d",
+          "allocated_objects": 799885,
+          "allocated_bytes": 447594116,
+          "mean_allocation_bytes": 559.573083630772,
+          "function": "quinn::endpoint::RecvState::poll_socket",
+          "location": "quinn.529f723b385a6b01-cgu.0:?"
+        },
+        {
+          "offset": "0x572213",
+          "allocated_objects": 400000,
+          "allocated_bytes": 414800000,
+          "mean_allocation_bytes": 1037.0,
+          "function": "war_relay::webtransport::read_record_budgeted::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2b8807",
+          "allocated_objects": 400000,
+          "allocated_bytes": 51200000,
+          "mean_allocation_bytes": 128.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x19da2a",
+          "allocated_objects": 799903,
+          "allocated_bytes": 31996120,
+          "mean_allocation_bytes": 40.0,
+          "function": "bytes::bytes_mut::BytesMut::split_to",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19c298",
+          "allocated_objects": 400000,
+          "allocated_bytes": 9600000,
+          "mean_allocation_bytes": 24.0,
+          "function": "bytes::bytes::shallow_clone_vec",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x4da0b8",
+          "allocated_objects": 400000,
+          "allocated_bytes": 5600000,
+          "mean_allocation_bytes": 14.0,
+          "function": "war_relay::webtransport::frame_chunks",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x3a6f49",
+          "allocated_objects": 2612,
+          "allocated_bytes": 1504512,
+          "mean_allocation_bytes": 576.0,
+          "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "location": "??:?"
+        }
+      ]
+    },
+    "candidate": {
+      "receipt": "artifacts/webtransport/shared-packet-tree-heap-100000.json",
+      "server_sha256": "cf4b8afe4cf678f5cd755d0d997ecad3d40ac9bfbbccf6ed83cc2128ad9bafc4",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "verified_measured_deliveries": 400000,
+      "allocated_objects": 3212021,
+      "allocated_bytes": 966521354,
+      "allocations_per_delivery": 8.0300525,
+      "allocated_bytes_per_delivery": 2416.303385,
+      "scope": "Ready-to-measured cumulative allocator request counters; bucket totals and exact executable/hash/mappings verified. Includes protocol/background allocations during the phase, not exact application-only requests. Diagnostic allocator can change packet batching; not ordinary performance or copy-byte measurement. First executable frame only; optimized sites may merge multiple types.",
+      "leading_sites": [
+        {
+          "offset": "0x25474d",
+          "allocated_objects": 799529,
+          "allocated_bytes": 447581750,
+          "mean_allocation_bytes": 559.8067737380383,
+          "function": "quinn::endpoint::RecvState::poll_socket",
+          "location": "quinn.529f723b385a6b01-cgu.0:?"
+        },
+        {
+          "offset": "0x572e93",
+          "allocated_objects": 400000,
+          "allocated_bytes": 414800000,
+          "mean_allocation_bytes": 1037.0,
+          "function": "war_relay::webtransport::read_record_budgeted::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2b9487",
+          "allocated_objects": 400000,
+          "allocated_bytes": 51200000,
+          "mean_allocation_bytes": 128.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x19dc6a",
+          "allocated_objects": 799546,
+          "allocated_bytes": 31981840,
+          "mean_allocation_bytes": 40.0,
+          "function": "bytes::bytes_mut::BytesMut::split_to",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19c4d8",
+          "allocated_objects": 400000,
+          "allocated_bytes": 9600000,
+          "mean_allocation_bytes": 24.0,
+          "function": "bytes::bytes::shallow_clone_vec",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x4dad38",
+          "allocated_objects": 400000,
+          "allocated_bytes": 5600000,
+          "mean_allocation_bytes": 14.0,
+          "function": "war_relay::webtransport::frame_chunks",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x28948d",
+          "allocated_objects": 1810,
+          "allocated_bytes": 2099600,
+          "mean_allocation_bytes": 1160.0,
+          "function": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x3a7bc9",
+          "allocated_objects": 2580,
+          "allocated_bytes": 1486080,
+          "mean_allocation_bytes": 576.0,
+          "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "location": "??:?"
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Three fresh process repeats per workload, four-second measurement phases; small differences are not proof of regression.",
+    "One ordinary 100000-session capacity pair; no statistical CPU claim.",
+    "Heap counters use a diagnostic allocator and do not measure copied bytes.",
+    "Shared synchronization is a possible explanation for absent gains, not a proven bottleneck.",
+    "Rejected candidate did not undergo browser or datagram acceptance because it failed the performance selection gate."
+  ],
+  "validation": {
+    "artifacts/webtransport/shared-packet-tree-proto-base-tests.log": {
+      "sha256": "3e5b9f3de2169a9d9e6b3eeae53a41ef95356424b24c79da0511bcd102c180d9",
+      "tail": "ts::token::retry_then_use_token ... ok\ntest tests::path_changes_unblock_oversized_datagrams ... ok\ntest tests::token::use_token ... ok\ntest tests::token::use_token_then_retry ... ok\ntest tests::zero_length_cid ... ok\ntest tests::zero_rtt_happypath ... ok\ntest tests::token::use_same_token_twice ... ok\ntest tests::token::use_token_expired ... ok\ntest tests::zero_rtt_rejection ... ok\ntest tests::zero_rtt_incoming_buffer_size ... ok\ntest tests::zero_rtt_incoming_buffer_size_total ... ok\ntest tests::datagram_send_buffer_metadata_boundaries ... ok\ntest tests::voluntary_ack_with_large_datagrams ... ok\n\ntest result: ok. 320 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s\n\n"
+    },
+    "artifacts/webtransport/shared-packet-tree-proto-enabled-tests.log": {
+      "sha256": "31748087e0a684f66be1f2a859933c82e78bc0e90e1278e2584a270bcf92136b",
+      "tail": "ts::token::use_token ... ok\ntest tests::token::retry_then_use_token ... ok\ntest tests::token::use_token_then_retry ... ok\ntest tests::zero_length_cid ... ok\ntest tests::token::use_same_token_twice ... ok\ntest tests::datagram_send_buffer_metadata_boundaries ... ok\ntest tests::token::use_token_expired ... ok\ntest tests::zero_rtt_happypath ... ok\ntest tests::zero_rtt_rejection ... ok\ntest tests::zero_rtt_incoming_buffer_size_total ... ok\ntest tests::zero_rtt_incoming_buffer_size ... ok\ntest tests::path_changes_unblock_oversized_datagrams ... ok\ntest tests::voluntary_ack_with_large_datagrams ... ok\n\ntest result: ok. 320 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n"
+    },
+    "artifacts/webtransport/shared-packet-tree-tests.log": {
+      "sha256": "7c6a63e01f544c8529a426b156f1cd7f8e3bc08b67acd1680ed2c5114478063a",
+      "tail": "::churn_close_rejects_missing_acknowledgements_wrong_codes_and_application_data ... ok\ntest tests::churn_close_waits_for_transport_eof_after_the_exact_acknowledgement ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n     Running unittests examples/tls_front.rs (target/debug/examples/tls_front-836724e1e8e1be04)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n     Running unittests examples/transport_probe.rs (target/debug/examples/transport_probe-ef5667c19dca835c)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+    },
+    "artifacts/webtransport/shared-packet-tree-clippy.log": {
+      "sha256": "1e55b31a0fcccd0fc6ab03849a0079555b8035d5ab4477bc57e76eb2ce1c8315",
+      "tail": "    Checking quinn-proto v0.11.19 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn-proto)\n    Checking quinn v0.11.12 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn)\n    Checking wtransport v0.7.2\n    Checking web-transport-quinn v0.13.3\n    Checking war-relay v0.1.0 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.55s\n"
+    }
+  }
+}
