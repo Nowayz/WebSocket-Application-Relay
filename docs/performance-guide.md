@@ -226,3 +226,24 @@ already part of process memory; never add them to RSS. The replacement allocator
 and capture overhead exclude heap runs from ordinary CPU, latency and RSS
 comparisons. Logical zero resource gauges can precede deferred QUIC retirement;
 keep the done gate and the separate process-exit profile distinct.
+
+### Server ACK-frequency policy
+
+The standard server builder uses `webtransport::server_transport_config()`.
+It requests an ACK after eight ack-eliciting packets, a maximum ACK delay of
+5 ms, and immediate acknowledgement of reordering. These are transport feedback
+parameters, not limits on application traffic. The batch request targets the
+measured ACK-heavy receive path in room/mixed workloads; the delay bound limits
+waiting on sparse traffic. Peers that do not support the extension ignore it.
+
+Callers building custom endpoints retain control over their transport config;
+`EndpointIngress::bind` does not overwrite it. A caller can start from this
+factory and disable requests with `ack_frequency_config(None)`. The standard
+CLI and integration fixtures use the same factory.
+
+The [controlled ACK-frequency report](reports/webtransport-ack-frequency-2026-10-21.json)
+keeps ordinary short/long workloads, capacity CPU/RSS, allocation diagnostics,
+packet counters, profiles and loss cases separate. ACK-frame counts are not CPU
+shares; Quinn I/O counters are not kernel syscall counts. High-rate candidate
+datagram cases had more client UDP-drop/missing-update runs than the baseline,
+so lower ACK traffic must not be described as a universal datagram improvement.

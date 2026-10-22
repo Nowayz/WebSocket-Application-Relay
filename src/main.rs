@@ -45,7 +45,7 @@ fn main() -> Result<()> {
         if relay.config.dev_cert {
             info!(certificate_sha256 = %identity.certificate_chain().as_slice()[0].hash(), "development certificate pin");
         }
-        let transport = wtransport::ServerConfig::builder().with_bind_address(relay.config.bind).with_identity(identity)
+        let transport = wtransport::ServerConfig::builder().with_bind_address(relay.config.bind).with_custom_transport(identity, war_relay::webtransport::server_transport_config())
             .keep_alive_interval((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.ping_interval_secs)))
             .max_idle_timeout((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.pong_timeout_secs)))?
             .build();

@@ -91,7 +91,7 @@ async fn fixture_with_client_transport(
     let hash = identity.certificate_chain().as_slice()[0].hash();
     let server_config = wtransport::ServerConfig::builder()
         .with_bind_address("127.0.0.1:0".parse().unwrap())
-        .with_identity(identity)
+        .with_custom_transport(identity, war_relay::webtransport::server_transport_config())
         .build();
     config.bind = "127.0.0.1:0".parse().unwrap();
     let (server, ingress) =

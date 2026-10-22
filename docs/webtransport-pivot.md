@@ -1783,3 +1783,61 @@ steady data traffic. Datagram submissions and verified arrivals are different
 quantities. The phase-gated results support testing ACK-frequency requests on
 fanout/mixed workloads, while providing a private-routing control. They do not
 yet prove an ACK-policy change saves CPU or improves complete workloads.
+
+### Retained eight-packet ACK request — 2026-10-21
+
+The [ACK-frequency report](reports/webtransport-ack-frequency-2026-10-21.json)
+retains a server transport factory used by both CLI and integration fixtures.
+It requests acknowledgement after eight ack-eliciting packets, with a 5 ms
+maximum delay and immediate acknowledgement of reordering. Unsupported peers
+ignore it. Custom endpoint callers retain their supplied configuration. Queue,
+read, stream-credit, fairness, deadline and application reliability rules remain
+unchanged. No diagnostic registry or counter endpoint is retained.
+
+Separate phase-gated counters confirmed one request sent for every live measured
+connection. Received ACK frames per verified application delivery fell from
+0.264 to 0.105 in room fanout (about 60%), 0.216 to 0.113 in mixed reliable
+(about 48%), and 0.304 to 0.140 in paced mixed datagrams (about 54%). Private
+routing changed less. Counts demonstrate the protocol effect, not CPU shares.
+Small ACK tails before measured-gate capture are included; per-connection I/O
+counters are not kernel syscall counts.
+
+All 18 short and 18 longer reliable cases passed with fixed clients. Short medians
+changed -1.61% private, +6.37% room, -0.26% mixed. The separate twelve-second
+cohort measured 1,423,648/1,418,769 private (-0.34%), 1,333,525/1,354,868 room
+(+1.60%), and 1,258,882/1,340,307 mixed (+6.47%). Variation is substantial; no
+uniform throughput win or native WebSocket parity is claimed. Both cohorts and
+all samples remain in the report.
+
+At 100,000 sessions, each ordinary resource case completed 400,000 checked
+deliveries and clean retirement. Server CPU was 7.96/7.10 seconds, client CPU
+7.99/7.06 seconds, and ready RSS 2,482.79/2,473.41 MiB. This is one matched pair,
+not a confidence interval. All five replacement-allocator gates completed;
+ready requested live bytes were 2,420,719,873. Allocator-diagnostic CPU/latency/RSS
+are excluded from ordinary comparisons; kernel costs remain separate incomplete
+accounting. Full memory parity remains far away.
+
+All six high-paced reliable cases passed with zero unreceived application
+messages. All six paired datagram cases passed integrity/cleanup, but candidate
+runs had private/fanout missing counts(4470,11620),(4278,17626),(3377,14162),
+with 8669,10823,9001 client UDP drops. Baseline counts were(0,0),(5495,15310),
+(0,0), with 0,8452,0 client drops. Server UDP receive drops were zero. This is a
+material stress-test tradeoff; do not call the policy universally better or
+loss-free. Causes of individual client drops are not inferred from these
+counters alone.
+
+Both endpoint profiles had zero lost samples. All nine clean/loss/reorder
+fixtures passed. Under loss plus bulk traffic, datagram p99 state age was 70.35 ms
+with 14/360 missing, versus 1,206.84 ms stream and 1,181.38 ms TLS WebSocket with none
+missing. Datagram bulk arrival was 1,056.95 ms. Under reordering, datagram p99 age
+was 99.98 ms with 5 missing and 7,219.34 ms bulk arrival. These single cases show the
+freshness/bulk tradeoff; they are not statistical rankings. Chromium passed all
+nine actual checks, including 5 MiB delivery and cleanup. All 274 relay tests and
+Clippy passed. Initial invalid configuration setup artifacts are preserved and
+excluded; the corrected CLI/test factory wiring is covered by the final runs.
+
+Retain for reduced protocol traffic and CPU, and the observed longer mixed
+throughput gain, with the datagram-pressure tradeoff explicit. Selected relay
+SHA256 is `6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f`.
+No push, deployment or PR occurred. Full throughput and memory parity remain
+unachieved, and the pivot is not accepted.

@@ -255,6 +255,20 @@ async fn write_frame_from(output: &Output, frame: &Frame, offset: usize) -> Resu
     write_output_chunks(output, &mut frame_chunks(frame, offset)).await
 }
 
+/// Default QUIC transport policy used by the relay's server builders.
+pub fn server_transport_config() -> wtransport::quinn::TransportConfig {
+    let mut transport = wtransport::quinn::TransportConfig::default();
+    let mut acknowledgements = wtransport::quinn::AckFrequencyConfig::default();
+    // Request eight packets per ACK, with a bounded sparse-traffic delay and
+    // immediate acknowledgement of reordering. Unsupported peers ignore this.
+    acknowledgements
+        .ack_eliciting_threshold(VarInt::from_u32(7))
+        .max_ack_delay(Some(Duration::from_millis(5)))
+        .reordering_threshold(VarInt::from_u32(1));
+    transport.ack_frequency_config(Some(acknowledgements));
+    transport
+}
+
 /// Bind the shared UDP socket explicitly so bursts from many sessions do not
 /// compete for a small per-socket OS default. The OS may cap requested sizes.
 pub fn bind_endpoint(
