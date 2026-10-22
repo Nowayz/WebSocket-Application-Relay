@@ -921,7 +921,7 @@ impl ConnectionRef {
                 blocked_readers: FxHashMap::default(),
                 stopped: FxHashMap::default(),
                 error: None,
-                io_poller: socket.clone().create_io_poller(),
+                io_poller: None,
                 socket,
                 runtime,
                 send_buffer: Vec::new(),
@@ -1005,7 +1005,8 @@ pub(crate) struct State {
     /// Always set to Some before the connection becomes drained
     pub(crate) error: Option<ConnectionError>,
     socket: Arc<dyn AsyncUdpSocket>,
-    io_poller: Pin<Box<dyn UdpPoller>>,
+    // Allocate writable notification state only after a send would block.
+    io_poller: Option<Pin<Box<dyn UdpPoller>>>,
     runtime: Arc<dyn Runtime>,
     /// Owns bytes only while a transmit is blocked on socket writability.
     /// Completed sends return their scratch allocation to the current thread.
@@ -1048,13 +1049,6 @@ impl State {
                 }
             };
 
-            if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
-                // Retry after a future wakeup
-                self.buffered_transmit = Some(t);
-                send_buffer.retain(&mut self.send_buffer);
-                return Ok(false);
-            }
-
             let len = t.size;
             let retry = match self
                 .socket
@@ -1065,11 +1059,17 @@ impl State {
                 Err(e) => return Err(e),
             };
             if retry {
-                // We thought the socket was writable, but it wasn't. Retry so that either another
-                // `poll_writable` call determines that the socket is indeed not writable and
-                // registers us for a wakeup, or the send succeeds if this really was just a
-                // transient failure.
+                // A successful nonblocking send needs no readiness future.
+                // After WouldBlock, register before yielding so the next writable
+                // transition cannot be missed. A ready poll retries this same
+                // transmit, preserving packet bytes and accounting.
                 self.buffered_transmit = Some(t);
+                let poller = self.io_poller
+                    .get_or_insert_with(|| self.socket.clone().create_io_poller());
+                if poller.as_mut().poll_writable(cx)?.is_pending() {
+                    send_buffer.retain(&mut self.send_buffer);
+                    return Ok(false);
+                }
                 continue;
             }
 
@@ -1102,7 +1102,7 @@ impl State {
             match self.conn_events.poll_recv(cx) {
                 Poll::Ready(Some(ConnectionEvent::Rebind(socket))) => {
                     self.socket = socket;
-                    self.io_poller = self.socket.clone().create_io_poller();
+                    self.io_poller = None;
                     self.inner.local_address_changed();
                 }
                 Poll::Ready(Some(ConnectionEvent::Proto(event))) => {

@@ -297,3 +297,13 @@ connection allocation fell 6,416 to 5,344 bytes. Ordinary ready RSS saved
 100.31 MiB at 100k sessions. Mixed throughput medians fell 2.05% initially and
 1.10% in the longer cohort, so this is a documented memory/throughput tradeoff.
 See `docs/reports/webtransport-packet-spaces-2026-10-22.json`.
+
+
+Quinn allocates writable-poll notification state only after a nonblocking
+send returns WouldBlock. Pending preserves the exact transmit buffer and
+registers a wakeup; rebind drops the previous socket's notifier. A forced
+backpressure/rebind test verifies progress and payload integrity. This saves
+17.95 MiB requested live allocations at 100k sessions; longer throughput
+medians change -1.21% private, +2.62% room, +2.30% mixed. Earlier short runs
+were slower; timing and datagram loss vary. See
+`docs/reports/webtransport-lazy-writable-2026-10-22.json` for scope and evidence.

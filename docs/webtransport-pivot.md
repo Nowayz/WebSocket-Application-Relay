@@ -2111,3 +2111,39 @@ acceptance was not run after the performance selection gate failed.
 Exact source, hashes, receipts, longer distributions, and limits are in
 [`webtransport-receive-storage-2026-10-22.json`](reports/webtransport-receive-storage-2026-10-22.json).
 Overall throughput and memory parity remain unmet.
+
+
+### Send-first UDP writability retained (2026-10-22)
+
+Connections now try the nonblocking send before creating or polling a
+writability notifier. WouldBlock registers the notifier before yielding;
+the exact transmit bytes remain retained until retry. Rebinding discards
+the old socket's notifier. A stable-server/rebinding-client test forces
+WouldBlock and Pending, then verifies 64 KiB through each of two rebinds.
+The original self-connected rebind fixture failed on both unchanged control
+and candidate; that diagnostic failure is preserved rather than attributed
+to the optimization.
+
+The ordinary 100k pair saved 15.42 MiB ready RSS (2,252.68 to 2,237.26 MiB),
+with 400k verified deliveries each. Server CPU was 6.83/6.75 seconds, p99 RTT
+histogram upper bound 2.097152 ms in both; one pair is not a confidence
+interval. Ready requested-live heap fell 2,192,201,779 to 2,173,376,411 bytes
+(17.95 MiB). The writability-poller site disappeared from ready attribution.
+
+Short-cohort throughput medians fell 0.98% private, 1.90% room, 5.29% mixed.
+The separate three-repeat twelve-second cohort instead measured -1.21%
+private, +2.62% room, +2.30% mixed. Retain this memory and room/mixed gain
+with its explicit private cost and shared-host variability, not as a
+universal speedup. Both-endpoint before/after profiles had zero lost samples.
+Six paced reliable controls passed. Six paired datagram controls passed;
+candidate missing updates improved in two pairs and worsened in one.
+
+All nine impaired-network freshness receipts passed, as did all nine Chrome
+checks including exact 5 MiB delivery. Connection/session/QUIC, queued-byte,
+variable-byte and read-budget gauges returned to zero. Relay tests, Clippy,
+the Quinn fixture suite (30 passed, 3 existing ignored), baseline blocked-send
+control and pinned vendor verification passed. Browser and fixture closed.
+The full source, reproduction scripts, fixed-client hashes, distributions,
+measurements, fixture failure and scope limits are in
+[`webtransport-lazy-writable-2026-10-22.json`](reports/webtransport-lazy-writable-2026-10-22.json).
+Overall throughput and memory parity remain unmet.

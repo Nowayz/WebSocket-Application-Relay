@@ -1109,3 +1109,126 @@ unsafe fn wake_by_ref_waker(data: *const ()) {
 unsafe fn drop_waker(data: *const ()) {
     drop(Arc::<WakeCounter>::from_raw(data as *const WakeCounter));
 }
+
+/// Force a blocked send and a pending writable poll independently of the real
+/// loopback socket's generous buffers. The next poll is explicitly woken.
+#[derive(Debug)]
+struct BlockOnceSocket {
+    inner: Arc<dyn crate::AsyncUdpSocket>,
+    block: std::sync::atomic::AtomicBool,
+    pending: Arc<std::sync::atomic::AtomicBool>,
+    polls: Arc<AtomicUsize>,
+}
+
+impl crate::AsyncUdpSocket for BlockOnceSocket {
+    fn create_io_poller(self: Arc<Self>) -> std::pin::Pin<Box<dyn crate::UdpPoller>> {
+        Box::pin(BlockOncePoller {
+            inner: self.inner.clone().create_io_poller(),
+            pending: self.pending.clone(),
+            polls: self.polls.clone(),
+        })
+    }
+    fn try_send(&self, transmit: &crate::udp::Transmit) -> io::Result<()> {
+        if self.block.swap(false, Ordering::SeqCst) {
+            self.pending.store(true, Ordering::SeqCst);
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
+        self.inner.try_send(transmit)
+    }
+    fn poll_recv(
+        &self,
+        cx: &mut Context,
+        bufs: &mut [std::io::IoSliceMut<'_>],
+        meta: &mut [crate::udp::RecvMeta],
+    ) -> Poll<io::Result<usize>> {
+        self.inner.poll_recv(cx, bufs, meta)
+    }
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.inner.local_addr()
+    }
+    fn max_transmit_segments(&self) -> usize {
+        self.inner.max_transmit_segments()
+    }
+    fn max_receive_segments(&self) -> usize {
+        self.inner.max_receive_segments()
+    }
+    fn may_fragment(&self) -> bool {
+        self.inner.may_fragment()
+    }
+}
+
+#[derive(Debug)]
+struct BlockOncePoller {
+    inner: std::pin::Pin<Box<dyn crate::UdpPoller>>,
+    pending: Arc<std::sync::atomic::AtomicBool>,
+    polls: Arc<AtomicUsize>,
+}
+impl crate::UdpPoller for BlockOncePoller {
+    fn poll_writable(mut self: std::pin::Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
+        self.polls.fetch_add(1, Ordering::SeqCst);
+        if self.pending.swap(false, Ordering::SeqCst) {
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+        self.inner.as_mut().poll_writable(cx)
+    }
+}
+
+#[test]
+fn blocked_transmit_survives_pending_writability_and_rebind() {
+    use crate::Runtime as _;
+    let runtime = rt_basic();
+    runtime.block_on(async {
+        timeout(Duration::from_secs(5), async {
+            let factory = EndpointFactory::new();
+            let endpoint = factory.endpoint();
+            let server = factory.endpoint();
+            let (outgoing, incoming) = join!(
+                endpoint
+                    .connect(server.local_addr().unwrap(), "localhost")
+                    .unwrap(),
+                async { server.accept().await.unwrap().await }
+            );
+            let outgoing = outgoing.unwrap();
+            let incoming = incoming.unwrap();
+            for byte in [41u8, 73] {
+                let socket = Arc::new(BlockOnceSocket {
+                    inner: TokioRuntime
+                        .wrap_udp_socket(UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap())
+                        .unwrap(),
+                    block: std::sync::atomic::AtomicBool::new(true),
+                    pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    polls: Arc::new(AtomicUsize::new(0)),
+                });
+                endpoint.rebind_abstract(socket.clone()).unwrap();
+                let payload = vec![byte; 65536];
+                let (sent, received) = join!(
+                    async {
+                        let mut send = outgoing.open_uni().await.unwrap();
+                        send.write_all(&payload).await.unwrap();
+                        send.finish().unwrap();
+                        send.stopped().await.unwrap();
+                    },
+                    async {
+                        incoming
+                            .accept_uni()
+                            .await
+                            .unwrap()
+                            .read_to_end(payload.len())
+                            .await
+                            .unwrap()
+                    }
+                );
+                let _ = sent;
+                assert_eq!(received, payload);
+                assert!(!socket.block.load(Ordering::SeqCst));
+                assert!(socket.polls.load(Ordering::SeqCst) > 0);
+            }
+            endpoint.close(0u32.into(), b"done");
+            server.close(0u32.into(), b"done");
+            join!(endpoint.wait_idle(), server.wait_idle());
+        })
+        .await
+        .expect("blocked transmit did not resume");
+    });
+}

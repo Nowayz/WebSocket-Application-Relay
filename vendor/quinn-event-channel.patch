@@ -2,13 +2,13 @@
 +++ b/quinn/Cargo.toml
 @@ -185,8 +185,8 @@
  version = "2.0.3"
- 
+
  [dependencies.tokio]
 -version = "1.28.1"
 -features = ["sync"]
 +version = "1.47"
 +features = ["sync", "rt"]
- 
+
  [dependencies.tracing]
  version = "0.1.10"
 --- a/quinn/Cargo.toml.orig
@@ -20,7 +20,7 @@
 -tokio = { workspace = true }
 +tokio = { version = "1.47", features = ["sync", "rt"] }
  udp = { package = "quinn-udp", path = "../quinn-udp", version = "0.5", default-features = false, features = ["tracing"] }
- 
+
  [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
 --- a/quinn/src/connection.rs
 +++ b/quinn/src/connection.rs
@@ -42,6 +42,15 @@
          on_handshake_data: oneshot::Sender<()>,
          on_connected: oneshot::Sender<bool>,
          socket: Arc<dyn AsyncUdpSocket>,
+@@ -921,7 +921,7 @@
+                 blocked_readers: FxHashMap::default(),
+                 stopped: FxHashMap::default(),
+                 error: None,
+-                io_poller: socket.clone().create_io_poller(),
++                io_poller: None,
+                 socket,
+                 runtime,
+                 send_buffer: Vec::new(),
 @@ -997,7 +997,7 @@
      connected: bool,
      timer: Option<Pin<Box<dyn AsyncTimer>>>,
@@ -51,24 +60,28 @@
      endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
      pub(crate) blocked_writers: FxHashMap<StreamId, Waker>,
      pub(crate) blocked_readers: FxHashMap<StreamId, Waker>,
-@@ -1007,6 +1007,8 @@
+@@ -1005,8 +1005,11 @@
+     /// Always set to Some before the connection becomes drained
+     pub(crate) error: Option<ConnectionError>,
      socket: Arc<dyn AsyncUdpSocket>,
-     io_poller: Pin<Box<dyn UdpPoller>>,
+-    io_poller: Pin<Box<dyn UdpPoller>>,
++    // Allocate writable notification state only after a send would block.
++    io_poller: Option<Pin<Box<dyn UdpPoller>>>,
      runtime: Arc<dyn Runtime>,
 +    /// Owns bytes only while a transmit is blocked on socket writability.
 +    /// Completed sends return their scratch allocation to the current thread.
      send_buffer: Vec<u8>,
      /// We buffer a transmit when the underlying I/O would block
      buffered_transmit: Option<proto::Transmit>,
-@@ -1014,6 +1016,7 @@
- 
+@@ -1014,6 +1017,7 @@
+
  impl State {
      fn drive_transmit(&mut self, cx: &mut Context) -> io::Result<bool> {
 +        let mut send_buffer = crate::transmit_buffer::TransmitBuffer::take(&mut self.send_buffer);
          let now = self.runtime.now();
          let mut transmits = 0;
- 
-@@ -1027,11 +1030,11 @@
+
+@@ -1027,11 +1031,11 @@
              let t = match self.buffered_transmit.take() {
                  Some(t) => t,
                  None => {
@@ -83,14 +96,16 @@
                      {
                          Some(t) => {
                              transmits += match t.segment_size {
-@@ -1048,13 +1051,14 @@
-             if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
-                 // Retry after a future wakeup
-                 self.buffered_transmit = Some(t);
-+                send_buffer.retain(&mut self.send_buffer);
-                 return Ok(false);
-             }
- 
+@@ -1045,27 +1049,27 @@
+                 }
+             };
+
+-            if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
+-                // Retry after a future wakeup
+-                self.buffered_transmit = Some(t);
+-                return Ok(false);
+-            }
+-
              let len = t.size;
              let retry = match self
                  .socket
@@ -99,10 +114,40 @@
              {
                  Ok(()) => false,
                  Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => true,
+                 Err(e) => return Err(e),
+             };
+             if retry {
+-                // We thought the socket was writable, but it wasn't. Retry so that either another
+-                // `poll_writable` call determines that the socket is indeed not writable and
+-                // registers us for a wakeup, or the send succeeds if this really was just a
+-                // transient failure.
++                // A successful nonblocking send needs no readiness future.
++                // After WouldBlock, register before yielding so the next writable
++                // transition cannot be missed. A ready poll retries this same
++                // transmit, preserving packet bytes and accounting.
+                 self.buffered_transmit = Some(t);
++                let poller = self.io_poller
++                    .get_or_insert_with(|| self.socket.clone().create_io_poller());
++                if poller.as_mut().poll_writable(cx)?.is_pending() {
++                    send_buffer.retain(&mut self.send_buffer);
++                    return Ok(false);
++                }
+                 continue;
+             }
+
+@@ -1098,7 +1102,7 @@
+             match self.conn_events.poll_recv(cx) {
+                 Poll::Ready(Some(ConnectionEvent::Rebind(socket))) => {
+                     self.socket = socket;
+-                    self.io_poller = self.socket.clone().create_io_poller();
++                    self.io_poller = None;
+                     self.inner.local_address_changed();
+                 }
+                 Poll::Ready(Some(ConnectionEvent::Proto(event))) => {
 --- a/quinn/src/endpoint.rs
 +++ b/quinn/src/endpoint.rs
 @@ -595,8 +595,9 @@
- 
+
  #[derive(Debug)]
  struct ConnectionSet {
 +    event_buffers: Arc<crate::event_queue::BufferPool<ConnectionEvent>>,
@@ -469,17 +514,146 @@
  mod send_stream;
 +mod transmit_buffer;
  mod work_limiter;
- 
+
  #[cfg(not(wasm_browser))]
 @@ -93,6 +94,8 @@
  #[cfg(test)]
  mod tests;
- 
+
 +mod event_queue;
 +
  #[derive(Debug)]
  enum ConnectionEvent {
      Close {
+--- a/quinn/src/tests.rs
++++ b/quinn/src/tests.rs
+@@ -1109,3 +1109,126 @@
+ unsafe fn drop_waker(data: *const ()) {
+     drop(Arc::<WakeCounter>::from_raw(data as *const WakeCounter));
+ }
++
++/// Force a blocked send and a pending writable poll independently of the real
++/// loopback socket's generous buffers. The next poll is explicitly woken.
++#[derive(Debug)]
++struct BlockOnceSocket {
++    inner: Arc<dyn crate::AsyncUdpSocket>,
++    block: std::sync::atomic::AtomicBool,
++    pending: Arc<std::sync::atomic::AtomicBool>,
++    polls: Arc<AtomicUsize>,
++}
++
++impl crate::AsyncUdpSocket for BlockOnceSocket {
++    fn create_io_poller(self: Arc<Self>) -> std::pin::Pin<Box<dyn crate::UdpPoller>> {
++        Box::pin(BlockOncePoller {
++            inner: self.inner.clone().create_io_poller(),
++            pending: self.pending.clone(),
++            polls: self.polls.clone(),
++        })
++    }
++    fn try_send(&self, transmit: &crate::udp::Transmit) -> io::Result<()> {
++        if self.block.swap(false, Ordering::SeqCst) {
++            self.pending.store(true, Ordering::SeqCst);
++            return Err(io::ErrorKind::WouldBlock.into());
++        }
++        self.inner.try_send(transmit)
++    }
++    fn poll_recv(
++        &self,
++        cx: &mut Context,
++        bufs: &mut [std::io::IoSliceMut<'_>],
++        meta: &mut [crate::udp::RecvMeta],
++    ) -> Poll<io::Result<usize>> {
++        self.inner.poll_recv(cx, bufs, meta)
++    }
++    fn local_addr(&self) -> io::Result<SocketAddr> {
++        self.inner.local_addr()
++    }
++    fn max_transmit_segments(&self) -> usize {
++        self.inner.max_transmit_segments()
++    }
++    fn max_receive_segments(&self) -> usize {
++        self.inner.max_receive_segments()
++    }
++    fn may_fragment(&self) -> bool {
++        self.inner.may_fragment()
++    }
++}
++
++#[derive(Debug)]
++struct BlockOncePoller {
++    inner: std::pin::Pin<Box<dyn crate::UdpPoller>>,
++    pending: Arc<std::sync::atomic::AtomicBool>,
++    polls: Arc<AtomicUsize>,
++}
++impl crate::UdpPoller for BlockOncePoller {
++    fn poll_writable(mut self: std::pin::Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.polls.fetch_add(1, Ordering::SeqCst);
++        if self.pending.swap(false, Ordering::SeqCst) {
++            cx.waker().wake_by_ref();
++            return Poll::Pending;
++        }
++        self.inner.as_mut().poll_writable(cx)
++    }
++}
++
++#[test]
++fn blocked_transmit_survives_pending_writability_and_rebind() {
++    use crate::Runtime as _;
++    let runtime = rt_basic();
++    runtime.block_on(async {
++        timeout(Duration::from_secs(5), async {
++            let factory = EndpointFactory::new();
++            let endpoint = factory.endpoint();
++            let server = factory.endpoint();
++            let (outgoing, incoming) = join!(
++                endpoint
++                    .connect(server.local_addr().unwrap(), "localhost")
++                    .unwrap(),
++                async { server.accept().await.unwrap().await }
++            );
++            let outgoing = outgoing.unwrap();
++            let incoming = incoming.unwrap();
++            for byte in [41u8, 73] {
++                let socket = Arc::new(BlockOnceSocket {
++                    inner: TokioRuntime
++                        .wrap_udp_socket(UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap())
++                        .unwrap(),
++                    block: std::sync::atomic::AtomicBool::new(true),
++                    pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
++                    polls: Arc::new(AtomicUsize::new(0)),
++                });
++                endpoint.rebind_abstract(socket.clone()).unwrap();
++                let payload = vec![byte; 65536];
++                let (sent, received) = join!(
++                    async {
++                        let mut send = outgoing.open_uni().await.unwrap();
++                        send.write_all(&payload).await.unwrap();
++                        send.finish().unwrap();
++                        send.stopped().await.unwrap();
++                    },
++                    async {
++                        incoming
++                            .accept_uni()
++                            .await
++                            .unwrap()
++                            .read_to_end(payload.len())
++                            .await
++                            .unwrap()
++                    }
++                );
++                let _ = sent;
++                assert_eq!(received, payload);
++                assert!(!socket.block.load(Ordering::SeqCst));
++                assert!(socket.polls.load(Ordering::SeqCst) > 0);
++            }
++            endpoint.close(0u32.into(), b"done");
++            server.close(0u32.into(), b"done");
++            join!(endpoint.wait_idle(), server.wait_idle());
++        })
++        .await
++        .expect("blocked transmit did not resume");
++    });
++}
 --- /dev/null
 +++ b/quinn/src/transmit_buffer.rs
 @@ -0,0 +1,66 @@
