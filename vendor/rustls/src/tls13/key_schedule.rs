@@ -246,14 +246,14 @@ impl KeyScheduleHandshakeStart {
         );
 
         if common.is_quic() {
-            common.quic.hs_secrets = Some(quic::Secrets::new(
+            common.quic.hs_secrets = Some(Box::new(quic::Secrets::new(
                 client_secret.clone(),
                 server_secret.clone(),
                 self.ks.suite,
                 self.ks.suite.quic.unwrap(),
                 common.side,
                 common.quic.version,
-            ));
+            )));
         }
 
         KeyScheduleHandshake {
@@ -326,14 +326,14 @@ impl KeyScheduleHandshake {
             .set_encrypter(server_secret, common);
 
         if common.is_quic() {
-            common.quic.traffic_secrets = Some(quic::Secrets::new(
+            common.quic.traffic_secrets = Some(Box::new(quic::Secrets::new(
                 _client_secret.clone(),
                 server_secret.clone(),
                 before_finished.ks.suite,
                 before_finished.ks.suite.quic.unwrap(),
                 common.side,
                 common.quic.version,
-            ));
+            )));
         }
 
         KeyScheduleTrafficWithClientFinishedPending {
@@ -460,14 +460,14 @@ impl KeyScheduleClientBeforeFinished {
             .set_encrypter(client_secret, common);
 
         if common.is_quic() {
-            common.quic.traffic_secrets = Some(quic::Secrets::new(
+            common.quic.traffic_secrets = Some(Box::new(quic::Secrets::new(
                 client_secret.clone(),
                 server_secret.clone(),
                 next.ks.suite,
                 next.ks.suite.quic.unwrap(),
                 common.side,
                 common.quic.version,
-            ));
+            )));
         }
 
         next.into_traffic(hs_hash)

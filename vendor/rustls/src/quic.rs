@@ -487,8 +487,10 @@ pub(crate) struct Quic {
     pub(crate) alert: Option<AlertDescription>,
     pub(crate) hs_queue: VecDeque<(bool, Vec<u8>)>,
     pub(crate) early_secret: Option<OkmBlock>,
-    pub(crate) hs_secrets: Option<Secrets>,
-    pub(crate) traffic_secrets: Option<Secrets>,
+    // These handoff values are consumed during the handshake. Keep their
+    // large storage out of every established connection, including TLS records.
+    pub(crate) hs_secrets: Option<Box<Secrets>>,
+    pub(crate) traffic_secrets: Option<Box<Secrets>>,
     /// Whether keys derived from traffic_secrets have been passed to the QUIC implementation
     #[cfg(feature = "std")]
     pub(crate) returned_traffic_keys: bool,
@@ -521,7 +523,7 @@ impl Quic {
                 secrets.update();
                 return Some(KeyChange::OneRtt {
                     keys,
-                    next: secrets,
+                    next: *secrets,
                 });
             }
         }

@@ -2147,3 +2147,40 @@ The full source, reproduction scripts, fixed-client hashes, distributions,
 measurements, fixture failure and scope limits are in
 [`webtransport-lazy-writable-2026-10-22.json`](reports/webtransport-lazy-writable-2026-10-22.json).
 Overall throughput and memory parity remain unmet.
+
+
+### Temporary QUIC secret handoff storage boxed (2026-10-22)
+
+Rustls's QUIC state retained inline Option<Secrets> storage for handshake
+and application key handoffs even after write_hs took those values. Boxing
+only those two temporary values preserves the original handoff/derivation
+points. Early-data secret state, packet/header cryptography and precomputed
+next packet keys are unchanged. This introduces temporary handshake
+allocations, rather than per-packet allocations.
+
+Compiler layout: QUIC server 1,160 to 824 bytes. Actual 100k TLS-session
+allocations: 1,368 to 1,032 bytes each. Ordinary ready RSS fell 2,236.04 to
+2,205.41 MiB (-30.63 MiB). Total requested live allocation fell 2,173,376,411
+to 2,142,329,135 bytes (-29.61 MiB); the total includes other live sites.
+Both 100k runs checked 400k deliveries. Setup was 11.47/11.40 seconds and
+server CPU 6.83/6.65 seconds; a single pair is not a confidence interval.
+
+Three short repeats measured -0.49% private, +4.43% room, -2.43% mixed.
+Three twelve-second repeats measured +0.98%, +1.54%, -0.58% respectively.
+Retain the measured memory saving with the explicit mixed-throughput cost;
+this does not establish a universal throughput improvement or full parity.
+
+Relay tests and Clippy passed. Selected Rustls suite: 246 passed; selected
+Quinn protocol suite: 312 passed, including key-update/reordering and
+0-RTT acceptance/rejection. Six paced reliable runs had zero missing,
+duplicate or reordered deliveries. Six paired datagram controls passed,
+with nonuniform loss. Both-endpoint before/after profiles had zero lost
+samples. All nine freshness receipts and nine Chrome checks passed,
+including exact 5 MiB delivery. Cleanup gauges were zero, fixtures stopped,
+and the pinned vendor patch verified. Full evidence, source, fixed-client
+hashes, reproduction scripts and limits are in
+[`webtransport-boxed-quic-secrets-2026-10-22.json`](reports/webtransport-boxed-quic-secrets-2026-10-22.json).
+
+A separate next target is the drained handshake-span vector's preallocated
+storage. It is not changed or counted as a saving here. Overall throughput
+and memory parity remain unmet.

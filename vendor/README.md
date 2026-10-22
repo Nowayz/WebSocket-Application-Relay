@@ -307,3 +307,12 @@ backpressure/rebind test verifies progress and payload integrity. This saves
 medians change -1.21% private, +2.62% room, +2.30% mixed. Earlier short runs
 were slower; timing and datagram loss vary. See
 `docs/reports/webtransport-lazy-writable-2026-10-22.json` for scope and evidence.
+
+
+Rustls QUIC handshake/application secret handoff values use temporary boxes
+instead of large inline optional storage. Existing take/derive/update
+transitions remain unchanged; packet and header ciphers and next-key
+precomputation remain intact. QUIC server layout shrinks by 336 bytes and
+100k ready RSS saves 30.63 MiB. Two temporary handshake allocations are the
+tradeoff; longer mixed throughput fell 0.58% while private/room improved.
+See `docs/reports/webtransport-boxed-quic-secrets-2026-10-22.json`.
