@@ -2262,3 +2262,37 @@ reproduction sources are in
 [`webtransport-retained-parity-29ff41d-2026-10-22.json`](reports/webtransport-retained-parity-29ff41d-2026-10-22.json).
 Datagram/freshness/browser acceptance for this binary remains in the prior
 handshake-span report. Overall throughput and memory parity remain unmet.
+
+
+### Grouped connection drivers rejected (2026-10-22)
+
+An explicit Runtime::spawn_connection hook grouped opaque Quinn connection
+futures on one FuturesUnordered worker per actual application-runtime worker.
+UDP ingress remained independent; child wake registrations and the existing
+protocol engine remained intact. Poll/destructor panic isolation, parked
+child cancellation and synchronous bind fallback were checked. Initial
+synchronous bind panicked outside Tokio; the corrected fallback passed the
+full relay suite and Clippy. This differs from the prior app/driver co-driving
+experiment, but still did not establish an improvement.
+
+Three rotated four-second throughput repeats measured -7.70% private,
+-9.18% room, -3.20% mixed. Every private/room candidate sample was below every
+control sample. A separate private diagnostic reproduced lower throughput.
+All 100k capacity checks and 400k deliveries passed. Ordinary ready RSS saved
+6.19 MiB (2,142.45 to 2,136.26 MiB); CPU 6.82/6.80 seconds and setup
+12.21/11.27 seconds are one pair, not confidence intervals.
+
+All five heap gates passed. Requested-live bytes fell 2,076,389,859 to
+2,071,958,700 (4.23 MiB). The ordinary driver allocation site changed from
+100k x 128 bytes to 100k x 88 bytes, saving 40 requested bytes per connection.
+That is much smaller than the separate application task and protocol states.
+Eight endpoint symbol profiles across private/mixed, baseline/candidate,
+server/client had zero lost samples. FuturesUnordered introduced its own
+ArcWake work, but the complete cause of throughput loss is not established.
+
+Reject the prototype; original source and selected executable restored.
+Longer throughput, browser/datagram/freshness checks were not run after the
+performance selection gate failed. Exact source, failure/correction,
+reproduction scripts, fixed clients, profiles and measurements are preserved
+in [`webtransport-grouped-drivers-2026-10-22.json`](reports/webtransport-grouped-drivers-2026-10-22.json).
+Overall throughput and memory parity remain unmet.
