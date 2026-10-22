@@ -1,0 +1,1278 @@
+{
+  "status": "Rejected: effective receive allocation reuse, but longer mixed throughput regressed 5.46%; overall parity unmet",
+  "baseline_commit": "a18ba994d16e8b308cccbfd884ad5d47e1dbab73",
+  "candidate_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+  "change": "Endpoint-local FIFO of empty BytesMut tails. try_reclaim never overwrites shared packet slices. Cache slots and backing bytes bounded by existing receive geometry. Fresh allocation fallback preserves progress. No shared mutex or traffic limit.",
+  "pending": [],
+  "throughput": {
+    "private": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-packet-spaces-1.json",
+            "verified_per_second": 1530598.780776913,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-packet-spaces-2.json",
+            "verified_per_second": 1427434.989169095,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-packet-spaces-3.json",
+            "verified_per_second": 1422023.0538905654,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1427434.989169095
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-receive-storage-1.json",
+            "verified_per_second": 1445642.961641908,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-receive-storage-2.json",
+            "verified_per_second": 1455196.4647915475,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-private-receive-storage-3.json",
+            "verified_per_second": 1446786.78891112,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1446786.78891112
+      },
+      "candidate_delta_percent": 1.3557044551142594
+    },
+    "roomonly": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-packet-spaces-1.json",
+            "verified_per_second": 1429258.325858312,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-packet-spaces-2.json",
+            "verified_per_second": 1365292.5267115717,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-packet-spaces-3.json",
+            "verified_per_second": 1426733.6394081167,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1426733.6394081167
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-receive-storage-1.json",
+            "verified_per_second": 1466662.008951584,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-receive-storage-2.json",
+            "verified_per_second": 1417990.152616592,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-roomonly-receive-storage-3.json",
+            "verified_per_second": 1492730.2098271737,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1466662.008951584
+      },
+      "candidate_delta_percent": 2.798586115908197
+    },
+    "mixed": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-packet-spaces-1.json",
+            "verified_per_second": 1379502.446389418,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-packet-spaces-2.json",
+            "verified_per_second": 1384891.8994672906,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-packet-spaces-3.json",
+            "verified_per_second": 1428309.4696900705,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1384891.8994672906
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-receive-storage-1.json",
+            "verified_per_second": 1374039.7613692707,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-receive-storage-2.json",
+            "verified_per_second": 1378207.042161093,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-mixed-receive-storage-3.json",
+            "verified_per_second": 1394851.3591058194,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1378207.042161093
+      },
+      "candidate_delta_percent": -0.48269885243525934
+    }
+  },
+  "capacity": {
+    "packet-spaces": {
+      "receipt": "artifacts/webtransport/receive-storage-capacity-packet-spaces-1.json",
+      "phase_rss_mib": {
+        "connected": 2233.8515625,
+        "ready": 2253.328125,
+        "measured": 2256.66015625,
+        "postcheck": 2259.76953125,
+        "done": 2259.76953125
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265935043003992,
+        "server_cpu_seconds": 6.700000000000003,
+        "client_cpu_seconds": 7.510000000000002,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99687.2148154389,
+        "server_user_cpu_seconds": 5.490000000000002,
+        "server_system_cpu_seconds": 1.21,
+        "round_trip": {
+          "max_ms": 5.019116,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.425129,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      }
+    },
+    "receive-storage": {
+      "receipt": "artifacts/webtransport/receive-storage-capacity-receive-storage-1.json",
+      "phase_rss_mib": {
+        "connected": 2237.3984375,
+        "ready": 2256.26953125,
+        "measured": 2258.33984375,
+        "postcheck": 2261.87890625,
+        "done": 2261.87890625
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.2666316850081785,
+        "server_cpu_seconds": 6.75,
+        "client_cpu_seconds": 7.359999999999996,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99667.2709570547,
+        "server_user_cpu_seconds": 5.52,
+        "server_system_cpu_seconds": 1.2299999999999995,
+        "round_trip": {
+          "max_ms": 4.288686,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.231145,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      }
+    }
+  },
+  "allocation": {
+    "baseline": {
+      "receipt": "artifacts/webtransport/packet-spaces-heap-100000.json",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "verified_measured_deliveries": 400000,
+      "allocated_objects": 3630150,
+      "allocated_bytes": 1450632800,
+      "allocations_per_delivery": 9.075375,
+      "allocated_bytes_per_delivery": 3626.582,
+      "sites": [
+        {
+          "offset": "0x287dd3",
+          "allocated_objects": 419098,
+          "allocated_bytes": 486153680,
+          "mean_allocation_bytes": 1160.0,
+          "function": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x25439d",
+          "allocated_objects": 799885,
+          "allocated_bytes": 447594116,
+          "mean_allocation_bytes": 559.573083630772,
+          "function": "quinn::endpoint::RecvState::poll_socket",
+          "location": "quinn.529f723b385a6b01-cgu.0:?"
+        },
+        {
+          "offset": "0x572213",
+          "allocated_objects": 400000,
+          "allocated_bytes": 414800000,
+          "mean_allocation_bytes": 1037.0,
+          "function": "war_relay::webtransport::read_record_budgeted::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2b8807",
+          "allocated_objects": 400000,
+          "allocated_bytes": 51200000,
+          "mean_allocation_bytes": 128.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x19da2a",
+          "allocated_objects": 799903,
+          "allocated_bytes": 31996120,
+          "mean_allocation_bytes": 40.0,
+          "function": "bytes::bytes_mut::BytesMut::split_to",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19c298",
+          "allocated_objects": 400000,
+          "allocated_bytes": 9600000,
+          "mean_allocation_bytes": 24.0,
+          "function": "bytes::bytes::shallow_clone_vec",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x4da0b8",
+          "allocated_objects": 400000,
+          "allocated_bytes": 5600000,
+          "mean_allocation_bytes": 14.0,
+          "function": "war_relay::webtransport::frame_chunks",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x3a6f49",
+          "allocated_objects": 2612,
+          "allocated_bytes": 1504512,
+          "mean_allocation_bytes": 576.0,
+          "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x3a7fd1",
+          "allocated_objects": 5224,
+          "allocated_bytes": 961216,
+          "mean_allocation_bytes": 184.0,
+          "function": "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19bc74",
+          "allocated_objects": 17,
+          "allocated_bytes": 278528,
+          "mean_allocation_bytes": 16384.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x49b799",
+          "allocated_objects": 17,
+          "allocated_bytes": 278528,
+          "mean_allocation_bytes": 16384.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x500010",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "war_relay::metrics::Metrics::render",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19bc7f",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x5256dc",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x197f16",
+          "allocated_objects": 34,
+          "allocated_bytes": 59500,
+          "mean_allocation_bytes": 1750.0,
+          "function": "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x56cf9f",
+          "allocated_objects": 34,
+          "allocated_bytes": 59500,
+          "mean_allocation_bytes": 1750.0,
+          "function": "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2bf8a4",
+          "allocated_objects": 1306,
+          "allocated_bytes": 20896,
+          "mean_allocation_bytes": 16.0,
+          "function": "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x2bf8d2",
+          "allocated_objects": 1306,
+          "allocated_bytes": 20896,
+          "mean_allocation_bytes": 16.0,
+          "function": "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x50587c",
+          "allocated_objects": 17,
+          "allocated_bytes": 19584,
+          "mean_allocation_bytes": 1152.0,
+          "function": "<axum::serve::WithGracefulShutdown<L,M,S,F> as core::future::into_future::IntoFuture>::into_future::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2160d9",
+          "allocated_objects": 17,
+          "allocated_bytes": 10608,
+          "mean_allocation_bytes": 624.0,
+          "function": "http::header::map::HeaderMap<T>::try_reserve",
+          "location": "hyper.486a1e2b601d73bb-cgu.0:?"
+        },
+        {
+          "offset": "0x198ea4",
+          "allocated_objects": 17,
+          "allocated_bytes": 10608,
+          "mean_allocation_bytes": 624.0,
+          "function": "http::header::map::HeaderMap<T>::try_insert2",
+          "location": "axum_core.a0012b0ab3e2f651-cgu.0:?"
+        },
+        {
+          "offset": "0x4d5647",
+          "allocated_objects": 17,
+          "allocated_bytes": 8976,
+          "mean_allocation_bytes": 528.0,
+          "function": "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4d5ad7",
+          "allocated_objects": 17,
+          "allocated_bytes": 8840,
+          "mean_allocation_bytes": 520.0,
+          "function": "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x525a38",
+          "allocated_objects": 17,
+          "allocated_bytes": 5440,
+          "mean_allocation_bytes": 320.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x49b787",
+          "allocated_objects": 17,
+          "allocated_bytes": 5440,
+          "mean_allocation_bytes": 320.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x419808",
+          "allocated_objects": 17,
+          "allocated_bytes": 4352,
+          "mean_allocation_bytes": 256.0,
+          "function": "tokio::runtime::io::registration_set::RegistrationSet::allocate",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x529447",
+          "allocated_objects": 17,
+          "allocated_bytes": 2992,
+          "mean_allocation_bytes": 176.0,
+          "function": "axum::routing::Router<S>::with_state",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x20e51b",
+          "allocated_objects": 17,
+          "allocated_bytes": 2516,
+          "mean_allocation_bytes": 148.0,
+          "function": "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x56d5ec",
+          "allocated_objects": 119,
+          "allocated_bytes": 748,
+          "mean_allocation_bytes": 6.285714285714286,
+          "function": "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x465227",
+          "allocated_objects": 17,
+          "allocated_bytes": 680,
+          "mean_allocation_bytes": 40.0,
+          "function": "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x216000",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::header::map::HeaderMap<T>::try_reserve",
+          "location": "hyper.486a1e2b601d73bb-cgu.0:?"
+        },
+        {
+          "offset": "0x19503a",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::extensions::Extensions::insert",
+          "location": "axum.7a4e953d3706b8a8-cgu.0:?"
+        },
+        {
+          "offset": "0x4d5a46",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x198e5b",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::header::map::HeaderMap<T>::try_insert2",
+          "location": "axum_core.a0012b0ab3e2f651-cgu.0:?"
+        },
+        {
+          "offset": "0x41473e",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "tokio.e7dc26f39524be4a-cgu.0:?"
+        },
+        {
+          "offset": "0x19a757",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x195069",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "http::extensions::Extensions::insert",
+          "location": "axum.7a4e953d3706b8a8-cgu.0:?"
+        },
+        {
+          "offset": "0x4d568a",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x19a6f9",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x54e7b5",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x502fd7",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<hyper_util::server::conn::auto::ReadVersion<I> as core::future::future::Future>::poll",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x525a8b",
+          "allocated_objects": 17,
+          "allocated_bytes": 272,
+          "mean_allocation_bytes": 16.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x4c2f8c",
+          "allocated_objects": 34,
+          "allocated_bytes": 272,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c300c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c307c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c2dbc",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c2e2c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c2e9c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c2f1c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x193920",
+          "allocated_objects": 17,
+          "allocated_bytes": 68,
+          "mean_allocation_bytes": 4.0,
+          "function": "axum::routing::route::set_content_length",
+          "location": "??:?"
+        }
+      ],
+      "scope": "Ready-to-measured cumulative allocator request counters; bucket totals and exact executable/hash/mappings verified. Includes protocol/background allocations during the phase, not exact application-only requests. Diagnostic allocator can change packet batching; not ordinary performance or copy-byte measurement. First executable frame only; optimized sites may merge multiple types."
+    },
+    "candidate": {
+      "receipt": "artifacts/webtransport/receive-storage-heap-100000.json",
+      "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "verified_measured_deliveries": 400000,
+      "allocated_objects": 2029124,
+      "allocated_bytes": 967245187,
+      "allocations_per_delivery": 5.07281,
+      "allocated_bytes_per_delivery": 2418.1129675,
+      "sites": [
+        {
+          "offset": "0x2884c3",
+          "allocated_objects": 413677,
+          "allocated_bytes": 479865320,
+          "mean_allocation_bytes": 1160.0,
+          "function": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x572903",
+          "allocated_objects": 400000,
+          "allocated_bytes": 414800000,
+          "mean_allocation_bytes": 1037.0,
+          "function": "war_relay::webtransport::read_record_budgeted::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2b8ef7",
+          "allocated_objects": 400000,
+          "allocated_bytes": 51200000,
+          "mean_allocation_bytes": 128.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?"
+        },
+        {
+          "offset": "0x19c398",
+          "allocated_objects": 400000,
+          "allocated_bytes": 9600000,
+          "mean_allocation_bytes": 24.0,
+          "function": "bytes::bytes::shallow_clone_vec",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x4da7a8",
+          "allocated_objects": 400000,
+          "allocated_bytes": 5600000,
+          "mean_allocation_bytes": 14.0,
+          "function": "war_relay::webtransport::frame_chunks",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x254913",
+          "allocated_objects": 2319,
+          "allocated_bytes": 2510823,
+          "mean_allocation_bytes": 1082.717981888745,
+          "function": "quinn::endpoint::RecvState::poll_socket",
+          "location": "quinn.529f723b385a6b01-cgu.0:?"
+        },
+        {
+          "offset": "0x3a7639",
+          "allocated_objects": 2494,
+          "allocated_bytes": 1436544,
+          "mean_allocation_bytes": 576.0,
+          "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x3a86c1",
+          "allocated_objects": 4988,
+          "allocated_bytes": 917792,
+          "mean_allocation_bytes": 184.0,
+          "function": "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19bd74",
+          "allocated_objects": 17,
+          "allocated_bytes": 278528,
+          "mean_allocation_bytes": 16384.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x49be89",
+          "allocated_objects": 17,
+          "allocated_bytes": 278528,
+          "mean_allocation_bytes": 16384.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x19bd7f",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "bytes.761df4b03ca1f5ca-cgu.0:?"
+        },
+        {
+          "offset": "0x525dcc",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x500700",
+          "allocated_objects": 17,
+          "allocated_bytes": 139264,
+          "mean_allocation_bytes": 8192.0,
+          "function": "war_relay::metrics::Metrics::render",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x19db2a",
+          "allocated_objects": 2336,
+          "allocated_bytes": 93440,
+          "mean_allocation_bytes": 40.0,
+          "function": "bytes::bytes_mut::BytesMut::split_to",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x198016",
+          "allocated_objects": 34,
+          "allocated_bytes": 59500,
+          "mean_allocation_bytes": 1750.0,
+          "function": "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x56d68f",
+          "allocated_objects": 34,
+          "allocated_bytes": 59500,
+          "mean_allocation_bytes": 1750.0,
+          "function": "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2bff94",
+          "allocated_objects": 1247,
+          "allocated_bytes": 19952,
+          "mean_allocation_bytes": 16.0,
+          "function": "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x2bffc2",
+          "allocated_objects": 1247,
+          "allocated_bytes": 19952,
+          "mean_allocation_bytes": 16.0,
+          "function": "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x505f6c",
+          "allocated_objects": 17,
+          "allocated_bytes": 19584,
+          "mean_allocation_bytes": 1152.0,
+          "function": "<axum::serve::WithGracefulShutdown<L,M,S,F> as core::future::into_future::IntoFuture>::into_future::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x2161d9",
+          "allocated_objects": 17,
+          "allocated_bytes": 10608,
+          "mean_allocation_bytes": 624.0,
+          "function": "http::header::map::HeaderMap<T>::try_reserve",
+          "location": "hyper.486a1e2b601d73bb-cgu.0:?"
+        },
+        {
+          "offset": "0x198fa4",
+          "allocated_objects": 17,
+          "allocated_bytes": 10608,
+          "mean_allocation_bytes": 624.0,
+          "function": "http::header::map::HeaderMap<T>::try_insert2",
+          "location": "axum_core.a0012b0ab3e2f651-cgu.0:?"
+        },
+        {
+          "offset": "0x4d5d37",
+          "allocated_objects": 17,
+          "allocated_bytes": 8976,
+          "mean_allocation_bytes": 528.0,
+          "function": "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4d61c7",
+          "allocated_objects": 17,
+          "allocated_bytes": 8840,
+          "mean_allocation_bytes": 520.0,
+          "function": "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x526128",
+          "allocated_objects": 17,
+          "allocated_bytes": 5440,
+          "mean_allocation_bytes": 320.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x49be77",
+          "allocated_objects": 17,
+          "allocated_bytes": 5440,
+          "mean_allocation_bytes": 320.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x419ef8",
+          "allocated_objects": 17,
+          "allocated_bytes": 4352,
+          "mean_allocation_bytes": 256.0,
+          "function": "tokio::runtime::io::registration_set::RegistrationSet::allocate",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x529b37",
+          "allocated_objects": 17,
+          "allocated_bytes": 2992,
+          "mean_allocation_bytes": 176.0,
+          "function": "axum::routing::Router<S>::with_state",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x20e61b",
+          "allocated_objects": 17,
+          "allocated_bytes": 2516,
+          "mean_allocation_bytes": 148.0,
+          "function": "hashbrown::raw::RawTable<T,A>::reserve_rehash",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x56dcdc",
+          "allocated_objects": 119,
+          "allocated_bytes": 748,
+          "mean_allocation_bytes": 6.285714285714286,
+          "function": "<hashbrown::map::HashMap<K,V,S,A> as core::clone::Clone>::clone",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x465917",
+          "allocated_objects": 17,
+          "allocated_bytes": 680,
+          "mean_allocation_bytes": 40.0,
+          "function": "<[(K,V); N] as axum_core::response::into_response_parts::IntoResponseParts>::into_response_parts",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x19a857",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x216100",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::header::map::HeaderMap<T>::try_reserve",
+          "location": "hyper.486a1e2b601d73bb-cgu.0:?"
+        },
+        {
+          "offset": "0x4d6136",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "axum_core::extract::request_parts::<impl axum_core::extract::FromRequestParts<S> for http::header::map::HeaderMap>::from_request_parts::{{closure}}",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x19513a",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::extensions::Extensions::insert",
+          "location": "axum.7a4e953d3706b8a8-cgu.0:?"
+        },
+        {
+          "offset": "0x414e2e",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "alloc::raw_vec::finish_grow",
+          "location": "tokio.e7dc26f39524be4a-cgu.0:?"
+        },
+        {
+          "offset": "0x198f5b",
+          "allocated_objects": 17,
+          "allocated_bytes": 544,
+          "mean_allocation_bytes": 32.0,
+          "function": "http::header::map::HeaderMap<T>::try_insert2",
+          "location": "axum_core.a0012b0ab3e2f651-cgu.0:?"
+        },
+        {
+          "offset": "0x195169",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "http::extensions::Extensions::insert",
+          "location": "axum.7a4e953d3706b8a8-cgu.0:?"
+        },
+        {
+          "offset": "0x4d5d7a",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<tower::util::map_future::MapFuture<S,F> as tower_service::Service<R>>::call",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x54eea5",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x5036c7",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<hyper_util::server::conn::auto::ReadVersion<I> as core::future::future::Future>::poll",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x19a7f9",
+          "allocated_objects": 17,
+          "allocated_bytes": 408,
+          "mean_allocation_bytes": 24.0,
+          "function": "<axum_core::body::Body as core::convert::From<alloc::borrow::Cow<str>>>::from",
+          "location": "??:?"
+        },
+        {
+          "offset": "0x52617b",
+          "allocated_objects": 17,
+          "allocated_bytes": 272,
+          "mean_allocation_bytes": 16.0,
+          "function": "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "location": "war_relay.dda031fd2e8ee20-cgu.0:?"
+        },
+        {
+          "offset": "0x4c367c",
+          "allocated_objects": 34,
+          "allocated_bytes": 272,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c34ac",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c351c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c358c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c360c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c36fc",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x4c376c",
+          "allocated_objects": 17,
+          "allocated_bytes": 136,
+          "mean_allocation_bytes": 8.0,
+          "function": "<T as tower::util::boxed_clone_sync::CloneService<R>>::clone_box",
+          "location": "war_relay.8a973a89955a6360-cgu.0:?"
+        },
+        {
+          "offset": "0x193a20",
+          "allocated_objects": 17,
+          "allocated_bytes": 68,
+          "mean_allocation_bytes": 4.0,
+          "function": "axum::routing::route::set_content_length",
+          "location": "??:?"
+        }
+      ],
+      "scope": "Ready-to-measured cumulative allocator request counters; bucket totals and exact executable/hash/mappings verified. Includes protocol/background allocations during the phase, not exact application-only requests. Diagnostic allocator can change packet batching; not ordinary performance or copy-byte measurement. First executable frame only; optimized sites may merge multiple types."
+    }
+  },
+  "source_diff": "diff --git a/vendor/quinn/src/endpoint.rs b/vendor/quinn/src/endpoint.rs\nindex fbec4c2..0f23707 100644\n--- a/vendor/quinn/src/endpoint.rs\n+++ b/vendor/quinn/src/endpoint.rs\n@@ -22,7 +22,7 @@ use crate::{\n     runtime::{AsyncUdpSocket, Runtime},\n     udp_transmit,\n };\n-use bytes::{Bytes, BytesMut};\n+use bytes::Bytes;\n use pin_project_lite::pin_project;\n use proto::{\n     self as proto, ClientConfig, ConnectError, ConnectionError, ConnectionHandle, DatagramEvent,\n@@ -743,6 +743,7 @@ struct RecvState {\n     incoming: VecDeque<proto::Incoming>,\n     connections: ConnectionSet,\n     recv_buf: Box<[u8]>,\n+    receive_buffers: crate::receive_buffers::ReceiveBuffers,\n     recv_limiter: WorkLimiter,\n }\n \n@@ -768,6 +769,9 @@ impl RecvState {\n                 close: None,\n             },\n             incoming: VecDeque::new(),\n+            receive_buffers: crate::receive_buffers::ReceiveBuffers::new(\n+                recv_buf.len(), max_receive_segments * BATCH_SIZE,\n+            ),\n             recv_buf: recv_buf.into(),\n             recv_limiter: WorkLimiter::new(RECV_TIME_BOUND),\n         }\n@@ -799,7 +803,8 @@ impl RecvState {\n                 Poll::Ready(Ok(msgs)) => {\n                     self.recv_limiter.record_work(msgs);\n                     for (meta, buf) in metas.iter().zip(iovs.iter()).take(msgs) {\n-                        let mut data: BytesMut = buf[0..meta.len].into();\n+                        let (mut data, storage_bytes) = self.receive_buffers.take(meta.len);\n+                        data.extend_from_slice(&buf[..meta.len]);\n                         while !data.is_empty() {\n                             let buf = data.split_to(meta.stride.min(data.len()));\n                             let mut response_buffer = Vec::new();\n@@ -836,6 +841,7 @@ impl RecvState {\n                                 None => {}\n                             }\n                         }\n+                        self.receive_buffers.recycle(data, storage_bytes);\n                     }\n                 }\n                 Poll::Pending => {\ndiff --git a/vendor/quinn/src/lib.rs b/vendor/quinn/src/lib.rs\nindex 6bdcaa9..2f7f419 100644\n--- a/vendor/quinn/src/lib.rs\n+++ b/vendor/quinn/src/lib.rs\n@@ -95,6 +95,7 @@ pub use crate::send_stream::{SendStream, StoppedError, WriteError};\n mod tests;\n \n mod event_queue;\n+mod receive_buffers;\n \n #[derive(Debug)]\n enum ConnectionEvent {\n",
+  "new_module": "//! Endpoint-local receive storage. Packet slices retain their ordinary BytesMut\n//! ownership; only empty tails are cached, and reclamation is delegated to bytes.\nuse std::collections::VecDeque;\n\nuse bytes::BytesMut;\n\npub(crate) struct ReceiveBuffers {\n    spare: VecDeque<(BytesMut, usize)>,\n    bytes: usize,\n    max_bytes: usize,\n    max_slots: usize,\n    primed: bool,\n}\n\nimpl ReceiveBuffers {\n    pub(crate) fn new(max_bytes: usize, max_slots: usize) -> Self {\n        Self {\n            spare: VecDeque::new(),\n            bytes: 0,\n            max_bytes,\n            max_slots,\n            primed: false,\n        }\n    }\n\n    pub(crate) fn take(&mut self, len: usize) -> (BytesMut, usize) {\n        // Fill one receive geometry before rotating. Immediate reuse would\n        // usually find the preceding packet still owned by its driver.\n        self.primed |=\n            self.spare.len() >= self.max_slots || len >= self.max_bytes.saturating_sub(self.bytes);\n        if let Some((mut buffer, storage_bytes)) =\n            self.primed.then(|| self.spare.pop_front()).flatten()\n        {\n            self.bytes -= storage_bytes;\n            debug_assert!(buffer.is_empty());\n            if buffer.try_reclaim(len) {\n                return (buffer, storage_bytes);\n            }\n            // A connection can still own a packet slice. Dropping our empty\n            // tail does not release or mutate that slice's backing storage.\n        }\n        let buffer = BytesMut::with_capacity(len);\n        let storage_bytes = buffer.capacity();\n        (buffer, storage_bytes)\n    }\n\n    pub(crate) fn recycle(&mut self, buffer: BytesMut, storage_bytes: usize) {\n        debug_assert!(buffer.is_empty());\n        if storage_bytes != 0\n            && self.spare.len() < self.max_slots\n            && storage_bytes <= self.max_bytes - self.bytes\n        {\n            self.bytes += storage_bytes;\n            self.spare.push_back((buffer, storage_bytes));\n        }\n    }\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn retained_packet_is_not_overwritten() {\n        let mut pool = ReceiveBuffers::new(64, 2);\n        let (mut first, size) = pool.take(32);\n        first.extend_from_slice(&[7; 32]);\n        let packet = first.split_to(32);\n        pool.recycle(first, size);\n        let (mut second, size) = pool.take(32);\n        second.extend_from_slice(&[9; 32]);\n        assert_eq!(&packet[..], &[7; 32]);\n        let _second_packet = second.split_to(32);\n        pool.recycle(second, size);\n        assert!(pool.bytes <= 64);\n    }\n\n    #[test]\n    fn retired_slice_allows_reuse_and_cache_stays_bounded() {\n        let mut pool = ReceiveBuffers::new(32, 1);\n        let (mut data, size) = pool.take(32);\n        data.extend_from_slice(&[3; 32]);\n        let pointer = data.as_ptr();\n        drop(data.split_to(32));\n        pool.recycle(data, size);\n        let (mut reused, size) = pool.take(32);\n        assert_eq!(reused.as_ptr(), pointer);\n        reused.extend_from_slice(&[4; 32]);\n        assert_eq!(&reused[..], &[4; 32]);\n        drop(reused.split_to(32));\n        pool.recycle(reused, size);\n        pool.recycle(BytesMut::with_capacity(32), 32);\n        assert_eq!(pool.spare.len(), 1);\n        assert_eq!(pool.bytes, 32);\n    }\n}\n",
+  "limits": [
+    "Three four-second repeats are screening evidence, not final acceptance.",
+    "Capacity timing/RSS is one pair.",
+    "Heap counters are diagnostic allocator requests, not copy bytes or ordinary timing.",
+    "No claim of overall parity; current idle connection state remains multi-GiB.",
+    "Three rotated twelve-second process repeats strengthen rejection; precise cause of mixed regression is unproven.",
+    "Broader browser, datagram, and freshness acceptance not run for rejected candidate.",
+    "Direct unit harness covered byte ownership and safe reuse; dependency test cfg was not enabled in root relay tests."
+  ],
+  "long_throughput": {
+    "private": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-packet-spaces-1.json",
+            "sha256": "aa3032e9df5591fd481b9c4947f8ffd2ca56b1b28acf9d06cdc1c47fa0afef02",
+            "verified_per_second": 1470951.1413321523,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-packet-spaces-2.json",
+            "sha256": "57aa247b8dd4b34c1fe0e764a2643433fdd640f17d0b6b03fc217aaaa3a337c3",
+            "verified_per_second": 1420324.5404509539,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-packet-spaces-3.json",
+            "sha256": "5bd242aec52d1e1f2a6156a4348cdf4b386a2cbb6dbba651acf4fad94b52004e",
+            "verified_per_second": 1440838.145855421,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1440838.145855421
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-receive-storage-1.json",
+            "sha256": "8983a9615eb4ab4e42d6978b0423199fb27414cc3af895484db688e0070695b6",
+            "verified_per_second": 1452993.3987178614,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-receive-storage-2.json",
+            "sha256": "4e55563e1f26db6455fd9fe2f4e9b80579d90ec652a077dd3547770cb0184c4f",
+            "verified_per_second": 1447758.4277211053,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-private-receive-storage-3.json",
+            "sha256": "2538619944209ed7267c9f4b2f36cd47eb0148b17349ba76c4ecafdeebef2ff5",
+            "verified_per_second": 1449947.7598270187,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1449947.7598270187
+      },
+      "candidate_delta_percent": 0.6322440863883116
+    },
+    "roomonly": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-packet-spaces-1.json",
+            "sha256": "5e455f84497d51b214f87399232e0b87bbb8c07f8588251c7e7146dd227b8e28",
+            "verified_per_second": 1432022.5331733685,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-packet-spaces-2.json",
+            "sha256": "85584652b420d94df640a99f4c1f1f1b8d99548f2161710409a478a633453d84",
+            "verified_per_second": 1430770.0210823223,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-packet-spaces-3.json",
+            "sha256": "3a78ceadbb19f5359f1b301b618b9000b7f44f57f6af674c3593929c03256671",
+            "verified_per_second": 1399633.0742082938,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1430770.0210823223
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-receive-storage-1.json",
+            "sha256": "9ac7cef817c1b6f5dc407ebfba71e9476a54c9654d92c0c87565e193581ce762",
+            "verified_per_second": 1443847.6393284143,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-receive-storage-2.json",
+            "sha256": "b67b6018adf972a278cbff30e58ab1d43d0a4986546a4ff702a8d22fa9e1a3a4",
+            "verified_per_second": 1471240.4523917716,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-roomonly-receive-storage-3.json",
+            "sha256": "8c9378118de1afa571f97527cab61dfa7a2787722ab70faae6931c0bf7f88928",
+            "verified_per_second": 1429559.482550491,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1443847.6393284143
+      },
+      "candidate_delta_percent": 0.9140265768358358
+    },
+    "mixed": {
+      "packet-spaces": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-packet-spaces-1.json",
+            "sha256": "f255411c797ff9698ef98ac739c7064e5aeb9f2f55a25586ff36932123ba4bba",
+            "verified_per_second": 1381465.1485283123,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-packet-spaces-2.json",
+            "sha256": "183ac2f87c7050c68b6b8794d330f41ed10ce9119d3aa14cc2ae2fec2be741d3",
+            "verified_per_second": 1453325.4489808774,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-packet-spaces-3.json",
+            "sha256": "51c7d7eac2b71ab728dd241853ee0c21356e6c331f70d24f35d855f22974f136",
+            "verified_per_second": 1451398.564353752,
+            "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1451398.564353752
+      },
+      "receive-storage": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-receive-storage-1.json",
+            "sha256": "08022a2cf4024c26f6b1de95e73c4fb25a20fac532b88862c1eb90dd1b7c6d25",
+            "verified_per_second": 1354845.573868232,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-receive-storage-2.json",
+            "sha256": "825b85f14b9a3fe091299d26ba9bd4f902d4e3d4bf915d3e916bbd56e02a11d8",
+            "verified_per_second": 1372106.3416093977,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/receive-storage-long-mixed-receive-storage-3.json",
+            "sha256": "e382a76da5e69cc04bff159432bce69d7239b09fb7ac3710243559bdff9a1c00",
+            "verified_per_second": 1399728.1872522829,
+            "server_sha256": "282783e9c61517955fd59482e9914ec0e785b46f8d4f02f529be02abf8a10faa",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1372106.3416093977
+      },
+      "candidate_delta_percent": -5.4631597888936785
+    }
+  },
+  "validation": {
+    "artifacts/webtransport/receive-storage-unit-tests.log": {
+      "sha256": "b159fd1e98ea41a4102b721da9c79031a4c9a328e60f1cf3b7f143ba076f2049",
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "tail": "\nrunning 2 tests\ntest tests::retired_slice_allows_reuse_and_cache_stays_bounded ... ok\ntest tests::retained_packet_is_not_overwritten ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+    },
+    "artifacts/webtransport/receive-storage-final-tests.log": {
+      "sha256": "b75fcbc6cdae6040b27984908600c3d870353a5b5313e3bc5e94a480d11bab20",
+      "test_summaries": [
+        "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.89s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.53s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.33s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "tail": "6724e1e8e1be04)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n     Running unittests examples/transport_probe.rs (target/debug/examples/transport_probe-ef5667c19dca835c)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+    },
+    "artifacts/webtransport/receive-storage-clippy.log": {
+      "sha256": "3b3763d3764f856dfd6f5dcbb0b0c77fd2604914e31efb42c15d83277b6182af",
+      "test_summaries": [],
+      "tail": "n-proto)\n    Checking quinn v0.11.12 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn)\n    Checking wtransport v0.7.2\n    Checking web-transport-quinn v0.13.3\n    Checking war-relay v0.1.0 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.67s\n"
+    },
+    "artifacts/webtransport/receive-storage-build.log": {
+      "sha256": "cb60b72e207529fe2ceb6fe7780fecde80772cf364055759fb22f239b42c8003",
+      "test_summaries": [],
+      "tail": "uinn)\n   Compiling quinn-proto v0.11.19 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn-proto)\n   Compiling wtransport v0.7.2\n   Compiling web-transport-quinn v0.13.3\n   Compiling war-relay v0.1.0 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next)\n    Finished `release` profile [optimized] target(s) in 17.33s\n"
+    }
+  }
+}

@@ -2083,3 +2083,31 @@ measurement limits are preserved in
 [`webtransport-shared-packet-tree-2026-10-22.json`](reports/webtransport-shared-packet-tree-2026-10-22.json).
 UDP receive storage is the next allocation target; throughput and memory
 parity remain unmet.
+
+
+### Endpoint-local UDP receive storage rejected (2026-10-22)
+
+A FIFO of empty BytesMut tails, bounded by existing receive byte/segment
+geometry, safely reused backing storage using try_reclaim. Packet slices
+retained normal ownership; outstanding references forced fresh allocation.
+The cache had no shared mutex. Focused ownership/reuse checks, relay tests,
+Clippy, and both 100k capacity runs passed.
+
+The diagnostic allocation census fell from 9.075 to 5.073 requests per
+verified delivery and 3,626.58 to 2,418.11 requested bytes per delivery.
+Receive-site allocations fell from 799,885 to 2,319, and split_to requests
+from 799,903 to 2,336. These are allocator requests under the diagnostic
+allocator, not copied bytes or ordinary performance results.
+
+Three four-second repeats initially gave +1.36% private, +2.80% room,
+-0.48% mixed. Three rotated twelve-second repeats instead gave +0.63%
+private, +0.91% room, and -5.46% mixed. The ordinary capacity pair added
+2.94 MiB ready RSS; server CPU was 6.70 versus 6.75 seconds for 400k verified
+deliveries. Reduced allocations did not translate into a whole-workload win.
+The cause of the mixed regression remains unproven. Reject this design;
+source and default executable were restored. Browser/datagram/freshness
+acceptance was not run after the performance selection gate failed.
+
+Exact source, hashes, receipts, longer distributions, and limits are in
+[`webtransport-receive-storage-2026-10-22.json`](reports/webtransport-receive-storage-2026-10-22.json).
+Overall throughput and memory parity remain unmet.
