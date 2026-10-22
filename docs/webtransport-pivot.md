@@ -2330,3 +2330,33 @@ Exact source, fixed clients, distributions, component metrics, heap captures,
 profiles and reproduction scripts are in
 [`webtransport-ordered-ack-2026-10-22.json`](reports/webtransport-ordered-ack-2026-10-22.json).
 Full throughput and memory parity remain unmet.
+
+## Receive cache geometry experiment — rejected (2026-10-22)
+
+Compared endpoint-local exact-size receive-storage caches with 32 and 2,048
+slots against retained ordered-ACK, with fixed clients and rotated runs.
+Three twelve-second repeats measured small-cache private +0.63%, room
+-0.97%, mixed +0.70%; large-cache +1.04%, +0.42%, -2.31%. The short
+small-cache mixed +4.00% gain did not persist. All 27 longer receipts passed.
+100k-session ready RSS was 2,081.34 / 2,080.47 / 2,083.22 MiB for
+baseline / small / large: no meaningful memory improvement. All three
+capacity runs verified 400k measured deliveries.
+
+Diagnostic cumulative allocation requests per delivery fell 9.096 to 8.361
+and 7.125, but allocation savings did not establish a whole-workload win.
+Instrumented private/mixed miss counts showed only 3.7–4.9% reuse for
+32 slots and 24–35% for 2,048. Size mismatch dominated the large cache;
+small-cache storage was also often not reclaimable. These counters do not
+prove a cache-locality cause. Four diagnostic receipts passed.
+
+Quinn fixture tests passed (33, three ignored). The final root suite had a
+failed embedding-service cancellation test (64 versus 63); preserve that
+failure and do not claim full-suite success. Broad acceptance gates were
+not run because both candidates failed selection. Both source variants
+were removed and the exact retained ordered-ACK executable restored
+(SHA256 8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a).
+
+Source, immutable receipts, distributions, allocation diagnostics, census,
+validation limits and reproduction scripts:
+[`webtransport-receive-cache-geometry-2026-10-22.json`](reports/webtransport-receive-cache-geometry-2026-10-22.json).
+Throughput and memory parity remain unmet; the overall goal remains active.
