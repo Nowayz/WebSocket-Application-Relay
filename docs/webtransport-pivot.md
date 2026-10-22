@@ -1967,3 +1967,29 @@ nine freshness and nine actual Chrome checks passed, including a byte-exact
 is a verified memory improvement, not a universal throughput or datagram win.
 See `reports/webtransport-event-batch-2026-10-22.json`. Overall native WebSocket
 throughput and memory parity remain unmet.
+
+### Retained final packet-space retirement
+
+Initial and Handshake spaces now release their separately owned storage after
+final key discard; Data stays inline and its live history is preserved. Retired
+spaces cannot be recreated by lookup. Retry is explicitly separate: it replaces
+Initial keys in live storage while preserving the next packet number. This
+reduced protocol Connection size by 1,072 bytes, and actual Quinn connection
+allocation from 6,416 to 5,344 bytes. Both 100k ordinary runs verified 400,000
+deliveries and cleanup; ready RSS fell from 2,357.13 to 2,256.82 MiB.
+
+Initial private/room/mixed median throughput changed -0.43/+1.77/-2.05%; longer
+medians -0.08/+2.04/-1.10%. Mixed private and fanout components both declined
+slightly, without a large hidden composition shift. Both cohorts passed all 18
+cases. All six paced reliable cases had zero missing deliveries. Three paired
+datagram candidate runs had fewer unreceived updates than their baselines, but
+no general reliability win is claimed. Both endpoint profiles had zero lost
+samples, all nine freshness cases passed, and all nine Chrome checks passed
+with zero current cleanup gauges. The relay suite, Clippy and 319 protocol
+tests passed, including terminal-retirement and late-packet replay checks.
+
+The completed allocation capture measured 2,192,201,779 requested live bytes
+at ready with no unresolved bytes and all five gates passed. This memory
+improvement retains an explicit mixed-throughput cost and does not establish
+overall native WebSocket parity. See
+`reports/webtransport-packet-spaces-2026-10-22.json`.

@@ -270,16 +270,66 @@ impl PacketSpace {
     }
 }
 
-impl Index<SpaceId> for [PacketSpace; 3] {
-    type Output = PacketSpace;
-    fn index(&self, space: SpaceId) -> &PacketSpace {
-        &self.as_ref()[space as usize]
+/// Data stays inline. Earlier spaces own transient state until final key
+/// retirement; None is a tombstone, never a request to allocate a new space.
+pub(super) struct PacketSpaces {
+    initial: Option<Box<PacketSpace>>,
+    handshake: Option<Box<PacketSpace>>,
+    data: PacketSpace,
+}
+
+impl PacketSpaces {
+    pub(super) fn new(initial: PacketSpace, now: Instant) -> Self {
+        Self {
+            initial: Some(Box::new(initial)),
+            handshake: Some(Box::new(PacketSpace::new(now))),
+            data: PacketSpace::new(now),
+        }
+    }
+
+    pub(super) fn get(&self, id: SpaceId) -> Option<&PacketSpace> {
+        match id {
+            SpaceId::Initial => self.initial.as_deref(),
+            SpaceId::Handshake => self.handshake.as_deref(),
+            SpaceId::Data => Some(&self.data),
+        }
+    }
+
+    pub(super) fn get_mut(&mut self, id: SpaceId) -> Option<&mut PacketSpace> {
+        match id {
+            SpaceId::Initial => self.initial.as_deref_mut(),
+            SpaceId::Handshake => self.handshake.as_deref_mut(),
+            SpaceId::Data => Some(&mut self.data),
+        }
+    }
+
+    pub(super) fn has_keys(&self, id: SpaceId) -> bool {
+        self.get(id).is_some_and(|space| space.crypto.is_some())
+    }
+
+    pub(super) fn retire(&mut self, id: SpaceId) {
+        match id {
+            SpaceId::Initial => {
+                self.initial.take();
+            }
+            SpaceId::Handshake => {
+                self.handshake.take();
+            }
+            SpaceId::Data => panic!("application packet space cannot be retired"),
+        }
     }
 }
 
-impl IndexMut<SpaceId> for [PacketSpace; 3] {
+impl Index<SpaceId> for PacketSpaces {
+    type Output = PacketSpace;
+    fn index(&self, space: SpaceId) -> &PacketSpace {
+        self.get(space).expect("packet space already retired")
+    }
+}
+
+impl IndexMut<SpaceId> for PacketSpaces {
     fn index_mut(&mut self, space: SpaceId) -> &mut PacketSpace {
-        &mut self.as_mut()[space as usize]
+        self.get_mut(space).expect("packet space already retired")
     }
 }
 
@@ -949,6 +999,26 @@ const MAX_ACK_BLOCKS: usize = 64;
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn retirement_is_terminal_and_preserves_application_history() {
+        let now = Instant::now();
+        let mut spaces = PacketSpaces::new(PacketSpace::new(now), now);
+        spaces[SpaceId::Data].next_packet_number = 99;
+        spaces[SpaceId::Data].crypto_offset = 72;
+        assert!(!spaces[SpaceId::Data].dedup.insert(88));
+        spaces.retire(SpaceId::Initial);
+        spaces.retire(SpaceId::Initial);
+        spaces.retire(SpaceId::Handshake);
+        for id in [SpaceId::Initial, SpaceId::Handshake] {
+            assert!(spaces.get(id).is_none());
+            assert!(spaces.get_mut(id).is_none());
+            assert!(!spaces.has_keys(id));
+        }
+        assert_eq!(spaces[SpaceId::Data].next_packet_number, 99);
+        assert_eq!(spaces[SpaceId::Data].crypto_offset, 72);
+        assert!(spaces[SpaceId::Data].dedup.insert(88));
+    }
 
     #[test]
     fn thin_pending_moves_storage_and_preserves_crypto_retransmit_priority() {

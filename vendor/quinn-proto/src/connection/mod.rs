@@ -70,7 +70,9 @@ mod send_buffer;
 mod spaces;
 #[cfg(fuzzing)]
 pub use spaces::Retransmits;
-use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
+use spaces::{
+    PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames, SentPacket, ThinRetransmits,
+};
 
 mod stats;
 pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
@@ -173,7 +175,7 @@ pub struct Connection {
     /// Outgoing spin bit state
     spin: bool,
     /// Packet number spaces: initial, handshake, 1-RTT
-    spaces: [PacketSpace; 3],
+    spaces: PacketSpaces,
     /// Highest usable packet number space
     highest_space: SpaceId,
     /// 1-RTT keys used prior to a key update
@@ -312,7 +314,7 @@ impl Connection {
             endpoint_events: VecDeque::new(),
             spin_enabled: config.allow_spin && rng.random_ratio(7, 8),
             spin: false,
-            spaces: [initial_space, PacketSpace::new(now), PacketSpace::new(now)],
+            spaces: PacketSpaces::new(initial_space, now),
             highest_space: SpaceId::Initial,
             prev_crypto: None,
             next_crypto: None,
@@ -483,7 +485,9 @@ impl Connection {
         for space in SpaceId::iter() {
             let request_immediate_ack =
                 space == SpaceId::Data && self.peer_supports_ack_frequency();
-            self.spaces[space].maybe_queue_probe(request_immediate_ack, &self.streams);
+            if let Some(space) = self.spaces.get_mut(space) {
+                space.maybe_queue_probe(request_immediate_ack, &self.streams);
+            }
         }
 
         // Check whether we need to send a close message
@@ -548,7 +552,7 @@ impl Connection {
 
             // Is there data or a close message to send in this space?
             let can_send = self.space_can_send(space_id, frame_space_1rtt);
-            if can_send.is_empty() && (!close || self.spaces[space_id].crypto.is_none()) {
+            if can_send.is_empty() && (!close || !self.spaces.has_keys(space_id)) {
                 space_idx += 1;
                 continue;
             }
@@ -760,7 +764,7 @@ impl Connection {
             // From here on, we've determined that a packet will definitely be sent.
             //
 
-            if self.spaces[SpaceId::Initial].crypto.is_some()
+            if self.spaces.has_keys(SpaceId::Initial)
                 && space_id == SpaceId::Handshake
                 && self.side.is_client()
             {
@@ -1078,7 +1082,7 @@ impl Connection {
 
     /// Indicate what types of frames are ready to send for the given space
     fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
-        if self.spaces[space_id].crypto.is_none()
+        if !self.spaces.has_keys(space_id)
             && (space_id != SpaceId::Data
                 || self.zero_rtt_crypto.is_none()
                 || self.side.is_server())
@@ -1830,7 +1834,7 @@ impl Connection {
 
     fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
         SpaceId::iter()
-            .filter_map(|id| Some((self.spaces[id].loss_time?, id)))
+            .filter_map(|id| Some((self.spaces.get(id)?.loss_time?, id)))
             .min_by_key(|&(time, _)| time)
     }
 
@@ -1849,7 +1853,11 @@ impl Connection {
 
         let mut result = None;
         for space in SpaceId::iter() {
-            if !self.spaces[space].has_in_flight() {
+            if !self
+                .spaces
+                .get(space)
+                .is_some_and(PacketSpace::has_in_flight)
+            {
                 continue;
             }
             if space == SpaceId::Data {
@@ -1878,12 +1886,13 @@ impl Connection {
         }
         // The server is guaranteed to have validated our address if any of our handshake or 1-RTT
         // packets are acknowledged or we've seen HANDSHAKE_DONE and discarded handshake keys.
-        self.spaces[SpaceId::Handshake]
-            .largest_acked_packet
+        self.spaces
+            .get(SpaceId::Handshake)
+            .and_then(|space| space.largest_acked_packet)
             .is_some()
             || self.spaces[SpaceId::Data].largest_acked_packet.is_some()
             || (self.spaces[SpaceId::Data].crypto.is_some()
-                && self.spaces[SpaceId::Handshake].crypto.is_none())
+                && !self.spaces.has_keys(SpaceId::Handshake))
     }
 
     fn set_loss_detection_timer(&mut self, now: Instant) {
@@ -1959,7 +1968,7 @@ impl Connection {
             None => return,
         };
         if self.side.is_server() {
-            if self.spaces[SpaceId::Initial].crypto.is_some() && space_id == SpaceId::Handshake {
+            if self.spaces.has_keys(SpaceId::Initial) && space_id == SpaceId::Handshake {
                 // A server stops sending and processing Initial packets when it receives its first Handshake packet.
                 self.discard_space(now, SpaceId::Initial);
             }
@@ -2218,6 +2227,11 @@ impl Connection {
     }
 
     fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
+        self.clear_space(now, space_id);
+        self.spaces.retire(space_id);
+    }
+
+    fn clear_space(&mut self, now: Instant, space_id: SpaceId) {
         debug_assert!(space_id != SpaceId::Data);
         trace!("discarding {:?} keys", space_id);
         if space_id == SpaceId::Initial {
@@ -2226,10 +2240,12 @@ impl Connection {
                 *token = Bytes::new();
             }
         }
-        let space = &mut self.spaces[space_id];
+        let Some(space) = self.spaces.get_mut(space_id) else {
+            return;
+        };
         space.crypto = None;
-        // No packet in this space can be sent or authenticated again. Keep its
-        // scalar packet-number/ACK history, but release handshake-only storage.
+        // Clear recovery for the old keys. Final discard then retires the
+        // space; Retry instead preserves its packet number and replaces keys.
         space.pending = ThinRetransmits::default();
         space.crypto_stream.discard_buffer();
         space.time_of_last_ack_eliciting_packet = None;
@@ -2523,7 +2539,7 @@ impl Connection {
                     self.on_packet_acked(now, info);
                 };
 
-                self.discard_space(now, SpaceId::Initial); // Make sure we clean up after any retransmitted Initials
+                self.clear_space(now, SpaceId::Initial); // Retry replaces keys, not final retirement
                 self.spaces[SpaceId::Initial] = PacketSpace {
                     crypto: Some(self.crypto.initial_keys(&rem_cid, self.side.side())),
                     next_packet_number: self.spaces[SpaceId::Initial].next_packet_number,
@@ -3032,7 +3048,7 @@ impl Connection {
                             "client sent HANDSHAKE_DONE",
                         ));
                     }
-                    if self.spaces[SpaceId::Handshake].crypto.is_some() {
+                    if self.spaces.has_keys(SpaceId::Handshake) {
                         self.discard_space(now, SpaceId::Handshake);
                     }
                 }
@@ -3815,7 +3831,7 @@ impl Connection {
         let ConnectionSide::Server { server_config } = &self.side else {
             return;
         };
-        let new_tokens = &mut self.spaces[SpaceId::Data as usize]
+        let new_tokens = &mut self.spaces[SpaceId::Data]
             .pending
             .get_or_create()
             .new_tokens;

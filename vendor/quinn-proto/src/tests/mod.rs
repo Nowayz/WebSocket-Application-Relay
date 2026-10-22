@@ -46,6 +46,43 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[test]
+fn replayed_early_packets_after_confirmation_preserve_application_io() {
+    let _guard = subscribe();
+    let mut pair = Pair::default();
+    let client = pair.begin_connect(client_config());
+    pair.drive_client();
+    let mut to_server = pair.server.inbound.clone();
+    pair.drive_server();
+    let to_client = pair.client.inbound.clone();
+    pair.drive_client();
+    to_server.extend(pair.server.inbound.iter().cloned());
+    pair.drive();
+    let server = pair.server.assert_accept();
+    pair.finish_connect(client, server);
+    for (_, ecn, packet) in to_server {
+        pair.server.inbound.push_back((pair.time, ecn, packet));
+    }
+    for (_, ecn, packet) in to_client {
+        pair.client.inbound.push_back((pair.time, ecn, packet));
+    }
+    pair.drive();
+    assert!(!pair.client_conn_mut(client).is_handshaking());
+    assert!(!pair.server_conn_mut(server).is_handshaking());
+    pair.client_datagrams(client)
+        .send(Bytes::from_static(b"after retirement"), true)
+        .unwrap();
+    pair.server_datagrams(server)
+        .send(Bytes::from_static(b"reply"), true)
+        .unwrap();
+    pair.drive();
+    assert_eq!(
+        pair.server_datagrams(server).recv().unwrap(),
+        b"after retirement"[..]
+    );
+    assert_eq!(pair.client_datagrams(client).recv().unwrap(), b"reply"[..]);
+}
+
+#[test]
 fn pending_incoming_survives_server_config_change() {
     let _guard = subscribe();
     let replacement = ServerConfig::with_crypto(Arc::new(server_crypto_with_alpn(vec![

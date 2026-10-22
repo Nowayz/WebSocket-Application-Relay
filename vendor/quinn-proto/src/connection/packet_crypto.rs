@@ -1,7 +1,7 @@
 use tracing::{debug, trace};
 
 use crate::Instant;
-use crate::connection::spaces::PacketSpace;
+use crate::connection::spaces::PacketSpaces;
 use crate::crypto::{HeaderKey, KeyPair, PacketKey};
 use crate::packet::{Packet, PartialDecode, SpaceId};
 use crate::token::ResetToken;
@@ -10,7 +10,7 @@ use crate::{RESET_TOKEN_SIZE, TransportError};
 /// Removes header protection of a packet, or returns `None` if the packet was dropped
 pub(super) fn unprotect_header(
     partial_decode: PartialDecode,
-    spaces: &[PacketSpace; 3],
+    spaces: &PacketSpaces,
     zero_rtt_crypto: Option<&ZeroRttCrypto>,
     stateless_reset_token: Option<ResetToken>,
 ) -> Option<UnprotectHeaderResult> {
@@ -22,7 +22,7 @@ pub(super) fn unprotect_header(
             return None;
         }
     } else if let Some(space) = partial_decode.space() {
-        if let Some(ref crypto) = spaces[space].crypto {
+        if let Some(crypto) = spaces.get(space).and_then(|space| space.crypto.as_ref()) {
             Some(&*crypto.header.remote)
         } else {
             debug!(
@@ -68,7 +68,7 @@ pub(super) struct UnprotectHeaderResult {
 /// Decrypts a packet's body in-place
 pub(super) fn decrypt_packet_body(
     packet: &mut Packet,
-    spaces: &[PacketSpace; 3],
+    spaces: &PacketSpaces,
     zero_rtt_crypto: Option<&ZeroRttCrypto>,
     conn_key_phase: bool,
     prev_crypto: Option<&PrevCrypto>,

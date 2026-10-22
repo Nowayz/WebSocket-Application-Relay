@@ -1,27 +1,24 @@
-diff --git a/quinn-proto/src/connection/assembler.rs b/quinn-proto/src/connection/assembler.rs
-index 93268e1..cd7afec 100644
 --- a/quinn-proto/src/connection/assembler.rs
 +++ b/quinn-proto/src/connection/assembler.rs
-@@ -37,6 +37,14 @@ impl Assembler {
+@@ -35,6 +35,14 @@
+         *self = Self::default();
+         self.data = old_data;
          self.data.clear();
-     }
- 
++    }
++
 +    /// Release buffered data and its staging allocation without resetting the
 +    /// consumed offset or ordering history. Used when a crypto space retires.
 +    pub(super) fn discard_buffer(&mut self) {
 +        self.data = BinaryHeap::new();
 +        self.buffered = 0;
 +        self.allocated = 0;
-+    }
-+
+     }
+ 
      pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
-         if ordered && !self.state.is_ordered() {
-             return Err(IllegalOrderedRead);
-@@ -377,6 +385,31 @@ mod test {
-     use super::*;
+@@ -378,6 +386,31 @@
      use assert_matches::assert_matches;
  
-+    #[test]
+     #[test]
 +    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
 +        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
 +        struct Owned(Arc<AtomicUsize>);
@@ -46,23 +43,44 @@ index 93268e1..cd7afec 100644
 +        assert!(x.read(usize::MAX, true).is_none());
 +    }
 +
-     #[test]
++    #[test]
      fn assemble_ordered() {
          let mut x = Assembler::new();
-diff --git a/quinn-proto/src/connection/mod.rs b/quinn-proto/src/connection/mod.rs
-index 5155740..ebd4546 100644
+         assert_matches!(next(&mut x, 32), None);
 --- a/quinn-proto/src/connection/mod.rs
 +++ b/quinn-proto/src/connection/mod.rs
-@@ -70,8 +70,6 @@ mod send_buffer;
+@@ -70,9 +70,9 @@
  mod spaces;
  #[cfg(fuzzing)]
  pub use spaces::Retransmits;
 -#[cfg(not(fuzzing))]
 -use spaces::Retransmits;
- use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
+-use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
++use spaces::{
++    PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames, SentPacket, ThinRetransmits,
++};
  
  mod stats;
-@@ -431,7 +429,7 @@ impl Connection {
+ pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
+@@ -175,7 +175,7 @@
+     /// Outgoing spin bit state
+     spin: bool,
+     /// Packet number spaces: initial, handshake, 1-RTT
+-    spaces: [PacketSpace; 3],
++    spaces: PacketSpaces,
+     /// Highest usable packet number space
+     highest_space: SpaceId,
+     /// 1-RTT keys used prior to a key update
+@@ -314,7 +314,7 @@
+             endpoint_events: VecDeque::new(),
+             spin_enabled: config.allow_spin && rng.random_ratio(7, 8),
+             spin: false,
+-            spaces: [initial_space, PacketSpace::new(now), PacketSpace::new(now)],
++            spaces: PacketSpaces::new(initial_space, now),
+             highest_space: SpaceId::Initial,
+             prev_crypto: None,
+             next_crypto: None,
+@@ -431,7 +431,7 @@
          RecvStream {
              id,
              state: &mut self.streams,
@@ -71,7 +89,7 @@ index 5155740..ebd4546 100644
          }
      }
  
-@@ -442,7 +440,7 @@ impl Connection {
+@@ -442,7 +442,7 @@
          SendStream {
              id,
              state: &mut self.streams,
@@ -80,7 +98,18 @@ index 5155740..ebd4546 100644
              conn_state: &self.state,
          }
      }
-@@ -508,10 +506,14 @@ impl Connection {
+@@ -485,7 +485,9 @@
+         for space in SpaceId::iter() {
+             let request_immediate_ack =
+                 space == SpaceId::Data && self.peer_supports_ack_frequency();
+-            self.spaces[space].maybe_queue_probe(request_immediate_ack, &self.streams);
++            if let Some(space) = self.spaces.get_mut(space) {
++                space.maybe_queue_probe(request_immediate_ack, &self.streams);
++            }
+         }
+ 
+         // Check whether we need to send a close message
+@@ -508,10 +510,14 @@
  
          // Check whether we need to send an ACK_FREQUENCY frame
          if let Some(config) = &self.config.ack_frequency_config {
@@ -99,7 +128,34 @@ index 5155740..ebd4546 100644
                  && self.peer_supports_ack_frequency();
          }
  
-@@ -1168,7 +1170,11 @@ impl Connection {
+@@ -546,7 +552,7 @@
+ 
+             // Is there data or a close message to send in this space?
+             let can_send = self.space_can_send(space_id, frame_space_1rtt);
+-            if can_send.is_empty() && (!close || self.spaces[space_id].crypto.is_none()) {
++            if can_send.is_empty() && (!close || !self.spaces.has_keys(space_id)) {
+                 space_idx += 1;
+                 continue;
+             }
+@@ -758,7 +764,7 @@
+             // From here on, we've determined that a packet will definitely be sent.
+             //
+ 
+-            if self.spaces[SpaceId::Initial].crypto.is_some()
++            if self.spaces.has_keys(SpaceId::Initial)
+                 && space_id == SpaceId::Handshake
+                 && self.side.is_client()
+             {
+@@ -1076,7 +1082,7 @@
+ 
+     /// Indicate what types of frames are ready to send for the given space
+     fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
+-        if self.spaces[space_id].crypto.is_none()
++        if !self.spaces.has_keys(space_id)
+             && (space_id != SpaceId::Data
+                 || self.zero_rtt_crypto.is_none()
+                 || self.side.is_server())
+@@ -1168,7 +1174,11 @@
              NewIdentifiers(ids, now) => {
                  self.local_cid_state.new_cids(&ids, now);
                  ids.into_iter().rev().for_each(|frame| {
@@ -112,7 +168,7 @@ index 5155740..ebd4546 100644
                  });
                  // Update Timer::PushNewCid
                  if self.timers.get(Timer::PushNewCid).is_none_or(|x| x <= now) {
-@@ -1437,7 +1443,7 @@ impl Connection {
+@@ -1437,7 +1447,7 @@
          self.streams.set_max_concurrent(dir, count);
          // If the limit was reduced, then a flow control update previously deemed insignificant may
          // now be significant.
@@ -121,7 +177,7 @@ index 5155740..ebd4546 100644
          self.streams.queue_max_stream_id(pending);
      }
  
-@@ -1458,7 +1464,7 @@ impl Connection {
+@@ -1458,7 +1468,7 @@
      /// See [`TransportConfig::receive_window()`]
      pub fn set_receive_window(&mut self, receive_window: VarInt) {
          if self.streams.set_receive_window(receive_window) {
@@ -130,7 +186,55 @@ index 5155740..ebd4546 100644
          }
      }
  
-@@ -2175,10 +2181,14 @@ impl Connection {
+@@ -1824,7 +1834,7 @@
+ 
+     fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
+         SpaceId::iter()
+-            .filter_map(|id| Some((self.spaces[id].loss_time?, id)))
++            .filter_map(|id| Some((self.spaces.get(id)?.loss_time?, id)))
+             .min_by_key(|&(time, _)| time)
+     }
+ 
+@@ -1843,7 +1853,11 @@
+ 
+         let mut result = None;
+         for space in SpaceId::iter() {
+-            if !self.spaces[space].has_in_flight() {
++            if !self
++                .spaces
++                .get(space)
++                .is_some_and(PacketSpace::has_in_flight)
++            {
+                 continue;
+             }
+             if space == SpaceId::Data {
+@@ -1872,12 +1886,13 @@
+         }
+         // The server is guaranteed to have validated our address if any of our handshake or 1-RTT
+         // packets are acknowledged or we've seen HANDSHAKE_DONE and discarded handshake keys.
+-        self.spaces[SpaceId::Handshake]
+-            .largest_acked_packet
++        self.spaces
++            .get(SpaceId::Handshake)
++            .and_then(|space| space.largest_acked_packet)
+             .is_some()
+             || self.spaces[SpaceId::Data].largest_acked_packet.is_some()
+             || (self.spaces[SpaceId::Data].crypto.is_some()
+-                && self.spaces[SpaceId::Handshake].crypto.is_none())
++                && !self.spaces.has_keys(SpaceId::Handshake))
+     }
+ 
+     fn set_loss_detection_timer(&mut self, now: Instant) {
+@@ -1953,7 +1968,7 @@
+             None => return,
+         };
+         if self.side.is_server() {
+-            if self.spaces[SpaceId::Initial].crypto.is_some() && space_id == SpaceId::Handshake {
++            if self.spaces.has_keys(SpaceId::Initial) && space_id == SpaceId::Handshake {
+                 // A server stops sending and processing Initial packets when it receives its first Handshake packet.
+                 self.discard_space(now, SpaceId::Initial);
+             }
+@@ -2175,10 +2190,14 @@
              }
              self.spaces[space].crypto_offset += outgoing.len() as u64;
              trace!("wrote {} {:?} CRYPTO bytes", outgoing.len(), space);
@@ -149,18 +253,44 @@ index 5155740..ebd4546 100644
          }
      }
  
-@@ -2218,6 +2228,10 @@ impl Connection {
+@@ -2208,6 +2227,11 @@
+     }
+ 
+     fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
++        self.clear_space(now, space_id);
++        self.spaces.retire(space_id);
++    }
++
++    fn clear_space(&mut self, now: Instant, space_id: SpaceId) {
+         debug_assert!(space_id != SpaceId::Data);
+         trace!("discarding {:?} keys", space_id);
+         if space_id == SpaceId::Initial {
+@@ -2216,8 +2240,14 @@
+                 *token = Bytes::new();
+             }
          }
-         let space = &mut self.spaces[space_id];
+-        let space = &mut self.spaces[space_id];
++        let Some(space) = self.spaces.get_mut(space_id) else {
++            return;
++        };
          space.crypto = None;
-+        // No packet in this space can be sent or authenticated again. Keep its
-+        // scalar packet-number/ACK history, but release handshake-only storage.
++        // Clear recovery for the old keys. Final discard then retires the
++        // space; Retry instead preserves its packet number and replaces keys.
 +        space.pending = ThinRetransmits::default();
 +        space.crypto_stream.discard_buffer();
          space.time_of_last_ack_eliciting_packet = None;
          space.loss_time = None;
          let sent_packets = mem::take(&mut space.sent_packets);
-@@ -2518,6 +2532,7 @@ impl Connection {
+@@ -2509,7 +2539,7 @@
+                     self.on_packet_acked(now, info);
+                 };
+ 
+-                self.discard_space(now, SpaceId::Initial); // Make sure we clean up after any retransmitted Initials
++                self.clear_space(now, SpaceId::Initial); // Retry replaces keys, not final retirement
+                 self.spaces[SpaceId::Initial] = PacketSpace {
+                     crypto: Some(self.crypto.initial_keys(&rem_cid, self.side.side())),
+                     next_packet_number: self.spaces[SpaceId::Initial].next_packet_number,
+@@ -2518,6 +2548,7 @@
                  };
                  self.spaces[SpaceId::Initial]
                      .pending
@@ -168,7 +298,7 @@ index 5155740..ebd4546 100644
                      .crypto
                      .push_back(frame::Crypto {
                          offset: 0,
-@@ -2587,7 +2602,7 @@ impl Connection {
+@@ -2587,7 +2618,7 @@
                              self.streams.zero_rtt_rejected();
  
                              // Discard already-queued frames
@@ -177,7 +307,7 @@ index 5155740..ebd4546 100644
  
                              // Discard 0-RTT packets
                              let sent_packets =
-@@ -2608,7 +2623,10 @@ impl Connection {
+@@ -2608,7 +2639,10 @@
                      self.issue_first_cids(now);
                  } else {
                      // Server-only
@@ -189,7 +319,7 @@ index 5155740..ebd4546 100644
                      self.discard_space(now, SpaceId::Handshake);
                  }
  
-@@ -2808,7 +2826,7 @@ impl Connection {
+@@ -2808,7 +2842,7 @@
                  }
                  Frame::Stream(frame) => {
                      if self.streams.received(frame, payload_len)?.should_transmit() {
@@ -198,7 +328,7 @@ index 5155740..ebd4546 100644
                      }
                  }
                  Frame::Ack(ack) => {
-@@ -2854,7 +2872,7 @@ impl Connection {
+@@ -2854,7 +2888,7 @@
                  }
                  Frame::ResetStream(frame) => {
                      if self.streams.received_reset(frame)?.should_transmit() {
@@ -207,7 +337,7 @@ index 5155740..ebd4546 100644
                      }
                  }
                  Frame::DataBlocked { offset } => {
-@@ -2930,7 +2948,10 @@ impl Connection {
+@@ -2930,7 +2964,10 @@
                      match self.rem_cids.insert(frame) {
                          Ok(None) => {}
                          Ok(Some((retired, reset_token))) => {
@@ -219,7 +349,7 @@ index 5155740..ebd4546 100644
                              self.set_reset_token(reset_token);
                          }
                          Err(InsertError::ExceedsLimit) => {
-@@ -2943,6 +2964,7 @@ impl Connection {
+@@ -2943,6 +2980,7 @@
                              // was retired all at once via retire_prior_to.
                              self.spaces[SpaceId::Data]
                                  .pending
@@ -227,7 +357,16 @@ index 5155740..ebd4546 100644
                                  .retire_cids(frame.sequence..frame.sequence.saturating_add(1))?;
                              continue;
                          }
-@@ -3031,7 +3053,7 @@ impl Connection {
+@@ -3010,7 +3048,7 @@
+                             "client sent HANDSHAKE_DONE",
+                         ));
+                     }
+-                    if self.spaces[SpaceId::Handshake].crypto.is_some() {
++                    if self.spaces.has_keys(SpaceId::Handshake) {
+                         self.discard_space(now, SpaceId::Handshake);
+                     }
+                 }
+@@ -3031,7 +3069,7 @@
          // on stopped streams. Incoming finishes/resets on open streams are not handled here as they
          // are only freed, and hence only issue credit, once the application has been notified
          // during a read on the stream.
@@ -236,7 +375,7 @@ index 5155740..ebd4546 100644
          self.streams.queue_max_stream_id(pending);
  
          if let Some(reason) = close {
-@@ -3118,6 +3140,7 @@ impl Connection {
+@@ -3118,6 +3156,7 @@
          // Retire the current remote CID and any CIDs we had to skip.
          self.spaces[SpaceId::Data]
              .pending
@@ -244,7 +383,7 @@ index 5155740..ebd4546 100644
              .retire_cids
              .extend(retired);
          self.set_reset_token(reset_token);
-@@ -3166,7 +3189,7 @@ impl Connection {
+@@ -3166,7 +3205,7 @@
          let pre_payload_len = buf.len();
  
          // HANDSHAKE_DONE
@@ -253,7 +392,7 @@ index 5155740..ebd4546 100644
              buf.write(frame::FrameType::HANDSHAKE_DONE);
              sent.retransmits.get_or_create().handshake_done = true;
              // This is just a u8 counter and the frame is typically just sent once
-@@ -3204,7 +3227,7 @@ impl Connection {
+@@ -3204,7 +3243,7 @@
          }
  
          // ACK_FREQUENCY
@@ -262,7 +401,7 @@ index 5155740..ebd4546 100644
              let sequence_number = self.ack_frequency.next_sequence_number();
  
              // Safe to unwrap because this is always provided when ACK frequency is enabled
-@@ -3262,7 +3285,7 @@ impl Connection {
+@@ -3262,7 +3301,7 @@
  
          // CRYPTO
          while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
@@ -271,7 +410,7 @@ index 5155740..ebd4546 100644
                  Some(x) => x,
                  None => break,
              };
-@@ -3298,14 +3321,14 @@ impl Connection {
+@@ -3298,14 +3337,14 @@
              sent.retransmits.get_or_create().crypto.push_back(truncated);
              if !frame.data.is_empty() {
                  frame.offset += len as u64;
@@ -288,7 +427,7 @@ index 5155740..ebd4546 100644
                  &mut sent.retransmits,
                  &mut self.stats.frame_tx,
                  max_size,
-@@ -3314,7 +3337,7 @@ impl Connection {
+@@ -3314,7 +3353,7 @@
  
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
@@ -297,7 +436,7 @@ index 5155740..ebd4546 100644
                  Some(x) => x,
                  None => break,
              };
-@@ -3336,7 +3359,7 @@ impl Connection {
+@@ -3336,7 +3375,7 @@
  
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
@@ -306,7 +445,7 @@ index 5155740..ebd4546 100644
                  Some(x) => x,
                  None => break,
              };
-@@ -3365,7 +3388,7 @@ impl Connection {
+@@ -3365,7 +3404,7 @@
          }
  
          // NEW_TOKEN
@@ -315,7 +454,7 @@ index 5155740..ebd4546 100644
              debug_assert_eq!(space_id, SpaceId::Data);
              let ConnectionSide::Server { server_config } = &self.side else {
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
-@@ -3391,7 +3414,7 @@ impl Connection {
+@@ -3391,7 +3430,7 @@
              };
  
              if buf.len() + new_token.size() >= max_size {
@@ -324,23 +463,59 @@ index 5155740..ebd4546 100644
                  break;
              }
  
-@@ -3792,7 +3815,10 @@ impl Connection {
+@@ -3792,7 +3831,10 @@
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
          };
 -        let new_tokens = &mut self.spaces[SpaceId::Data as usize].pending.new_tokens;
-+        let new_tokens = &mut self.spaces[SpaceId::Data as usize]
++        let new_tokens = &mut self.spaces[SpaceId::Data]
 +            .pending
 +            .get_or_create()
 +            .new_tokens;
          new_tokens.clear();
          for _ in 0..server_config.validation_token.sent {
              new_tokens.push(self.path.remote);
-diff --git a/quinn-proto/src/connection/spaces.rs b/quinn-proto/src/connection/spaces.rs
-index f66d5ac..4ab1762 100644
+--- a/quinn-proto/src/connection/packet_crypto.rs
++++ b/quinn-proto/src/connection/packet_crypto.rs
+@@ -1,7 +1,7 @@
+ use tracing::{debug, trace};
+ 
+ use crate::Instant;
+-use crate::connection::spaces::PacketSpace;
++use crate::connection::spaces::PacketSpaces;
+ use crate::crypto::{HeaderKey, KeyPair, PacketKey};
+ use crate::packet::{Packet, PartialDecode, SpaceId};
+ use crate::token::ResetToken;
+@@ -10,7 +10,7 @@
+ /// Removes header protection of a packet, or returns `None` if the packet was dropped
+ pub(super) fn unprotect_header(
+     partial_decode: PartialDecode,
+-    spaces: &[PacketSpace; 3],
++    spaces: &PacketSpaces,
+     zero_rtt_crypto: Option<&ZeroRttCrypto>,
+     stateless_reset_token: Option<ResetToken>,
+ ) -> Option<UnprotectHeaderResult> {
+@@ -22,7 +22,7 @@
+             return None;
+         }
+     } else if let Some(space) = partial_decode.space() {
+-        if let Some(ref crypto) = spaces[space].crypto {
++        if let Some(crypto) = spaces.get(space).and_then(|space| space.crypto.as_ref()) {
+             Some(&*crypto.header.remote)
+         } else {
+             debug!(
+@@ -68,7 +68,7 @@
+ /// Decrypts a packet's body in-place
+ pub(super) fn decrypt_packet_body(
+     packet: &mut Packet,
+-    spaces: &[PacketSpace; 3],
++    spaces: &PacketSpaces,
+     zero_rtt_crypto: Option<&ZeroRttCrypto>,
+     conn_key_phase: bool,
+     prev_crypto: Option<&PrevCrypto>,
 --- a/quinn-proto/src/connection/spaces.rs
 +++ b/quinn-proto/src/connection/spaces.rs
-@@ -23,7 +23,7 @@ pub(super) struct PacketSpace {
+@@ -23,7 +23,7 @@
      pub(super) rx_packet: u64,
  
      /// Data to send
@@ -349,7 +524,7 @@ index f66d5ac..4ab1762 100644
      /// Packet numbers to acknowledge
      pub(super) pending_acks: PendingAcks,
  
-@@ -76,7 +76,7 @@ impl PacketSpace {
+@@ -76,7 +76,7 @@
              dedup: Dedup::new(),
              rx_packet: 0,
  
@@ -358,7 +533,7 @@ index f66d5ac..4ab1762 100644
              pending_acks: PendingAcks::new(),
  
              next_packet_number: 0,
-@@ -207,6 +207,11 @@ impl PacketSpace {
+@@ -207,6 +207,11 @@
      /// Stop tracking sent packet `number`, and return what we knew about it
      pub(super) fn take(&mut self, number: u64) -> Option<SentPacket> {
          let packet = self.sent_packets.remove(&number)?;
@@ -370,10 +545,86 @@ index f66d5ac..4ab1762 100644
          if !packet.ack_eliciting && number > self.largest_ack_eliciting_sent {
              self.unacked_non_ack_eliciting_tail =
                  self.unacked_non_ack_eliciting_tail.checked_sub(1).unwrap();
-@@ -431,6 +436,24 @@ pub(super) struct ThinRetransmits {
-     retransmits: Option<Box<Retransmits>>,
+@@ -265,16 +270,66 @@
+     }
  }
  
+-impl Index<SpaceId> for [PacketSpace; 3] {
++/// Data stays inline. Earlier spaces own transient state until final key
++/// retirement; None is a tombstone, never a request to allocate a new space.
++pub(super) struct PacketSpaces {
++    initial: Option<Box<PacketSpace>>,
++    handshake: Option<Box<PacketSpace>>,
++    data: PacketSpace,
++}
++
++impl PacketSpaces {
++    pub(super) fn new(initial: PacketSpace, now: Instant) -> Self {
++        Self {
++            initial: Some(Box::new(initial)),
++            handshake: Some(Box::new(PacketSpace::new(now))),
++            data: PacketSpace::new(now),
++        }
++    }
++
++    pub(super) fn get(&self, id: SpaceId) -> Option<&PacketSpace> {
++        match id {
++            SpaceId::Initial => self.initial.as_deref(),
++            SpaceId::Handshake => self.handshake.as_deref(),
++            SpaceId::Data => Some(&self.data),
++        }
++    }
++
++    pub(super) fn get_mut(&mut self, id: SpaceId) -> Option<&mut PacketSpace> {
++        match id {
++            SpaceId::Initial => self.initial.as_deref_mut(),
++            SpaceId::Handshake => self.handshake.as_deref_mut(),
++            SpaceId::Data => Some(&mut self.data),
++        }
++    }
++
++    pub(super) fn has_keys(&self, id: SpaceId) -> bool {
++        self.get(id).is_some_and(|space| space.crypto.is_some())
++    }
++
++    pub(super) fn retire(&mut self, id: SpaceId) {
++        match id {
++            SpaceId::Initial => {
++                self.initial.take();
++            }
++            SpaceId::Handshake => {
++                self.handshake.take();
++            }
++            SpaceId::Data => panic!("application packet space cannot be retired"),
++        }
++    }
++}
++
++impl Index<SpaceId> for PacketSpaces {
+     type Output = PacketSpace;
+     fn index(&self, space: SpaceId) -> &PacketSpace {
+-        &self.as_ref()[space as usize]
+-    }
+-}
+-
+-impl IndexMut<SpaceId> for [PacketSpace; 3] {
++        self.get(space).expect("packet space already retired")
++    }
++}
++
++impl IndexMut<SpaceId> for PacketSpaces {
+     fn index_mut(&mut self, space: SpaceId) -> &mut PacketSpace {
+-        &mut self.as_mut()[space as usize]
++        self.get_mut(space).expect("packet space already retired")
+     }
+ }
+ 
+@@ -429,6 +484,24 @@
+ #[derive(Debug, Default, Clone)]
+ pub(super) struct ThinRetransmits {
+     retransmits: Option<Box<Retransmits>>,
++}
++
 +impl std::ops::BitOrAssign for ThinRetransmits {
 +    fn bitor_assign(&mut self, rhs: Self) {
 +        let Some(rhs) = rhs.retransmits else {
@@ -390,15 +641,32 @@ index f66d5ac..4ab1762 100644
 +    fn bitor_assign(&mut self, rhs: Retransmits) {
 +        *self.get_or_create() |= rhs;
 +    }
-+}
-+
+ }
+ 
  impl ThinRetransmits {
-     /// Returns `true` if no retransmits are necessary
-     pub(super) fn is_empty(&self, streams: &StreamsState) -> bool {
-@@ -927,6 +950,36 @@ const MAX_ACK_BLOCKS: usize = 64;
- mod test {
+@@ -928,6 +1001,56 @@
      use super::*;
  
+     #[test]
++    fn retirement_is_terminal_and_preserves_application_history() {
++        let now = Instant::now();
++        let mut spaces = PacketSpaces::new(PacketSpace::new(now), now);
++        spaces[SpaceId::Data].next_packet_number = 99;
++        spaces[SpaceId::Data].crypto_offset = 72;
++        assert!(!spaces[SpaceId::Data].dedup.insert(88));
++        spaces.retire(SpaceId::Initial);
++        spaces.retire(SpaceId::Initial);
++        spaces.retire(SpaceId::Handshake);
++        for id in [SpaceId::Initial, SpaceId::Handshake] {
++            assert!(spaces.get(id).is_none());
++            assert!(spaces.get_mut(id).is_none());
++            assert!(!spaces.has_keys(id));
++        }
++        assert_eq!(spaces[SpaceId::Data].next_packet_number, 99);
++        assert_eq!(spaces[SpaceId::Data].crypto_offset, 72);
++        assert!(spaces[SpaceId::Data].dedup.insert(88));
++    }
++
 +    #[test]
 +    fn thin_pending_moves_storage_and_preserves_crypto_retransmit_priority() {
 +        let mut pending = ThinRetransmits::default();
@@ -429,14 +697,13 @@ index f66d5ac..4ab1762 100644
 +        assert!(pending.get().is_none());
 +    }
 +
-     #[test]
++    #[test]
      fn sanity() {
          let mut dedup = Dedup::new();
-diff --git a/quinn-proto/src/connection/streams/mod.rs b/quinn-proto/src/connection/streams/mod.rs
-index fe41e73..7254bfe 100644
+         assert!(!dedup.insert(0));
 --- a/quinn-proto/src/connection/streams/mod.rs
 +++ b/quinn-proto/src/connection/streams/mod.rs
-@@ -23,6 +23,7 @@ pub(crate) use send::{ByteSlice, BytesArray};
+@@ -23,6 +23,7 @@
  use send::{BytesSource, Send, SendState};
  pub use send::{FinishError, WriteError, Written};
  
@@ -444,9 +711,6 @@ index fe41e73..7254bfe 100644
  mod state;
  #[allow(unreachable_pub)] // fuzzing only
  pub use state::StreamsState;
-diff --git a/quinn-proto/src/connection/streams/sparse.rs b/quinn-proto/src/connection/streams/sparse.rs
-new file mode 100644
-index 0000000..35e098f
 --- /dev/null
 +++ b/quinn-proto/src/connection/streams/sparse.rs
 @@ -0,0 +1,189 @@
@@ -639,11 +903,9 @@ index 0000000..35e098f
 +        }
 +    }
 +}
-diff --git a/quinn-proto/src/connection/streams/state.rs b/quinn-proto/src/connection/streams/state.rs
-index 7a5908d..240c8f7 100644
 --- a/quinn-proto/src/connection/streams/state.rs
 +++ b/quinn-proto/src/connection/streams/state.rs
-@@ -5,7 +5,7 @@ use std::{
+@@ -5,7 +5,7 @@
  };
  
  use bytes::BufMut;
@@ -652,7 +914,7 @@ index 7a5908d..240c8f7 100644
  use tracing::{debug, error, trace};
  
  use super::{
-@@ -69,8 +69,8 @@ impl StreamRecv {
+@@ -69,8 +69,8 @@
  pub struct StreamsState {
      pub(super) side: Side,
      // Set of streams that are currently open, or could be immediately opened by the peer
@@ -663,7 +925,7 @@ index 7a5908d..240c8f7 100644
      pub(super) free_recv: Vec<StreamRecv>,
      pub(super) next: [u64; 2],
      /// Maximum number of locally-initiated streams that may be opened over the lifetime of the
-@@ -155,8 +155,8 @@ impl StreamsState {
+@@ -155,8 +155,8 @@
      ) -> Self {
          let mut this = Self {
              side,
@@ -674,7 +936,7 @@ index 7a5908d..240c8f7 100644
              free_recv: Vec::new(),
              next: [0, 0],
              max: [0, 0],
-@@ -204,10 +204,13 @@ impl StreamsState {
+@@ -204,10 +204,13 @@
          self.max[Dir::Bi as usize] = params.initial_max_streams_bidi.into();
          self.max[Dir::Uni as usize] = params.initial_max_streams_uni.into();
          self.received_max_data(params.initial_max_data);
@@ -692,3 +954,69 @@ index 7a5908d..240c8f7 100644
              }
          }
      }
+--- a/quinn-proto/src/packet.rs
++++ b/quinn-proto/src/packet.rs
+@@ -882,7 +882,7 @@
+ 
+ /// Packet number space identifiers
+ #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+-pub enum SpaceId {
++pub(crate) enum SpaceId {
+     /// Unprotected packets, used to bootstrap the handshake
+     Initial = 0,
+     Handshake = 1,
+@@ -891,7 +891,7 @@
+ }
+ 
+ impl SpaceId {
+-    pub fn iter() -> impl Iterator<Item = Self> {
++    pub(crate) fn iter() -> impl Iterator<Item = Self> {
+         [Self::Initial, Self::Handshake, Self::Data].iter().cloned()
+     }
+ }
+--- a/quinn-proto/src/tests/mod.rs
++++ b/quinn-proto/src/tests/mod.rs
+@@ -44,6 +44,43 @@
+ // Unfortunately it's either-or: Enable this and you can run in the browser, disable to run in nodejs.
+ // #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+ // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
++
++#[test]
++fn replayed_early_packets_after_confirmation_preserve_application_io() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client = pair.begin_connect(client_config());
++    pair.drive_client();
++    let mut to_server = pair.server.inbound.clone();
++    pair.drive_server();
++    let to_client = pair.client.inbound.clone();
++    pair.drive_client();
++    to_server.extend(pair.server.inbound.iter().cloned());
++    pair.drive();
++    let server = pair.server.assert_accept();
++    pair.finish_connect(client, server);
++    for (_, ecn, packet) in to_server {
++        pair.server.inbound.push_back((pair.time, ecn, packet));
++    }
++    for (_, ecn, packet) in to_client {
++        pair.client.inbound.push_back((pair.time, ecn, packet));
++    }
++    pair.drive();
++    assert!(!pair.client_conn_mut(client).is_handshaking());
++    assert!(!pair.server_conn_mut(server).is_handshaking());
++    pair.client_datagrams(client)
++        .send(Bytes::from_static(b"after retirement"), true)
++        .unwrap();
++    pair.server_datagrams(server)
++        .send(Bytes::from_static(b"reply"), true)
++        .unwrap();
++    pair.drive();
++    assert_eq!(
++        pair.server_datagrams(server).recv().unwrap(),
++        b"after retirement"[..]
++    );
++    assert_eq!(pair.client_datagrams(client).recv().unwrap(), b"reply"[..]);
++}
+ 
+ #[test]
+ fn pending_incoming_survives_server_config_change() {

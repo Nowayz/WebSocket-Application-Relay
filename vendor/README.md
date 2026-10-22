@@ -278,3 +278,22 @@ pool locks; pool operations never acquire a queue lock. Ordinary ready RSS
 fell by 81.66 MiB at 100k sessions. Throughput rankings varied between cohorts,
 and high-rate datagram loss varied; see
 `docs/reports/webtransport-event-batch-2026-10-22.json` for complete evidence.
+
+### Final packet-space retirement
+
+The quinn-proto patch stores Initial and Handshake packet spaces separately
+from inline Data-space state. Final key discard removes in-flight packets,
+recomputes the loss timer and releases the earlier space. Its absent slot is
+a tombstone: lookups never allocate or recreate it. A valid Retry instead
+clears the old recovery state and replaces Initial keys in still-live storage,
+preserving the next packet number and existing Retry behavior.
+
+This follows RFC 9002 section 6.4 for discarded-key recovery state; it does not
+retire 0-RTT/Data history or alter stream offsets, Data ACK/dedup history,
+congestion policy or key-update precomputation. Focused tests replay early
+packets after confirmation and verify bidirectional application traffic.
+Protocol Connection storage fell 5,728 to 4,656 bytes; the actual Quinn
+connection allocation fell 6,416 to 5,344 bytes. Ordinary ready RSS saved
+100.31 MiB at 100k sessions. Mixed throughput medians fell 2.05% initially and
+1.10% in the longer cohort, so this is a documented memory/throughput tradeoff.
+See `docs/reports/webtransport-packet-spaces-2026-10-22.json`.
