@@ -13,11 +13,11 @@
 +        self.buffered = 0;
 +        self.allocated = 0;
      }
- 
+
      pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
 @@ -378,6 +386,31 @@
      use assert_matches::assert_matches;
- 
+
      #[test]
 +    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
 +        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
@@ -59,7 +59,7 @@
 +use spaces::{
 +    PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames, SentPacket, ThinRetransmits,
 +};
- 
+
  mod stats;
  pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
 @@ -175,7 +175,7 @@
@@ -88,7 +88,7 @@
 +            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
          }
      }
- 
+
 @@ -442,7 +442,7 @@
          SendStream {
              id,
@@ -107,10 +107,10 @@
 +                space.maybe_queue_probe(request_immediate_ack, &self.streams);
 +            }
          }
- 
+
          // Check whether we need to send a close message
 @@ -508,10 +510,14 @@
- 
+
          // Check whether we need to send an ACK_FREQUENCY frame
          if let Some(config) = &self.config.ack_frequency_config {
 -            self.spaces[SpaceId::Data].pending.ack_frequency = self
@@ -127,9 +127,9 @@
 +            ) && self.highest_space == SpaceId::Data
                  && self.peer_supports_ack_frequency();
          }
- 
+
 @@ -546,7 +552,7 @@
- 
+
              // Is there data or a close message to send in this space?
              let can_send = self.space_can_send(space_id, frame_space_1rtt);
 -            if can_send.is_empty() && (!close || self.spaces[space_id].crypto.is_none()) {
@@ -140,14 +140,14 @@
 @@ -758,7 +764,7 @@
              // From here on, we've determined that a packet will definitely be sent.
              //
- 
+
 -            if self.spaces[SpaceId::Initial].crypto.is_some()
 +            if self.spaces.has_keys(SpaceId::Initial)
                  && space_id == SpaceId::Handshake
                  && self.side.is_client()
              {
 @@ -1076,7 +1082,7 @@
- 
+
      /// Indicate what types of frames are ready to send for the given space
      fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
 -        if self.spaces[space_id].crypto.is_none()
@@ -176,7 +176,7 @@
 +        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
          self.streams.queue_max_stream_id(pending);
      }
- 
+
 @@ -1458,7 +1468,7 @@
      /// See [`TransportConfig::receive_window()`]
      pub fn set_receive_window(&mut self, receive_window: VarInt) {
@@ -185,18 +185,18 @@
 +            self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
          }
      }
- 
+
 @@ -1824,7 +1834,7 @@
- 
+
      fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
          SpaceId::iter()
 -            .filter_map(|id| Some((self.spaces[id].loss_time?, id)))
 +            .filter_map(|id| Some((self.spaces.get(id)?.loss_time?, id)))
              .min_by_key(|&(time, _)| time)
      }
- 
+
 @@ -1843,7 +1853,11 @@
- 
+
          let mut result = None;
          for space in SpaceId::iter() {
 -            if !self.spaces[space].has_in_flight() {
@@ -223,7 +223,7 @@
 -                && self.spaces[SpaceId::Handshake].crypto.is_none())
 +                && !self.spaces.has_keys(SpaceId::Handshake))
      }
- 
+
      fn set_loss_detection_timer(&mut self, now: Instant) {
 @@ -1953,7 +1968,7 @@
              None => return,
@@ -252,10 +252,10 @@
 +                });
          }
      }
- 
+
 @@ -2208,6 +2227,11 @@
      }
- 
+
      fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
 +        self.clear_space(now, space_id);
 +        self.spaces.retire(space_id);
@@ -284,7 +284,7 @@
 @@ -2509,7 +2539,7 @@
                      self.on_packet_acked(now, info);
                  };
- 
+
 -                self.discard_space(now, SpaceId::Initial); // Make sure we clean up after any retransmitted Initials
 +                self.clear_space(now, SpaceId::Initial); // Retry replaces keys, not final retirement
                  self.spaces[SpaceId::Initial] = PacketSpace {
@@ -300,11 +300,11 @@
                          offset: 0,
 @@ -2587,7 +2618,7 @@
                              self.streams.zero_rtt_rejected();
- 
+
                              // Discard already-queued frames
 -                            self.spaces[SpaceId::Data].pending = Retransmits::default();
 +                            self.spaces[SpaceId::Data].pending = ThinRetransmits::default();
- 
+
                              // Discard 0-RTT packets
                              let sent_packets =
 @@ -2608,7 +2639,10 @@
@@ -318,7 +318,7 @@
 +                        .handshake_done = true;
                      self.discard_space(now, SpaceId::Handshake);
                  }
- 
+
 @@ -2808,7 +2842,7 @@
                  }
                  Frame::Stream(frame) => {
@@ -373,7 +373,7 @@
 -        let pending = &mut self.spaces[SpaceId::Data].pending;
 +        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
          self.streams.queue_max_stream_id(pending);
- 
+
          if let Some(reason) = close {
 @@ -3118,6 +3156,7 @@
          // Retire the current remote CID and any CIDs we had to skip.
@@ -385,7 +385,7 @@
          self.set_reset_token(reset_token);
 @@ -3166,7 +3205,7 @@
          let pre_payload_len = buf.len();
- 
+
          // HANDSHAKE_DONE
 -        if !is_0rtt && mem::replace(&mut space.pending.handshake_done, false) {
 +        if !is_0rtt && mem::replace(&mut space.pending.get_or_create().handshake_done, false) {
@@ -394,15 +394,15 @@
              // This is just a u8 counter and the frame is typically just sent once
 @@ -3204,7 +3243,7 @@
          }
- 
+
          // ACK_FREQUENCY
 -        if mem::replace(&mut space.pending.ack_frequency, false) {
 +        if mem::replace(&mut space.pending.get_or_create().ack_frequency, false) {
              let sequence_number = self.ack_frequency.next_sequence_number();
- 
+
              // Safe to unwrap because this is always provided when ACK frequency is enabled
 @@ -3262,7 +3301,7 @@
- 
+
          // CRYPTO
          while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
 -            let mut frame = match space.pending.crypto.pop_front() {
@@ -418,7 +418,7 @@
 +                space.pending.get_or_create().crypto.push_front(frame);
              }
          }
- 
+
          if space_id == SpaceId::Data {
              self.streams.write_control_frames(
                  buf,
@@ -428,7 +428,7 @@
                  &mut self.stats.frame_tx,
                  max_size,
 @@ -3314,7 +3353,7 @@
- 
+
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
 -            let issued = match space.pending.new_cids.pop() {
@@ -437,7 +437,7 @@
                  None => break,
              };
 @@ -3336,7 +3375,7 @@
- 
+
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
 -            let seq = match space.pending.retire_cids.pop() {
@@ -447,7 +447,7 @@
              };
 @@ -3365,7 +3404,7 @@
          }
- 
+
          // NEW_TOKEN
 -        while let Some(remote_addr) = space.pending.new_tokens.pop() {
 +        while let Some(remote_addr) = space.pending.get_or_create().new_tokens.pop() {
@@ -456,13 +456,13 @@
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
 @@ -3391,7 +3430,7 @@
              };
- 
+
              if buf.len() + new_token.size() >= max_size {
 -                space.pending.new_tokens.push(remote_addr);
 +                space.pending.get_or_create().new_tokens.push(remote_addr);
                  break;
              }
- 
+
 @@ -3792,7 +3831,10 @@
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
@@ -479,7 +479,7 @@
 +++ b/quinn-proto/src/connection/packet_crypto.rs
 @@ -1,7 +1,7 @@
  use tracing::{debug, trace};
- 
+
  use crate::Instant;
 -use crate::connection::spaces::PacketSpace;
 +use crate::connection::spaces::PacketSpaces;
@@ -513,25 +513,134 @@
      zero_rtt_crypto: Option<&ZeroRttCrypto>,
      conn_key_phase: bool,
      prev_crypto: Option<&PrevCrypto>,
+--- a/quinn-proto/src/connection/send_buffer.rs
++++ b/quinn-proto/src/connection/send_buffer.rs
+@@ -47,32 +47,41 @@
+         range.start = base_offset.max(range.start);
+         range.end = base_offset.max(range.end);
+
++        // With no saved out-of-order ACKs, this is exactly the buffered
++        // prefix. Avoid inserting a range only to remove it immediately.
++        if range.start == base_offset && self.acks.is_empty() {
++            self.discard_prefix((range.end - range.start) as usize);
++            return;
++        }
++
+         self.acks.insert(range);
+
+         while self.acks.min() == Some(self.offset - self.unacked_len as u64) {
+             let prefix = self.acks.pop_min().unwrap();
+-            let mut to_advance = (prefix.end - prefix.start) as usize;
+-
+-            self.unacked_len -= to_advance;
+-            while to_advance > 0 {
+-                let front = self
+-                    .unacked_segments
+-                    .front_mut()
+-                    .expect("Expected buffered data");
+-
+-                if front.len() <= to_advance {
+-                    to_advance -= front.len();
+-                    self.unacked_segments.pop_front();
+-                    self.front_trimmed = 0;
+-
+-                    if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
+-                        self.unacked_segments.shrink_to_fit();
+-                    }
+-                } else {
+-                    front.advance(to_advance);
+-                    self.front_trimmed += to_advance;
+-                    to_advance = 0;
++            self.discard_prefix((prefix.end - prefix.start) as usize);
++        }
++    }
++
++    fn discard_prefix(&mut self, mut to_advance: usize) {
++        self.unacked_len -= to_advance;
++        while to_advance > 0 {
++            let front = self
++                .unacked_segments
++                .front_mut()
++                .expect("Expected buffered data");
++
++            if front.len() <= to_advance {
++                to_advance -= front.len();
++                self.unacked_segments.pop_front();
++                self.front_trimmed = 0;
++
++                if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
++                    self.unacked_segments.shrink_to_fit();
+                 }
++            } else {
++                front.advance(to_advance);
++                self.front_trimmed += to_advance;
++                to_advance = 0;
+             }
+         }
+     }
+@@ -397,6 +406,43 @@
+         assert!(buf.acks.is_empty());
+     }
+
++    #[test]
++    fn ordered_prefix_then_overlapping_reordered_ack_preserves_pending_ranges() {
++        let mut buf = SendBuffer::new();
++        buf.write(Bytes::from_static(b"abcdefghij"));
++        buf.write(Bytes::from_static(b"klmnopqrst"));
++        let _ = buf.poll_transmit(64);
++        buf.ack(0..4);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
++        assert_eq!(buf.front_trimmed, 4);
++        buf.ack(10..15);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
++        buf.ack(4..12);
++        assert_eq!(aggregate_unacked(&buf), b"pqrst");
++        assert!(buf.acks.is_empty());
++        buf.ack(0..7);
++        assert_eq!(aggregate_unacked(&buf), b"pqrst");
++        buf.ack(15..20);
++        assert!(buf.is_fully_acked());
++        assert_eq!(buf.front_trimmed, 0);
++    }
++
++    #[test]
++    fn discarded_duplicate_ack_does_not_drop_an_out_of_order_ack() {
++        let mut buf = SendBuffer::new();
++        buf.write(Bytes::from_static(b"abcdefghijklmnop"));
++        let _ = buf.poll_transmit(64);
++        buf.ack(0..4);
++        buf.ack(10..12);
++        buf.ack(0..2);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnop");
++        assert_eq!(buf.acks.peek_min(), Some(10..12));
++        buf.ack(4..10);
++        assert_eq!(aggregate_unacked(&buf), b"mnop");
++        buf.ack(12..16);
++        assert!(buf.is_fully_acked());
++    }
++
+     fn aggregate_unacked(buf: &SendBuffer) -> Vec<u8> {
+         let mut result = Vec::new();
+         for segment in buf.unacked_segments.iter() {
 --- a/quinn-proto/src/connection/spaces.rs
 +++ b/quinn-proto/src/connection/spaces.rs
 @@ -23,7 +23,7 @@
      pub(super) rx_packet: u64,
- 
+
      /// Data to send
 -    pub(super) pending: Retransmits,
 +    pub(super) pending: ThinRetransmits,
      /// Packet numbers to acknowledge
      pub(super) pending_acks: PendingAcks,
- 
+
 @@ -76,7 +76,7 @@
              dedup: Dedup::new(),
              rx_packet: 0,
- 
+
 -            pending: Retransmits::default(),
 +            pending: ThinRetransmits::default(),
              pending_acks: PendingAcks::new(),
- 
+
              next_packet_number: 0,
 @@ -207,6 +207,11 @@
      /// Stop tracking sent packet `number`, and return what we knew about it
@@ -548,7 +657,7 @@
 @@ -265,16 +270,66 @@
      }
  }
- 
+
 -impl Index<SpaceId> for [PacketSpace; 3] {
 +/// Data stays inline. Earlier spaces own transient state until final key
 +/// retirement; None is a tombstone, never a request to allocate a new space.
@@ -618,7 +727,7 @@
 +        self.get_mut(space).expect("packet space already retired")
      }
  }
- 
+
 @@ -429,6 +484,24 @@
  #[derive(Debug, Default, Clone)]
  pub(super) struct ThinRetransmits {
@@ -642,11 +751,11 @@
 +        *self.get_or_create() |= rhs;
 +    }
  }
- 
+
  impl ThinRetransmits {
 @@ -928,6 +1001,56 @@
      use super::*;
- 
+
      #[test]
 +    fn retirement_is_terminal_and_preserves_application_history() {
 +        let now = Instant::now();
@@ -706,7 +815,7 @@
 @@ -23,6 +23,7 @@
  use send::{BytesSource, Send, SendState};
  pub use send::{FinishError, WriteError, Written};
- 
+
 +mod sparse;
  mod state;
  #[allow(unreachable_pub)] // fuzzing only
@@ -907,12 +1016,12 @@
 +++ b/quinn-proto/src/connection/streams/state.rs
 @@ -5,7 +5,7 @@
  };
- 
+
  use bytes::BufMut;
 -use rustc_hash::FxHashMap;
 +use super::sparse::SparseMap;
  use tracing::{debug, error, trace};
- 
+
  use super::{
 @@ -69,8 +69,8 @@
  pub struct StreamsState {
@@ -957,7 +1066,7 @@
 --- a/quinn-proto/src/packet.rs
 +++ b/quinn-proto/src/packet.rs
 @@ -882,7 +882,7 @@
- 
+
  /// Packet number space identifiers
  #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 -pub enum SpaceId {
@@ -967,7 +1076,7 @@
      Handshake = 1,
 @@ -891,7 +891,7 @@
  }
- 
+
  impl SpaceId {
 -    pub fn iter() -> impl Iterator<Item = Self> {
 +    pub(crate) fn iter() -> impl Iterator<Item = Self> {
@@ -1017,6 +1126,6 @@
 +    );
 +    assert_eq!(pair.client_datagrams(client).recv().unwrap(), b"reply"[..]);
 +}
- 
+
  #[test]
  fn pending_incoming_survives_server_config_change() {

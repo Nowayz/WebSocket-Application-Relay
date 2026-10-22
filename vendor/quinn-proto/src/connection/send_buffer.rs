@@ -47,32 +47,41 @@ impl SendBuffer {
         range.start = base_offset.max(range.start);
         range.end = base_offset.max(range.end);
 
+        // With no saved out-of-order ACKs, this is exactly the buffered
+        // prefix. Avoid inserting a range only to remove it immediately.
+        if range.start == base_offset && self.acks.is_empty() {
+            self.discard_prefix((range.end - range.start) as usize);
+            return;
+        }
+
         self.acks.insert(range);
 
         while self.acks.min() == Some(self.offset - self.unacked_len as u64) {
             let prefix = self.acks.pop_min().unwrap();
-            let mut to_advance = (prefix.end - prefix.start) as usize;
+            self.discard_prefix((prefix.end - prefix.start) as usize);
+        }
+    }
 
-            self.unacked_len -= to_advance;
-            while to_advance > 0 {
-                let front = self
-                    .unacked_segments
-                    .front_mut()
-                    .expect("Expected buffered data");
+    fn discard_prefix(&mut self, mut to_advance: usize) {
+        self.unacked_len -= to_advance;
+        while to_advance > 0 {
+            let front = self
+                .unacked_segments
+                .front_mut()
+                .expect("Expected buffered data");
 
-                if front.len() <= to_advance {
-                    to_advance -= front.len();
-                    self.unacked_segments.pop_front();
-                    self.front_trimmed = 0;
+            if front.len() <= to_advance {
+                to_advance -= front.len();
+                self.unacked_segments.pop_front();
+                self.front_trimmed = 0;
 
-                    if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
-                        self.unacked_segments.shrink_to_fit();
-                    }
-                } else {
-                    front.advance(to_advance);
-                    self.front_trimmed += to_advance;
-                    to_advance = 0;
+                if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
+                    self.unacked_segments.shrink_to_fit();
                 }
+            } else {
+                front.advance(to_advance);
+                self.front_trimmed += to_advance;
+                to_advance = 0;
             }
         }
     }
@@ -395,6 +404,43 @@ mod tests {
         buf.ack(0..16);
         assert_eq!(aggregate_unacked(&buf), &MSG[23..]);
         assert!(buf.acks.is_empty());
+    }
+
+    #[test]
+    fn ordered_prefix_then_overlapping_reordered_ack_preserves_pending_ranges() {
+        let mut buf = SendBuffer::new();
+        buf.write(Bytes::from_static(b"abcdefghij"));
+        buf.write(Bytes::from_static(b"klmnopqrst"));
+        let _ = buf.poll_transmit(64);
+        buf.ack(0..4);
+        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
+        assert_eq!(buf.front_trimmed, 4);
+        buf.ack(10..15);
+        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
+        buf.ack(4..12);
+        assert_eq!(aggregate_unacked(&buf), b"pqrst");
+        assert!(buf.acks.is_empty());
+        buf.ack(0..7);
+        assert_eq!(aggregate_unacked(&buf), b"pqrst");
+        buf.ack(15..20);
+        assert!(buf.is_fully_acked());
+        assert_eq!(buf.front_trimmed, 0);
+    }
+
+    #[test]
+    fn discarded_duplicate_ack_does_not_drop_an_out_of_order_ack() {
+        let mut buf = SendBuffer::new();
+        buf.write(Bytes::from_static(b"abcdefghijklmnop"));
+        let _ = buf.poll_transmit(64);
+        buf.ack(0..4);
+        buf.ack(10..12);
+        buf.ack(0..2);
+        assert_eq!(aggregate_unacked(&buf), b"efghijklmnop");
+        assert_eq!(buf.acks.peek_min(), Some(10..12));
+        buf.ack(4..10);
+        assert_eq!(aggregate_unacked(&buf), b"mnop");
+        buf.ack(12..16);
+        assert!(buf.is_fully_acked());
     }
 
     fn aggregate_unacked(buf: &SendBuffer) -> Vec<u8> {

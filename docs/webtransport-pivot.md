@@ -2296,3 +2296,37 @@ performance selection gate failed. Exact source, failure/correction,
 reproduction scripts, fixed clients, profiles and measurements are preserved
 in [`webtransport-grouped-drivers-2026-10-22.json`](reports/webtransport-grouped-drivers-2026-10-22.json).
 Overall throughput and memory parity remain unmet.
+
+
+### Contiguous stream ACK prefix fast path retained (2026-10-22)
+
+When a clamped stream ACK begins at the first buffered byte and no
+out-of-order ACK ranges are pending, SendBuffer now discards that exact
+prefix directly. The original range-tree path handles other cases. A shared
+prefix-discard helper preserves segment ownership and front-trimmed accounting.
+No range-set type, ACK policy, packet-number policy or resource budget changes.
+Focused tests cover partial segments, overlapping reordered ACKs, and old
+duplicates while out-of-order ranges are pending.
+
+Both 100k capacity runs verified 400k deliveries. Ready RSS fell 2,142.12 to
+2,082.50 MiB (-59.62 MiB); setup 11.54/11.36 seconds and server CPU 6.61/6.61
+seconds are a single pair. Requested live bytes fell 2,076,389,859 to
+2,018,187,005 (-55.51 MiB), with all five heap gates passing. The prior
+300k x 192-byte range-tree insertion site disappeared. Fragmented ACKs
+retain the original fallback and may still allocate trees.
+
+Three short repeats measured +1.10% private, +1.74% room, +3.42% mixed.
+Three twelve-second repeats measured +0.14%, +0.83%, -1.14%. Retain the
+measured memory saving with the explicit mixed-throughput cost and timing
+variability; do not use the larger short gains as the final speed claim.
+Relay tests, Clippy, 314 protocol tests and pinned vendor verification pass.
+Six paced reliable controls had zero missing/duplicate/out-of-order messages;
+six paired datagram controls passed with variable loss. Both-endpoint
+profiles had zero lost samples. All nine freshness receipts and nine Chrome
+checks passed, including exact 5 MiB delivery. Cleanup gauges returned to
+zero, browser and fixtures stopped.
+
+Exact source, fixed clients, distributions, component metrics, heap captures,
+profiles and reproduction scripts are in
+[`webtransport-ordered-ack-2026-10-22.json`](reports/webtransport-ordered-ack-2026-10-22.json).
+Full throughput and memory parity remain unmet.

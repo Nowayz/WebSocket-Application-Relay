@@ -325,3 +325,12 @@ This removes the 640-byte constructor allocation at 100k sessions and saves
 62.89 MiB ordinary RSS. Longer throughput changes +0.93% private, -0.07%
 room and -0.05% mixed; earlier short runs were worse. See
 `docs/reports/webtransport-handshake-spans-2026-10-22.json`.
+
+
+Quinn-proto stream ACK bookkeeping releases an ordered prefix directly when
+there are no pending out-of-order ACK ranges. Other cases retain the original
+range-tree algorithm. This removes the 300k x 192-byte range-tree site in the
+100k ordered workload and saves 59.62 MiB ordinary RSS. Longer throughput
+changes +0.14% private, +0.83% room, -1.14% mixed. Protocol, paced traffic,
+loss/reordering and Chrome checks pass. See
+`docs/reports/webtransport-ordered-ack-2026-10-22.json` for evidence and limits.
