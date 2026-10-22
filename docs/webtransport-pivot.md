@@ -2216,3 +2216,49 @@ freshness cases and nine headed Chrome checks passed, including exact
 Source, hashes, reproduction scripts, fixed-client workloads and evidence:
 [`webtransport-handshake-spans-2026-10-22.json`](reports/webtransport-handshake-spans-2026-10-22.json).
 Overall parity remains unmet; refresh native WebSocket comparisons next.
+
+
+### Current native parity audit after 29ff41d (2026-10-22)
+
+The same retained executable runs both native plaintext WebSocket and
+encrypted WebTransport, with fixed clients and no concurrent task-owned
+benchmarks. Three rotated twelve-second runs per workload measured native/WT
+median verified deliveries/s: private 1,196,677/1,427,686 (+19.30% WT), room
+1,553,659/1,434,141 (-7.69%), mixed 1,459,897/1,406,145 (-3.68%). Private meets
+this throughput target; room and mixed do not. This is not acceptance of
+overall parity.
+
+The fresh 100k pair checked 400k deliveries each. Native/WT ready RSS was
+114.32/2,142.35 MiB (18.74x); setup 0.668/11.613 seconds; server CPU
+2.05/7.39 seconds. User CPU was 0.42/6.05 seconds and system CPU 1.63/1.34:
+the large extra cost is in user-space processing. Both p99 RTT histogram
+upper bounds were 2.097152 ms, with maxima 3.586/16.053 ms. Single-pair times
+are not confidence intervals. Client ready RSS was 613.57/4,274.29 MiB and
+client CPU 2.42/8.42 seconds; clients stayed fixed. Both application resource
+gauge sets reached zero. Done server RSS was 58.28/1,939.35 MiB; high RSS
+alone does not establish a live allocation leak.
+
+Current-executable diagnostic heap captures passed all five gates and
+400k deliveries: native ready live 118,841,155 bytes, WT 2,076,389,859 bytes
+(17.47x). WT used the immediately pre-commit capture of the identical
+executable and traffic workload. Diagnostic allocator counts are separate
+from ordinary RSS/timing. Kernel accounting found 100k live TCP sockets
+versus one UDP socket; partial socket-object estimates 243,200,000 versus
+1,344 bytes. Buffer limits are not allocated bytes, skmem counters are not
+an additive total, and TCP TIME_WAIT objects are reported separately.
+
+Matched-offered-rate both-endpoint profiles had zero lost samples. Server
+self samples: native 78.71% kernel/20.90% executable; WT 20.12% kernel/71.05%
+executable/7.44% libc. WT connection-driver polling, task wakeups, event
+queue dispatch, notifications and timer reset remain prominent. These
+support a worker-grouped driver scheduling experiment while preserving
+independent UDP ingress; they do not establish that any particular pooling
+implementation will win. This differs from the rejected app/driver
+co-driving prototype and requires new whole-workload evidence.
+
+Full distributions, all component measurements, capacity phases, client
+metrics, kernel counters, exact hashes, profiles, heap attribution and
+reproduction sources are in
+[`webtransport-retained-parity-29ff41d-2026-10-22.json`](reports/webtransport-retained-parity-29ff41d-2026-10-22.json).
+Datagram/freshness/browser acceptance for this binary remains in the prior
+handshake-span report. Overall throughput and memory parity remain unmet.
