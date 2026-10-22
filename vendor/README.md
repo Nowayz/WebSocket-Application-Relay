@@ -259,3 +259,22 @@ allocate again. The ordinary 100k comparison saved 37.68 MiB ready RSS.
 Throughput rankings varied across cohorts, with lower room/mixed medians in
 both longer cohorts; this is a memory tradeoff, not a throughput improvement.
 See `docs/reports/webtransport-handshake-buffer-2026-10-22.json`.
+
+### Endpoint event overflow scratch
+
+The Quinn event-channel patch now shares empty overflow buffers through an
+endpoint-owned pool, accessible to both the ingress and connection-driver
+runtimes. A thread-local prototype had zero reuse because the two owners ran
+on different threads. A CPU-sized shared cache reused only about half of
+requests and discarded many returns. The retained cache is sized to one UDP
+receive batch (`max_receive_segments * BATCH_SIZE`); diagnostic reuse was
+99.99% private and 99.73% mixed with no full-cache returns.
+
+Only empty small buffers enter the pool. The existing per-buffer retention
+threshold remains; larger drained buffers free storage. The pool size bounds
+retained scratch, never event count or queue depth. FIFO, wakers, cooperative
+scheduling and retirement retain their queue ownership. Queue locks precede
+pool locks; pool operations never acquire a queue lock. Ordinary ready RSS
+fell by 81.66 MiB at 100k sessions. Throughput rankings varied between cohorts,
+and high-rate datagram loss varied; see
+`docs/reports/webtransport-event-batch-2026-10-22.json` for complete evidence.

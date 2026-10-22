@@ -1,36 +1,30 @@
-diff --git a/quinn/Cargo.toml b/quinn/Cargo.toml
-index 4f87fd3..91133e4 100644
 --- a/quinn/Cargo.toml
 +++ b/quinn/Cargo.toml
-@@ -185,8 +185,8 @@ optional = true
+@@ -185,8 +185,8 @@
  version = "2.0.3"
-
+ 
  [dependencies.tokio]
 -version = "1.28.1"
 -features = ["sync"]
 +version = "1.47"
 +features = ["sync", "rt"]
-
+ 
  [dependencies.tracing]
  version = "0.1.10"
-diff --git a/quinn/Cargo.toml.orig b/quinn/Cargo.toml.orig
-index 145ff32..01f9135 100644
 --- a/quinn/Cargo.toml.orig
 +++ b/quinn/Cargo.toml.orig
-@@ -64,7 +64,7 @@ rustls = { workspace = true, optional = true }
+@@ -64,7 +64,7 @@
  smol = { workspace = true, optional = true }
  thiserror = { workspace = true }
  tracing =  { workspace = true }
 -tokio = { workspace = true }
 +tokio = { version = "1.47", features = ["sync", "rt"] }
  udp = { package = "quinn-udp", path = "../quinn-udp", version = "0.5", default-features = false, features = ["tracing"] }
-
+ 
  [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
-diff --git a/quinn/src/connection.rs b/quinn/src/connection.rs
-index ff449dd..6fc7fea 100644
 --- a/quinn/src/connection.rs
 +++ b/quinn/src/connection.rs
-@@ -45,7 +45,7 @@ impl Connecting {
+@@ -45,7 +45,7 @@
          handle: ConnectionHandle,
          conn: proto::Connection,
          endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
@@ -39,7 +33,7 @@ index ff449dd..6fc7fea 100644
          socket: Arc<dyn AsyncUdpSocket>,
          runtime: Arc<dyn Runtime>,
      ) -> Self {
-@@ -899,7 +899,7 @@ impl ConnectionRef {
+@@ -899,7 +899,7 @@
          handle: ConnectionHandle,
          conn: proto::Connection,
          endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
@@ -48,7 +42,7 @@ index ff449dd..6fc7fea 100644
          on_handshake_data: oneshot::Sender<()>,
          on_connected: oneshot::Sender<bool>,
          socket: Arc<dyn AsyncUdpSocket>,
-@@ -997,7 +997,7 @@ pub(crate) struct State {
+@@ -997,7 +997,7 @@
      connected: bool,
      timer: Option<Pin<Box<dyn AsyncTimer>>>,
      timer_deadline: Option<Instant>,
@@ -57,7 +51,7 @@ index ff449dd..6fc7fea 100644
      endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
      pub(crate) blocked_writers: FxHashMap<StreamId, Waker>,
      pub(crate) blocked_readers: FxHashMap<StreamId, Waker>,
-@@ -1007,6 +1007,8 @@ pub(crate) struct State {
+@@ -1007,6 +1007,8 @@
      socket: Arc<dyn AsyncUdpSocket>,
      io_poller: Pin<Box<dyn UdpPoller>>,
      runtime: Arc<dyn Runtime>,
@@ -66,15 +60,15 @@ index ff449dd..6fc7fea 100644
      send_buffer: Vec<u8>,
      /// We buffer a transmit when the underlying I/O would block
      buffered_transmit: Option<proto::Transmit>,
-@@ -1014,6 +1016,7 @@ pub(crate) struct State {
-
+@@ -1014,6 +1016,7 @@
+ 
  impl State {
      fn drive_transmit(&mut self, cx: &mut Context) -> io::Result<bool> {
 +        let mut send_buffer = crate::transmit_buffer::TransmitBuffer::take(&mut self.send_buffer);
          let now = self.runtime.now();
          let mut transmits = 0;
-
-@@ -1027,11 +1030,11 @@ impl State {
+ 
+@@ -1027,11 +1030,11 @@
              let t = match self.buffered_transmit.take() {
                  Some(t) => t,
                  None => {
@@ -89,14 +83,14 @@ index ff449dd..6fc7fea 100644
                      {
                          Some(t) => {
                              transmits += match t.segment_size {
-@@ -1048,13 +1051,14 @@ impl State {
+@@ -1048,13 +1051,14 @@
              if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
                  // Retry after a future wakeup
                  self.buffered_transmit = Some(t);
 +                send_buffer.retain(&mut self.send_buffer);
                  return Ok(false);
              }
-
+ 
              let len = t.size;
              let retry = match self
                  .socket
@@ -105,40 +99,48 @@ index ff449dd..6fc7fea 100644
              {
                  Ok(()) => false,
                  Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => true,
-diff --git a/quinn/src/endpoint.rs b/quinn/src/endpoint.rs
-index 1bf82c0..ed66178 100644
 --- a/quinn/src/endpoint.rs
 +++ b/quinn/src/endpoint.rs
-@@ -596,7 +596,7 @@ fn proto_ecn(ecn: udp::EcnCodepoint) -> proto::EcnCodepoint {
+@@ -595,8 +595,9 @@
+ 
  #[derive(Debug)]
  struct ConnectionSet {
++    event_buffers: Arc<crate::event_queue::BufferPool<ConnectionEvent>>,
      /// Senders for communicating with the endpoint's connections
 -    senders: FxHashMap<ConnectionHandle, mpsc::UnboundedSender<ConnectionEvent>>,
 +    senders: FxHashMap<ConnectionHandle, crate::event_queue::Sender<ConnectionEvent>>,
      /// Stored to give out clones to new ConnectionInners
      sender: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
      /// Set if the endpoint has been manually closed
-@@ -611,7 +611,7 @@ impl ConnectionSet {
+@@ -611,7 +612,7 @@
          socket: Arc<dyn AsyncUdpSocket>,
          runtime: Arc<dyn Runtime>,
      ) -> Connecting {
 -        let (send, recv) = mpsc::unbounded_channel();
-+        let (send, recv) = crate::event_queue::channel();
++        let (send, recv) = crate::event_queue::channel_with_pool(self.event_buffers.clone());
          if let Some((error_code, ref reason)) = self.close {
              send.send(ConnectionEvent::Close {
                  error_code,
-diff --git a/modified/quinn/src/event_queue.rs b/quinn/src/event_queue.rs
-new file mode 100644
-index 0000000..667661e
+@@ -759,6 +760,9 @@
+         ];
+         Self {
+             connections: ConnectionSet {
++                event_buffers: Arc::new(crate::event_queue::BufferPool::new(
++                    max_receive_segments * BATCH_SIZE,
++                )),
+                 senders: FxHashMap::default(),
+                 sender,
+                 close: None,
 --- /dev/null
 +++ b/quinn/src/event_queue.rs
-@@ -0,0 +1,246 @@
+@@ -0,0 +1,327 @@
 +//! One endpoint-owned sender and one connection-owned receiver. Keep an idle
 +//! event slot inline instead of allocating a 32-event block per connection.
 +//! The endpoint serializes producers; this channel also permits concurrent
 +//! send/receive. FIFO, receiver retirement and scheduler cooperation are explicit.
 +use std::{
 +    collections::VecDeque,
++    mem,
 +    sync::{Arc, Mutex},
 +    task::{ready, Context, Poll, Waker},
 +};
@@ -153,9 +155,48 @@ index 0000000..667661e
 +    16
 +};
 +
++/// Empty overflow storage shared by an endpoint and its connection drivers.
++/// The endpoint sizes the cache to its receive batch, allowing drained queues
++/// to return scratch for the next burst. Event queues still grow freely.
++#[derive(Debug)]
++pub(crate) struct BufferPool<T> {
++    spare: Mutex<Vec<VecDeque<T>>>,
++    slots: usize,
++}
++
++impl<T> BufferPool<T> {
++    pub(crate) fn new(slots: usize) -> Self {
++        debug_assert!(slots > 0);
++        Self {
++            spare: Mutex::new(Vec::with_capacity(slots)),
++            slots,
++        }
++    }
++
++    fn take(&self) -> VecDeque<T> {
++        self.spare
++            .lock()
++            .unwrap_or_else(|e| e.into_inner())
++            .pop()
++            .unwrap_or_default()
++    }
++
++    fn recycle(&self, buffer: VecDeque<T>) {
++        debug_assert!(buffer.is_empty());
++        if buffer.capacity() == 0 || buffer.capacity() > RETAIN_SLOTS {
++            return;
++        }
++        let mut spare = self.spare.lock().unwrap_or_else(|e| e.into_inner());
++        if spare.len() < self.slots {
++            spare.push(buffer);
++        }
++    }
++}
++
 +#[derive(Debug)]
 +struct State<T> {
 +    first: Option<T>,
++    pool: Arc<BufferPool<T>>,
 +    rest: VecDeque<T>,
 +    sender_alive: bool,
 +    receiver_alive: bool,
@@ -168,9 +209,15 @@ index 0000000..667661e
 +#[derive(Debug)]
 +pub(crate) struct Receiver<T>(Arc<Mutex<State<T>>>);
 +
-+pub(crate) fn channel<T>() -> (Sender<T>, Receiver<T>) {
++#[cfg(test)]
++fn channel<T>() -> (Sender<T>, Receiver<T>) {
++    channel_with_pool(Arc::new(BufferPool::new(4)))
++}
++
++pub(crate) fn channel_with_pool<T>(pool: Arc<BufferPool<T>>) -> (Sender<T>, Receiver<T>) {
 +    let state = Arc::new(Mutex::new(State {
 +        first: None,
++        pool,
 +        rest: VecDeque::new(),
 +        sender_alive: true,
 +        receiver_alive: true,
@@ -189,6 +236,9 @@ index 0000000..667661e
 +            if state.first.is_none() && state.rest.is_empty() {
 +                state.first = Some(value);
 +            } else {
++                if state.rest.capacity() == 0 {
++                    state.rest = state.pool.take();
++                }
 +                state.rest.push_back(value);
 +            }
 +            state.reader.take()
@@ -223,8 +273,9 @@ index 0000000..667661e
 +        let coop = ready!(tokio::task::coop::poll_proceed(cx));
 +        let mut state = self.0.lock().unwrap();
 +        let value = state.first.take().or_else(|| state.rest.pop_front());
-+        if state.rest.is_empty() && state.rest.capacity() > RETAIN_SLOTS {
-+            state.rest = VecDeque::new();
++        if state.rest.is_empty() && state.rest.capacity() != 0 {
++            let buffer = mem::take(&mut state.rest);
++            state.pool.recycle(buffer);
 +        }
 +        if value.is_some() || !state.sender_alive {
 +            coop.made_progress();
@@ -267,6 +318,37 @@ index 0000000..667661e
 +        sync::atomic::{AtomicUsize, Ordering::Relaxed},
 +        task::Wake,
 +    };
++
++    #[tokio::test]
++    async fn an_endpoint_pool_reuses_drained_storage_across_driver_threads() {
++        let pool = Arc::new(BufferPool::new(4));
++        let (send, mut receive) = channel_with_pool(pool.clone());
++        std::thread::spawn(move || {
++            for value in 0..5 {
++                send.send(value).unwrap();
++            }
++        })
++        .join()
++        .unwrap();
++        for value in 0..5 {
++            assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(value));
++        }
++        assert_eq!(receive.0.lock().unwrap().rest.capacity(), 0);
++        assert_eq!(pool.spare.lock().unwrap().len(), 1);
++        let (send, mut other) = channel_with_pool(pool.clone());
++        let producer_pool = pool.clone();
++        std::thread::spawn(move || {
++            send.send(10).unwrap();
++            send.send(11).unwrap();
++            assert!(producer_pool.spare.lock().unwrap().is_empty());
++        })
++        .join()
++        .unwrap();
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, Some(10));
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, Some(11));
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, None);
++        assert_eq!(pool.spare.lock().unwrap().len(), 1);
++    }
 +
 +    #[tokio::test]
 +    async fn fifo_burst_drain_and_inline_idle_storage() {
@@ -379,30 +461,25 @@ index 0000000..667661e
 +        assert_eq!(count.get(), 1000);
 +    }
 +}
-diff --git a/quinn/src/lib.rs b/quinn/src/lib.rs
-index 82becdb..6bdcaa9 100644
 --- a/quinn/src/lib.rs
 +++ b/quinn/src/lib.rs
-@@ -50,6 +50,7 @@ mod mutex;
+@@ -50,6 +50,7 @@
  mod recv_stream;
  mod runtime;
  mod send_stream;
 +mod transmit_buffer;
  mod work_limiter;
-
+ 
  #[cfg(not(wasm_browser))]
-@@ -93,6 +94,8 @@ pub use crate::send_stream::{SendStream, StoppedError, WriteError};
+@@ -93,6 +94,8 @@
  #[cfg(test)]
  mod tests;
-
+ 
 +mod event_queue;
 +
  #[derive(Debug)]
  enum ConnectionEvent {
      Close {
-diff --git a/modified/quinn/src/transmit_buffer.rs b/quinn/src/transmit_buffer.rs
-new file mode 100644
-index 0000000..e91c0d9
 --- /dev/null
 +++ b/quinn/src/transmit_buffer.rs
 @@ -0,0 +1,66 @@

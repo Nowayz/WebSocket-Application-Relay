@@ -1945,3 +1945,25 @@ therefore did not reuse overflow storage across those owners. The experiment
 was rejected and its source/patch archived; retained product source and
 release executable were restored. A cache spanning both owners is a distinct
 future experiment. See `reports/webtransport-event-spare-2026-10-22.json`.
+
+### Retained endpoint receive-batch event buffer pool
+
+The endpoint-owned pool supersedes the rejected thread-local cache and the
+unretained CPU-sized pool. It caches empty small overflow buffers across
+ingress and connection-driver runtimes, sized to one UDP receive batch.
+Diagnostic cache reuse reached 99.99% private and 99.73% mixed, with zero
+full-cache returns. Queue depth, delivered events, FIFO and scheduling budgets
+are unchanged. Both 100k ordinary runs checked 400,000 deliveries and cleanup;
+ready RSS fell from 2,437.88 to 2,356.22 MiB. The separate allocation diagnostic
+passed all five gates with 2,299,061,739 requested live bytes at ready.
+
+Initial private/room/mixed median throughput changed +2.21/+1.48/-0.45%; longer
+medians -0.24/-1.49/+2.17%. Both cohorts passed all 18 cases. Six paced reliable
+cases had zero missing deliveries; six paired datagram cases passed but loss
+varied, including one candidate run with 13,042 private and 43,852 fanout
+updates unreceived. Both endpoint profiles reported zero lost samples; all
+nine freshness and nine actual Chrome checks passed, including a byte-exact
+5 MiB application message and zero current cleanup gauges. The selected change
+is a verified memory improvement, not a universal throughput or datagram win.
+See `reports/webtransport-event-batch-2026-10-22.json`. Overall native WebSocket
+throughput and memory parity remain unmet.

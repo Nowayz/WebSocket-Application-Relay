@@ -595,6 +595,7 @@ fn proto_ecn(ecn: udp::EcnCodepoint) -> proto::EcnCodepoint {
 
 #[derive(Debug)]
 struct ConnectionSet {
+    event_buffers: Arc<crate::event_queue::BufferPool<ConnectionEvent>>,
     /// Senders for communicating with the endpoint's connections
     senders: FxHashMap<ConnectionHandle, crate::event_queue::Sender<ConnectionEvent>>,
     /// Stored to give out clones to new ConnectionInners
@@ -611,7 +612,7 @@ impl ConnectionSet {
         socket: Arc<dyn AsyncUdpSocket>,
         runtime: Arc<dyn Runtime>,
     ) -> Connecting {
-        let (send, recv) = crate::event_queue::channel();
+        let (send, recv) = crate::event_queue::channel_with_pool(self.event_buffers.clone());
         if let Some((error_code, ref reason)) = self.close {
             send.send(ConnectionEvent::Close {
                 error_code,
@@ -759,6 +760,9 @@ impl RecvState {
         ];
         Self {
             connections: ConnectionSet {
+                event_buffers: Arc::new(crate::event_queue::BufferPool::new(
+                    max_receive_segments * BATCH_SIZE,
+                )),
                 senders: FxHashMap::default(),
                 sender,
                 close: None,
