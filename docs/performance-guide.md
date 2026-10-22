@@ -197,7 +197,13 @@ The heap tool requires gperftools (`/usr/lib/libtcmalloc.so` by default; select
 another installation with `--library`). It preloads only the server, pauses the
 client at each gate, and waits for the dump's signal handler to finish. The
 `--capture-timeout` watchdog controls the diagnostic collector, not relay
-protocol deadlines. Use fresh output paths and prefixes. The analyzer verifies
+protocol deadlines. The collector retries dump requests when no profile appears
+and no signal is pending or active, recording attempts and all gate profiles.
+[gperftools 2.18.1's signal handler](https://github.com/gperftools/gperftools/blob/gperftools-2.18.1/src/heap-profiler.cc#L361-L371)
+uses `TryLock` and can ignore a request during concurrent heap activity. Automatic
+interval dumps are disabled; gate and process-exit snapshots remain distinct.
+`python scripts/test-capacity-heap-capture.py` checks recovery against the real
+profiler after suppressing the first request. Use fresh output paths and prefixes. The analyzer verifies
 the exact executable and profile hashes, resolves captured executable addresses,
 and checks that all allocation buckets sum to the profile header. Optimized
 inline sites can share function names; this is not complete stack attribution.

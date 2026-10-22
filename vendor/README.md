@@ -31,6 +31,17 @@ diff is `quinn-event-channel.patch`, with original checksum and Git revision in
 sender/receiver retirement, and cooperative scheduling alongside the upstream
 runtime tests and real relay integration workloads.
 
+## Empty sent-packet tree reclamation
+
+`PacketSpace::take` releases the empty `BTreeMap` root after removing the last
+sent packet. Upstream retains that leaf even when the connection becomes idle;
+at 100,000 sessions the measured packet-node allocation site retained about
+116 MB. Packet-number, ACK, loss and deduplication history remain unchanged.
+The next outstanding packet recreates the tree. This trades a small measured
+throughput cost for lower idle memory; see the empty-packet-tree report. A
+worker-local empty-tree cache was tested and rejected because it did not improve
+the complete mixed workload.
+
 ## QUIC packet-construction storage
 
 The same Quinn runtime patch reuses packet-construction buffers per runtime

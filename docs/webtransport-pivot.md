@@ -1593,3 +1593,40 @@ next memory targets. The ownership improvement is retained with the measured
 costs; full throughput and memory parity remain unachieved, and the pivot is not
 accepted. Reproduction commands and the maintained heap collector/analyzer are
 in the [performance guide](performance-guide.md#phase-gated-capacity-allocations).
+
+### Empty sent-packet tree reclamation — 2026-10-21
+
+The [controlled comparison and receipts](reports/webtransport-empty-packet-tree-2026-10-21.json)
+retain a five-line change to release the sent-packet BTreeMap root when the last
+outstanding packet retires. Packet-number, ACK/loss and deduplication history
+remain intact. The ordinary 100,000-session pair reduced ready RSS from
+2,696.32 to 2,592.88 MiB (103.43 MiB); both completed 400,000 checked deliveries
+and cleanup. This is one resource pair, not a confidence interval.
+
+There is a measured throughput cost. In the rotated three-way block, retained
+versus selected median verified deliveries/s were 1,446,507 versus 1,439,217
+(private), 1,364,003 versus 1,332,460 (room), and 1,353,307 versus 1,341,964
+(mixed): -0.50%, -2.31%, -0.84%. The separate initial pair block measured
+-0.68%, -1.35%, -2.58%; cohorts remain separate. A worker-local empty-root cache
+was rejected: its mixed median was 1,290,517/s. The simple policy saves idle
+memory at a small active-throughput cost; it does not prove parity.
+
+The completed full-scale replacement-allocator diagnostic captured all five
+gates. Ready requested live bytes fell from the previous 2,648,845,537 to
+2,528,858,001. All buckets resolve to the exact binary; the 641.6 MB accept-site
+allocation and approximately 230 MB packet keys remain major targets. This
+attribution identifies executable allocation sites, not proven Rust type sizes.
+Requested allocations and profiler RSS are not ordinary resource measurements.
+The initial incomplete capture is preserved. The collector now retries signal
+requests intentionally ignored by gperftools' TryLock handler, with per-gate
+attempt counts; the real-profiler recovery check passes. Logical done and exit
+profiles remain separate.
+
+Verification: 274 relay tests passed (one existing ignored), 317 quinn-proto
+tests passed, Clippy passed, and 153 vendor files verified. Six high-paced
+reliable cases, six paired datagram cases, nine loss/reordering fixture cases,
+and all nine actual Chromium checks completed. Datagram integrity does not mean
+loss-free delivery: paired runs retain their unreceived counts and client UDP
+drops. Browser cleanup returned all session/connection/storage gauges to zero;
+the permanent global channel remained at one. The browser also verified a
+5 MiB application message. Full memory and throughput parity remain unachieved.

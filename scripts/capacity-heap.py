@@ -22,41 +22,54 @@ PATH_ARGS = ('server', 'client', 'output', 'server_preload', 'user_latency_outpu
              'user_latency_histogram_output', 'pressure_client', 'kernel_slab_sizes')
 
 
-def signal_handler_active(pid):
+def signal_state(pid):
     mask = 1 << (signal.SIGUSR2 - 1)
+    active = pending = False
     for path in Path(f'/proc/{pid}/task').glob('*/status'):
         try:
             for line in path.read_text().splitlines():
-                if line.startswith('SigBlk:') and int(line.split()[1], 16) & mask:
-                    return True
+                key, _, value = line.partition(':')
+                if key == 'SigBlk':
+                    active |= bool(int(value.strip(), 16) & mask)
+                elif key in ('SigPnd', 'ShdPnd'):
+                    pending |= bool(int(value.strip(), 16) & mask)
         except FileNotFoundError:
             pass  # A thread can retire during this read-only observation.
-    return False
+    return active, pending
 
 
 def capture(pid, prefix, timeout):
-    deadline = time.monotonic() + timeout
-    while signal_handler_active(pid):
+    start = time.monotonic()
+    deadline = start + timeout
+    while any(signal_state(pid)):
         if time.monotonic() >= deadline:
-            raise TimeoutError('previous heap signal handler remains active')
+            raise TimeoutError('previous heap signal remains active or pending')
         time.sleep(.025)
     before = set(prefix.parent.glob(prefix.name + '*.heap'))
-    os.kill(pid, signal.SIGUSR2)
+    attempts = 0
     previous = None
     while time.monotonic() < deadline:
-        created = set(prefix.parent.glob(prefix.name + '*.heap')) - before
-        if len(created) == 1:
-            path = created.pop()
+        active, pending = signal_state(pid)
+        created = sorted(set(prefix.parent.glob(prefix.name + '*.heap')) - before)
+        if created:
+            path = created[-1]
             data = path.read_bytes()
-            # A complete-looking file can precede return from a large dump's
-            # signal handler. Do not send the next gate's signal while it runs.
+            # Raced retries can create several valid snapshots of this same
+            # paused gate. Retain their paths and select the latest complete one.
             if (data == previous and data.endswith(b'\n') and b'MAPPED_LIBRARIES:' in data
-                    and not signal_handler_active(pid)):
+                    and not any(signal_state(pid))):
                 return {'path': str(path), 'sha256': hashlib.sha256(data).hexdigest(),
-                        'header': data.splitlines()[0].decode()}
+                        'header': data.splitlines()[0].decode(),
+                        'signal_attempts': attempts, 'capture_seconds': time.monotonic() - start,
+                        'gate_profiles': [str(value) for value in created]}
             previous = data
+        elif not active and not pending:
+            # gperftools' signal handler uses TryLock and can intentionally
+            # ignore a request while another thread holds its heap lock.
+            os.kill(pid, signal.SIGUSR2)
+            attempts += 1
         time.sleep(.025)
-    raise TimeoutError('heap gate did not finish with signal handler unblocked')
+    raise TimeoutError(f'heap gate incomplete after {attempts} signal requests')
 
 
 def run(options):
@@ -79,8 +92,10 @@ def run(options):
     if not options.library.is_file():
         raise FileNotFoundError(options.library)
     environment = {'HEAPPROFILE': str(prefix), 'HEAPPROFILESIGNAL': str(signal.SIGUSR2),
-                   'HEAP_PROFILE_ALLOCATION_INTERVAL': str(100 * 1024**3),
-                   'HEAP_PROFILE_INUSE_INTERVAL': str(100 * 1024**3)}
+                   'HEAP_PROFILE_ALLOCATION_INTERVAL': '0',
+                   'HEAP_PROFILE_INUSE_INTERVAL': '0',
+                   'HEAP_PROFILE_DEALLOCATION_INTERVAL': '0',
+                   'HEAP_PROFILE_TIME_INTERVAL': '0'}
     saved = {key: os.environ.get(key) for key in environment}
     original_launch, original_process = subprocess.Popen, capacity.process
     server_pid = None

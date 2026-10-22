@@ -207,6 +207,11 @@ impl PacketSpace {
     /// Stop tracking sent packet `number`, and return what we knew about it
     pub(super) fn take(&mut self, number: u64) -> Option<SentPacket> {
         let packet = self.sent_packets.remove(&number)?;
+        // BTreeMap retains its empty leaf after the last removal. Idle peers
+        // need the packet-number history below, not an unused packet-tree node.
+        if self.sent_packets.is_empty() {
+            self.sent_packets = BTreeMap::new();
+        }
         if !packet.ack_eliciting && number > self.largest_ack_eliciting_sent {
             self.unacked_non_ack_eliciting_tail =
                 self.unacked_non_ack_eliciting_tail.checked_sub(1).unwrap();

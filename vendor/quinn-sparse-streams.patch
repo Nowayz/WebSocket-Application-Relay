@@ -5,7 +5,7 @@ index 93268e1..cd7afec 100644
 @@ -37,6 +37,14 @@ impl Assembler {
          self.data.clear();
      }
-
+ 
 +    /// Release buffered data and its staging allocation without resetting the
 +    /// consumed offset or ordering history. Used when a crypto space retires.
 +    pub(super) fn discard_buffer(&mut self) {
@@ -20,7 +20,7 @@ index 93268e1..cd7afec 100644
 @@ -377,6 +385,31 @@ mod test {
      use super::*;
      use assert_matches::assert_matches;
-
+ 
 +    #[test]
 +    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
 +        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
@@ -60,7 +60,7 @@ index 5155740..ebd4546 100644
 -#[cfg(not(fuzzing))]
 -use spaces::Retransmits;
  use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
-
+ 
  mod stats;
 @@ -431,7 +429,7 @@ impl Connection {
          RecvStream {
@@ -70,7 +70,7 @@ index 5155740..ebd4546 100644
 +            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
          }
      }
-
+ 
 @@ -442,7 +440,7 @@ impl Connection {
          SendStream {
              id,
@@ -81,7 +81,7 @@ index 5155740..ebd4546 100644
          }
      }
 @@ -508,10 +506,14 @@ impl Connection {
-
+ 
          // Check whether we need to send an ACK_FREQUENCY frame
          if let Some(config) = &self.config.ack_frequency_config {
 -            self.spaces[SpaceId::Data].pending.ack_frequency = self
@@ -98,7 +98,7 @@ index 5155740..ebd4546 100644
 +            ) && self.highest_space == SpaceId::Data
                  && self.peer_supports_ack_frequency();
          }
-
+ 
 @@ -1168,7 +1170,11 @@ impl Connection {
              NewIdentifiers(ids, now) => {
                  self.local_cid_state.new_cids(&ids, now);
@@ -120,7 +120,7 @@ index 5155740..ebd4546 100644
 +        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
          self.streams.queue_max_stream_id(pending);
      }
-
+ 
 @@ -1458,7 +1464,7 @@ impl Connection {
      /// See [`TransportConfig::receive_window()`]
      pub fn set_receive_window(&mut self, receive_window: VarInt) {
@@ -129,7 +129,7 @@ index 5155740..ebd4546 100644
 +            self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
          }
      }
-
+ 
 @@ -2175,10 +2181,14 @@ impl Connection {
              }
              self.spaces[space].crypto_offset += outgoing.len() as u64;
@@ -148,7 +148,7 @@ index 5155740..ebd4546 100644
 +                });
          }
      }
-
+ 
 @@ -2218,6 +2228,10 @@ impl Connection {
          }
          let space = &mut self.spaces[space_id];
@@ -170,11 +170,11 @@ index 5155740..ebd4546 100644
                          offset: 0,
 @@ -2587,7 +2602,7 @@ impl Connection {
                              self.streams.zero_rtt_rejected();
-
+ 
                              // Discard already-queued frames
 -                            self.spaces[SpaceId::Data].pending = Retransmits::default();
 +                            self.spaces[SpaceId::Data].pending = ThinRetransmits::default();
-
+ 
                              // Discard 0-RTT packets
                              let sent_packets =
 @@ -2608,7 +2623,10 @@ impl Connection {
@@ -188,7 +188,7 @@ index 5155740..ebd4546 100644
 +                        .handshake_done = true;
                      self.discard_space(now, SpaceId::Handshake);
                  }
-
+ 
 @@ -2808,7 +2826,7 @@ impl Connection {
                  }
                  Frame::Stream(frame) => {
@@ -234,7 +234,7 @@ index 5155740..ebd4546 100644
 -        let pending = &mut self.spaces[SpaceId::Data].pending;
 +        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
          self.streams.queue_max_stream_id(pending);
-
+ 
          if let Some(reason) = close {
 @@ -3118,6 +3140,7 @@ impl Connection {
          // Retire the current remote CID and any CIDs we had to skip.
@@ -246,7 +246,7 @@ index 5155740..ebd4546 100644
          self.set_reset_token(reset_token);
 @@ -3166,7 +3189,7 @@ impl Connection {
          let pre_payload_len = buf.len();
-
+ 
          // HANDSHAKE_DONE
 -        if !is_0rtt && mem::replace(&mut space.pending.handshake_done, false) {
 +        if !is_0rtt && mem::replace(&mut space.pending.get_or_create().handshake_done, false) {
@@ -255,15 +255,15 @@ index 5155740..ebd4546 100644
              // This is just a u8 counter and the frame is typically just sent once
 @@ -3204,7 +3227,7 @@ impl Connection {
          }
-
+ 
          // ACK_FREQUENCY
 -        if mem::replace(&mut space.pending.ack_frequency, false) {
 +        if mem::replace(&mut space.pending.get_or_create().ack_frequency, false) {
              let sequence_number = self.ack_frequency.next_sequence_number();
-
+ 
              // Safe to unwrap because this is always provided when ACK frequency is enabled
 @@ -3262,7 +3285,7 @@ impl Connection {
-
+ 
          // CRYPTO
          while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
 -            let mut frame = match space.pending.crypto.pop_front() {
@@ -279,7 +279,7 @@ index 5155740..ebd4546 100644
 +                space.pending.get_or_create().crypto.push_front(frame);
              }
          }
-
+ 
          if space_id == SpaceId::Data {
              self.streams.write_control_frames(
                  buf,
@@ -289,7 +289,7 @@ index 5155740..ebd4546 100644
                  &mut self.stats.frame_tx,
                  max_size,
 @@ -3314,7 +3337,7 @@ impl Connection {
-
+ 
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
 -            let issued = match space.pending.new_cids.pop() {
@@ -298,7 +298,7 @@ index 5155740..ebd4546 100644
                  None => break,
              };
 @@ -3336,7 +3359,7 @@ impl Connection {
-
+ 
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
 -            let seq = match space.pending.retire_cids.pop() {
@@ -308,7 +308,7 @@ index 5155740..ebd4546 100644
              };
 @@ -3365,7 +3388,7 @@ impl Connection {
          }
-
+ 
          // NEW_TOKEN
 -        while let Some(remote_addr) = space.pending.new_tokens.pop() {
 +        while let Some(remote_addr) = space.pending.get_or_create().new_tokens.pop() {
@@ -317,13 +317,13 @@ index 5155740..ebd4546 100644
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
 @@ -3391,7 +3414,7 @@ impl Connection {
              };
-
+ 
              if buf.len() + new_token.size() >= max_size {
 -                space.pending.new_tokens.push(remote_addr);
 +                space.pending.get_or_create().new_tokens.push(remote_addr);
                  break;
              }
-
+ 
 @@ -3792,7 +3815,10 @@ impl Connection {
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
@@ -337,31 +337,43 @@ index 5155740..ebd4546 100644
          for _ in 0..server_config.validation_token.sent {
              new_tokens.push(self.path.remote);
 diff --git a/quinn-proto/src/connection/spaces.rs b/quinn-proto/src/connection/spaces.rs
-index f66d5ac..5084fb9 100644
+index f66d5ac..4ab1762 100644
 --- a/quinn-proto/src/connection/spaces.rs
 +++ b/quinn-proto/src/connection/spaces.rs
 @@ -23,7 +23,7 @@ pub(super) struct PacketSpace {
      pub(super) rx_packet: u64,
-
+ 
      /// Data to send
 -    pub(super) pending: Retransmits,
 +    pub(super) pending: ThinRetransmits,
      /// Packet numbers to acknowledge
      pub(super) pending_acks: PendingAcks,
-
+ 
 @@ -76,7 +76,7 @@ impl PacketSpace {
              dedup: Dedup::new(),
              rx_packet: 0,
-
+ 
 -            pending: Retransmits::default(),
 +            pending: ThinRetransmits::default(),
              pending_acks: PendingAcks::new(),
-
+ 
              next_packet_number: 0,
-@@ -431,6 +431,24 @@ pub(super) struct ThinRetransmits {
+@@ -207,6 +207,11 @@ impl PacketSpace {
+     /// Stop tracking sent packet `number`, and return what we knew about it
+     pub(super) fn take(&mut self, number: u64) -> Option<SentPacket> {
+         let packet = self.sent_packets.remove(&number)?;
++        // BTreeMap retains its empty leaf after the last removal. Idle peers
++        // need the packet-number history below, not an unused packet-tree node.
++        if self.sent_packets.is_empty() {
++            self.sent_packets = BTreeMap::new();
++        }
+         if !packet.ack_eliciting && number > self.largest_ack_eliciting_sent {
+             self.unacked_non_ack_eliciting_tail =
+                 self.unacked_non_ack_eliciting_tail.checked_sub(1).unwrap();
+@@ -431,6 +436,24 @@ pub(super) struct ThinRetransmits {
      retransmits: Option<Box<Retransmits>>,
  }
-
+ 
 +impl std::ops::BitOrAssign for ThinRetransmits {
 +    fn bitor_assign(&mut self, rhs: Self) {
 +        let Some(rhs) = rhs.retransmits else {
@@ -383,10 +395,10 @@ index f66d5ac..5084fb9 100644
  impl ThinRetransmits {
      /// Returns `true` if no retransmits are necessary
      pub(super) fn is_empty(&self, streams: &StreamsState) -> bool {
-@@ -927,6 +945,36 @@ const MAX_ACK_BLOCKS: usize = 64;
+@@ -927,6 +950,36 @@ const MAX_ACK_BLOCKS: usize = 64;
  mod test {
      use super::*;
-
+ 
 +    #[test]
 +    fn thin_pending_moves_storage_and_preserves_crypto_retransmit_priority() {
 +        let mut pending = ThinRetransmits::default();
@@ -427,12 +439,12 @@ index fe41e73..7254bfe 100644
 @@ -23,6 +23,7 @@ pub(crate) use send::{ByteSlice, BytesArray};
  use send::{BytesSource, Send, SendState};
  pub use send::{FinishError, WriteError, Written};
-
+ 
 +mod sparse;
  mod state;
  #[allow(unreachable_pub)] // fuzzing only
  pub use state::StreamsState;
-diff --git a/modified/quinn-proto/src/connection/streams/sparse.rs b/quinn-proto/src/connection/streams/sparse.rs
+diff --git a/quinn-proto/src/connection/streams/sparse.rs b/quinn-proto/src/connection/streams/sparse.rs
 new file mode 100644
 index 0000000..35e098f
 --- /dev/null
@@ -633,12 +645,12 @@ index 7a5908d..240c8f7 100644
 +++ b/quinn-proto/src/connection/streams/state.rs
 @@ -5,7 +5,7 @@ use std::{
  };
-
+ 
  use bytes::BufMut;
 -use rustc_hash::FxHashMap;
 +use super::sparse::SparseMap;
  use tracing::{debug, error, trace};
-
+ 
  use super::{
 @@ -69,8 +69,8 @@ impl StreamRecv {
  pub struct StreamsState {
