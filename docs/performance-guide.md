@@ -247,3 +247,31 @@ packet counters, profiles and loss cases separate. ACK-frame counts are not CPU
 shares; Quinn I/O counters are not kernel syscall counts. High-rate candidate
 datagram cases had more client UDP-drop/missing-update runs than the baseline,
 so lower ACK traffic must not be described as a universal datagram improvement.
+
+### Resolve callers behind generic allocation symbols
+
+An optimized executable may omit frame pointers. A heap captured with a frame
+pointer unwinder can stop at a generic allocation helper and cannot identify
+its caller. Do not infer a particular container or type from that symbol alone.
+Use an explicitly supported unwinder for a separate diagnostic run:
+
+```sh
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-unwind/relay --output artifacts/capacity-unwind.json \
+  --stacktrace-method libunwind
+python scripts/analyze-capacity-heap.py --receipt artifacts/capacity-unwind.json \
+  --stacks --output artifacts/capacity-unwind-stacks.json
+```
+
+The collector requests verbose profiler startup confirmation and records the
+requested and observed methods. An explicit request that is not confirmed fails
+the collector rather than silently accepting a fallback. Availability depends
+on the installed gperftools build. This can cost substantially more allocation
+CPU, so exclude its timing/RSS from ordinary comparisons. Watchdogs are
+collector controls, not changes to relay protocol deadlines.
+
+`--stacks` groups by all captured frames inside the exact executable image,
+using the same receipt/profile hash and ELF load-bias checks. It cannot recover
+omitted or inlined frames and excludes shared-library frames. All live bucket
+bytes must still sum to the heap header. Omitting `--stacks` retains the existing
+first-frame grouping and site rows.

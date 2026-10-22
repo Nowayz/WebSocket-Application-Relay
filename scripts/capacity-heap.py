@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import time
@@ -96,6 +97,9 @@ def run(options):
                    'HEAP_PROFILE_INUSE_INTERVAL': '0',
                    'HEAP_PROFILE_DEALLOCATION_INTERVAL': '0',
                    'HEAP_PROFILE_TIME_INTERVAL': '0'}
+    if options.stacktrace_method is not None:
+        environment.update(TCMALLOC_STACKTRACE_METHOD=options.stacktrace_method,
+                           TCMALLOC_STACKTRACE_METHOD_VERBOSE='1')
     saved = {key: os.environ.get(key) for key in environment}
     original_launch, original_process = subprocess.Popen, capacity.process
     server_pid = None
@@ -134,12 +138,20 @@ def run(options):
                 'source_receipt': str(options.receipt),
                 'capture_timeout_seconds': options.capture_timeout,
                 'profiles': [str(path) for path in sorted(prefix.parent.glob(prefix.name + '*.heap'))],
+                'stacktrace_method_requested': options.stacktrace_method,
+                'stacktrace_method_observed': (
+                    match[1] if (match := re.search(
+                        r'Chosen stacktrace method is (\S+)', result.get('server_log', '')))
+                    else None),
             }
             options.output.write_text(json.dumps(result, indent=2) + '\n')
     if not result['passed']:
         raise RuntimeError(f'capacity verification failed: {options.output}')
     if not all('heap' in event['server'] for event in result['events']):
         raise RuntimeError('missing phase-gate allocation snapshot')
+    if (options.stacktrace_method is not None and
+            result['heap_diagnostic']['stacktrace_method_observed'] != options.stacktrace_method):
+        raise RuntimeError('profiler did not confirm the requested stacktrace method')
     return result
 
 
@@ -148,6 +160,8 @@ if __name__ == '__main__':
     parser.add_argument('--receipt', type=Path, required=True, help='Existing capacity receipt or its args object')
     parser.add_argument('--output', type=Path, required=True, help='Fresh diagnostic receipt path')
     parser.add_argument('--prefix', type=Path, required=True, help='Fresh heap directory/file prefix')
+    parser.add_argument('--stacktrace-method',
+                        help='Request a gperftools unwinder and verify its startup confirmation')
     parser.add_argument('--library', type=Path, default=Path('/usr/lib/libtcmalloc.so'))
     parser.add_argument('--slab-sizes', type=Path, help='Read-only socket_resources.py --slab-sizes-only receipt')
     parser.add_argument('--capture-timeout', type=float, default=30,

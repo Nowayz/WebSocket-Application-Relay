@@ -34,7 +34,7 @@ def image_address_at_zero_offset(binary):
     raise ValueError('ELF has no zero-offset LOAD segment')
 
 
-def analyze(receipt, phase):
+def analyze(receipt, phase, stacks=False):
     data = json.loads(receipt.read_text())
     event = next(event for event in data['events'] if event['event'] == phase)
     heap_info = event['server']['heap']
@@ -60,25 +60,38 @@ def analyze(receipt, phase):
         if not match or not int(match[1]):
             continue
         count, size = int(match[1]), int(match[2])
-        frames = (int(value, 16) for value in match[3].split())
-        address = next((address for address in frames if any(start <= address < end for start, end in maps)), None)
-        bucket = sites[address - load_bias] if address is not None else unresolved
+        frames = tuple(int(value, 16) for value in match[3].split())
+        captured = tuple(address - load_bias for address in frames
+                         if any(start <= address < end for start, end in maps))
+        key = captured if stacks else captured[:1]
+        bucket = sites[key] if key else unresolved
         bucket[0] += count
         bucket[1] += size
-    ordered = sorted(sites, key=lambda address: sites[address][1], reverse=True)
+    ordered = sorted(sites, key=lambda key: sites[key][1], reverse=True)
+    addresses = sorted({address for key in ordered for address in key})
     symbols = subprocess.run(['addr2line', '-C', '-f', '-e', str(binary)],
-                             input=''.join(f'{address:x}\n' for address in ordered),
+                             input=''.join(f'{address:x}\n' for address in addresses),
                              text=True, capture_output=True, check=True).stdout.splitlines()
-    if len(symbols) != 2 * len(ordered):
+    if len(symbols) != 2 * len(addresses):
         raise RuntimeError('unexpected addr2line output shape')
-    rows = [{'offset': hex(address), 'objects': sites[address][0], 'bytes': sites[address][1],
-             'mean_bytes': sites[address][1] / sites[address][0],
-             'function': symbols[2 * index], 'location': symbols[2 * index + 1]}
-            for index, address in enumerate(ordered)]
+    resolved = {address: {'offset': hex(address), 'function': symbols[2 * index],
+                          'location': symbols[2 * index + 1]}
+                for index, address in enumerate(addresses)}
+    rows = []
+    for key in ordered:
+        row = dict(resolved[key[0]], objects=sites[key][0], bytes=sites[key][1],
+                   mean_bytes=sites[key][1] / sites[key][0])
+        if stacks:
+            row['frames'] = [resolved[address] for address in key]
+        rows.append(row)
     expected = int(re.search(r':\s*(\d+)\s*\[', lines[0])[1])
     if sum(row['bytes'] for row in rows) + unresolved[1] != expected:
         raise ValueError('allocation buckets do not match the profile header')
-    return {'scope': __doc__, 'receipt': str(receipt), 'phase': phase, 'heap': str(heap),
+    scope = (__doc__ if not stacks else
+             'Group by all captured frames inside the exact executable image. '
+             'This excludes shared-library frames and cannot recover omitted or inlined frames; '
+             'it is not a complete call-stack or type-layout proof. Bucket bytes match the header.')
+    return {'scope': scope, 'receipt': str(receipt), 'phase': phase, 'heap': str(heap),
             'heap_sha256': heap_info['sha256'], 'server_sha256': data['server_sha256'],
             'analyzer_sha256': digest(Path(__file__)), 'requested_live_bytes': expected,
             'unresolved_objects': unresolved[0], 'unresolved_bytes': unresolved[1], 'sites': rows}
@@ -89,8 +102,10 @@ if __name__ == '__main__':
     parser.add_argument('--receipt', type=Path, required=True)
     parser.add_argument('--phase', default='ready')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--stacks', action='store_true',
+                        help='Group by all captured executable frames, not just the first')
     args = parser.parse_args()
-    result = analyze(args.receipt, args.phase)
+    result = analyze(args.receipt, args.phase, args.stacks)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as output:
         output.write(json.dumps(result, indent=2) + '\n')

@@ -1841,3 +1841,23 @@ throughput gain, with the datagram-pressure tradeoff explicit. Selected relay
 SHA256 is `6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f`.
 No push, deployment or PR occurred. Full throughput and memory parity remain
 unachieved, and the pivot is not accepted.
+
+### Heap unwinding attribution — 2026-10-21
+
+The [unwinding verification](reports/webtransport-heap-unwinding-2026-10-21.json)
+addresses truncated caller evidence in the original replacement-allocator
+profiles. The maintained collector can explicitly select a supported stacktrace
+method and verifies the profiler's real startup confirmation. The analyzer adds
+optional grouping by all captured executable frames; its default site rows
+match the existing 100,000-session profile exactly. It does not recover omitted,
+inlined or shared-library frames.
+
+A separate 8,192-session `libunwind` diagnostic passed all five gates and 32,768
+measured checked deliveries. Ready buckets sum to 203,079,200 requested bytes
+with no unresolved allocations. Unlike the truncated profiles, useful callers
+now identify the event-queue deque, stream assembler heap, TLS handshake buffer,
+and other vectors. An 832-byte event-queue allocation at executable offset
+`0x24ca97` matches the same site's 99,965 objects / 83,170,880 bytes in the
+original full-scale profile. No reclamation policy or product change is inferred
+from that fact alone. The full 100,000-session libunwind capture is running;
+its diagnostic watchdog is extended without changing protocol deadlines.
