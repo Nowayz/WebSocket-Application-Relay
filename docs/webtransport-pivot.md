@@ -1727,3 +1727,33 @@ Retain this as a verified memory improvement. The selected relay SHA256 is
 Requested storage remains about 2.426 GB against the earlier native baseline of
 about 119 MB. Full throughput and memory parity remain unachieved; the pivot is
 not accepted. No push, deployment or PR is part of this change.
+
+### Rejected borrowed QUIC record bodies — 2026-10-21
+
+The [ordered-chunk reader experiment](reports/webtransport-chunk-reader-rejected-2026-10-21.json)
+returned an immutable QUIC body chunk directly when it contained the complete
+record body, avoiding a new Vec and copy. It preserved explicit four-byte
+framing, ordered reads on the same stream, maximum-size checks, the same full
+announced-size staging lease, bounded assembly and cancellation ownership. It
+never consumed ahead of the current record. All 274 tests and Clippy passed;
+both 100,000-session cases completed 400,000 deliveries and clean retirement.
+
+Reject the change: the initial four-second cohort's +0.82% private, +1.66% room
+and +1.24% mixed medians did not persist in the separate twelve-second cohort.
+Long baseline/candidate medians were 1,417,723/1,422,197 private (+0.32%),
+1,348,535/1,332,929 room (-1.16%), and 1,319,563/1,316,336 mixed (-0.24%). Every
+long room candidate sample was below every baseline sample. No repeatable
+whole-workload throughput gain was established. All 36 traffic runs passed;
+passing correctness does not establish an optimization.
+
+The ordinary capacity pair used 7.87/7.52 server CPU seconds but candidate ready
+RSS increased about 3.45 MiB. This single pair is not a confidence interval. The
+compiler diagnostic left session/spawn futures unchanged at 1,736/1,808 bytes;
+the original 192 MB task-allocation target was not reduced. Server/client CPU
+sets were checked against actual topology and use distinct physical cores.
+
+Experimental source and binaries remain archived locally; source and selected
+release binary were restored to commit 874983e, SHA256
+`773479940aa1498da90dd62ef3e2b9236e34fb412a2f41b5fba7477b98a8a3f2`.
+No reader change is retained, and no new browser/loss acceptance is claimed for
+the rejected candidate. Full throughput and memory parity remain unachieved.
