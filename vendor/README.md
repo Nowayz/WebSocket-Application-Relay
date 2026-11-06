@@ -334,3 +334,13 @@ range-tree algorithm. This removes the 300k x 192-byte range-tree site in the
 changes +0.14% private, +0.83% room, -1.14% mixed. Protocol, paced traffic,
 loss/reordering and Chrome checks pass. See
 `docs/reports/webtransport-ordered-ack-2026-10-22.json` for evidence and limits.
+
+## UDP receive-batch timestamps
+
+The Quinn endpoint samples time immediately after each successful socket
+receive, before routing that batch. Reusing the start of a longer endpoint
+poll could stamp fast ACKs earlier than concurrent packet transmissions and
+turn negative RTT intervals into zero samples. The patch removes that stale
+timestamp plumbing. A fake-clock stateless-reset regression distinguishes
+after-receive sampling from both shared and before-receive timestamps.
+The complete change remains in `quinn-event-channel.patch`.

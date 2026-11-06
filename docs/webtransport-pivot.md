@@ -2549,3 +2549,45 @@ Evidence:
 - [Receive-clock diagnosis](reports/webtransport-receive-clock-diagnosis-2026-11-06.json)
 
 Full throughput, memory and reliable-load acceptance remain unproven.
+
+## Receive-clock correction retained — 2026-11-06
+
+The completed acceptance record retains the post-receive timestamp correction
+as a correctness fix. The selected release image is
+`e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3`.
+It contains no diagnostic probes. The deterministic old-code regression,
+31 Quinn fixture tests, 253 relay tests, Clippy and vendor verification pass.
+All 36 ordinary short/long throughput receipts passed. Longer median changes
+against ordered-ACK are private -0.12%, room +0.83%, mixed +1.28%; these small
+differences support no statistical speed claim.
+
+Both endpoint profiles have zero lost samples. Actual Chrome passes all nine
+checks, including the 5 MiB payload and datagrams, and all tracked connection
+and output resources return to zero. Six datagram controls pass. Paced reliable
+controls still include one candidate failure out of three, versus three passing
+baseline controls; the clock defect is not established as the overload cause.
+
+A separate opaque user-space UDP proxy exercises 20 ms delay and independent
+2% loss in each direction without changing host networking. All four runs pass
+their protocol and proxy checks. Candidate datagram p99 freshest-state age is
+199.84 ms with 14/360 updates missing, versus 4921.00 ms and no missing updates
+for streams. Reliable bulk arrives at 9141.12 ms with datagram state traffic,
+versus 4937.94 ms in stream mode. Baseline datagram p99 is 103.99 ms; one run
+per mode/variant does not establish a tail-latency trend. This proxy is not a
+kernel netem or native TCP equivalence experiment.
+
+Current ordinary 100k runs use the same selected release image for both modes:
+QUIC ready RSS is 2080.46 MiB, native WebSocket 115.66 MiB (17.99x). Client
+setup is 10.7385 s versus 0.6606 s. Separately captured requested live allocation
+totals are 2,018,165,276 B versus 118,838,339 B at ready, and 70,821,883 B versus
+1,846,611 B at logical done. Diagnostic allocator RSS is excluded from ordinary
+RSS comparisons. Current kernel socket-memory/slab attribution remains
+unavailable; it is not reported as zero or inferred from older kernel sizes.
+
+The final report also corrects earlier setup labels: client-reported setup and
+controller connected-gate wall time are now distinct. Raw receipts are unchanged.
+Full evidence, hashes, commands, distributions and limits:
+[receive-clock validation](reports/webtransport-receive-clock-validation-2026-11-06.json).
+
+The full goal remains active: solve the measured receiver-pressure/stream-credit
+failure and the large memory gap before accepting the pivot.

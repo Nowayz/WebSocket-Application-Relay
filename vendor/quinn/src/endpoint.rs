@@ -9,8 +9,8 @@ use std::{
     pin::Pin,
     str,
     sync::{
-        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
     },
     task::{Context, Poll, Waker},
 };
@@ -18,7 +18,6 @@ use std::{
 #[cfg(all(not(wasm_browser), any(feature = "aws-lc-rs", feature = "ring")))]
 use crate::runtime::default_runtime;
 use crate::{
-    Instant,
     runtime::{AsyncUdpSocket, Runtime},
     udp_transmit,
 };
@@ -31,13 +30,13 @@ use proto::{
 use rustc_hash::FxHashMap;
 #[cfg(all(not(wasm_browser), any(feature = "aws-lc-rs", feature = "ring"),))]
 use socket2::{Domain, Protocol, Socket, Type};
-use tokio::sync::{Notify, futures::Notified, mpsc};
+use tokio::sync::{futures::Notified, mpsc, Notify};
 use tracing::{Instrument, Span};
-use udp::{BATCH_SIZE, RecvMeta};
+use udp::{RecvMeta, BATCH_SIZE};
 
 use crate::{
-    ConnectionEvent, EndpointConfig, IO_LOOP_BOUND, RECV_TIME_BOUND, VarInt,
-    connection::Connecting, incoming::Incoming, work_limiter::WorkLimiter,
+    connection::Connecting, incoming::Incoming, work_limiter::WorkLimiter, ConnectionEvent,
+    EndpointConfig, VarInt, IO_LOOP_BOUND, RECV_TIME_BOUND,
 };
 
 /// A QUIC endpoint.
@@ -372,9 +371,8 @@ impl Future for EndpointDriver {
             endpoint.driver = Some(cx.waker().clone());
         }
 
-        let now = endpoint.runtime.now();
         let mut keep_going = false;
-        keep_going |= endpoint.drive_recv(cx, now)?;
+        keep_going |= endpoint.drive_recv(cx)?;
         keep_going |= endpoint.handle_events(cx, &self.0.shared);
 
         if !endpoint.recv_state.incoming.is_empty() {
@@ -494,21 +492,21 @@ pub(crate) struct Shared {
 }
 
 impl State {
-    fn drive_recv(&mut self, cx: &mut Context, now: Instant) -> Result<bool, io::Error> {
+    fn drive_recv(&mut self, cx: &mut Context) -> Result<bool, io::Error> {
         let get_time = || self.runtime.now();
         self.recv_state.recv_limiter.start_cycle(get_time);
         if let Some(socket) = &self.prev_socket {
             // We don't care about the `PollProgress` from old sockets.
             let poll_res =
                 self.recv_state
-                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime, now);
+                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime);
             if poll_res.is_err() {
                 self.prev_socket = None;
             }
         };
         let poll_res =
             self.recv_state
-                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime, now);
+                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime);
         self.recv_state.recv_limiter.finish_cycle(get_time);
         let poll_res = poll_res?;
         if poll_res.received_connection_packet {
@@ -779,7 +777,6 @@ impl RecvState {
         endpoint: &mut proto::Endpoint,
         socket: &dyn AsyncUdpSocket,
         runtime: &dyn Runtime,
-        now: Instant,
     ) -> Result<PollProgress, io::Error> {
         let mut received_connection_packet = false;
         let mut metas = [RecvMeta::default(); BATCH_SIZE];
@@ -797,6 +794,8 @@ impl RecvState {
         loop {
             match socket.poll_recv(cx, &mut iovs, &mut metas) {
                 Poll::Ready(Ok(msgs)) => {
+                    // Concurrent sends must not be newer than their received loopback ACKs.
+                    let now = runtime.now();
                     self.recv_limiter.record_work(msgs);
                     for (meta, buf) in metas.iter().zip(iovs.iter()).take(msgs) {
                         let mut data: BytesMut = buf[0..meta.len].into();
@@ -880,4 +879,117 @@ struct PollProgress {
     received_connection_packet: bool,
     /// Whether datagram handling was interrupted early by the work limiter for fairness
     keep_going: bool,
+}
+
+#[cfg(all(test, any(feature = "ring", feature = "aws-lc-rs")))]
+mod receive_clock_tests {
+    use super::*;
+    use crate::{
+        runtime::{AsyncTimer, UdpPoller},
+        Duration, Instant,
+    };
+    use std::{net::Ipv4Addr, sync::atomic::AtomicU64};
+
+    #[derive(Debug)]
+    struct AdvancingSocket {
+        base: Instant,
+        micros: AtomicU64,
+        receives: AtomicUsize,
+        responses: AtomicUsize,
+    }
+
+    impl Runtime for AdvancingSocket {
+        fn new_timer(&self, _: Instant) -> Pin<Box<dyn AsyncTimer>> {
+            unreachable!("stateless resets use no connection timer")
+        }
+
+        fn spawn(&self, _: Pin<Box<dyn Future<Output = ()> + Send>>) {
+            unreachable!("stateless resets spawn no connection driver")
+        }
+
+        #[cfg(not(wasm_browser))]
+        fn wrap_udp_socket(&self, _: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
+            unreachable!("the test supplies its socket")
+        }
+
+        fn now(&self) -> Instant {
+            self.base + Duration::from_micros(self.micros.load(Ordering::Relaxed))
+        }
+    }
+
+    impl AsyncUdpSocket for AdvancingSocket {
+        fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
+            unreachable!("the test socket is always writable")
+        }
+
+        fn try_send(&self, _: &udp::Transmit<'_>) -> io::Result<()> {
+            self.responses.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+
+        fn poll_recv(
+            &self,
+            _: &mut Context,
+            bufs: &mut [IoSliceMut<'_>],
+            meta: &mut [RecvMeta],
+        ) -> Poll<io::Result<usize>> {
+            if self.receives.fetch_add(1, Ordering::Relaxed) >= 2 {
+                return Poll::Pending;
+            }
+            self.micros.fetch_add(15, Ordering::Relaxed);
+            // A short-header packet with an unknown, nonempty random-format CID.
+            bufs[0][..64].fill(7);
+            bufs[0][0] = 0x40;
+            meta[0] = RecvMeta {
+                addr: (Ipv4Addr::LOCALHOST, 4433).into(),
+                len: 64,
+                stride: 64,
+                ..RecvMeta::default()
+            };
+            Poll::Ready(Ok(1))
+        }
+
+        fn local_addr(&self) -> io::Result<SocketAddr> {
+            Ok((Ipv4Addr::LOCALHOST, 4434).into())
+        }
+    }
+
+    #[test]
+    fn receive_batches_refresh_timestamp_after_poll_recv() {
+        let mut config = EndpointConfig::default();
+        config.min_reset_interval(Duration::from_micros(10));
+        config.cid_generator(|| Box::new(proto::RandomConnectionIdGenerator::new(8)));
+        let mut endpoint = proto::Endpoint::new(Arc::new(config), None, true, Some([0; 32]));
+        let (sender, _events) = mpsc::unbounded_channel();
+        let mut recv = RecvState::new(sender, 1, &endpoint);
+        let socket = AdvancingSocket {
+            base: Instant::now(),
+            micros: AtomicU64::new(0),
+            receives: AtomicUsize::new(0),
+            responses: AtomicUsize::new(0),
+        };
+        // A reset at the old poll time makes before-receive timestamps observable too.
+        let mut packet = [7; 64];
+        packet[0] = 0x40;
+        assert!(matches!(
+            endpoint.handle(
+                socket.now(),
+                (Ipv4Addr::LOCALHOST, 4433).into(),
+                None,
+                None,
+                BytesMut::from(&packet[..]),
+                &mut Vec::new(),
+            ),
+            Some(DatagramEvent::Response(_))
+        ));
+        recv.recv_limiter.start_cycle(|| socket.now());
+        let mut cx = Context::from_waker(Waker::noop());
+        let progress = recv
+            .poll_socket(&mut cx, &mut endpoint, &socket, &socket)
+            .unwrap();
+        recv.recv_limiter.finish_cycle(|| socket.now());
+        assert!(!progress.keep_going);
+        assert_eq!(socket.micros.load(Ordering::Relaxed), 30);
+        assert_eq!(socket.responses.load(Ordering::Relaxed), 2);
+    }
 }

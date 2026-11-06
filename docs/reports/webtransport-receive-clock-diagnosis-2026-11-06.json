@@ -1,7 +1,7 @@
 {
-  "status": "Defect and correction proven; pure candidate acceptance in progress",
+  "status": "Defect and correction proven; pure candidate validation completed and correctness fix retained; full parity remains unmet",
   "source_path": "vendor/quinn/src/endpoint.rs",
-  "root_cause": "EndpointDriver captured one timestamp before drain; later poll_recv batches reused it while concurrent connectiondrivers transmitted packets. An ACK could then predate the packet it acknowledges; saturating subtraction hides negative RTT aszero.",
+  "root_cause": "EndpointDriver captured one timestamp before drain; later poll_recv batches reused it while concurrent connection drivers transmitted packets. An ACK could then predate the packet it acknowledges; saturating subtraction hides negative RTT as zero.",
   "correction": "Read runtime.now immediately after each successful socket.poll_recv and remove stale timestamp plumbing. One clock sample per batch, no per-datagram fields or altered resource limits.",
   "regression_test": "receive_batches_refresh_timestamp_after_poll_recv",
   "red": {
@@ -66,8 +66,10 @@
   ],
   "scope": "Diagnostic predicate only; no ordinary speed or RSS claim. Frozen clients were unchanged. All three old-code probes observed negative ACK timing; all three fixed-code probes observed none. Each variant still failed one of three paced-load trials, so the clock correction is not proved to solve overload.",
   "pending": [
-    "Longer uninstrumented comparison and paired traffic controls in live exec 22701",
-    "Pure both-endpoint profiles and actual browser acceptance",
-    "Impaired-network freshness acceptance using a truthful unprivileged fixture or restored namespace capability"
-  ]
+    "Resolve remaining peer receive pressure and intermittent paced reliable overload.",
+    "Reach100000-session memory parity and prove complete native-WebSocket throughput parity after subsequent changes."
+  ],
+  "validation_report": {
+    "path": "docs/reports/webtransport-receive-clock-validation-2026-11-06.json"
+  }
 }
