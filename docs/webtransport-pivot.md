@@ -2405,3 +2405,41 @@ restored. Broad acceptance gates intentionally not run for the rejected
 candidate. Throughput and memory parity remain unmet.
 Evidence and reproduction:
 [`webtransport-compact-rng-rejected-2026-11-06.json`](reports/webtransport-compact-rng-rejected-2026-11-06.json).
+
+## Initial expanded key-update pair — rejected (2026-11-06)
+
+Deferred the first expanded 1-RTT successor pair until a local update or
+Short-header phase mismatch, then kept original eager-successor behavior.
+Cached preparation survives failed authentication without advancing secrets
+again. Tests cover idle absence, local/remote update, reordering, packet
+capture and repeated corrupted updates followed by valid data. All 322
+copied protocol tests and 253 relay tests passed (one existing ignored);
+Clippy and pinned-vendor verification passed.
+
+All 18 short and 18 longer fixed-client throughput receipts passed. Longer
+medians: private -1.05%, room -1.70%, mixed +1.03%. Both 100k capacity
+runs passed with 400k measured deliveries. Ready RSS fell 2,081.14 to
+1,962.60 MiB (-118.54 MiB). Fresh paired allocator captures passed all
+five gates: requested live bytes fell 2,018,178,503 to 1,902,036,045
+(-110.76 MiB), packet-key allocations 400,040 to 202,364. Savings apply
+to sessions before their first update; later behavior resumes eager preparation.
+
+Rejected on reliable-load acceptance: initial candidate paced runs passed
+5/6, with mixed run 3 closing slow consumers (1013). Fresh rotated mixed
+controls passed baseline 3/3 versus candidate 2/3; the candidate failed
+again with slow-consumer closures. Six paired datagram controls passed
+with loss recorded separately. No resource budgets were raised.
+
+Kernel SOCK_DIAG returned ENOENT for both protocols/families. Fresh paired
+allocation-only receipts explicitly mark kernel accounting unavailable, never
+zero; the failed original capture is retained. Privileged profiling failed
+under no-new-privileges. User-only capture initially exceeded mmap-lock
+allowance at 512 pages; fresh 64-page captures succeeded for both endpoints
+with zero lost samples. Both profiled workloads passed, so those profiles do
+not explain the intermittent overload. Delayed derivation as cause remains
+unproven. Browser/freshness gates were skipped for the rejected candidate.
+
+Original source, provenance/patch and exact ordered-ACK executable restored.
+Overall throughput/memory parity remains unmet. Full evidence, rejected
+diff, failed trials, profile limits and reproduction scripts:
+[`webtransport-first-key-update-rejected-2026-11-06.json`](reports/webtransport-first-key-update-rejected-2026-11-06.json).
