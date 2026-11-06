@@ -1,0 +1,72 @@
+{
+  "status": "Peer UDP queue/drop pressure observed before logged queue refusal",
+  "runs": [
+    {
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-diagnostic-mixed-1.json",
+        "sha256": "a8d429b0ef87e2aaa27752020a44eb946fbe40d5e3da9f9d425da76d637ff2c1"
+      },
+      "samples": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-diagnostic-mixed-1-samples.json",
+        "sha256": "7545ab92401fb3416eef49ffb2a990ebb884ef81d963c30360794e45366b79af"
+      },
+      "passed": true,
+      "refusal_wall_unix": null,
+      "sample_count": 1297,
+      "requested_sampling_seconds": 0.004,
+      "max_actual_gap_seconds": 0.008735342009458691,
+      "stable_client_socket_inodes": [
+        "3395834",
+        "3395835",
+        "3395836"
+      ],
+      "max_client_drops": 0,
+      "max_client_rx_queue_all_samples": 453909,
+      "max_server_drops": 0
+    },
+    {
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-diagnostic-mixed-2.json",
+        "sha256": "ceb221493b593f9432e852d903c91d1ca589c8a1fe3364a7df01b6090f5fe24c"
+      },
+      "samples": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-diagnostic-mixed-2-samples.json",
+        "sha256": "2aa9be5f086323ed231e381ccc9f6bf4b42a88b347437e1ba1ac25778fb4c699"
+      },
+      "passed": false,
+      "refusal_wall_unix": 1794005173.833957,
+      "sample_count": 940,
+      "requested_sampling_seconds": 0.004,
+      "max_actual_gap_seconds": 0.00751373398816213,
+      "stable_client_socket_inodes": [
+        "3395841",
+        "3395842",
+        "3395843"
+      ],
+      "max_client_drops": 16630,
+      "max_client_rx_queue_all_samples": 6847131,
+      "max_server_drops": 0,
+      "first_drop_detected_ms_before_refusal": 307.69896507263184,
+      "last_zero_drop_ms_before_refusal": 312.30878829956055,
+      "last_pre_refusal_ms": 2.7518272399902344,
+      "last_pre_refusal_client": {
+        "owned_sockets": 1,
+        "receive_queue_bytes": 5818776,
+        "send_queue_bytes": 0,
+        "receive_drops": 8460
+      },
+      "pre_refusal_peak_rx_queue": 6787978,
+      "pre_refusal_peak_ms": 188.51661682128906
+    }
+  ],
+  "controller": {
+    "path": "artifacts/webtransport/reliable-peer-udp-diagnostic.py",
+    "sha256": "9c74487f52fa99a7cc619c228e49321395098341dd4fd383580502397e20ce65"
+  },
+  "scope": "Owned-inode /proc UDP counters. Diagnostic collector onCPU4, sampled requested4ms with actual gaps recorded. Not kernel-memory totals or ordinary performance.",
+  "interpretation": "Failedtrialclient receive drops begin307.7\u2013312.3ms before loggedrefusal; passingtrialhaszero drops. Serverdropszero. This supports receiverpressurebeforestreamcredit exhaustion, but not a specific scheduling/CPU/burst cause or flow-specific lost-packet attribution.",
+  "limits": [
+    "Overall peakqueue6847131B and final16630drops include post-refusal time; pre-refusal peak6787978B and lastpre-refusal8460drops are the causal-order observations.",
+    "Observer/proc scanning can perturb execution; no performance comparison from diagnostic runs."
+  ]
+}

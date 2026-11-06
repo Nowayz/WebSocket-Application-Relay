@@ -1,0 +1,66 @@
+{
+  "status": "Immediate write gate identified; underlying peer-credit delay still being investigated",
+  "diagnostic_source": "diff --git a/src/webtransport.rs b/src/webtransport.rs\nindex 757e8ac..0dae326 100644\n--- a/src/webtransport.rs\n+++ b/src/webtransport.rs\n@@ -27,6 +27,9 @@ use wtransport::quinn::{Endpoint, VarInt};\n \n mod queue;\n \n+// Diagnostic only: capture the first failure without a logging avalanche.\n+static OVERLOAD_RECORDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+\n struct QueuedOutput {\n     packet: Envelope,\n     offset: usize,\n@@ -99,6 +102,21 @@ impl Output {\n             if accepted && wake {\n                 self.queue.ready.notify_one();\n             }\n+            if !accepted && !OVERLOAD_RECORDED.swap(true, Relaxed) {\n+                let quic = std::ops::Deref::deref(self.connection.as_ref());\n+                tracing::warn!(\n+                    writer_busy = queue.owner.busy,\n+                    immediate,\n+                    queue_closed = queue.is_closed(),\n+                    queue_limit = self.relay.config.queue_messages,\n+                    queue_capacity_bytes = queue.allocated_bytes(),\n+                    stream = ?queue.owner.stream.quic_id(),\n+                    rtt_micros = quic.rtt().as_micros(),\n+                    write_state = %quic.diagnostic_write_state(queue.owner.stream.quic_id()),\n+                    stats = ?quic.stats(),\n+                    \"OVERLOAD_DIAGNOSTIC first reliable queue refusal\"\n+                );\n+            }\n             return accepted;\n         }\n         if queue.is_closed() {\ndiff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..f8e0642 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -1313,6 +1313,14 @@ impl Connection {\n         self.spaces[self.highest_space].ping_pending = true;\n     }\n \n+    /// Diagnostic-only instantaneous write-admission state.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        format!(\"{} cwnd={} in_flight={} proto_closed={}\",\n+            self.streams.diagnostic_write_state(id).unwrap_or_else(|| \"stream_absent=true\".into()),\n+            self.path.congestion.window(), self.path.in_flight.bytes, self.state.is_closed())\n+    }\n+\n     /// Update traffic keys spontaneously\n     ///\n     /// This can be useful for testing key updates, as they otherwise only happen infrequently.\ndiff --git a/vendor/quinn-proto/src/connection/streams/state.rs b/vendor/quinn-proto/src/connection/streams/state.rs\nindex 240c8f7..f33373f 100644\n--- a/vendor/quinn-proto/src/connection/streams/state.rs\n+++ b/vendor/quinn-proto/src/connection/streams/state.rs\n@@ -841,6 +841,18 @@ impl StreamsState {\n         Ok(())\n     }\n \n+    pub(crate) fn diagnostic_write_state(&self, id: StreamId) -> Option<String> {\n+        let stream = self.send.get(&id)?.as_ref()?;\n+        Some(format!(\n+            \"stream_max={} stream_offset={} stream_credit={} conn_max={} data_sent={} conn_credit={} send_window={} buffered_data={} window_credit={} write_limit={} stream_retained={} stream_writable={} stream_stopped={} connection_blocked={}\",\n+            stream.max_data, stream.offset(), stream.max_data.saturating_sub(stream.offset()),\n+            self.max_data, self.data_sent, self.max_data.saturating_sub(self.data_sent),\n+            self.send_window, self.buffered_data, self.send_window.saturating_sub(self.buffered_data),\n+            self.write_limit(), stream.pending.buffered(), stream.is_writable(),\n+            stream.stop_reason.is_some(), stream.connection_blocked,\n+        ))\n+    }\n+\n     /// Returns the maximum amount of data this is allowed to be written on the connection\n     pub(crate) fn write_limit(&self) -> u64 {\n         (self.max_data - self.data_sent)\n@@ -1075,6 +1087,36 @@ mod tests {\n         )\n     }\n \n+    #[test]\n+    fn diagnostic_write_state_distinguishes_readonly_budgets() {\n+        let mut server = make(Side::Server);\n+        server.send_window = 24;\n+        server.set_params(&TransportParameters {\n+            initial_max_streams_uni: 1u32.into(),\n+            initial_max_data: 1000u32.into(),\n+            initial_max_stream_data_uni: 1000u32.into(),\n+            ..TransportParameters::default()\n+        });\n+        let (mut pending, state) = (Retransmits::default(), ConnState::Established);\n+        let id = Streams { state: &mut server, conn_state: &state }.open(Dir::Uni).unwrap();\n+        SendStream { id, state: &mut server, pending: &mut pending, conn_state: &state }\n+            .write(&[42; 24]).unwrap();\n+        let before = (server.data_sent, server.buffered_data, server.send.len());\n+        let snapshot = server.diagnostic_write_state(id).unwrap();\n+        assert!(snapshot.contains(\"window_credit=0 \"));\n+        assert!(snapshot.contains(\"stream_credit=976 \"));\n+        assert!(snapshot.contains(\"conn_credit=976 \"));\n+        assert_eq!(snapshot, server.diagnostic_write_state(id).unwrap());\n+        assert_eq!(before, (server.data_sent, server.buffered_data, server.send.len()));\n+        server.send_window = 1000;\n+        let stream = server.send.get_mut(&id).unwrap().as_mut().unwrap();\n+        stream.max_data = stream.offset();\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"stream_credit=0 \"));\n+        server.send.get_mut(&id).unwrap().as_mut().unwrap().max_data = 1000;\n+        server.max_data = server.data_sent;\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"conn_credit=0 \"));\n+    }\n+\n     #[test]\n     fn send_window_retains_selectively_acked_data() {\n         let mut server = make(Side::Server);\ndiff --git a/vendor/quinn/src/connection.rs b/vendor/quinn/src/connection.rs\nindex 17f9667..5862f8a 100644\n--- a/vendor/quinn/src/connection.rs\n+++ b/vendor/quinn/src/connection.rs\n@@ -555,6 +555,15 @@ impl Connection {\n         self.0.state.lock(\"stats\").inner.stats()\n     }\n \n+    /// Diagnostic-only snapshot under the connection lock.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        let state = self.0.state.lock(\"diagnostic_write_state\");\n+        format!(\"{} writer_registered={} runtime_error={}\",\n+            state.inner.diagnostic_write_state(id),\n+            state.blocked_writers.contains_key(&id), state.error.is_some())\n+    }\n+\n     /// Current state of the congestion control algorithm, for debugging purposes\n     pub fn congestion_state(&self) -> Box<dyn Controller> {\n         self.0\n",
+  "binary": {
+    "path": "artifacts/webtransport/binaries/reliable-write-state-relay",
+    "sha256": "ab7088e160275aa758bf5d03793e022c866e699c8955de718c706e309ad47b9a"
+  },
+  "runs": [
+    {
+      "receipt": "artifacts/webtransport/reliable-write-state-recovered-mixed-1.json",
+      "passed": true,
+      "snapshots": [],
+      "receipt_sha256": "79a1721ce894e307b50924436b339d7c8d1a8c14617a19856f9e5d36c1c9bba5"
+    },
+    {
+      "receipt": "artifacts/webtransport/reliable-write-state-recovered-mixed-2.json",
+      "passed": false,
+      "snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3428,
+          "stream_max": 30735007,
+          "stream_offset": 30735007,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 30735081,
+          "conn_credit": 4611686018396652822,
+          "send_window": 10000000,
+          "buffered_data": 1133104,
+          "window_credit": 8866896,
+          "write_limit": 8866896,
+          "stream_retained": 1133104,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 24798,
+          "in_flight": 15972,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "receipt_sha256": "1d032f30ffd6fe0f71fc902ee489d40b66f136f653bd5a8142d92217090a7f95"
+    }
+  ],
+  "scope": "Instrumented first-refusal state only, not ordinary performance. Original load receipts preserved after postprocessor shadowing error; recovered copies only add verified diagnostic metadata.",
+  "self_checks": [
+    "stream_credit=max(0,stream_max-stream_offset)",
+    "conn_credit=max(0,conn_max-data_sent)",
+    "window_credit=max(0,send_window-buffered_data)",
+    "write_limit=min(conn_credit,window_credit)"
+  ],
+  "interpretation": "At sampled refusal streamcredit0 is the direct write gate. Connectioncredit andlocalwindow remainpositive; streamready/notstopped, connectionopen, writerregistered. Cwnd does not directlygate applicationwrites. This does not prove why peer credit stopped progressing.",
+  "tests": {
+    "path": "artifacts/webtransport/reliable-write-state-proto-tests.log",
+    "sha256": "5db74b4c2ead03651553dc7cc4b104b4be969e840f7e4eafd5da1485f922d5d7"
+  },
+  "postprocessor_failure_log": {
+    "path": "artifacts/webtransport/reliable-write-state.log",
+    "sha256": "635e3b12ec9549390adfd20ddc9e8093e09de200e680f1ec5a33efefe4dc5f0f"
+  }
+}
