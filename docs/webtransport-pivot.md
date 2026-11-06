@@ -2510,3 +2510,42 @@ The logging patch is diagnostic-only and not retained in production source.
 All processes stopped; retained executable restored.
 Exact traces, counters, source patch, controls and scripts:
 [`webtransport-reliable-overload-diagnostic-2026-11-06.json`](reports/webtransport-reliable-overload-diagnostic-2026-11-06.json).
+
+## Current write gate, peer pressure, and receive clock — 2026-11-06
+
+A read-only first-refusal snapshot identifies the immediate private-write
+gate: peer stream credit was zero, while connection credit was ample and
+8.87 MiB remained in the local send window. The stream was open, not stopped,
+and its writer remained registered as blocked. Historical loss and flow-control
+counters alone could not establish this; the new current-state probe does.
+
+An owned-inode UDP timeline finds client drops beginning 307.7–312.3 ms
+before the logged refusal. The last pre-refusal sample had 8,460 drops and
+5.82 MB queued; the pre-refusal peak was 6.79 MB. Server drops remained zero.
+The passing trial had no client drops and a 0.45 MB peak. Later peaks/final
+drop counts include post-refusal traffic and must not be used as preceding
+causal evidence. This narrows the failure to receiver-side pressure and
+stream-credit progress, without proving its CPU/scheduling/burst mechanism.
+
+A separate library defect is now proven: Quinn captured one receive time
+before draining several socket batches. Concurrent sends could then be newer
+than their received ACKs. A real probe captured a negative interval, and all
+three paired old-code probes observed the predicate. The correction samples
+time immediately after each successful receive. None of the three fixed
+probes observed it. A deterministic stateless-reset-throttle regression fails
+on old code and passes with the fix; all 31 Quinn fixture tests pass, with
+three existing ignored. Each probe variant still failed one paced trial, so
+this correction is not a claimed overload solution.
+
+The uninstrumented candidate passes relay tests, Clippy, vendor verification,
+all 18 short throughput receipts, and both 100k capacity runs. Short medians
+were private -1.01%, room -0.06%, mixed -1.79%, with essentially unchanged RSS.
+Longer performance, traffic and runtime acceptance remain in progress; the
+product change is uncommitted. No queue or receive/send resource budgets changed.
+
+Evidence:
+- [Current write gate](reports/webtransport-current-write-gate-2026-11-06.json)
+- [Peer UDP pressure](reports/webtransport-peer-udp-pressure-2026-11-06.json)
+- [Receive-clock diagnosis](reports/webtransport-receive-clock-diagnosis-2026-11-06.json)
+
+Full throughput, memory and reliable-load acceptance remain unproven.

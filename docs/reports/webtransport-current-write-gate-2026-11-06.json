@@ -54,7 +54,7 @@
     "window_credit=max(0,send_window-buffered_data)",
     "write_limit=min(conn_credit,window_credit)"
   ],
-  "interpretation": "At sampled refusal streamcredit0 is the direct write gate. Connectioncredit andlocalwindow remainpositive; streamready/notstopped, connectionopen, writerregistered. Cwnd does not directlygate applicationwrites. This does not prove why peer credit stopped progressing.",
+  "interpretation": "At the sampled refusal, stream_credit=0 was the direct application-write gate. Connection credit and the local send window remained positive. The stream was writable and not stopped, the connection was open, and Quinn still held its blocked-writer registration. Congestion window is not a direct application-write gate. This snapshot does not establish why the peer stopped replenishing stream credit.",
   "tests": {
     "path": "artifacts/webtransport/reliable-write-state-proto-tests.log",
     "sha256": "5db74b4c2ead03651553dc7cc4b104b4be969e840f7e4eafd5da1485f922d5d7"

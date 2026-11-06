@@ -64,9 +64,9 @@
     "sha256": "9c74487f52fa99a7cc619c228e49321395098341dd4fd383580502397e20ce65"
   },
   "scope": "Owned-inode /proc UDP counters. Diagnostic collector onCPU4, sampled requested4ms with actual gaps recorded. Not kernel-memory totals or ordinary performance.",
-  "interpretation": "Failedtrialclient receive drops begin307.7\u2013312.3ms before loggedrefusal; passingtrialhaszero drops. Serverdropszero. This supports receiverpressurebeforestreamcredit exhaustion, but not a specific scheduling/CPU/burst cause or flow-specific lost-packet attribution.",
+  "interpretation": "In the failing diagnostic trial, client receive drops began 307.7\u2013312.3 ms before the logged refusal. The passing trial had zero client drops; server receive drops were zero in both. Receiver pressure preceded stream-credit exhaustion, but these observations do not distinguish CPU saturation, endpoint scheduling, receive bursts, or flow-specific loss.",
   "limits": [
-    "Overall peakqueue6847131B and final16630drops include post-refusal time; pre-refusal peak6787978B and lastpre-refusal8460drops are the causal-order observations.",
-    "Observer/proc scanning can perturb execution; no performance comparison from diagnostic runs."
+    "The overall 6,847,131-byte queue peak and final 16,630-drop count include post-refusal time. The pre-refusal peak was 6,787,978 bytes; the last pre-refusal sample had 8,460 drops.",
+    "Observer /proc scanning may perturb execution. These trials are diagnostics, not ordinary performance comparisons."
   ]
 }
