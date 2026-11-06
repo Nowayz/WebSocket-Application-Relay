@@ -2383,3 +2383,25 @@ cost. Source and exact retained ordered-ACK executable restored. No broad
 acceptance for this rejected candidate. Full parity remains unmet.
 Evidence and reproduction:
 [`webtransport-quic-exporter-rejected-2026-10-22.json`](reports/webtransport-quic-exporter-rejected-2026-10-22.json).
+
+## Compact connection RNG — rejected (recorded 2026-11-06)
+
+Completed Oct 22 measurements used a 48-byte seed/word-position state in
+place of the buffered 320-byte connection StdRng, reconstructing the same
+pinned ChaCha12 generator on random requests. Initial constructor calls
+remained buffered. Mixed-call byte/u32/u64 sequence equivalence passed,
+as did 322 copied Quinn protocol tests, 18 short and 18 longer throughput
+receipts, and both 100k capacity runs (400k measured deliveries each).
+
+Longer medians regressed private 2.09%, room 3.64%, while mixed rose 0.78%.
+Requested live bytes fell 2,018,187,005 to 1,990,972,072 (-25.95 MiB);
+main connection allocation shrank 272 bytes. Ordinary ready RSS fell
+2,083.65 to 2,053.98 MiB (-29.67 MiB). The memory reduction is real, but
+it does not justify the observed private/room cost. Reconstruction cost
+is a hypothesis rather than a profiled causal finding.
+
+Rejected; original source, lockfile and exact retained ordered-ACK binary
+restored. Broad acceptance gates intentionally not run for the rejected
+candidate. Throughput and memory parity remain unmet.
+Evidence and reproduction:
+[`webtransport-compact-rng-rejected-2026-11-06.json`](reports/webtransport-compact-rng-rejected-2026-11-06.json).
