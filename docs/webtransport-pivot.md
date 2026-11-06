@@ -2489,3 +2489,24 @@ before selecting more variants. Browser/freshness gates were not run for
 this unselected change. No per-session memory benefit claimed.
 Full source, exact hashes, counters, failures and reproduction:
 [`webtransport-datagram-parts-deferred-2026-11-06.json`](reports/webtransport-datagram-parts-deferred-2026-11-06.json).
+
+## Retained reliable overload diagnostic — 2026-11-06
+
+A failure-only instrumented build records the first queue refusal, without
+logging every closing peer. The first trial passed; the second reproduced
+the close. First sampled refusal: immediate/private path, queue open and
+full at its64-message limit, writer_busy=true, RTT3.179ms, cwnd20,536B,
+118lost packets/12congestion events and one historical STREAM_DATA_BLOCKED
+frame. A writer already owned an unfinished record; this is not evidence
+of a wholly unstarted writer. It does not yet distinguish current stream
+credit/send-window/congestion blocking from delayed repolling.
+
+Matched paced controls used the same frozen server/client images, offered
+load and CPU placement. Native WebSocket passed3/3; retained QUIC passed
+2/3, with139slow-consumer events in its failing run. This verifies that
+mean-throughput medians are insufficient acceptance; sample counts do not
+establish a statistical failure rate. No resource budgets were raised.
+The logging patch is diagnostic-only and not retained in production source.
+All processes stopped; retained executable restored.
+Exact traces, counters, source patch, controls and scripts:
+[`webtransport-reliable-overload-diagnostic-2026-11-06.json`](reports/webtransport-reliable-overload-diagnostic-2026-11-06.json).

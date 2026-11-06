@@ -1,0 +1,124 @@
+{
+  "status": "Failure reproduced; mechanism narrowed; no production fix claimed; goal active",
+  "instrumentation_patch": "diff --git a/src/webtransport.rs b/src/webtransport.rs\nindex 757e8ac..72d1f18 100644\n--- a/src/webtransport.rs\n+++ b/src/webtransport.rs\n@@ -27,6 +27,9 @@ use wtransport::quinn::{Endpoint, VarInt};\n \n mod queue;\n \n+// Diagnostic only: capture the first failure without a logging avalanche.\n+static OVERLOAD_RECORDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+\n struct QueuedOutput {\n     packet: Envelope,\n     offset: usize,\n@@ -99,6 +102,20 @@ impl Output {\n             if accepted && wake {\n                 self.queue.ready.notify_one();\n             }\n+            if !accepted && !OVERLOAD_RECORDED.swap(true, Relaxed) {\n+                let quic = std::ops::Deref::deref(self.connection.as_ref());\n+                tracing::warn!(\n+                    writer_busy = queue.owner.busy,\n+                    immediate,\n+                    queue_closed = queue.is_closed(),\n+                    queue_limit = self.relay.config.queue_messages,\n+                    queue_capacity_bytes = queue.allocated_bytes(),\n+                    stream = ?queue.owner.stream.quic_id(),\n+                    rtt_micros = quic.rtt().as_micros(),\n+                    stats = ?quic.stats(),\n+                    \"OVERLOAD_DIAGNOSTIC first reliable queue refusal\"\n+                );\n+            }\n             return accepted;\n         }\n         if queue.is_closed() {\n",
+  "diagnostic_binary": {
+    "path": "artifacts/webtransport/binaries/reliable-overload-diagnostic-relay",
+    "sha256": "1daa22eb976d2b546b168b88b83db7c1fb87f973ff2be0d2174dbfe918e6aaaf"
+  },
+  "diagnostic_runs": [
+    {
+      "receipt": "artifacts/webtransport/reliable-overload-diagnostic-mixed-1.json",
+      "passed": true,
+      "error": null,
+      "first_refusal": [],
+      "sha256": "5f6c4ef779bada89e04e1a6187fb2fe7491263ea343306e6adb0057268b48a94"
+    },
+    {
+      "receipt": "artifacts/webtransport/reliable-overload-diagnostic-mixed-2.json",
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "first_refusal": [
+        "2026-11-06T22:27:44.901368Z  WARN war_relay::webtransport: OVERLOAD_DIAGNOSTIC first reliable queue refusal writer_busy=true immediate=true queue_closed=false queue_limit=64 queue_capacity_bytes=5120 stream=StreamId(4) rtt_micros=3179 stats=ConnectionStats { udp_tx: UdpStats { datagrams: 22590, bytes: 31357718, ios: 3745 }, udp_rx: UdpStats { datagrams: 1869, bytes: 75743, ios: 1870 }, frame_tx: FrameStats { ACK: 546, ACK_FREQUENCY: 1, CONNECTION_CLOSE: 0, CRYPTO: 3, DATA_BLOCKED: 0, DATAGRAM: 0, HANDSHAKE_DONE: 1, IMMEDIATE_ACK: 4, MAX_DATA: 0, MAX_STREAM_DATA: 0, MAX_STREAMS_BIDI: 0, MAX_STREAMS_UNI: 0, NEW_CONNECTION_ID: 4, NEW_TOKEN: 4, PATH_CHALLENGE: 0, PATH_RESPONSE: 0, PING: 4, RESET_STREAM: 0, RETIRE_CONNECTION_ID: 1, STREAM_DATA_BLOCKED: 1, STREAMS_BLOCKED_BIDI: 0, STREAMS_BLOCKED_UNI: 0, STOP_SENDING: 0, STREAM: 22578 }, frame_rx: FrameStats { ACK: 1711, ACK_FREQUENCY: 0, CONNECTION_CLOSE: 0, CRYPTO: 2, DATA_BLOCKED: 0, DATAGRAM: 0, HANDSHAKE_DONE: 0, IMMEDIATE_ACK: 4, MAX_DATA: 0, MAX_STREAM_DATA: 187, MAX_STREAMS_BIDI: 0, MAX_STREAMS_UNI: 0, NEW_CONNECTION_ID: 5, NEW_TOKEN: 0, PATH_CHALLENGE: 0, PATH_RESPONSE: 0, PING: 4, RESET_STREAM: 0, RETIRE_CONNECTION_ID: 0, STREAM_DATA_BLOCKED: 0, STREAMS_BLOCKED_BIDI: 0, STREAMS_BLOCKED_UNI: 0, STOP_SENDING: 0, STREAM: 3 }, path: PathStats { rtt: 3.179421ms, min_rtt: 0ns, cwnd: 20536, congestion_events: 12, lost_packets: 118, lost_bytes: 168784, sent_packets: 22592, sent_plpmtud_probes: 4, lost_plpmtud_probes: 0, black_holes_detected: 0, current_mtu: 1452 } }"
+      ],
+      "sha256": "5c67e53165096adba89e9d8d2d44b2d95a71d5c743bdfd552166e7dddfcd7ddf"
+    }
+  ],
+  "transport_controls": [
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-stream-1.json",
+      "sha256": "cfc5ead52d1c6267775f33a0f7fa2cac9a65a7e770c86f61a7bee128667d1197",
+      "mode": "stream",
+      "passed": true,
+      "error": null,
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 0,
+      "client_stderr": ""
+    },
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-stream-2.json",
+      "sha256": "ebcc8f9ce0224724386d2e830fe6582d4ad4225afbb768f225cf1f0b2fa9e1a8",
+      "mode": "stream",
+      "passed": true,
+      "error": null,
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 0,
+      "client_stderr": ""
+    },
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-stream-3.json",
+      "sha256": "fca936c6c7b5fe59cf3c26b9f0e7426fc1e07af6749b404f68b82e4ab8959362",
+      "mode": "stream",
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 139,
+      "client_stderr": "Error: session error: webtransport error: closed: code=1013 reason=Try Again Later\n\nCaused by:\n    0: webtransport error: closed: code=1013 reason=Try Again Later\n    1: closed: code=1013 reason=Try Again Later\n"
+    },
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-websocket-1.json",
+      "sha256": "a1c022a50b163943842abd2cc5665f6907bce8052b8e0ed69f22fb7babe6932e",
+      "mode": "websocket",
+      "passed": true,
+      "error": null,
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 0,
+      "client_stderr": ""
+    },
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-websocket-2.json",
+      "sha256": "6b8d6caa1eac4d29d3050ae1c2b64631011a5d3f7bdca7293ea4bc825bda6380",
+      "mode": "websocket",
+      "passed": true,
+      "error": null,
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 0,
+      "client_stderr": ""
+    },
+    {
+      "path": "artifacts/webtransport/retained-paced-transport-control-20261106-websocket-3.json",
+      "sha256": "0536b33fcc0ba94e8be58c24ceab02ab98ad39f30c989cf9eba68aaf730b3aa3",
+      "mode": "websocket",
+      "passed": true,
+      "error": null,
+      "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "slow_consumers": 0,
+      "client_stderr": ""
+    }
+  ],
+  "observations": {
+    "first_refusal": {
+      "writer_busy": true,
+      "immediate_path": true,
+      "queue_closed": false,
+      "message_limit": 64,
+      "queue_capacity_bytes": 5120,
+      "stream_id": 4,
+      "rtt_micros": 3179,
+      "congestion_window_bytes": 20536,
+      "lost_packets_counter": 118,
+      "congestion_events_counter": 12,
+      "historical_stream_data_blocked_frames": 1
+    },
+    "matched_native_passes": 3,
+    "matched_native_trials": 3,
+    "matched_quic_passes": 2,
+    "matched_quic_trials": 3
+  },
+  "interpretation": "Mean closed-loop throughput does not establish reliable paced acceptance. First refused queue had a dequeued/incomplete write, not a wholly unstarted writer. Small congestion window, loss history and prior STREAM_DATA_BLOCKED motivate distinguishing per-flow send-window/stream-credit/congestion state and scheduling at refusal. These cumulative counters do not identify the current block reason or prove a root cause. Native passed3/3 versus retainedQUIC2/3 in this fresh matched set; too few trials for a statistical failure-rate claim.",
+  "scope_limits": [
+    "Diagnostic first-event logging only; rate/CPU/RSS excluded from ordinary performance comparisons.",
+    "Busy flag proves an unfinished writer-owned record, not that its waker was promptly serviced or that it was currently transport-credit blocked.",
+    "Historical flow-control and loss counters are not time-correlated root-cause proof.",
+    "No queue/resource budgets, CC algorithms, socket limits or client code changed. Exact retained source and executable restored before tests ran from frozen diagnostic image."
+  ],
+  "reproduction_scripts": {
+    "artifacts/webtransport/reliable-overload-diagnostic.py": "import argparse, importlib.util, json, sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts')\nspec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py')\nload=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport');source=json.loads((out/'first-key-update-paced-mixed-high-stream-3.json').read_text())\nfor i in range(1,7):\n    assert not (out/f'reliable-overload-diagnostic-mixed-{i}.json').exists()\nruns=[]\nfor i in range(1,7):\n    values=dict(source['args']);values.update(server=out/'binaries/reliable-overload-diagnostic-relay',output=out/f'reliable-overload-diagnostic-mixed-{i}.json')\n    values['client']=Path(values['client']);assert load.digest(values['client'])==source['client_sha256']\n    result=load.run(argparse.Namespace(**values))\n    lines=[line for line in result['server_log'].splitlines() if 'OVERLOAD_DIAGNOSTIC first reliable queue refusal' in line]\n    assert len(lines)<=1, 'failure logging was not bounded to first observation'\n    result.update(profile_diagnostic=True,diagnostic_scope='First refusal only; no rate/CPU/RSS comparison or accepted source change.',overload_diagnostic=lines)\n    values['output'].write_text(json.dumps(result,indent=2)+'\\n')\n    runs.append({'receipt':str(values['output']),'passed':result['passed'],'error':result.get('error'),'first_refusal':lines})\n    print('OBSERVED',i,result['passed'],lines,flush=True)\n    if lines:break\n(out/'reliable-overload-diagnostic-summary.json').write_text(json.dumps(runs,indent=2)+'\\n')\n",
+    "artifacts/webtransport/retained-paced-transport-controls-20261106.py": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts')\nspec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py')\nload=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport');source=json.loads((out/'first-key-update-paced-mixed-high-stream-3.json').read_text());failures=[]\nfor i in range(1,4):\n    for mode in (['websocket','stream'] if i!=2 else ['stream','websocket']):\n        args=dict(source['args']);args.update(server=out/'binaries/ordered-ack-relay',mode=mode,output=out/f'retained-paced-transport-control-20261106-{mode}-{i}.json');args['client']=Path(args['client'])\n        assert not args['output'].exists();assert load.digest(args['client'])==source['client_sha256']\n        result=load.run(argparse.Namespace(**args))\n        print('TRANSPORT',mode,i,result['passed'],result.get('error'),flush=True)\n        if not result['passed']:failures.append(str(args['output']))\nprint('FAILURES',json.dumps(failures),flush=True)\n"
+  }
+}
