@@ -1,0 +1,1599 @@
+{
+  "status": "Rejected after complete screen; retained receive-clock baseline remains selected",
+  "decision": "reject",
+  "baseline_commit": "aba5fdf",
+  "server_images": {
+    "baseline": {
+      "path": "artifacts/webtransport/binaries/receive-clock-relay",
+      "sha256": "e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3"
+    },
+    "candidate": {
+      "path": "artifacts/webtransport/binaries/inline-assembler-relay",
+      "sha256": "22b939f92e149211f02d846b57b4d19058a04503e72ca2aa8499f22634b7ded5"
+    }
+  },
+  "source_identities": {
+    "vendor/quinn-proto/src/connection/assembler.rs": "36ddc37a9f6bb2d26413bb0a1561545e5fded6ca1b6ece91a8180cffea74cf52",
+    "vendor/quinn-sparse-streams.patch": "4a728cd0e7e635f95cbab391d6bb3f4c593be1038d289124386544ffc7b43a4b"
+  },
+  "source_diff": "diff --git a/vendor/quinn-proto/src/connection/assembler.rs b/vendor/quinn-proto/src/connection/assembler.rs\nindex cd7afec..fcf3872 100644\n--- a/vendor/quinn-proto/src/connection/assembler.rs\n+++ b/vendor/quinn-proto/src/connection/assembler.rs\n@@ -1,6 +1,6 @@\n use std::{\n     cmp::{Ordering, max},\n-    collections::{BinaryHeap, binary_heap::PeekMut},\n+    collections::BinaryHeap,\n     mem,\n };\n \n@@ -12,7 +12,7 @@ use crate::range_set::RangeSet;\n #[derive(Debug, Default)]\n pub(super) struct Assembler {\n     state: State,\n-    data: BinaryHeap<Buffer>,\n+    data: BufferStorage,\n     /// Total number of buffered bytes, including duplicates in ordered mode.\n     buffered: usize,\n     /// Estimated number of allocated bytes, will never be less than `buffered`.\n@@ -40,7 +40,7 @@ impl Assembler {\n     /// Release buffered data and its staging allocation without resetting the\n     /// consumed offset or ordering history. Used when a crypto space retires.\n     pub(super) fn discard_buffer(&mut self) {\n-        self.data = BinaryHeap::new();\n+        self.data = BufferStorage::default();\n         self.buffered = 0;\n         self.allocated = 0;\n     }\n@@ -56,7 +56,7 @@ impl Assembler {\n             }\n             let mut recvd = RangeSet::new();\n             recvd.insert(0..self.bytes_read);\n-            for chunk in &self.data {\n+            for chunk in self.data.iter() {\n                 recvd.insert(chunk.offset..chunk.offset + chunk.bytes.len() as u64);\n             }\n             self.state = State::Unordered { recvd };\n@@ -67,21 +67,18 @@ impl Assembler {\n     /// Get the the next chunk\n     pub(super) fn read(&mut self, max_length: usize, ordered: bool) -> Option<Chunk> {\n         loop {\n-            let mut chunk = self.data.peek_mut()?;\n+            if ordered && self.data.peek()?.offset > self.bytes_read {\n+                return None;\n+            }\n+            let mut chunk = self.data.pop()?;\n \n             if ordered {\n-                if chunk.offset > self.bytes_read {\n-                    // Next chunk is after current read index\n-                    return None;\n-                } else if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {\n-                    // Next chunk is useless as the read index is beyond its end\n+                if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {\n                     self.buffered -= chunk.bytes.len();\n                     self.allocated -= chunk.allocation_size;\n-                    PeekMut::pop(chunk);\n                     continue;\n                 }\n \n-                // Determine `start` and `len` of the slice of useful data in chunk\n                 let start = (self.bytes_read - chunk.offset) as usize;\n                 if start > 0 {\n                     chunk.bytes.advance(start);\n@@ -95,12 +92,13 @@ impl Assembler {\n                 let offset = chunk.offset;\n                 chunk.offset += max_length as u64;\n                 self.buffered -= max_length;\n-                Chunk::new(offset, chunk.bytes.split_to(max_length))\n+                let result = Chunk::new(offset, chunk.bytes.split_to(max_length));\n+                self.data.push(chunk);\n+                result\n             } else {\n                 self.bytes_read += chunk.bytes.len() as u64;\n                 self.buffered -= chunk.bytes.len();\n                 self.allocated -= chunk.allocation_size;\n-                let chunk = PeekMut::pop(chunk);\n                 Chunk::new(chunk.offset, chunk.bytes)\n             });\n         }\n@@ -113,7 +111,7 @@ impl Assembler {\n     fn defragment(&mut self) {\n         // Chunks smaller than min_chunk_size are merged regardless of fragmentation\n         let min_chunk_size = max(self.buffered.div_ceil(MAX_CHUNKS), MIN_RETAINED_CHUNK_SIZE);\n-        let new = BinaryHeap::with_capacity(self.data.len());\n+        let new = self.data.empty_for_compaction();\n         let old = mem::replace(&mut self.data, new);\n         let mut buffers = old.into_sorted_vec();\n         self.buffered = 0;\n@@ -244,6 +242,93 @@ impl Assembler {\n     }\n }\n \n+#[derive(Debug)]\n+enum BufferStorage {\n+    Inline(Option<Buffer>),\n+    Heap(BinaryHeap<Buffer>),\n+}\n+\n+impl Default for BufferStorage {\n+    fn default() -> Self {\n+        Self::Inline(None)\n+    }\n+}\n+\n+impl BufferStorage {\n+    fn empty_for_compaction(&self) -> Self {\n+        match self {\n+            Self::Inline(_) => Self::default(),\n+            Self::Heap(heap) => Self::Heap(BinaryHeap::with_capacity(heap.len())),\n+        }\n+    }\n+\n+    fn push(&mut self, buffer: Buffer) {\n+        match self {\n+            Self::Inline(slot) => match slot.take() {\n+                None => *slot = Some(buffer),\n+                Some(first) => *self = Self::Heap(BinaryHeap::from(vec![first, buffer])),\n+            },\n+            Self::Heap(heap) => heap.push(buffer),\n+        }\n+    }\n+\n+    fn peek(&self) -> Option<&Buffer> {\n+        match self {\n+            Self::Inline(slot) => slot.as_ref(),\n+            Self::Heap(heap) => heap.peek(),\n+        }\n+    }\n+\n+    fn pop(&mut self) -> Option<Buffer> {\n+        match self {\n+            Self::Inline(slot) => slot.take(),\n+            Self::Heap(heap) => heap.pop(),\n+        }\n+    }\n+\n+    fn len(&self) -> usize {\n+        match self {\n+            Self::Inline(slot) => usize::from(slot.is_some()),\n+            Self::Heap(heap) => heap.len(),\n+        }\n+    }\n+\n+    fn is_empty(&self) -> bool {\n+        self.len() == 0\n+    }\n+\n+    fn clear(&mut self) {\n+        // Keep a spilled heap's capacity across normal reads and stream reuse.\n+        match self {\n+            Self::Inline(slot) => *slot = None,\n+            Self::Heap(heap) => heap.clear(),\n+        }\n+    }\n+\n+    fn iter(&self) -> impl Iterator<Item = &Buffer> {\n+        let (inline, heap) = match self {\n+            Self::Inline(slot) => (slot.as_ref(), None),\n+            Self::Heap(heap) => (None, Some(heap)),\n+        };\n+        inline.into_iter().chain(heap.into_iter().flatten())\n+    }\n+\n+    fn into_sorted_vec(self) -> Vec<Buffer> {\n+        match self {\n+            Self::Inline(slot) => slot.into_iter().collect(),\n+            Self::Heap(heap) => heap.into_sorted_vec(),\n+        }\n+    }\n+\n+    #[cfg(test)]\n+    fn capacity(&self) -> usize {\n+        match self {\n+            Self::Inline(_) => 0,\n+            Self::Heap(heap) => heap.capacity(),\n+        }\n+    }\n+}\n+\n /// A chunk of data from the receive stream\n #[derive(Debug, PartialEq, Eq)]\n pub struct Chunk {\n@@ -410,6 +495,73 @@ mod test {\n         assert!(x.read(usize::MAX, true).is_none());\n     }\n \n+    #[test]\n+    fn inline_spill_partial_read_and_reuse_preserve_accounting() {\n+        let mut x = Assembler::new();\n+        x.insert(0, Bytes::from_static(b\"abcd\"), 8).unwrap();\n+        assert_eq!(x.data.capacity(), 0);\n+        assert_eq!((x.buffered, x.allocated), (4, 8));\n+        assert_eq!(x.read(1, true), Some(Chunk::new(0, Bytes::from_static(b\"a\"))));\n+        assert_eq!(x.data.capacity(), 0);\n+        assert_eq!((x.buffered, x.allocated), (3, 8));\n+        x.insert(4, Bytes::from_static(b\"ef\"), 6).unwrap();\n+        let capacity = x.data.capacity();\n+        assert!(capacity >= 2);\n+        assert_eq!((x.buffered, x.allocated), (5, 14));\n+        assert_eq!(x.read(1, true), Some(Chunk::new(1, Bytes::from_static(b\"b\"))));\n+        assert_eq!((x.buffered, x.allocated), (4, 14));\n+        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(2, Bytes::from_static(b\"cd\"))));\n+        assert_eq!((x.buffered, x.allocated), (2, 6));\n+        x.clear();\n+        assert_eq!((x.buffered, x.allocated), (0, 0));\n+        assert_eq!(x.bytes_read(), 4);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.reinit();\n+        assert_eq!(x.bytes_read(), 0);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.insert(0, Bytes::from_static(b\"abcdef\"), 6).unwrap();\n+        x.insert(2, Bytes::from_static(b\"cdefgh\"), 6).unwrap();\n+        assert_eq!(x.data.capacity(), capacity);\n+        // Advancing the first chunk past the second must restore heap ordering.\n+        assert_eq!(x.read(3, true), Some(Chunk::new(0, Bytes::from_static(b\"abc\"))));\n+        assert_eq!(x.read(2, true), Some(Chunk::new(3, Bytes::from_static(b\"de\"))));\n+        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(5, Bytes::from_static(b\"f\"))));\n+        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(6, Bytes::from_static(b\"gh\"))));\n+        assert_eq!((x.buffered, x.allocated), (0, 0));\n+        assert_eq!(x.bytes_read(), 8);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.discard_buffer();\n+        assert_eq!(x.data.capacity(), 0);\n+    }\n+\n+    #[test]\n+    fn partial_inline_clear_and_retirement_release_only_staged_ownership() {\n+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};\n+        struct Owned(Arc<AtomicUsize>);\n+        impl AsRef<[u8]> for Owned {\n+            fn as_ref(&self) -> &[u8] { b\"abcd\" }\n+        }\n+        impl Drop for Owned {\n+            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }\n+        }\n+        for retirement in [false, true] {\n+            let dropped = Arc::new(AtomicUsize::new(0));\n+            let mut x = Assembler::new();\n+            x.insert(0, Bytes::from_owner(Owned(dropped.clone())), 4).unwrap();\n+            let first = x.read(1, true).unwrap();\n+            assert_eq!(first.bytes, b\"a\"[..]);\n+            assert_eq!((x.buffered, x.allocated), (3, 4));\n+            if retirement { x.discard_buffer(); } else { x.clear(); }\n+            assert_eq!((x.buffered, x.allocated), (0, 0));\n+            assert_eq!(x.bytes_read(), 1);\n+            assert_eq!(dropped.load(SeqCst), 0);\n+            drop(first);\n+            assert_eq!(dropped.load(SeqCst), 1);\n+            x.insert(0, Bytes::from_static(b\"abcd\"), 4).unwrap();\n+            assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(1, Bytes::from_static(b\"bcd\"))));\n+        }\n+    }\n+\n     #[test]\n     fn assemble_ordered() {\n         let mut x = Assembler::new();\ndiff --git a/vendor/quinn-sparse-streams.patch b/vendor/quinn-sparse-streams.patch\nindex 3d1ca5c..88bc7a2 100644\n--- a/vendor/quinn-sparse-streams.patch\n+++ b/vendor/quinn-sparse-streams.patch\n@@ -1,24 +1,198 @@\n --- a/quinn-proto/src/connection/assembler.rs\n +++ b/quinn-proto/src/connection/assembler.rs\n-@@ -35,6 +35,14 @@\n-         *self = Self::default();\n-         self.data = old_data;\n+@@ -1,6 +1,6 @@\n+ use std::{\n+     cmp::{Ordering, max},\n+-    collections::{BinaryHeap, binary_heap::PeekMut},\n++    collections::BinaryHeap,\n+     mem,\n+ };\n+\n+@@ -12,7 +12,7 @@\n+ #[derive(Debug, Default)]\n+ pub(super) struct Assembler {\n+     state: State,\n+-    data: BinaryHeap<Buffer>,\n++    data: BufferStorage,\n+     /// Total number of buffered bytes, including duplicates in ordered mode.\n+     buffered: usize,\n+     /// Estimated number of allocated bytes, will never be less than `buffered`.\n+@@ -37,6 +37,14 @@\n          self.data.clear();\n-+    }\n-+\n+     }\n+\n +    /// Release buffered data and its staging allocation without resetting the\n +    /// consumed offset or ordering history. Used when a crypto space retires.\n +    pub(super) fn discard_buffer(&mut self) {\n-+        self.data = BinaryHeap::new();\n++        self.data = BufferStorage::default();\n +        self.buffered = 0;\n +        self.allocated = 0;\n++    }\n++\n+     pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {\n+         if ordered && !self.state.is_ordered() {\n+             return Err(IllegalOrderedRead);\n+@@ -48,7 +56,7 @@\n+             }\n+             let mut recvd = RangeSet::new();\n+             recvd.insert(0..self.bytes_read);\n+-            for chunk in &self.data {\n++            for chunk in self.data.iter() {\n+                 recvd.insert(chunk.offset..chunk.offset + chunk.bytes.len() as u64);\n+             }\n+             self.state = State::Unordered { recvd };\n+@@ -59,21 +67,18 @@\n+     /// Get the the next chunk\n+     pub(super) fn read(&mut self, max_length: usize, ordered: bool) -> Option<Chunk> {\n+         loop {\n+-            let mut chunk = self.data.peek_mut()?;\n++            if ordered && self.data.peek()?.offset > self.bytes_read {\n++                return None;\n++            }\n++            let mut chunk = self.data.pop()?;\n+\n+             if ordered {\n+-                if chunk.offset > self.bytes_read {\n+-                    // Next chunk is after current read index\n+-                    return None;\n+-                } else if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {\n+-                    // Next chunk is useless as the read index is beyond its end\n++                if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {\n+                     self.buffered -= chunk.bytes.len();\n+                     self.allocated -= chunk.allocation_size;\n+-                    PeekMut::pop(chunk);\n+                     continue;\n+                 }\n+\n+-                // Determine `start` and `len` of the slice of useful data in chunk\n+                 let start = (self.bytes_read - chunk.offset) as usize;\n+                 if start > 0 {\n+                     chunk.bytes.advance(start);\n+@@ -87,12 +92,13 @@\n+                 let offset = chunk.offset;\n+                 chunk.offset += max_length as u64;\n+                 self.buffered -= max_length;\n+-                Chunk::new(offset, chunk.bytes.split_to(max_length))\n++                let result = Chunk::new(offset, chunk.bytes.split_to(max_length));\n++                self.data.push(chunk);\n++                result\n+             } else {\n+                 self.bytes_read += chunk.bytes.len() as u64;\n+                 self.buffered -= chunk.bytes.len();\n+                 self.allocated -= chunk.allocation_size;\n+-                let chunk = PeekMut::pop(chunk);\n+                 Chunk::new(chunk.offset, chunk.bytes)\n+             });\n+         }\n+@@ -105,7 +111,7 @@\n+     fn defragment(&mut self) {\n+         // Chunks smaller than min_chunk_size are merged regardless of fragmentation\n+         let min_chunk_size = max(self.buffered.div_ceil(MAX_CHUNKS), MIN_RETAINED_CHUNK_SIZE);\n+-        let new = BinaryHeap::with_capacity(self.data.len());\n++        let new = self.data.empty_for_compaction();\n+         let old = mem::replace(&mut self.data, new);\n+         let mut buffers = old.into_sorted_vec();\n+         self.buffered = 0;\n+@@ -236,6 +242,93 @@\n      }\n+ }\n \n-     pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {\n-@@ -378,6 +386,31 @@\n++#[derive(Debug)]\n++enum BufferStorage {\n++    Inline(Option<Buffer>),\n++    Heap(BinaryHeap<Buffer>),\n++}\n++\n++impl Default for BufferStorage {\n++    fn default() -> Self {\n++        Self::Inline(None)\n++    }\n++}\n++\n++impl BufferStorage {\n++    fn empty_for_compaction(&self) -> Self {\n++        match self {\n++            Self::Inline(_) => Self::default(),\n++            Self::Heap(heap) => Self::Heap(BinaryHeap::with_capacity(heap.len())),\n++        }\n++    }\n++\n++    fn push(&mut self, buffer: Buffer) {\n++        match self {\n++            Self::Inline(slot) => match slot.take() {\n++                None => *slot = Some(buffer),\n++                Some(first) => *self = Self::Heap(BinaryHeap::from(vec![first, buffer])),\n++            },\n++            Self::Heap(heap) => heap.push(buffer),\n++        }\n++    }\n++\n++    fn peek(&self) -> Option<&Buffer> {\n++        match self {\n++            Self::Inline(slot) => slot.as_ref(),\n++            Self::Heap(heap) => heap.peek(),\n++        }\n++    }\n++\n++    fn pop(&mut self) -> Option<Buffer> {\n++        match self {\n++            Self::Inline(slot) => slot.take(),\n++            Self::Heap(heap) => heap.pop(),\n++        }\n++    }\n++\n++    fn len(&self) -> usize {\n++        match self {\n++            Self::Inline(slot) => usize::from(slot.is_some()),\n++            Self::Heap(heap) => heap.len(),\n++        }\n++    }\n++\n++    fn is_empty(&self) -> bool {\n++        self.len() == 0\n++    }\n++\n++    fn clear(&mut self) {\n++        // Keep a spilled heap's capacity across normal reads and stream reuse.\n++        match self {\n++            Self::Inline(slot) => *slot = None,\n++            Self::Heap(heap) => heap.clear(),\n++        }\n++    }\n++\n++    fn iter(&self) -> impl Iterator<Item = &Buffer> {\n++        let (inline, heap) = match self {\n++            Self::Inline(slot) => (slot.as_ref(), None),\n++            Self::Heap(heap) => (None, Some(heap)),\n++        };\n++        inline.into_iter().chain(heap.into_iter().flatten())\n++    }\n++\n++    fn into_sorted_vec(self) -> Vec<Buffer> {\n++        match self {\n++            Self::Inline(slot) => slot.into_iter().collect(),\n++            Self::Heap(heap) => heap.into_sorted_vec(),\n++        }\n++    }\n++\n++    #[cfg(test)]\n++    fn capacity(&self) -> usize {\n++        match self {\n++            Self::Inline(_) => 0,\n++            Self::Heap(heap) => heap.capacity(),\n++        }\n++    }\n++}\n++\n+ /// A chunk of data from the receive stream\n+ #[derive(Debug, PartialEq, Eq)]\n+ pub struct Chunk {\n+@@ -376,6 +469,98 @@\n+ mod test {\n+     use super::*;\n      use assert_matches::assert_matches;\n-\n-     #[test]\n++\n++    #[test]\n +    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {\n +        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};\n +        struct Owned(Arc<AtomicUsize>);\n@@ -44,9 +218,74 @@\n +    }\n +\n +    #[test]\n++    fn inline_spill_partial_read_and_reuse_preserve_accounting() {\n++        let mut x = Assembler::new();\n++        x.insert(0, Bytes::from_static(b\"abcd\"), 8).unwrap();\n++        assert_eq!(x.data.capacity(), 0);\n++        assert_eq!((x.buffered, x.allocated), (4, 8));\n++        assert_eq!(x.read(1, true), Some(Chunk::new(0, Bytes::from_static(b\"a\"))));\n++        assert_eq!(x.data.capacity(), 0);\n++        assert_eq!((x.buffered, x.allocated), (3, 8));\n++        x.insert(4, Bytes::from_static(b\"ef\"), 6).unwrap();\n++        let capacity = x.data.capacity();\n++        assert!(capacity >= 2);\n++        assert_eq!((x.buffered, x.allocated), (5, 14));\n++        assert_eq!(x.read(1, true), Some(Chunk::new(1, Bytes::from_static(b\"b\"))));\n++        assert_eq!((x.buffered, x.allocated), (4, 14));\n++        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(2, Bytes::from_static(b\"cd\"))));\n++        assert_eq!((x.buffered, x.allocated), (2, 6));\n++        x.clear();\n++        assert_eq!((x.buffered, x.allocated), (0, 0));\n++        assert_eq!(x.bytes_read(), 4);\n++        assert_eq!(x.data.capacity(), capacity);\n++        x.reinit();\n++        assert_eq!(x.bytes_read(), 0);\n++        assert_eq!(x.data.capacity(), capacity);\n++        x.insert(0, Bytes::from_static(b\"abcdef\"), 6).unwrap();\n++        x.insert(2, Bytes::from_static(b\"cdefgh\"), 6).unwrap();\n++        assert_eq!(x.data.capacity(), capacity);\n++        // Advancing the first chunk past the second must restore heap ordering.\n++        assert_eq!(x.read(3, true), Some(Chunk::new(0, Bytes::from_static(b\"abc\"))));\n++        assert_eq!(x.read(2, true), Some(Chunk::new(3, Bytes::from_static(b\"de\"))));\n++        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(5, Bytes::from_static(b\"f\"))));\n++        assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(6, Bytes::from_static(b\"gh\"))));\n++        assert_eq!((x.buffered, x.allocated), (0, 0));\n++        assert_eq!(x.bytes_read(), 8);\n++        assert_eq!(x.data.capacity(), capacity);\n++        x.discard_buffer();\n++        assert_eq!(x.data.capacity(), 0);\n++    }\n++\n++    #[test]\n++    fn partial_inline_clear_and_retirement_release_only_staged_ownership() {\n++        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};\n++        struct Owned(Arc<AtomicUsize>);\n++        impl AsRef<[u8]> for Owned {\n++            fn as_ref(&self) -> &[u8] { b\"abcd\" }\n++        }\n++        impl Drop for Owned {\n++            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }\n++        }\n++        for retirement in [false, true] {\n++            let dropped = Arc::new(AtomicUsize::new(0));\n++            let mut x = Assembler::new();\n++            x.insert(0, Bytes::from_owner(Owned(dropped.clone())), 4).unwrap();\n++            let first = x.read(1, true).unwrap();\n++            assert_eq!(first.bytes, b\"a\"[..]);\n++            assert_eq!((x.buffered, x.allocated), (3, 4));\n++            if retirement { x.discard_buffer(); } else { x.clear(); }\n++            assert_eq!((x.buffered, x.allocated), (0, 0));\n++            assert_eq!(x.bytes_read(), 1);\n++            assert_eq!(dropped.load(SeqCst), 0);\n++            drop(first);\n++            assert_eq!(dropped.load(SeqCst), 1);\n++            x.insert(0, Bytes::from_static(b\"abcd\"), 4).unwrap();\n++            assert_eq!(x.read(usize::MAX, true), Some(Chunk::new(1, Bytes::from_static(b\"bcd\"))));\n++        }\n++    }\n+\n+     #[test]\n      fn assemble_ordered() {\n-         let mut x = Assembler::new();\n-         assert_matches!(next(&mut x, 32), None);\n --- a/quinn-proto/src/connection/mod.rs\n +++ b/quinn-proto/src/connection/mod.rs\n @@ -70,9 +70,9 @@\n@@ -820,7 +1059,7 @@\n  mod state;\n  #[allow(unreachable_pub)] // fuzzing only\n  pub use state::StreamsState;\n---- /dev/null\n+--- a/quinn-proto/src/connection/streams/sparse.rs\n +++ b/quinn-proto/src/connection/streams/sparse.rs\n @@ -0,0 +1,189 @@\n +//! Preserve the logical stream map without allocating a slot for every unused\n",
+  "source_diff_receipt": {
+    "path": "artifacts/webtransport/inline-assembler-source.patch",
+    "sha256": "bfbb208a71eeb919391376f2b56da34c57748a35eab5183d73e9c04ab73d018f"
+  },
+  "hypothesis": "The ordered receive assembler usually holds at most one chunk. Inline that first Buffer to remove the persistent heap root and spill to BinaryHeap only on a second buffered chunk.",
+  "implementation": "Inline Option<Buffer> or spilled BinaryHeap. Keep spilled capacity across ordinary clear/reuse. Retirement resets storage to Inline(None). Reads pop/update/push partial chunks to preserve heap ordering and duplicate/accounting semantics. No unsafe code or new dependency.",
+  "scope": "Fixed clients and matched workloads; server change only. Requested live bytes use diagnostic replacement allocator in separate runs; ordinary RSS/CPU use non-preload capacity. All raw failed receipts are retained. No kernel bytes are inferred from process RSS.",
+  "validation": {
+    "proto-tests": {
+      "path": "artifacts/webtransport/inline-assembler-proto-tests.log",
+      "sha256": "853f52ee58f80aae1457a5fcbb58263e8d45e18054c0397f57135c11d5763515",
+      "results": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.65s",
+        "test result: ok. 323 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s"
+      ]
+    },
+    "root-tests": {
+      "path": "artifacts/webtransport/inline-assembler-root-tests.log",
+      "sha256": "61dfea0a5e81242bc111d1aff53f716ffe7f64a37b60b8fd32701c29136c4fac",
+      "results": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.90s",
+        "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.85s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.51s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.24s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    "clippy": {
+      "path": "artifacts/webtransport/inline-assembler-clippy.log",
+      "sha256": "455a165112ed377aee216624f2f68502ca0a8ea380eae0081e7156c62292a425",
+      "results": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.06s"
+      ]
+    },
+    "build": {
+      "path": "artifacts/webtransport/inline-assembler-build.log",
+      "sha256": "f26fe3e3ce13deacd1f9db96c68350092d5deeda8fed36ea8db936ccadf635c4",
+      "results": [
+        "    Finished `release` profile [optimized] target(s) in 16.04s"
+      ]
+    },
+    "totals": {
+      "proto_passed": 323,
+      "root_passed": 253,
+      "root_existing_ignored": 1
+    }
+  },
+  "ordinary_capacity_100000": {
+    "baseline": {
+      "path": "artifacts/webtransport/receive-clock-capacity-receive-clock-1.json",
+      "sha256": "f755c5190283aa4b8cd2245c027e7e88b78687d19aeeb4570651788032e49aaf",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "setup_seconds": 10.738541922,
+      "connected_gate_wall_seconds": 10.763827506976668,
+      "phase_server_rss_mib": {
+        "connected": 2060.82421875,
+        "ready": 2080.45703125,
+        "measured": 2083.546875,
+        "postcheck": 2087.33984375,
+        "done": 2087.33984375
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265000353043433,
+        "server_cpu_seconds": 6.009999999999998,
+        "client_cpu_seconds": 6.819999999999997,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99696.02154641584,
+        "server_user_cpu_seconds": 4.940000000000001,
+        "server_system_cpu_seconds": 1.0700000000000003,
+        "round_trip": {
+          "max_ms": 3.319236,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.030592,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "cleanup_checked": {
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_channels": 1
+      }
+    },
+    "candidate": {
+      "path": "artifacts/webtransport/inline-assembler-capacity-candidate-1.json",
+      "sha256": "96228f311eacc12178bb3f340b7804c5ceebcee90fb4fcd8cbe819d085d8a485",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "setup_seconds": 10.465281805,
+      "connected_gate_wall_seconds": 10.491091692994814,
+      "phase_server_rss_mib": {
+        "connected": 2004.33984375,
+        "ready": 2025.1015625,
+        "measured": 2027.99609375,
+        "postcheck": 2031.4921875,
+        "done": 2030.6484375
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.272699182038195,
+        "server_cpu_seconds": 5.920000000000002,
+        "client_cpu_seconds": 6.790000000000003,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99679.9977269372,
+        "server_user_cpu_seconds": 4.890000000000001,
+        "server_system_cpu_seconds": 1.0299999999999994,
+        "round_trip": {
+          "max_ms": 3.202925,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.229264,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "cleanup_checked": {
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_channels": 1
+      }
+    }
+  },
+  "ordinary_ready_rss_saving_mib": 55.35546875,
+  "separate_live_allocation_capture": {
+    "baseline": {
+      "receipt": {
+        "path": "artifacts/webtransport/inline-assembler-heap-baseline.json",
+        "sha256": "c08d9431df7d9cd39213f10bc6445470c55678e386a6e359b935235dccfbb038"
+      },
+      "phases": {
+        "ready": {
+          "path": "artifacts/webtransport/inline-assembler-heap-baseline-ready-sites.json",
+          "sha256": "b25043b3d93c61f9f4da6734ef1f9858fa84cbbb7501bc0b052cabea7f8482a9",
+          "requested_live_bytes": 2018467661,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-heap-baseline_727061.0002.heap",
+          "heap_sha256": "21e588c1737005662637b34f38e47006918ad9ce65a4962578e7394e6e42dd8b",
+          "top_sites": [
+            {
+              "offset": "0x251f60",
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 100000,
+              "bytes": 534400000,
+              "mean_bytes": 5344.0
+            },
+            {
+              "offset": "0x3a6d59",
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+              "location": "??:?",
+              "objects": 400054,
+              "bytes": 230431104,
+              "mean_bytes": 576.0
+            },
+            {
+              "offset": "0x588262",
+              "function": "war_relay::main::{{closure}}",
+              "location": "war_relay.dda031fd2e8ee20-cgu.0:?",
+              "objects": 100000,
+              "bytes": 192000000,
+              "mean_bytes": 1920.0
+            },
+            {
+              "offset": "0x2b85c7",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 1100000,
+              "bytes": 179200000,
+              "mean_bytes": 162.9090909090909
+            },
+            {
+              "offset": "0x2c5a9b",
+              "function": "<quinn_proto::crypto::rustls::QuicServerConfig as quinn_proto::crypto::ServerConfig>::start_session",
+              "location": "??:?",
+              "objects": 100000,
+              "bytes": 103200000,
+              "mean_bytes": 1032.0
+            },
+            {
+              "offset": "0x2c6af4",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 400005,
+              "bytes": 101233812,
+              "mean_bytes": 253.08136648291895
+            },
+            {
+              "offset": "0x57446c",
+              "function": "war_relay::webtransport::serve::{{closure}}::{{closure}}",
+              "location": "war_relay.dda031fd2e8ee20-cgu.0:?",
+              "objects": 100000,
+              "bytes": 79200000,
+              "mean_bytes": 792.0
+            },
+            {
+              "offset": "0x595e21",
+              "function": "web_transport_quinn::session::Session::new",
+              "location": "??:?",
+              "objects": 100000,
+              "bytes": 51200000,
+              "mean_bytes": 512.0
+            },
+            {
+              "offset": "0x3a6f31",
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::header_protection_key",
+              "location": "??:?",
+              "objects": 200000,
+              "bytes": 51200000,
+              "mean_bytes": 256.0
+            },
+            {
+              "offset": "0x279e77",
+              "function": "quinn_proto::connection::Connection::process_payload",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 300000,
+              "bytes": 40800000,
+              "mean_bytes": 136.0
+            },
+            {
+              "offset": "0x28cacf",
+              "function": "quinn_proto::connection::streams::SendStream::write",
+              "location": "??:?",
+              "objects": 200000,
+              "bytes": 32000000,
+              "mean_bytes": 160.0
+            },
+            {
+              "offset": "0x251994",
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 100000,
+              "bytes": 29600000,
+              "mean_bytes": 296.0
+            }
+          ]
+        },
+        "done": {
+          "path": "artifacts/webtransport/inline-assembler-heap-baseline-done-sites.json",
+          "sha256": "409d8fa94dd6d54fc3ffb457878a6e1e241146cbe3d1eee26fb7c0820fc19a84",
+          "requested_live_bytes": 71150651,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-heap-baseline_727061.0005.heap",
+          "heap_sha256": "76ec13cdfebe1a31370c701c2175512289d9098d5f176849a336b08b533410cc",
+          "top_sites": [
+            {
+              "offset": "0x2c6af4",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 4,
+              "bytes": 41156996,
+              "mean_bytes": 10289249.0
+            },
+            {
+              "offset": "0x2b85d9",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 9,
+              "bytes": 22039456,
+              "mean_bytes": 2448828.4444444445
+            },
+            {
+              "offset": "0x252ff7",
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 3014656,
+              "mean_bytes": 3014656.0
+            },
+            {
+              "offset": "0x260864",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 1,
+              "bytes": 2228240,
+              "mean_bytes": 2228240.0
+            },
+            {
+              "offset": "0x4a9396",
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "location": "war_relay.8a973a89955a6360-cgu.0:?",
+              "objects": 2,
+              "bytes": 1327376,
+              "mean_bytes": 663688.0
+            },
+            {
+              "offset": "0x24d257",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 744,
+              "bytes": 619008,
+              "mean_bytes": 832.0
+            },
+            {
+              "offset": "0x24d269",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 54,
+              "bytes": 112992,
+              "mean_bytes": 2092.4444444444443
+            },
+            {
+              "offset": "0x4d710d",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "war_relay.8a973a89955a6360-cgu.0:?",
+              "objects": 174,
+              "bytes": 95864,
+              "mean_bytes": 550.9425287356322
+            },
+            {
+              "offset": "0x4d0183",
+              "function": "<war_relay::relay::messages::MessageFanouts as core::default::Default>::default",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 73864,
+              "mean_bytes": 73864.0
+            },
+            {
+              "offset": "0x253059",
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 65536,
+              "mean_bytes": 65536.0
+            },
+            {
+              "offset": "0x3bb43d",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "rustls.273bbb2001a55490-cgu.0:?",
+              "objects": 1,
+              "bytes": 50192,
+              "mean_bytes": 50192.0
+            },
+            {
+              "offset": "0x4ee8f8",
+              "function": "war_relay::relay::Channel::new",
+              "location": "war_relay.8a973a89955a6360-cgu.0:?",
+              "objects": 171,
+              "bytes": 34200,
+              "mean_bytes": 200.0
+            }
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "receipt": {
+        "path": "artifacts/webtransport/inline-assembler-heap-candidate.json",
+        "sha256": "e667b16e5fed710332126753ca8e03fb6183ac401381c992857b52167e35ce85"
+      },
+      "phases": {
+        "ready": {
+          "path": "artifacts/webtransport/inline-assembler-heap-candidate-ready-sites.json",
+          "sha256": "548df6f41338ab2883cfafc1a597ad7bff33a90a335d160972986f7e0e6c21ba",
+          "requested_live_bytes": 1963888112,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-heap-candidate_727107.0002.heap",
+          "heap_sha256": "eff168a53e73332c581fc530480163d398422e5ee5c1368b705cddf925652b44",
+          "top_sites": [
+            {
+              "offset": "0x251de0",
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 100000,
+              "bytes": 537600000,
+              "mean_bytes": 5376.0
+            },
+            {
+              "offset": "0x3a6f19",
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+              "location": "??:?",
+              "objects": 400020,
+              "bytes": 230411520,
+              "mean_bytes": 576.0
+            },
+            {
+              "offset": "0x588422",
+              "function": "war_relay::main::{{closure}}",
+              "location": "war_relay.dda031fd2e8ee20-cgu.0:?",
+              "objects": 100000,
+              "bytes": 192000000,
+              "mean_bytes": 1920.0
+            },
+            {
+              "offset": "0x2b8787",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 800000,
+              "bytes": 112000000,
+              "mean_bytes": 140.0
+            },
+            {
+              "offset": "0x2c5c5b",
+              "function": "<quinn_proto::crypto::rustls::QuicServerConfig as quinn_proto::crypto::ServerConfig>::start_session",
+              "location": "??:?",
+              "objects": 100000,
+              "bytes": 103200000,
+              "mean_bytes": 1032.0
+            },
+            {
+              "offset": "0x2c6cb4",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 400005,
+              "bytes": 101233812,
+              "mean_bytes": 253.08136648291895
+            },
+            {
+              "offset": "0x57462c",
+              "function": "war_relay::webtransport::serve::{{closure}}::{{closure}}",
+              "location": "war_relay.dda031fd2e8ee20-cgu.0:?",
+              "objects": 100000,
+              "bytes": 79200000,
+              "mean_bytes": 792.0
+            },
+            {
+              "offset": "0x595fe1",
+              "function": "web_transport_quinn::session::Session::new",
+              "location": "??:?",
+              "objects": 100000,
+              "bytes": 51200000,
+              "mean_bytes": 512.0
+            },
+            {
+              "offset": "0x3a70f1",
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::header_protection_key",
+              "location": "??:?",
+              "objects": 200000,
+              "bytes": 51200000,
+              "mean_bytes": 256.0
+            },
+            {
+              "offset": "0x279dea",
+              "function": "quinn_proto::connection::Connection::process_payload",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 300000,
+              "bytes": 50400000,
+              "mean_bytes": 168.0
+            },
+            {
+              "offset": "0x28ca3f",
+              "function": "quinn_proto::connection::streams::SendStream::write",
+              "location": "??:?",
+              "objects": 200000,
+              "bytes": 32000000,
+              "mean_bytes": 160.0
+            },
+            {
+              "offset": "0x251814",
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 100000,
+              "bytes": 29600000,
+              "mean_bytes": 296.0
+            }
+          ]
+        },
+        "done": {
+          "path": "artifacts/webtransport/inline-assembler-heap-candidate-done-sites.json",
+          "sha256": "cae1098ec61bcff8e6d04a4aec84b475f5b2a14d1fd33328e24b513b00be9405",
+          "requested_live_bytes": 70984348,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-heap-candidate_727107.0005.heap",
+          "heap_sha256": "367463dba1694eaa4b3d9c256cdd49d1dbfc001cea436fff9a717fc5fb12223c",
+          "top_sites": [
+            {
+              "offset": "0x2c6cb4",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 4,
+              "bytes": 41156996,
+              "mean_bytes": 10289249.0
+            },
+            {
+              "offset": "0x2b8799",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+              "objects": 8,
+              "bytes": 22037056,
+              "mean_bytes": 2754632.0
+            },
+            {
+              "offset": "0x252e77",
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 3014656,
+              "mean_bytes": 3014656.0
+            },
+            {
+              "offset": "0x2606e4",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 1,
+              "bytes": 2228240,
+              "mean_bytes": 2228240.0
+            },
+            {
+              "offset": "0x4a9556",
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "location": "war_relay.8a973a89955a6360-cgu.0:?",
+              "objects": 2,
+              "bytes": 1327376,
+              "mean_bytes": 663688.0
+            },
+            {
+              "offset": "0x24d107",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 570,
+              "bytes": 474240,
+              "mean_bytes": 832.0
+            },
+            {
+              "offset": "0x24d119",
+              "function": "alloc::raw_vec::finish_grow",
+              "location": "quinn.529f723b385a6b01-cgu.0:?",
+              "objects": 52,
+              "bytes": 110400,
+              "mean_bytes": 2123.076923076923
+            },
+            {
+              "offset": "0x4d72cd",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "war_relay.8a973a89955a6360-cgu.0:?",
+              "objects": 142,
+              "bytes": 77944,
+              "mean_bytes": 548.9014084507043
+            },
+            {
+              "offset": "0x4d0343",
+              "function": "<war_relay::relay::messages::MessageFanouts as core::default::Default>::default",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 73864,
+              "mean_bytes": 73864.0
+            },
+            {
+              "offset": "0x252ed9",
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 65536,
+              "mean_bytes": 65536.0
+            },
+            {
+              "offset": "0x3bb5fd",
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "location": "rustls.273bbb2001a55490-cgu.0:?",
+              "objects": 1,
+              "bytes": 50192,
+              "mean_bytes": 50192.0
+            },
+            {
+              "offset": "0x44759b",
+              "function": "<tracing_subscriber::registry::sharded::Registry as core::default::Default>::default",
+              "location": "??:?",
+              "objects": 1,
+              "bytes": 32768,
+              "mean_bytes": 32768.0
+            }
+          ]
+        }
+      }
+    }
+  },
+  "requested_live_ready_saving": {
+    "bytes": 54579549,
+    "mib": 52.051114082336426,
+    "percent": 2.7040090884071883
+  },
+  "allocation_interpretation": "Net totals already include larger embedded assembler state. Leading100000 connection allocations increase5344\u21925376bytes each (+3.2MB). Proto raw_vec site loses300000 objects and67.2MB, but inline state also enlarges receive structures. This is persistent-live-site evidence, not a count of per-message allocations. Logical done residual does not alone establish a leak.",
+  "long_reliable_throughput": {
+    "cases": {
+      "private": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-baseline-1.json",
+              "sha256": "e13124f2916ba6039ca1c91c61e9b6f01fe307dd46dcd0aa7ef4fcaeb0864eaf",
+              "passed": true,
+              "verified_received_deliveries": 18461088,
+              "elapsed_seconds": 12.000281109,
+              "verified_received_per_second": 1538387.9621081967,
+              "server_cpu_seconds": 40.260000000000005,
+              "client_cpu_seconds": 56.949999999999996,
+              "private_round_trip": {
+                "max_ms": 3.457695,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1538387.9621081967,
+                "verified": 18461088
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-baseline-2.json",
+              "sha256": "885c40d3315236f050a15b7940426b5287aa1325aad24c0377fffcc5078c2639",
+              "passed": true,
+              "verified_received_deliveries": 17921008,
+              "elapsed_seconds": 12.00035523,
+              "verified_received_per_second": 1493373.125755378,
+              "server_cpu_seconds": 39.980000000000004,
+              "client_cpu_seconds": 60.17,
+              "private_round_trip": {
+                "max_ms": 3.204072,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1493373.125755378,
+                "verified": 17921008
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-baseline-3.json",
+              "sha256": "91d149c7210247ceb697303b47a1bd881d07af2ed4335a23d4d6498a1d450fee",
+              "passed": true,
+              "verified_received_deliveries": 17876080,
+              "elapsed_seconds": 12.000316884,
+              "verified_received_per_second": 1489633.996568386,
+              "server_cpu_seconds": 40.03,
+              "client_cpu_seconds": 59.330000000000005,
+              "private_round_trip": {
+                "max_ms": 4.214325,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1489633.996568386,
+                "verified": 17876080
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1493373.125755378
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-candidate-1.json",
+              "sha256": "ac49c1361a7200996a4d03f530061a9ceac2aaf49cbe0387a74b1941341b676c",
+              "passed": true,
+              "verified_received_deliveries": 17818592,
+              "elapsed_seconds": 12.000313744,
+              "verified_received_per_second": 1484843.8449293931,
+              "server_cpu_seconds": 40.160000000000004,
+              "client_cpu_seconds": 60.910000000000004,
+              "private_round_trip": {
+                "max_ms": 3.423356,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1484843.8449293931,
+                "verified": 17818592
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-candidate-2.json",
+              "sha256": "af9b3490069b1770a7ebd518d9e0088a167149aa0657bdd6563b3b62d67d98ba",
+              "passed": true,
+              "verified_received_deliveries": 17609008,
+              "elapsed_seconds": 12.000373982,
+              "verified_received_per_second": 1467371.602452781,
+              "server_cpu_seconds": 40.02,
+              "client_cpu_seconds": 59.43,
+              "private_round_trip": {
+                "max_ms": 2.53985,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1467371.602452781,
+                "verified": 17609008
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-private-candidate-3.json",
+              "sha256": "4f407201d8b240df5bd8bc1226211117a1749c49965044c5e58867c7414a1f91",
+              "passed": true,
+              "verified_received_deliveries": 17681472,
+              "elapsed_seconds": 12.000268224,
+              "verified_received_per_second": 1473423.0660476277,
+              "server_cpu_seconds": 40.15,
+              "client_cpu_seconds": 60.67,
+              "private_round_trip": {
+                "max_ms": 3.947912,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1473423.0660476277,
+                "verified": 17681472
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1473423.0660476277
+        },
+        "candidate_median_percent_change": -1.3359059007881369
+      },
+      "roomonly": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-baseline-1.json",
+              "sha256": "ac788fc5f61b8cc56aa935dc2e73c15ae6bffd995636a5e9136f674c4578120d",
+              "passed": true,
+              "verified_received_deliveries": 19935232,
+              "elapsed_seconds": 12.001250381,
+              "verified_received_per_second": 1661096.24973418,
+              "server_cpu_seconds": 36.47,
+              "client_cpu_seconds": 57.3,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.756701,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1661096.24973418,
+                "verified": 19935232
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-baseline-2.json",
+              "sha256": "e217537f2331ac815a90299428afc1af973cede111d4d9b518d760781ec0aa27",
+              "passed": true,
+              "verified_received_deliveries": 20144128,
+              "elapsed_seconds": 12.001254403,
+              "verified_received_per_second": 1678501.8735178628,
+              "server_cpu_seconds": 36.440000000000005,
+              "client_cpu_seconds": 57.45,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.414354,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1678501.8735178628,
+                "verified": 20144128
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-baseline-3.json",
+              "sha256": "8658e884cf5dba68632010199c53522d18168a7a5137b2feb6194922bfa954b4",
+              "passed": true,
+              "verified_received_deliveries": 19783680,
+              "elapsed_seconds": 12.00229733,
+              "verified_received_per_second": 1648324.4379015898,
+              "server_cpu_seconds": 36.25,
+              "client_cpu_seconds": 58.46,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.513937,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1648324.4379015898,
+                "verified": 19783680
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1661096.24973418
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-candidate-1.json",
+              "sha256": "d885d29833860c7414f043a65df2bb91ea033dbd2d69e57944043d13f7960592",
+              "passed": true,
+              "verified_received_deliveries": 19525632,
+              "elapsed_seconds": 12.002400644,
+              "verified_received_per_second": 1626810.5505843835,
+              "server_cpu_seconds": 36.0,
+              "client_cpu_seconds": 58.38,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.742875,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1626810.5505843835,
+                "verified": 19525632
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-candidate-2.json",
+              "sha256": "5ae71cfd19acfe3268d7ba22c108dbe0927f0e7658b1ecd041cff3dc7eb8f4f6",
+              "passed": true,
+              "verified_received_deliveries": 19337216,
+              "elapsed_seconds": 12.000929922,
+              "verified_received_per_second": 1611309.8006306316,
+              "server_cpu_seconds": 36.31,
+              "client_cpu_seconds": 56.669999999999995,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.65172,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1611309.8006306316,
+                "verified": 19337216
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-roomonly-candidate-3.json",
+              "sha256": "f655d2cee1dc47d0c1cf901473237b2ab1760d312acd446df5d29f776c61f533",
+              "passed": true,
+              "verified_received_deliveries": 19832832,
+              "elapsed_seconds": 12.001055139,
+              "verified_received_per_second": 1652590.6905926098,
+              "server_cpu_seconds": 36.510000000000005,
+              "client_cpu_seconds": 57.54,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.904784,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1652590.6905926098,
+                "verified": 19832832
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1626810.5505843835
+        },
+        "candidate_median_percent_change": -2.064040488640151
+      },
+      "mixed": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-baseline-1.json",
+              "sha256": "0cd379397d1b6c84358db6354ec6e9de0179254e14fd6a075bd777851789e9be",
+              "passed": true,
+              "verified_received_deliveries": 19519920,
+              "elapsed_seconds": 12.001129026,
+              "verified_received_per_second": 1626506.969278542,
+              "server_cpu_seconds": 39.97,
+              "client_cpu_seconds": 62.39,
+              "private_round_trip": {
+                "max_ms": 5.723593,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 368470.66558652633,
+                "verified": 4422064
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.37443,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1258036.3036920158,
+                "verified": 15097856
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-baseline-2.json",
+              "sha256": "d4d100804f73f4bc6486c7a7e6dd0fb8e28e69e37c52f1c3f7ca85d59d3be704",
+              "passed": true,
+              "verified_received_deliveries": 19328480,
+              "elapsed_seconds": 12.002695901,
+              "verified_received_per_second": 1610344.8891335868,
+              "server_cpu_seconds": 40.08,
+              "client_cpu_seconds": 62.39,
+              "private_round_trip": {
+                "max_ms": 6.093303,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 369535.64737322595,
+                "verified": 4435424
+              },
+              "fanout_round_trip": {
+                "max_ms": 9.328075,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1240809.2417603608,
+                "verified": 14893056
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-baseline-3.json",
+              "sha256": "4fd33512c88e94119a66481e9abc2e597d939c6f0720e1ed5fa22d1c278121e1",
+              "passed": true,
+              "verified_received_deliveries": 19572944,
+              "elapsed_seconds": 12.001718616,
+              "verified_received_per_second": 1630845.100293093,
+              "server_cpu_seconds": 39.69,
+              "client_cpu_seconds": 63.04,
+              "private_round_trip": {
+                "max_ms": 4.996824,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 360243.0733741842,
+                "verified": 4323536
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.533559,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1270602.0269189088,
+                "verified": 15249408
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1626506.969278542
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-candidate-1.json",
+              "sha256": "799b346119bfdea42e0208e4c532407fcb1ee5698f39614acad43f504738283e",
+              "passed": true,
+              "verified_received_deliveries": 19183952,
+              "elapsed_seconds": 12.002339634,
+              "verified_received_per_second": 1598351.0369641653,
+              "server_cpu_seconds": 39.93,
+              "client_cpu_seconds": 62.89,
+              "private_round_trip": {
+                "max_ms": 6.699095,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 358870.0312894345,
+                "verified": 4307280
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.379439,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1239481.0056747308,
+                "verified": 14876672
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-candidate-2.json",
+              "sha256": "73743eb37bcc3302ced2a35b6b632e9961912384eab315f9ff3c58ce28ed4a6a",
+              "passed": true,
+              "verified_received_deliveries": 18912160,
+              "elapsed_seconds": 12.002190936,
+              "verified_received_per_second": 1575725.6404973427,
+              "server_cpu_seconds": 38.92,
+              "client_cpu_seconds": 63.42,
+              "private_round_trip": {
+                "max_ms": 5.85344,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 333499.1103994215,
+                "verified": 4002720
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.566722,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1242226.5300979211,
+                "verified": 14909440
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-assembler-long-mixed-candidate-3.json",
+              "sha256": "a5cb8697e8b6f6f1290be9d6b8cc661afd80c48b38d3b83e6cf3824a30aab74b",
+              "passed": true,
+              "verified_received_deliveries": 19227632,
+              "elapsed_seconds": 12.002062076,
+              "verified_received_per_second": 1602027.3748165874,
+              "server_cpu_seconds": 39.44,
+              "client_cpu_seconds": 64.28,
+              "private_round_trip": {
+                "max_ms": 5.945668,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 340676.12499490625,
+                "verified": 4088816
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.926499,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1261351.249821681,
+                "verified": 15138816
+              }
+            }
+          ],
+          "median_verified_received_per_second": 1598351.0369641653
+        },
+        "candidate_median_percent_change": -1.7310674252361657
+      }
+    },
+    "scope": "Three rotated-order12second repeats per private/room/mixed case; serverCPU0-3/client8-15. Aggregate verified received healthy+fanout deliveries; diagnostics excluded from ordinary medians. Partial medians are provisional while missing receipts remain."
+  },
+  "paced_reliable_controls": {
+    "runs": [
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-baseline-1.json",
+        "sha256": "5ff09365e06142cb2260c2a090a2de665930c01f6f2db01aec3a275d440e0450",
+        "variant": "baseline",
+        "passed": true,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "measurement": {
+          "elapsed_seconds": 5.004242366,
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.3,
+          "server_cpu_cores_observation": 2.6577449746166035,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.63,
+          "client_cpu_cores_observation": 4.122502167394024,
+          "client_timed_udp_receive_drops": 375,
+          "private": {
+            "arrival_age": {
+              "max_ms": 12.664535,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023999
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023999,
+            "generated_source_updates": 1023999,
+            "generation_lag": {
+              "max_ms": 1.374285,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023999
+            },
+            "last_submit_ms": 3999.991952,
+            "not_generated": 1,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 1008,
+            "received_during_offer": 1022991,
+            "scheduled_arrival_age": {
+              "max_ms": 13.594685,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023999
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255747.75,
+            "verified_unique": 1023999
+          },
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 20.974439,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.193,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 2.097152,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.915184,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 5094,
+            "received_during_offer": 4090906,
+            "scheduled_arrival_age": {
+              "max_ms": 20.97892,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1022726.5,
+            "verified_unique": 4096000
+          }
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-baseline-2.json",
+        "sha256": "2851adeaedc0517467c003087beed13a2c1c390868766974f583dea967929553",
+        "variant": "baseline",
+        "passed": false,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "error": "RuntimeError('client EOF before final gate')",
+        "last_server_metrics": {
+          "war_quic_connections": 1088,
+          "war_datagrams_received": 0,
+          "war_datagrams_submitted": 0,
+          "war_datagram_bytes_submitted": 0,
+          "war_datagrams_dropped": 0,
+          "war_datagrams_oversized": 0,
+          "war_read_buffer_reserved_bytes": 0,
+          "war_read_buffer_peak_reserved_bytes": 45628,
+          "war_read_buffer_limit_bytes": 1073741824,
+          "war_read_buffer_reservations_rejected_total": 0,
+          "war_accept_errors_total": 0,
+          "war_setup_errors_total": 0,
+          "war_ip_rejected_total": 0,
+          "war_read_buffer_reclaims_total": 0,
+          "war_read_buffer_reclaim_header_bytes_total": 0,
+          "war_read_buffer_reclaims_deferred_total": 0,
+          "war_idle_timeouts_total": 0,
+          "war_unstarted_writes_cancelled_total": 0,
+          "war_routing_reused_bytes_total": 1051352224,
+          "war_routing_copied_bytes_total": 0,
+          "war_write_timeouts_total": 0,
+          "war_write_errors_total": 106,
+          "war_aborted_writes_total": 0,
+          "war_close_failures_total": 0,
+          "war_transport_disconnects_total": 0,
+          "war_global_pressure_total": 0,
+          "war_accepted_total": 1089,
+          "war_rejected_total": 0,
+          "war_origin_rejected_total": 0,
+          "war_handshake_errors_total": 0,
+          "war_joined_total": 1089,
+          "war_join_rejected_total": 0,
+          "war_disconnected_total": 382,
+          "war_incoming_messages_total": 1027672,
+          "war_incoming_bytes_total": 1065695864,
+          "war_deliveries_total": 5180614,
+          "war_delivered_bytes_total": 5305059144,
+          "war_slow_consumers_total": 943,
+          "war_protocol_errors_total": 0,
+          "war_rate_limited_total": 0,
+          "war_variable_bytes": 0,
+          "war_connections": 707,
+          "war_sessions": 707,
+          "war_channels": 4,
+          "war_queued_bytes": 0,
+          "war_draining": 0,
+          "war_native_connection_slots": 0,
+          "war_output_queue_capacity_bytes": 3609600,
+          "war_output_queue_peak_capacity_bytes": 0
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-baseline-3.json",
+        "sha256": "c5df01692d36471f7ceedad8e2566faa8c62f5cefaf3db01df89534da8578e80",
+        "variant": "baseline",
+        "passed": true,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "measurement": {
+          "elapsed_seconds": 5.005055018,
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.280000000000001,
+          "server_cpu_cores_observation": 2.653317486469237,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.45,
+          "client_cpu_cores_observation": 4.085869171558425,
+          "client_timed_udp_receive_drops": 3561,
+          "private": {
+            "arrival_age": {
+              "max_ms": 49.907403,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 16.777216,
+              "samples": 1024000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1024000,
+            "generated_source_updates": 1024000,
+            "generation_lag": {
+              "max_ms": 1.429102,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1024000
+            },
+            "last_submit_ms": 3999.984688,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 249,
+            "received_during_offer": 1023751,
+            "scheduled_arrival_age": {
+              "max_ms": 50.341617,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 16.777216,
+              "samples": 1024000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255937.75,
+            "verified_unique": 1024000
+          },
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 78.050877,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.390723,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 2.097152,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.892391,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2778,
+            "received_during_offer": 4093222,
+            "scheduled_arrival_age": {
+              "max_ms": 78.219219,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023305.5,
+            "verified_unique": 4096000
+          }
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-candidate-1.json",
+        "sha256": "e7e9971839e0e8c24b74a34a597ee1dc8233b54cb569903e21df2326b91a8add",
+        "variant": "candidate",
+        "passed": true,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "measurement": {
+          "elapsed_seconds": 5.006227092,
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.32,
+          "server_cpu_cores_observation": 2.660686332285144,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.53,
+          "client_cpu_cores_observation": 4.100892672808859,
+          "client_timed_udp_receive_drops": 10539,
+          "private": {
+            "arrival_age": {
+              "max_ms": 18.725111,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023979
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023979,
+            "generated_source_updates": 1023979,
+            "generation_lag": {
+              "max_ms": 1.358126,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023979
+            },
+            "last_submit_ms": 3999.940496,
+            "not_generated": 21,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 432,
+            "received_during_offer": 1023547,
+            "scheduled_arrival_age": {
+              "max_ms": 19.612582,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023979
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255886.75,
+            "verified_unique": 1023979
+          },
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 60.795956,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.189721,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 1.048576,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.870308,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2144,
+            "received_during_offer": 4093856,
+            "scheduled_arrival_age": {
+              "max_ms": 61.803865,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023464.0,
+            "verified_unique": 4096000
+          }
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-candidate-2.json",
+        "sha256": "989a2c43e9d193fd5721d1524afaea9a8c5ba3454a809765a46f5e2fd9144370",
+        "variant": "candidate",
+        "passed": true,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "measurement": {
+          "elapsed_seconds": 5.004148306,
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.25,
+          "server_cpu_cores_observation": 2.6478032204027966,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 19.869999999999997,
+          "client_cpu_cores_observation": 3.9707056595776273,
+          "client_timed_udp_receive_drops": 12476,
+          "private": {
+            "arrival_age": {
+              "max_ms": 58.254865,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 33.554432,
+              "samples": 1023791
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023791,
+            "generated_source_updates": 1023791,
+            "generation_lag": {
+              "max_ms": 1.36874,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023791
+            },
+            "last_submit_ms": 3999.166307,
+            "not_generated": 209,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 300,
+            "received_during_offer": 1023491,
+            "scheduled_arrival_age": {
+              "max_ms": 58.456466,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 33.554432,
+              "samples": 1023791
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255872.75,
+            "verified_unique": 1023791
+          },
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 58.338063,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 0.49651,
+              "p50_upper_ms": 0.131072,
+              "p99_upper_ms": 0.262144,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.143808,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2044,
+            "received_during_offer": 4093956,
+            "scheduled_arrival_age": {
+              "max_ms": 58.424273,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023489.0,
+            "verified_unique": 4096000
+          }
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-assembler-paced-mixed-candidate-3.json",
+        "sha256": "3f7a597b385c76b4ff7a98e5e8eb882e0663c62ec8a61a010c30d29784198bc7",
+        "variant": "candidate",
+        "passed": true,
+        "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "measurement": {
+          "elapsed_seconds": 5.004567368,
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.23,
+          "server_cpu_cores_observation": 2.6435851547517824,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 19.92,
+          "client_cpu_cores_observation": 3.980364042528761,
+          "client_timed_udp_receive_drops": 1981,
+          "private": {
+            "arrival_age": {
+              "max_ms": 40.572737,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023943
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023943,
+            "generated_source_updates": 1023943,
+            "generation_lag": {
+              "max_ms": 1.254835,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023943
+            },
+            "last_submit_ms": 4000.000227,
+            "not_generated": 57,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 293,
+            "received_during_offer": 1023650,
+            "scheduled_arrival_age": {
+              "max_ms": 40.758788,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023943
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255912.5,
+            "verified_unique": 1023943
+          },
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 61.4016,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.216329,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 2.097152,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.923519,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2993,
+            "received_during_offer": 4093007,
+            "scheduled_arrival_age": {
+              "max_ms": 62.360623,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023251.75,
+            "verified_unique": 4096000
+          }
+        }
+      }
+    ],
+    "passes_by_variant": {
+      "baseline": 2,
+      "candidate": 3
+    },
+    "scope": "Identical frozen offered-load client and original resource budgets; failed trials remain failures, not discarded or replaced."
+  },
+  "decision_rationale": "Reject despite a real52.05MiB requested-live saving: all three repeated whole-workload throughput medians regress (private,room,mixed). The paced baseline failure is preserved separately; candidate3/3 versus baseline2/3 does not establish a failure-rate advantage. Keep retained receive-clock baseline aba5fdf/e1ac. Full throughput and memory parity remains unmet.",
+  "missing_comparison_receipts": [],
+  "failed_comparison_receipts": [
+    "artifacts/webtransport/inline-assembler-paced-mixed-baseline-2.json"
+  ],
+  "reproduction_scripts": {
+    "artifacts/webtransport/inline-assembler-memory-screen.py": {
+      "sha256": "f1ea7a7cf3e9225cff0deca5bb943f77e1002e161d542f6e57987363488eaca7",
+      "source": "\"\"\"Frozen-client ordinary capacity and separate live-allocation screen.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nsys.path.insert(0, 'scripts')\nimport capacity\n\nA = Path('artifacts/webtransport')\nspec = importlib.util.spec_from_file_location('heap_capture', 'scripts/capacity-heap.py')\nheap_capture = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(heap_capture)\nspec = importlib.util.spec_from_file_location('heap_sites', 'scripts/analyze-capacity-heap.py')\nheap_sites = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(heap_sites)\n\nreference = json.loads((A/'receive-clock-capacity-receive-clock-1.json').read_text())\nassert reference['passed'] and reference['args']['users'] == 100000\nordinary = A/'inline-assembler-capacity-candidate-1.json'\nassert not ordinary.exists()\nvalues = reference['args'].copy()\nvalues.update(server=str(A/'binaries/inline-assembler-relay'), output=str(ordinary))\nfor key in heap_capture.PATH_ARGS:\n    if values.get(key) is not None:\n        values[key] = Path(values[key])\ncapacity.run(argparse.Namespace(**values))\nassert json.loads(ordinary.read_text())['passed']\nprint('ORDINARY_CAPACITY_PASSED', flush=True)\n\noriginal = capacity.run\ndef allocations_only(args):\n    args.kernel_socket_resources = False\n    original(args)\ncapacity.run = allocations_only\ntry:\n    for variant, source in [('baseline', A/'receive-clock-capacity-receive-clock-1.json'),\n                            ('candidate', ordinary)]:\n        output = A/f'inline-assembler-heap-{variant}.json'\n        heap_capture.run(argparse.Namespace(receipt=source, output=output,\n            prefix=A/f'inline-assembler-heap-{variant}', library=Path('/usr/lib/libtcmalloc.so'),\n            slab_sizes=None, stacktrace_method=None, capture_timeout=30))\n        result = json.loads(output.read_text())\n        assert result['passed'] and not result['args']['kernel_socket_resources']\n        assert result['client_sha256'] == reference['client_sha256']\n        result['kernel_diagnostic_unavailable'] = {\n            'status': 'unavailable',\n            'scope': 'Current SOCK_DIAG ENOENT and slab object_size EACCES; not zero kernel memory.',\n            'reference': 'artifacts/webtransport/receive-clock-kernel-slab-observation.json'}\n        output.write_text(json.dumps(result, indent=2)+'\\n')\n        for phase in ['ready', 'done']:\n            sites = heap_sites.analyze(output, phase)\n            assert sites['unresolved_bytes'] == 0\n            assert sum(x['bytes'] for x in sites['sites']) == sites['requested_live_bytes']\n            target = A/f'inline-assembler-heap-{variant}-{phase}-sites.json'\n            with target.open('x') as file:\n                file.write(json.dumps(sites, indent=2)+'\\n')\n            print('LIVE_BYTES', variant, phase, sites['requested_live_bytes'], flush=True)\nfinally:\n    capacity.run = original\n"
+    },
+    "artifacts/webtransport/inline-assembler-compare.py": {
+      "sha256": "d970705ef38447d09c869026a9e2518ba3d25ea9685744f92765968030836495",
+      "source": "\"\"\"Serialized rotated whole-workload comparisons with frozen clients.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nsys.path.insert(0, 'scripts')\nimport inspection\nspec = importlib.util.spec_from_file_location('load', 'scripts/datagram-load.py')\nload = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(load)\nA = Path('artifacts/webtransport')\nimages = {'baseline': A/'binaries/receive-clock-relay',\n          'candidate': A/'binaries/inline-assembler-relay'}\nfailures = []\nfor repeat in range(1, 4):\n    order = ['baseline', 'candidate'] if repeat != 2 else ['candidate', 'baseline']\n    for variant in order:\n        for case in ['private', 'roomonly', 'mixed']:\n            reference = json.loads((A/f'receive-clock-long-{case}-receive-clock-1.json').read_text())\n            args = reference['args'].copy()\n            output = A/f'inline-assembler-long-{case}-{variant}-{repeat}.json'\n            assert not output.exists()\n            args.update(server=str(images[variant].resolve()), output=str(output.resolve()))\n            for key in ['server', 'client', 'client_source_root', 'tls_front', 'tls_cert',\n                        'tls_key', 'tls_ca', 'heap_profile', 'heap_library', 'output',\n                        'fanout_latency_output']:\n                if args.get(key) is not None:\n                    args[key] = Path(args[key])\n            result = inspection.run(argparse.Namespace(**args))\n            assert result['client_sha256'] == reference['client_sha256']\n            if not result['passed']:\n                failures.append(str(output))\n            print('ORDINARY', repeat, variant, case, result['passed'], flush=True)\nfor repeat in range(1, 4):\n    order = ['baseline', 'candidate'] if repeat != 2 else ['candidate', 'baseline']\n    for variant in order:\n        reference = json.loads((A/'receive-clock-paced-mixed-control-receive-clock-1.json').read_text())\n        args = reference['args'].copy()\n        output = A/f'inline-assembler-paced-mixed-{variant}-{repeat}.json'\n        assert not output.exists()\n        args.update(server=str(images[variant].resolve()), output=str(output.resolve()))\n        for key in ['server', 'client', 'output']:\n            args[key] = Path(args[key])\n        result = load.run(argparse.Namespace(**args))\n        assert result['client_sha256'] == reference['client_sha256']\n        if not result['passed']:\n            failures.append(str(output))\n        print('PACED', repeat, variant, result['passed'], flush=True)\nprint('FAILURES', json.dumps(failures), flush=True)\n"
+    }
+  },
+  "limits": [
+    "Memory screen is not whole-workload acceptance.",
+    "No browser/freshness or both-endpoint profiles were rerun for this candidate yet.",
+    "Kernel resource bytes remain unavailable: SOCK_DIAG ENOENT and root-only slab sizes, not zero kernel cost.",
+    "Full100000-session memory parity remains far from met."
+  ]
+}

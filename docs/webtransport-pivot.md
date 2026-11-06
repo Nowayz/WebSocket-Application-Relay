@@ -2591,3 +2591,26 @@ Full evidence, hashes, commands, distributions and limits:
 
 The full goal remains active: solve the measured receiver-pressure/stream-credit
 failure and the large memory gap before accepting the pivot.
+
+## Inline assembler screen rejected — 2026-11-06
+
+A one-chunk inline assembler removes 300,000 x 224 B staging roots at the
+100k ready gate, while enlarging each relevant connection/receive object by
+32 B. The paired replacement-allocator total falls from 2,018,467,661 B to
+1,963,888,112 B: a net 52.05 MiB saving. Ordinary ready RSS falls 55.36 MiB.
+All 323 protocol tests, 253 relay tests, Clippy, vendor verification and the
+100k routing/cleanup checks pass. These are persistent storage savings, not
+per-delivery allocation claims.
+
+The full 18-run, 12-second rotated comparison passes correctness but median
+throughput falls private 1.34%, room 2.06%, and mixed 1.73%. Paced controls pass
+baseline 2/3 and candidate 3/3; the baseline failure remains recorded and these
+small samples establish no failure-rate improvement. The repeatable throughput
+cost across all workloads outweighs this modest memory saving. The cause of
+that cost has not been attributed to a particular instruction or cache layout.
+
+The candidate is rejected. Source is restored and rebuilt to the selected
+receive-clock image `e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3`.
+Candidate source, binary hashes, failures, commands and measurements remain in
+[the complete screen report](reports/webtransport-inline-assembler-screen-2026-11-06.json).
+Browser, freshness and profile gates were skipped for this rejected variant.
