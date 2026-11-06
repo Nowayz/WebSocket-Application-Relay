@@ -2614,3 +2614,42 @@ receive-clock image `e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4
 Candidate source, binary hashes, failures, commands and measurements remain in
 [the complete screen report](reports/webtransport-inline-assembler-screen-2026-11-06.json).
 Browser, freshness and profile gates were skipped for this rejected variant.
+
+## Retained-clock UDP and CPU correlation — 2026-11-06
+
+A temporary first-refusal image based on the retained clock correction repeats
+the precise credit snapshot while collecting owned UDP state and client-thread
+CPU counters. Two trials pass; the third fails and ends the diagnostic's
+predeclared up-to-six-trial stopping rule. These samples do not estimate a
+failure rate. The fixed client and offered traffic remain unchanged.
+
+The failing connection has a positive 13.95 us minimum RTT, peer stream credit
+zero, 8,894,408 B of local send-window headroom, and a registered writer. Its
+in-flight bytes are 18,876 against a 20,314 B congestion window; the remaining
+1,438 B is below the current 1,452 B MTU. This is consistent with congestion
+limiting normal packet drainage in addition to the immediate stream-credit
+admission gate; the diagnostic did not observe a packetizer branch directly.
+
+Client UDP drops are first observed 742.6 ms before logged refusal. The last preceding
+sample has 12,301 drops and 6,429,240 B queued. A passing trial also has 7,571
+drops, so drops alone are not sufficient for a close. Later peaks and totals
+include post-refusal traffic and remain separate in the report.
+
+Across actual sampled adjacent windows, aggregate client CPU increases from
+4.956 to 5.493 core equivalents. All eight workers are balanced during the
+drop-to-refusal window (0.679-0.708 each). This does not show sustained saturation
+of all eight cores or identify one fixed hot thread. A migrating endpoint
+future can still serialize work, and interval averages do not resolve bursts.
+Kernel scheduler statistics are disabled; their raw wait fields cannot prove
+absence of OS wait or quantify Tokio future queueing.
+
+The diagnostic source is removed and the pure selected image is rebuilt and
+verified as `e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3`.
+No workload remains running. Exact timelines, window endpoints, counter checks,
+observer cost, source and binary identities:
+[UDP/CPU correlation report](reports/webtransport-peer-udp-cpu-correlation-2026-11-06.json).
+
+Remaining causal work is to distinguish ingress/future fairness, catch-up
+bursts, and loss/flow-control recovery. Throughput and memory parity remain
+unmet; the compact established-session IO prototype is an unverified next
+memory candidate, not a retained implementation.

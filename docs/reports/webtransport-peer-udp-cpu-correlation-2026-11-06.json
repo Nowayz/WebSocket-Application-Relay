@@ -1,0 +1,1536 @@
+{
+  "status": "Completed diagnostic correlation; no production or server-performance claim",
+  "retained_product_commit": "aba5fdff34ce0cc48350907947f1714f74a0a190",
+  "diagnostic_base_commit": "f4dc015d34a93346111500690498842cc18f72ff",
+  "diagnostic_source_base_commit": "f4dc015d34a93346111500690498842cc18f72ff",
+  "worktree_root": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+  "stopping_rule": "At most6 fresh diagnostic trials; stop at first logged refusal. This selected stopping rule does not estimate a failure probability.",
+  "source_arguments": {
+    "server": "artifacts/webtransport/binaries/receive-clock-relay",
+    "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/datagram-load-final",
+    "mode": "stream",
+    "pairs": 32,
+    "readers": 1024,
+    "private_rate": 8000,
+    "fanout_rate": 1000,
+    "seconds": 4,
+    "drain_ms": 1000,
+    "payload_bytes": 1024,
+    "workers": 4,
+    "client_workers": 8,
+    "udp_receive_buffer_bytes": 4194304,
+    "io_timeout_secs": 30,
+    "timeout": 180,
+    "server_cpus": "0-3",
+    "client_cpus": "8-15",
+    "output": "artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json"
+  },
+  "reproduction_sources": {
+    "analyzer": "\"\"\"Summarize a completed diagnostic collection without running workloads.\"\"\"\nimport argparse\nimport datetime\nimport hashlib\nimport json\nfrom pathlib import Path\nimport statistics\nimport re\n\nROOT = Path(__file__).resolve().parents[2]\nART = ROOT / 'artifacts/webtransport'\nOUTPUT = ROOT / 'docs/reports/webtransport-peer-udp-cpu-correlation-2026-11-06.json'\n\n\ndef ref(path):\n    return {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}\n\n\ndef cpu_window(cpus, start, end, sched_enabled):\n    selected = [c for c in cpus if start <= c['wall_time_unix_seconds'] <= end]\n    if len(selected) < 2:\n        return {'status': 'insufficient_samples', 'requested_wall_seconds': [start, end]}\n    before, after = selected[0], selected[-1]\n    elapsed = after['monotonic_seconds'] - before['monotonic_seconds']\n    assert elapsed > 0\n    assert before['clock_ticks_per_second'] == after['clock_ticks_per_second']\n    ticks = after['clock_ticks_per_second']\n    old = {(t['tid'], t.get('start_time_ticks')): t for t in before['threads']}\n    rows, skipped = [], []\n    for thread in after['threads']:\n        identity = (thread['tid'], thread.get('start_time_ticks'))\n        prior = old.get(identity)\n        if prior is None or thread['status'] != 'observed' or prior['status'] != 'observed':\n            skipped.append(list(identity)); continue\n        user = thread['user_ticks'] - prior['user_ticks']\n        system = thread['system_ticks'] - prior['system_ticks']\n        assert user >= 0 and system >= 0\n        row = {'tid': thread['tid'], 'start_time_ticks': thread['start_time_ticks'],\n               'name': thread['name'], 'main_thread': thread['is_main_thread'],\n               'user_seconds': user / ticks, 'system_seconds': system / ticks,\n               'cpu_core_equivalent': (user + system) / ticks / elapsed,\n               'last_cpu_before': prior['last_cpu'], 'last_cpu_after': thread['last_cpu']}\n        if prior.get('schedstat_status') == thread.get('schedstat_status') == 'observed':\n            delta = {key: thread['schedstat'][key] - prior['schedstat'][key]\n                     for key in ['run_ns', 'wait_ns', 'timeslices']}\n            assert all(value >= 0 for value in delta.values())\n            row['raw_schedstat_delta'] = delta\n        rows.append(row)\n    workers = [row['cpu_core_equivalent'] for row in rows if row['name'] == 'tokio-rt-worker']\n    return {'status': 'observed', 'requested_wall_seconds': [start, end],\n            'actual_wall_seconds': [before['wall_time_unix_seconds'], after['wall_time_unix_seconds']],\n            'actual_monotonic_seconds': [before['monotonic_seconds'], after['monotonic_seconds']],\n            'elapsed_seconds': elapsed, 'clock_ticks_per_second': ticks,\n            'threads': rows, 'excluded_thread_identities': skipped,\n            'aggregate_cpu_core_equivalent': sum(row['cpu_core_equivalent'] for row in rows),\n            'worker_core_equivalent_range': [min(workers), max(workers)] if workers else None,\n            'schedstat_wait_interpretable': sched_enabled,\n            'scope': 'Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait.'}\n\n\ndef self_check():\n    def point(t, user, system):\n        return {'wall_time_unix_seconds': t, 'monotonic_seconds': t,\n                'clock_ticks_per_second': 100, 'threads': [{'tid': 1, 'start_time_ticks': 2,\n                'status': 'observed', 'name': 'tokio-rt-worker', 'is_main_thread': False,\n                'user_ticks': user, 'system_ticks': system, 'last_cpu': 8}]}\n    result = cpu_window([point(1, 0, 0), point(2, 75, 25)], 1, 2, False)\n    assert result['aggregate_cpu_core_equivalent'] == 1\n    assert result['elapsed_seconds'] == 1 and not result['schedstat_wait_interpretable']\n\n\ndef main():\n    self_check()\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument('--output', type=Path, default=OUTPUT)\n    output = parser.parse_args().output\n    assert not output.exists(), output\n    summary_path = ART / 'reliable-peer-udp-cpu-diagnostic-summary.json'\n    summary = json.loads(summary_path.read_text())\n    assert any(row['first_refusal'] for row in summary) or len(summary) == 6, 'collection may be incomplete'\n    inputs = []\n    for row in summary:\n        receipt = Path(row['receipt']); assert ref(receipt)['sha256'] == row['receipt_sha256']\n        r = json.loads(receipt.read_text()); path = Path(r['udp_samples_path'])\n        assert ref(path)['sha256'] == r['udp_samples_sha256']\n        data = json.loads(path.read_text()); samples = data['samples']\n        assert all(b['monotonic_seconds'] > a['monotonic_seconds'] for a, b in zip(samples, samples[1:]))\n        assert data['collector_affinity_before'] == data['collector_affinity_restored']\n        inputs.append((receipt, r, path, data))\n    assert len({r['server_sha256'] for _, r, _, _ in inputs}) == 1\n    assert len({r['client_sha256'] for _, r, _, _ in inputs}) == 1\n    failed = next((x for x in inputs if x[1]['overload_diagnostic']), None)\n    relative_windows = None\n    if failed:\n        _, r, _, data = failed\n        refusal = datetime.datetime.fromisoformat(r['overload_diagnostic'][0].split()[0].replace('Z', '+00:00')).timestamp()\n        first_drop = next(s['wall_time_unix_seconds'] for s in data['samples']\n                          if s['client'].get('udp', {}).get('receive_drops', 0))\n        width = refusal - first_drop\n        assert width > 0\n        origin = data['samples'][0]['wall_time_unix_seconds']\n        relative_windows = {'matched_pre_drop_elapsed': [first_drop - width - origin, first_drop - origin],\n                            'matched_drop_to_refusal_elapsed': [first_drop - origin, refusal - origin]}\n    report = {'status': 'Completed diagnostic correlation; no production or server-performance claim',\n              'retained_product_commit': 'aba5fdff34ce0cc48350907947f1714f74a0a190',\n              'diagnostic_base_commit': 'f4dc015d34a93346111500690498842cc18f72ff',\n              'diagnostic_source_base_commit': 'f4dc015d34a93346111500690498842cc18f72ff',\n              'worktree_root': str(ROOT),\n              'stopping_rule': 'At most6 fresh diagnostic trials; stop at first logged refusal. This selected stopping rule does not estimate a failure probability.',\n              'source_arguments': json.loads((ART / 'receive-clock-paced-mixed-control-receive-clock-1.json').read_text())['args'],\n              'reproduction_sources': {\n                  'analyzer': Path(__file__).read_text(),\n                  'collector': (ART / 'reliable-peer-udp-cpu-diagnostic.py').read_text()},\n              'summary': ref(summary_path), 'analyzer': ref(Path(__file__)),\n              'collector': ref(ART / 'reliable-peer-udp-cpu-diagnostic.py'),\n              'source_arguments_receipt': ref(ART / 'receive-clock-paced-mixed-control-receive-clock-1.json'),\n              'instrumented_server': ref(Path(inputs[0][1]['args']['server'])),\n              'source_patch': ref(ART / 'receive-clock-write-state-source.patch'),\n              'source_patch_text': (ART / 'receive-clock-write-state-source.patch').read_text(),\n              'trials': [], 'relative_windows': relative_windows,\n              'limits': ['Requested 4ms UDP and40ms CPU sampling is not guaranteed cadence; actual times and costs are recorded.',\n                         'Pre-drop window is an adjacent equal-duration reference, not proof of an unpressured state; receive queue can already be growing.',\n                         'Window CPU endpoints are sampled inside the requested wall-time windows; no counter interpolation or extrapolation.',\n                         'sched_schedstats was inspected; disabled statistics cannot support a no-wait conclusion, even if raw counters are nonzero.',\n                         'Per-thread CPU cannot identify the single migrating endpoint task; OS runnable wait cannot measure Tokio future wait.',\n                         'Logical offered deliveries are not observed network packet or syscall rates. Kernel byte totals remain unavailable.',\n                         'Two passes followed by one refusal result from stop-at-first-refusal collection, not a statistical failure-rate estimate.']}\n    for receipt, r, series, data in inputs:\n        samples = data['samples']; cpus = [s['client_threads'] for s in samples if 'client_threads' in s]\n        row = {'receipt': ref(receipt), 'series': ref(series), 'passed': r['passed'], 'error': r.get('error'),\n               'server_sha256': r['server_sha256'], 'client_sha256': r['client_sha256'],\n               'collector_cpu': data['collector_cpu'], 'sched_schedstats': data['sched_schedstats'],\n               'sample_count': len(samples), 'cpu_sample_count': len(cpus), 'roles': data['roles'],\n               'write_state_snapshots': r['write_state_snapshots'], 'udp': {}, 'cpu_windows': {}}\n        gaps = [b['monotonic_seconds'] - a['monotonic_seconds'] for a, b in zip(samples, samples[1:])]\n        costs = [s['collector_sample_seconds'] for s in samples]\n        cpu_costs = [c['collection_seconds'] for c in cpus]\n        biases = [s['wall_time_unix_seconds'] - s['monotonic_seconds'] for s in samples]\n        row['observer'] = {'median_gap_seconds': statistics.median(gaps), 'max_gap_seconds': max(gaps),\n                           'median_collection_seconds': statistics.median(costs), 'max_collection_seconds': max(costs),\n                           'max_cpu_collection_seconds': max(cpu_costs), 'max_cpu_gap_seconds': data['max_observed_cpu_gap_seconds'],\n                           'wall_minus_monotonic_range_seconds': max(biases) - min(biases)}\n        refusal = datetime.datetime.fromisoformat(r['overload_diagnostic'][0].split()[0].replace('Z', '+00:00')).timestamp() if r['overload_diagnostic'] else None\n        assert r['diagnostic_controller_sha256'] == report['collector']['sha256']\n        assert r['source_receipt_sha256'] == report['source_arguments_receipt']['sha256']\n        assert r['server_sha256'] == report['instrumented_server']['sha256']\n        if r['write_state_snapshots']:\n            snap = r['write_state_snapshots'][0]\n            mtu = re.search(r'current_mtu:\\s*(\\d+)', r['overload_diagnostic'][0])\n            row['transmit_snapshot'] = {\n                'cwnd_bytes': snap['cwnd'], 'in_flight_bytes': snap['in_flight'],\n                'remaining_cwnd_bytes': max(0, snap['cwnd'] - snap['in_flight']),\n                'current_mtu_bytes': int(mtu[1]) if mtu else None,\n                'scope': 'Snapshot arithmetic, not an observed packetizer branch or measured goodput limit.'}\n        for role in ['client', 'server']:\n            valid = [s for s in samples if s[role].get('udp', {}).get('owned_sockets', 0)]\n            identities = {tuple(s[role]['owned_socket_inodes']) for s in valid}\n            positive = [s for s in valid if s[role]['udp']['receive_drops'] > 0]\n            def snap(s):\n                return {'wall_time_utc': s['wall_time_utc'], 'wall_time_unix_seconds': s['wall_time_unix_seconds'],\n                        'udp': s[role]['udp'], 'role_sample_seconds': s[role]['sample_seconds']}\n            item = {'owned_socket_inode_sets': [list(value) for value in sorted(identities)],\n                    'identity_stable': len(identities) == 1,\n                    'drops_monotonic': all(b[role]['udp']['receive_drops'] >= a[role]['udp']['receive_drops'] for a, b in zip(valid, valid[1:])),\n                    'peak': snap(max(valid, key=lambda s: s[role]['udp']['receive_queue_bytes'])),\n                    'final': snap(valid[-1]), 'first_positive_drop_sample': snap(positive[0]) if positive else None}\n            if refusal:\n                before = [s for s in valid if s['wall_time_unix_seconds'] + s[role]['sample_seconds'] < refusal]\n                item.update(first_refusal_wall_time_seconds=refusal,\n                            last_pre_refusal=snap(before[-1]) if before else None)\n                item['peak_pre_refusal'] = snap(max(before, key=lambda s: s[role]['udp']['receive_queue_bytes'])) if before else None\n                if positive:\n                    first = valid.index(positive[0]); prior = valid[first - 1] if first else None\n                    item['drop_onset_bracket_seconds_before_refusal'] = [refusal - (positive[0]['wall_time_unix_seconds'] + positive[0][role]['sample_seconds']), refusal - prior['wall_time_unix_seconds']] if prior else None\n            row['udp'][role] = item\n        if relative_windows:\n            origin = samples[0]['wall_time_unix_seconds']\n            enabled = data['sched_schedstats'].get('enabled') is True\n            for label, bounds in relative_windows.items():\n                row['cpu_windows'][label] = cpu_window(cpus, origin + bounds[0], origin + bounds[1], enabled)\n        report['trials'].append(row)\n    output.write_text(json.dumps(report, indent=2) + '\\n')\n    print(output)\n    for row in report['trials']:\n        print(row['passed'], [(label, round(window.get('aggregate_cpu_core_equivalent', 0), 3))\n                             for label, window in row['cpu_windows'].items()])\n\n\nif __name__ == '__main__':\n    main()\n",
+    "collector": "\"\"\"First-refusal diagnostic; sampled /proc UDP state is not a throughput benchmark.\"\"\"\nimport argparse\nimport datetime\nimport errno\nimport importlib.util\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport select\nimport subprocess\nimport sys\nimport time\n\nROOT = Path(__file__).resolve().parents[2]\nOUT = ROOT / 'artifacts/webtransport'\nsys.path.insert(0, str(ROOT / 'scripts'))\nimport capacity\nimport socket_resources\n\nspec = importlib.util.spec_from_file_location('datagram_load', ROOT / 'scripts/datagram-load.py')\nload = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(load)\nSOURCE = OUT / 'receive-clock-paced-mixed-control-receive-clock-1.json'\nSERVER = OUT / 'binaries/receive-clock-write-state-relay'\nINTERVAL = .004  # Half of the observed 64-message queue's 8 ms at 8,000 messages/s.\nCPU_INTERVAL = .040  # Coarser than UDP sampling to limit observer overhead.\nCLOCK_TICKS = os.sysconf(\"SC_CLK_TCK\")\nCOLLECTOR_CPU = 4\nSCOPE = ('Diagnostic first-refusal sampling only; exclude timing, CPU and RSS from ordinary '\n         'comparisons. /proc counters are process-owned UDP census, not kernel-memory totals. '\n         'Counter differences are meaningful only while the owned UDP socket set is unchanged. '\n         'A busy writer or historic loss alone does not identify why peer stream credit stalled.')\n\n\ndef parse_trace(line):\n    values = {key: (text == 'true' if text in ('true', 'false') else int(text))\n              for key, text in re.findall(r'\\b([a-z_]+)=(\\d+|true|false)', line)}\n    if not values.get('stream_absent'):\n        assert values['stream_credit'] == max(0, values['stream_max'] - values['stream_offset'])\n        assert values['conn_credit'] == max(0, values['conn_max'] - values['data_sent'])\n        assert values['window_credit'] == max(0, values['send_window'] - values['buffered_data'])\n        assert values['write_limit'] == min(values['conn_credit'], values['window_credit'])\n    return values\n\n\ndef udp_state(pid):\n    began = time.monotonic()\n    try:\n        inodes = {str(value) for value in socket_resources.owned_inodes(pid)}\n        census = capacity.udp_census(inodes)\n        return {'status': 'observed' if census['owned_sockets'] else 'no_udp_sockets',\n                'pid': pid, 'owned_socket_inodes': sorted(inodes), 'udp': census,\n                'sample_monotonic_seconds': began,\n                'sample_seconds': time.monotonic() - began}\n    except OSError as error:\n        return {'status': 'gone' if error.errno in (errno.ENOENT, errno.ESRCH) else 'unavailable',\n                'pid': pid, 'error': repr(error), 'sample_seconds': time.monotonic() - began}\n\n\ndef parse_thread_stat(text):\n    left, right = text.find('('), text.rfind(')')\n    fields = text[right + 2:].split()\n    if left < 0 or right <= left or len(fields) < 37:\n        raise ValueError('short or malformed /proc thread stat')\n    values = {'name': text[left + 1:right], 'user_ticks': int(fields[11]),\n              'system_ticks': int(fields[12]), 'start_time_ticks': int(fields[19]),\n              'last_cpu': int(fields[36])}\n    if min(values[key] for key in ['user_ticks', 'system_ticks', 'start_time_ticks']) < 0:\n        raise ValueError('negative cumulative thread counter')\n    return values\n\n\ndef parse_schedstat(text):\n    fields = [int(value) for value in text.split()]\n    if len(fields) != 3 or min(fields) < 0:\n        raise ValueError('malformed /proc thread schedstat')\n    return dict(zip(['run_ns', 'wait_ns', 'timeslices'], fields))\n\n\ndef parser_self_check():\n    fields = ['0'] * 37\n    fields[0], fields[11], fields[12], fields[19], fields[36] = 'R', '123', '45', '88', '9'\n    parsed = parse_thread_stat('77 (worker (sample)) ' + ' '.join(fields))\n    assert parsed == {'name': 'worker (sample)', 'user_ticks': 123, 'system_ticks': 45,\n                      'start_time_ticks': 88, 'last_cpu': 9}\n    assert parse_schedstat('1000 2000 3\\n') == {'run_ns': 1000, 'wait_ns': 2000, 'timeslices': 3}\n\n\ndef schedstats_switch():\n    path = Path('/proc/sys/kernel/sched_schedstats')\n    try:\n        value = path.read_text().strip()\n        if value not in ('0', '1'):\n            raise ValueError('unexpected sched_schedstats value: ' + value)\n        return {'status': 'observed', 'enabled': value == '1', 'source': str(path)}\n    except (OSError, ValueError) as error:\n        return {'status': 'unavailable', 'error': repr(error), 'source': str(path)}\n\n\ndef client_cpu_state(pid):\n    began = time.monotonic()\n    result = {'pid': pid, 'monotonic_seconds': began, 'wall_time_unix_seconds': time.time(),\n              'clock_ticks_per_second': CLOCK_TICKS, 'threads': []}\n    try:\n        tasks = sorted(Path(f'/proc/{pid}/task').iterdir(), key=lambda path: int(path.name))\n    except OSError as error:\n        result.update(status='gone' if error.errno in (errno.ENOENT, errno.ESRCH) else 'unavailable',\n                      error=repr(error), collection_seconds=time.monotonic() - began)\n        return result\n    for task in tasks:\n        row = {'tid': int(task.name), 'is_main_thread': int(task.name) == pid}\n        try:\n            row.update(parse_thread_stat((task / 'stat').read_text()), status='observed')\n            row['user_seconds'] = row['user_ticks'] / CLOCK_TICKS\n            row['system_seconds'] = row['system_ticks'] / CLOCK_TICKS\n        except (OSError, ValueError) as error:\n            row.update(status='gone' if isinstance(error, OSError) and error.errno in\n                       (errno.ENOENT, errno.ESRCH) else 'unavailable', stat_error=repr(error))\n        try:\n            row.update(schedstat=parse_schedstat((task / 'schedstat').read_text()),\n                       schedstat_status='observed')\n        except (OSError, ValueError) as error:\n            row.update(schedstat_status='gone' if isinstance(error, OSError) and error.errno in\n                       (errno.ENOENT, errno.ESRCH) else 'unavailable', schedstat_error=repr(error))\n        result['threads'].append(row)\n    result.update(status='observed', collection_seconds=time.monotonic() - began)\n    return result\n\n\ndef run_trial(index, source):\n    output = OUT / f'reliable-peer-udp-cpu-diagnostic-mixed-{index}.json'\n    series_path = OUT / f'reliable-peer-udp-cpu-diagnostic-mixed-{index}-samples.json'\n    values = dict(source['args'])\n    values.update(server=SERVER, output=output, client=Path(values['client']).resolve())\n    args = argparse.Namespace(**values)\n    assert args.mode == 'stream' and args.private_rate == 8000\n    assert INTERVAL == 64 / args.private_rate / 2\n    assert args.server_cpus == '0-3' and args.client_cpus == '8-15'\n    assert load.digest(args.client) == source['client_sha256'], 'fixed client changed'\n    original_launch, original_select = subprocess.Popen, select.select\n    affinity = os.sched_getaffinity(0)\n    assert COLLECTOR_CPU in affinity, 'collector CPU is unavailable in current affinity'\n    roles, children, samples = {}, {}, []\n    sampling_started, next_sample, next_cpu_sample = False, 0.0, 0.0\n    schedstats = schedstats_switch()\n\n    def sample(reason):\n        nonlocal sampling_started, next_sample, next_cpu_sample\n        began, wall = time.monotonic(), time.time()\n        client = udp_state(roles['client'])\n        if not sampling_started:\n            if client.get('udp', {}).get('owned_sockets', 0) == 0:\n                next_sample = began + INTERVAL\n                return\n            sampling_started = True\n        server = udp_state(roles['server'])\n        observation = {'monotonic_seconds': began, 'wall_time_unix_seconds': wall,\n                       'wall_time_utc': datetime.datetime.fromtimestamp(\n                           wall, datetime.timezone.utc).isoformat(),\n                       'reason': reason, 'client': client, 'server': server}\n        if began >= next_cpu_sample:\n            observation['client_threads'] = client_cpu_state(roles['client'])\n            next_cpu_sample = time.monotonic() + CPU_INTERVAL\n        observation['collector_sample_seconds'] = time.monotonic() - began\n        samples.append(observation)\n        next_sample = began + INTERVAL\n\n    def launch(command, *positional, **keywords):\n        process = original_launch(command, *positional, **keywords)\n        tokens = [str(token) for token in command]\n        for role in ('server', 'client'):\n            if str(getattr(args, role).resolve()) in tokens:\n                assert role not in roles, f'duplicate {role} launch'\n                roles[role], children[role] = process.pid, process\n        return process\n\n    def wait(readers, writers, errors, timeout=None):\n        client_wait = ('client' in children and len(readers) == 1\n                       and readers[0] is children['client'].stdout)\n        if client_wait:\n            timeout = INTERVAL if timeout is None else min(timeout, INTERVAL)\n        ready = original_select(readers, writers, errors, timeout)\n        if client_wait and time.monotonic() >= next_sample:\n            sample('client_stdout_wait')\n        return ready\n\n    result = None\n    try:\n        os.sched_setaffinity(0, {COLLECTOR_CPU})\n        subprocess.Popen, select.select = launch, wait\n        result = load.run(args)\n    finally:\n        subprocess.Popen, select.select = original_launch, original_select\n        os.sched_setaffinity(0, affinity)\n        gaps = [after['monotonic_seconds'] - before['monotonic_seconds']\n                for before, after in zip(samples, samples[1:])]\n        cpu_samples = [sample['client_threads'] for sample in samples if 'client_threads' in sample]\n        cpu_gaps = [after['monotonic_seconds'] - before['monotonic_seconds']\n                    for before, after in zip(cpu_samples, cpu_samples[1:])]\n        series_path.write_text(json.dumps({\n            'scope': SCOPE, 'sampling_interval_seconds': INTERVAL,\n            'sampling_interval_reason': 'Half of observed queue_limit64/private_rate8000 = 4 ms.',\n            'max_observed_gap_seconds': max(gaps, default=None),\n            'sampling_limit': 'OS scheduling, /proc reads and load-runner gate work can extend the requested interval; use actual timestamps.',\n            'collector_cpu': COLLECTOR_CPU, 'collector_affinity_before': sorted(affinity),\n            'collector_affinity_restored': sorted(os.sched_getaffinity(0)),\n            'roles': roles, 'sampling_started': sampling_started, 'samples': samples,\n            'client_cpu_interval_seconds': CPU_INTERVAL,\n            'max_observed_cpu_gap_seconds': max(cpu_gaps, default=None),\n            'client_cpu_snapshot_count': len(cpu_samples), 'sched_schedstats': schedstats,\n            'cpu_scope': 'Per-TID cumulative counters; compare deltas only for the same PID/TID/start_time_ticks. /proc stat CPU ticks are quantized. schedstat wait is OS runnable-thread delay, not Tokio future wait. A disabled/unavailable sched_schedstats switch prevents treating zero wait as no starvation. Tokio futures migrate across worker threads, so no TID identifies the endpoint task.',\n            'observer_cost': 'Client thread files are read only at the coarser CPU cadence; collection_seconds and actual sample gaps quantify observer work. Ordinary timing/CPU/RSS comparisons are invalid for this diagnostic.',\n        }, indent=2) + '\\n')\n    if result is None:\n        raise RuntimeError(f'load runner did not return a receipt: {output}')\n    lines = [line for line in result['server_log'].splitlines() if 'OVERLOAD_DIAGNOSTIC' in line]\n    assert len(lines) <= 1, 'first-refusal logging unexpectedly repeated'\n    result.update(profile_diagnostic=True, diagnostic_scope=SCOPE,\n                  write_state_snapshots=[parse_trace(line) for line in lines],\n                  overload_diagnostic=lines, udp_samples_path=str(series_path),\n                  udp_samples_sha256=load.digest(series_path),\n                  diagnostic_controller_sha256=load.digest(Path(__file__)),\n                  source_receipt_sha256=load.digest(SOURCE),\n                  sampling_started=sampling_started)\n    output.write_text(json.dumps(result, indent=2) + '\\n')\n    return {'receipt': str(output), 'receipt_sha256': load.digest(output),\n            'samples': str(series_path), 'passed': result['passed'], 'error': result.get('error'),\n            'write_state_snapshots': result['write_state_snapshots'], 'first_refusal': lines,\n            'sample_count': len(samples), 'sampling_started': sampling_started}\n\n\ndef main():\n    parser_self_check()\n    assert CLOCK_TICKS > 0\n    source = json.loads(SOURCE.read_text())\n    assert SERVER.is_file()\n    summary = OUT / 'reliable-peer-udp-cpu-diagnostic-summary.json'\n    assert not summary.exists(), summary\n    for index in range(1, 7):\n        for suffix in ('.json', '-samples.json'):\n            path = OUT / f'reliable-peer-udp-cpu-diagnostic-mixed-{index}{suffix}'\n            assert not path.exists(), path\n    runs = []\n    for index in range(1, 7):\n        row = run_trial(index, source)\n        runs.append(row)\n        summary.write_text(json.dumps(runs, indent=2) + '\\n')\n        print('OBSERVED', index, row['passed'], row['sample_count'], row['first_refusal'], flush=True)\n        if row['first_refusal']:\n            break\n\n\nif __name__ == '__main__':\n    main()\n"
+  },
+  "summary": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-summary.json",
+    "sha256": "28853b2d073411dcb69d30f0c8e938b93a14eb236e6b6497d60aace73e0bf42d"
+  },
+  "analyzer": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-reliable-peer-udp-cpu.py",
+    "sha256": "0720ea8cfc2c2d9dfbe11996fc6b8d5508206e12025706bec07f7023d6455757"
+  },
+  "collector": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic.py",
+    "sha256": "c11b54d28641c8b0aeb6eaa2bb377b3010db52455bb4e5a9e41c8f47ef7da5d1"
+  },
+  "source_arguments_receipt": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+    "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+  },
+  "instrumented_server": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/receive-clock-write-state-relay",
+    "sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374"
+  },
+  "source_patch": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-write-state-source.patch",
+    "sha256": "d2f79a54b59b01477e4697607cbb7312ce1792200d50ed68ee1ebd4045756c1f"
+  },
+  "source_patch_text": "diff --git a/src/webtransport.rs b/src/webtransport.rs\nindex 757e8ac..0dae326 100644\n--- a/src/webtransport.rs\n+++ b/src/webtransport.rs\n@@ -27,6 +27,9 @@ use wtransport::quinn::{Endpoint, VarInt};\n \n mod queue;\n \n+// Diagnostic only: capture the first failure without a logging avalanche.\n+static OVERLOAD_RECORDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+\n struct QueuedOutput {\n     packet: Envelope,\n     offset: usize,\n@@ -99,6 +102,21 @@ impl Output {\n             if accepted && wake {\n                 self.queue.ready.notify_one();\n             }\n+            if !accepted && !OVERLOAD_RECORDED.swap(true, Relaxed) {\n+                let quic = std::ops::Deref::deref(self.connection.as_ref());\n+                tracing::warn!(\n+                    writer_busy = queue.owner.busy,\n+                    immediate,\n+                    queue_closed = queue.is_closed(),\n+                    queue_limit = self.relay.config.queue_messages,\n+                    queue_capacity_bytes = queue.allocated_bytes(),\n+                    stream = ?queue.owner.stream.quic_id(),\n+                    rtt_micros = quic.rtt().as_micros(),\n+                    write_state = %quic.diagnostic_write_state(queue.owner.stream.quic_id()),\n+                    stats = ?quic.stats(),\n+                    \"OVERLOAD_DIAGNOSTIC first reliable queue refusal\"\n+                );\n+            }\n             return accepted;\n         }\n         if queue.is_closed() {\ndiff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..f8e0642 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -1313,6 +1313,14 @@ impl Connection {\n         self.spaces[self.highest_space].ping_pending = true;\n     }\n \n+    /// Diagnostic-only instantaneous write-admission state.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        format!(\"{} cwnd={} in_flight={} proto_closed={}\",\n+            self.streams.diagnostic_write_state(id).unwrap_or_else(|| \"stream_absent=true\".into()),\n+            self.path.congestion.window(), self.path.in_flight.bytes, self.state.is_closed())\n+    }\n+\n     /// Update traffic keys spontaneously\n     ///\n     /// This can be useful for testing key updates, as they otherwise only happen infrequently.\ndiff --git a/vendor/quinn-proto/src/connection/streams/state.rs b/vendor/quinn-proto/src/connection/streams/state.rs\nindex 240c8f7..f33373f 100644\n--- a/vendor/quinn-proto/src/connection/streams/state.rs\n+++ b/vendor/quinn-proto/src/connection/streams/state.rs\n@@ -841,6 +841,18 @@ impl StreamsState {\n         Ok(())\n     }\n \n+    pub(crate) fn diagnostic_write_state(&self, id: StreamId) -> Option<String> {\n+        let stream = self.send.get(&id)?.as_ref()?;\n+        Some(format!(\n+            \"stream_max={} stream_offset={} stream_credit={} conn_max={} data_sent={} conn_credit={} send_window={} buffered_data={} window_credit={} write_limit={} stream_retained={} stream_writable={} stream_stopped={} connection_blocked={}\",\n+            stream.max_data, stream.offset(), stream.max_data.saturating_sub(stream.offset()),\n+            self.max_data, self.data_sent, self.max_data.saturating_sub(self.data_sent),\n+            self.send_window, self.buffered_data, self.send_window.saturating_sub(self.buffered_data),\n+            self.write_limit(), stream.pending.buffered(), stream.is_writable(),\n+            stream.stop_reason.is_some(), stream.connection_blocked,\n+        ))\n+    }\n+\n     /// Returns the maximum amount of data this is allowed to be written on the connection\n     pub(crate) fn write_limit(&self) -> u64 {\n         (self.max_data - self.data_sent)\n@@ -1075,6 +1087,36 @@ mod tests {\n         )\n     }\n \n+    #[test]\n+    fn diagnostic_write_state_distinguishes_readonly_budgets() {\n+        let mut server = make(Side::Server);\n+        server.send_window = 24;\n+        server.set_params(&TransportParameters {\n+            initial_max_streams_uni: 1u32.into(),\n+            initial_max_data: 1000u32.into(),\n+            initial_max_stream_data_uni: 1000u32.into(),\n+            ..TransportParameters::default()\n+        });\n+        let (mut pending, state) = (Retransmits::default(), ConnState::Established);\n+        let id = Streams { state: &mut server, conn_state: &state }.open(Dir::Uni).unwrap();\n+        SendStream { id, state: &mut server, pending: &mut pending, conn_state: &state }\n+            .write(&[42; 24]).unwrap();\n+        let before = (server.data_sent, server.buffered_data, server.send.len());\n+        let snapshot = server.diagnostic_write_state(id).unwrap();\n+        assert!(snapshot.contains(\"window_credit=0 \"));\n+        assert!(snapshot.contains(\"stream_credit=976 \"));\n+        assert!(snapshot.contains(\"conn_credit=976 \"));\n+        assert_eq!(snapshot, server.diagnostic_write_state(id).unwrap());\n+        assert_eq!(before, (server.data_sent, server.buffered_data, server.send.len()));\n+        server.send_window = 1000;\n+        let stream = server.send.get_mut(&id).unwrap().as_mut().unwrap();\n+        stream.max_data = stream.offset();\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"stream_credit=0 \"));\n+        server.send.get_mut(&id).unwrap().as_mut().unwrap().max_data = 1000;\n+        server.max_data = server.data_sent;\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"conn_credit=0 \"));\n+    }\n+\n     #[test]\n     fn send_window_retains_selectively_acked_data() {\n         let mut server = make(Side::Server);\ndiff --git a/vendor/quinn/src/connection.rs b/vendor/quinn/src/connection.rs\nindex 17f9667..5862f8a 100644\n--- a/vendor/quinn/src/connection.rs\n+++ b/vendor/quinn/src/connection.rs\n@@ -555,6 +555,15 @@ impl Connection {\n         self.0.state.lock(\"stats\").inner.stats()\n     }\n \n+    /// Diagnostic-only snapshot under the connection lock.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        let state = self.0.state.lock(\"diagnostic_write_state\");\n+        format!(\"{} writer_registered={} runtime_error={}\",\n+            state.inner.diagnostic_write_state(id),\n+            state.blocked_writers.contains_key(&id), state.error.is_some())\n+    }\n+\n     /// Current state of the congestion control algorithm, for debugging purposes\n     pub fn congestion_state(&self) -> Box<dyn Controller> {\n         self.0\n",
+  "trials": [
+    {
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "bbedd60b041198ba9e0cc41ea2df8ab6663fb3358ded218efda86fc069f26b3f"
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "ccc416732c01514c49f56ce156d864bfa6d0e1f3377c45f6711e56fb57eef458"
+      },
+      "passed": true,
+      "error": null,
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "collector_cpu": 4,
+      "sched_schedstats": {
+        "status": "observed",
+        "enabled": false,
+        "source": "/proc/sys/kernel/sched_schedstats"
+      },
+      "sample_count": 1289,
+      "cpu_sample_count": 138,
+      "roles": {
+        "server": 729811,
+        "client": 729817
+      },
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "owned_socket_inode_sets": [
+            [
+              "4428474",
+              "4428475",
+              "4428476"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:37:55.537001+00:00",
+            "wall_time_unix_seconds": 1794008275.5370007,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 4456303,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00035887002013623714
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:37:58.414802+00:00",
+            "wall_time_unix_seconds": 1794008278.4148018,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00016104598762467504
+          },
+          "first_positive_drop_sample": null
+        },
+        "server": {
+          "owned_socket_inode_sets": [
+            [
+              "4474519",
+              "4474520",
+              "4474521",
+              "4485127"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:37:56.300503+00:00",
+            "wall_time_unix_seconds": 1794008276.300503,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1098110,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00030577200232073665
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:37:58.414802+00:00",
+            "wall_time_unix_seconds": 1794008278.4148018,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.0001654850202612579
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "matched_pre_drop_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008273.314615,
+            1794008274.0572276
+          ],
+          "actual_wall_seconds": [
+            1794008273.3414872,
+            1794008274.0322266
+          ],
+          "actual_monotonic_seconds": [
+            444995.398848742,
+            444996.089588113
+          ],
+          "elapsed_seconds": 0.6907393709989265,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729817,
+              "start_time_ticks": 44499448,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729818,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.25,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5211806581683318,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 356899030,
+                "wait_ns": 39750,
+                "timeslices": 40567
+              }
+            },
+            {
+              "tid": 729819,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.25,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.5067034176636559,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 356009126,
+                "wait_ns": 237769,
+                "timeslices": 40044
+              }
+            },
+            {
+              "tid": 729820,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.23,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.5067034176636559,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 353839057,
+                "wait_ns": 37280,
+                "timeslices": 40393
+              }
+            },
+            {
+              "tid": 729821,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.25,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.5067034176636559,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 355683495,
+                "wait_ns": 33190,
+                "timeslices": 40887
+              }
+            },
+            {
+              "tid": 729822,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.24,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.5211806581683318,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 353201135,
+                "wait_ns": 55718,
+                "timeslices": 39797
+              }
+            },
+            {
+              "tid": 729823,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.23,
+              "system_seconds": 0.13,
+              "cpu_core_equivalent": 0.5211806581683318,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 356023651,
+                "wait_ns": 26430,
+                "timeslices": 40708
+              }
+            },
+            {
+              "tid": 729824,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.25,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5211806581683318,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 357390312,
+                "wait_ns": 42978,
+                "timeslices": 40072
+              }
+            },
+            {
+              "tid": 729825,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.24,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5067034176636559,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 351253729,
+                "wait_ns": 31889,
+                "timeslices": 39559
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.11153630332795,
+          "worker_core_equivalent_range": [
+            0.5067034176636559,
+            0.5211806581683318
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        },
+        "matched_drop_to_refusal_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008274.0572276,
+            1794008274.7998402
+          ],
+          "actual_wall_seconds": [
+            1794008274.0754943,
+            1794008274.765774
+          ],
+          "actual_monotonic_seconds": [
+            444996.132856104,
+            444996.823135819
+          ],
+          "elapsed_seconds": 0.6902797149959952,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729817,
+              "start_time_ticks": 44499448,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729818,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.27,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 375712080,
+                "wait_ns": 32020,
+                "timeslices": 37270
+              }
+            },
+            {
+              "tid": 729819,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.29,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 379007109,
+                "wait_ns": 27610,
+                "timeslices": 37415
+              }
+            },
+            {
+              "tid": 729820,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.28,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 376016142,
+                "wait_ns": 46600,
+                "timeslices": 38114
+              }
+            },
+            {
+              "tid": 729821,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.27,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 377326422,
+                "wait_ns": 37360,
+                "timeslices": 37533
+              }
+            },
+            {
+              "tid": 729822,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.26,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5360145922905277,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 375162489,
+                "wait_ns": 382779,
+                "timeslices": 36938
+              }
+            },
+            {
+              "tid": 729823,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.26,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 375857762,
+                "wait_ns": 92540,
+                "timeslices": 37149
+              }
+            },
+            {
+              "tid": 729824,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.26,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.5360145922905277,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 375670306,
+                "wait_ns": 35510,
+                "timeslices": 37070
+              }
+            },
+            {
+              "tid": 729825,
+              "start_time_ticks": 44499448,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.26,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.5505014731632447,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 377780724,
+                "wait_ns": 37920,
+                "timeslices": 37409
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.375038023560524,
+          "worker_core_equivalent_range": [
+            0.5360145922905277,
+            0.5505014731632447
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        }
+      },
+      "observer": {
+        "median_gap_seconds": 0.004725271981442347,
+        "max_gap_seconds": 0.007682483003009111,
+        "median_collection_seconds": 0.0006504420307464898,
+        "max_collection_seconds": 0.0027676650206558406,
+        "max_cpu_collection_seconds": 0.00054676498984918,
+        "max_cpu_gap_seconds": 0.0451033019926399,
+        "wall_minus_monotonic_range_seconds": 1.6689300537109375e-06
+      }
+    },
+    {
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-2.json",
+        "sha256": "455b41e6f700dcb1015c7daeb06000e9ea0a08b5d9dce079b9c92cb70b0d588b"
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-2-samples.json",
+        "sha256": "5bbdfd7f63d469b7df323b73362b51c943db0aaed30d87a41459ac1d7cdf9792"
+      },
+      "passed": true,
+      "error": null,
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "collector_cpu": 4,
+      "sched_schedstats": {
+        "status": "observed",
+        "enabled": false,
+        "source": "/proc/sys/kernel/sched_schedstats"
+      },
+      "sample_count": 1262,
+      "cpu_sample_count": 138,
+      "roles": {
+        "server": 729841,
+        "client": 729847
+      },
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "owned_socket_inode_sets": [
+            [
+              "4428481",
+              "4428482",
+              "4428483"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:38:00.745764+00:00",
+            "wall_time_unix_seconds": 1794008280.745764,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6645576,
+              "send_queue_bytes": 0,
+              "receive_drops": 2910
+            },
+            "role_sample_seconds": 0.0003307610168121755
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:38:04.472249+00:00",
+            "wall_time_unix_seconds": 1794008284.4722488,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 7571
+            },
+            "role_sample_seconds": 0.0003300810349173844
+          },
+          "first_positive_drop_sample": {
+            "wall_time_utc": "2026-11-06T23:38:00.220175+00:00",
+            "wall_time_unix_seconds": 1794008280.2201753,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 5899026,
+              "send_queue_bytes": 0,
+              "receive_drops": 97
+            },
+            "role_sample_seconds": 0.00037599995266646147
+          }
+        },
+        "server": {
+          "owned_socket_inode_sets": [
+            [
+              "4474529",
+              "4474530",
+              "4474531",
+              "4486151"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:38:00.558750+00:00",
+            "wall_time_unix_seconds": 1794008280.5587497,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1124272,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00019507401157170534
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:38:04.472249+00:00",
+            "wall_time_unix_seconds": 1794008284.4722488,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00030393199995160103
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "matched_pre_drop_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008279.382743,
+            1794008280.1253555
+          ],
+          "actual_wall_seconds": [
+            1794008279.4136686,
+            1794008280.1064253
+          ],
+          "actual_monotonic_seconds": [
+            445001.471030291,
+            445002.163787131
+          ],
+          "elapsed_seconds": 0.6927568400278687,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729847,
+              "start_time_ticks": 44500055,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729848,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 457974935,
+                "wait_ns": 57989,
+                "timeslices": 26153
+              }
+            },
+            {
+              "tid": 729849,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 459270483,
+                "wait_ns": 65400,
+                "timeslices": 26023
+              }
+            },
+            {
+              "tid": 729850,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 455086475,
+                "wait_ns": 59030,
+                "timeslices": 25451
+              }
+            },
+            {
+              "tid": 729851,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 458474355,
+                "wait_ns": 95180,
+                "timeslices": 25895
+              }
+            },
+            {
+              "tid": 729852,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.33,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.649578573604408,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 458730833,
+                "wait_ns": 204450,
+                "timeslices": 26001
+              }
+            },
+            {
+              "tid": 729853,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.649578573604408,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 455662948,
+                "wait_ns": 71509,
+                "timeslices": 25875
+              }
+            },
+            {
+              "tid": 729854,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 459020157,
+                "wait_ns": 125950,
+                "timeslices": 26162
+              }
+            },
+            {
+              "tid": 729855,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6640136530178392,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 455931347,
+                "wait_ns": 160830,
+                "timeslices": 25911
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.283239065315851,
+          "worker_core_equivalent_range": [
+            0.649578573604408,
+            0.6640136530178392
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        },
+        "matched_drop_to_refusal_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008280.1253555,
+            1794008280.867968
+          ],
+          "actual_wall_seconds": [
+            1794008280.1484826,
+            1794008280.835921
+          ],
+          "actual_monotonic_seconds": [
+            445002.205844305,
+            445002.89328267
+          ],
+          "elapsed_seconds": 0.6874383650138043,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729847,
+              "start_time_ticks": 44500055,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729848,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.37,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 456483942,
+                "wait_ns": 54180,
+                "timeslices": 20422
+              }
+            },
+            {
+              "tid": 729849,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 459701319,
+                "wait_ns": 45860,
+                "timeslices": 20428
+              }
+            },
+            {
+              "tid": 729850,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 459460728,
+                "wait_ns": 50459,
+                "timeslices": 19944
+              }
+            },
+            {
+              "tid": 729851,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.36,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6836976577391953,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 458536157,
+                "wait_ns": 62688,
+                "timeslices": 20588
+              }
+            },
+            {
+              "tid": 729852,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6546041403885913,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 456858724,
+                "wait_ns": 47588,
+                "timeslices": 20873
+              }
+            },
+            {
+              "tid": 729853,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.37,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 457907841,
+                "wait_ns": 51620,
+                "timeslices": 20556
+              }
+            },
+            {
+              "tid": 729854,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.35,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 461665122,
+                "wait_ns": 65070,
+                "timeslices": 20557
+              }
+            },
+            {
+              "tid": 729855,
+              "start_time_ticks": 44500055,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.36,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6691508990638934,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 456640620,
+                "wait_ns": 40518,
+                "timeslices": 20413
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.353207192511147,
+          "worker_core_equivalent_range": [
+            0.6546041403885913,
+            0.6836976577391953
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        }
+      },
+      "observer": {
+        "median_gap_seconds": 0.004752181994263083,
+        "max_gap_seconds": 0.0077338009723462164,
+        "median_collection_seconds": 0.0006690120208077133,
+        "max_collection_seconds": 0.002544900984503329,
+        "max_cpu_collection_seconds": 0.0005788839771412313,
+        "max_cpu_gap_seconds": 0.046194292954169214,
+        "wall_minus_monotonic_range_seconds": 3.814697265625e-06
+      }
+    },
+    {
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-3.json",
+        "sha256": "7c95a309bcd7ed2c833dc1e60ee11f38c3694206e82ac9f9e2796337ab6c4d6b"
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic-mixed-3-samples.json",
+        "sha256": "306a60d7a3d9fccdd0183cececad84707ab8e667247815a1c9e37ec238225742"
+      },
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "collector_cpu": 4,
+      "sched_schedstats": {
+        "status": "observed",
+        "enabled": false,
+        "source": "/proc/sys/kernel/sched_schedstats"
+      },
+      "sample_count": 923,
+      "cpu_sample_count": 102,
+      "roles": {
+        "server": 729869,
+        "client": 729875
+      },
+      "write_state_snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3897,
+          "stream_max": 16565510,
+          "stream_offset": 16565510,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 16565584,
+          "conn_credit": 4611686018410822319,
+          "send_window": 10000000,
+          "buffered_data": 1105592,
+          "window_credit": 8894408,
+          "write_limit": 8894408,
+          "stream_retained": 1105592,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 20314,
+          "in_flight": 18876,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "udp": {
+        "client": {
+          "owned_socket_inode_sets": [
+            [
+              "4428488",
+              "4428489",
+              "4428490"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:38:08.933369+00:00",
+            "wall_time_unix_seconds": 1794008288.9333692,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7049603,
+              "send_queue_bytes": 0,
+              "receive_drops": 41373
+            },
+            "role_sample_seconds": 0.00034000095911324024
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:38:08.942809+00:00",
+            "wall_time_unix_seconds": 1794008288.9428086,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7049603,
+              "send_queue_bytes": 0,
+              "receive_drops": 43137
+            },
+            "role_sample_seconds": 0.00034021097235381603
+          },
+          "first_positive_drop_sample": {
+            "wall_time_utc": "2026-11-06T23:38:06.183511+00:00",
+            "wall_time_unix_seconds": 1794008286.1835115,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6417083,
+              "send_queue_bytes": 0,
+              "receive_drops": 39
+            },
+            "role_sample_seconds": 0.0003805590094998479
+          },
+          "first_refusal_wall_time_seconds": 1794008286.926124,
+          "last_pre_refusal": {
+            "wall_time_utc": "2026-11-06T23:38:06.923422+00:00",
+            "wall_time_unix_seconds": 1794008286.923422,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6429240,
+              "send_queue_bytes": 0,
+              "receive_drops": 12301
+            },
+            "role_sample_seconds": 0.00036313000600785017
+          },
+          "peak_pre_refusal": {
+            "wall_time_utc": "2026-11-06T23:38:06.731377+00:00",
+            "wall_time_unix_seconds": 1794008286.7313774,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6745975,
+              "send_queue_bytes": 0,
+              "receive_drops": 7912
+            },
+            "role_sample_seconds": 0.00038235000101849437
+          },
+          "drop_onset_bracket_seconds_before_refusal": [
+            0.742232084274292,
+            0.7474029064178467
+          ]
+        },
+        "server": {
+          "owned_socket_inode_sets": [
+            [
+              "4474537",
+              "4474538",
+              "4474539",
+              "4486156"
+            ]
+          ],
+          "identity_stable": true,
+          "drops_monotonic": true,
+          "peak": {
+            "wall_time_utc": "2026-11-06T23:38:05.445141+00:00",
+            "wall_time_unix_seconds": 1794008285.4451408,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 998977,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00040208897553384304
+          },
+          "final": {
+            "wall_time_utc": "2026-11-06T23:38:08.942809+00:00",
+            "wall_time_unix_seconds": 1794008288.9428086,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00030012201750651
+          },
+          "first_positive_drop_sample": null,
+          "first_refusal_wall_time_seconds": 1794008286.926124,
+          "last_pre_refusal": {
+            "wall_time_utc": "2026-11-06T23:38:06.923422+00:00",
+            "wall_time_unix_seconds": 1794008286.923422,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1920,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00031141203362494707
+          },
+          "peak_pre_refusal": {
+            "wall_time_utc": "2026-11-06T23:38:05.445141+00:00",
+            "wall_time_unix_seconds": 1794008285.4451408,
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 998977,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "role_sample_seconds": 0.00040208897553384304
+          }
+        }
+      },
+      "cpu_windows": {
+        "matched_pre_drop_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008285.440899,
+            1794008286.1835115
+          ],
+          "actual_wall_seconds": [
+            1794008285.469889,
+            1794008286.15991
+          ],
+          "actual_monotonic_seconds": [
+            445007.527250593,
+            445008.217271541
+          ],
+          "elapsed_seconds": 0.6900209480081685,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729875,
+              "start_time_ticks": 44500660,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729876,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 429285500,
+                "wait_ns": 96760,
+                "timeslices": 28214
+              }
+            },
+            {
+              "tid": 729877,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.33,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 431860383,
+                "wait_ns": 160710,
+                "timeslices": 28540
+              }
+            },
+            {
+              "tid": 729878,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.29,
+              "system_seconds": 0.13,
+              "cpu_core_equivalent": 0.6086771730805889,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 429816626,
+                "wait_ns": 46929,
+                "timeslices": 29199
+              }
+            },
+            {
+              "tid": 729879,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.32,
+              "system_seconds": 0.11,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 433883657,
+                "wait_ns": 108790,
+                "timeslices": 28866
+              }
+            },
+            {
+              "tid": 729880,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.3,
+              "system_seconds": 0.12,
+              "cpu_core_equivalent": 0.6086771730805889,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 426505206,
+                "wait_ns": 1298985,
+                "timeslices": 28085
+              }
+            },
+            {
+              "tid": 729881,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.34,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 428873806,
+                "wait_ns": 75840,
+                "timeslices": 29206
+              }
+            },
+            {
+              "tid": 729882,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.33,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 429816747,
+                "wait_ns": 190329,
+                "timeslices": 28677
+              }
+            },
+            {
+              "tid": 729883,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.33,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6231694867253648,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 430960332,
+                "wait_ns": 503958,
+                "timeslices": 28380
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.956371266513367,
+          "worker_core_equivalent_range": [
+            0.6086771730805889,
+            0.6231694867253648
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        },
+        "matched_drop_to_refusal_elapsed": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794008286.1835115,
+            1794008286.926124
+          ],
+          "actual_wall_seconds": [
+            1794008286.203472,
+            1794008286.8953059
+          ],
+          "actual_monotonic_seconds": [
+            445008.260833364,
+            445008.952667464
+          ],
+          "elapsed_seconds": 0.691834099998232,
+          "clock_ticks_per_second": 100,
+          "threads": [
+            {
+              "tid": 729875,
+              "start_time_ticks": 44500660,
+              "name": "datagram-load-f",
+              "main_thread": true,
+              "user_seconds": 0.0,
+              "system_seconds": 0.0,
+              "cpu_core_equivalent": 0.0,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 0,
+                "wait_ns": 0,
+                "timeslices": 0
+              }
+            },
+            {
+              "tid": 729876,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6793536196050485,
+              "last_cpu_before": 8,
+              "last_cpu_after": 8,
+              "raw_schedstat_delta": {
+                "run_ns": 477366248,
+                "wait_ns": 478608,
+                "timeslices": 19500
+              }
+            },
+            {
+              "tid": 729877,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6793536196050485,
+              "last_cpu_before": 9,
+              "last_cpu_after": 9,
+              "raw_schedstat_delta": {
+                "run_ns": 474682314,
+                "wait_ns": 81389,
+                "timeslices": 19221
+              }
+            },
+            {
+              "tid": 729878,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6793536196050485,
+              "last_cpu_before": 10,
+              "last_cpu_after": 10,
+              "raw_schedstat_delta": {
+                "run_ns": 476152811,
+                "wait_ns": 69589,
+                "timeslices": 19918
+              }
+            },
+            {
+              "tid": 729879,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.39,
+              "system_seconds": 0.08,
+              "cpu_core_equivalent": 0.6793536196050485,
+              "last_cpu_before": 11,
+              "last_cpu_after": 11,
+              "raw_schedstat_delta": {
+                "run_ns": 477256400,
+                "wait_ns": 73320,
+                "timeslices": 19475
+              }
+            },
+            {
+              "tid": 729880,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.09,
+              "cpu_core_equivalent": 0.6793536196050485,
+              "last_cpu_before": 12,
+              "last_cpu_after": 12,
+              "raw_schedstat_delta": {
+                "run_ns": 474077493,
+                "wait_ns": 43860,
+                "timeslices": 19220
+              }
+            },
+            {
+              "tid": 729881,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.39,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.7082622842690931,
+              "last_cpu_before": 13,
+              "last_cpu_after": 13,
+              "raw_schedstat_delta": {
+                "run_ns": 475433488,
+                "wait_ns": 53020,
+                "timeslices": 19229
+              }
+            },
+            {
+              "tid": 729882,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6938079519370708,
+              "last_cpu_before": 14,
+              "last_cpu_after": 14,
+              "raw_schedstat_delta": {
+                "run_ns": 474001512,
+                "wait_ns": 43159,
+                "timeslices": 19555
+              }
+            },
+            {
+              "tid": 729883,
+              "start_time_ticks": 44500661,
+              "name": "tokio-rt-worker",
+              "main_thread": false,
+              "user_seconds": 0.38,
+              "system_seconds": 0.1,
+              "cpu_core_equivalent": 0.6938079519370708,
+              "last_cpu_before": 15,
+              "last_cpu_after": 15,
+              "raw_schedstat_delta": {
+                "run_ns": 478703922,
+                "wait_ns": 52959,
+                "timeslices": 19158
+              }
+            }
+          ],
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.492646286168477,
+          "worker_core_equivalent_range": [
+            0.6793536196050485,
+            0.7082622842690931
+          ],
+          "schedstat_wait_interpretable": false,
+          "scope": "Cumulative deltas use matching TID/start_time identities and actual snapshot times. CPU ticks are quantized; TIDs do not identify migrating Tokio futures. schedstat wait is OS-thread wait, not future queue wait."
+        }
+      },
+      "observer": {
+        "median_gap_seconds": 0.004768625978613272,
+        "max_gap_seconds": 0.007923765981104225,
+        "median_collection_seconds": 0.0006904609617777169,
+        "max_collection_seconds": 0.0013751430087722838,
+        "max_cpu_collection_seconds": 0.0006573119899258018,
+        "max_cpu_gap_seconds": 0.044906917959451675,
+        "wall_minus_monotonic_range_seconds": 1.430511474609375e-06
+      },
+      "transmit_snapshot": {
+        "cwnd_bytes": 20314,
+        "in_flight_bytes": 18876,
+        "remaining_cwnd_bytes": 1438,
+        "current_mtu_bytes": 1452,
+        "scope": "Snapshot arithmetic, not an observed packetizer branch or measured goodput limit."
+      }
+    }
+  ],
+  "relative_windows": {
+    "matched_pre_drop_elapsed": [
+      0.8846218585968018,
+      1.6272344589233398
+    ],
+    "matched_drop_to_refusal_elapsed": [
+      1.6272344589233398,
+      2.369847059249878
+    ]
+  },
+  "limits": [
+    "Requested 4ms UDP and40ms CPU sampling is not guaranteed cadence; actual times and costs are recorded.",
+    "Pre-drop window is an adjacent equal-duration reference, not proof of an unpressured state; receive queue can already be growing.",
+    "Window CPU endpoints are sampled inside the requested wall-time windows; no counter interpolation or extrapolation.",
+    "sched_schedstats was inspected; disabled statistics cannot support a no-wait conclusion, even if raw counters are nonzero.",
+    "Per-thread CPU cannot identify the single migrating endpoint task; OS runnable wait cannot measure Tokio future wait.",
+    "Logical offered deliveries are not observed network packet or syscall rates. Kernel byte totals remain unavailable.",
+    "Two passes followed by one refusal result from stop-at-first-refusal collection, not a statistical failure-rate estimate."
+  ]
+}
