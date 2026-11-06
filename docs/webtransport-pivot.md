@@ -2443,3 +2443,21 @@ Original source, provenance/patch and exact ordered-ACK executable restored.
 Overall throughput/memory parity remains unmet. Full evidence, rejected
 diff, failed trials, profile limits and reproduction scripts:
 [`webtransport-first-key-update-rejected-2026-11-06.json`](reports/webtransport-first-key-update-rejected-2026-11-06.json).
+
+## Retained ordered-ACK parity refresh — 2026-11-06
+
+Same frozen server image (7d7eec6) and clients, rotated three12s runs:
+QUIC medians private +17.88%, room +1.33%, mixed +10.23% versus native
+plaintext WebSocket. Room distributions overlap; do not claim universal or
+statistical superiority. All18 receipts passed. Fresh100k capacity pairs
+passed400k measured deliveries each; ready RSS native111.99MiB versus
+QUIC2083.02MiB. RTTp99 bucket upper bounds1.048576ms versus2.097152ms.
+Memory parity remains far from met.
+
+Both-endpoint mixed user-cycle leaf profiles passed with zero lost samples.
+Kernel accounting/profiling unavailable; never substitute zero. The initial
+DWARF attempt failed permissions; a successful native leaf capture's report
+hook failed and was recovered from the same data, with PIDs verified from
+thread-affinity metadata. No ordinary timing includes profiling.
+Detailed counters, CPU/delivery, setup, retirement, latency, hashes and scripts:
+[`webtransport-retained-parity-ordered-ack-2026-11-06.json`](reports/webtransport-retained-parity-ordered-ack-2026-11-06.json).
