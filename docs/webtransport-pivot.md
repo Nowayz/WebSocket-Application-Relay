@@ -2461,3 +2461,31 @@ hook failed and was recovered from the same data, with PIDs verified from
 thread-affinity metadata. No ordinary timing includes profiling.
 Detailed counters, CPU/delivery, setup, retirement, latency, hashes and scripts:
 [`webtransport-retained-parity-ordered-ack-2026-11-06.json`](reports/webtransport-retained-parity-ordered-ack-2026-11-06.json).
+
+## Datagram parts coalescing — not retained (2026-11-06)
+
+Verified an integration double-copy: relay allocates a CBOR-frame Vec, then
+WebTransport allocates again to prepend the session ID. A pinned library
+method coalesced session header/routing prefix/body in one allocation.
+Eleven library tests,253 relay tests(one existing ignored), Clippy, release
+build and300 vendored-file verification passed. Fixed-client18short and
+6long datagram receipts passed integrity/cleanup; user-space profiles of
+both endpoints had zero lost samples.
+
+A4000-submission allocator diagnostic removed exactly4000 relay temporary
+allocations totaling4,148,000 bytes; final4000 transmit buffers remained.
+Total requests fell15043 to10006, but packet batching also changed; do not
+attribute the entire difference to this change or claim copied-byte counters.
+Room CPU median fell11.14 to10.71s at the same offered load. Private
+CPU2.06 to2.04s. Mixed CPU/arrival results were not a convincing win:
+short missing counts increased; longer receipt distributions overlap widely.
+
+Fresh reliable mixed controls failed baseline1/3 and candidate2/3 with
+slow-consumer closes. This method is not called on reliable output; those
+failures expose an unstable common acceptance boundary, not proof of a
+parts-method cause. Do not replace the failed receipts with passing retries.
+Restore retained source/binary and diagnose queue saturation/scheduling
+before selecting more variants. Browser/freshness gates were not run for
+this unselected change. No per-session memory benefit claimed.
+Full source, exact hashes, counters, failures and reproduction:
+[`webtransport-datagram-parts-deferred-2026-11-06.json`](reports/webtransport-datagram-parts-deferred-2026-11-06.json).
