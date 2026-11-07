@@ -2737,3 +2737,39 @@ Exact repeat values, workload/CPU identities, counters, latency histogram
 bounds, setup/retirement phases, current QUIC allocation scope and receipt
 hashes: [current parity report](reports/webtransport-session-io-current-parity-2026-11-06.json).
 The full goal remains active and unmet.
+
+## Isolated client read-cooperation diagnostic — 2026-11-06
+
+Nine fixed-order rotated cases compare original frozen client A, unmodified
+rebuilt client B, and the same B snapshot with one receiver `consume_budget`
+await (C). B/C build from explicit retained source `f9c61c8` in an isolated
+source/target tree; the original acceptance clients and selected production
+image remain frozen. Every case uses the same read-only first-refusal server
+image `737b50de`, the original 32-pair/1024-reader stream workload, buffers,
+CPU placement and UDP/thread observer. This is a client-side causal diagnostic,
+not server performance acceptance.
+
+A passes two cases, B one and C two. C3 still refuses output with peer stream
+credit zero, 8,852,000 B of local send-window headroom and a registered writer.
+Its first positive client-drop observation completes 318.281 ms before logged
+refusal. All four refusals have peer stream credit zero. Several passing cases
+also drop UDP packets; B2 has congestion-window headroom greater than the MTU,
+so neither drops alone nor instantaneous cwnd exhaustion explains every close.
+
+Passing C1/C2 generate 1,023,810 and 1,023,811 private updates (99.9814% of plan)
+and all 4,000 fanout updates. Their private generation-lag p99 upper bound is
+1.048576 ms. These passes do not conceal a large offer reduction, but failed
+measured gates remain unavailable and three repetitions establish no failure-rate
+ranking. The one cooperation call is not sufficient to fix the failure.
+
+Failed pre-refusal CPU windows average 5.387-5.508 cores; scheduler statistics
+remain disabled. Requested sampling cadence is not guaranteed: actual UDP gaps
+reach 6.84-9.63 ms and CPU gaps 45.18-47.18 ms. Shorter bursts and serialization
+of a migrating endpoint future remain unresolved. All sampled server UDP drops
+are zero and every owned-socket set is stable.
+
+Build archives, source/feature/toolchain bindings, exact one-line diff, all nine
+outcomes, generated counts, first-refusal snapshots and sampling limits:
+[client cooperation report](reports/webtransport-client-read-cooperation-diagnostic-2026-11-06.json).
+Next diagnostics distinguish ingress isolation and send-buffer ownership/recovery
+without raising resource budgets or replacing fixed-client server acceptance.

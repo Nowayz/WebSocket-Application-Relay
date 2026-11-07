@@ -1,0 +1,3050 @@
+{
+  "record_type": "completed_client_only_causal_diagnostic",
+  "analysis_timestamp_utc": "2026-11-07T00:30:45.398529+00:00",
+  "conclusion": "One receiver consume_budget call is not a sufficient fix: cooperative client C3 still reached peer stream-credit zero and reliable queue refusal after client UDP drops. This experiment does not identify the complete causal mechanism or establish a server performance improvement.",
+  "scope": "Client-only cooperative-read diagnostic, not server performance acceptance. A is frozen original; B rebuild controls library/toolchain drift; C differs from B by one receiver consume_budget call. Nine fixed cases rotate A/B/C and continue through ordinary workload failures; no failure-rate estimate or automatic winner follows from these three repetitions. Any C benefit requires actual generated counts and generation lag consistent with the full planned offer; passing while generating less work is insufficient.",
+  "worktree_root": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+  "analysis_checkout_head": "f0dfbf17a34ff0ae66bd718410dbea774fc99e3b",
+  "stopping_rule": "Run all nine cases; ordinary workload failure does not stop the series. Infrastructure errors abort with partial status.",
+  "rotated_order": [
+    {
+      "arm": "A",
+      "repetition": 1
+    },
+    {
+      "arm": "B",
+      "repetition": 1
+    },
+    {
+      "arm": "C",
+      "repetition": 1
+    },
+    {
+      "arm": "B",
+      "repetition": 2
+    },
+    {
+      "arm": "C",
+      "repetition": 2
+    },
+    {
+      "arm": "A",
+      "repetition": 2
+    },
+    {
+      "arm": "C",
+      "repetition": 3
+    },
+    {
+      "arm": "A",
+      "repetition": 3
+    },
+    {
+      "arm": "B",
+      "repetition": 3
+    }
+  ],
+  "source_build": {
+    "record_type": "client_diagnostic_build_provenance",
+    "scope": "Client-only cooperative-read diagnostic. A is the original frozen client; B is rebuilt from retained sources; C adds one receiver consume_budget call. B/C cannot be used to claim a server performance win or acceptance. The exact original A dependency build is not established by source-path matches.",
+    "timestamp_utc": "2026-11-07T00:25:05.352005+00:00",
+    "status": "complete",
+    "retained_source_commit": "f9c61c810912e902c2a3a20146c037913833051f",
+    "tracked_snapshot_paths": [
+      "Cargo.toml",
+      "Cargo.lock",
+      "src",
+      "examples",
+      "vendor"
+    ],
+    "snapshot_directory": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source",
+    "source_B_archive": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source-B.tar",
+      "sha256": "9e518dd6b8ace5bf944cb16c30be05c4c47cb4f945e1f7a15cbce6b8e008f6d1",
+      "bytes": 5160960
+    },
+    "source_B_manifest": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source-B-manifest.json",
+      "sha256": "d7161ee6eca174ca5a87a3077306a1bbc196b1b1dd445a543bcb905376faa3ee",
+      "bytes": 107908
+    },
+    "toolchain": {
+      "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.91.1\nLLVM version: 21.1.2",
+      "cargo": "cargo 1.91.1 (ea2d97820 2025-10-10)\nrelease: 1.91.1\ncommit-hash: ea2d97820c16195b0ca3fadb4319fe512c199a43\ncommit-date: 2025-10-10\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.1 (sys:0.20.2 vendored)\nlibcurl: 8.15.0-DEV (sys:0.4.83+curl-8.15.0 vendored ssl:OpenSSL/3.5.2)\nssl: OpenSSL 3.5.2 5 Aug 2025\nos: Arch Linux [64-bit]",
+      "build_environment": {}
+    },
+    "applicable_build_configuration": [
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/rust-toolchain.toml",
+        "sha256": "8f60f3f4f74555b3cde3875a861a761bf6de766fee6471ef996d98c5d0504d1b",
+        "bytes": 66
+      }
+    ],
+    "resolved_dependencies_and_features": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/cargo-metadata.json",
+      "sha256": "6159d6ccfd438f9ff3f713c67d309cf4ea82dee8dba8a772a10f1d686984fa87",
+      "bytes": 1275697
+    },
+    "candidate_patch": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-diagnostic.patch",
+      "sha256": "2e402a31c2e97daa28b168308d715621ea2d414dc262291b0d26a40be3de18b4",
+      "bytes": 232
+    },
+    "original_argument_receipt": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+      "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84",
+      "bytes": 15044
+    },
+    "server": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/receive-clock-write-state-relay",
+      "sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "bytes": 7932640
+    },
+    "A": {
+      "binary": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/datagram-load-final",
+        "sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+        "bytes": 5713800
+      },
+      "provenance_limit": "Frozen original; exact dependency build was not recovered."
+    },
+    "controller_sources": [
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-client-read-cooperation-diagnostic.py",
+        "sha256": "503b82da146f1c210d15863a73b2929150a68dd78a0333aef41c390f04b91d14",
+        "bytes": 11248
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/run-client-read-cooperation-diagnostic.py",
+        "sha256": "6cd6ce3e75185e02dd82a0c1902de79b57d7be71e9a97637eda0c01f04ef3f26",
+        "bytes": 9683
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-peer-udp-cpu-diagnostic.py",
+        "sha256": "c11b54d28641c8b0aeb6eaa2bb377b3010db52455bb4e5a9e41c8f47ef7da5d1",
+        "bytes": 13241
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/datagram-load.py",
+        "sha256": "624ea8c66ac41ee519ec3890e01b9b92bb14a7c7326b9b31862626f60db0408d",
+        "bytes": 12052
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/benchmark.py",
+        "sha256": "9dad7569893d272bb8fb79b05163531f84cdb1b5c15a2a890911a47f31f82ba1",
+        "bytes": 10061
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/capacity.py",
+        "sha256": "e8f00913f25e16039d5f81bf151383f093567b11cb48c13f083efa47ac041e74",
+        "bytes": 37837
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/inspection.py",
+        "sha256": "637acd47201d43b1134e4066ab591e4f3967a292255066b9dfd862c17d34dd26",
+        "bytes": 30713
+      },
+      {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/socket_resources.py",
+        "sha256": "a71a45683b0d3661686dbdd7fa9c23665f6de7338358138119fd28f540a6a0e1",
+        "bytes": 9461
+      }
+    ],
+    "B": {
+      "command": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "--example",
+        "datagram_load",
+        "--target-dir",
+        "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source/target",
+        "--message-format=json-render-diagnostics"
+      ],
+      "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source",
+      "log": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/build-B.log",
+        "sha256": "19b918dd43a914edc8e1bd485203e342d93c89fff9d1733eebe124af9021ef9f",
+        "bytes": 259184
+      },
+      "binary": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-read-current-control-diagnostic",
+        "sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+        "bytes": 5725048
+      }
+    },
+    "source_C_archive": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source-C.tar",
+      "sha256": "612449d5973c2f1e2302dabb89422e0ed746aa46705dd9dd8eeef3cef9314df2",
+      "bytes": 5550080
+    },
+    "source_C_manifest": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source-C-manifest.json",
+      "sha256": "1cc5e3f6d4335719807fb24b762aef32de7d5c5c7f2a59e9548bc6c3c48afd3e",
+      "bytes": 107908
+    },
+    "C": {
+      "command": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "--example",
+        "datagram_load",
+        "--target-dir",
+        "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source/target",
+        "--message-format=json-render-diagnostics"
+      ],
+      "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/source",
+      "log": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-build-f9c61c8/build-C.log",
+        "sha256": "bdace50ab3c6c5eb2943b0ffc33b467971ad535c44dd7c020f958e425da03a26",
+        "bytes": 251526
+      },
+      "binary": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-read-current-cooperative-diagnostic",
+        "sha256": "4e8f13309a8ab8844deb7f3cc17782cb09e5311c3e86def448424ea4ba0a2e45",
+        "bytes": 5725880
+      }
+    }
+  },
+  "B_vs_C_changed_files": [
+    "examples/datagram_load.rs"
+  ],
+  "client_patch_text": "--- a/examples/datagram_load.rs\n+++ b/examples/datagram_load.rs\n@@ -345,6 +345,7 @@\n             now,\n             &args,\n         )?;\n+        tokio::task::consume_budget().await;\n     }\n     Ok(ReadResult {\n         recipient: r,\n",
+  "server_diagnostic_patch": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-write-state-source.patch",
+    "sha256": "d2f79a54b59b01477e4697607cbb7312ce1792200d50ed68ee1ebd4045756c1f",
+    "bytes": 6476
+  },
+  "server_diagnostic_patch_text": "diff --git a/src/webtransport.rs b/src/webtransport.rs\nindex 757e8ac..0dae326 100644\n--- a/src/webtransport.rs\n+++ b/src/webtransport.rs\n@@ -27,6 +27,9 @@ use wtransport::quinn::{Endpoint, VarInt};\n \n mod queue;\n \n+// Diagnostic only: capture the first failure without a logging avalanche.\n+static OVERLOAD_RECORDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+\n struct QueuedOutput {\n     packet: Envelope,\n     offset: usize,\n@@ -99,6 +102,21 @@ impl Output {\n             if accepted && wake {\n                 self.queue.ready.notify_one();\n             }\n+            if !accepted && !OVERLOAD_RECORDED.swap(true, Relaxed) {\n+                let quic = std::ops::Deref::deref(self.connection.as_ref());\n+                tracing::warn!(\n+                    writer_busy = queue.owner.busy,\n+                    immediate,\n+                    queue_closed = queue.is_closed(),\n+                    queue_limit = self.relay.config.queue_messages,\n+                    queue_capacity_bytes = queue.allocated_bytes(),\n+                    stream = ?queue.owner.stream.quic_id(),\n+                    rtt_micros = quic.rtt().as_micros(),\n+                    write_state = %quic.diagnostic_write_state(queue.owner.stream.quic_id()),\n+                    stats = ?quic.stats(),\n+                    \"OVERLOAD_DIAGNOSTIC first reliable queue refusal\"\n+                );\n+            }\n             return accepted;\n         }\n         if queue.is_closed() {\ndiff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..f8e0642 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -1313,6 +1313,14 @@ impl Connection {\n         self.spaces[self.highest_space].ping_pending = true;\n     }\n \n+    /// Diagnostic-only instantaneous write-admission state.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        format!(\"{} cwnd={} in_flight={} proto_closed={}\",\n+            self.streams.diagnostic_write_state(id).unwrap_or_else(|| \"stream_absent=true\".into()),\n+            self.path.congestion.window(), self.path.in_flight.bytes, self.state.is_closed())\n+    }\n+\n     /// Update traffic keys spontaneously\n     ///\n     /// This can be useful for testing key updates, as they otherwise only happen infrequently.\ndiff --git a/vendor/quinn-proto/src/connection/streams/state.rs b/vendor/quinn-proto/src/connection/streams/state.rs\nindex 240c8f7..f33373f 100644\n--- a/vendor/quinn-proto/src/connection/streams/state.rs\n+++ b/vendor/quinn-proto/src/connection/streams/state.rs\n@@ -841,6 +841,18 @@ impl StreamsState {\n         Ok(())\n     }\n \n+    pub(crate) fn diagnostic_write_state(&self, id: StreamId) -> Option<String> {\n+        let stream = self.send.get(&id)?.as_ref()?;\n+        Some(format!(\n+            \"stream_max={} stream_offset={} stream_credit={} conn_max={} data_sent={} conn_credit={} send_window={} buffered_data={} window_credit={} write_limit={} stream_retained={} stream_writable={} stream_stopped={} connection_blocked={}\",\n+            stream.max_data, stream.offset(), stream.max_data.saturating_sub(stream.offset()),\n+            self.max_data, self.data_sent, self.max_data.saturating_sub(self.data_sent),\n+            self.send_window, self.buffered_data, self.send_window.saturating_sub(self.buffered_data),\n+            self.write_limit(), stream.pending.buffered(), stream.is_writable(),\n+            stream.stop_reason.is_some(), stream.connection_blocked,\n+        ))\n+    }\n+\n     /// Returns the maximum amount of data this is allowed to be written on the connection\n     pub(crate) fn write_limit(&self) -> u64 {\n         (self.max_data - self.data_sent)\n@@ -1075,6 +1087,36 @@ mod tests {\n         )\n     }\n \n+    #[test]\n+    fn diagnostic_write_state_distinguishes_readonly_budgets() {\n+        let mut server = make(Side::Server);\n+        server.send_window = 24;\n+        server.set_params(&TransportParameters {\n+            initial_max_streams_uni: 1u32.into(),\n+            initial_max_data: 1000u32.into(),\n+            initial_max_stream_data_uni: 1000u32.into(),\n+            ..TransportParameters::default()\n+        });\n+        let (mut pending, state) = (Retransmits::default(), ConnState::Established);\n+        let id = Streams { state: &mut server, conn_state: &state }.open(Dir::Uni).unwrap();\n+        SendStream { id, state: &mut server, pending: &mut pending, conn_state: &state }\n+            .write(&[42; 24]).unwrap();\n+        let before = (server.data_sent, server.buffered_data, server.send.len());\n+        let snapshot = server.diagnostic_write_state(id).unwrap();\n+        assert!(snapshot.contains(\"window_credit=0 \"));\n+        assert!(snapshot.contains(\"stream_credit=976 \"));\n+        assert!(snapshot.contains(\"conn_credit=976 \"));\n+        assert_eq!(snapshot, server.diagnostic_write_state(id).unwrap());\n+        assert_eq!(before, (server.data_sent, server.buffered_data, server.send.len()));\n+        server.send_window = 1000;\n+        let stream = server.send.get_mut(&id).unwrap().as_mut().unwrap();\n+        stream.max_data = stream.offset();\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"stream_credit=0 \"));\n+        server.send.get_mut(&id).unwrap().as_mut().unwrap().max_data = 1000;\n+        server.max_data = server.data_sent;\n+        assert!(server.diagnostic_write_state(id).unwrap().contains(\"conn_credit=0 \"));\n+    }\n+\n     #[test]\n     fn send_window_retains_selectively_acked_data() {\n         let mut server = make(Side::Server);\ndiff --git a/vendor/quinn/src/connection.rs b/vendor/quinn/src/connection.rs\nindex 17f9667..5862f8a 100644\n--- a/vendor/quinn/src/connection.rs\n+++ b/vendor/quinn/src/connection.rs\n@@ -555,6 +555,15 @@ impl Connection {\n         self.0.state.lock(\"stats\").inner.stats()\n     }\n \n+    /// Diagnostic-only snapshot under the connection lock.\n+    #[doc(hidden)]\n+    pub fn diagnostic_write_state(&self, id: StreamId) -> String {\n+        let state = self.0.state.lock(\"diagnostic_write_state\");\n+        format!(\"{} writer_registered={} runtime_error={}\",\n+            state.inner.diagnostic_write_state(id),\n+            state.blocked_writers.contains_key(&id), state.error.is_some())\n+    }\n+\n     /// Current state of the congestion control algorithm, for debugging purposes\n     pub fn congestion_state(&self) -> Box<dyn Controller> {\n         self.0\n",
+  "summary": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-summary.json",
+    "sha256": "fbfcdd8e623dc0df7ec73e3dc1cea2fa74ea428b81714a4367bb8fb744cb99e9",
+    "bytes": 29831
+  },
+  "analyzer": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-read-cooperation-diagnostic.py",
+    "sha256": "3642cb5986b8d073a89f593f62b283e4743c1f4390396af686e4670e1a214816",
+    "bytes": 20368
+  },
+  "cpu_window_helper": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-reliable-peer-udp-cpu.py",
+    "sha256": "0720ea8cfc2c2d9dfbe11996fc6b8d5508206e12025706bec07f7023d6455757",
+    "bytes": 13294
+  },
+  "frozen_original_client_verified_unchanged": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/datagram-load-final",
+    "sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+    "bytes": 5713800
+  },
+  "retained_production_binary_verified_unchanged": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/session-io-relay",
+    "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+    "bytes": 7925208
+  },
+  "current_release_binary_at_analysis": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+    "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+    "bytes": 7925208,
+    "matches_retained_production_binary": true,
+    "scope": "Read-only point-in-time observation; separate parent experiments can later replace target/release/war-relay."
+  },
+  "planned_offer": {
+    "private_source_updates": 1024000,
+    "fanout_source_updates": 4000,
+    "private_deliveries": 1024000,
+    "fanout_deliveries": 4096000,
+    "total_deliveries": 5120000
+  },
+  "trials": [
+    {
+      "arm": "A",
+      "repetition": 1,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-1/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "3dea62019af6423ad4ad9f42fcdb8c46c3ea1808ed0f7cb17ab3d457efa6eb5b",
+        "bytes": 488688
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-1/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "8ca66c25871224df4b41e246e76748246568e5be765f29d99fe57b8e8ee64323",
+        "bytes": 2234814
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-A.json",
+        "sha256": "f2b52d41738185a5091d26e70136b24b0106b4507a61b8e424ba5e3ee2858d22",
+        "bytes": 2176
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "direct_child_pids": {
+        "server": 759554,
+        "client": 759560
+      },
+      "measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004422725,
+        "private": {
+          "arrival_age": {
+            "max_ms": 7.93848,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023869
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023869,
+          "generated_source_updates": 1023869,
+          "generation_lag": {
+            "max_ms": 1.342964,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023869
+          },
+          "last_submit_ms": 3999.497405,
+          "not_generated": 131,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 285,
+          "received_during_offer": 1023584,
+          "scheduled_arrival_age": {
+            "max_ms": 8.915034,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023869
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255896.0,
+          "verified_unique": 1023869,
+          "generated_fraction_of_plan": 0.9998720703125
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 11.064738,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 0.731361,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.403517,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 1893,
+          "received_during_offer": 4094107,
+          "scheduled_arrival_age": {
+            "max_ms": 11.413956,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023526.75,
+          "verified_unique": 4096000,
+          "generated_fraction_of_plan": 1.0
+        }
+      },
+      "refusal_wall_seconds": null,
+      "refusal_utc": null,
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 1275,
+          "owned_socket_inode_sets": [
+            [
+              "5055060",
+              "5055061",
+              "5055062"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011184.5044343,
+            "observation_end_wall_seconds": 1794011184.5048172,
+            "observation_start_utc": "2026-11-07T00:26:24.504434+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1694244,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011186.102627,
+            "observation_end_wall_seconds": 1794011186.1029725,
+            "observation_start_utc": "2026-11-07T00:26:26.102627+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 4800,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 1275,
+          "owned_socket_inode_sets": [
+            [
+              "5059423",
+              "5059424",
+              "5059425",
+              "5062045"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011181.3388991,
+            "observation_end_wall_seconds": 1794011181.339071,
+            "observation_start_utc": "2026-11-07T00:26:21.338899+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1154503,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011186.102974,
+            "observation_end_wall_seconds": 1794011186.1032772,
+            "observation_start_utc": "2026-11-07T00:26:26.102974+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1920,
+              "send_queue_bytes": 960,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011180.0997531,
+            1794011186.1026263
+          ],
+          "actual_wall_seconds": [
+            1794011180.1002975,
+            1794011186.0699072
+          ],
+          "actual_monotonic_seconds": [
+            447902.157658926,
+            447908.127268921
+          ],
+          "elapsed_seconds": 5.969609995023347,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 3.259844448167152,
+          "worker_core_equivalent_range": [
+            0.4020363142652192,
+            0.41041207081241127
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 13.35,
+          "system_cpu_seconds": 6.11,
+          "main_thread_cpu_seconds": 0.060000000000000005,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 19536086878,
+            "wait_ns": 10802883,
+            "timeslices": 2080799
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 1275,
+        "cpu_sample_count": 139,
+        "median_udp_gap_seconds": 0.0047355699934996665,
+        "maximum_udp_gap_seconds": 0.008556203974876553,
+        "maximum_cpu_gap_seconds": 0.047181894013192505,
+        "median_collection_seconds": 0.0006600130000151694,
+        "maximum_collection_seconds": 0.0033891110215336084,
+        "maximum_cpu_collection_seconds": 0.0030503300367854536,
+        "total_collection_seconds": 0.8069975246326067,
+        "wall_minus_monotonic_range_seconds": 8.344650268554688e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      }
+    },
+    {
+      "arm": "B",
+      "repetition": 1,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-1/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "8fd751b8ede62e44f6c2b94afd21d10e71b5f39d739610135c38ae827809a141",
+        "bytes": 489429
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-1/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "0c59cc3f9417d1153565be682734ff528d994886d3336deb1e73418c3d3916ca",
+        "bytes": 2208638
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-B.json",
+        "sha256": "25f6e4743123fbefe6466e3ec7e430ee8b17a35e522307e1f8e8c061ec9843d8",
+        "bytes": 2897
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+      "direct_child_pids": {
+        "server": 759569,
+        "client": 759575
+      },
+      "measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.003838218,
+        "private": {
+          "arrival_age": {
+            "max_ms": 134.191025,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 67.108864,
+            "samples": 1023930
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023930,
+          "generated_source_updates": 1023930,
+          "generation_lag": {
+            "max_ms": 1.407405,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023930
+          },
+          "last_submit_ms": 3999.99875,
+          "not_generated": 70,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 2267,
+          "received_during_offer": 1021663,
+          "scheduled_arrival_age": {
+            "max_ms": 134.848658,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 67.108864,
+            "samples": 1023930
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255415.75,
+          "verified_unique": 1023930,
+          "generated_fraction_of_plan": 0.999931640625
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 61.281701,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.339087,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.940291,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 5311,
+          "received_during_offer": 4090689,
+          "scheduled_arrival_age": {
+            "max_ms": 61.816044,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1022672.25,
+          "verified_unique": 4096000,
+          "generated_fraction_of_plan": 1.0
+        }
+      },
+      "refusal_wall_seconds": null,
+      "refusal_utc": null,
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 1254,
+          "owned_socket_inode_sets": [
+            [
+              "5055067",
+              "5055068",
+              "5055069"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011189.8814192,
+            "observation_end_wall_seconds": 1794011189.88181,
+            "observation_start_utc": "2026-11-07T00:26:29.881419+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6946173,
+              "send_queue_bytes": 0,
+              "receive_drops": 12124
+            }
+          },
+          "maximum_sampled_receive_drops": 18702,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011192.2166433,
+            "observation_end_wall_seconds": 1794011192.2168067,
+            "observation_start_utc": "2026-11-07T00:26:32.216643+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 960,
+              "send_queue_bytes": 0,
+              "receive_drops": 18702
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011188.271114,
+            "observation_end_wall_seconds": 1794011188.2713735,
+            "observation_start_utc": "2026-11-07T00:26:28.271114+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6534656,
+              "send_queue_bytes": 0,
+              "receive_drops": 59
+            }
+          }
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 1254,
+          "owned_socket_inode_sets": [
+            [
+              "5061056",
+              "5064005",
+              "5064006",
+              "5064007"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011186.7614,
+            "observation_end_wall_seconds": 1794011186.7616568,
+            "observation_start_utc": "2026-11-07T00:26:26.761400+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1351596,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011192.216807,
+            "observation_end_wall_seconds": 1794011192.2169735,
+            "observation_start_utc": "2026-11-07T00:26:32.216807+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011186.2279718,
+            1794011192.216643
+          ],
+          "actual_wall_seconds": [
+            1794011186.2284818,
+            1794011192.1815176
+          ],
+          "actual_monotonic_seconds": [
+            447908.285843512,
+            447914.238879161
+          ],
+          "elapsed_seconds": 5.953035649028607,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 3.831658559565664,
+          "worker_core_equivalent_range": [
+            0.472028082085906,
+            0.48378678875708514
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 17.57,
+          "system_cpu_seconds": 5.24,
+          "main_thread_cpu_seconds": 0.060000000000000005,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 22902802232,
+            "wait_ns": 8512949,
+            "timeslices": 1431500
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011188.021114,
+            1794011188.271114
+          ],
+          "actual_wall_seconds": [
+            1794011188.0373456,
+            1794011188.25259
+          ],
+          "actual_monotonic_seconds": [
+            447910.094707172,
+            447910.309951485
+          ],
+          "elapsed_seconds": 0.21524431300349534,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.156930673387756,
+          "worker_core_equivalent_range": [
+            0.6039648536400074,
+            0.6504236885353927
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.89,
+          "system_cpu_seconds": 0.22,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1101252711,
+            "wait_ns": 304169,
+            "timeslices": 54585
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 1254,
+        "cpu_sample_count": 138,
+        "median_udp_gap_seconds": 0.004766983969602734,
+        "maximum_udp_gap_seconds": 0.007034623995423317,
+        "maximum_cpu_gap_seconds": 0.04605770297348499,
+        "median_collection_seconds": 0.0006874020036775619,
+        "maximum_collection_seconds": 0.002638969977851957,
+        "maximum_cpu_collection_seconds": 0.00040266895666718483,
+        "total_collection_seconds": 0.8678629453643225,
+        "wall_minus_monotonic_range_seconds": 2.1457672119140625e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      }
+    },
+    {
+      "arm": "C",
+      "repetition": 1,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-1/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "c0509b21e895df4ce5814ebe15a9337684769ab3ce0aaeb29b632b896f9dd2f6",
+        "bytes": 489426
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-1/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "51c690dc258ef0762b6b2b58a2104451d418aeb96d1359d1a0cd97ac1e676709",
+        "bytes": 2216176
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-C.json",
+        "sha256": "495fe7a547d226cd6eebe3ad75b9ad245dbb98560f36addede9c661e16a17c61",
+        "bytes": 2905
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "4e8f13309a8ab8844deb7f3cc17782cb09e5311c3e86def448424ea4ba0a2e45",
+      "direct_child_pids": {
+        "server": 759589,
+        "client": 759595
+      },
+      "measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004315772,
+        "private": {
+          "arrival_age": {
+            "max_ms": 117.050987,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 67.108864,
+            "samples": 1023810
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023810,
+          "generated_source_updates": 1023810,
+          "generation_lag": {
+            "max_ms": 1.252144,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023810
+          },
+          "last_submit_ms": 3999.252567,
+          "not_generated": 190,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 261,
+          "received_during_offer": 1023549,
+          "scheduled_arrival_age": {
+            "max_ms": 117.342738,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 67.108864,
+            "samples": 1023810
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255887.25,
+          "verified_unique": 1023810,
+          "generated_fraction_of_plan": 0.999814453125
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 52.218991,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 0.486788,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.197558,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2404,
+          "received_during_offer": 4093596,
+          "scheduled_arrival_age": {
+            "max_ms": 52.380735,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023399.0,
+          "verified_unique": 4096000,
+          "generated_fraction_of_plan": 1.0
+        }
+      },
+      "refusal_wall_seconds": null,
+      "refusal_utc": null,
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 1260,
+          "owned_socket_inode_sets": [
+            [
+              "5055074",
+              "5055075",
+              "5055076"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011195.4318469,
+            "observation_end_wall_seconds": 1794011195.4322374,
+            "observation_start_utc": "2026-11-07T00:26:35.431847+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7023908,
+              "send_queue_bytes": 0,
+              "receive_drops": 7967
+            }
+          },
+          "maximum_sampled_receive_drops": 19916,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011198.7120264,
+            "observation_end_wall_seconds": 1794011198.7122605,
+            "observation_start_utc": "2026-11-07T00:26:38.712026+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 19916
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011194.8633416,
+            "observation_end_wall_seconds": 1794011194.8637502,
+            "observation_start_utc": "2026-11-07T00:26:34.863342+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6706788,
+              "send_queue_bytes": 0,
+              "receive_drops": 533
+            }
+          }
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 1260,
+          "owned_socket_inode_sets": [
+            [
+              "5061061",
+              "5064017",
+              "5064018",
+              "5064019"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011195.383982,
+            "observation_end_wall_seconds": 1794011195.3842912,
+            "observation_start_utc": "2026-11-07T00:26:35.383982+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1380241,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011198.7122614,
+            "observation_end_wall_seconds": 1794011198.7124522,
+            "observation_start_utc": "2026-11-07T00:26:38.712261+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011192.730662,
+            1794011198.7120256
+          ],
+          "actual_wall_seconds": [
+            1794011192.7314873,
+            1794011198.693576
+          ],
+          "actual_monotonic_seconds": [
+            447914.78884894,
+            447920.750937826
+          ],
+          "elapsed_seconds": 5.962088886008132,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 3.7553952026017243,
+          "worker_core_equivalent_range": [
+            0.46292500041003837,
+            0.47634311636395255
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 16.529999999999998,
+          "system_cpu_seconds": 5.859999999999999,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 22469313252,
+            "wait_ns": 11025276,
+            "timeslices": 1519014
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011194.6133416,
+            1794011194.8633416
+          ],
+          "actual_wall_seconds": [
+            1794011194.6336565,
+            1794011194.8493123
+          ],
+          "actual_monotonic_seconds": [
+            447916.691018174,
+            447916.906673536
+          ],
+          "elapsed_seconds": 0.2156553620006889,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.239841891788391,
+          "worker_core_equivalent_range": [
+            0.602813668966806,
+            0.6955542334232376
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.86,
+          "system_cpu_seconds": 0.27,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1132942410,
+            "wait_ns": 962857,
+            "timeslices": 58740
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 1260,
+        "cpu_sample_count": 138,
+        "median_udp_gap_seconds": 0.004761764022987336,
+        "maximum_udp_gap_seconds": 0.00928637501783669,
+        "maximum_cpu_gap_seconds": 0.045889247965533286,
+        "median_collection_seconds": 0.0006840269779786468,
+        "maximum_collection_seconds": 0.0013506640098057687,
+        "maximum_cpu_collection_seconds": 0.0007022109930403531,
+        "total_collection_seconds": 0.8424140263232403,
+        "wall_minus_monotonic_range_seconds": 8.58306884765625e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      }
+    },
+    {
+      "arm": "B",
+      "repetition": 2,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-2/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "639ddf85e32be30228eeee22828d681ec6897203f243940c560d1a4dde618509",
+        "bytes": 23343
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-2/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "cf39f92f248fc6632d626f5f5c97650763d44364c5cebd5f40604bee1c05e9bb",
+        "bytes": 1627357
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-B.json",
+        "sha256": "25f6e4743123fbefe6466e3ec7e430ee8b17a35e522307e1f8e8c061ec9843d8",
+        "bytes": 2897
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+      "direct_child_pids": {
+        "server": 759606,
+        "client": 759612
+      },
+      "measurement": {
+        "status": "unavailable",
+        "reason": "No measured gate; actual generated work, lag and completed goodput are unknown."
+      },
+      "refusal_wall_seconds": 1794011202.132953,
+      "refusal_utc": "2026-11-07T00:26:42.132953+00:00",
+      "write_state_snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3509,
+          "stream_max": 24561670,
+          "stream_offset": 24561670,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 24561744,
+          "conn_credit": 4611686018402826159,
+          "send_window": 10000000,
+          "buffered_data": 1148512,
+          "window_credit": 8851488,
+          "write_limit": 8851488,
+          "stream_retained": 1148512,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 28467,
+          "in_flight": 20328,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 925,
+          "owned_socket_inode_sets": [
+            [
+              "5055081",
+              "5055082",
+              "5055083"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011203.1836746,
+            "observation_end_wall_seconds": 1794011203.184018,
+            "observation_start_utc": "2026-11-07T00:26:43.183675+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7268991,
+              "send_queue_bytes": 0,
+              "receive_drops": 43331
+            }
+          },
+          "maximum_sampled_receive_drops": 43522,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011203.1931455,
+            "observation_end_wall_seconds": 1794011203.1934967,
+            "observation_start_utc": "2026-11-07T00:26:43.193146+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7268991,
+              "send_queue_bytes": 0,
+              "receive_drops": 43522
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011200.4653919,
+            "observation_end_wall_seconds": 1794011200.465798,
+            "observation_start_utc": "2026-11-07T00:26:40.465392+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 5681688,
+              "send_queue_bytes": 0,
+              "receive_drops": 24
+            }
+          },
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011202.1295516,
+            "observation_end_wall_seconds": 1794011202.129924,
+            "observation_start_utc": "2026-11-07T00:26:42.129552+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 3238326,
+              "send_queue_bytes": 0,
+              "receive_drops": 19419
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011202.0088978,
+            "observation_end_wall_seconds": 1794011202.0092819,
+            "observation_start_utc": "2026-11-07T00:26:42.008898+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6772084,
+              "send_queue_bytes": 0,
+              "receive_drops": 16190
+            }
+          },
+          "first_positive_observation_completed_ms_before_refusal": 1667.1550273895264,
+          "drop_onset_bracket_ms_before_refusal": [
+            1667.1550273895264,
+            1672.375202178955
+          ]
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 925,
+          "owned_socket_inode_sets": [
+            [
+              "5059439",
+              "5061064",
+              "5064031",
+              "5064032"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011201.306726,
+            "observation_end_wall_seconds": 1794011201.3069098,
+            "observation_start_utc": "2026-11-07T00:26:41.306726+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1479056,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011203.193498,
+            "observation_end_wall_seconds": 1794011203.1938138,
+            "observation_start_utc": "2026-11-07T00:26:43.193498+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null,
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011202.1299255,
+            "observation_end_wall_seconds": 1794011202.1301286,
+            "observation_start_utc": "2026-11-07T00:26:42.129925+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 45105,
+              "send_queue_bytes": 2304,
+              "receive_drops": 0
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011201.306726,
+            "observation_end_wall_seconds": 1794011201.3069098,
+            "observation_start_utc": "2026-11-07T00:26:41.306726+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1479056,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011198.8071012,
+            1794011203.1931446
+          ],
+          "actual_wall_seconds": [
+            1794011198.8075914,
+            1794011203.1502337
+          ],
+          "actual_monotonic_seconds": [
+            447920.864953094,
+            447925.207595555
+          ],
+          "elapsed_seconds": 4.342642461007927,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.821948891260974,
+          "worker_core_equivalent_range": [
+            0.594108316115249,
+            0.6102275339943448
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 16.419999999999998,
+          "system_cpu_seconds": 4.52,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 21013856383,
+            "wait_ns": 8655927,
+            "timeslices": 1057319
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011200.2153919,
+            1794011200.4653919
+          ],
+          "actual_wall_seconds": [
+            1794011200.2301035,
+            1794011200.4466262
+          ],
+          "actual_monotonic_seconds": [
+            447922.287465229,
+            447922.503987898
+          ],
+          "elapsed_seconds": 0.21652266901219264,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.449775791991335,
+          "worker_core_equivalent_range": [
+            0.646583568541345,
+            0.7389526497615371
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.88,
+          "system_cpu_seconds": 0.3,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1153362620,
+            "wait_ns": 99050,
+            "timeslices": 57624
+          }
+        },
+        "quarter_second_before_refusal": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011201.882953,
+            1794011202.132953
+          ],
+          "actual_wall_seconds": [
+            1794011201.893663,
+            1794011202.1108325
+          ],
+          "actual_monotonic_seconds": [
+            447923.951024625,
+            447924.168194028
+          ],
+          "elapsed_seconds": 0.21716940304031596,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.387499268406599,
+          "worker_core_equivalent_range": [
+            0.644658032117029,
+            0.6907050344111024
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.9299999999999999,
+          "system_cpu_seconds": 0.24,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1184757855,
+            "wait_ns": 880077,
+            "timeslices": 42813
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 925,
+        "cpu_sample_count": 102,
+        "median_udp_gap_seconds": 0.004774314002133906,
+        "maximum_udp_gap_seconds": 0.006838289031293243,
+        "maximum_cpu_gap_seconds": 0.0451747159822844,
+        "median_collection_seconds": 0.0006975409924052656,
+        "maximum_collection_seconds": 0.0021124340128153563,
+        "maximum_cpu_collection_seconds": 0.001724155037663877,
+        "total_collection_seconds": 0.620578812318854,
+        "wall_minus_monotonic_range_seconds": 1.1920928955078125e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      },
+      "connection_path_snapshot": {
+        "cwnd": 28467,
+        "congestion_events": 19,
+        "lost_packets": 204,
+        "lost_bytes": 287766,
+        "sent_packets": 17494,
+        "current_mtu": 1452,
+        "remaining_cwnd_bytes": 8139,
+        "remaining_cwnd_below_mtu": false
+      }
+    },
+    {
+      "arm": "C",
+      "repetition": 2,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-2/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "129f5b5808ae274b946e536a7b61bd116ced83932cb07e94f70bc13bbf4b873a",
+        "bytes": 489480
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-2/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "758afbbe42c96dd9cab06baeeb3fe82ea1f451e874da944c2ad6cc340021601c",
+        "bytes": 2220614
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-C.json",
+        "sha256": "495fe7a547d226cd6eebe3ad75b9ad245dbb98560f36addede9c661e16a17c61",
+        "bytes": 2905
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "4e8f13309a8ab8844deb7f3cc17782cb09e5311c3e86def448424ea4ba0a2e45",
+      "direct_child_pids": {
+        "server": 759623,
+        "client": 759629
+      },
+      "measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.003811909,
+        "private": {
+          "arrival_age": {
+            "max_ms": 127.722506,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 134.217728,
+            "samples": 1023811
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023811,
+          "generated_source_updates": 1023811,
+          "generation_lag": {
+            "max_ms": 1.306134,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023811
+          },
+          "last_submit_ms": 3999.258682,
+          "not_generated": 189,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 2974,
+          "received_during_offer": 1020837,
+          "scheduled_arrival_age": {
+            "max_ms": 128.076556,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 134.217728,
+            "samples": 1023811
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255209.25,
+          "verified_unique": 1023811,
+          "generated_fraction_of_plan": 0.9998154296875
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 84.3682,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 0.548134,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.192394,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 3641,
+          "received_during_offer": 4092359,
+          "scheduled_arrival_age": {
+            "max_ms": 84.604396,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023089.75,
+          "verified_unique": 4096000,
+          "generated_fraction_of_plan": 1.0
+        }
+      },
+      "refusal_wall_seconds": null,
+      "refusal_utc": null,
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 1263,
+          "owned_socket_inode_sets": [
+            [
+              "5055093",
+              "5055094",
+              "5055095"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011205.5694687,
+            "observation_end_wall_seconds": 1794011205.5698686,
+            "observation_start_utc": "2026-11-07T00:26:45.569469+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6995051,
+              "send_queue_bytes": 0,
+              "receive_drops": 2294
+            }
+          },
+          "maximum_sampled_receive_drops": 37386,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011209.2435627,
+            "observation_end_wall_seconds": 1794011209.243737,
+            "observation_start_utc": "2026-11-07T00:26:49.243563+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 960,
+              "send_queue_bytes": 0,
+              "receive_drops": 37386
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011204.6553965,
+            "observation_end_wall_seconds": 1794011204.6557882,
+            "observation_start_utc": "2026-11-07T00:26:44.655396+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6330723,
+              "send_queue_bytes": 0,
+              "receive_drops": 453
+            }
+          }
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 1263,
+          "owned_socket_inode_sets": [
+            [
+              "5062056",
+              "5062058",
+              "5064039",
+              "5064040"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011205.5650625,
+            "observation_end_wall_seconds": 1794011205.5653756,
+            "observation_start_utc": "2026-11-07T00:26:45.565063+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1127055,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011209.2437375,
+            "observation_end_wall_seconds": 1794011209.2439058,
+            "observation_start_utc": "2026-11-07T00:26:49.243737+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011203.2627883,
+            1794011209.2435625
+          ],
+          "actual_wall_seconds": [
+            1794011203.2634518,
+            1794011209.221677
+          ],
+          "actual_monotonic_seconds": [
+            447925.320813443,
+            447931.279038745
+          ],
+          "elapsed_seconds": 5.958225301990751,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 3.9424491034522586,
+          "worker_core_equivalent_range": [
+            0.48672211153731587,
+            0.49679222418981206
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 17.93,
+          "system_cpu_seconds": 5.56,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 23580492061,
+            "wait_ns": 7817271,
+            "timeslices": 1291845
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011204.4053965,
+            1794011204.6553965
+          ],
+          "actual_wall_seconds": [
+            1794011204.4208894,
+            1794011204.6366796
+          ],
+          "actual_monotonic_seconds": [
+            447926.478251082,
+            447926.69404125
+          ],
+          "elapsed_seconds": 0.2157901679747738,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.3755924604294565,
+          "worker_core_equivalent_range": [
+            0.6487784003966586,
+            0.6951197147107055
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.87,
+          "system_cpu_seconds": 0.29,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1158333127,
+            "wait_ns": 125700,
+            "timeslices": 55973
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 1263,
+        "cpu_sample_count": 138,
+        "median_udp_gap_seconds": 0.004761459014844149,
+        "maximum_udp_gap_seconds": 0.008936454018112272,
+        "maximum_cpu_gap_seconds": 0.045998543966561556,
+        "median_collection_seconds": 0.0006810820195823908,
+        "maximum_collection_seconds": 0.001468682021368295,
+        "maximum_cpu_collection_seconds": 0.0005807749694213271,
+        "total_collection_seconds": 0.826742876030039,
+        "wall_minus_monotonic_range_seconds": 2.384185791015625e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      }
+    },
+    {
+      "arm": "A",
+      "repetition": 2,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-2/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "3c5ea13046f0795cb3bc1e208ec77c02e0d84d5759a49b3a497d9f10e8cd397b",
+        "bytes": 488706
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-2/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "32e0037200dd743eb88ff2389de32d72d3af14b7859dd6cfde76465ce9aab0ab",
+        "bytes": 2228807
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-A.json",
+        "sha256": "f2b52d41738185a5091d26e70136b24b0106b4507a61b8e424ba5e3ee2858d22",
+        "bytes": 2176
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "direct_child_pids": {
+        "server": 759638,
+        "client": 759644
+      },
+      "measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004149217,
+        "private": {
+          "arrival_age": {
+            "max_ms": 42.520747,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 16.777216,
+            "samples": 1023870
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023870,
+          "generated_source_updates": 1023870,
+          "generation_lag": {
+            "max_ms": 2.528523,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023870
+          },
+          "last_submit_ms": 3999.502023,
+          "not_generated": 130,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 836,
+          "received_during_offer": 1023034,
+          "scheduled_arrival_age": {
+            "max_ms": 43.380145,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 1023870
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255758.5,
+          "verified_unique": 1023870,
+          "generated_fraction_of_plan": 0.999873046875
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 72.221012,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.840845,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.508753,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 4687,
+          "received_during_offer": 4091313,
+          "scheduled_arrival_age": {
+            "max_ms": 72.615091,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1022828.25,
+          "verified_unique": 4096000,
+          "generated_fraction_of_plan": 1.0
+        }
+      },
+      "refusal_wall_seconds": null,
+      "refusal_utc": null,
+      "write_state_snapshots": [],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 1270,
+          "owned_socket_inode_sets": [
+            [
+              "5055100",
+              "5055101",
+              "5055102"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011213.4320252,
+            "observation_end_wall_seconds": 1794011213.4324267,
+            "observation_start_utc": "2026-11-07T00:26:53.432025+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6940145,
+              "send_queue_bytes": 0,
+              "receive_drops": 11861
+            }
+          },
+          "maximum_sampled_receive_drops": 14544,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011215.352448,
+            "observation_end_wall_seconds": 1794011215.3527863,
+            "observation_start_utc": "2026-11-07T00:26:55.352448+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1920,
+              "send_queue_bytes": 0,
+              "receive_drops": 14544
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011211.1841917,
+            "observation_end_wall_seconds": 1794011211.1846278,
+            "observation_start_utc": "2026-11-07T00:26:51.184192+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 4553601,
+              "send_queue_bytes": 0,
+              "receive_drops": 121
+            }
+          }
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 1270,
+          "owned_socket_inode_sets": [
+            [
+              "5059446",
+              "5061067",
+              "5064047",
+              "5064048"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011211.3338907,
+            "observation_end_wall_seconds": 1794011211.3340757,
+            "observation_start_utc": "2026-11-07T00:26:51.333891+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 952143,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011215.352788,
+            "observation_end_wall_seconds": 1794011215.35301,
+            "observation_start_utc": "2026-11-07T00:26:55.352788+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 960,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011209.367161,
+            1794011215.352447
+          ],
+          "actual_wall_seconds": [
+            1794011209.3676512,
+            1794011215.3386672
+          ],
+          "actual_monotonic_seconds": [
+            447931.425012898,
+            447937.396029108
+          ],
+          "elapsed_seconds": 5.971016209980007,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 3.8603144237783233,
+          "worker_core_equivalent_range": [
+            0.4756309311726871,
+            0.4856794719721101
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 17.76,
+          "system_cpu_seconds": 5.29,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 23145296860,
+            "wait_ns": 26734245,
+            "timeslices": 1382687
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011210.9341917,
+            1794011211.1841917
+          ],
+          "actual_wall_seconds": [
+            1794011210.9459584,
+            1794011211.160198
+          ],
+          "actual_monotonic_seconds": [
+            447933.003320015,
+            447933.217559544
+          ],
+          "elapsed_seconds": 0.2142395290429704,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.901056330222794,
+          "worker_core_equivalent_range": [
+            0.6067974504085364,
+            0.6534741773630391
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.85,
+          "system_cpu_seconds": 0.2,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1051235051,
+            "wait_ns": 8372840,
+            "timeslices": 50342
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 1270,
+        "cpu_sample_count": 138,
+        "median_udp_gap_seconds": 0.004736744973342866,
+        "maximum_udp_gap_seconds": 0.008601302979514003,
+        "maximum_cpu_gap_seconds": 0.046737374970689416,
+        "median_collection_seconds": 0.0006574279977940023,
+        "maximum_collection_seconds": 0.00256138201802969,
+        "maximum_cpu_collection_seconds": 0.002179152041207999,
+        "total_collection_seconds": 0.8024133603321388,
+        "wall_minus_monotonic_range_seconds": 2.1457672119140625e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      }
+    },
+    {
+      "arm": "C",
+      "repetition": 3,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-3/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "577dc87e1113a0922bf88049cda571f2c54573cb2bf7c094f10823650faa1386",
+        "bytes": 23348
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/C-3/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "576b4f12c334757b94e70f20e6597c901aa7fcb0cc2a1a2fa2684e02472491f5",
+        "bytes": 1629204
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-C.json",
+        "sha256": "495fe7a547d226cd6eebe3ad75b9ad245dbb98560f36addede9c661e16a17c61",
+        "bytes": 2905
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "4e8f13309a8ab8844deb7f3cc17782cb09e5311c3e86def448424ea4ba0a2e45",
+      "direct_child_pids": {
+        "server": 759655,
+        "client": 759661
+      },
+      "measurement": {
+        "status": "unavailable",
+        "reason": "No measured gate; actual generated work, lag and completed goodput are unknown."
+      },
+      "refusal_wall_seconds": 1794011217.663211,
+      "refusal_utc": "2026-11-07T00:26:57.663211+00:00",
+      "write_state_snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3539,
+          "stream_max": 15283766,
+          "stream_offset": 15283766,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 15283840,
+          "conn_credit": 4611686018412104063,
+          "send_window": 10000000,
+          "buffered_data": 1148000,
+          "window_credit": 8852000,
+          "write_limit": 8852000,
+          "stream_retained": 1148000,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 18816,
+          "in_flight": 17424,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 923,
+          "owned_socket_inode_sets": [
+            [
+              "5055107",
+              "5055108",
+              "5055109"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011217.5549233,
+            "observation_end_wall_seconds": 1794011217.5553129,
+            "observation_start_utc": "2026-11-07T00:26:57.554923+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7117742,
+              "send_queue_bytes": 0,
+              "receive_drops": 6293
+            }
+          },
+          "maximum_sampled_receive_drops": 41538,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011219.8344495,
+            "observation_end_wall_seconds": 1794011219.8348188,
+            "observation_start_utc": "2026-11-07T00:26:59.834450+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 2676449,
+              "send_queue_bytes": 0,
+              "receive_drops": 41538
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011217.344725,
+            "observation_end_wall_seconds": 1794011217.34493,
+            "observation_start_utc": "2026-11-07T00:26:57.344725+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6607520,
+              "send_queue_bytes": 0,
+              "receive_drops": 71
+            }
+          },
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011217.6609616,
+            "observation_end_wall_seconds": 1794011217.6613374,
+            "observation_start_utc": "2026-11-07T00:26:57.660962+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6087492,
+              "send_queue_bytes": 0,
+              "receive_drops": 8958
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011217.5549233,
+            "observation_end_wall_seconds": 1794011217.5553129,
+            "observation_start_utc": "2026-11-07T00:26:57.554923+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7117742,
+              "send_queue_bytes": 0,
+              "receive_drops": 6293
+            }
+          },
+          "first_positive_observation_completed_ms_before_refusal": 318.2811737060547,
+          "drop_onset_bracket_ms_before_refusal": [
+            318.2811737060547,
+            322.9343891143799
+          ]
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 923,
+          "owned_socket_inode_sets": [
+            [
+              "5059454",
+              "5061070",
+              "5064055",
+              "5064056"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011216.8955193,
+            "observation_end_wall_seconds": 1794011216.8957005,
+            "observation_start_utc": "2026-11-07T00:26:56.895519+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1128816,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011219.8348203,
+            "observation_end_wall_seconds": 1794011219.8351128,
+            "observation_start_utc": "2026-11-07T00:26:59.834820+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null,
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011217.661339,
+            "observation_end_wall_seconds": 1794011217.6616619,
+            "observation_start_utc": "2026-11-07T00:26:57.661339+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 835395,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011216.8955193,
+            "observation_end_wall_seconds": 1794011216.8957005,
+            "observation_start_utc": "2026-11-07T00:26:56.895519+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1128816,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011215.452917,
+            1794011219.8344483
+          ],
+          "actual_wall_seconds": [
+            1794011215.4533904,
+            1794011219.8301382
+          ],
+          "actual_monotonic_seconds": [
+            447937.510751986,
+            447941.887499699
+          ],
+          "elapsed_seconds": 4.376747713016812,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.8300704966676244,
+          "worker_core_equivalent_range": [
+            0.5963332070152554,
+            0.6100420163719279
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 16.47,
+          "system_cpu_seconds": 4.67,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 21231356327,
+            "wait_ns": 6608452,
+            "timeslices": 1121318
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011217.094725,
+            1794011217.344725
+          ],
+          "actual_wall_seconds": [
+            1794011217.1382964,
+            1794011217.3137777
+          ],
+          "actual_monotonic_seconds": [
+            447939.195657926,
+            447939.371139339
+          ],
+          "elapsed_seconds": 0.17548141302540898,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.185734399507233,
+          "worker_core_equivalent_range": [
+            0.5698609230227729,
+            0.6838331076273274
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.71,
+          "system_cpu_seconds": 0.2,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 899485512,
+            "wait_ns": 385849,
+            "timeslices": 44207
+          }
+        },
+        "quarter_second_before_refusal": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011217.413211,
+            1794011217.663211
+          ],
+          "actual_wall_seconds": [
+            1794011217.4442701,
+            1794011217.661671
+          ],
+          "actual_monotonic_seconds": [
+            447939.501631771,
+            447939.719032417
+          ],
+          "elapsed_seconds": 0.21740064601181075,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.4277667598830135,
+          "worker_core_equivalent_range": [
+            0.6439723274437474,
+            0.7359683742214256
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.9299999999999999,
+          "system_cpu_seconds": 0.25,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1184612319,
+            "wait_ns": 115010,
+            "timeslices": 44457
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 923,
+        "cpu_sample_count": 102,
+        "median_udp_gap_seconds": 0.004763819015352055,
+        "maximum_udp_gap_seconds": 0.007870392000768334,
+        "maximum_cpu_gap_seconds": 0.045331741974223405,
+        "median_collection_seconds": 0.0006866120384074748,
+        "maximum_collection_seconds": 0.0012115479912608862,
+        "maximum_cpu_collection_seconds": 0.0004017089959233999,
+        "total_collection_seconds": 0.6220029709511437,
+        "wall_minus_monotonic_range_seconds": 1.1920928955078125e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      },
+      "connection_path_snapshot": {
+        "cwnd": 18816,
+        "congestion_events": 9,
+        "lost_packets": 119,
+        "lost_bytes": 169917,
+        "sent_packets": 10582,
+        "current_mtu": 1452,
+        "remaining_cwnd_bytes": 1392,
+        "remaining_cwnd_below_mtu": true
+      }
+    },
+    {
+      "arm": "A",
+      "repetition": 3,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-3/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "c8d3cee92431bed729199c9b0f51035c6e482c1cb0929e10f9450383e84a0b14",
+        "bytes": 22594
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/A-3/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "3572874f14f4e118e861939b4fa324e84927645c71904a88b40de768df2521d2",
+        "bytes": 1650613
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-A.json",
+        "sha256": "f2b52d41738185a5091d26e70136b24b0106b4507a61b8e424ba5e3ee2858d22",
+        "bytes": 2176
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "direct_child_pids": {
+        "server": 759670,
+        "client": 759676
+      },
+      "measurement": {
+        "status": "unavailable",
+        "reason": "No measured gate; actual generated work, lag and completed goodput are unknown."
+      },
+      "refusal_wall_seconds": 1794011222.884093,
+      "refusal_utc": "2026-11-07T00:27:02.884093+00:00",
+      "write_state_snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3427,
+          "stream_max": 21372634,
+          "stream_offset": 21372634,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 21372708,
+          "conn_credit": 4611686018406015195,
+          "send_window": 10000000,
+          "buffered_data": 1128280,
+          "window_credit": 8871720,
+          "write_limit": 8871720,
+          "stream_retained": 1128280,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 37165,
+          "in_flight": 36300,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 944,
+          "owned_socket_inode_sets": [
+            [
+              "5055114",
+              "5055115",
+              "5055116"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011222.5772197,
+            "observation_end_wall_seconds": 1794011222.5775979,
+            "observation_start_utc": "2026-11-07T00:27:02.577220+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6913289,
+              "send_queue_bytes": 0,
+              "receive_drops": 18603
+            }
+          },
+          "maximum_sampled_receive_drops": 27968,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011224.3201342,
+            "observation_end_wall_seconds": 1794011224.3204682,
+            "observation_start_utc": "2026-11-07T00:27:04.320134+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 5209905,
+              "send_queue_bytes": 0,
+              "receive_drops": 27968
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011221.4350612,
+            "observation_end_wall_seconds": 1794011221.4352548,
+            "observation_start_utc": "2026-11-07T00:27:01.435061+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6604983,
+              "send_queue_bytes": 0,
+              "receive_drops": 71
+            }
+          },
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011222.8797278,
+            "observation_end_wall_seconds": 1794011222.8800962,
+            "observation_start_utc": "2026-11-07T00:27:02.879728+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6351656,
+              "send_queue_bytes": 0,
+              "receive_drops": 23493
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011222.5772197,
+            "observation_end_wall_seconds": 1794011222.5775979,
+            "observation_start_utc": "2026-11-07T00:27:02.577220+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6913289,
+              "send_queue_bytes": 0,
+              "receive_drops": 18603
+            }
+          },
+          "first_positive_observation_completed_ms_before_refusal": 1448.838233947754,
+          "drop_onset_bracket_ms_before_refusal": [
+            1448.838233947754,
+            1453.4718990325928
+          ]
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 945,
+          "owned_socket_inode_sets": [
+            [
+              "5061075",
+              "5062073",
+              "5064061",
+              "5064062"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011220.6194499,
+            "observation_end_wall_seconds": 1794011220.619775,
+            "observation_start_utc": "2026-11-07T00:27:00.619450+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 971638,
+              "send_queue_bytes": 960,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011224.324888,
+            "observation_end_wall_seconds": 1794011224.3251936,
+            "observation_start_utc": "2026-11-07T00:27:04.324888+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null,
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011222.8800979,
+            "observation_end_wall_seconds": 1794011222.880409,
+            "observation_start_utc": "2026-11-07T00:27:02.880098+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 151734,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011220.6194499,
+            "observation_end_wall_seconds": 1794011220.619775,
+            "observation_start_utc": "2026-11-07T00:27:00.619450+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 971638,
+              "send_queue_bytes": 960,
+              "receive_drops": 0
+            }
+          }
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011219.9288998,
+            1794011224.3245838
+          ],
+          "actual_wall_seconds": [
+            1794011219.9293964,
+            1794011224.291984
+          ],
+          "actual_monotonic_seconds": [
+            447941.986758016,
+            447946.349345691
+          ],
+          "elapsed_seconds": 4.362587674986571,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.848040102727587,
+          "worker_core_equivalent_range": [
+            0.5982687786344681,
+            0.6120220838904329
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 16.22,
+          "system_cpu_seconds": 4.93,
+          "main_thread_cpu_seconds": 0.04,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 21238484404,
+            "wait_ns": 5809966,
+            "timeslices": 1021236
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011221.1850612,
+            1794011221.4350612
+          ],
+          "actual_wall_seconds": [
+            1794011221.229753,
+            1794011221.408557
+          ],
+          "actual_monotonic_seconds": [
+            447943.287114806,
+            447943.465918712
+          ],
+          "elapsed_seconds": 0.1788039060193114,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.14530146729925,
+          "worker_core_equivalent_range": [
+            0.615199088481432,
+            0.6711262783433803
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.7,
+          "system_cpu_seconds": 0.22,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 917433761,
+            "wait_ns": 542558,
+            "timeslices": 46713
+          }
+        },
+        "quarter_second_before_refusal": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011222.634093,
+            1794011222.884093
+          ],
+          "actual_wall_seconds": [
+            1794011222.6497297,
+            1794011222.8657713
+          ],
+          "actual_monotonic_seconds": [
+            447944.707091415,
+            447944.923132827
+          ],
+          "elapsed_seconds": 0.21604141197167337,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.50820321502078,
+          "worker_core_equivalent_range": [
+            0.6480239076495036,
+            0.7405987515994326
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.94,
+          "system_cpu_seconds": 0.25,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1174810254,
+            "wait_ns": 204440,
+            "timeslices": 43031
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 945,
+        "cpu_sample_count": 101,
+        "median_udp_gap_seconds": 0.004721490491647273,
+        "maximum_udp_gap_seconds": 0.009628896019421518,
+        "maximum_cpu_gap_seconds": 0.04556400602450594,
+        "median_collection_seconds": 0.0006501029711216688,
+        "maximum_collection_seconds": 0.0010994210024364293,
+        "maximum_cpu_collection_seconds": 0.0003992790007032454,
+        "total_collection_seconds": 0.5508720413199626,
+        "wall_minus_monotonic_range_seconds": 1.430511474609375e-06,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      },
+      "connection_path_snapshot": {
+        "cwnd": 37165,
+        "congestion_events": 22,
+        "lost_packets": 201,
+        "lost_bytes": 283986,
+        "sent_packets": 15062,
+        "current_mtu": 1452,
+        "remaining_cwnd_bytes": 865,
+        "remaining_cwnd_below_mtu": true
+      }
+    },
+    {
+      "arm": "B",
+      "repetition": 3,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-3/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "b1dbf957153acc7a9f1037a0c169a571c72fba688d710a30e3270cc7a95848d6",
+        "bytes": 23332
+      },
+      "series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-runs/B-3/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "eb9849562a83b8e236e108b346461ade6176c26a4b81a9ab2b9a25447f31367b",
+        "bytes": 1632018
+      },
+      "source_argument_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-args-B.json",
+        "sha256": "25f6e4743123fbefe6466e3ec7e430ee8b17a35e522307e1f8e8c061ec9843d8",
+        "bytes": 2897
+      },
+      "server_sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+      "client_sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+      "direct_child_pids": {
+        "server": 759690,
+        "client": 759696
+      },
+      "measurement": {
+        "status": "unavailable",
+        "reason": "No measured gate; actual generated work, lag and completed goodput are unknown."
+      },
+      "refusal_wall_seconds": 1794011226.880409,
+      "refusal_utc": "2026-11-07T00:27:06.880409+00:00",
+      "write_state_snapshots": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3481,
+          "stream_max": 17553403,
+          "stream_offset": 17553403,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 17553477,
+          "conn_credit": 4611686018409834426,
+          "send_window": 10000000,
+          "buffered_data": 1122232,
+          "window_credit": 8877768,
+          "write_limit": 8877768,
+          "stream_retained": 1122232,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 32495,
+          "in_flight": 31944,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "udp": {
+        "client": {
+          "status": "observed",
+          "valid_samples": 928,
+          "owned_socket_inode_sets": [
+            [
+              "5045060",
+              "5055121",
+              "5055122"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011225.357167,
+            "observation_end_wall_seconds": 1794011225.3573792,
+            "observation_start_utc": "2026-11-07T00:27:05.357167+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7053046,
+              "send_queue_bytes": 0,
+              "receive_drops": 860
+            }
+          },
+          "maximum_sampled_receive_drops": 41888,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011228.7783694,
+            "observation_end_wall_seconds": 1794011228.7787135,
+            "observation_start_utc": "2026-11-07T00:27:08.778369+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 4658802,
+              "send_queue_bytes": 0,
+              "receive_drops": 41888
+            }
+          },
+          "first_positive_drop_sample": {
+            "observation_start_wall_seconds": 1794011225.3480403,
+            "observation_end_wall_seconds": 1794011225.3482385,
+            "observation_start_utc": "2026-11-07T00:27:05.348040+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 6453282,
+              "send_queue_bytes": 0,
+              "receive_drops": 96
+            }
+          },
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011226.877317,
+            "observation_end_wall_seconds": 1794011226.877701,
+            "observation_start_utc": "2026-11-07T00:27:06.877317+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 5926831,
+              "send_queue_bytes": 0,
+              "receive_drops": 17769
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011225.357167,
+            "observation_end_wall_seconds": 1794011225.3573792,
+            "observation_start_utc": "2026-11-07T00:27:05.357167+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 7053046,
+              "send_queue_bytes": 0,
+              "receive_drops": 860
+            }
+          },
+          "first_positive_observation_completed_ms_before_refusal": 1532.1705341339111,
+          "drop_onset_bracket_ms_before_refusal": [
+            1532.1705341339111,
+            1536.8375778198242
+          ]
+        },
+        "server": {
+          "status": "observed",
+          "valid_samples": 928,
+          "owned_socket_inode_sets": [
+            [
+              "5061077",
+              "5064067",
+              "5064068",
+              "5064069"
+            ]
+          ],
+          "identity_stable": true,
+          "owned_udp_socket_counts": [
+            1
+          ],
+          "drops_monotonic": true,
+          "peak_queue": {
+            "observation_start_wall_seconds": 1794011225.1456857,
+            "observation_end_wall_seconds": 1794011225.146002,
+            "observation_start_utc": "2026-11-07T00:27:05.145686+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1159377,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "maximum_sampled_receive_drops": 0,
+          "final_observed": {
+            "observation_start_wall_seconds": 1794011228.7787144,
+            "observation_end_wall_seconds": 1794011228.7790165,
+            "observation_start_utc": "2026-11-07T00:27:08.778714+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "first_positive_drop_sample": null,
+          "last_pre_refusal": {
+            "observation_start_wall_seconds": 1794011226.8777025,
+            "observation_end_wall_seconds": 1794011226.8780198,
+            "observation_start_utc": "2026-11-07T00:27:06.877702+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 127874,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "peak_pre_refusal": {
+            "observation_start_wall_seconds": 1794011225.1456857,
+            "observation_end_wall_seconds": 1794011225.146002,
+            "observation_start_utc": "2026-11-07T00:27:05.145686+00:00",
+            "udp": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 1159377,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        }
+      },
+      "cpu_windows": {
+        "whole_observed_socket_lifetime": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011224.3941507,
+            1794011228.7783682
+          ],
+          "actual_wall_seconds": [
+            1794011224.3946927,
+            1794011228.7360325
+          ],
+          "actual_monotonic_seconds": [
+            447946.452054197,
+            447950.793393721
+          ],
+          "elapsed_seconds": 4.341339523962233,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 4.929354150229823,
+          "worker_core_equivalent_range": [
+            0.6081072409629316,
+            0.6219278600757254
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 17.12,
+          "system_cpu_seconds": 4.28,
+          "main_thread_cpu_seconds": 0.05,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 21500086306,
+            "wait_ns": 12166496,
+            "timeslices": 974251
+          }
+        },
+        "quarter_second_before_first_sampled_drop": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011225.0980403,
+            1794011225.3480403
+          ],
+          "actual_wall_seconds": [
+            1794011225.1313677,
+            1794011225.3082087
+          ],
+          "actual_monotonic_seconds": [
+            447947.188728991,
+            447947.365570178
+          ],
+          "elapsed_seconds": 0.176841186999809,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.202407966199603,
+          "worker_core_equivalent_range": [
+            0.6220270394369091,
+            0.6785749521129917
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.7,
+          "system_cpu_seconds": 0.22,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 928948573,
+            "wait_ns": 852335,
+            "timeslices": 41910
+          }
+        },
+        "quarter_second_before_refusal": {
+          "status": "observed",
+          "requested_wall_seconds": [
+            1794011226.630409,
+            1794011226.880409
+          ],
+          "actual_wall_seconds": [
+            1794011226.6582055,
+            1794011226.8729079
+          ],
+          "actual_monotonic_seconds": [
+            447948.715566986,
+            447948.930269372
+          ],
+          "elapsed_seconds": 0.21470238600159064,
+          "clock_ticks_per_second": 100,
+          "excluded_thread_identities": [],
+          "aggregate_cpu_core_equivalent": 5.449403808634582,
+          "worker_core_equivalent_range": [
+            0.6520654129990098,
+            0.7452176148560111
+          ],
+          "schedstat_wait_interpretable": false,
+          "matched_thread_count": 9,
+          "matched_worker_count": 8,
+          "user_cpu_seconds": 0.98,
+          "system_cpu_seconds": 0.19,
+          "main_thread_cpu_seconds": 0.0,
+          "raw_schedstat_delta_sum": {
+            "run_ns": 1169532663,
+            "wait_ns": 93880,
+            "timeslices": 42170
+          }
+        }
+      },
+      "observer": {
+        "requested_udp_interval_seconds": 0.004,
+        "requested_cpu_interval_seconds": 0.04,
+        "collector_cpu": 4,
+        "sample_count": 928,
+        "cpu_sample_count": 102,
+        "median_udp_gap_seconds": 0.004773643973749131,
+        "maximum_udp_gap_seconds": 0.00778982398333028,
+        "maximum_cpu_gap_seconds": 0.045620445045642555,
+        "median_collection_seconds": 0.000696431496180594,
+        "maximum_collection_seconds": 0.0013219660031609237,
+        "maximum_cpu_collection_seconds": 0.000631543982308358,
+        "total_collection_seconds": 0.6048561626812443,
+        "wall_minus_monotonic_range_seconds": 1.9550323486328125e-05,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        },
+        "collector_affinity_restored": true
+      },
+      "connection_path_snapshot": {
+        "cwnd": 32495,
+        "congestion_events": 16,
+        "lost_packets": 136,
+        "lost_bytes": 194351,
+        "sent_packets": 12130,
+        "current_mtu": 1452,
+        "remaining_cwnd_bytes": 551,
+        "remaining_cwnd_below_mtu": true
+      }
+    }
+  ],
+  "reproduction_commands": {
+    "build_when_outputs_absent": [
+      "python",
+      "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-client-read-cooperation-diagnostic.py"
+    ],
+    "collect_when_outputs_absent": [
+      "python",
+      "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/run-client-read-cooperation-diagnostic.py"
+    ],
+    "analyze_completed_receipts_to_fresh_path": [
+      "python",
+      "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-read-cooperation-diagnostic.py",
+      "--output",
+      "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-read-cooperation-correlation-reproduced.json"
+    ]
+  },
+  "reproduction_limit": "Build/collection refuse existing outputs. Preserve originals; replay in a fresh artifact copy with the same paths/configuration. Analysis only needs the completed receipts and referenced artifacts.",
+  "generation_semantics": "Planned counts are rate*4seconds for32private sources and1fanout source. Generated increments after the send operation succeeds; it is not server receipt. Lag is generation timestamp minus scheduled timestamp before send; last_submit_ms is measured after send completion. A send begun before4seconds can complete later. Histogram p50/p99 values are logarithmic bucket upper bounds, while max_ms is exact for observed samples. Missing measured gates do not reveal partial generated work.",
+  "limits": [
+    "Three rotated repetitions per arm provide observed outcomes, not a statistically defensible failure-rate ranking. A and C both passing twice does not establish equivalence; B passing once does not establish regression.",
+    "Only B versus C isolates the reviewed receiver call under one retained build/toolchain/dependency state. A remains the original frozen artifact, whose exact dependency build was not recovered.",
+    "Client variants are diagnostics only and cannot replace frozen A in server acceptance or count as a server win.",
+    "Requested4ms UDP and40ms CPU sampling are not guaranteed cadence. Actual role observation intervals, sample gaps and observer costs are retained.",
+    "CPU deltas average sampled intervals and can miss short saturation or scheduling bursts. Balanced workers and unused aggregate capacity do not exclude serialization of one migrating endpoint future.",
+    "OS schedstat runnable-thread wait is not Tokio future wait. Disabled sched_schedstats prevents interpreting zero or residual wait counters as absence of starvation.",
+    "UDP receive_drops are cumulative process-owned socket census; identity stability is checked. Queue bytes are sampled kernel accounting, not application payload or complete kernel memory.",
+    "First observed socket drop preceding refusal establishes ordering, not the unique cause. Passing trials also drop UDP packets.",
+    "Cwnd-minus-inflight and MTU arithmetic are snapshots, not an observed packetizer branch or measured goodput ceiling.",
+    "Logical offered deliveries are not measured network packet or syscall rates. No packet-level microburst trace or exact endpoint-future wait was collected.",
+    "Observer-instrumented timing/CPU/RSS cannot be substituted for ordinary server comparison measurements."
+  ],
+  "embedded_sources": {
+    "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-read-cooperation-diagnostic.py": "#!/usr/bin/env python3\n\"\"\"Correlate completed client-cooperation receipts; never launch a workload.\"\"\"\nimport argparse\nimport datetime\nimport difflib\nimport hashlib\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport re\nimport statistics\nimport subprocess\nimport tarfile\n\nROOT = Path(__file__).resolve().parents[2]\nART = ROOT / 'artifacts/webtransport'\nOUTPUT = ROOT / 'docs/reports/webtransport-client-read-cooperation-diagnostic-2026-11-06.json'\nSUMMARY = ART / 'client-read-cooperation-summary.json'\nHELPER = ART / 'analyze-reliable-peer-udp-cpu.py'\nA_SHA = 'b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d'\nPRODUCT_SHA = '1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0'\n\n\ndef ref(path):\n    path = Path(path).resolve()\n    with path.open('rb') as stream:\n        sha = hashlib.file_digest(stream, 'sha256').hexdigest()\n    return {'path': str(path), 'sha256': sha, 'bytes': path.stat().st_size}\n\n\ndef verify(row):\n    assert ref(row['path'])['sha256'] == row['sha256'], row['path']\n\n\ndef utc(timestamp):\n    return datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc).isoformat()\n\n\ndef observed_interval(sample, role):\n    state = sample[role]\n    began = sample['wall_time_unix_seconds'] + state['sample_monotonic_seconds'] - sample['monotonic_seconds']\n    return began, began + state['sample_seconds']\n\n\ndef udp_summary(samples, role, refusal):\n    valid = [sample for sample in samples if sample[role].get('udp', {}).get('owned_sockets', 0)]\n    if not valid:\n        return {'status': 'unavailable', 'reason': 'No observed owned UDP socket.'}\n    identities = {tuple(sample[role]['owned_socket_inodes']) for sample in valid}\n\n    def point(sample):\n        start, end = observed_interval(sample, role)\n        return {'observation_start_wall_seconds': start, 'observation_end_wall_seconds': end,\n                'observation_start_utc': utc(start), 'udp': sample[role]['udp']}\n\n    positive = next((sample for sample in valid if sample[role]['udp']['receive_drops'] > 0), None)\n    result = {'status': 'observed', 'valid_samples': len(valid),\n              'owned_socket_inode_sets': [list(value) for value in sorted(identities)],\n              'identity_stable': len(identities) == 1,\n              'owned_udp_socket_counts': sorted({sample[role]['udp']['owned_sockets'] for sample in valid}),\n              'drops_monotonic': all(after[role]['udp']['receive_drops'] >= before[role]['udp']['receive_drops']\n                                     for before, after in zip(valid, valid[1:])),\n              'peak_queue': point(max(valid, key=lambda sample: sample[role]['udp']['receive_queue_bytes'])),\n              'maximum_sampled_receive_drops': max(sample[role]['udp']['receive_drops'] for sample in valid),\n              'final_observed': point(valid[-1]),\n              'first_positive_drop_sample': point(positive) if positive else None}\n    if refusal is not None:\n        before = [sample for sample in valid if observed_interval(sample, role)[1] < refusal]\n        result.update(last_pre_refusal=point(before[-1]) if before else None,\n                      peak_pre_refusal=point(max(before, key=lambda sample: sample[role]['udp']['receive_queue_bytes'])) if before else None)\n        if positive:\n            index = valid.index(positive)\n            prior = valid[index - 1] if index else None\n            result['first_positive_observation_completed_ms_before_refusal'] = (\n                refusal - observed_interval(positive, role)[1]) * 1000\n            result['drop_onset_bracket_ms_before_refusal'] = [\n                (refusal - observed_interval(positive, role)[1]) * 1000,\n                (refusal - observed_interval(prior, role)[0]) * 1000] if prior else None\n    return result\n\n\ndef compact_cpu(helper, cpus, start, end, enabled):\n    result = helper.cpu_window(cpus, start, end, enabled)\n    result.pop('scope', None)\n    rows = result.pop('threads', [])\n    result['matched_thread_count'] = len(rows)\n    result['matched_worker_count'] = sum(row['name'] == 'tokio-rt-worker' for row in rows)\n    result['user_cpu_seconds'] = sum(row['user_seconds'] for row in rows)\n    result['system_cpu_seconds'] = sum(row['system_seconds'] for row in rows)\n    result['main_thread_cpu_seconds'] = sum(row['user_seconds'] + row['system_seconds'] for row in rows if row['main_thread'])\n    result['raw_schedstat_delta_sum'] = {key: sum(row.get('raw_schedstat_delta', {}).get(key, 0) for row in rows)\n                                        for key in ('run_ns', 'wait_ns', 'timeslices')}\n    return result\n\n\ndef measurement(receipt):\n    details = receipt.get('measurement')\n    if not isinstance(details, dict):\n        return {'status': 'unavailable', 'reason': 'No measured gate; actual generated work, lag and completed goodput are unknown.'}\n    result = {'status': 'observed', 'elapsed_seconds': details['elapsed_seconds']}\n    for name, planned in [('private', 1024000), ('fanout', 4000)]:\n        part = details[name]\n        assert part['planned_source_updates'] == planned\n        assert part['not_generated'] == planned - part['generated_source_updates']\n        assert part['generation_lag']['samples'] == part['generated_source_updates']\n        assert part['verified_unique'] + part['unreceived_within_window'] == part['expected_generated_deliveries']\n        assert part['received_during_offer'] + part['received_during_drain'] == part['verified_unique']\n        assert part['expected_generated_deliveries'] == part['generated_source_updates'] * (1024 if name == 'fanout' else 1)\n        result[name] = {key: value for key, value in part.items() if key != 'per_recipient'}\n        result[name]['generated_fraction_of_plan'] = part['generated_source_updates'] / planned\n    return result\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument('--output', type=Path, default=OUTPUT)\n    output = parser.parse_args().output\n    assert not output.exists(), output\n    synthetic = {'wall_time_unix_seconds': 100., 'monotonic_seconds': 5.,\n                 'client': {'sample_monotonic_seconds': 5.002, 'sample_seconds': .003}}\n    assert abs(observed_interval(synthetic, 'client')[1] - 100.005) < 1e-9\n    assert measurement({})['status'] == 'unavailable'\n    spec = importlib.util.spec_from_file_location('prior_cpu_correlation', HELPER)\n    helper = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(helper)\n    helper.self_check()\n    summary = json.loads(SUMMARY.read_text())\n    assert summary['status'] == 'complete' and len(summary['runs']) == 9\n    assert [(row['arm'], row['repetition']) for row in summary['runs']] == [\n        ('A', 1), ('B', 1), ('C', 1), ('B', 2), ('C', 2), ('A', 2), ('C', 3), ('A', 3), ('B', 3)]\n    verify(summary['build_manifest'])\n    build = json.loads(Path(summary['build_manifest']['path']).read_text())\n    assert build['status'] == 'complete'\n    for key in ('source_B_archive', 'source_B_manifest', 'source_C_archive', 'source_C_manifest',\n                'resolved_dependencies_and_features', 'candidate_patch', 'original_argument_receipt', 'server'):\n        verify(build[key])\n    for arm in 'ABC':\n        verify(build[arm]['binary'])\n    before = json.loads(Path(build['source_B_manifest']['path']).read_text())\n    after = json.loads(Path(build['source_C_manifest']['path']).read_text())\n    changed = sorted(name for name in set(before) | set(after)\n                     if before.get(name, {}).get('sha256') != after.get(name, {}).get('sha256'))\n    assert changed == ['examples/datagram_load.rs']\n    archived = []\n    for name in ('source_B_archive', 'source_C_archive'):\n        with tarfile.open(build[name]['path']) as archive:\n            archived.append(archive.extractfile('examples/datagram_load.rs').read().decode())\n    actual_patch = ''.join(difflib.unified_diff(archived[0].splitlines(keepends=True), archived[1].splitlines(keepends=True),\n                         fromfile='a/examples/datagram_load.rs', tofile='b/examples/datagram_load.rs'))\n    assert actual_patch == Path(build['candidate_patch']['path']).read_text()\n    original = ref(ART / 'binaries/datagram-load-final')\n    product = ref(ART / 'binaries/session-io-relay')\n    assert original['sha256'] == A_SHA and product['sha256'] == PRODUCT_SHA\n    current = ref(ROOT / 'target/release/war-relay')\n    report = {'record_type': 'completed_client_only_causal_diagnostic',\n              'analysis_timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),\n              'conclusion': 'One receiver consume_budget call is not a sufficient fix: cooperative client C3 still reached peer stream-credit zero and reliable queue refusal after client UDP drops. This experiment does not identify the complete causal mechanism or establish a server performance improvement.',\n              'scope': summary['scope'], 'worktree_root': str(ROOT),\n              'analysis_checkout_head': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),\n              'stopping_rule': summary['stopping_rule'], 'rotated_order': summary['planned_order'],\n              'source_build': build, 'B_vs_C_changed_files': changed, 'client_patch_text': actual_patch,\n              'server_diagnostic_patch': ref(ART / 'receive-clock-write-state-source.patch'),\n              'server_diagnostic_patch_text': (ART / 'receive-clock-write-state-source.patch').read_text(),\n              'summary': ref(SUMMARY), 'analyzer': ref(Path(__file__)), 'cpu_window_helper': ref(HELPER),\n              'frozen_original_client_verified_unchanged': original,\n              'retained_production_binary_verified_unchanged': product,\n              'current_release_binary_at_analysis': {**current, 'matches_retained_production_binary': current['sha256'] == PRODUCT_SHA,\n                  'scope': 'Read-only point-in-time observation; separate parent experiments can later replace target/release/war-relay.'},\n              'planned_offer': summary['planned_offer'], 'trials': [],\n              'reproduction_commands': {\n                  'build_when_outputs_absent': ['python', str(ART / 'build-client-read-cooperation-diagnostic.py')],\n                  'collect_when_outputs_absent': ['python', str(ART / 'run-client-read-cooperation-diagnostic.py')],\n                  'analyze_completed_receipts_to_fresh_path': ['python', str(Path(__file__).resolve()), '--output', str(ART / 'client-read-cooperation-correlation-reproduced.json')]},\n              'reproduction_limit': 'Build/collection refuse existing outputs. Preserve originals; replay in a fresh artifact copy with the same paths/configuration. Analysis only needs the completed receipts and referenced artifacts.',\n              'generation_semantics': 'Planned counts are rate*4seconds for32private sources and1fanout source. Generated increments after the send operation succeeds; it is not server receipt. Lag is generation timestamp minus scheduled timestamp before send; last_submit_ms is measured after send completion. A send begun before4seconds can complete later. Histogram p50/p99 values are logarithmic bucket upper bounds, while max_ms is exact for observed samples. Missing measured gates do not reveal partial generated work.',\n              'limits': [\n                  'Three rotated repetitions per arm provide observed outcomes, not a statistically defensible failure-rate ranking. A and C both passing twice does not establish equivalence; B passing once does not establish regression.',\n                  'Only B versus C isolates the reviewed receiver call under one retained build/toolchain/dependency state. A remains the original frozen artifact, whose exact dependency build was not recovered.',\n                  'Client variants are diagnostics only and cannot replace frozen A in server acceptance or count as a server win.',\n                  'Requested4ms UDP and40ms CPU sampling are not guaranteed cadence. Actual role observation intervals, sample gaps and observer costs are retained.',\n                  'CPU deltas average sampled intervals and can miss short saturation or scheduling bursts. Balanced workers and unused aggregate capacity do not exclude serialization of one migrating endpoint future.',\n                  'OS schedstat runnable-thread wait is not Tokio future wait. Disabled sched_schedstats prevents interpreting zero or residual wait counters as absence of starvation.',\n                  'UDP receive_drops are cumulative process-owned socket census; identity stability is checked. Queue bytes are sampled kernel accounting, not application payload or complete kernel memory.',\n                  'First observed socket drop preceding refusal establishes ordering, not the unique cause. Passing trials also drop UDP packets.',\n                  'Cwnd-minus-inflight and MTU arithmetic are snapshots, not an observed packetizer branch or measured goodput ceiling.',\n                  'Logical offered deliveries are not measured network packet or syscall rates. No packet-level microburst trace or exact endpoint-future wait was collected.',\n                  'Observer-instrumented timing/CPU/RSS cannot be substituted for ordinary server comparison measurements.'],\n              'embedded_sources': {}}\n    for entry in summary['runs']:\n        receipt_path = Path(entry['receipt'])\n        assert ref(receipt_path)['sha256'] == entry['receipt_sha256']\n        receipt = json.loads(receipt_path.read_text())\n        series_path = Path(entry['samples'])\n        assert ref(series_path)['sha256'] == receipt['udp_samples_sha256']\n        data = json.loads(series_path.read_text())\n        samples = data['samples']\n        assert all(b['monotonic_seconds'] > a['monotonic_seconds'] for a, b in zip(samples, samples[1:]))\n        assert data['collector_affinity_before'] == data['collector_affinity_restored']\n        assert receipt['client_sha256'] == build[entry['arm']]['binary']['sha256']\n        assert receipt['server_sha256'] == build['server']['sha256']\n        assert receipt['diagnostic_controller_sha256'] == summary['observer']['sha256']\n        cpus = [sample['client_threads'] for sample in samples if 'client_threads' in sample]\n        enabled = data['sched_schedstats'].get('enabled') is True\n        trace = receipt['overload_diagnostic']\n        assert len(trace) <= 1\n        refusal = datetime.datetime.fromisoformat(trace[0].split()[0].replace('Z', '+00:00')).timestamp() if trace else None\n        row = {'arm': entry['arm'], 'repetition': entry['repetition'], 'passed': receipt['passed'],\n               'error': receipt.get('error'), 'receipt': ref(receipt_path), 'series': ref(series_path),\n               'source_argument_recipe': receipt['source_argument_recipe'],\n               'server_sha256': receipt['server_sha256'], 'client_sha256': receipt['client_sha256'],\n               'direct_child_pids': data['roles'], 'measurement': measurement(receipt),\n               'refusal_wall_seconds': refusal, 'refusal_utc': utc(refusal) if refusal else None,\n               'write_state_snapshots': receipt['write_state_snapshots'], 'udp': {}, 'cpu_windows': {}}\n        for role in ('client', 'server'):\n            row['udp'][role] = udp_summary(samples, role, refusal)\n        gaps = [b['monotonic_seconds'] - a['monotonic_seconds'] for a, b in zip(samples, samples[1:])]\n        costs = [sample['collector_sample_seconds'] for sample in samples]\n        biases = [sample['wall_time_unix_seconds'] - sample['monotonic_seconds'] for sample in samples]\n        row['observer'] = {'requested_udp_interval_seconds': data['sampling_interval_seconds'],\n                           'requested_cpu_interval_seconds': data['client_cpu_interval_seconds'],\n                           'collector_cpu': data['collector_cpu'], 'sample_count': len(samples), 'cpu_sample_count': len(cpus),\n                           'median_udp_gap_seconds': statistics.median(gaps), 'maximum_udp_gap_seconds': max(gaps),\n                           'maximum_cpu_gap_seconds': data['max_observed_cpu_gap_seconds'],\n                           'median_collection_seconds': statistics.median(costs), 'maximum_collection_seconds': max(costs),\n                           'maximum_cpu_collection_seconds': max(cpu['collection_seconds'] for cpu in cpus),\n                           'total_collection_seconds': sum(costs),\n                           'wall_minus_monotonic_range_seconds': max(biases) - min(biases),\n                           'sched_schedstats': data['sched_schedstats'], 'collector_affinity_restored': True}\n        row['cpu_windows']['whole_observed_socket_lifetime'] = compact_cpu(helper, cpus,\n            samples[0]['wall_time_unix_seconds'], samples[-1]['wall_time_unix_seconds'], enabled)\n        positive = row['udp']['client']['first_positive_drop_sample']\n        if positive:\n            when = positive['observation_start_wall_seconds']\n            row['cpu_windows']['quarter_second_before_first_sampled_drop'] = compact_cpu(helper, cpus, when - .25, when, enabled)\n        if refusal:\n            row['cpu_windows']['quarter_second_before_refusal'] = compact_cpu(helper, cpus, refusal - .25, refusal, enabled)\n            snap = receipt['write_state_snapshots'][0]\n            assert snap['stream_credit'] == max(0, snap['stream_max'] - snap['stream_offset'])\n            assert snap['window_credit'] == max(0, snap['send_window'] - snap['buffered_data'])\n            path = trace[0].split('path: PathStats {', 1)[1]\n            observed = {key: int(value) for key, value in re.findall(r'\\b(cwnd|congestion_events|lost_packets|lost_bytes|sent_packets|current_mtu):\\s*(\\d+)', path)}\n            row['connection_path_snapshot'] = {**observed, 'remaining_cwnd_bytes': max(0, snap['cwnd'] - snap['in_flight']),\n                'remaining_cwnd_below_mtu': max(0, snap['cwnd'] - snap['in_flight']) < observed['current_mtu']}\n        report['trials'].append(row)\n    report['observed_outcomes'] = {arm: {'passes': sum(row['passed'] for row in report['trials'] if row['arm'] == arm),\n                                        'executed': 3} for arm in 'ABC'}\n    report['causal_findings'] = [\n        'C3 preserves the failure mechanism after the receiver cooperation call: client socket drops precede queue refusal; peer stream credit is zero while local send-window credit remains available.',\n        'Every logged refusal in A3/B2/B3/C3 has peer stream_credit0, registered writer and open protocol. B2 still has more than one MTU of cwnd headroom, so cwnd exhaustion is not a universal instantaneous explanation.',\n        'Several passing cases also have nonzero client UDP drops. Socket loss alone is insufficient to predict refusal.',\n        'Passing C cases generated essentially the full private plan and all4000fanout source updates, with recorded lag. Their passes are not explained by a large generated-work shortfall, but they do not establish improved robustness.',\n        'The receiver cooperation hypothesis remains plausible as one contributor, but one consume_budget await per verified update does not solve the mixed-load failure. More precise endpoint scheduling/burst evidence would be needed to assign the remaining cause.']\n    # Build/runner/collector sources have immutable path+hash references in source_build.\n    for path in [Path(__file__)]:\n        assert path.suffix == '.py'\n        report['embedded_sources'][str(path)] = path.read_text()\n    text = json.dumps(report, indent=2) + '\\n'\n    assert '\\u007fELF' not in text, 'report contains binary data'\n    assert len(text.encode()) < 150000, f'report unexpectedly large: {len(text.encode())} bytes'\n    output.parent.mkdir(parents=True, exist_ok=True)\n    output.write_text(text)\n    print(json.dumps({'output': ref(output), 'outcomes': report['observed_outcomes']}), flush=True)\n    for row in report['trials']:\n        print(json.dumps({'case': row['arm'] + str(row['repetition']), 'passed': row['passed'],\n            'client_drops': row['udp']['client']['maximum_sampled_receive_drops'],\n            'drop_lead_ms': row['udp']['client'].get('first_positive_observation_completed_ms_before_refusal'),\n            'cpu_windows_cores': {label: value.get('aggregate_cpu_core_equivalent') for label, value in row['cpu_windows'].items()}}), flush=True)\n\n\nif __name__ == '__main__':\n    main()\n"
+  },
+  "observed_outcomes": {
+    "A": {
+      "passes": 2,
+      "executed": 3
+    },
+    "B": {
+      "passes": 1,
+      "executed": 3
+    },
+    "C": {
+      "passes": 2,
+      "executed": 3
+    }
+  },
+  "causal_findings": [
+    "C3 preserves the failure mechanism after the receiver cooperation call: client socket drops precede queue refusal; peer stream credit is zero while local send-window credit remains available.",
+    "Every logged refusal in A3/B2/B3/C3 has peer stream_credit0, registered writer and open protocol. B2 still has more than one MTU of cwnd headroom, so cwnd exhaustion is not a universal instantaneous explanation.",
+    "Several passing cases also have nonzero client UDP drops. Socket loss alone is insufficient to predict refusal.",
+    "Passing C cases generated essentially the full private plan and all4000fanout source updates, with recorded lag. Their passes are not explained by a large generated-work shortfall, but they do not establish improved robustness.",
+    "The receiver cooperation hypothesis remains plausible as one contributor, but one consume_budget await per verified update does not solve the mixed-load failure. More precise endpoint scheduling/burst evidence would be needed to assign the remaining cause."
+  ]
+}
