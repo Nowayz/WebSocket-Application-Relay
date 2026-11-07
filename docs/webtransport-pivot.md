@@ -2773,3 +2773,30 @@ outcomes, generated counts, first-refusal snapshots and sampling limits:
 [client cooperation report](reports/webtransport-client-read-cooperation-diagnostic-2026-11-06.json).
 Next diagnostics distinguish ingress isolation and send-buffer ownership/recovery
 without raising resource budgets or replacing fixed-client server acceptance.
+
+## Immediate reliable fanout screen rejected — 2026-11-06
+
+This candidate gives reliable room fanout the same single cancel-safe admission
+poll used by private output when the recipient queue is empty and its writer is
+not busy. Gated observer sends remain queued. A real 12 MiB fanout under 64 KiB
+peer stream credit verifies that partial admission resumes before later private
+output. All 254 relay tests and Clippy pass, including existing observer/barrier,
+blocked-output timeout and queue ownership checks.
+
+All 18 ordinary 12-second comparisons pass correctness, but median throughput
+changes against compact SessionIO are private -0.43%, room -10.17%, mixed -6.60%.
+Room server CPU falls from 36.32 to 32.11 s and mixed from 39.71 to 34.51 s;
+lower CPU does not compensate for lower verified-delivery throughput. Reliable
+paced controls pass 2/3 for each variant, retaining both repeat-3 failures.
+Datagram controls pass 3/3 for each variant.
+
+The candidate is rejected; selected source/tests are restored and rebuilt to
+`1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0`.
+No memory, browser, freshness or ordinary profile benefit is claimed for it.
+Source/test changes, hashes, controls and all failures remain in the
+[fanout screen report](reports/webtransport-fanout-immediate-screen-2026-11-06.json).
+
+Moving admission into the publisher changes both synchronous work and lock/batch
+behavior. The regression is not attributed to mutex waiting without measurement.
+A separate sampled write-lock diagnostic is prepared to distinguish acquisition
+wait from held time. Nonblocking admission remains a hypothesis, not a fix.
