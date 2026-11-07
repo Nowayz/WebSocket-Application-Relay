@@ -3476,3 +3476,52 @@ and I/O ownership remains unfinished; this result neither proves nor disproves
 its potential. The goal remains active. The [indexed driver report](reports/webtransport-indexed-driver-screen-2026-11-07.json)
 binds both binaries, patch, manifests, fixed clients, raw measurements, all phase
 checks, profiles and original test failure. No product code or deployment changes.
+
+## Direct protocol owner implemented; relay integration pending — 2026-11-07
+
+The next experiment now has a working, isolated local-owner QUIC/HTTP3 path.
+Unlike the rejected indexed scheduler, this code owns `quinn-proto` connection
+state directly. Application stream polls and packet processing use local-only
+`Rc<RefCell>` handles, with no connection mutex and no asynchronous write/read RPC.
+A shared deadline index and one endpoint timer replace per-connection Sleep
+objects. Pending UDP ciphertext retains exact ownership until socket acceptance.
+The existing QUIC/TLS core and SETTINGS, CONNECT, stream-header and capsule
+parsers remain unchanged. This is a singleton-owner correctness prototype, not
+an integrated or timed multiworker relay.
+
+Eight actual network contracts pass: encrypted 1 MiB stream transfer and
+bidirectional datagrams with full retirement; pending-read cancellation;
+flow-blocked write cancellation preserving the original suffix; endpoint shutdown
+and wakeup; ordinary client SETTINGS/CONNECT/application IO; local and peer
+capsule code/reason preservation and first-close semantics; preservation of a raw
+QUIC close cause; and progress past a stalled stream header. The HTTP3 client is
+the unchanged `web-transport-quinn` implementation used by fixed relay clients.
+
+The close tests found a real integration requirement: the core's local `close`
+starts protocol teardown but does not issue Quinn's application notification.
+The owner now explicitly notifies/wakes API waiters on local close and endpoint
+shutdown. It also keeps raw transport closure distinct from capsule closure.
+Initial compile failures, incorrect client-surface expectations, the peer-close
+notification timeout and subsequent corrected receipts are all preserved.
+
+All-target Clippy passes with warnings denied. The full serial suite passes the
+eight new tests but fails the native WebSocket origin-budget assertion at
+`tests/relay_integration/origin_policy.rs:110` (49152 versus 8192). The identical
+assertion was independently reproduced on unchanged retained source. There is no
+whole-suite passing claim or claimed fix for that baseline failure. The twelve
+retained-backend WebTransport tests pass separately; they do not test the new
+backend.
+
+The seven-file patch and complete source archives are frozen and read back;
+archive reconstruction verifies all 378 candidate input hashes, and the patch
+passes `git apply --check` against retained source. All 374 product inputs and
+the selected `91337694` image remain unchanged. No candidate relay binary,
+throughput or memory improvement is claimed.
+
+The next required work is ingress/worker sharding, the relay's Send+Sync output
+proxy with local stream ownership, exact budgets/admission/metrics/retirement,
+and equivalent receive/socket policy. Only then can the fixed-client throughput,
+100k memory, datagram, browser and loss/freshness comparisons decide the larger
+experiment. The [direct owner progress report](reports/webtransport-owned-protocol-progress-2026-11-07.json)
+links the frozen implementation, receipts and concrete remaining integration
+contract. The goal remains active; no deployment or product selection changed.
