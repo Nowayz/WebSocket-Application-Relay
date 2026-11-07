@@ -3424,3 +3424,55 @@ is byte-identical to the reproduced analysis and preserves all seven offers,
 literal-clock bounds, counter-source proof, sample domains, tooling history and
 raw/source hashes. Independent read-only analysis corroborates the critical
 credit/progress observations. Full memory parity remains open.
+
+## Indexed concrete driver scheduler rejected — 2026-11-07
+
+The resumed custom-driver experiment first replaces per-connection Tokio driver
+spawns with explicit indexed driver ownership: one owner per application-runtime
+worker, reusable connection slots, deduplicated readiness tokens, bounded ready
+batches, and stale-token protection. This uses concrete driver objects rather
+than the previously rejected FuturesUnordered grouping. It retains Quinn's
+protocol state, shared stream-state mutexes, endpoint event queues, timers and
+UDP implementation. It is a scheduling treatment, not the completed direct
+protocol-state/I/O ownership experiment.
+
+Both ordinary release images were built in the same isolated source and target
+directories from HEAD `48e02ba8`; six source files differ. The product checkout
+and selected `91337694` image remain unchanged. Three rotated 12-second repeats
+per arm and case all pass content, routing, FIFO and counter checks:
+
+| Workload | Baseline median deliveries/s | Indexed median deliveries/s | Change |
+| --- | ---: | ---: | ---: |
+| Private | 1,486,312 | 1,337,836 | -9.99% |
+| Room | 1,701,989 | 1,621,494 | -4.73% |
+| Mixed | 1,632,433 | 1,635,340 | +0.18% |
+
+All private and room candidate samples are below their corresponding control
+ranges. Mixed ranges overlap, and aggregate totals do not prove component parity.
+Both 100,000-session capacity runs verify 400,000 measured deliveries, 100,000
+orderly closes, 750,000 departure checks, and all exact final cleanup gauges.
+Ready RSS is 1,842.0977 versus 1,823.9609 MiB: 18.1367 MiB saved, about 0.98%.
+This single pair is not a confidence interval or an allocation-owner attribution.
+Setup is 11.0925/10.7250 seconds, retirement 2.0861/2.1069 seconds, and paced
+measurement server CPU 6.04/5.92 CPU-seconds. RTT p99 histogram upper bounds are
+1.048576/2.097152 ms. Capacity pacing is not maximum throughput.
+
+Three scheduler contract tests pass. The serial full relay suite passes 258 tests
+with one existing ignored, including all 12 actual UDP/TLS/HTTP3 tests exercising
+the candidate server driver. All-target Clippy passes with warnings denied. The
+first concurrent full suite stopped on a native WebSocket origin admission-budget
+assertion; that receipt is preserved, and the serial rerun passes. No causal fix
+for that assertion is claimed.
+
+Both endpoint profiles on each arm have zero lost user-cycle samples. They show
+active VAES/AVX2 crypto routines in both versions, but do not identify a unique
+cause for the scheduler regression. Shared cooperative budgeting within each
+owner turn is part of this treatment; it has not been independently ablated.
+
+Reject this scheduler treatment. Additional paced/datagram/browser/freshness
+acceptance and a candidate heap capture were not run after its throughput
+selection gate failed. A complete direct quinn-proto owner with changed stream
+and I/O ownership remains unfinished; this result neither proves nor disproves
+its potential. The goal remains active. The [indexed driver report](reports/webtransport-indexed-driver-screen-2026-11-07.json)
+binds both binaries, patch, manifests, fixed clients, raw measurements, all phase
+checks, profiles and original test failure. No product code or deployment changes.
