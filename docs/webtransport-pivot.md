@@ -3062,3 +3062,76 @@ failures (a post-success return-value assumption and unavailable SOCK_DIAG) are
 recorded separately from application results; corrected allocation-only captures
 do not measure kernel memory. Full scripts, hashes, profiles and limits are in
 the [guarded assembler report](reports/webtransport-inline-peek-screen-2026-11-06.json).
+
+## Compact protocol unit notifications retained — 2026-11-06
+
+The protocol's internal application-event queue only receives four payload-free
+notifications, but previously stored the 56-byte public event enum. Store a
+private one-byte enum and convert back when polling. All five producer sites,
+duplicates, FIFO order and queued/stream/error priority remain intact. Public
+events, endpoint events, flow control, resource limits and the wire format are
+unchanged. This reduces stored metadata without adding a queue, task or cache.
+
+At 100,000 sessions, event buffers change from 100,000 x 224 B to 100,000 x 8 B:
+21,600,000 B (20.5994 MiB) directly saved. The core connection allocation stays
+5344 B. Matched ready live allocations fall 1,848,346,869→1,825,903,840 B,
+a total 21.4033 MiB saving; the additional 843,029 B is not attributed to the
+event change. Ordinary ready RSS falls 1889.9961→1871.2305 MiB in that pair.
+
+All 18 incremental reliable comparisons pass. Private, room and mixed medians
+change -0.2601%, +1.1916% and -0.0671% versus `1c8e2d56`; ranges overlap, so
+no general speedup is claimed. Datagram controls pass 3/3 each. Original-client
+reliable controls pass 3/3 baseline and 2/3 candidate: the candidate's first
+EOF/slow-consumer failure remains failed with its measured rate unavailable.
+The preceding identical-baseline 0/3 control result shows a pre-existing
+instability but does not classify or erase this failure. Six additional controls
+with the same frozen dedicated-ingress client pass, three per server image,
+without unreceived generated updates or measured UDP-drop deltas. Those runs
+provide additional functional coverage and do not replace original-client
+acceptance or establish a failure-rate improvement.
+
+All 322 protocol tests and 253 relay tests pass (one existing relay test ignored),
+as does all-target Clippy. Archive verification covers 300 files, six pinned
+archives and five complete patches. Both endpoint profiles pass with zero lost
+samples in four reports. Actual headed Chrome 157 passes all nine browser checks,
+including typed CBOR, datagrams, 5 MiB delivery and three clean closures; console
+errors/warnings and final gauges are zero, and task-owned browser/fixture
+processes are gone.
+
+Four user-space UDP-proxy freshness cases pass at configured 20 ms each direction
+and 2% loss. Candidate datagram p99 freshest-state age is 110.47 ms with 19/360
+missing updates, versus 5020.89 ms and none missing for reliable streams. Bulk
+arrives at 9660.22 versus 5037.37 ms. This preserves the freshness/bulk tradeoff;
+single-pair proxy results are not TCP/netem equivalence or a tail SLA.
+
+A fresh native comparison uses the same final `f1811d2c` image and frozen client
+in both modes. All 18 cases pass; three 12-second repetitions rotate transport
+order. Verified received medians are:
+
+| Workload | Native WebSocket / s | WebTransport / s | WT change |
+| --- | ---: | ---: | ---: |
+| Private | 1,284,693 | 1,507,742 | +17.36% |
+| Room | 1,685,258 | 1,668,916 | -0.97% |
+| Mixed | 1,615,396 | 1,619,519 | +0.26% |
+
+Native room rates range 1.512–1.697 million/s and mixed 1.582–1.797 million/s.
+These small, variable samples do not prove room-throughput parity or a broad
+ordering. Both modes also pass a fresh same-boot 100k capacity run, each checking
+400,000 paced deliveries. Ready RSS is 115.3242 versus 1872.1367 MiB (16.2337x
+process RSS); server CPU is 1.96 versus 6.07 s, setup 0.6671 versus 10.5145 s,
+and retirement 0.6297 versus 1.9924 s. RTT p99 bucket upper bounds are 0.524288
+versus 1.048576 ms. Capacity traffic is not maximum throughput. Native WebSocket
+is plaintext; QUIC includes TLS.
+
+Same-boot BTF and socket counts separately bound protocol C-object payloads at
+243.2 MB for 100,000 TCP sockets and 1344 B for one UDP socket. These exclude
+socket buffers, slab rounding and other kernel storage; no complete kernel or
+userspace-plus-kernel total is claimed.
+
+The ordinary root build is byte-identical to the frozen tested image
+`f1811d2cd2dc6736b48fe0a1fdf8459209e0530a1a48ae930f56ff2cec0a7851`.
+Retain this incremental memory improvement. Full throughput/memory parity and
+original-client reliable-load acceptance remain unresolved; the pivot is not
+accepted. Exact distributions, CPU/latency/age metrics, all failures, build and
+source identities, reproduction scripts and scope limits are in the
+[unit-notification report](reports/webtransport-proto-unit-events-screen-2026-11-06.json).

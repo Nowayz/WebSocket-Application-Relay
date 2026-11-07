@@ -368,6 +368,20 @@ cloning starts empty and successful polls release it. This keeps consuming
 conversion from silently cancelling a registration or an owned operation.
 
 The complete archive-relative change is `web-transport-session-io.patch`.
+
+The protocol's application-event queue stores four internal unit notifications
+in a private one-byte enum and converts each to the unchanged public `Event`
+when polled. Stream events and connection errors remain separately polled in
+the original order. All notification producers, FIFO order and duplicates are
+preserved; no queue-depth limit or notification coalescing is introduced.
+
+The previous queue allocated storage for the 56-byte public enum even though
+none of its queued variants carried a payload. At 100,000 connected sessions,
+the observed retained buffers fall from 100,000 x 224 B to 100,000 x 8 B, with
+the 5344-byte Quinn connection allocation unchanged. This measures the event
+buffer component; full process allocations, RSS and throughput are reported
+separately. The complete change is included in `quinn-sparse-streams.patch`,
+and `src/connection/datagrams.rs` is declared in `provenance.json`.
 `provenance.json` pins the published archive and the three modified source files.
 Focused real-QUIC tests cover busy conversion, wake registration, raw/nonzero-ID
 datagrams, empty-state release, partial/QPACK retention, clones and close capsules.

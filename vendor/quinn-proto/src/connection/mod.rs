@@ -168,7 +168,7 @@ pub struct Connection {
     /// The value that the server included in the Source Connection ID field of a Retry packet, if
     /// one was received
     retry_src_cid: Option<ConnectionId>,
-    events: VecDeque<Event>,
+    events: VecDeque<QueuedEvent>,
     endpoint_events: VecDeque<EndpointEventInner>,
     /// Whether the spin bit is in use for this connection
     spin_enabled: bool,
@@ -395,7 +395,7 @@ impl Connection {
     #[must_use]
     pub fn poll(&mut self) -> Option<Event> {
         if let Some(x) = self.events.pop_front() {
-            return Some(x);
+            return Some(x.into());
         }
 
         if let Some(event) = self.streams.poll() {
@@ -2151,7 +2151,7 @@ impl Connection {
         while let Some(chunk) = space.crypto_stream.read(usize::MAX, true) {
             trace!("consumed {} CRYPTO bytes", chunk.bytes.len());
             if self.crypto.read_handshake(&chunk.bytes)? {
-                self.events.push_back(Event::HandshakeDataReady);
+                self.events.push_back(QueuedEvent::HandshakeDataReady);
             }
         }
 
@@ -2646,7 +2646,7 @@ impl Connection {
                     self.discard_space(now, SpaceId::Handshake);
                 }
 
-                self.events.push_back(Event::Connected);
+                self.events.push_back(QueuedEvent::Connected);
                 self.state = State::Established;
                 trace!("established");
                 Ok(())
@@ -3012,7 +3012,7 @@ impl Connection {
                         .datagrams
                         .received(datagram, &self.config.datagram_receive_buffer_size)?
                     {
-                        self.events.push_back(Event::DatagramReceived);
+                        self.events.push_back(QueuedEvent::DatagramReceived);
                     }
                 }
                 Frame::AckFrequency(ack_frequency) => {
@@ -3399,7 +3399,7 @@ impl Connection {
             }
         }
         if self.datagrams.send_blocked && sent_datagrams {
-            self.events.push_back(Event::DatagramsUnblocked);
+            self.events.push_back(QueuedEvent::DatagramsUnblocked);
             self.datagrams.send_blocked = false;
         }
 
@@ -4065,6 +4065,26 @@ mod state {
     }
 }
 
+// Only unit notifications are queued; stream and error payloads are polled separately.
+#[derive(Debug)]
+enum QueuedEvent {
+    HandshakeDataReady,
+    Connected,
+    DatagramReceived,
+    DatagramsUnblocked,
+}
+
+impl From<QueuedEvent> for Event {
+    fn from(event: QueuedEvent) -> Self {
+        match event {
+            QueuedEvent::HandshakeDataReady => Self::HandshakeDataReady,
+            QueuedEvent::Connected => Self::Connected,
+            QueuedEvent::DatagramReceived => Self::DatagramReceived,
+            QueuedEvent::DatagramsUnblocked => Self::DatagramsUnblocked,
+        }
+    }
+}
+
 /// Events of interest to the application
 #[derive(Debug)]
 pub enum Event {
@@ -4155,6 +4175,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn queued_unit_events_preserve_fifo_duplicates_and_small_storage() {
+        assert_eq!(mem::size_of::<QueuedEvent>(), 1);
+        let input = [
+            QueuedEvent::HandshakeDataReady,
+            QueuedEvent::Connected,
+            QueuedEvent::DatagramReceived,
+            QueuedEvent::DatagramReceived,
+            QueuedEvent::DatagramsUnblocked,
+            QueuedEvent::DatagramsUnblocked,
+            QueuedEvent::Connected,
+        ];
+        let expected = [
+            Event::HandshakeDataReady,
+            Event::Connected,
+            Event::DatagramReceived,
+            Event::DatagramReceived,
+            Event::DatagramsUnblocked,
+            Event::DatagramsUnblocked,
+            Event::Connected,
+        ];
+        let mut queued = VecDeque::new();
+        let mut wide = VecDeque::new();
+        for (compact, public) in input.into_iter().zip(expected) {
+            queued.push_back(compact);
+            wide.push_back(public);
+        }
+        let capacity = queued.capacity();
+        assert!(capacity * mem::size_of::<QueuedEvent>() < wide.capacity() * mem::size_of::<Event>());
+        while let Some(expected) = wide.pop_front() {
+            let actual: Event = queued.pop_front().unwrap().into();
+            assert_eq!(mem::discriminant(&actual), mem::discriminant(&expected));
+        }
+        assert!(queued.is_empty());
+        assert_eq!(queued.capacity(), capacity);
+        queued.push_back(QueuedEvent::DatagramReceived);
+        assert!(matches!(
+            Event::from(queued.pop_front().unwrap()),
+            Event::DatagramReceived
+        ));
+        assert_eq!(queued.capacity(), capacity);
+    }
 
     #[cfg(feature = "rustls-ring")]
     #[test]

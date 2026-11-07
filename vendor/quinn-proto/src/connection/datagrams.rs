@@ -4,7 +4,7 @@ use bytes::Bytes;
 use thiserror::Error;
 use tracing::{debug, trace};
 
-use super::{Connection, Event};
+use super::{Connection, QueuedEvent};
 use crate::{
     TransportError,
     frame::{Datagram, FrameStruct},
@@ -67,7 +67,7 @@ impl Datagrams<'_> {
         }
 
         self.conn.datagrams.send_blocked = false;
-        self.conn.events.push_back(Event::DatagramsUnblocked);
+        self.conn.events.push_back(QueuedEvent::DatagramsUnblocked);
     }
 
     /// Compute the maximum size of datagrams that may passed to `send_datagram`
