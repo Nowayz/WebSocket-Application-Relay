@@ -1,0 +1,2362 @@
+{
+  "scope": "Source-verified exact-selected CPU and allocation audit with separate diagnostic type and occupancy builds. No production modification or new selected optimization.",
+  "selected": {
+    "path": "target/release/war-relay",
+    "sha256": "91337694ecef14ff3bb80bf37d13786aa5d4653e462096aeb3ddd92b71e19ea1"
+  },
+  "product_inputs_verified": 374,
+  "heap_requested_live_bytes": 1790254690,
+  "heap_groups": {
+    "Quinn connection owner including protocol core": {
+      "bytes": 534400000,
+      "objects": 100000,
+      "mib": 509.6435546875,
+      "bytes_per_connection": 5344.0,
+      "percent": 29.850501327272042
+    },
+    "Expanded packet keys": {
+      "bytes": 230433408,
+      "objects": 400058,
+      "mib": 219.7584228515625,
+      "bytes_per_connection": 2304.33408,
+      "percent": 12.871543322140383
+    },
+    "Application task cells": {
+      "bytes": 179200000,
+      "objects": 100000,
+      "mib": 170.8984375,
+      "bytes_per_connection": 1792.0,
+      "percent": 10.009748948067273
+    },
+    "Protocol vector backing allocations": {
+      "bytes": 179788288,
+      "objects": 1101154,
+      "mib": 171.45947265625,
+      "bytes_per_connection": 1797.88288,
+      "percent": 10.04260952389964
+    },
+    "Rustls QUIC session shells": {
+      "bytes": 103200000,
+      "objects": 100000,
+      "mib": 98.419189453125,
+      "bytes_per_connection": 1032.0,
+      "percent": 5.76454292098517
+    },
+    "Protocol hash tables": {
+      "bytes": 101233812,
+      "objects": 400005,
+      "mib": 96.54408645629883,
+      "bytes_per_connection": 1012.33812,
+      "percent": 5.654715642722321
+    },
+    "Header protection keys": {
+      "bytes": 51200000,
+      "objects": 200000,
+      "mib": 48.828125,
+      "bytes_per_connection": 512.0,
+      "percent": 2.8599282708763636
+    },
+    "HTTP3 capsule task cells": {
+      "bytes": 51200000,
+      "objects": 100000,
+      "mib": 48.828125,
+      "bytes_per_connection": 512.0,
+      "percent": 2.8599282708763636
+    },
+    "Other allocations": {
+      "bytes": 359599182,
+      "objects": 3645394,
+      "mib": 342.9405040740967,
+      "bytes_per_connection": 3595.99182,
+      "percent": 20.086481773160443
+    }
+  },
+  "heap_top_sites": [
+    {
+      "offset": "0x253490",
+      "function": "quinn::endpoint::EndpointInner::accept",
+      "location": "quinn.529f723b385a6b01-cgu.0:?",
+      "objects": 100000,
+      "bytes": 534400000,
+      "mean_bytes": 5344.0
+    },
+    {
+      "offset": "0x3a7f59",
+      "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+      "location": "??:?",
+      "objects": 400058,
+      "bytes": 230433408,
+      "mean_bytes": 576.0
+    },
+    {
+      "offset": "0x58b742",
+      "function": "war_relay::main::{{closure}}",
+      "location": "war_relay.43295da09962f55c-cgu.0:?",
+      "objects": 100000,
+      "bytes": 179200000,
+      "mean_bytes": 1792.0
+    },
+    {
+      "offset": "0x2b9727",
+      "function": "alloc::raw_vec::finish_grow",
+      "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+      "objects": 1101144,
+      "bytes": 157746432,
+      "mean_bytes": 143.25686013818355
+    },
+    {
+      "offset": "0x2c6c9b",
+      "function": "<quinn_proto::crypto::rustls::QuicServerConfig as quinn_proto::crypto::ServerConfig>::start_session",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 103200000,
+      "mean_bytes": 1032.0
+    },
+    {
+      "offset": "0x2c7cf4",
+      "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+      "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+      "objects": 400005,
+      "bytes": 101233812,
+      "mean_bytes": 253.08136648291895
+    },
+    {
+      "offset": "0x3a8131",
+      "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::header_protection_key",
+      "location": "??:?",
+      "objects": 200000,
+      "bytes": 51200000,
+      "mean_bytes": 256.0
+    },
+    {
+      "offset": "0x59d4f1",
+      "function": "web_transport_quinn::session::Session::new",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 51200000,
+      "mean_bytes": 512.0
+    },
+    {
+      "offset": "0x27b264",
+      "function": "quinn_proto::connection::Connection::process_payload",
+      "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+      "objects": 300000,
+      "bytes": 40800000,
+      "mean_bytes": 136.0
+    },
+    {
+      "offset": "0x28dedf",
+      "function": "quinn_proto::connection::streams::SendStream::write",
+      "location": "??:?",
+      "objects": 200000,
+      "bytes": 32000000,
+      "mean_bytes": 160.0
+    },
+    {
+      "offset": "0x252ec4",
+      "function": "quinn::endpoint::EndpointInner::accept",
+      "location": "quinn.529f723b385a6b01-cgu.0:?",
+      "objects": 100000,
+      "bytes": 29600000,
+      "mean_bytes": 296.0
+    },
+    {
+      "offset": "0x578876",
+      "function": "war_relay::webtransport::session::{{closure}}",
+      "location": "war_relay.43295da09962f55c-cgu.0:?",
+      "objects": 100000,
+      "bytes": 27200000,
+      "mean_bytes": 272.0
+    },
+    {
+      "offset": "0x37ba2a",
+      "function": "alloc::alloc::exchange_malloc",
+      "location": "rustls.273bbb2001a55490-cgu.0:?",
+      "objects": 100000,
+      "bytes": 22400000,
+      "mean_bytes": 224.0
+    },
+    {
+      "offset": "0x2b9739",
+      "function": "alloc::raw_vec::finish_grow",
+      "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+      "objects": 10,
+      "bytes": 22041856,
+      "mean_bytes": 2204185.6
+    },
+    {
+      "offset": "0x27ff1f",
+      "function": "quinn_proto::connection::Connection::on_path_validated",
+      "location": "quinn_proto.cb80b3e0b22be59e-cgu.0:?",
+      "objects": 76314,
+      "bytes": 17094336,
+      "mean_bytes": 224.0
+    },
+    {
+      "offset": "0x28d0ff",
+      "function": "quinn_proto::connection::streams::SendStream::write_chunks",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 16000000,
+      "mean_bytes": 160.0
+    },
+    {
+      "offset": "0x253725",
+      "function": "quinn::endpoint::EndpointInner::accept",
+      "location": "quinn.529f723b385a6b01-cgu.0:?",
+      "objects": 100000,
+      "bytes": 14400000,
+      "mean_bytes": 144.0
+    },
+    {
+      "offset": "0x261d94",
+      "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+      "location": "quinn.529f723b385a6b01-cgu.0:?",
+      "objects": 100001,
+      "bytes": 13828240,
+      "mean_bytes": 138.2810171898281
+    },
+    {
+      "offset": "0x4ee472",
+      "function": "war_relay::relay::Relay::subscribe_with_output::{{closure}}",
+      "location": "war_relay.fea0d83d5a679886-cgu.0:?",
+      "objects": 100000,
+      "bytes": 13600000,
+      "mean_bytes": 136.0
+    },
+    {
+      "offset": "0x25bdfc",
+      "function": "<quinn::runtime::tokio::TokioRuntime as quinn::runtime::Runtime>::spawn",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 12800000,
+      "mean_bytes": 128.0
+    },
+    {
+      "offset": "0x37bb07",
+      "function": "alloc::raw_vec::finish_grow",
+      "location": "rustls.273bbb2001a55490-cgu.0:?",
+      "objects": 100000,
+      "bytes": 12800000,
+      "mean_bytes": 128.0
+    },
+    {
+      "offset": "0x59b11b",
+      "function": "web_transport_quinn::session::Session::try_into_established",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 11200000,
+      "mean_bytes": 112.0
+    },
+    {
+      "offset": "0x25cb40",
+      "function": "<quinn::runtime::tokio::TokioRuntime as quinn::runtime::Runtime>::new_timer",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 11200000,
+      "mean_bytes": 112.0
+    },
+    {
+      "offset": "0x59baa9",
+      "function": "web_transport_quinn::session::Session::new",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 9600000,
+      "mean_bytes": 96.0
+    },
+    {
+      "offset": "0x39bb32",
+      "function": "rustls::server::tls13::client_hello::emit_encrypted_extensions",
+      "location": "rustls.273bbb2001a55490-cgu.0:?",
+      "objects": 100000,
+      "bytes": 9550032,
+      "mean_bytes": 95.50032
+    },
+    {
+      "offset": "0x59c341",
+      "function": "web_transport_quinn::session::Session::new",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 8000000,
+      "mean_bytes": 80.0
+    },
+    {
+      "offset": "0x262aaf",
+      "function": "<quinn_proto::congestion::cubic::CubicConfig as quinn_proto::congestion::ControllerFactory>::build",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 7200000,
+      "mean_bytes": 72.0
+    },
+    {
+      "offset": "0x58ba1d",
+      "function": "war_relay::main::{{closure}}",
+      "location": "war_relay.43295da09962f55c-cgu.0:?",
+      "objects": 100000,
+      "bytes": 5600000,
+      "mean_bytes": 56.0
+    },
+    {
+      "offset": "0x26995e",
+      "function": "quinn_proto::connection::Connection::poll_transmit",
+      "location": "??:?",
+      "objects": 23686,
+      "bytes": 5305664,
+      "mean_bytes": 224.0
+    },
+    {
+      "offset": "0x59c425",
+      "function": "web_transport_quinn::session::Session::new",
+      "location": "??:?",
+      "objects": 100000,
+      "bytes": 4800000,
+      "mean_bytes": 48.0
+    }
+  ],
+  "type_layouts": {
+    "quinn::connection::ConnectionInner": {
+      "name": "quinn::connection::ConnectionInner",
+      "bytes": 5328,
+      "alignment": 16,
+      "log_line": 336433,
+      "details": [
+        "    field `.state`: 5088 bytes",
+        "    field `.shared`: 232 bytes",
+        "    end padding: 8 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "quinn::connection::State": {
+      "name": "quinn::connection::State",
+      "bytes": 5072,
+      "alignment": 16,
+      "log_line": 336444,
+      "details": [
+        "    field `.inner`: 4656 bytes",
+        "    field `.on_handshake_data`: 16 bytes",
+        "    field `.on_connected`: 16 bytes",
+        "    field `.buffered_transmit`: 80 bytes",
+        "    field `.timer_deadline`: 16 bytes",
+        "    field `.blocked_writers`: 32 bytes",
+        "    field `.blocked_readers`: 32 bytes",
+        "    field `.stopped`: 32 bytes",
+        "    field `.socket`: 16 bytes",
+        "    field `.runtime`: 16 bytes",
+        "    field `.driver`: 16 bytes",
+        "    field `.timer`: 16 bytes",
+        "    field `.io_poller`: 16 bytes",
+        "    field `.error`: 56 bytes",
+        "    field `.send_buffer`: 24 bytes",
+        "    field `.conn_events`: 8 bytes",
+        "    field `.endpoint_events`: 8 bytes",
+        "    field `.handle`: 8 bytes",
+        "    field `.connected`: 1 bytes",
+        "    end padding: 7 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "quinn::connection::Shared": {
+      "name": "quinn::connection::Shared",
+      "bytes": 232,
+      "alignment": 8,
+      "log_line": 337756,
+      "details": [
+        "    field `.stream_budget_available`: 64 bytes",
+        "    field `.stream_incoming`: 64 bytes",
+        "    field `.datagram_received`: 32 bytes",
+        "    field `.datagrams_unblocked`: 32 bytes",
+        "    field `.closed`: 32 bytes",
+        "    field `.ref_count`: 8 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "quinn_proto::connection::Connection": {
+      "name": "quinn_proto::connection::Connection",
+      "bytes": 4656,
+      "alignment": 16,
+      "log_line": 336467,
+      "details": [
+        "    field `.peer_params`: 352 bytes",
+        "    field `.spaces`: 560 bytes",
+        "    field `.packet_number_filter`: 32 bytes",
+        "    field `.ack_frequency`: 80 bytes",
+        "    field `.streams`: 704 bytes",
+        "    field `.prev_path`: 432 bytes",
+        "    field `.events`: 32 bytes",
+        "    field `.endpoint_events`: 32 bytes",
+        "    field `.local_cid_state`: 112 bytes",
+        "    field `.idle_timeout`: 16 bytes",
+        "    field `.next_bundled_ack_time`: 16 bytes",
+        "    field `.timers`: 160 bytes",
+        "    field `.prev_crypto`: 64 bytes",
+        "    field `.rem_cids`: 208 bytes",
+        "    field `.crypto`: 16 bytes",
+        "    field `.rng`: 320 bytes",
+        "    field `.zero_rtt_crypto`: 32 bytes",
+        "    field `.next_crypto`: 32 bytes",
+        "    field `.path`: 408 bytes",
+        "    field `.error`: 56 bytes",
+        "    field `.path_responses`: 24 bytes",
+        "    field `.datagrams`: 88 bytes",
+        "    field `.side`: 72 bytes",
+        "    field `.stats`: 536 bytes",
+        "    field `.state`: 72 bytes",
+        "    field `.endpoint_config`: 8 bytes",
+        "    field `.config`: 8 bytes",
+        "    field `.path_counter`: 8 bytes",
+        "    field `.key_phase_size`: 8 bytes",
+        "    field `.authentication_failures`: 8 bytes",
+        "    field `.total_authed_packets`: 8 bytes",
+        "    field `.pto_count`: 4 bytes",
+        "    field `.version`: 4 bytes",
+        "    field `.retry_src_cid`: 22 bytes",
+        "    field `.allow_mtud`: 1 bytes",
+        "    field `.zero_rtt_enabled`: 1 bytes",
+        "    field `.key_phase`: 1 bytes",
+        "    field `.spin_enabled`: 1 bytes",
+        "    field `.spin`: 1 bytes",
+        "    field `.accepted_0rtt`: 1 bytes",
+        "    field `.permit_idle_reset`: 1 bytes",
+        "    field `.close`: 1 bytes",
+        "    field `.receiving_ecn`: 1 bytes",
+        "    field `.app_limited`: 1 bytes",
+        "    field `.local_ip`: 17 bytes",
+        "    field `.highest_space`: 1 bytes",
+        "    field `.handshake_cid`: 21 bytes",
+        "    field `.rem_handshake_cid`: 21 bytes",
+        "    field `.orig_rem_cid`: 21 bytes",
+        "    field `.initial_dst_cid`: 21 bytes",
+        "    end padding: 10 bytes"
+      ],
+      "repeated_records": 4
+    },
+    "connection::streams::state::StreamsState": {
+      "name": "connection::streams::state::StreamsState",
+      "bytes": 704,
+      "alignment": 8,
+      "log_line": 315263,
+      "details": [
+        "    field `.send`: 144 bytes",
+        "    field `.recv`: 152 bytes",
+        "    field `.pending`: 64 bytes",
+        "    field `.data_blocked_limit`: 16 bytes",
+        "    field `.free_recv`: 24 bytes",
+        "    field `.events`: 32 bytes",
+        "    field `.connection_blocked`: 24 bytes",
+        "    field `.next`: 16 bytes",
+        "    field `.max`: 16 bytes",
+        "    field `.max_remote`: 16 bytes",
+        "    field `.sent_max_remote`: 16 bytes",
+        "    field `.allocated_remote_count`: 16 bytes",
+        "    field `.max_concurrent_remote_count`: 16 bytes",
+        "    field `.next_remote`: 16 bytes",
+        "    field `.next_reported_remote`: 16 bytes",
+        "    field `.send_streams`: 8 bytes",
+        "    field `.max_data`: 8 bytes",
+        "    field `.receive_window`: 8 bytes",
+        "    field `.local_max_data`: 8 bytes",
+        "    field `.sent_max_data`: 8 bytes",
+        "    field `.data_sent`: 8 bytes",
+        "    field `.data_recvd`: 8 bytes",
+        "    field `.buffered_data`: 8 bytes",
+        "    field `.send_window`: 8 bytes",
+        "    field `.stream_receive_window`: 8 bytes",
+        "    field `.initial_max_stream_data_uni`: 8 bytes",
+        "    field `.initial_max_stream_data_bidi_local`: 8 bytes",
+        "    field `.initial_max_stream_data_bidi_remote`: 8 bytes",
+        "    field `.receive_window_shrink_debt`: 8 bytes",
+        "    field `.opened`: 2 bytes",
+        "    field `.side`: 1 bytes",
+        "    field `.flow_control_adjusted`: 1 bytes",
+        "    end padding: 4 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "connection::spaces::PacketSpace": {
+      "name": "connection::spaces::PacketSpace",
+      "bytes": 544,
+      "alignment": 16,
+      "log_line": 315320,
+      "details": [
+        "    field `.pending_acks`: 160 bytes",
+        "    field `.largest_acked_packet`: 16 bytes",
+        "    field `.largest_acked_packet_sent`: 16 bytes",
+        "    field `.time_of_last_ack_eliciting_packet`: 16 bytes",
+        "    field `.loss_time`: 16 bytes",
+        "    field `.crypto`: 64 bytes",
+        "    field `.dedup`: 32 bytes",
+        "    field `.crypto_stream`: 88 bytes",
+        "    field `.rx_packet`: 8 bytes",
+        "    field `.pending`: 8 bytes",
+        "    field `.next_packet_number`: 8 bytes",
+        "    field `.largest_ack_eliciting_sent`: 8 bytes",
+        "    field `.unacked_non_ack_eliciting_tail`: 8 bytes",
+        "    field `.sent_packets`: 24 bytes",
+        "    field `.ecn_counters`: 24 bytes",
+        "    field `.ecn_feedback`: 24 bytes",
+        "    field `.crypto_offset`: 8 bytes",
+        "    field `.sent_with_keys`: 8 bytes",
+        "    field `.loss_probes`: 4 bytes",
+        "    field `.ping_pending`: 1 bytes",
+        "    field `.immediate_ack_pending`: 1 bytes",
+        "    end padding: 2 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "connection::spaces::PacketSpaces": {
+      "name": "connection::spaces::PacketSpaces",
+      "bytes": 560,
+      "alignment": 16,
+      "log_line": 315316,
+      "details": [
+        "    field `.data`: 544 bytes",
+        "    field `.initial`: 8 bytes",
+        "    field `.handshake`: 8 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "connection::paths::PathData": {
+      "name": "connection::paths::PathData",
+      "bytes": 408,
+      "alignment": 8,
+      "log_line": 315474,
+      "details": [
+        "    field `.challenge`: 16 bytes",
+        "    field `.mtud`: 152 bytes",
+        "    field `.first_packet`: 16 bytes",
+        "    field `.pacing`: 48 bytes",
+        "    field `.rtt`: 64 bytes",
+        "    field `.remote`: 32 bytes",
+        "    field `.first_packet_after_rtt_sample`: 16 bytes",
+        "    field `.congestion`: 16 bytes",
+        "    field `.total_sent`: 8 bytes",
+        "    field `.total_recvd`: 8 bytes",
+        "    field `.in_flight`: 16 bytes",
+        "    field `.generation`: 8 bytes",
+        "    field `.sending_ecn`: 1 bytes",
+        "    field `.challenge_pending`: 1 bytes",
+        "    field `.validated`: 1 bytes",
+        "    end padding: 5 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "connection::stats::ConnectionStats": {
+      "name": "connection::stats::ConnectionStats",
+      "bytes": 536,
+      "alignment": 8,
+      "log_line": 315364,
+      "details": [
+        "    field `.path`: 104 bytes",
+        "    field `.udp_tx`: 24 bytes",
+        "    field `.udp_rx`: 24 bytes",
+        "    field `.frame_tx`: 192 bytes",
+        "    field `.frame_rx`: 192 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "crypto::rustls::TlsSession": {
+      "name": "crypto::rustls::TlsSession",
+      "bytes": 1032,
+      "alignment": 8,
+      "log_line": 315209,
+      "details": [
+        "    field `.inner`: 824 bytes",
+        "    field `.next_secrets`: 176 bytes",
+        "    field `.suite`: 24 bytes",
+        "    field `.got_handshake_data`: 1 bytes",
+        "    field `.version`: 1 bytes",
+        "    end padding: 6 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "rustls::quic::Connection": {
+      "name": "rustls::quic::Connection",
+      "bytes": 824,
+      "alignment": 8,
+      "log_line": 315226,
+      "details": [
+        "    variant `Server`: 824 bytes",
+        "        field `.0`: 824 bytes",
+        "    variant `Client`: 720 bytes",
+        "        padding: 8 bytes",
+        "        field `.0`: 712 bytes, alignment: 8 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "rustls::conn::ConnectionCore<rustls::server::ServerConnectionData>": {
+      "name": "rustls::conn::ConnectionCore<rustls::server::ServerConnectionData>",
+      "bytes": 736,
+      "alignment": 8,
+      "log_line": 315244,
+      "details": [
+        "    field `.common_state`: 496 bytes",
+        "    field `.data`: 136 bytes",
+        "    field `.hs_deframer`: 32 bytes",
+        "    field `.state`: 64 bytes",
+        "    field `.seen_consecutive_empty_fragments`: 1 bytes",
+        "    end padding: 7 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "common_state::CommonState": {
+      "name": "common_state::CommonState",
+      "bytes": 496,
+      "alignment": 8,
+      "log_line": 300770,
+      "details": [
+        "    field `.record_layer`: 80 bytes",
+        "    field `.received_plaintext`: 56 bytes",
+        "    field `.sendable_tls`: 56 bytes",
+        "    field `.quic`: 160 bytes",
+        "    field `.kx_state`: 24 bytes",
+        "    field `.alpn_protocol`: 24 bytes",
+        "    field `.peer_certificates`: 24 bytes",
+        "    field `.queued_key_update_message`: 24 bytes",
+        "    field `.suite`: 8 bytes",
+        "    field `.message_fragmenter`: 8 bytes",
+        "    field `.negotiated_version`: 4 bytes",
+        "    field `.temper_counters`: 4 bytes",
+        "    field `.tls13_tickets_received`: 4 bytes",
+        "    field `.side`: 1 bytes",
+        "    field `.aligned_handshake`: 1 bytes",
+        "    field `.may_send_application_data`: 1 bytes",
+        "    field `.may_receive_application_data`: 1 bytes",
+        "    field `.early_traffic`: 1 bytes",
+        "    field `.sent_fatal_alert`: 1 bytes",
+        "    field `.has_sent_close_notify`: 1 bytes",
+        "    field `.has_received_close_notify`: 1 bytes",
+        "    field `.has_seen_eof`: 1 bytes",
+        "    field `.protocol`: 1 bytes",
+        "    field `.enable_secret_extraction`: 1 bytes",
+        "    field `.refresh_traffic_keys_pending`: 1 bytes",
+        "    field `.fips`: 1 bytes",
+        "    field `.handshake_kind`: 1 bytes",
+        "    end padding: 6 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "crypto::ring::quic::PacketKey": {
+      "name": "crypto::ring::quic::PacketKey",
+      "bytes": 576,
+      "alignment": 16,
+      "log_line": 300637,
+      "details": [
+        "    field `.key`: 544 bytes",
+        "    field `.confidentiality_limit`: 8 bytes",
+        "    field `.integrity_limit`: 8 bytes",
+        "    field `.iv`: 12 bytes",
+        "    end padding: 4 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "ring::aead::aes_gcm::Key": {
+      "name": "ring::aead::aes_gcm::Key",
+      "bytes": 528,
+      "alignment": 16,
+      "log_line": 300750,
+      "details": [
+        "    field `.0`: 528 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "ring::aead::aes_gcm::DynKey": {
+      "name": "ring::aead::aes_gcm::DynKey",
+      "bytes": 528,
+      "alignment": 16,
+      "log_line": 300735,
+      "details": [
+        "    discriminant: 8 bytes",
+        "    variant `VAesClMulAvx2`: 520 bytes",
+        "        padding: 8 bytes",
+        "        field `.0`: 512 bytes, alignment: 16 bytes",
+        "    variant `AesHwClMulAvxMovbe`: 520 bytes",
+        "        padding: 8 bytes",
+        "        field `.0`: 512 bytes, alignment: 16 bytes",
+        "    variant `AesHwClMul`: 520 bytes",
+        "        padding: 8 bytes",
+        "        field `.0`: 512 bytes, alignment: 16 bytes",
+        "    variant `Simd`: 264 bytes",
+        "        field `.0`: 264 bytes",
+        "    variant `Fallback`: 264 bytes",
+        "        field `.0`: 264 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "ring::aead::aes_gcm::Combo<ring::aead::aes::hw::Key, ring::aead::gcm::vclmulavx2::Key>": {
+      "name": "ring::aead::aes_gcm::Combo<ring::aead::aes::hw::Key, ring::aead::gcm::vclmulavx2::Key>",
+      "bytes": 512,
+      "alignment": 16,
+      "log_line": 300766,
+      "details": [
+        "    field `.gcm_key`: 256 bytes",
+        "    field `.aes_key`: 244 bytes",
+        "    end padding: 12 bytes"
+      ],
+      "repeated_records": 2
+    },
+    "war_relay::webtransport::application::WriterState<'_>": {
+      "name": "war_relay::webtransport::application::WriterState<'_>",
+      "bytes": 96,
+      "alignment": 8,
+      "log_line": 406863,
+      "details": [
+        "    field `.remaining`: 8 bytes",
+        "    field `.quantum`: 8 bytes",
+        "    field `.phase`: 56 bytes",
+        "    field `.outgoing`: 16 bytes",
+        "    field `.draining`: 1 bytes",
+        "    field `.yielding`: 1 bytes",
+        "    field `.selecting`: 1 bytes",
+        "    end padding: 5 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "war_relay::webtransport::application::InputState<'_>": {
+      "name": "war_relay::webtransport::application::InputState<'_>",
+      "bytes": 72,
+      "alignment": 8,
+      "log_line": 407839,
+      "details": [
+        "    field `.phase`: 56 bytes",
+        "    field `.remaining`: 8 bytes",
+        "    field `.yielding`: 1 bytes",
+        "    end padding: 7 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "war_relay::webtransport::application::RecordReader": {
+      "name": "war_relay::webtransport::application::RecordReader",
+      "bytes": 80,
+      "alignment": 8,
+      "log_line": 407377,
+      "details": [
+        "    field `.size`: 16 bytes",
+        "    field `.body`: 24 bytes",
+        "    field `.header_read`: 8 bytes",
+        "    field `.body_read`: 8 bytes",
+        "    field `.lease`: 16 bytes",
+        "    field `.header`: 4 bytes",
+        "    end padding: 4 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "{async fn body of war_relay::webtransport::session()}": {
+      "name": "{async fn body of war_relay::webtransport::session()}",
+      "bytes": 1560,
+      "alignment": 8,
+      "log_line": 402489,
+      "details": [
+        "    discriminant: 1 bytes",
+        "    variant `Unresumed`: 600 bytes",
+        "        padding: 551 bytes",
+        "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "    variant `Suspend0`: 1015 bytes",
+        "        padding: 143 bytes",
+        "        local `.connection`: 8 bytes, alignment: 8 bytes",
+        "        local `.acceptor`: 24 bytes",
+        "        local `.relay`: 8 bytes",
+        "        padding: 368 bytes",
+        "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "        local `..coroutine_field33`: 1 bytes, type: bool",
+        "        padding: 1 bytes",
+        "        local `..coroutine_field35`: 1 bytes, alignment: 1 bytes, type: bool",
+        "        padding: 5 bytes",
+        "        local `.retirement`: 8 bytes, alignment: 8 bytes",
+        "        local `.__awaitee`: 400 bytes, type: tokio::time::Timeout<{async block@webtransport::session::{closure#0}::{closure#0}}>",
+        "    variant `Suspend1`: 1559 bytes",
+        "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+        "        local `.writer`: 96 bytes",
+        "        local `.registration`: 16 bytes",
+        "        local `.connection`: 8 bytes",
+        "        local `.acceptor`: 24 bytes",
+        "        local `.relay`: 8 bytes",
+        "        local `.receive`: 56 bytes",
+        "        local `.activity`: 8 bytes",
+        "        local `.output`: 8 bytes",
+        "        local `.record_quantum`: 8 bytes",
+        "        local `.writing`: 248 bytes",
+        "        local `.writing`: 8 bytes",
+        "        local `.writer_yield`: 24 bytes",
+        "        local `.writer_yield`: 8 bytes",
+        "        upvar `.acceptor`: 24 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "        local `..coroutine_field33`: 1 bytes, type: bool",
+        "        local `..coroutine_field34`: 1 bytes, type: bool",
+        "        local `..coroutine_field35`: 1 bytes, type: bool",
+        "        padding: 1 bytes",
+        "        local `..coroutine_field37`: 1 bytes, alignment: 1 bytes, type: bool",
+        "        local `..coroutine_field38`: 1 bytes, type: bool",
+        "        padding: 2 bytes",
+        "        local `.datagrams`: 72 bytes, alignment: 8 bytes",
+        "        local `.reliable`: 72 bytes",
+        "        local `.idle`: 168 bytes",
+        "        local `.idle`: 8 bytes",
+        "        local `.closed`: 8 bytes",
+        "        local `.datagram`: 8 bytes",
+        "        local `.reliable_yield`: 24 bytes",
+        "        local `.reliable_yield`: 8 bytes",
+        "        local `.datagram_yield`: 24 bytes",
+        "        local `.datagram_yield`: 8 bytes",
+        "        local `.__awaitee`: 152 bytes, type: PollFn<{closure@webtransport::session::{closure#0}::{closure#5}}>",
+        "        local `.limiter`: 48 bytes",
+        "        local `.reader`: 80 bytes",
+        "        local `.closed`: 112 bytes",
+        "        local `.datagram`: 160 bytes",
+        "    variant `Suspend2`: 751 bytes",
+        "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+        "        local `.writer`: 96 bytes",
+        "        local `.registration`: 16 bytes",
+        "        local `.connection`: 8 bytes",
+        "        local `.acceptor`: 24 bytes",
+        "        local `.relay`: 8 bytes",
+        "        local `.receive`: 56 bytes",
+        "        local `.activity`: 8 bytes",
+        "        local `.output`: 8 bytes",
+        "        local `.record_quantum`: 8 bytes",
+        "        local `.writing`: 248 bytes",
+        "        local `.writing`: 8 bytes",
+        "        local `.writer_yield`: 24 bytes",
+        "        local `.writer_yield`: 8 bytes",
+        "        upvar `.acceptor`: 24 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "        local `..coroutine_field33`: 1 bytes, type: bool",
+        "        local `..coroutine_field34`: 1 bytes, type: bool",
+        "        local `..coroutine_field35`: 1 bytes, type: bool",
+        "        local `..coroutine_field36`: 1 bytes, type: bool",
+        "        local `..coroutine_field37`: 1 bytes, type: bool",
+        "        local `..coroutine_field38`: 1 bytes, type: bool",
+        "        padding: 2 bytes",
+        "        local `.__awaitee`: 144 bytes, alignment: 8 bytes, type: tokio::time::Timeout<PollFn<{closure@webtransport::session::{closure#0}::{closure#6}}>>",
+        "    variant `Suspend3`: 831 bytes",
+        "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+        "        local `.writer`: 96 bytes",
+        "        local `.registration`: 16 bytes",
+        "        local `.connection`: 8 bytes",
+        "        local `.acceptor`: 24 bytes",
+        "        local `.relay`: 8 bytes",
+        "        local `.receive`: 56 bytes",
+        "        local `.activity`: 8 bytes",
+        "        local `.output`: 8 bytes",
+        "        local `.record_quantum`: 8 bytes",
+        "        local `.writing`: 248 bytes",
+        "        local `.writing`: 8 bytes",
+        "        local `.writer_yield`: 24 bytes",
+        "        local `.writer_yield`: 8 bytes",
+        "        upvar `.acceptor`: 24 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "        local `..coroutine_field33`: 1 bytes, type: bool",
+        "        local `..coroutine_field34`: 1 bytes, type: bool",
+        "        local `..coroutine_field35`: 1 bytes, type: bool",
+        "        local `..coroutine_field36`: 1 bytes, type: bool",
+        "        local `..coroutine_field37`: 1 bytes, type: bool",
+        "        local `..coroutine_field38`: 1 bytes, type: bool",
+        "        padding: 2 bytes",
+        "        local `.__awaitee`: 224 bytes, alignment: 8 bytes, type: tokio::time::Timeout<{async fn body of web_transport_quinn::session::EstablishedIo::closed()}>",
+        "    variant `Returned`: 600 bytes",
+        "        padding: 551 bytes",
+        "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes",
+        "    variant `Panicked`: 600 bytes",
+        "        padding: 551 bytes",
+        "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+        "        upvar `.connection`: 8 bytes",
+        "        upvar `.relay`: 8 bytes",
+        "        upvar `.retirement`: 8 bytes"
+      ],
+      "repeated_records": 1
+    },
+    "application_task_cell": {
+      "name": "tokio::runtime::task::core::Cell<{async block@src/webtransport.rs:342:32: 342:42}, std::sync::Arc<tokio::runtime::scheduler::current_thread::Handle>>",
+      "bytes": 1792,
+      "alignment": 128,
+      "log_line": 370569,
+      "details": [
+        "    field `.header`: 32 bytes",
+        "    field `.core`: 1656 bytes",
+        "    field `.trailer`: 48 bytes",
+        "    end padding: 56 bytes"
+      ]
+    },
+    "tinyvec::alloc::collections::btree::node::LeafNode<u64, connection::spaces::SentPacket>": {
+      "bytes": 1160,
+      "alignment": 8,
+      "log_line": 315202,
+      "details": [
+        "    field `.vals`: 1056 bytes",
+        "    field `.parent`: 8 bytes",
+        "    field `.keys`: 88 bytes",
+        "    field `.parent_idx`: 2 bytes",
+        "    field `.len`: 2 bytes",
+        "    end padding: 4 bytes"
+      ]
+    },
+    "connection::spaces::SentPacket": {
+      "bytes": 96,
+      "alignment": 8,
+      "log_line": 316278,
+      "details": [
+        "    field `.largest_acked`: 16 bytes",
+        "    field `.time_sent`: 16 bytes",
+        "    field `.stream_frames`: 40 bytes",
+        "    field `.path_generation`: 8 bytes",
+        "    field `.retransmits`: 8 bytes",
+        "    field `.size`: 2 bytes",
+        "    field `.ack_eliciting`: 1 bytes",
+        "    end padding: 5 bytes"
+      ]
+    }
+  },
+  "cpu": {
+    "private": {
+      "buckets_percent": {
+        "Crypto": 18.949999999999996,
+        "Quinn integration and I/O": 9.63,
+        "Protocol processing": 19.749999999999996,
+        "Bytes ownership and buffer operations": 10.140000000000002,
+        "libc including unsymbolized internals": 20.569999999999965,
+        "Application": 7.83,
+        "Other": 8.809999999999983,
+        "Tokio scheduling notifications and timers": 4.459999999999997
+      },
+      "top_symbols": [
+        {
+          "self_user_cycle_percent": 6.2,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 4.73,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 4.35,
+          "dso": "war-relay",
+          "symbol": "quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -"
+        },
+        {
+          "self_user_cycle_percent": 4.17,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 4.0,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.27,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.91,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.47,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a79b9                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.23,
+          "dso": "war-relay",
+          "symbol": "war_relay::relay::Users::get                                                                                                                                                                                                                                                             -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.11,
+          "dso": "libc.so.6",
+          "symbol": "0x000000000018f393                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.1,
+          "dso": "war-relay",
+          "symbol": "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.95,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.88,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.76,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes_mut::BytesMut::split_to                                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.75,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__gcm_ghash_vpclmulqdq_avx2_1                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.71,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::open                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.65,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.55,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a799d                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.43,
+          "dso": "war-relay",
+          "symbol": "quinn::event_queue::Sender<T>::send                                                                                                                                                                                                                                                      -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.34,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes_mut::shared_v_clone                                                                                                                                                                                                                                                         -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.32,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes::shared_drop                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.1,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::Output::submit                                                                                                                                                                                                                                                  -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.06,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::session::{{closure}}                                                                                                                                                                                                                                            -      -"
+        },
+        {
+          "self_user_cycle_percent": 0.97,
+          "dso": "war-relay",
+          "symbol": "quinn::send_stream::SendStream::write_chunks::{{closure}}                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 0.97,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::application::InputState::begin                                                                                                                                                                                                                                  -      -"
+        }
+      ],
+      "all_symbols": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/private-server-all-symbols.txt",
+        "sha256": "af511aaa2aa1e206eef6a89b2e221bb09d5f3f3ba4e52613387707dd57f290e8"
+      },
+      "profile": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/private-selected-profile-0003.json",
+        "sha256": "157776a0dae845fa50cb006b1aef1f55834c847efce196fdaaac397f97ee43c9"
+      }
+    },
+    "roomonly": {
+      "buckets_percent": {
+        "Crypto": 15.539999999999997,
+        "Protocol processing": 22.18,
+        "Application": 8.15,
+        "Bytes ownership and buffer operations": 5.019999999999999,
+        "Tokio scheduling notifications and timers": 18.810000000000002,
+        "Quinn integration and I/O": 5.6499999999999995,
+        "libc including unsymbolized internals": 14.71999999999996,
+        "Other": 10.26999999999997
+      },
+      "top_symbols": [
+        {
+          "self_user_cycle_percent": 8.09,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 5.71,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.61,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.08,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::session::{{closure}}                                                                                                                                                                                                                                            -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.52,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.31,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes::shared_drop                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.28,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.25,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::Handle::current                                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.09,
+          "dso": "war-relay",
+          "symbol": "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.01,
+          "dso": "war-relay",
+          "symbol": "tokio::time::sleep::Sleep::reset                                                                                                                                                                                                                                                         -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.96,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes::shared_clone                                                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.93,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.89,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.84,
+          "dso": "[vdso]",
+          "symbol": "__vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.77,
+          "dso": "war-relay",
+          "symbol": "tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.72,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::task::waker::clone_waker                                                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.7,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::packet_builder::PacketBuilder::new                                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.69,
+          "dso": "libc.so.6",
+          "symbol": "realloc                                                                                                                                                                                                                                                                                  -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.68,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a799d                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.5,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.44,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::task::waker::wake_by_val                                                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.39,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a79b9                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.34,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__gcm_ghash_vpclmulqdq_avx2_1                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.31,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::streams::SendStream::write_chunks                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.31,
+          "dso": "war-relay",
+          "symbol": "quinn::send_stream::SendStream::write_chunks::{{closure}}                                                                                                                                                                                                                                -      -"
+        }
+      ],
+      "all_symbols": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/roomonly-server-all-symbols.txt",
+        "sha256": "7b9b2198b2516fd4c3b5281e6629a4fda16c81e8c5581450054dd2639a0782ca"
+      },
+      "profile": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/roomonly-selected-profile-0003.json",
+        "sha256": "a7f1a4ea51f45cd0dd04dea3d7173e9821786129bd9a2447c771d4f0a65fdb54"
+      }
+    },
+    "mixed": {
+      "buckets_percent": {
+        "Crypto": 14.97,
+        "Protocol processing": 23.960000000000004,
+        "libc including unsymbolized internals": 15.02999999999997,
+        "Quinn integration and I/O": 7.669999999999997,
+        "Application": 7.249999999999999,
+        "Bytes ownership and buffer operations": 6.8,
+        "Tokio scheduling notifications and timers": 14.949999999999998,
+        "Other": 9.659999999999982
+      },
+      "top_symbols": [
+        {
+          "self_user_cycle_percent": 7.04,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 5.14,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.7,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.51,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.41,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.3,
+          "dso": "war-relay",
+          "symbol": "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.26,
+          "dso": "war-relay",
+          "symbol": "quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.16,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::session::{{closure}}                                                                                                                                                                                                                                            -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.95,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes::shared_drop                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.92,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.83,
+          "dso": "war-relay",
+          "symbol": "tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.82,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::packet_builder::PacketBuilder::new                                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.75,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::Handle::current                                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.74,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::streams::SendStream::write_chunks                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.63,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.6,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a799d                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.56,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.38,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a79b9                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.37,
+          "dso": "war-relay",
+          "symbol": "bytes::bytes::shared_clone                                                                                                                                                                                                                                                               -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.36,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.34,
+          "dso": "war-relay",
+          "symbol": "tokio::time::sleep::Sleep::reset                                                                                                                                                                                                                                                         -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.32,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::task::waker::wake_by_val                                                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.31,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.24,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.22,
+          "dso": "libc.so.6",
+          "symbol": "realloc                                                                                                                                                                                                                                                                                  -      -"
+        }
+      ],
+      "all_symbols": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/mixed-server-all-symbols.txt",
+        "sha256": "5342b4a3351f01d0f06ccdfbe57828fc2bd0f57f49c71aad966dfb01e08945ca"
+      },
+      "profile": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/mixed-selected-profile-0003.json",
+        "sha256": "aeb80b3949d05f56de2b07d981cff7941418ebf8e2161437e9d494479c563678"
+      }
+    },
+    "datagram": {
+      "buckets_percent": {
+        "Crypto": 15.449999999999998,
+        "Quinn integration and I/O": 10.579999999999997,
+        "libc including unsymbolized internals": 15.229999999999976,
+        "Tokio scheduling notifications and timers": 18.259999999999998,
+        "Protocol processing": 21.830000000000002,
+        "Other": 12.069999999999975,
+        "Application": 4.01,
+        "Bytes ownership and buffer operations": 2.76
+      },
+      "top_symbols": [
+        {
+          "self_user_cycle_percent": 6.39,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -"
+        },
+        {
+          "self_user_cycle_percent": 4.63,
+          "dso": "war-relay",
+          "symbol": "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.51,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.49,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.3,
+          "dso": "war-relay",
+          "symbol": "tokio::time::sleep::Sleep::reset                                                                                                                                                                                                                                                         -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.11,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 3.09,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.65,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.61,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::packet_builder::PacketBuilder::new                                                                                                                                                                                                                              -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.61,
+          "dso": "[vdso]",
+          "symbol": "__vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.53,
+          "dso": "war-relay",
+          "symbol": "quinn::connection::Connection::send_datagram                                                                                                                                                                                                                                             -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.4,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.34,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::time::<impl tokio::runtime::time::handle::Handle>::process_at_time                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 2.0,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.93,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::scheduler::multi_thread::worker::Context::park_internal                                                                                                                                                                                                                  -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.59,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a79b9                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.51,
+          "dso": "war-relay",
+          "symbol": "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.46,
+          "dso": "libc.so.6",
+          "symbol": "0x00000000000a799d                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.37,
+          "dso": "war-relay",
+          "symbol": "ring_core_0_17_14__gcm_ghash_vpclmulqdq_avx2_1                                                                                                                                                                                                                                           -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.25,
+          "dso": "[unknown]",
+          "symbol": "0xffffffffa9a00080                                                                                                                                                                                                                                                                       -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.2,
+          "dso": "war-relay",
+          "symbol": "quinn::connection::Connection::max_datagram_size                                                                                                                                                                                                                                         -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.12,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::task::waker::wake_by_val                                                                                                                                                                                                                                                 -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.11,
+          "dso": "war-relay",
+          "symbol": "ring::aead::aes_gcm::open                                                                                                                                                                                                                                                                -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.01,
+          "dso": "war-relay",
+          "symbol": "war_relay::webtransport::Output::submit                                                                                                                                                                                                                                                  -      -"
+        },
+        {
+          "self_user_cycle_percent": 1.01,
+          "dso": "war-relay",
+          "symbol": "tokio::runtime::task::raw::poll                                                                                                                                                                                                                                                          -      -"
+        }
+      ],
+      "all_symbols": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/datagram-server-all-symbols.txt",
+        "sha256": "ac055a171647e20a4446e572d29c4ee02ab42c3a3fabbb51d6a2a80f8fb5664d"
+      },
+      "profile": {
+        "path": "artifacts/webtransport/selected-hotspot-audit-v1/datagram-selected-profile-0004.json",
+        "sha256": "30cb70e0d971de11cfd955fd071fe0bc6fc08c696a20391f072d8e963bd37573"
+      }
+    }
+  },
+  "occupancy": {
+    "scope": "One snapshot per connection immediately after the first post-join reliable record is consumed, before its route. Snapshots are staggered, not a simultaneous global idle census. Fixed counters and extra diagnostic lock invalidate performance comparisons.",
+    "snapshots": [
+      {
+        "connections": 10000,
+        "recv_streams": 30000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 6720000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 6720000,
+        "send_streams": 30000,
+        "send_segments": 13430,
+        "send_capacity_bytes": 859520,
+        "send_payload_bytes": 6990315,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 30000,
+        "send_map_capacity": 30000,
+        "recv_map_entries": 30000,
+        "recv_map_capacity": 30000,
+        "events_len": 0,
+        "events_capacity_bytes": 80000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 1920000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 20000,
+        "recv_streams": 60000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 13440000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 13440000,
+        "send_streams": 60000,
+        "send_segments": 27184,
+        "send_capacity_bytes": 1739776,
+        "send_payload_bytes": 14149272,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 60000,
+        "send_map_capacity": 60000,
+        "recv_map_entries": 60000,
+        "recv_map_capacity": 60000,
+        "events_len": 0,
+        "events_capacity_bytes": 160000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 3840000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 30000,
+        "recv_streams": 90000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 20160000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 20160000,
+        "send_streams": 90000,
+        "send_segments": 40422,
+        "send_capacity_bytes": 2587008,
+        "send_payload_bytes": 21039651,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 90000,
+        "send_map_capacity": 90000,
+        "recv_map_entries": 90000,
+        "recv_map_capacity": 90000,
+        "events_len": 0,
+        "events_capacity_bytes": 240000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 5760000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 40000,
+        "recv_streams": 120000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 26880000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 26880000,
+        "send_streams": 120000,
+        "send_segments": 53318,
+        "send_capacity_bytes": 3412352,
+        "send_payload_bytes": 27752019,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 120000,
+        "send_map_capacity": 120000,
+        "recv_map_entries": 120000,
+        "recv_map_capacity": 120000,
+        "events_len": 0,
+        "events_capacity_bytes": 320000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 7680000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 50000,
+        "recv_streams": 150000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 33600000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 33600000,
+        "send_streams": 150000,
+        "send_segments": 65668,
+        "send_capacity_bytes": 4202752,
+        "send_payload_bytes": 34180194,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 150000,
+        "send_map_capacity": 150000,
+        "recv_map_entries": 150000,
+        "recv_map_capacity": 150000,
+        "events_len": 0,
+        "events_capacity_bytes": 400000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 9600000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 60000,
+        "recv_streams": 180000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 40320000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 40320000,
+        "send_streams": 180000,
+        "send_segments": 79254,
+        "send_capacity_bytes": 5072256,
+        "send_payload_bytes": 41251707,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 180000,
+        "send_map_capacity": 180000,
+        "recv_map_entries": 180000,
+        "recv_map_capacity": 180000,
+        "events_len": 0,
+        "events_capacity_bytes": 480000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 11520000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 70000,
+        "recv_streams": 210000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 47040000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 47040000,
+        "send_streams": 210000,
+        "send_segments": 92178,
+        "send_capacity_bytes": 5899392,
+        "send_payload_bytes": 47978649,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 210000,
+        "send_map_capacity": 210000,
+        "recv_map_entries": 210000,
+        "recv_map_capacity": 210000,
+        "events_len": 0,
+        "events_capacity_bytes": 560000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 13440000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 80000,
+        "recv_streams": 240000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 53760000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 53760000,
+        "send_streams": 240000,
+        "send_segments": 105094,
+        "send_capacity_bytes": 6726016,
+        "send_payload_bytes": 54701427,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 240000,
+        "send_map_capacity": 240000,
+        "recv_map_entries": 240000,
+        "recv_map_capacity": 240000,
+        "events_len": 0,
+        "events_capacity_bytes": 640000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 15360000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 90000,
+        "recv_streams": 270000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 60480000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 60480000,
+        "send_streams": 270000,
+        "send_segments": 118572,
+        "send_capacity_bytes": 7588608,
+        "send_payload_bytes": 61716726,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 270000,
+        "send_map_capacity": 270000,
+        "recv_map_entries": 270000,
+        "recv_map_capacity": 270000,
+        "events_len": 0,
+        "events_capacity_bytes": 720000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 17280000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      },
+      {
+        "connections": 100000,
+        "recv_streams": 300000,
+        "assembler_entries": 0,
+        "assembler_capacity_bytes": 67200000,
+        "assembler_payload_bytes": 0,
+        "empty_assembler_capacity_bytes": 67200000,
+        "send_streams": 300000,
+        "send_segments": 131278,
+        "send_capacity_bytes": 8401792,
+        "send_payload_bytes": 68330199,
+        "empty_send_capacity_bytes": 0,
+        "send_map_entries": 300000,
+        "send_map_capacity": 300000,
+        "recv_map_entries": 300000,
+        "recv_map_capacity": 300000,
+        "events_len": 0,
+        "events_capacity_bytes": 800000,
+        "endpoint_events_len": 0,
+        "endpoint_events_capacity_bytes": 19200000,
+        "previous_paths": 0,
+        "initial_spaces": 0,
+        "handshake_spaces": 0
+      }
+    ],
+    "totals": {
+      "connections": 100000,
+      "recv_streams": 300000,
+      "assembler_entries": 0,
+      "assembler_capacity_bytes": 67200000,
+      "assembler_payload_bytes": 0,
+      "empty_assembler_capacity_bytes": 67200000,
+      "send_streams": 300000,
+      "send_segments": 131278,
+      "send_capacity_bytes": 8401792,
+      "send_payload_bytes": 68330199,
+      "empty_send_capacity_bytes": 0,
+      "send_map_entries": 300000,
+      "send_map_capacity": 300000,
+      "recv_map_entries": 300000,
+      "recv_map_capacity": 300000,
+      "events_len": 0,
+      "events_capacity_bytes": 800000,
+      "endpoint_events_len": 0,
+      "endpoint_events_capacity_bytes": 19200000,
+      "previous_paths": 0,
+      "initial_spaces": 0,
+      "handshake_spaces": 0
+    },
+    "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/selected-hotspot-audit-v1/occupancy-capacity.json",
+    "passed": true
+  },
+  "retained_storage_ledger": [
+    {
+      "item": "Empty receive assembler backing arrays",
+      "bytes": 67200000,
+      "classification": "Measured empty retained capacity; reclaiming per read can create allocation churn. Evaluate inline common-case storage or bounded lifecycle reclamation.",
+      "mib": 64.0869140625,
+      "bytes_per_connection": 672.0
+    },
+    {
+      "item": "Empty endpoint event queue backing arrays",
+      "bytes": 19200000,
+      "classification": "Measured empty retained capacity; handshake/CID lifecycle reclamation candidate.",
+      "mib": 18.310546875,
+      "bytes_per_connection": 192.0
+    },
+    {
+      "item": "Empty application event queue backing arrays",
+      "bytes": 800000,
+      "classification": "Measured empty retained capacity; small queue representation candidate.",
+      "mib": 0.762939453125,
+      "bytes_per_connection": 8.0
+    },
+    {
+      "item": "Unused inline previous-path field",
+      "bytes": 43200000,
+      "classification": "No previous paths in snapshots; representation/lifecycle cost. Moving out of line has an existing negative joint-performance result.",
+      "mib": 41.19873046875,
+      "bytes_per_connection": 432.0
+    },
+    {
+      "item": "Per-connection statistics",
+      "bytes": 53600000,
+      "classification": "Observability state, not mandatory wire state. Removing it changes the public statistics contract; not counted as a promised saving.",
+      "mib": 51.116943359375,
+      "bytes_per_connection": 536.0
+    },
+    {
+      "item": "Per-connection StdRng",
+      "bytes": 32000000,
+      "classification": "Security-sensitive random state; smaller representation is possible but not zero-cost or a proven selected improvement.",
+      "mib": 30.517578125,
+      "bytes_per_connection": 320.0
+    }
+  ],
+  "measured_empty_dynamic_capacity_bytes": 87200000,
+  "empty_capacity_plus_unused_previous_path_bytes": 130400000,
+  "conclusion": "Current footprint is not established as maximally efficient or inevitable. Empty collections and unused inline cold state are measured. Crypto expanded schedules/current+next key roles are purposeful costs of this implementation, not a universal QUIC lower bound. No additive RSS saving or throughput gain is claimed.",
+  "next_targets": [
+    "Receive assembler representation and reuse: remove ~64MiB empty backing arrays without per-packet allocate/free.",
+    "Reclaim or inline small endpoint/application event queues after lifecycle bursts (~19MiB empty at snapshots).",
+    "Packet tracking small-live-set representation: target1160-byte leaf allocation churn while preserving ACK/loss ordering. Prior shared-pool rejection rules out claiming a pooling win without new evidence.",
+    "Measure allocation ownership churn and packet construction, then scheduling/timers on fanout/datagram paths.",
+    "Treat stats, RNG, TLS shell and cold migration data as separate behavior-preserving representation experiments; do not remove crypto/key-update protections."
+  ],
+  "evidence": [
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/build.json",
+      "sha256": "d47ca320a9915045167f4f7f4b3f20625bb451dee757ee2164750b2d11e62983"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/source-inputs.json",
+      "sha256": "2512d345309edd06b992006ff97601fced0b044b121c3a6532b2df78a88e488e"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/compiler.log",
+      "sha256": "5d220331c58fa808ee6400e7020be0339e214025c258a213679f0988c87f6c56"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/type-layouts.json",
+      "sha256": "a77c23074b5029e9f06e2367ce5320f4079c9d835cce6b4921dc82973a7b8fb6"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/selected-ready-stacks.json",
+      "sha256": "0ac3f7c0ac87d3bcdc7e996b8ec61bc288f313beff56881ea9af34f64144fa22"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/selected-done-stacks.json",
+      "sha256": "b0cac65d531bcb962dc222e6feda3cd12e28c7a3b9e4befcf5c336dcbeaca2a3"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/symbolized-ready-stacks.json",
+      "sha256": "ab90c10ee789f3cb42db75f5b4042ece271683e9b7ffec2bd9ebf96a2d236dd5"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/heap-symbolized.json",
+      "sha256": "6dfbebfbce7c3d6d4006ee03aba558710b9f5d7a9da61e0df89323bb73e04869"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/occupancy-capacity.json",
+      "sha256": "fc0764e8ed74f2355eff347b892d1ac7ed31fae30ba6a964e6ee07b9039245a1"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/occupancy-analysis.json",
+      "sha256": "b295f6baeff5045a06d20f63fdd07f805d1c20a9f79c5ffed9d2af1ae64e03b3"
+    },
+    {
+      "path": "artifacts/webtransport/selected-occupancy-audit-v2/build.json",
+      "sha256": "8daa5df03cc3aa888bc3b47d3670b96dbbea21b5750535e3b37449c34ea5cdf9"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/allocation-churn.json",
+      "sha256": "11e313df48592597a4dffee1da8bca4e2ccbe6a59ad6f943f9a2076a8e682ac0"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/churn.py",
+      "sha256": "a8468cbdcec39c4ec4caa5366979fa20187dbca988dcae5ae5e4869192d42271"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/profile.py",
+      "sha256": "e81453f7d48e2ffde40e44ce01d0014d22e501efb4d9205a6b6b6bbfcdda5a48"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/run-occupancy.py",
+      "sha256": "fb093bd10eb5c42f66ff7ca5432dfaff47268f384e209785c850be12f30f88eb"
+    },
+    {
+      "path": "artifacts/webtransport/build-occupancy-audit.py",
+      "sha256": "4c280391855baac3320a47f486bc93bd9bc7ea65618978475bf83af460b92544"
+    },
+    {
+      "path": "artifacts/webtransport/selected-hotspot-audit-v1/frozen-source.tar.gz",
+      "sha256": "793a35d9e67a819427d1b41c683fc142d8080b9bac1170c723fe559fcdc39f34"
+    },
+    {
+      "path": "artifacts/webtransport/selected-occupancy-audit-v2/frozen-source.tar.gz",
+      "sha256": "24f52dee160b93e1f74a6553c4e85bc5987964ed38e1a8b1c276260ff1996d0e"
+    }
+  ],
+  "limitations": [
+    "CPU profiles are flat user-cycle samples, not total CPU or kernel attribution; DWARF attachment was denied. Broad prefix buckets include rounded symbols and do not establish causal gains.",
+    "Heap captures use replacement allocator and are not RSS. All byte groups reconcile to profile header; embedded field ledger is inside owner allocations and must not be added again.",
+    "Occupancy snapshots are staggered after first consumed application record. They are not concurrent snapshots of all100k connections and do not prove capacity never becomes useful.",
+    "The first type diagnostic requested debuginfo but Cargo strips it; source attribution uses compiler layout and inspected source, not recovered source lines. Occupancy build explicitly disables stripping.",
+    "Two failed DWARF attachments, one unavailable-callchain report attempt, one datagram controller PID detection failure, and one diagnostic visibility compile failure are preserved and excluded from successful results.",
+    "No before/after optimization benchmark, deployment, browser or injected-loss acceptance is claimed."
+  ],
+  "allocation_churn": {
+    "scope": "Cumulative server allocation events/bytes between ready and measured diagnostic gates. Includes monitoring, gate and background protocol work; replacement allocator. Not exact malloc syscall counts or isolated per-message costs.",
+    "events": 3636050,
+    "requested_bytes": 1458442295,
+    "verified_measured_deliveries": 400000,
+    "events_per_delivery": 9.090125,
+    "requested_bytes_per_delivery": 3646.1057375,
+    "top_stacks": [
+      {
+        "frames": [
+          "quinn::endpoint::RecvState::poll_socket",
+          "<quinn::endpoint::EndpointDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::current_thread::Context::run_task",
+          "std::sys::backtrace::__rust_begin_short_backtrace"
+        ],
+        "allocation_events": 799879,
+        "requested_bytes": 447595371
+      },
+      {
+        "frames": [
+          "war_relay::webtransport::session::{{closure}}",
+          "war_relay::webtransport::serve::{{closure}}::{{closure}}",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task",
+          "tokio::runtime::scheduler::multi_thread::worker::run",
+          "tokio::runtime::task::raw::poll"
+        ],
+        "allocation_events": 395399,
+        "requested_bytes": 410028763
+      },
+      {
+        "frames": [
+          "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "quinn_proto::connection::Connection::poll_transmit",
+          "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task"
+        ],
+        "allocation_events": 218749,
+        "requested_bytes": 253748840
+      },
+      {
+        "frames": [
+          "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "quinn_proto::connection::Connection::poll_transmit",
+          "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task"
+        ],
+        "allocation_events": 193726,
+        "requested_bytes": 224722160
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVec<T,A>::grow_one",
+          "alloc::collections::vec_deque::VecDeque<T,A>::grow",
+          "quinn_proto::connection::streams::SendStream::write_chunks",
+          "quinn::send_stream::SendStream::write_chunks::{{closure}}",
+          "war_relay::webtransport::Output::submit"
+        ],
+        "allocation_events": 395399,
+        "requested_bytes": 50611072
+      },
+      {
+        "frames": [
+          "bytes::bytes_mut::BytesMut::split_to",
+          "quinn::endpoint::RecvState::poll_socket",
+          "<quinn::endpoint::EndpointDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::current_thread::Context::run_task"
+        ],
+        "allocation_events": 799879,
+        "requested_bytes": 31995160
+      },
+      {
+        "frames": [
+          "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "quinn_proto::connection::Connection::poll_transmit",
+          "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task"
+        ],
+        "allocation_events": 9350,
+        "requested_bytes": 10846000
+      },
+      {
+        "frames": [
+          "bytes::bytes::shallow_clone_vec",
+          "bytes::bytes::promotable_even_clone",
+          "war_relay::webtransport::frame_chunks",
+          "war_relay::webtransport::Output::submit",
+          "<war_relay::webtransport::Output as war_relay::relay::PeerOutput>::send",
+          "war_relay::relay::ReceiveBatch::receive_bounded"
+        ],
+        "allocation_events": 395399,
+        "requested_bytes": 9489576
+      },
+      {
+        "frames": [
+          "war_relay::webtransport::frame_chunks",
+          "war_relay::webtransport::Output::submit",
+          "<war_relay::webtransport::Output as war_relay::relay::PeerOutput>::send",
+          "war_relay::relay::ReceiveBatch::receive_bounded",
+          "war_relay::webtransport::application::InputState::begin",
+          "war_relay::webtransport::session::{{closure}}"
+        ],
+        "allocation_events": 395399,
+        "requested_bytes": 5535586
+      },
+      {
+        "frames": [
+          "quinn_proto::connection::packet_builder::PacketBuilder::finish_and_track",
+          "quinn_proto::connection::Connection::poll_transmit",
+          "<quinn::connection::ConnectionDriver as core::future::future::Future>::poll",
+          "<tracing::instrument::Instrumented<T> as core::future::future::Future>::poll",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task"
+        ],
+        "allocation_events": 4218,
+        "requested_bytes": 4892880
+      },
+      {
+        "frames": [
+          "war_relay::webtransport::session::{{closure}}",
+          "war_relay::webtransport::serve::{{closure}}::{{closure}}",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task",
+          "tokio::runtime::scheduler::multi_thread::worker::run",
+          "tokio::runtime::task::raw::poll"
+        ],
+        "allocation_events": 4601,
+        "requested_bytes": 4771237
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVec<T,A>::grow_one",
+          "alloc::collections::vec_deque::VecDeque<T,A>::grow",
+          "quinn_proto::connection::streams::SendStream::write_chunks",
+          "quinn::send_stream::SendStream::write_chunks::{{closure}}",
+          "war_relay::webtransport::Output::submit"
+        ],
+        "allocation_events": 4601,
+        "requested_bytes": 588928
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 423936
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 423936
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle",
+          "war_relay::metrics::Metrics::render",
+          "<F as axum::handler::Handler<(M,T1,T2),S>>::call::{{closure}}",
+          "<axum::util::MapIntoResponseFuture<F> as core::future::future::Future>::poll",
+          "<axum::routing::route::RouteFuture<E> as core::future::future::Future>::poll"
+        ],
+        "allocation_events": 12,
+        "requested_bytes": 196608
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle",
+          "bytes::bytes_mut::BytesMut::reserve_inner",
+          "hyper::proto::h1::io::Buffered<T,B>::poll_read_from_io",
+          "hyper::proto::h1::conn::Conn<I,B,T>::poll_read_head",
+          "axum::serve::handle_connection::{{closure}}::{{closure}}"
+        ],
+        "allocation_events": 12,
+        "requested_bytes": 196608
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::update",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 135424
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode",
+          "quinn_proto::connection::Connection::handle_event"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 135424
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::update",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 135424
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::handle_decode",
+          "quinn_proto::connection::Connection::handle_event"
+        ],
+        "allocation_events": 736,
+        "requested_bytes": 135424
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 127872
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 127872
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 196,
+        "requested_bytes": 112896
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+          "rustls::quic::KeyBuilder::packet_key",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 196,
+        "requested_bytes": 112896
+      },
+      {
+        "frames": [
+          "bytes::bytes::shallow_clone_vec",
+          "bytes::bytes::promotable_even_clone",
+          "war_relay::webtransport::frame_chunks",
+          "war_relay::webtransport::Output::submit",
+          "<war_relay::webtransport::Output as war_relay::relay::PeerOutput>::send",
+          "war_relay::relay::ReceiveBatch::receive_bounded"
+        ],
+        "allocation_events": 4601,
+        "requested_bytes": 110424
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle",
+          "bytes::bytes_mut::BytesMut::reserve_inner",
+          "hyper::proto::h1::io::Buffered<T,B>::poll_read_from_io",
+          "hyper::proto::h1::conn::Conn<I,B,T>::poll_read_head",
+          "axum::serve::handle_connection::{{closure}}::{{closure}}"
+        ],
+        "allocation_events": 12,
+        "requested_bytes": 98304
+      },
+      {
+        "frames": [
+          "axum::serve::handle_connection::{{closure}}::{{closure}}",
+          "tokio::runtime::task::raw::poll",
+          "tokio::runtime::scheduler::multi_thread::worker::Context::run_task",
+          "tokio::runtime::scheduler::multi_thread::worker::run",
+          "tokio::runtime::task::raw::poll",
+          "std::sys::backtrace::__rust_begin_short_backtrace"
+        ],
+        "allocation_events": 12,
+        "requested_bytes": 98304
+      },
+      {
+        "frames": [
+          "war_relay::metrics::Metrics::render",
+          "<F as axum::handler::Handler<(M,T1,T2),S>>::call::{{closure}}",
+          "<axum::util::MapIntoResponseFuture<F> as core::future::future::Future>::poll",
+          "<axum::routing::route::RouteFuture<E> as core::future::future::Future>::poll",
+          "hyper::proto::h1::dispatch::Dispatcher<D,Bs,I,T>::poll_write",
+          "axum::serve::handle_connection::{{closure}}::{{closure}}"
+        ],
+        "allocation_events": 12,
+        "requested_bytes": 98304
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle",
+          "bytes::bytes_mut::BytesMut::reserve_inner",
+          "hyper::proto::h1::io::Buffered<T,B>::poll_read_from_io",
+          "hyper::proto::h1::conn::Conn<I,B,T>::poll_read_head",
+          "axum::serve::handle_connection::{{closure}}::{{closure}}"
+        ],
+        "allocation_events": 4,
+        "requested_bytes": 65536
+      },
+      {
+        "frames": [
+          "alloc::raw_vec::finish_grow",
+          "alloc::raw_vec::RawVecInner<A>::reserve::do_reserve_and_handle",
+          "war_relay::metrics::Metrics::render",
+          "<F as axum::handler::Handler<(M,T1,T2),S>>::call::{{closure}}",
+          "<axum::util::MapIntoResponseFuture<F> as core::future::future::Future>::poll",
+          "<axum::routing::route::RouteFuture<E> as core::future::future::Future>::poll"
+        ],
+        "allocation_events": 4,
+        "requested_bytes": 65536
+      },
+      {
+        "frames": [
+          "war_relay::webtransport::frame_chunks",
+          "war_relay::webtransport::Output::submit",
+          "<war_relay::webtransport::Output as war_relay::relay::PeerOutput>::send",
+          "war_relay::relay::ReceiveBatch::receive_bounded",
+          "war_relay::webtransport::application::InputState::begin",
+          "war_relay::webtransport::session::{{closure}}"
+        ],
+        "allocation_events": 4601,
+        "requested_bytes": 64414
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::update",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 40848
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update",
+          "quinn_proto::connection::packet_builder::PacketBuilder::new"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 40848
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update",
+          "quinn_proto::connection::packet_builder::PacketBuilder::new"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 40848
+      },
+      {
+        "frames": [
+          "<rustls::crypto::ring::tls13::RingHkdf as rustls::crypto::tls13::Hkdf>::expander_for_okm",
+          "rustls::quic::Secrets::update",
+          "rustls::quic::Secrets::next_packet_keys",
+          "<quinn_proto::crypto::rustls::TlsSession as quinn_proto::crypto::Session>::next_1rtt_keys",
+          "quinn_proto::connection::Connection::update_keys",
+          "quinn_proto::connection::Connection::force_key_update"
+        ],
+        "allocation_events": 222,
+        "requested_bytes": 40848
+      }
+    ]
+  },
+  "packet_tracking_tradeoff": {
+    "observed_top_stacks_minimum_events": 426043,
+    "observed_top_stacks_minimum_requested_bytes": 494209880,
+    "cause": "Selected PacketSpace::take releases empty BTreeMap roots. Subsequent sends allocate another1160-byte leaf. One SentPacket is96bytes. This intentionally traded active allocation work for idle memory; current evidence does not establish a better selected representation.",
+    "previous_shared_pool_result": "Rejected: fewer allocation requests did not establish a whole-workload gain.",
+    "history": [
+      "docs/reports/webtransport-empty-packet-tree-2026-10-21.json",
+      "docs/reports/webtransport-shared-packet-tree-2026-10-22.json"
+    ]
+  },
+  "post_retirement_live_requested_bytes": 70850491,
+  "post_retirement_explanation": "About54MiB remains in endpoint CID hash-table and connection-slab capacity (34603024+22020096 bytes). Retained process RSS is not evidence that all session objects leaked."
+}
