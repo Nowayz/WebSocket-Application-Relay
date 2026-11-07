@@ -3247,3 +3247,124 @@ The [receive-target pilot report](reports/webtransport-client-receive-target-pil
 is byte-identical to the independently reviewed analysis and retains source
 audits, exact images, all histogram objects, both-endpoint CPU, socket identities,
 observer limits, failed null measurements and raw/reproduction references.
+
+## Compact established application state retained incrementally — 2026-11-06
+
+Retain the three frozen compact application-state files at code commit
+`f01198156047a93e9233b78d19e44ea9d529bd87`. The normal root release image is
+byte-identical to the measured candidate, SHA256
+`91337694ecef14ff3bb80bf37d13786aa5d4653e462096aeb3ddd92b71e19ea1`.
+The [integration receipt](../artifacts/webtransport/compact-application-v1-integration.json)
+binds the live sources, frozen prototype, normal build log, code commit and measured
+image. **The full goal remains ACTIVE / NOT ACCEPTED.** This is an incremental
+memory improvement with exercised behavior preserved; it does not establish full
+native WebSocket parity, a reliability fix, a unique allocator/cache/read-credit
+cause, or results on all hardware. CPU costs remain measured separately from the throughput and memory criteria.
+
+The established poll is the measured layout maximum. Explicit application
+writer/input state replaces large stored async selection state; the output queue
+owns a registered waker, and an inline same-task drain flag replaces the local
+finishing token. The complete main task allocation shrinks from 2,048 to 1,792
+bytes, the output Arc from 288 to 272 bytes, and the nested session future from
+1,792 to 1,560 bytes. Its active variant is 1,559 bytes, versus admission 1,015,
+drain 751 and final close 831. Those nested sizes are not additional heap owners.
+No single writer-size subtraction or cache explanation is used to claim the gain.
+
+At 100,000 sessions, the matched diagnostic heap captures show requested live bytes
+falling from 1,826,016,848 to 1,787,692,258: **38,324,590 bytes, or 36.55 MiB,
+less**. Source-bound allocation stacks identify 25,600,000 fewer bytes in main task
+cells, 1,600,000 fewer output-Arc bytes, and removal of 100,000 local 112-byte
+finishing-token allocations (11,200,000 bytes); other allocations increase by
+75,410 bytes in aggregate. The established-I/O Arc and capsule task remain.
+All five attributed per-session owner classes disappear after retirement in this
+diagnostic pair. This is not an exhaustive owner census or proof of long-term leak
+absence, and diagnostic requested-live heap is separate from normal-allocator RSS.
+
+Preserve the original normal-allocator done observation: candidate RSS exceeds
+baseline by 189,148 KiB, **184.71 MiB**, with zero session/budget gauges. The absent
+attributed per-session heap owners belong to the separate tcmalloc diagnostic pair. The separate two-wave supplement does not
+reproduce that gap: candidate done RSS is lower by 26,736 and 26,520 KiB in its
+two waves. Both arms retain a large resident footprint; the second population adds
+only about 8–9.4 MiB at sampled ready/measured gates, consistent with reuse of
+retained process capacity. Gate samples do not establish continuous peak memory,
+delayed-idle decay, a unique allocator cause or a leak verdict.
+
+All 18 ordinary fixed-client runs pass with unchanged verification and exact
+counter gates. Verified-received median changes versus frozen baseline `f1811d2c`
+are +0.0252% private, +0.6945% room only and +1.9828% mixed. These are descriptive
+local differences, not a component ablation. Original frozen paced client A
+(`b1fea5d6`) passes 1/3 on baseline and 3/3 on candidate; the two baseline EOF
+outcomes retain null measurements and there is no comparative median or
+failure-rate ranking. Datagram controls pass 3/3 on each arm with received-offer
+median -0.3494% and overlapping ranges. The original causal read-credit failure
+remains unresolved, and the separate diagnostic 250-us client is not retained.
+
+The fresh same-image comparison uses the retained relay, one frozen `3af40bb6`
+inspection client, and three rotated 12-second repetitions per case and transport.
+All 18 receipts pass. Rates below count verified healthy plus fanout deliveries,
+and the report retains each component, both endpoints' CPU, and all latency
+histograms separately.
+
+| Case | Native WebSocket min / median / max deliveries/s | WebTransport min / median / max deliveries/s | Median change |
+| --- | ---: | ---: | ---: |
+| Private | 1,267,322 / 1,285,029 / 1,326,260 | 1,502,955 / 1,511,186 / 1,524,226 | +17.5994% |
+| Room only | 1,556,926 / 1,608,071 / 1,633,123 | 1,690,139 / 1,693,727 / 1,731,428 | +5.3266% |
+| Mixed | 1,419,026 / 1,605,249 / 1,607,395 | 1,635,838 / 1,648,776 / 1,664,125 | +2.7115% |
+
+The mixed private/fanout split differs materially between transports, so its total
+does not establish component parity. Native WebSocket is plaintext and QUIC uses
+TLS; these results include that difference. They do not resolve capacity memory
+or establish parity outside the measured local workloads.
+
+The fresh same-image 100,000-session capacity pair verifies 400,000 measured
+deliveries per mode and retires all session/QUIC/budget gauges to zero. It uses the
+same frozen capacity client `ec893ebc` and one boot. At ready, relay RSS is
+119,684 KiB (116.87890625 MiB) for native WebSocket versus 1,886,128 KiB
+(1,841.921875 MiB) for WebTransport: **15.759232646×**, or 1,725.04296875 MiB
+more. At measured it is 119,684 versus 1,888,696 KiB (1,844.4296875 MiB),
+**15.780689148×**, or 1,727.55078125 MiB more. This large process-memory gap keeps
+the full goal open.
+
+WebSocket/WebTransport setup is 0.624565644/10.4632178 seconds, measured relay CPU
+1.95/6.05 seconds (client 2.42/6.81), and retirement 0.616366588/2.046467136
+seconds. Measured round-trip p99 histogram upper bounds are 0.524288/1.048576 ms.
+This is paced capacity evidence, not a maximum-throughput test. The same-boot BTF
+record gives a protocol-object payload lower bound of 100,000 × 2,432-byte
+`tcp_sock` = 243,200,000 bytes versus one 1,344-byte `udp_sock`. It excludes socket
+buffers, slab physical rounding, file/inode/FD allocations and other kernel
+memory. There is no full kernel total or combined RSS-plus-kernel total.
+
+Separate `cycles:u` diagnostic profiles cover both endpoints on both arms; all four
+symbol reports have zero lost samples. They describe relative sampled shares,
+not ordinary timing, absolute cycle costs, a component benefit, or a causal
+read-credit/cache explanation. Recorded validation totals 258 passing tests and
+one existing ignored test, including six required actual reader/queue/waker contract checks (five new and one
+strengthened existing test), plus all-target Clippy with warnings denied and the normal release
+build.
+
+Actual headed Chrome 157 passes nine top-level checks and three orderly closures
+with no console errors or warnings. Session, connection and budget cleanup gauges are zero, with the empty global channel
+count remaining one. The screenshot was visually inspected, and all owned browser/server/HTTP processes
+are gone. Source-map contents and exact current JS sources bind to the reused
+browser bundle; JS did not change and that bundle was not rebuilt.
+
+All four user-space proxy freshness cases pass their transport and fixture checks.
+Each direction configures 20 ms delay and independent 2% Bernoulli loss. Candidate
+datagram freshest-state p99 is 124.278647 ms with 15 of 360 updates not received
+within the observation window and 9,350.533092 ms reliable-bulk arrival; candidate
+stream values are 5,041.402184 ms, zero missing and 5,072.125325 ms bulk arrival.
+Baseline datagram values are 113.216705 ms, 14 missing and 9,413.422873 ms bulk;
+baseline stream values are 4,701.576815 ms, zero missing and 4,739.968426 ms bulk.
+These single diagnostic pairs do not rank implementations, establish statistical
+tails or native TCP/netem equivalence, or attribute missing updates to network
+loss. Seeds 42/43 do not produce identical packet trajectories.
+
+Independent source/evidence review recommends incremental retention with no
+concrete correctness blocker. Its review completed before the fresh native screen,
+which is recorded separately above. No hosted deployment or production rollout
+is claimed. The [compact application report](reports/webtransport-compact-application-screen-2026-11-06.json)
+retains the per-run rates, both CPU endpoints, complete small component histograms,
+null failed measurements, source/binary/build/integration bindings, reproduction
+instructions and hashed raw references. The full 603,310-byte terminal screen
+remains referenced for every raw counter map rather than duplicated into the
+bounded report.
