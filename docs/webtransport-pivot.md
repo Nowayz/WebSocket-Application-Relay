@@ -3164,3 +3164,86 @@ freshness or CPU-profile acceptance run is needed for this rejected candidate.
 No compiler-layout/cache cause is inferred. Exact distributions, both-endpoint
 CPU and latency metrics, failed receipts, source/binary bindings and reproduction
 scripts are in the [routing screen report](reports/webtransport-route-input-helper-screen-2026-11-06.json).
+
+## Endpoint readiness attribution captured — 2026-11-06
+
+Rebuild canonical client B with a passive endpoint recorder, preserving the
+original eight shared workers, CPU placement, four-second traffic offer, buffers,
+queues and verification. Keep the frozen first-refusal server `737b50de` fixed.
+Every endpoint poll and known self-wake is recorded; one in 64 polls additionally
+times endpoint-lock acquisition, receive/dispatch work and endpoint events, with
+bounded nested batch/send samples. Unsampled counters are unavailable. Clock
+anchors bound the join to the server warning and owned-socket UDP observations.
+
+The first bounded series passes three times, then captures a refusal with a
+complete 8192-row dump. It retains only 90 ms before the warning, while UDP drops
+started about 2.4 seconds earlier. A separate capacity-only recorder change to
+262,144 rows closes that history gap. This second fixed-budget series passes
+five times, then captures another refusal. All six files retain their complete
+histories without overwrite. Both failed clients exit naturally with code 1 and
+close code 1013; neither is killed by the controller. Counts describe stopped
+diagnostic series, not failure-rate estimates or original-A acceptance.
+
+The full failed history has 162,366 polls. First client UDP drops map to
+2.938080–2.942877 s, with the warning at 4.003825–4.003826 s. In the 250 ms before
+first drop, 4180 known-ready entries have a maximum wake-to-poll upper bound of
+133.486 us; 88 detailed polls have an endpoint-lock acquisition maximum of
+130 ns. In the 250 ms before warning, all 3897 entries consume known self-wakes,
+with a maximum 159.486 us; 61 detailed lock samples reach at most 90 ns.
+That quarter-second partitions into 193.625 ms entry-to-wake-before, 0.240 ms
+wake-call brackets and 56.135 ms wake-after-to-next-entry. These are elapsed
+intervals, not CPU duty; shared wake-call brackets cannot be counted twice.
+
+The client UDP queue builds and drops while the endpoint repeatedly progresses.
+The warning again has zero stream credit, with connection and send-window credit
+available. Passing attempts also experience UDP drops during their conservative
+source-derived offer cores. This evidence does not support a long delay after a
+known self-wake or a sampled endpoint-lock spike as the immediate onset/refusal
+explanation. Untimed external readiness, unsampled locks, connection processing,
+ordered reassembly, application reads and credit transmission remain unresolved;
+no unique cause is established.
+
+The recorder, larger working set and UDP/CPU observer perturb these diagnostics.
+The 64-poll detail cadence can also alias with the receive limiter's 256 nonempty
+cycle adaptation. No sample extrapolation, ordinary timing ranking, server win
+or reliability fix is claimed. Selected `f1811d2c` source/image remains retained.
+The [attribution report](reports/webtransport-endpoint-ready-attribution-2026-11-06.json)
+is a byte-identical copy of the independently reviewed full-history findings,
+with all six outcomes, sample domains, source/binary bindings, generation limits,
+UDP identities, timeline bounds and reproduction-reader references.
+
+## Untraced client receive-target sensitivity pilot — 2026-11-06
+
+A separately rebuilt, untraced canonical B client changes only Quinn's receive
+fairness target from 50 to 250 us. All 332 source files, relocated dependency
+metadata and toolchain are checked; only that constant differs. This is an
+explicit fivefold fairness-target increase, not a hard time cap: the limiter
+checks after whole native-message batches and estimates work between sampled
+nonempty cycles. Queues, byte/flow-control limits, buffers, eight shared workers,
+CPU placement, verification and the frozen `737b50de` server stay fixed.
+
+Four diagnostic cases run in predetermined 50/250/250/50 order without an endpoint
+recorder. The first 50-us case passes with zero UDP drops. Both 250-us cases pass
+with zero drops. The last 50-us case naturally exits 1 with close code 1013 and
+the familiar zero-stream-credit refusal; its measured counts, CPU and histograms
+remain unavailable. All four outcomes are retained without extending the pilot.
+This split is not a failure-rate estimate or a demonstrated reliability fix.
+
+All generated deliveries in the three passes are verified without duplicates,
+reordering or unreceived messages. Private source shortfalls are 132/69/209 of
+1,024,000 planned updates; fanout generates 4000/4000/3999 of 4000. Observed client
+CPU is 17.18/20.49/20.64 s and server CPU 13.18/13.36/13.13 s in pass order.
+Private generation-lag p99 upper bounds remain 1.048576 ms; fanout bounds are
+0.524288/1.048576/2.097152 ms. Fanout arrival-age p99 upper bounds stay 8.388608 ms,
+while recorded maxima are 11.664/17.052/22.166 ms. These are diagnostic values,
+not an ordinary CPU-efficiency ranking or a repeated-baseline median.
+
+Do not adopt the larger default from this pilot. It supplies no clean integrated
+improvement or server-performance proof, and the fairness/lag tradeoff remains.
+Selected `f1811d2c` and protected root/C/original-client sources and artifacts
+remain unchanged. Connection-event consumption, ordered reads, application
+consumption and credit transmission remain the next causal boundaries to trace.
+The [receive-target pilot report](reports/webtransport-client-receive-target-pilot-2026-11-06.json)
+is byte-identical to the independently reviewed analysis and retains source
+audits, exact images, all histogram objects, both-endpoint CPU, socket identities,
+observer limits, failed null measurements and raw/reproduction references.
