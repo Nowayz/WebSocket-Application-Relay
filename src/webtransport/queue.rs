@@ -1,16 +1,15 @@
 //! One consumer, serialized producers. Keep the first queued packet inline so
 //! an idle peer does not retain Tokio mpsc's initial 32-message allocation.
 use parking_lot::Mutex;
+#[cfg(test)]
+use std::future::poll_fn;
 use std::{
     collections::VecDeque,
-    future::{Future, poll_fn},
-    task::Poll,
+    task::{Context, Poll, Waker},
 };
-use tokio::sync::Notify;
 
 pub(super) struct Queue<T, O = ()> {
     pub state: Mutex<State<T, O>>,
-    pub ready: Notify,
 }
 
 pub(super) struct State<T, O = ()> {
@@ -19,6 +18,7 @@ pub(super) struct State<T, O = ()> {
     rest: VecDeque<T>,
     maximum: usize,
     closed: bool,
+    consumer: Option<Waker>,
 }
 
 impl<T, O> State<T, O> {
@@ -32,6 +32,14 @@ impl<T, O> State<T, O> {
 
     pub fn is_closed(&self) -> bool {
         self.closed
+    }
+
+    // Call after publishing output or closure under the queue lock. The owning
+    // Tokio task's waker schedules work; it must not synchronously reenter us.
+    pub fn wake_consumer(&mut self) {
+        if let Some(waker) = self.consumer.take() {
+            waker.wake();
+        }
     }
 
     pub fn try_push(&mut self, value: T) -> bool {
@@ -68,26 +76,48 @@ impl<T, O> Queue<T, O> {
                 rest: VecDeque::new(),
                 maximum,
                 closed: false,
+                consumer: None,
             }),
-            ready: Notify::new(),
         }
     }
 
     // Only the owning session creates a receiver. Dropping it refuses future
     // submissions and releases every queued output reservation.
     pub fn receiver(&self) -> Receiver<'_, T, O> {
-        Receiver { queue: self }
+        Receiver {
+            queue: self,
+            was_idle: false,
+        }
     }
 }
 
 pub(super) struct Receiver<'a, T, O = ()> {
     queue: &'a Queue<T, O>,
+    was_idle: bool,
+}
+
+// Cancelled async receives release their task registration, as Notified did.
+// The explicit poll API instead retains it until Ready or Receiver drop.
+#[cfg(test)]
+struct ReceiveWait<'a, T, O> {
+    queue: &'a Queue<T, O>,
+    armed: bool,
+}
+
+#[cfg(test)]
+impl<T, O> Drop for ReceiveWait<'_, T, O> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.queue.state.lock().consumer = None;
+        }
+    }
 }
 
 impl<T, O> Receiver<'_, T, O> {
     pub fn close(&self) {
-        self.queue.state.lock().closed = true;
-        self.queue.ready.notify_one();
+        let mut state = self.queue.state.lock();
+        state.closed = true;
+        state.wake_consumer();
     }
 
     #[cfg(test)]
@@ -103,45 +133,45 @@ impl<T, O> Receiver<'_, T, O> {
     }
 
     // Update the owner under the queue lock when dequeue must be atomic with it.
+    pub fn poll_recv_with_idle_map<U>(
+        &mut self,
+        cx: &mut Context<'_>,
+        mut map: impl FnMut(T, &mut O) -> U,
+    ) -> Poll<(Option<U>, bool)> {
+        let mut state = self.queue.state.lock();
+        if let Some(value) = state.pop() {
+            state.consumer = None;
+            let was_idle = std::mem::take(&mut self.was_idle);
+            return Poll::Ready((Some(map(value, &mut state.owner)), was_idle));
+        }
+        if state.closed {
+            state.consumer = None;
+            return Poll::Ready((None, std::mem::take(&mut self.was_idle)));
+        }
+        if !state
+            .consumer
+            .as_ref()
+            .is_some_and(|waker| waker.will_wake(cx.waker()))
+        {
+            state.consumer = Some(cx.waker().clone());
+        }
+        self.was_idle = true;
+        Poll::Pending
+    }
+
+    #[cfg(test)]
     pub async fn recv_with_idle_map<U>(
         &mut self,
         mut map: impl FnMut(T, &mut O) -> U,
     ) -> (Option<U>, bool) {
-        let mut was_idle = false;
-        loop {
-            // Most active writers already have output. Avoid registering and
-            // unregistering a wakeup for each ready packet in a burst.
-            {
-                let mut state = self.queue.state.lock();
-                if let Some(value) = state.pop() {
-                    return (Some(map(value, &mut state.owner)), was_idle);
-                }
-                if state.closed {
-                    return (None, was_idle);
-                }
-            }
-            let notified = self.queue.ready.notified();
-            tokio::pin!(notified);
-            // Register before inspecting the queue to cover a concurrent enqueue.
-            notified.as_mut().enable();
-            {
-                let mut state = self.queue.state.lock();
-                if let Some(value) = state.pop() {
-                    return (Some(map(value, &mut state.owner)), was_idle);
-                }
-                if state.closed {
-                    return (None, was_idle);
-                }
-            }
-            poll_fn(|cx| match notified.as_mut().poll(cx) {
-                Poll::Pending => {
-                    was_idle = true;
-                    Poll::Pending
-                }
-                Poll::Ready(()) => Poll::Ready(()),
-            })
-            .await;
-        }
+        self.was_idle = false;
+        let mut wait = ReceiveWait {
+            queue: self.queue,
+            armed: true,
+        };
+        let result = poll_fn(|cx| self.poll_recv_with_idle_map(cx, &mut map)).await;
+        wait.armed = false;
+        result
     }
 }
 
@@ -149,6 +179,7 @@ impl<T, O> Drop for Receiver<'_, T, O> {
     fn drop(&mut self) {
         let mut state = self.queue.state.lock();
         state.closed = true;
+        state.consumer = None;
         state.first = None;
         state.rest.clear();
     }
@@ -157,9 +188,13 @@ impl<T, O> Drop for Receiver<'_, T, O> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering::Relaxed},
+    use std::{
+        future::Future,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering::Relaxed},
+        },
+        task::Wake,
     };
 
     #[tokio::test]
@@ -185,8 +220,9 @@ mod tests {
         let mut receiver = queue.receiver();
         let producer = async {
             tokio::task::yield_now().await;
-            assert!(queue.state.lock().try_push(1));
-            queue.ready.notify_one();
+            let mut state = queue.state.lock();
+            assert!(state.try_push(1));
+            state.wake_consumer();
         };
         let (_, first) = tokio::join!(producer, receiver.recv_with_idle());
         assert_eq!(first, (Some(1), true));
@@ -226,12 +262,16 @@ mod tests {
         let producer = queue.clone();
         let task = tokio::spawn(async move {
             for value in 0..1000 {
-                assert!(producer.state.lock().try_push(value));
-                producer.ready.notify_one();
+                {
+                    let mut state = producer.state.lock();
+                    assert!(state.try_push(value));
+                    state.wake_consumer();
+                }
                 tokio::task::yield_now().await;
             }
-            producer.state.lock().closed = true;
-            producer.ready.notify_one();
+            let mut state = producer.state.lock();
+            state.closed = true;
+            state.wake_consumer();
         });
         for value in 0..1000 {
             assert_eq!(receive.recv().await, Some(value));
@@ -250,17 +290,163 @@ mod tests {
         }
         let count = Arc::new(AtomicUsize::new(3));
         let queue = Queue::new(8);
-        let receive = queue.receiver();
+        let mut receive = queue.receiver();
+        let counter = Arc::new(WakeCounter::default());
+        let weak = Arc::downgrade(&counter);
+        {
+            let waker = Waker::from(counter);
+            let mut cx = Context::from_waker(&waker);
+            assert!(
+                receive
+                    .poll_recv_with_idle_map(&mut cx, |value, _| value)
+                    .is_pending()
+            );
+        }
+        assert!(weak.upgrade().is_some());
         for _ in 0..3 {
             assert!(queue.state.lock().try_push(Lease(count.clone())));
         }
         drop(receive);
         assert_eq!(count.load(Relaxed), 0);
+        assert!(weak.upgrade().is_none());
+        assert!(queue.state.lock().consumer.is_none());
+        assert!(queue.state.lock().is_closed());
         assert!(
             !queue
                 .state
                 .lock()
                 .try_push(Lease(Arc::new(AtomicUsize::new(1))))
+        );
+    }
+
+    #[derive(Default)]
+    struct WakeCounter(AtomicUsize);
+
+    impl Wake for WakeCounter {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Relaxed);
+        }
+    }
+
+    #[test]
+    fn enqueue_before_and_after_registration_never_loses_output_or_idle_state() {
+        let queue = Queue::new(3);
+        let mut receive = queue.receiver();
+        let counter = Arc::new(WakeCounter::default());
+        let waker = Waker::from(counter.clone());
+        let mut cx = Context::from_waker(&waker);
+        {
+            let mut state = queue.state.lock();
+            assert!(state.try_push(10));
+            state.wake_consumer();
+        }
+        assert_eq!(counter.0.load(Relaxed), 0);
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut cx, |value, _| value),
+            Poll::Ready((Some(10), false))
+        );
+        assert!(
+            receive
+                .poll_recv_with_idle_map(&mut cx, |value, _| value)
+                .is_pending()
+        );
+        {
+            let mut state = queue.state.lock();
+            assert!(state.try_push(20));
+            state.wake_consumer();
+            state.wake_consumer();
+        }
+        assert_eq!(counter.0.load(Relaxed), 1);
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut cx, |value, _| value),
+            Poll::Ready((Some(20), true))
+        );
+        assert!(queue.state.lock().try_push(30));
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut cx, |value, _| value),
+            Poll::Ready((Some(30), false))
+        );
+    }
+
+    #[test]
+    fn a_pending_receiver_uses_the_latest_task_waker() {
+        let queue = Queue::<usize>::new(1);
+        let mut receive = queue.receiver();
+        let old = Arc::new(WakeCounter::default());
+        let new = Arc::new(WakeCounter::default());
+        let old_waker = Waker::from(old.clone());
+        let new_waker = Waker::from(new.clone());
+        assert!(
+            receive
+                .poll_recv_with_idle_map(&mut Context::from_waker(&old_waker), |value, _| value)
+                .is_pending()
+        );
+        assert!(
+            receive
+                .poll_recv_with_idle_map(&mut Context::from_waker(&new_waker), |value, _| value)
+                .is_pending()
+        );
+        {
+            let mut state = queue.state.lock();
+            assert!(state.try_push(1));
+            state.wake_consumer();
+        }
+        assert_eq!(old.0.load(Relaxed), 0);
+        assert_eq!(new.0.load(Relaxed), 1);
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut Context::from_waker(&new_waker), |value, _| value),
+            Poll::Ready((Some(1), true))
+        );
+    }
+
+    #[test]
+    fn closing_a_pending_receiver_wakes_it_and_refuses_late_output() {
+        let queue = Queue::<usize>::new(1);
+        let mut receive = queue.receiver();
+        let counter = Arc::new(WakeCounter::default());
+        let waker = Waker::from(counter.clone());
+        let mut cx = Context::from_waker(&waker);
+        assert!(
+            receive
+                .poll_recv_with_idle_map(&mut cx, |value, _| value)
+                .is_pending()
+        );
+        receive.close();
+        assert_eq!(counter.0.load(Relaxed), 1);
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut cx, |value, _| value),
+            Poll::Ready((None, true))
+        );
+        assert_eq!(
+            receive.poll_recv_with_idle_map(&mut cx, |value, _| value),
+            Poll::Ready((None, false))
+        );
+        assert!(!queue.state.lock().try_push(1));
+    }
+
+    #[test]
+    fn cancelling_the_async_adapter_unregisters_without_losing_later_output() {
+        let queue = Queue::new(1);
+        let mut receive = queue.receiver();
+        let counter = Arc::new(WakeCounter::default());
+        let waker = Waker::from(counter);
+        let mut cx = Context::from_waker(&waker);
+        {
+            let waiting = receive.recv_with_idle();
+            tokio::pin!(waiting);
+            assert!(waiting.as_mut().poll(&mut cx).is_pending());
+        }
+        assert!(queue.state.lock().consumer.is_none());
+        assert!(queue.state.lock().try_push(7));
+        let waiting = receive.recv_with_idle();
+        tokio::pin!(waiting);
+        assert_eq!(
+            waiting.as_mut().poll(&mut cx),
+            Poll::Ready((Some(7), false))
         );
     }
 }

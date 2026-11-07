@@ -25,6 +25,7 @@ use tokio_util::sync::CancellationToken;
 use web_transport_quinn::{EstablishedIo as Connection, SendStream, SessionAcceptor};
 use wtransport::quinn::{Endpoint, VarInt};
 
+mod application;
 mod queue;
 
 struct QueuedOutput {
@@ -97,7 +98,7 @@ impl Output {
                     .fetch_add(growth, Relaxed);
             }
             if accepted && wake {
-                self.queue.ready.notify_one();
+                queue.wake_consumer();
             }
             return accepted;
         }
@@ -233,26 +234,22 @@ fn frame_chunks(frame: &Frame, offset: usize) -> [Bytes; 2] {
             .slice(offset.saturating_sub(header_len)..),
     ]
 }
-async fn write_output_chunks(output: &Output, chunks: &mut [Bytes]) -> Result<()> {
-    poll_fn(|cx| {
-        let mut state = output.queue.state.lock();
-        // Chunk suffixes live outside this temporary future, so a Pending poll
-        // preserves all accepted bytes without retaining the stream in a task.
-        let result = {
-            let write = state.owner.stream.write_all_chunks(chunks);
-            tokio::pin!(write);
-            write.as_mut().poll(cx)
-        };
-        if matches!(&result, Poll::Ready(Ok(()))) {
-            state.owner.busy = false;
-        }
-        result
-    })
-    .await?;
-    Ok(())
-}
-async fn write_frame_from(output: &Output, frame: &Frame, offset: usize) -> Result<()> {
-    write_output_chunks(output, &mut frame_chunks(frame, offset)).await
+fn poll_output_chunks(
+    output: &Output,
+    chunks: &mut [Bytes],
+    cx: &mut TaskContext<'_>,
+) -> Poll<Result<()>> {
+    let mut state = output.queue.state.lock();
+    // Suffixes outlive this temporary future, as in the original async bridge.
+    let result = {
+        let write = state.owner.stream.write_all_chunks(chunks);
+        tokio::pin!(write);
+        write.as_mut().poll(cx)
+    };
+    if matches!(&result, Poll::Ready(Ok(()))) {
+        state.owner.busy = false;
+    }
+    result.map(|result| result.map_err(Into::into))
 }
 
 /// Default QUIC transport policy used by the relay's server builders.
@@ -449,150 +446,22 @@ async fn session(
             output.clone(),
         )
         .map_err(|e| anyhow::anyhow!(e.reason))?;
-    let finishing = CancellationToken::new();
-    let mut outgoing = output.queue.receiver();
-    // A ready input burst must let writers run before one producer can fill
-    // an entire recipient queue. Use admission as the smaller fairness bound.
     let record_quantum = INPUT_QUANTUM.min(relay.config.queue_messages);
-    let writer = async {
-        // Mark the writer active while dequeuing under the submission gate.
-        // A popped record still precedes new output even if the queue is empty.
-        let take = |packet, owner: &mut StreamOutput| {
-            assert!(!owner.busy);
-            owner.busy = true;
-            packet
-        };
-        let mut remaining = record_quantum;
-        loop {
-            let (packet, was_idle) = if finishing.is_cancelled() {
-                outgoing.close();
-                outgoing.recv_with_idle_map(take).await
-            } else {
-                tokio::select! {
-                    packet = outgoing.recv_with_idle_map(take) => packet,
-                    _ = finishing.cancelled() => { outgoing.close(); outgoing.recv_with_idle_map(take).await }
-                }
-            };
-            let Some(queued) = packet else {
-                break;
-            };
-            if was_idle {
-                remaining = record_quantum;
-            }
-            let packet = queued.packet;
-            let remaining_time = Duration::from_secs(relay.config.write_timeout_secs)
-                .saturating_sub(
-                    queued
-                        .started
-                        .map_or(Duration::ZERO, |started| started.elapsed()),
-                );
-            tokio::time::timeout(
-                remaining_time,
-                write_frame_from(&output, &packet.frame, queued.offset),
-            )
-            .await
-            .inspect_err(|_| {
-                relay.metrics.write_timeouts.fetch_add(1, Relaxed);
-            })?
-            .inspect_err(|_| {
-                relay.metrics.write_errors.fetch_add(1, Relaxed);
-            })?;
-            output.delivered(&packet.frame);
-            remaining -= 1;
-            if remaining == 0 {
-                tokio::task::yield_now().await;
-                remaining = record_quantum;
-            }
-        }
-        if finishing.is_cancelled() {
-            write_output_chunks(&output, &mut [Bytes::from_static(&[0, 0, 0, 0])]).await?;
-        }
-        Ok::<(), anyhow::Error>(())
-    };
-    tokio::pin!(writer);
+    let mut writer = application::WriterState::new(output.queue.receiver(), record_quantum);
+    let writing = None;
+    tokio::pin!(writing);
+    let writer_yield = None;
+    tokio::pin!(writer_yield);
     let result = {
-        let limiter = Mutex::new(RateLimiter::new(
+        let mut limiter = RateLimiter::new(
             relay.config.messages_per_second,
             relay.config.bytes_per_second,
             Instant::now(),
-        ));
-        let route = async |bytes: Bytes, unreliable: bool| {
-            if let Some(activity) = &activity {
-                *activity.lock() = Instant::now();
-            }
-            if !limiter.lock().allow(bytes.len(), Instant::now()) {
-                relay.metrics.rate_limited.fetch_add(1, Relaxed);
-                registration.peer.close(Disconnect::RATE);
-                return Err(anyhow::anyhow!("rate exceeded"));
-            }
-            let mut pending = Pending {
-                registration: &registration,
-                work: None,
-            };
-            let mut batch = relay.receive_batch();
-            let result = if unreliable {
-                batch.receive_datagram(&registration.peer, bytes, &mut pending.work, FANOUT_QUANTUM)
-            } else {
-                let size = bytes.len();
-                batch.receive_bounded(
-                    &registration.peer,
-                    bytes,
-                    size,
-                    &mut pending.work,
-                    FANOUT_QUANTUM,
-                )
-            };
-            batch.publish();
-            drop(batch);
-            while let Some(work) = pending.work.as_mut().filter(|work| work.active()) {
-                tokio::task::yield_now().await;
-                work.resume(FANOUT_QUANTUM)
-                    .map_err(|e| anyhow::anyhow!(e.reason))?;
-            }
-            result.map(|_| ()).map_err(|error| {
-                registration.peer.close(error.reason);
-                anyhow::anyhow!(error.reason.reason)
-            })
-        };
-        let reliable = async {
-            let mut remaining = record_quantum;
-            loop {
-                let bytes = read_record_budgeted(
-                    &mut receive,
-                    relay.config.max_message_bytes,
-                    relay.metrics.read_budget.as_ref(),
-                )
-                .await?;
-                if bytes.is_empty() {
-                    return Ok::<_, anyhow::Error>(());
-                }
-                route(bytes, false).await?;
-                remaining -= 1;
-                if remaining == 0 {
-                    tokio::task::yield_now().await;
-                    remaining = record_quantum;
-                }
-            }
-        };
-        let datagrams = async {
-            let mut remaining = INPUT_QUANTUM;
-            loop {
-                let bytes = connection.read_datagram().await?;
-                relay.metrics.datagrams_received.fetch_add(1, Relaxed);
-                if bytes.len() > relay.config.max_message_bytes {
-                    registration.peer.close(Disconnect::PROTOCOL);
-                    bail!("datagram exceeds message limit");
-                }
-                route(bytes, true).await?;
-                remaining -= 1;
-                if remaining == 0 {
-                    tokio::task::yield_now().await;
-                    remaining = INPUT_QUANTUM;
-                }
-            }
-            #[allow(unreachable_code)]
-            Ok::<(), anyhow::Error>(())
-        };
+        );
+        // Reverse local drop order retires reliable work before datagram work.
+        let mut datagrams = application::InputState::new(INPUT_QUANTUM);
+        let mut reader = application::RecordReader::default();
+        let mut reliable = application::InputState::new(record_quantum);
         let idle = async {
             let Some(activity) = &activity else {
                 return std::future::pending::<Result<()>>().await;
@@ -608,29 +477,157 @@ async fn session(
                 }
             }
         };
-        tokio::select! {
-            biased;
-            result = idle => result.map(|_| false),
-            _ = connection.closed() => Ok(false),
-            // Flush already admitted output before another ready input batch.
-            // Both record loops yield at record_quantum, so priority cannot
-            // turn a continuously ready writer into input starvation.
-            result = &mut writer => result.map(|_| false),
-            result = reliable => result.map(|_| true),
-            result = datagrams => result.map(|_| false),
-        }
+        tokio::pin!(idle);
+        let closed = connection.closed();
+        tokio::pin!(closed);
+        let datagram = None;
+        tokio::pin!(datagram);
+        let reliable_yield = None;
+        tokio::pin!(reliable_yield);
+        let datagram_yield = None;
+        tokio::pin!(datagram_yield);
+        poll_fn(|cx| {
+            if application::poll_budget_available(cx).is_pending() {
+                return Poll::Pending;
+            }
+            if let Poll::Ready(result) = idle.as_mut().poll(cx) {
+                return Poll::Ready(result.map(|_| false));
+            }
+            if closed.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(Ok(false));
+            }
+            if let Poll::Ready(result) = writer.poll(cx, &output, writing.as_mut(), |cx, reset| {
+                if reset {
+                    writer_yield.as_mut().set(Some(tokio::task::yield_now()));
+                }
+                let result = writer_yield
+                    .as_mut()
+                    .as_pin_mut()
+                    .expect("writer yield")
+                    .poll(cx);
+                if result.is_ready() {
+                    writer_yield.as_mut().set(None);
+                }
+                result
+            }) {
+                return Poll::Ready(result.map(|_| false));
+            }
+            let reliable_result = loop {
+                match reliable.poll_ready(cx, record_quantum, |cx, reset| {
+                    if reset {
+                        reliable_yield.as_mut().set(Some(tokio::task::yield_now()));
+                    }
+                    let result = reliable_yield
+                        .as_mut()
+                        .as_pin_mut()
+                        .expect("reliable yield")
+                        .poll(cx);
+                    if result.is_ready() {
+                        reliable_yield.as_mut().set(None);
+                    }
+                    result
+                }) {
+                    Poll::Pending => break Poll::Pending,
+                    Poll::Ready(Err(error)) => break Poll::Ready(Err(error)),
+                    Poll::Ready(Ok(())) => {}
+                }
+                let bytes = match reader.poll(
+                    &mut receive,
+                    relay.config.max_message_bytes,
+                    relay.metrics.read_budget.as_ref(),
+                    cx,
+                ) {
+                    Poll::Pending => break Poll::Pending,
+                    Poll::Ready(Err(error)) => break Poll::Ready(Err(error)),
+                    Poll::Ready(Ok(bytes)) => bytes,
+                };
+                if bytes.is_empty() {
+                    break Poll::Ready(Ok(()));
+                }
+                if let Err(error) =
+                    reliable.begin(&relay, &registration, &activity, &mut limiter, bytes, false)
+                {
+                    break Poll::Ready(Err(error));
+                }
+            };
+            if let Poll::Ready(result) = reliable_result {
+                return Poll::Ready(result.map(|_| true));
+            }
+            let datagram_result: Poll<Result<()>> = loop {
+                match datagrams.poll_ready(cx, INPUT_QUANTUM, |cx, reset| {
+                    if reset {
+                        datagram_yield.as_mut().set(Some(tokio::task::yield_now()));
+                    }
+                    let result = datagram_yield
+                        .as_mut()
+                        .as_pin_mut()
+                        .expect("datagram yield")
+                        .poll(cx);
+                    if result.is_ready() {
+                        datagram_yield.as_mut().set(None);
+                    }
+                    result
+                }) {
+                    Poll::Pending => break Poll::Pending,
+                    Poll::Ready(Err(error)) => break Poll::Ready(Err(error)),
+                    Poll::Ready(Ok(())) => {}
+                }
+                if datagram.as_mut().as_pin_mut().is_none() {
+                    datagram.as_mut().set(Some(connection.read_datagram()));
+                }
+                let result = match datagram
+                    .as_mut()
+                    .as_pin_mut()
+                    .expect("datagram read")
+                    .poll(cx)
+                {
+                    Poll::Pending => break Poll::Pending,
+                    Poll::Ready(result) => result,
+                };
+                datagram.as_mut().set(None);
+                let bytes = match result {
+                    Ok(bytes) => bytes,
+                    Err(error) => break Poll::Ready(Err(error.into())),
+                };
+                relay.metrics.datagrams_received.fetch_add(1, Relaxed);
+                if bytes.len() > relay.config.max_message_bytes {
+                    registration.peer.close(Disconnect::PROTOCOL);
+                    break Poll::Ready(Err(anyhow::anyhow!("datagram exceeds message limit")));
+                }
+                if let Err(error) =
+                    datagrams.begin(&relay, &registration, &activity, &mut limiter, bytes, true)
+                {
+                    break Poll::Ready(Err(error));
+                }
+            };
+            datagram_result.map(|result| result.map(|_| false))
+        })
+        .await
     };
-    // Routing futures are gone before registration: cancelled publications have
-    // transferred their continuation to retirement, and no later input is admitted.
+    // Both input states retired accepted work before this registration leaves.
     drop(registration);
     if result? {
-        finishing.cancel();
+        writer.begin_drain();
         tokio::time::timeout(
             Duration::from_secs(relay.config.write_timeout_secs),
-            &mut writer,
+            poll_fn(|cx| {
+                writer.poll(cx, &output, writing.as_mut(), |cx, reset| {
+                    if reset {
+                        writer_yield.as_mut().set(Some(tokio::task::yield_now()));
+                    }
+                    let result = writer_yield
+                        .as_mut()
+                        .as_pin_mut()
+                        .expect("writer yield")
+                        .poll(cx);
+                    if result.is_ready() {
+                        writer_yield.as_mut().set(None);
+                    }
+                    result
+                })
+            }),
         )
         .await??;
-        // Keep the ACK deliverable until the client closes QUIC, or a bounded deadline.
         let _ = tokio::time::timeout(
             Duration::from_secs(relay.config.write_timeout_secs),
             connection.closed(),
