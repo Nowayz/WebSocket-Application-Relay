@@ -65,6 +65,7 @@ enum Admission {
 pub struct Relay {
     pub config: Config,
     pub metrics: Arc<Metrics>,
+    pub(crate) receive_arena: crate::receive_arena::ReceiveArena,
     admission: AtomicU8,
     users: Users,
     /// Lock-free name-to-channel index. Lookup never blocks; creation and
@@ -1362,13 +1363,19 @@ impl Relay {
         let users = Users::new(config.max_connections);
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
+        let receive_arena = crate::receive_arena::ReceiveArena::new(
+            config.receive_arena_bytes,
+            config.receive_arena_page_bytes,
+        );
         Ok(Arc::new(Self {
             ip_limit: crate::admission::IpLimit::new(config.max_connections_per_ip),
             config,
             metrics: Arc::new(Metrics {
                 read_budget,
+                receive_arena_budget: Some(receive_arena.budget.clone()),
                 ..Metrics::default()
             }),
+            receive_arena,
             admission: AtomicU8::new(Admission::Open as u8),
             users,
             channels,

@@ -36,9 +36,43 @@ pub(super) struct RecordReader {
     header: [u8; 4],
     header_read: usize,
     size: Option<usize>,
-    body: Vec<u8>,
+    body: RecordBody,
     body_read: usize,
     lease: Option<tungstenite::protocol::ReadLease>,
+}
+
+enum RecordBody {
+    Direct(Vec<u8>),
+    Arena(crate::receive_arena::ArenaBuffer),
+}
+
+impl Default for RecordBody {
+    fn default() -> Self {
+        Self::Direct(Vec::new())
+    }
+}
+
+impl RecordBody {
+    fn len(&self) -> usize {
+        match self {
+            Self::Direct(v) => v.len(),
+            Self::Arena(v) => v.as_ref().len(),
+        }
+    }
+
+    fn publish(self) -> Bytes {
+        match self {
+            Self::Direct(v) => Bytes::from(v),
+            Self::Arena(v) => v.publish(),
+        }
+    }
+
+    fn as_mut(&mut self) -> &mut [u8] {
+        match self {
+            Self::Direct(v) => v,
+            Self::Arena(v) => v.as_mut(),
+        }
+    }
 }
 
 impl RecordReader {
@@ -47,6 +81,7 @@ impl RecordReader {
         stream: &mut S,
         maximum: usize,
         budget: Option<&Arc<tungstenite::protocol::ReadBudget>>,
+        arena: Option<&crate::receive_arena::ReceiveArena>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Bytes>> {
         while self.header_read < self.header.len() {
@@ -79,7 +114,10 @@ impl RecordReader {
                 Ok(lease) => lease,
                 Err(error) => return Poll::Ready(Err(error.into())),
             };
-            self.body = Vec::with_capacity(size.min(4096));
+            self.body = arena.and_then(|a| a.allocate(size)).map_or_else(
+                || RecordBody::Direct(Vec::with_capacity(size.min(4096))),
+                RecordBody::Arena,
+            );
             self.body_read = 0;
             self.size = Some(size);
             size
@@ -88,13 +126,15 @@ impl RecordReader {
             if self.body_read == self.body.len() {
                 let count = (size - self.body.len()).min(4096);
                 let start = self.body.len();
-                if start + count > self.body.capacity() {
-                    let capacity = self.body.capacity().saturating_mul(2).min(size);
-                    self.body.reserve_exact(capacity.max(start + count) - start);
+                if let RecordBody::Direct(body) = &mut self.body {
+                    if start + count > body.capacity() {
+                        let capacity = body.capacity().saturating_mul(2).min(size);
+                        body.reserve_exact(capacity.max(start + count) - start);
+                    }
+                    body.resize(start + count, 0);
                 }
-                self.body.resize(start + count, 0);
             }
-            let mut read = ReadBuf::new(&mut self.body[self.body_read..]);
+            let mut read = ReadBuf::new(&mut self.body.as_mut()[self.body_read..]);
             match Pin::new(&mut *stream).poll_read(cx, &mut read) {
                 Poll::Pending => return Poll::Pending,
                 Poll::Ready(Err(error)) => return Poll::Ready(Err(error.into())),
@@ -109,7 +149,7 @@ impl RecordReader {
             }
             self.body_read += read.filled().len();
         }
-        let bytes = Bytes::from(std::mem::take(&mut self.body));
+        let bytes = std::mem::take(&mut self.body).publish();
         self.lease = None;
         self.header_read = 0;
         self.body_read = 0;
@@ -480,64 +520,68 @@ mod tests {
 
     #[test]
     fn fragmented_record_completion_and_cancellation_preserve_the_budget_and_eof_contract() {
-        let payload: Vec<_> = (0..9000).map(|index| (index % 251) as u8).collect();
-        let mut bytes = (payload.len() as u32).to_be_bytes().to_vec();
-        bytes.extend_from_slice(&payload);
-        bytes.extend_from_slice(&[0; 4]);
-        let budget = tungstenite::protocol::ReadBudget::new(payload.len() * 2);
-        let mut cx = Context::from_waker(std::task::Waker::noop());
-        let mut cancelled = RecordReader::default();
-        let mut stream = Fragmented {
-            bytes: bytes.clone(),
-            position: 0,
-            pause: false,
-        };
-        while budget.reserved() == 0 {
-            assert!(
-                cancelled
-                    .poll(&mut stream, payload.len(), Some(&budget), &mut cx)
-                    .is_pending()
-            );
-        }
-        assert_eq!(budget.reserved(), payload.len() * 2);
-        drop(cancelled);
-        assert_eq!(budget.reserved(), 0);
+        for arena_enabled in [false, true] {
+            let arena = crate::receive_arena::ReceiveArena::new(32768, 16384);
+            let arena = arena_enabled.then_some(&arena);
+            let payload: Vec<_> = (0..9000).map(|index| (index % 251) as u8).collect();
+            let mut bytes = (payload.len() as u32).to_be_bytes().to_vec();
+            bytes.extend_from_slice(&payload);
+            bytes.extend_from_slice(&[0; 4]);
+            let budget = tungstenite::protocol::ReadBudget::new(payload.len() * 2);
+            let mut cx = Context::from_waker(std::task::Waker::noop());
+            let mut cancelled = RecordReader::default();
+            let mut stream = Fragmented {
+                bytes: bytes.clone(),
+                position: 0,
+                pause: false,
+            };
+            while budget.reserved() == 0 {
+                assert!(
+                    cancelled
+                        .poll(&mut stream, payload.len(), Some(&budget), arena, &mut cx)
+                        .is_pending()
+                );
+            }
+            assert_eq!(budget.reserved(), payload.len() * 2);
+            drop(cancelled);
+            assert_eq!(budget.reserved(), 0);
 
-        let mut reader = RecordReader::default();
-        let mut stream = Fragmented {
-            bytes,
-            position: 0,
-            pause: false,
-        };
-        let received = loop {
-            if let Poll::Ready(result) =
-                reader.poll(&mut stream, payload.len(), Some(&budget), &mut cx)
-            {
-                break result.unwrap();
-            }
-        };
-        assert_eq!(received.as_ref(), payload.as_slice());
-        assert_eq!(budget.reserved(), 0);
-        assert_eq!(budget.peak(), payload.len() * 2);
-        let close = loop {
-            if let Poll::Ready(result) =
-                reader.poll(&mut stream, payload.len(), Some(&budget), &mut cx)
-            {
-                break result.unwrap();
-            }
-        };
-        assert!(close.is_empty());
-        let eof = loop {
-            if let Poll::Ready(result) =
-                reader.poll(&mut stream, payload.len(), Some(&budget), &mut cx)
-            {
-                break result.unwrap_err();
-            }
-        };
-        assert_eq!(
-            eof.downcast_ref::<std::io::Error>().unwrap().kind(),
-            std::io::ErrorKind::UnexpectedEof
-        );
-        assert_eq!(budget.reserved(), 0);
+            let mut reader = RecordReader::default();
+            let mut stream = Fragmented {
+                bytes,
+                position: 0,
+                pause: false,
+            };
+            let received = loop {
+                if let Poll::Ready(result) =
+                    reader.poll(&mut stream, payload.len(), Some(&budget), arena, &mut cx)
+                {
+                    break result.unwrap();
+                }
+            };
+            assert_eq!(received.as_ref(), payload.as_slice());
+            assert_eq!(budget.reserved(), 0);
+            assert_eq!(budget.peak(), payload.len() * 2);
+            let close = loop {
+                if let Poll::Ready(result) =
+                    reader.poll(&mut stream, payload.len(), Some(&budget), arena, &mut cx)
+                {
+                    break result.unwrap();
+                }
+            };
+            assert!(close.is_empty());
+            let eof = loop {
+                if let Poll::Ready(result) =
+                    reader.poll(&mut stream, payload.len(), Some(&budget), arena, &mut cx)
+                {
+                    break result.unwrap_err();
+                }
+            };
+            assert_eq!(
+                eof.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::UnexpectedEof
+            );
+            assert_eq!(budget.reserved(), 0);
+        }
     }
 }

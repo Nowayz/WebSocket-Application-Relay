@@ -64,6 +64,12 @@ pub struct Config {
     pub total_queue_bytes: usize,
     #[arg(long, env = "WAR_READ_BUFFER_BYTES", default_value_t = 4 * 1024)]
     pub read_buffer_bytes: usize,
+    /// Maximum backing storage for shared reliable-message slabs; zero disables.
+    #[arg(long, env = "WAR_RECEIVE_ARENA_BYTES", default_value_t = 0)]
+    pub receive_arena_bytes: usize,
+    /// Minimum slab allocation on first use by a worker, shared across connections.
+    #[arg(long, env = "WAR_RECEIVE_ARENA_PAGE_BYTES", default_value_t = 64 * 1024)]
+    pub receive_arena_page_bytes: usize,
     /// Shared decoder staging allowance, including growth headroom; zero disables admission.
     #[arg(long, env = "WAR_TOTAL_READ_BUFFER_BYTES", default_value_t = 1024 * 1024 * 1024)]
     pub total_read_buffer_bytes: usize,
@@ -145,6 +151,14 @@ impl Config {
 
     pub fn validate(&self) -> Result<()> {
         self.origin_policy.validate()?;
+        ensure!(
+            self.receive_arena_page_bytes > 0
+                && self.receive_arena_page_bytes <= isize::MAX as usize
+                && self.receive_arena_bytes <= isize::MAX as usize
+                && (self.receive_arena_bytes == 0
+                    || self.receive_arena_bytes >= self.receive_arena_page_bytes),
+            "receive-arena-bytes must be zero or at least receive-arena-page-bytes; both must fit the address space"
+        );
         ensure!(
             self.listen_backlog > 0,
             "listen-backlog must be in 1..=65535"
@@ -364,6 +378,32 @@ mod backlog_tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn receive_arena_has_a_separate_backing_limit_and_page_hint() {
+        let config = Config::try_parse_from([
+            "war-relay",
+            "--receive-arena-bytes",
+            "131072",
+            "--receive-arena-page-bytes",
+            "32768",
+        ])
+        .unwrap();
+        config.validate().unwrap();
+        assert_eq!(config.receive_arena_bytes, 131072);
+        assert_eq!(config.receive_arena_page_bytes, 32768);
+        for (bytes, page) in [(1, 2), (0, 0), (1, usize::MAX)] {
+            assert!(
+                Config {
+                    receive_arena_bytes: bytes,
+                    receive_arena_page_bytes: page,
+                    ..Config::default()
+                }
+                .validate()
+                .is_err()
+            );
+        }
     }
 
     #[test]

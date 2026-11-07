@@ -1,0 +1,2439 @@
+{
+  "objective": "Improve received-message allocation where inefficient, with configurable bounded arena backing and minimum slab size.",
+  "implementation": "Worker-local active and spare slabs. BytesMut slices retain a shared budget lease through Bytes::from_owner. Final slice can recover the allocation. Exhaustion and oversized records use the original allocation path.",
+  "configuration": {
+    "receive_arena_bytes": {
+      "default": 0,
+      "tested": 8388608,
+      "meaning": "Hard process backing reservation including cached and published slabs; zero disables."
+    },
+    "receive_arena_page_bytes": {
+      "default": 65536,
+      "tested": 65536,
+      "meaning": "Minimum slab size allocated lazily per active worker, shared across connections."
+    }
+  },
+  "candidate": {
+    "path": "artifacts/webtransport/receive-arena-v2/candidate-relay",
+    "sha256": "4429ea3401928321c2bdc2b391a1670256ffbb25f858f84d85742fb877c2188d"
+  },
+  "previous_selected": {
+    "path": "artifacts/webtransport/receive-arena-v2/selected-relay",
+    "sha256": "91337694ecef14ff3bb80bf37d13786aa5d4653e462096aeb3ddd92b71e19ea1"
+  },
+  "source_inputs_verified": 375,
+  "ordinary": {
+    "private": {
+      "selected": {
+        "rates": [
+          1537512.9154393706,
+          1485404.8044282873,
+          1488868.9343853348
+        ],
+        "median": 1488868.9343853348,
+        "server_cpu_us_per_delivery": [
+          2.1841928177236354,
+          2.232771976310626,
+          2.2471746606010674
+        ],
+        "median_server_cpu_us_per_delivery": 2.232771976310626,
+        "p99_upper_ms": {
+          "healthy": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-1.json",
+            "sha256": "54daaecd8594a88539d50e98f0b35b17755d96bef39e9c993ab16f1c3d938505"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-2.json",
+            "sha256": "dcf5f6c76a16b579f1408b277681be42094ad78d4227900c8e2ecb80dc70a05f"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-3.json",
+            "sha256": "4ce32e2201dba8c5d9a48e91a1e488d630244e93626989b600a6464a3b937bf3"
+          }
+        ]
+      },
+      "off": {
+        "rates": [
+          1480672.791968668,
+          1482215.7297796246,
+          1486154.0447621637
+        ],
+        "median": 1482215.7297796246,
+        "server_cpu_us_per_delivery": [
+          2.2455312240272516,
+          2.2431780401977504,
+          2.236131944793334
+        ],
+        "median_server_cpu_us_per_delivery": 2.2431780401977504,
+        "p99_upper_ms": {
+          "healthy": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-off-1.json",
+            "sha256": "f7343cb6c0a699a9db9f011dcb71654ff1ffb15221a355160b67ae64d2f06dfb"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-off-2.json",
+            "sha256": "0f54a12f87f2bdcd0df998781e5845d239b2d76988660353c702e245181f73c3"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-off-3.json",
+            "sha256": "4cd528bd2b485e33f78cf9db807b8742177cce00378553c9f471d9d500f33602"
+          }
+        ]
+      },
+      "on": {
+        "rates": [
+          1470034.0233735717,
+          1484617.4909786656,
+          1511554.4347886597
+        ],
+        "median": 1484617.4909786656,
+        "server_cpu_us_per_delivery": [
+          2.1183788897223086,
+          2.1043052885025566,
+          2.0772727834043985
+        ],
+        "median_server_cpu_us_per_delivery": 2.1043052885025566,
+        "p99_upper_ms": {
+          "healthy": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-on-1.json",
+            "sha256": "adaaa42f6868cedd98f078053de20822f981b27d3be8bfd10f82e899bcb7504a"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-on-2.json",
+            "sha256": "ed125f824f6cec51b8a75df78892bff8863ce1bccd08ccfa2632c570364588bb"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-private-on-3.json",
+            "sha256": "b37bc39b91436a251e2dd72ff2c5eed20de6e37cef9318f57eef008f6a1b4bc2"
+          }
+        ]
+      },
+      "on_change_from_selected_percent": -0.2855485334190555,
+      "on_change_from_off_percent": 0.1620385717670203
+    },
+    "roomonly": {
+      "selected": {
+        "rates": [
+          1718745.951754617,
+          1692360.0296469848,
+          1707423.9920813222
+        ],
+        "median": 1707423.9920813222,
+        "server_cpu_us_per_delivery": [
+          1.7651231446088167,
+          1.7802228271829001,
+          1.7826218331501098
+        ],
+        "median_server_cpu_us_per_delivery": 1.7802228271829001,
+        "p99_upper_ms": {
+          "healthy": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-1.json",
+            "sha256": "9a0fb3b41c09c59564f379241485e007ecdbd8082355404e2be2e3fa927537f8"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-2.json",
+            "sha256": "fbb2bed3a95a71700ef868a3371150a8c0e2bf138b5ab5ba11d589daae37f324"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-3.json",
+            "sha256": "790d213e90c89e61bd7570eb2be795dd1a2580a027c5ea2797cca53e7e5b2efd"
+          }
+        ]
+      },
+      "off": {
+        "rates": [
+          1683394.9385351476,
+          1703838.7267667057,
+          1686795.3028393835
+        ],
+        "median": 1686795.3028393835,
+        "server_cpu_us_per_delivery": [
+          1.787131151175755,
+          1.7954824253955537,
+          1.7972148801092676
+        ],
+        "median_server_cpu_us_per_delivery": 1.7954824253955537,
+        "p99_upper_ms": {
+          "healthy": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-1.json",
+            "sha256": "ed3677ce8a1cbc38aa4e37e7472810a7937afb87b971cf90b1fe350041b3f91c"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-2.json",
+            "sha256": "3cc309175198f60ffd9a4e2b2489036dd11571d58ff7d771dd8f6e15553e3e35"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-3.json",
+            "sha256": "4d17b011521138b4e96d0969fcc89e981670f684f7e6f43cfccf89473cadf2cc"
+          }
+        ]
+      },
+      "on": {
+        "rates": [
+          1675287.5554361294,
+          1688083.3970914325,
+          1704303.5754477137
+        ],
+        "median": 1688083.3970914325,
+        "server_cpu_us_per_delivery": [
+          1.801836391067427,
+          1.7898380635867366,
+          1.7946340295855026
+        ],
+        "median_server_cpu_us_per_delivery": 1.7946340295855026,
+        "p99_upper_ms": {
+          "healthy": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-1.json",
+            "sha256": "10f1d1114efadd858b2fa60a8cf0b6b7ee99f9aef78455edd731e5ca9b3b8312"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-2.json",
+            "sha256": "28a22a42994d83d2da1be6ab777434cad02aedfe17599bab4a3418dfc7f6e1ac"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-3.json",
+            "sha256": "992bf865813c2d3e4b4151ea837e26ba0514274c30afd2a21764eda10603330a"
+          }
+        ]
+      },
+      "on_change_from_selected_percent": -1.1327353416367258,
+      "on_change_from_off_percent": 0.07636340046006662
+    },
+    "mixed": {
+      "selected": {
+        "rates": [
+          1658449.749289574,
+          1665549.600696004,
+          1654603.3022700557
+        ],
+        "median": 1658449.749289574,
+        "server_cpu_us_per_delivery": [
+          2.025022465642437,
+          2.0004970477285884,
+          1.999538358910237
+        ],
+        "median_server_cpu_us_per_delivery": 2.0004970477285884,
+        "p99_upper_ms": {
+          "healthy": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-1.json",
+            "sha256": "dea43543bed0822c33f063523ab548e1e02bd03b2d569a192e4ededd90b02e28"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-2.json",
+            "sha256": "2e8c1d9805c5a2070a124823fcc7fbe487a480ff2432d163ba4446ed820d92b3"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-3.json",
+            "sha256": "cf7d0b31e2789cb0fba63d4cef23cedbf5bf222bd7166e3396a47d3d322b4c85"
+          }
+        ]
+      },
+      "off": {
+        "rates": [
+          1631921.3935031851,
+          1660864.1948951862,
+          1635769.4007733383
+        ],
+        "median": 1635769.4007733383,
+        "server_cpu_us_per_delivery": [
+          2.0298572810204667,
+          2.0130690469138894,
+          2.0184949759186366
+        ],
+        "median_server_cpu_us_per_delivery": 2.0184949759186366,
+        "p99_upper_ms": {
+          "healthy": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-1.json",
+            "sha256": "e5217df82b398ce6fd45cc3ddab32853d9598981228ba24a77c57ec0400a118d"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-2.json",
+            "sha256": "2a13e9c608249148a4466c747484d073633852a482bcc8d0be3db1694b8de50e"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-3.json",
+            "sha256": "86a7d59bd914a50399115e9555d028a694bc9981b8195302670deb5725c02f29"
+          }
+        ]
+      },
+      "on": {
+        "rates": [
+          1674827.3732932243,
+          1679776.1314383294,
+          1648948.539842601
+        ],
+        "median": 1674827.3732932243,
+        "server_cpu_us_per_delivery": [
+          1.971152123988553,
+          1.9751426585588785,
+          1.9947937298398506
+        ],
+        "median_server_cpu_us_per_delivery": 1.9751426585588785,
+        "p99_upper_ms": {
+          "healthy": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "receipts": [
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-1.json",
+            "sha256": "1af6f1702a4623c92fec89aa81053fb249571448ab27fee07557a02e55d34a64"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-2.json",
+            "sha256": "55b9cf29a65bab3244ed85f0316a2abecd6282e3ab2c57422f59bfab281e4f1b"
+          },
+          {
+            "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-3.json",
+            "sha256": "b9cbfd46fbaa458201d26eb19e566fd15c8c67b201c419402e07946b2cabf3d9"
+          }
+        ]
+      },
+      "on_change_from_selected_percent": 0.9875260924044227,
+      "on_change_from_off_percent": 2.3877431929843373
+    }
+  },
+  "capacity": {
+    "selected": {
+      "receipt": {
+        "path": "artifacts/webtransport/receive-arena-v2/capacity-selected.json",
+        "sha256": "2cb19c65963aa7d204f9847fbeef028ad151be72902d2b7018d03aaaaf6764e4"
+      },
+      "ready_rss_mib": 1843.41015625,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.266683983034454,
+        "server_cpu_seconds": 5.98,
+        "client_cpu_seconds": 6.789999999999999,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99669.40125557975,
+        "server_user_cpu_seconds": 4.890000000000001,
+        "server_system_cpu_seconds": 1.0899999999999999,
+        "round_trip": {
+          "max_ms": 10.9561,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.625183,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "ready_metrics": {
+        "war_quic_connections": 100000,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 16592,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 102700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 100000,
+        "war_incoming_bytes_total": 103700000,
+        "war_deliveries_total": 200000,
+        "war_delivered_bytes_total": 104600000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "cleanup_metrics": {
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 16592,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 616200000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 100000,
+        "war_incoming_messages_total": 600000,
+        "war_incoming_bytes_total": 622200000,
+        "war_deliveries_total": 1450000,
+        "war_delivered_bytes_total": 637350000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "retirement": {
+        "retirement_seconds": 2.026449953
+      },
+      "gate_details": {
+        "connected": {
+          "rooms": 6250,
+          "setup_seconds": 10.470973888,
+          "users": 100000
+        },
+        "ready": {
+          "all_connections_routed": true,
+          "per_user_histogram_value_bytes": null,
+          "proof_round_trip": {
+            "max_ms": 12.549718,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 16.777216,
+            "samples": 100000
+          },
+          "rooms": 6250,
+          "users": 100000
+        },
+        "measured": {
+          "active_users": 100000,
+          "churn_lifecycle": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "churn_round_trip": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "counts": {
+            "churn_cycles": 0,
+            "delivered_bytes": 414800000,
+            "deliveries": 400000,
+            "departure_checks": 0,
+            "joins": 0,
+            "normal_closes": 0,
+            "routing_checks": 400000,
+            "sent_bytes": 414800000,
+            "sent_messages": 400000,
+            "value_bytes": 410800000
+          },
+          "elapsed_seconds": 4.013267813,
+          "round_trip": {
+            "max_ms": 10.9561,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 2.625183,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "scheduled_seconds": 4
+        },
+        "postcheck": {
+          "all_connections_routed_again": true,
+          "proof_round_trip": {
+            "max_ms": 8.831556,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 100000
+          },
+          "users": 100000
+        },
+        "done": {
+          "retirement_seconds": 2.026449953
+        }
+      }
+    },
+    "off": {
+      "receipt": {
+        "path": "artifacts/webtransport/receive-arena-v2/capacity-off.json",
+        "sha256": "afa1c377fe349e7e66c603a270cb54b6830959d0495d3cfc80bb4d35e7aa37fd"
+      },
+      "ready_rss_mib": 1843.07421875,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265170589031186,
+        "server_cpu_seconds": 6.189999999999998,
+        "client_cpu_seconds": 6.840000000000003,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99698.84838740069,
+        "server_user_cpu_seconds": 4.98,
+        "server_system_cpu_seconds": 1.21,
+        "round_trip": {
+          "max_ms": 10.125252,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.016636,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "ready_metrics": {
+        "war_receive_arena_reserved_bytes": 0,
+        "war_receive_arena_peak_reserved_bytes": 0,
+        "war_quic_connections": 100000,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 12444,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 102700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 100000,
+        "war_incoming_bytes_total": 103700000,
+        "war_deliveries_total": 200000,
+        "war_delivered_bytes_total": 104600000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "cleanup_metrics": {
+        "war_receive_arena_reserved_bytes": 0,
+        "war_receive_arena_peak_reserved_bytes": 0,
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 16592,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 616200000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 100000,
+        "war_incoming_messages_total": 600000,
+        "war_incoming_bytes_total": 622200000,
+        "war_deliveries_total": 1450000,
+        "war_delivered_bytes_total": 637350000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "retirement": {
+        "retirement_seconds": 2.05370631
+      },
+      "gate_details": {
+        "connected": {
+          "rooms": 6250,
+          "setup_seconds": 10.816190933,
+          "users": 100000
+        },
+        "ready": {
+          "all_connections_routed": true,
+          "per_user_histogram_value_bytes": null,
+          "proof_round_trip": {
+            "max_ms": 13.012976,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 16.777216,
+            "samples": 100000
+          },
+          "rooms": 6250,
+          "users": 100000
+        },
+        "measured": {
+          "active_users": 100000,
+          "churn_lifecycle": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "churn_round_trip": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "counts": {
+            "churn_cycles": 0,
+            "delivered_bytes": 414800000,
+            "deliveries": 400000,
+            "departure_checks": 0,
+            "joins": 0,
+            "normal_closes": 0,
+            "routing_checks": 400000,
+            "sent_bytes": 414800000,
+            "sent_messages": 400000,
+            "value_bytes": 410800000
+          },
+          "elapsed_seconds": 4.012082451,
+          "round_trip": {
+            "max_ms": 10.125252,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 3.016636,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "scheduled_seconds": 4
+        },
+        "postcheck": {
+          "all_connections_routed_again": true,
+          "proof_round_trip": {
+            "max_ms": 8.566124,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 100000
+          },
+          "users": 100000
+        },
+        "done": {
+          "retirement_seconds": 2.05370631
+        }
+      }
+    },
+    "on": {
+      "receipt": {
+        "path": "artifacts/webtransport/receive-arena-v2/capacity-on.json",
+        "sha256": "217d7f9967aba8aa4152f3376dbee37d310620804e3e1a854aec120176766674"
+      },
+      "ready_rss_mib": 1844.6171875,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.264995910983998,
+        "server_cpu_seconds": 6.0,
+        "client_cpu_seconds": 6.930000000000003,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99699.65232979011,
+        "server_user_cpu_seconds": 4.919999999999998,
+        "server_system_cpu_seconds": 1.0700000000000003,
+        "round_trip": {
+          "max_ms": 10.023915,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.561178,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "ready_metrics": {
+        "war_receive_arena_reserved_bytes": 2621440,
+        "war_receive_arena_peak_reserved_bytes": 4325376,
+        "war_quic_connections": 100000,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 16592,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 102700000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 0,
+        "war_incoming_messages_total": 100000,
+        "war_incoming_bytes_total": 103700000,
+        "war_deliveries_total": 200000,
+        "war_delivered_bytes_total": 104600000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 100000,
+        "war_sessions": 100000,
+        "war_channels": 6251,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "cleanup_metrics": {
+        "war_receive_arena_reserved_bytes": 1048576,
+        "war_receive_arena_peak_reserved_bytes": 4390912,
+        "war_quic_connections": 0,
+        "war_datagrams_received": 0,
+        "war_datagrams_submitted": 0,
+        "war_datagram_bytes_submitted": 0,
+        "war_datagrams_dropped": 0,
+        "war_datagrams_oversized": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_read_buffer_peak_reserved_bytes": 16592,
+        "war_read_buffer_limit_bytes": 268435456,
+        "war_read_buffer_reservations_rejected_total": 0,
+        "war_accept_errors_total": 0,
+        "war_setup_errors_total": 0,
+        "war_ip_rejected_total": 0,
+        "war_read_buffer_reclaims_total": 0,
+        "war_read_buffer_reclaim_header_bytes_total": 0,
+        "war_read_buffer_reclaims_deferred_total": 0,
+        "war_idle_timeouts_total": 0,
+        "war_unstarted_writes_cancelled_total": 0,
+        "war_routing_reused_bytes_total": 616200000,
+        "war_routing_copied_bytes_total": 0,
+        "war_write_timeouts_total": 0,
+        "war_write_errors_total": 0,
+        "war_aborted_writes_total": 0,
+        "war_close_failures_total": 0,
+        "war_transport_disconnects_total": 0,
+        "war_global_pressure_total": 0,
+        "war_accepted_total": 100000,
+        "war_rejected_total": 0,
+        "war_origin_rejected_total": 0,
+        "war_handshake_errors_total": 0,
+        "war_joined_total": 100000,
+        "war_join_rejected_total": 0,
+        "war_disconnected_total": 100000,
+        "war_incoming_messages_total": 600000,
+        "war_incoming_bytes_total": 622200000,
+        "war_deliveries_total": 1450000,
+        "war_delivered_bytes_total": 637350000,
+        "war_slow_consumers_total": 0,
+        "war_protocol_errors_total": 0,
+        "war_rate_limited_total": 0,
+        "war_variable_bytes": 0,
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_channels": 1,
+        "war_queued_bytes": 0,
+        "war_draining": 0,
+        "war_native_connection_slots": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_output_queue_peak_capacity_bytes": 0
+      },
+      "retirement": {
+        "retirement_seconds": 2.071920437
+      },
+      "gate_details": {
+        "connected": {
+          "rooms": 6250,
+          "setup_seconds": 10.893355882,
+          "users": 100000
+        },
+        "ready": {
+          "all_connections_routed": true,
+          "per_user_histogram_value_bytes": null,
+          "proof_round_trip": {
+            "max_ms": 12.721313,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 16.777216,
+            "samples": 100000
+          },
+          "rooms": 6250,
+          "users": 100000
+        },
+        "measured": {
+          "active_users": 100000,
+          "churn_lifecycle": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "churn_round_trip": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "counts": {
+            "churn_cycles": 0,
+            "delivered_bytes": 414800000,
+            "deliveries": 400000,
+            "departure_checks": 0,
+            "joins": 0,
+            "normal_closes": 0,
+            "routing_checks": 400000,
+            "sent_bytes": 414800000,
+            "sent_messages": 400000,
+            "value_bytes": 410800000
+          },
+          "elapsed_seconds": 4.012050099,
+          "round_trip": {
+            "max_ms": 10.023915,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 400000
+          },
+          "schedule_lag": {
+            "max_ms": 2.561178,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 25000
+          },
+          "scheduled_seconds": 4
+        },
+        "postcheck": {
+          "all_connections_routed_again": true,
+          "proof_round_trip": {
+            "max_ms": 8.084256,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 100000
+          },
+          "users": 100000
+        },
+        "done": {
+          "retirement_seconds": 2.071920437
+        }
+      }
+    }
+  },
+  "allocation_diagnostic": {
+    "off": {
+      "receipt": {
+        "path": "artifacts/webtransport/receive-arena-v2/heap-off.json",
+        "sha256": "4d350865d5ceef49daa9de0a3cf629dd797f8498cb05cf960ada21d1310d49a2"
+      },
+      "gates": {
+        "connected": {
+          "live_objects": 6040677,
+          "live_bytes": 1779450047,
+          "allocation_events": 36271232,
+          "requested_bytes": 6638355084
+        },
+        "ready": {
+          "live_objects": 6141132,
+          "live_bytes": 1788502650,
+          "allocation_events": 37496605,
+          "requested_bytes": 7014950074
+        },
+        "measured": {
+          "live_objects": 6146522,
+          "live_bytes": 1795642559,
+          "allocation_events": 41134939,
+          "requested_bytes": 8473796219
+        },
+        "postcheck": {
+          "live_objects": 6144623,
+          "live_bytes": 1791134646,
+          "allocation_events": 42056680,
+          "requested_bytes": 8833899272
+        },
+        "done": {
+          "live_objects": 2714,
+          "live_bytes": 70935017,
+          "allocation_events": 46008487,
+          "requested_bytes": 9425605226
+        }
+      },
+      "delta": {
+        "allocation_events": 3638334,
+        "requested_bytes": 1458846145
+      }
+    },
+    "on": {
+      "receipt": {
+        "path": "artifacts/webtransport/receive-arena-v2/heap-on.json",
+        "sha256": "3b16794019323180a04b69feb20919141a7f31dc85871395a1fb068de8cf1397"
+      },
+      "gates": {
+        "connected": {
+          "live_objects": 6040758,
+          "live_bytes": 1779509483,
+          "allocation_events": 36276165,
+          "requested_bytes": 6640385018
+        },
+        "ready": {
+          "live_objects": 6139831,
+          "live_bytes": 1788766867,
+          "allocation_events": 37399904,
+          "requested_bytes": 6977923545
+        },
+        "measured": {
+          "live_objects": 6147814,
+          "live_bytes": 1797944267,
+          "allocation_events": 40646027,
+          "requested_bytes": 8196299410
+        },
+        "postcheck": {
+          "live_objects": 6147341,
+          "live_bytes": 1793742429,
+          "allocation_events": 41490855,
+          "requested_bytes": 8517795767
+        },
+        "done": {
+          "live_objects": 3285,
+          "live_bytes": 72242920,
+          "allocation_events": 45444537,
+          "requested_bytes": 9110965379
+        }
+      },
+      "delta": {
+        "allocation_events": 3246123,
+        "requested_bytes": 1218375865
+      }
+    },
+    "on_change_allocation_events_percent": -10.779961377927371,
+    "on_change_requested_bytes_percent": -16.483594299795058
+  },
+  "message_shapes": {
+    "results": [
+      {
+        "size": 64,
+        "arm": "off",
+        "rep": 1,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 1397989573,
+            "deliveries": 18394657,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 1397989004,
+            "sent_messages": 18394593,
+            "value_bytes": 1214043072
+          },
+          "elapsed_seconds": 6.000190022,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 3.097898,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "per_second": 3065668.2425982007,
+            "verified": 18394592
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 64,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 20.61,
+          "server_cpu_seconds_per_wall_second": 3.43489121585023,
+          "client_cpu_seconds": 22.13,
+          "client_cpu_seconds_per_wall_second": 3.6882165262865403
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-64-off-1.json"
+      },
+      {
+        "size": 64,
+        "arm": "on",
+        "rep": 1,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 1416101893,
+            "deliveries": 18632977,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 1416101324,
+            "sent_messages": 18632913,
+            "value_bytes": 1229772192
+          },
+          "elapsed_seconds": 6.000165244,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 3.316172,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "per_second": 3105399.808552339,
+            "verified": 18632912
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 64,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 20.34,
+          "server_cpu_seconds_per_wall_second": 3.3899066397112048,
+          "client_cpu_seconds": 26.67,
+          "client_cpu_seconds_per_wall_second": 4.444877585108055
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-64-on-1.json"
+      },
+      {
+        "size": 64,
+        "arm": "on",
+        "rep": 2,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 1424706309,
+            "deliveries": 18746193,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 1424705740,
+            "sent_messages": 18746129,
+            "value_bytes": 1237244448
+          },
+          "elapsed_seconds": 6.000155955,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 2.461784,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "per_second": 3124273.458988784,
+            "verified": 18746128
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 64,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 20.229999999999997,
+          "server_cpu_seconds_per_wall_second": 3.3715790308987055,
+          "client_cpu_seconds": 27.959999999999997,
+          "client_cpu_seconds_per_wall_second": 4.659878878098261
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-64-on-2.json"
+      },
+      {
+        "size": 64,
+        "arm": "off",
+        "rep": 2,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 1386446085,
+            "deliveries": 18242769,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 1386445516,
+            "sent_messages": 18242705,
+            "value_bytes": 1204018464
+          },
+          "elapsed_seconds": 6.000203765,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 2.017536,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "per_second": 3040347.4139348664,
+            "verified": 18242704
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 64,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 20.25,
+          "server_cpu_seconds_per_wall_second": 3.374885386079884,
+          "client_cpu_seconds": 29.419999999999998,
+          "client_cpu_seconds_per_wall_second": 4.903166817702231
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-64-off-2.json"
+      },
+      {
+        "size": 16384,
+        "arm": "off",
+        "rep": 1,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 13265829461,
+            "deliveries": 809105,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 13265828892,
+            "sent_messages": 809041,
+            "value_bytes": 13257738480
+          },
+          "elapsed_seconds": 6.001473843,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 40.985254,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "per_second": 134806.8859691271,
+            "verified": 809040
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 16384,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 16.639999999999997,
+          "server_cpu_seconds_per_wall_second": 2.7726522576464383,
+          "client_cpu_seconds": 29.5,
+          "client_cpu_seconds_per_wall_second": 4.915459230803482
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-16384-off-1.json"
+      },
+      {
+        "size": 16384,
+        "arm": "on",
+        "rep": 1,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 13646502213,
+            "deliveries": 832321,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 13646501644,
+            "sent_messages": 832257,
+            "value_bytes": 13638179072
+          },
+          "elapsed_seconds": 6.017969318,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 39.472004,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "per_second": 138295.15506346754,
+            "verified": 832256
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 16384,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 16.45,
+          "server_cpu_seconds_per_wall_second": 2.7334802041607884,
+          "client_cpu_seconds": 29.62,
+          "client_cpu_seconds_per_wall_second": 4.921926057583134
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-16384-on-1.json"
+      },
+      {
+        "size": 16384,
+        "arm": "on",
+        "rep": 2,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 13161413365,
+            "deliveries": 802737,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 13161412796,
+            "sent_messages": 802673,
+            "value_bytes": 13153386064
+          },
+          "elapsed_seconds": 6.002536587,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 40.457278,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "per_second": 133722.13369567588,
+            "verified": 802672
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 16384,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 16.22,
+          "server_cpu_seconds_per_wall_second": 2.7021909429304407,
+          "client_cpu_seconds": 28.740000000000002,
+          "client_cpu_seconds_per_wall_second": 4.787975813799068
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-16384-on-2.json"
+      },
+      {
+        "size": 16384,
+        "arm": "off",
+        "rep": 2,
+        "measurement": {
+          "churn": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "churn_lifecycles_per_worker": [],
+          "counts": {
+            "delivered_bytes": 13681657381,
+            "deliveries": 834465,
+            "joins": 64,
+            "normal_closes": 0,
+            "sent_bytes": 13681656812,
+            "sent_messages": 834401,
+            "value_bytes": 13673312800
+          },
+          "elapsed_seconds": 6.002202418,
+          "fanout": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "fanout_controller_timing": null,
+          "fanout_membership": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "global_join_probe": null,
+          "healthy": {
+            "max_ms": 40.298531,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "per_second": 139015.63824267546,
+            "verified": 834400
+          },
+          "inspection": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "per_second": 0.0,
+            "verified": 0
+          },
+          "private_payload_bytes": 16384,
+          "value_kind": "bytes",
+          "server_cpu_seconds": 16.95,
+          "server_cpu_seconds_per_wall_second": 2.823963408692892,
+          "client_cpu_seconds": 29.740000000000002,
+          "client_cpu_seconds_per_wall_second": 4.954847892302455
+        },
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/shape-16384-off-2.json"
+      }
+    ],
+    "medians": {
+      "64": {
+        "off": 3053007.8282665336,
+        "on": 3114836.633770562
+      },
+      "16384": {
+        "off": 136911.26210590126,
+        "on": 136008.64437957172
+      }
+    }
+  },
+  "paced": {
+    "records": [
+      {
+        "arm": "off",
+        "rep": 1,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-off-1.json",
+        "measurement": {
+          "elapsed_seconds": 5.003681085,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 8.359228,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 0.941301,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.430342,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2295,
+            "received_during_offer": 4093705,
+            "scheduled_arrival_age": {
+              "max_ms": 8.746227,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023426.25,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 8.350429,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023865
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023865,
+            "generated_source_updates": 1023865,
+            "generation_lag": {
+              "max_ms": 1.59685,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023865
+            },
+            "last_submit_ms": 3999.454601,
+            "not_generated": 135,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 320,
+            "received_during_offer": 1023545,
+            "scheduled_arrival_age": {
+              "max_ms": 9.369937,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023865
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255886.25,
+            "verified_unique": 1023865
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.110000000000001,
+          "server_cpu_cores_observation": 2.6200710591450496,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.209999999999997,
+          "client_cpu_cores_observation": 4.039026400100797,
+          "client_timed_udp_receive_drops": 0
+        }
+      },
+      {
+        "arm": "on",
+        "rep": 1,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-on-1.json",
+        "measurement": {
+          "elapsed_seconds": 5.004433718,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 7.441932,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 4.194304,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 0.717298,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.430696,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2150,
+            "received_during_offer": 4093850,
+            "scheduled_arrival_age": {
+              "max_ms": 7.923649,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023462.5,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 5.703879,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023872
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023872,
+            "generated_source_updates": 1023872,
+            "generation_lag": {
+              "max_ms": 1.323105,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023872
+            },
+            "last_submit_ms": 3999.486144,
+            "not_generated": 128,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 547,
+            "received_during_offer": 1023325,
+            "scheduled_arrival_age": {
+              "max_ms": 6.666303,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023872
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255831.25,
+            "verified_unique": 1023872
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.06,
+          "server_cpu_cores_observation": 2.6096858777498952,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.32,
+          "client_cpu_cores_observation": 4.060399466759408,
+          "client_timed_udp_receive_drops": 0
+        }
+      },
+      {
+        "arm": "on",
+        "rep": 2,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-on-2.json",
+        "measurement": {
+          "elapsed_seconds": 5.004574037,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 9.277184,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.274311,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 2.097152,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.985206,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2978,
+            "received_during_offer": 4093022,
+            "scheduled_arrival_age": {
+              "max_ms": 10.243977,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023255.5,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 5.084326,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023952
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023952,
+            "generated_source_updates": 1023952,
+            "generation_lag": {
+              "max_ms": 1.319008,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023952
+            },
+            "last_submit_ms": 4000.000165,
+            "not_generated": 48,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 448,
+            "received_during_offer": 1023504,
+            "scheduled_arrival_age": {
+              "max_ms": 6.04722,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023952
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255876.0,
+            "verified_unique": 1023952
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.020000000000001,
+          "server_cpu_cores_observation": 2.601620018754855,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 19.869999999999997,
+          "client_cpu_cores_observation": 3.970367878084405,
+          "client_timed_udp_receive_drops": 0
+        }
+      },
+      {
+        "arm": "off",
+        "rep": 2,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-off-2.json",
+        "measurement": {
+          "elapsed_seconds": 5.004454433,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 46.944796,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.072269,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 1.048576,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.756736,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 5322,
+            "received_during_offer": 4090678,
+            "scheduled_arrival_age": {
+              "max_ms": 47.706197,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1022669.5,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 51.123385,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 16.777216,
+              "samples": 1023957
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023957,
+            "generated_source_updates": 1023957,
+            "generation_lag": {
+              "max_ms": 1.326229,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023957
+            },
+            "last_submit_ms": 3999.819005,
+            "not_generated": 43,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 1206,
+            "received_during_offer": 1022751,
+            "scheduled_arrival_age": {
+              "max_ms": 51.950644,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 16.777216,
+              "samples": 1023957
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255687.75,
+            "verified_unique": 1023957
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.200000000000001,
+          "server_cpu_cores_observation": 2.637650152823362,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.779999999999998,
+          "client_cpu_cores_observation": 4.152300770884049,
+          "client_timed_udp_receive_drops": 9034
+        }
+      },
+      {
+        "arm": "off",
+        "rep": 3,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-off-3.json",
+        "measurement": {
+          "elapsed_seconds": 5.004180285,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 12.131579,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 0.93598,
+              "p50_upper_ms": 0.262144,
+              "p99_upper_ms": 0.524288,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.175907,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2637,
+            "received_during_offer": 4093363,
+            "scheduled_arrival_age": {
+              "max_ms": 12.25853,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023340.75,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 9.42602,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023814
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023814,
+            "generated_source_updates": 1023814,
+            "generation_lag": {
+              "max_ms": 2.180127,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023814
+            },
+            "last_submit_ms": 3999.272224,
+            "not_generated": 186,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 223,
+            "received_during_offer": 1023591,
+            "scheduled_arrival_age": {
+              "max_ms": 9.556281,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 8.388608,
+              "samples": 1023814
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255897.75,
+            "verified_unique": 1023814
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.100000000000001,
+          "server_cpu_cores_observation": 2.617811360487385,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.16,
+          "client_cpu_cores_observation": 4.028631834154632,
+          "client_timed_udp_receive_drops": 0
+        }
+      },
+      {
+        "arm": "on",
+        "rep": 3,
+        "receipt": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-arena-v2/paced-on-3.json",
+        "measurement": {
+          "elapsed_seconds": 5.00600913,
+          "fanout": {
+            "arrival_age": {
+              "max_ms": 6.900047,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 4096000,
+            "generated_source_updates": 4000,
+            "generation_lag": {
+              "max_ms": 1.637541,
+              "p50_upper_ms": 1.048576,
+              "p99_upper_ms": 1.048576,
+              "samples": 4000
+            },
+            "last_submit_ms": 3999.677958,
+            "not_generated": 0,
+            "out_of_order": 0,
+            "planned_source_updates": 4000,
+            "received_during_drain": 2323,
+            "received_during_offer": 4093677,
+            "scheduled_arrival_age": {
+              "max_ms": 7.653252,
+              "p50_upper_ms": 4.194304,
+              "p99_upper_ms": 8.388608,
+              "samples": 4096000
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 1023419.25,
+            "verified_unique": 4096000
+          },
+          "mode": "stream",
+          "observation_seconds": 5.0,
+          "offered_seconds": 4,
+          "private": {
+            "arrival_age": {
+              "max_ms": 5.177763,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023952
+            },
+            "duplicates": 0,
+            "expected_generated_deliveries": 1023952,
+            "generated_source_updates": 1023952,
+            "generation_lag": {
+              "max_ms": 1.876123,
+              "p50_upper_ms": 0.524288,
+              "p99_upper_ms": 1.048576,
+              "samples": 1023952
+            },
+            "last_submit_ms": 3999.801415,
+            "not_generated": 48,
+            "out_of_order": 0,
+            "planned_source_updates": 1024000,
+            "received_during_drain": 509,
+            "received_during_offer": 1023443,
+            "scheduled_arrival_age": {
+              "max_ms": 6.254381,
+              "p50_upper_ms": 2.097152,
+              "p99_upper_ms": 4.194304,
+              "samples": 1023952
+            },
+            "unreceived_within_window": 0,
+            "verified_during_offer_per_second": 255860.75,
+            "verified_unique": 1023952
+          },
+          "reliable_complete": true,
+          "server_cpu_seconds": 13.07,
+          "server_cpu_cores_observation": 2.610862197928113,
+          "server_timed_udp_receive_drops": 0,
+          "client_cpu_seconds": 20.57,
+          "client_cpu_cores_observation": 4.1090616229059895,
+          "client_timed_udp_receive_drops": 0
+        }
+      }
+    ]
+  },
+  "validation": {
+    "library": "174 passed,1 existing ignored",
+    "network": "13 WebTransport tests plus forced-transmit, read-budget and config-secret integration suites passed.",
+    "clippy": "release all-targets,-Dwarnings passed",
+    "docs": "docs/operations.md describes knobs, limits, caching and metrics"
+  },
+  "limits": [
+    "Loopback fixed-client comparisons; three12s rotations. Small throughput differences are not confidence intervals.",
+    "Allocator diagnostics are separate from ordinary throughput/RSS and include monitoring/background work.",
+    "Preallocation is lazy and per worker, not per connection or an eager process startup reservation.",
+    "Arena backing cap excludes allocator metadata and is not an RSS limit; existing staging and output budgets remain independent.",
+    "This changes reliable application record bodies, not QUIC UDP ingress storage, receive-assembler metadata or legacy WebSocket decoder storage.",
+    "No full native-suite, browser, injected-loss or deployment acceptance is claimed; broader transport parity remains unmet."
+  ],
+  "requirements_audit": {
+    "profile_existing_path": "Per-record Vec allocation confirmed in RecordReader and earlier allocation stacks.",
+    "configure_and_bound": "CLI/env fields validated; separate arena backing quota includes held output slices and worker caches.",
+    "reuse_without_corruption": "Retained views, final-slice return, cancellation, fragmentation and exact wire payload/FIFO checks pass.",
+    "fallback": "Unit and real UDP/TLS/H3 mixed-size tests cover exhaustion and oversized records without rejecting admissible traffic.",
+    "measure_actual_result": "Frozen source/images,27 ordinary runs,8 size-shape runs,3 ordinary100k captures,2 separate heap diagnostics and6 paced captures.",
+    "usable_integration": "Tested uninstrumented image installed in target/release/war-relay; source375 inputs and both CLI flags verified. Arena default remains disabled."
+  },
+  "evidence": [
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/build.json",
+      "sha256": "4ab5cc87c52607e86e0dced8277d42441e2fb15d28e22301da8b525919087467"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/source-inputs.json",
+      "sha256": "39c8f66dff7f509f24059eadc084dfa268b26aeb59e4556557fe352a410143bf"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/source.tar.gz",
+      "sha256": "e5bc8556a2639832a64e75ac9a049e83556e2311d6ef9d66b5d281ca4b0e8fb7"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-summary.json",
+      "sha256": "3ebdbe374d5fad94c8d24f8c810551ce814704e04051e4edff1c17685a3f32f3"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-summary.json",
+      "sha256": "8c7710dac6be800d04364355b69f49bbf26e68d2cf483dd318b3cbf4624bb525"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-summary.json",
+      "sha256": "314a2c1897612fb05bdd5832ad3835e782492fb18dd20df3fd0f9916077290ae"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/type-layout-diagnostic.log",
+      "sha256": "d28bab37f7f75972cd4329ab76e8533e246c8c1df6fff6039ccdea26fd423c9a"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/local-installation.json",
+      "sha256": "8ae74fa12ac28305d34c67330d2edfe4d7a79c3cd5e03c21878f132382b8601e"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-lib-tests-0002.log",
+      "sha256": "de8fded4196f01045427ea06e02fd6c5b5e7e93e89c4f0a3b9f251ff24f9e990"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-network-tests-0002.log",
+      "sha256": "6b07c36590fcb9eb443dd9f93bd534d66da40e69353baba8ceeb6ca53e09bd98"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-clippy-0001.log",
+      "sha256": "c0361fc890446e97eb90697821db8505d7feec3cb409c79e046bb68bd2a8dbe9"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-1.json",
+      "sha256": "e5217df82b398ce6fd45cc3ddab32853d9598981228ba24a77c57ec0400a118d"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-2.json",
+      "sha256": "2a13e9c608249148a4466c747484d073633852a482bcc8d0be3db1694b8de50e"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-off-3.json",
+      "sha256": "86a7d59bd914a50399115e9555d028a694bc9981b8195302670deb5725c02f29"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-1.json",
+      "sha256": "1af6f1702a4623c92fec89aa81053fb249571448ab27fee07557a02e55d34a64"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-2.json",
+      "sha256": "55b9cf29a65bab3244ed85f0316a2abecd6282e3ab2c57422f59bfab281e4f1b"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-on-3.json",
+      "sha256": "b9cbfd46fbaa458201d26eb19e566fd15c8c67b201c419402e07946b2cabf3d9"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-1.json",
+      "sha256": "dea43543bed0822c33f063523ab548e1e02bd03b2d569a192e4ededd90b02e28"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-2.json",
+      "sha256": "2e8c1d9805c5a2070a124823fcc7fbe487a480ff2432d163ba4446ed820d92b3"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-mixed-selected-3.json",
+      "sha256": "cf7d0b31e2789cb0fba63d4cef23cedbf5bf222bd7166e3396a47d3d322b4c85"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-off-1.json",
+      "sha256": "f7343cb6c0a699a9db9f011dcb71654ff1ffb15221a355160b67ae64d2f06dfb"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-off-2.json",
+      "sha256": "0f54a12f87f2bdcd0df998781e5845d239b2d76988660353c702e245181f73c3"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-off-3.json",
+      "sha256": "4cd528bd2b485e33f78cf9db807b8742177cce00378553c9f471d9d500f33602"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-on-1.json",
+      "sha256": "adaaa42f6868cedd98f078053de20822f981b27d3be8bfd10f82e899bcb7504a"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-on-2.json",
+      "sha256": "ed125f824f6cec51b8a75df78892bff8863ce1bccd08ccfa2632c570364588bb"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-on-3.json",
+      "sha256": "b37bc39b91436a251e2dd72ff2c5eed20de6e37cef9318f57eef008f6a1b4bc2"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-1.json",
+      "sha256": "54daaecd8594a88539d50e98f0b35b17755d96bef39e9c993ab16f1c3d938505"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-2.json",
+      "sha256": "dcf5f6c76a16b579f1408b277681be42094ad78d4227900c8e2ecb80dc70a05f"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-private-selected-3.json",
+      "sha256": "4ce32e2201dba8c5d9a48e91a1e488d630244e93626989b600a6464a3b937bf3"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-1.json",
+      "sha256": "ed3677ce8a1cbc38aa4e37e7472810a7937afb87b971cf90b1fe350041b3f91c"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-2.json",
+      "sha256": "3cc309175198f60ffd9a4e2b2489036dd11571d58ff7d771dd8f6e15553e3e35"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-off-3.json",
+      "sha256": "4d17b011521138b4e96d0969fcc89e981670f684f7e6f43cfccf89473cadf2cc"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-1.json",
+      "sha256": "10f1d1114efadd858b2fa60a8cf0b6b7ee99f9aef78455edd731e5ca9b3b8312"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-2.json",
+      "sha256": "28a22a42994d83d2da1be6ab777434cad02aedfe17599bab4a3418dfc7f6e1ac"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-on-3.json",
+      "sha256": "992bf865813c2d3e4b4151ea837e26ba0514274c30afd2a21764eda10603330a"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-1.json",
+      "sha256": "9a0fb3b41c09c59564f379241485e007ecdbd8082355404e2be2e3fa927537f8"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-2.json",
+      "sha256": "fbb2bed3a95a71700ef868a3371150a8c0e2bf138b5ab5ba11d589daae37f324"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-roomonly-selected-3.json",
+      "sha256": "790d213e90c89e61bd7570eb2be795dd1a2580a027c5ea2797cca53e7e5b2efd"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/long-summary.json",
+      "sha256": "3ebdbe374d5fad94c8d24f8c810551ce814704e04051e4edff1c17685a3f32f3"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-16384-off-1.json",
+      "sha256": "06f555a0b7c791b5e836334119a51a75856b98f72f98f2c553bc0584eb35b60c"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-16384-off-2.json",
+      "sha256": "7beda26e24dbe60b13280a6e069d919f5e9cac39eadc7a7a2067554987c2a779"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-16384-on-1.json",
+      "sha256": "e9a743ca57bfc35ba5cb21a3647d9ebf59c9455e3103904ecdf9fac63b8cfd66"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-16384-on-2.json",
+      "sha256": "1f74284fb3aed785e0a8b061de6c3e8dde2debf344efcfd0e29ca73953421e62"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-64-off-1.json",
+      "sha256": "d470db8da702f73124adb862e53c1c1cba9b027dc1cbd6dc1982258787e5b114"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-64-off-2.json",
+      "sha256": "eaf6953911af9f51011be61df74608a55e53854c54dc5ee9b49b1bd2463e7b93"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-64-on-1.json",
+      "sha256": "a1541f619fcf890ce70794894a1624b02bfc82f6cd00d3703d0fc1e1e245d070"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-64-on-2.json",
+      "sha256": "352ba7f46ca714909fa2de7df66498c2e15fd69867af66e769991783fa809299"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/shape-summary.json",
+      "sha256": "8c7710dac6be800d04364355b69f49bbf26e68d2cf483dd318b3cbf4624bb525"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-off-1.json",
+      "sha256": "6478ff3b792cc94e64060f0cc333539f983129d06613e2286899fe08b386416d"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-off-2.json",
+      "sha256": "7f5aea817fee2fd1cc278cec3d449854fad1c74b66a388b43579052a50f905d1"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-off-3.json",
+      "sha256": "d16779ec40119a3419fcb5b74c58e6b6a8c46eab8831efd39f37ee2ccdbfc2e5"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-on-1.json",
+      "sha256": "a025dd4686d0d9f3d94abc143485a54a3cc676d40cd7f9fffaaa8963825b8560"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-on-2.json",
+      "sha256": "4d95ebe3a69d09ec4a48f6fb3adcdecbc8c7fdd55808d0c255e93681fa770f65"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-on-3.json",
+      "sha256": "6eae9df0565ea4c902120800cdd483030eeceb0dbda4f59e1d87da13265ce725"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/paced-summary.json",
+      "sha256": "314a2c1897612fb05bdd5832ad3835e782492fb18dd20df3fd0f9916077290ae"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/capacity-off.json",
+      "sha256": "afa1c377fe349e7e66c603a270cb54b6830959d0495d3cfc80bb4d35e7aa37fd"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/capacity-on.json",
+      "sha256": "217d7f9967aba8aa4152f3376dbee37d310620804e3e1a854aec120176766674"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/capacity-selected.json",
+      "sha256": "2cb19c65963aa7d204f9847fbeef028ad151be72902d2b7018d03aaaaf6764e4"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/heap-off.json",
+      "sha256": "4d350865d5ceef49daa9de0a3cf629dd797f8498cb05cf960ada21d1310d49a2"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/heap-on.json",
+      "sha256": "3b16794019323180a04b69feb20919141a7f31dc85871395a1fb068de8cf1397"
+    },
+    {
+      "path": "artifacts/webtransport/receive-arena-v2/completion-audit.json",
+      "sha256": "e1ec45b32ca1629b5e77daddcd8c3cc9cf07320726dcc0cbe634f96169d9bb93"
+    }
+  ],
+  "type_layout": {
+    "reader_bytes": 96,
+    "previous_reader_bytes": 80,
+    "application_task_cell_bytes": 1792,
+    "previous_application_task_cell_bytes": 1792,
+    "record_body_bytes": 40,
+    "arena_buffer_bytes": 40,
+    "owned_message_metadata_bytes": 48,
+    "scope": "Separate root-library -Zprint-type-sizes diagnostic; ordinary timing uses the frozen uninstrumented image."
+  },
+  "local_installation": {
+    "before_sha256": "92ff8f919dc3cca2f5319b5891b40dddba8973f3d4879d7ccace8227febfdaf6",
+    "after_sha256": "4429ea3401928321c2bdc2b391a1670256ffbb25f858f84d85742fb877c2188d",
+    "source_inputs_verified": 375,
+    "cli_flags_verified": [
+      "--receive-arena-bytes",
+      "--receive-arena-page-bytes"
+    ],
+    "default_arena_bytes": 0,
+    "selection": "Install tested configurable implementation locally; arena remains opt-in. Broader transport pivot is not accepted."
+  },
+  "decision": "Keep a configurable opt-in arena for demonstrably lower allocation churn and private CPU; do not claim general throughput/RSS improvement or enable it automatically.",
+  "completion_audit": {
+    "requirements_proven": [
+      "profile_existing_path",
+      "configure_and_bound",
+      "reuse_without_corruption",
+      "fallback",
+      "measure_actual_result",
+      "usable_integration"
+    ],
+    "source_inputs_verified": 375,
+    "ordinary_runs": 27,
+    "size_runs": 8,
+    "paced_runs": 6,
+    "capacity_sessions_each": 100000,
+    "capacity_measured_deliveries_each": 400000,
+    "tests_passed": 204,
+    "existing_ignored": 1,
+    "source_and_installed_image_match": true,
+    "original_heaps_preserved": 6,
+    "broader_transport_parity_accepted": false,
+    "arena_enabled_by_default": false
+  }
+}

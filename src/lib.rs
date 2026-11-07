@@ -4,6 +4,7 @@ mod admission;
 mod common;
 pub mod config;
 mod frame;
+mod receive_arena;
 pub mod metrics;
 pub mod origin;
 pub mod protocol;

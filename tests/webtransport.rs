@@ -75,6 +75,7 @@ async fn fixture() -> Fixture {
         auth_password: Some("test".into()),
         messages_per_second: 0,
         bytes_per_second: 0,
+        receive_arena_bytes: 512 * 1024,
         ..Config::default()
     })
     .await
@@ -550,6 +551,7 @@ async fn partially_written_private_record_resumes_before_the_next_record() {
         Config {
             messages_per_second: 0,
             bytes_per_second: 0,
+            receive_arena_bytes: 512 * 1024,
             ..Config::default()
         },
         Some(transport),
@@ -587,4 +589,36 @@ async fn partially_written_private_record_resumes_before_the_next_record() {
     assert_eq!(relay.metrics.write_timeouts.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.output_queue_capacity_bytes.load(Relaxed), 0);
+}
+
+#[tokio::test]
+async fn receive_arena_fallback_preserves_mixed_record_sizes_and_order() {
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        messages_per_second: 0,
+        bytes_per_second: 0,
+        receive_arena_bytes: 64,
+        receive_arena_page_bytes: 64,
+        ..Config::default()
+    })
+    .await;
+    let mut source = Client::open(&endpoint, &url, "arena-source").await;
+    let mut sink = Client::open(&endpoint, &url, "arena-sink").await;
+    let mut expected = Vec::new();
+    for n in 0..64u8 {
+        let body = vec![n; if n % 2 == 0 { 17 } else { 1024 }];
+        write_record(&mut source.send, &route(sink.id, &body))
+            .await
+            .unwrap();
+        expected.push(body);
+    }
+    for body in expected {
+        verify(&sink.read().await, source.id, &body);
+    }
+    let arena = relay.metrics.receive_arena_budget.as_ref().unwrap();
+    assert_eq!(arena.peak(), 64);
+    assert!(arena.reserved() <= 64);
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(relay.counts().0, 0);
+    assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
 }

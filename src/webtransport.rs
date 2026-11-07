@@ -535,6 +535,7 @@ async fn session(
                     &mut receive,
                     relay.config.max_message_bytes,
                     relay.metrics.read_budget.as_ref(),
+                    Some(&relay.receive_arena),
                     cx,
                 ) {
                     Poll::Pending => break Poll::Pending,

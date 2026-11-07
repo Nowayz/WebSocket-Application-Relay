@@ -3654,3 +3654,65 @@ The [profiled recommendations report](reports/webtransport-profiled-recommendati
 records the requirement audit, current performance and resource metrics, separate
 heap/profile diagnostics, 472 hashed evidence receipts, invalid trial exclusions,
 and the remaining acceptance gaps. All six original heap files are preserved.
+
+### Configurable reliable receive arena — 2026-11-07
+
+Reliable application records previously allocated a new Vec body for every
+message. The optional receive arena now splits writable regions from bounded
+worker-local BytesMut slabs. Bytes::from_owner retains the slab reservation
+through every published slice; only the final slice can recover a completed
+allocation into a single spare-page cache. There is no global pool mutex or new
+unsafe code. Existing staging, queue, message-size, validation and timeout limits
+remain intact. Exhaustion and records larger than a page use the original path.
+
+`--receive-arena-bytes` caps all arena backing, including cached pages and pages
+held by consumers; zero disables it and remains the default. The tested setting
+is 8 MiB. `--receive-arena-page-bytes` is the minimum slab allocation on an active
+worker, shared across connections; its default and tested setting is 64 KiB.
+Allocation is lazy, so this does not reserve a slab for each connection.
+The operations guide documents both flags, environment variables and gauges.
+
+The final frozen image is `4429ea34`; on/off comparisons use this same binary,
+with the exact previous `91337694` image as an additional control. Three rotated
+serialized 12-second repetitions per workload all pass received-work/cleanup:
+
+| Workload | Previous deliveries/s | Arena off | Arena on |
+| --- | ---: | ---: | ---: |
+| Private | 1,488,869 | 1,482,216 | 1,484,617 |
+| Room fanout | 1,707,424 | 1,686,795 | 1,688,083 |
+| Mixed | 1,658,450 | 1,635,769 | 1,674,827 |
+
+This is not a general throughput improvement. Same-image mixed throughput rises
+2.39%; private and fanout changes are small. Same-image median private server
+CPU falls from 2.243 to 2.104 microseconds per verified delivery (6.19%). All
+ordinary p99 histogram upper bounds are unchanged. Separate tiny/large-message
+checks favor arena-on by 2.03% at 64 bytes and arena-off by 0.66% at 16 KiB;
+these are two repetitions per shape, not confidence intervals.
+
+At 100,000 sessions, ready ordinary RSS is 1,843.41 / 1,843.07 / 1,844.62 MiB
+for previous/off/on. Each verifies 400,000 measured deliveries with a 1.05 ms
+round-trip p99 histogram upper bound and clean resource retirement. The arena
+does not establish a resident-memory reduction. In a separate replacement-
+allocator capture, ready-to-measured allocation events fall from 3,638,334 to
+3,246,123 (10.78%) and requested bytes from 1,458,846,145 to 1,218,375,865
+(16.48%). This includes monitoring/background work, not isolated message costs.
+An earlier bump-only version reduced request count but not byte traffic; the
+completed-page spare is the material reuse improvement.
+
+Compiler layout verifies RecordReader grows from 80 to 96 bytes while the
+allocated application task remains 1,792 bytes: existing alignment padding
+absorbs the change. This does not remove QUIC's separate receive-assembler
+capacity or connection-state footprint. Cached arena backing is reported
+separately from staging and can remain warm until the worker runtime exits.
+
+Validation: 174 library tests pass (one existing ignored); 30 integration tests
+cover WebTransport, forced transmit retry, read budgets and configuration secrets;
+release all-target Clippy passes. Six paced reliable runs deliver all generated
+work with zero missing, duplicate or out-of-order deliveries. The feature remains
+opt-in because workload-dependent timing and a bounded warm cache do not meet
+the broader pivot's joint improvement criterion. No browser, injected-loss,
+full native-suite or deployment acceptance is claimed.
+
+The [receive-arena report](reports/webtransport-receive-arena-2026-11-07.json)
+records frozen sources, image identities, ordinary/allocator results, size and
+paced-load checks, configuration, validation and the completion audit.

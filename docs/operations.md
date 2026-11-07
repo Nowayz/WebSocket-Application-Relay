@@ -231,6 +231,8 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--queue-bytes` | `WAR_QUEUE_BYTES` | `33554432` (32 MiB) | At least `max-message-bytes` + 10 | Per-session output byte allowance |
 | `--total-queue-bytes` | `WAR_TOTAL_QUEUE_BYTES` | `268435456` (256 MiB) | At least `queue-bytes` | Global output budget shared by all sessions, bodies and captured views |
 | `--read-buffer-bytes` | `WAR_READ_BUFFER_BYTES` | `4096` | 1 to 1048576 | Base decoder receive storage per connection |
+| `--receive-arena-bytes` | `WAR_RECEIVE_ARENA_BYTES` | `0` (disabled) | 0, or at least `receive-arena-page-bytes`; must fit the address space | Process-wide backing-store cap for reliable WebTransport receive slabs, including retained published slices |
+| `--receive-arena-page-bytes` | `WAR_RECEIVE_ARENA_PAGE_BYTES` | `65536` (64 KiB) | Positive and fits the address space | Minimum slab allocation on first use by a worker, shared across its connections |
 | `--total-read-buffer-bytes` | `WAR_TOTAL_READ_BUFFER_BYTES` | `1073741824` (1 GiB) | 0, or at least 2 × max(`read-buffer-bytes`, 20480) | Shared decoder staging allowance; 0 disables that admission check |
 | `--read-buffer-idle-secs` | `WAR_READ_BUFFER_IDLE_SECS` | `5` | 0 to 86400 | Reclaim enlarged decoder storage after this long without large input; 0 disables |
 | `--max-variables` | `WAR_MAX_VARIABLES` | `256` | 1 to 4294967295 | Variables per channel |
@@ -268,6 +270,29 @@ commonly doubles a request), plus the resident baseline of the process. That
 total must fit under the cgroup memory limit with headroom, or the OOM killer
 ends the process instead of the budgets refusing admission. Raise a budget
 only together with the limit that contains it.
+
+When enabling the reliable WebTransport receive arena, also allow up to
+`WAR_RECEIVE_ARENA_BYTES` of backing storage. For example,
+`--receive-arena-bytes 8388608 --receive-arena-page-bytes 65536` permits up to
+8 MiB of slabs, allocating a 64 KiB page lazily on a worker's first eligible
+record. This is shared across connections; it does not preallocate 64 KiB for
+every session. Workers reuse released prefixes and append into unused page space.
+The final slice can return a completed slab to a single spare-page cache on its
+worker, so the next allocation can reuse its backing storage. Both active and
+spare pages count against the same process cap; no global pool lock is used.
+Each published slice retains its page until its final consumer releases it.
+The arena budget includes those retained pages and worker caches. Once that cap
+is reached, or a record exceeds the page size, the reader uses its ordinary
+budgeted allocation path. Arena pressure therefore does not reject otherwise
+admissible messages. Message-size, staging, queue, rate and timeout limits still
+apply. Datagram payload allocation and the legacy WebSocket decoder are unchanged.
+
+`war_receive_arena_reserved_bytes` and `war_receive_arena_peak_reserved_bytes`
+report backing reservations separately from decoder staging. Arena storage may
+remain cached after connections retire and is released when the worker runtime
+exits; its reservation must remain within the configured cap. A larger page can
+reduce payload allocations but lets one retained small slice pin more capacity.
+Choose the page size and cap using actual message sizes and slow-recipient load.
 
 After a load test, check that the six gauges the release gate requires to be
 zero have returned to zero: `war_connections`, `war_sessions`,

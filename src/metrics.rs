@@ -16,6 +16,7 @@ pub struct Metrics {
     pub datagrams_dropped: AtomicU64,
     pub datagrams_oversized: AtomicU64,
     pub read_budget: Option<Arc<ReadBudget>>,
+    pub receive_arena_budget: Option<Arc<ReadBudget>>,
     pub accepted: AtomicU64,
     pub accept_errors: AtomicU64,
     pub setup_errors: AtomicU64,
@@ -85,6 +86,20 @@ impl Metrics {
         let mut text = String::with_capacity(8192);
         let budget = self.read_budget.as_deref();
         for (prefix, value) in [
+            sample!(
+                "receive_arena_reserved_bytes",
+                "gauge",
+                self.receive_arena_budget
+                    .as_ref()
+                    .map_or(0, |b| b.reserved()) as u64,
+                "Backing bytes held by reliable receive arena pages, including worker cache and published messages."
+            ),
+            sample!(
+                "receive_arena_peak_reserved_bytes",
+                "gauge",
+                self.receive_arena_budget.as_ref().map_or(0, |b| b.peak()) as u64,
+                "Peak reliable receive arena backing reservation."
+            ),
             sample!(
                 "quic_connections",
                 "gauge",
