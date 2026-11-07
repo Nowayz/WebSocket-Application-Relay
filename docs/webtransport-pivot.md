@@ -2975,3 +2975,39 @@ does not cover earlier reservation rejection or an already-closed queue.
 Actual sample gaps, disabled scheduler-statistics limits, all receipts and
 44 verified immutable build/source/log references are retained in the
 [negative probe report](reports/webtransport-stronger-send-state-negative-probe-2026-11-06.json).
+
+## ChaCha preference screen rejected — 2026-11-06
+
+The server-only TLS policy candidate prefers ChaCha20-Poly1305 while retaining
+AES suites, the certificate resolver, ALPN and transport configuration. Two
+separate debug diagnostics verify 64 actual negotiations each: selected
+baseline AES-256-GCM and candidate ChaCha20-Poly1305. Debug timings are excluded.
+The first preflight is preserved as a controller failure: the shared transport
+helper reset the requested log filter. A new diagnostic-only wrapper applies
+the filter after that helper; ordinary preparation remains unchanged.
+
+All 18 ordinary 12-second comparisons pass, using unchanged inspection clients
+and three rotated-order repetitions for each workload. Verified received
+private-plus-fanout medians are:
+
+| Workload | Selected AES / s | ChaCha candidate / s | Change |
+| --- | ---: | ---: | ---: |
+| Private | 1,467,264 | 1,123,080 | -23.46% |
+| Room | 1,564,243 | 1,379,075 | -11.84% |
+| Mixed | 1,514,543 | 1,279,835 | -15.50% |
+
+Median server CPU rises from 40.00 to 41.42 s, 36.41 to 38.95 s and 40.27 to
+42.25 s respectively, despite fewer verified deliveries. Server CPU per
+delivery rises 35.28%, 21.48% and 24.16%; client CPU per delivery also rises.
+The cipher changes both endpoints' work, so the throughput cost is not
+attributed exclusively to server computation. Reliable paced controls pass
+3/3 per image, and datagram controls pass 3/3 per image.
+
+Reject this cipher preference and do not proceed with the proposed ChaCha Ring
+compaction. Cipher choice alone changes no Ring key representation, and no
+memory saving is claimed. Source and selected `1c8e2d56` binary remain restored.
+No candidate browser, loss/bulk freshness or memory acceptance was needed for
+this rejected CPU screen. All 32 completed cases, the failed logging preflight,
+source/build hashes, exact distributions, both-endpoint CPU, latency and
+datagram observation limits are in the
+[cipher screen report](reports/webtransport-chacha-preference-screen-2026-11-06.json).
