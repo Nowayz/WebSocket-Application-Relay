@@ -3368,3 +3368,59 @@ null failed measurements, source/binary/build/integration bindings, reproduction
 instructions and hashed raw references. The full 603,310-byte terminal screen
 remains referenced for every raw counter map rather than duplicated into the
 bounded report.
+
+## Selected-peer credit and sender backlog captured — 2026-11-06
+
+A separately reconstructed canonical-B 50-us client traces queue service,
+connection processing, ordered reads, application verification and credit
+encoding/transmit association for 32 private recipients and eight fixed fanout
+sentinels. A separately named diagnostic server adds a joined relay ID and an
+earlier literal refusal timestamp to the frozen `737b50de` lineage. These are
+diagnostic images; retained product `91337694` and its configured limits are
+unchanged. Numeric relay ID and stream ID provide the cross-process join.
+
+Seven offers complete the predefined experiment: passing initial control, four
+marked passes, one marked refusal and passing final control. No further marked
+offer follows that first refusal. Two tooling issues are preserved separately:
+the first parser omitted valid reason-0 state wakes, and a later controller
+recognized EOF but initially missed the equivalent natural end-gate exit wording.
+Stored data was reparsed, only the unused budget resumed, and the failed workload
+still has no final measurement or reconstructed generated counts.
+
+The failing private recipient, stream 4, retains all 2909 selected records with
+no overwrite. At the literal warning the server's stream maximum and admitted
+write frontier are both 25,896,519 B. The client's latest encoded credit maximum
+is also 25,896,519 B, with local socket acceptance recorded. This demonstrates
+agreement on that value, without assigning receipt or ACK to a particular
+duplicate encoding. Bracketing consumed-byte observations place its unadvertised
+read advance at 103,638–133,462 B, below the existing 156,250 B renewal threshold.
+The observations do not support a lost newly queued credit update.
+
+The selected receiver continues ordered transport and verified application
+progress. Earlier ordered-gap branch visits follow shared client UDP pressure,
+but their cumulative count is not a current missing-packet count: the last
+pre-warning snapshot has consumed prefix equal to highest received end and no
+buffered bytes. The shared socket has 12,034 drops before refusal, without
+connection-specific loss attribution. Sampled service/readiness intervals are
+short; the final eight milliseconds contain no sampled queue/wake/lock pairs,
+so that interval remains unavailable rather than zero-delay evidence.
+
+There is a rigorous sender-backlog lower bound. The admitted stream frontier
+25,896,519 B exceeds lifetime gross returned UDP output 25,569,832 B by
+326,687 B. Every returned transmit counts its full bytes before `try_send`,
+including headers, control, retransmissions, GSO and other streams. The output
+submission gate prevents this stream's admission frontier advancing across the
+two warning snapshots. Consequently at least 326,687 admitted stream bytes have
+not appeared in accounted returned output or been locally accepted. This is not
+the exact unsent-byte value and does not classify the full 1,130,061 B retained
+send storage. The packetizer's exact unsent/retransmission/ACK-retention partition
+and its pacing, congestion or service cause remain unresolved.
+
+This narrows the failure to exhausted write admission and a bounded output queue
+behind a nonzero sender backlog, with receiver credit progress continuing. It
+does not identify a unique upstream scheduling or recovery defect. The
+[peer-credit attribution report](reports/webtransport-peer-credit-attribution-2026-11-06.json)
+is byte-identical to the reproduced analysis and preserves all seven offers,
+literal-clock bounds, counter-source proof, sample domains, tooling history and
+raw/source hashes. Independent read-only analysis corroborates the critical
+credit/progress observations. Full memory parity remains open.
