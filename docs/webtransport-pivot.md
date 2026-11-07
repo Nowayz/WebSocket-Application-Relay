@@ -3135,3 +3135,32 @@ original-client reliable-load acceptance remain unresolved; the pivot is not
 accepted. Exact distributions, CPU/latency/age metrics, all failures, build and
 source identities, reproduction scripts and scope limits are in the
 [unit-notification report](reports/webtransport-proto-unit-events-screen-2026-11-06.json).
+
+## Eager routing continuation rejected — 2026-11-06
+
+Move the immediate receive/publish/drop prefix outside its suspended routing
+continuation, preserving both immediate-await callers and accepted fanout
+retirement on cancellation. The release compiler reduces the main session task
+2048→1920 B; the writer remains 544 B. At 100,000 sessions the main task owners
+save exactly 12,800,000 B, while total ready requested-live heap falls
+1,826,122,955→1,813,170,708 B (12.35 MiB). Other allocations account for the
+remaining 152,247 B. Output, established IO and capsule allocations are unchanged.
+The separate ordinary capacity pair lowers ready RSS by 6.36 MiB. All four
+capacity/heap runs pass routing, closure and full resource retirement checks.
+
+All 18 ordinary comparisons pass, but every same-repeat candidate rate is lower.
+Private, room and mixed medians change -0.6083%, -0.0814% and -1.5517%; datagram
+controls pass 3/3 each with received-offer median -0.5936%. Original-A reliable
+controls pass 1/3 on both arms. Four EOF failures remain failed with measurements
+and medians unavailable; this establishes no failure-rate or causal ranking.
+Ordinary done gates assert their documented gauges, but observe 64–177 remaining
+QUIC connections at that point. Full retirement evidence comes from the separate
+capacity runs, not that earlier inspection gate.
+
+The actual cancellation test, 254 relay tests (one existing ignored), all-target
+Clippy and release build pass. Reject the modest memory saving with the lower
+mixed-throughput median; retain selected `f1811d2c` source/image. No browser,
+freshness or CPU-profile acceptance run is needed for this rejected candidate.
+No compiler-layout/cache cause is inferred. Exact distributions, both-endpoint
+CPU and latency metrics, failed receipts, source/binary bindings and reproduction
+scripts are in the [routing screen report](reports/webtransport-route-input-helper-screen-2026-11-06.json).
