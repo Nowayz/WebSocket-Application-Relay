@@ -2883,3 +2883,34 @@ boot-bound receipts, full phase metrics, socket censuses, archived BTF, parser
 selfchecks, source/binary hashes and limits are in the
 [live-kernel capacity report](reports/webtransport-live-kernel-capacity-2026-11-06.json).
 Memory parity remains unmet.
+
+## Longer client ingress diagnostic — 2026-11-06
+
+Six new rotated B/D cases extend only the offer duration from four to sixteen
+seconds. The frozen clients, diagnostic server, rates, 1024 readers, CPU
+allowance, requested buffers and one-second drain remain unchanged. The new
+plan is 4,096,000 private and 16,000 fanout source updates, or 20,480,000
+deliveries. All six pass, verify every generated delivery and clean up.
+
+| Case | Client UDP drops | Sampled client RX peak, bytes | Client / server CPU, s | Generated deliveries |
+| --- | ---: | ---: | ---: | ---: |
+| B1 | 12,814 | 6,953,743 | 80.28 / 54.39 | 20,479,866 |
+| D1 | 0 | 536,038 | 67.14 / 54.89 | 20,479,937 |
+| D2 | 0 | 860,809 | 66.82 / 55.25 | 20,479,998 |
+| B2 | 12,794 | 7,610,586 | 82.39 / 54.56 | 20,479,961 |
+| B3 | 12,341 | 6,726,780 | 82.67 / 54.84 | 20,479,837 |
+| D3 | 0 | 2,872,072 | 65.99 / 55.19 | 20,479,980 |
+
+All cases generate all 16,000 fanout updates. Private generation is
+99.9960205–99.9999512% of plan; cutoff differences remain visible and no cases
+are excluded. Dedicated ingress retains its observed pressure reduction over
+the longer offer. Its thread averages 0.810–0.819 core over roughly 17-second
+measured windows, including drain. That average does not rule out shorter
+single-core saturation, and D3's 2.87 MB sampled queue peak remains material.
+
+Controls also pass 3/3. This is neither proof of a reliability fix nor a server
+performance improvement, and allocation/isolation remain a joint treatment.
+It does not replace fixed-client ordinary server comparisons. All six raw
+receipts, immutable four-second references, duration-only recipe checks,
+generation/lag/age histograms, per-role CPU and observer limits are in the
+[long ingress report](reports/webtransport-client-dedicated-ingress-long-diagnostic-2026-11-06.json).
