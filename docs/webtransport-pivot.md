@@ -2800,3 +2800,86 @@ Moving admission into the publisher changes both synchronous work and lock/batch
 behavior. The regression is not attributed to mutex waiting without measurement.
 A separate sampled write-lock diagnostic is prepared to distinguish acquisition
 wait from held time. Nonblocking admission remains a hypothesis, not a fix.
+
+## Client dedicated-ingress diagnostic — 2026-11-06
+
+Six rotated four-second offers compare unmodified rebuilt client B with client
+D, using the same frozen first-refusal server `737b50de`. B has eight shared
+runtime workers on CPUs 8–15; D has seven application workers on CPUs 9–15 and
+one dedicated endpoint runtime on CPU 8. Both have eight runtime workers within
+the same eight-core allowance, plus a coordinator thread allowed on CPUs 8–15.
+The server remains four workers on CPUs 0–3. Each process owns one UDP socket;
+both arms request the same 4 MiB receive buffer on client and server. Traffic,
+certificate pin, payloads, pacing and verification are unchanged.
+
+All six cases pass. B controls also pass 3/3, so D does not demonstrate a
+reliability fix. Counts below describe generated source updates; every generated
+delivery is verified, with zero duplicate/order errors or unreceived updates.
+
+| Case | Client UDP drops | Sampled client RX peak, bytes | Client / server CPU, s | Private / fanout source updates |
+| --- | ---: | ---: | ---: | ---: |
+| B1 | 1,788 | 6,681,589 | 17.46 / 13.42 | 1,023,928 / 4,000 |
+| D1 | 0 | 934,914 | 16.12 / 13.82 | 1,023,823 / 4,000 |
+| D2 | 0 | 177,409 | 16.35 / 13.69 | 1,023,776 / 4,000 |
+| B2 | 13,152 | 6,880,576 | 21.03 / 13.54 | 1,023,941 / 4,000 |
+| B3 | 9,025 | 7,108,574 | 20.82 / 13.53 | 1,023,783 / 3,999 |
+| D3 | 0 | 183,790 | 16.77 / 13.69 | 1,023,840 / 4,000 |
+
+Private generation is 99.978125–99.994238% of the 1,024,000-update plan; B3 also
+omits one of 4,000 planned fanout updates. These small cutoff differences are
+reported without excluding cases. Server UDP drops are zero throughout. All
+six verify 1,089 normal closes and 1,024 source departures, exit successfully,
+and return relay connection/session/queue/read-buffer accounting to zero.
+
+D reduces observed client ingress pressure: median sampled RX peak falls
+97.33% and measured client CPU falls 21.47%. Median server CPU rises 1.18%.
+Private arrival-age p99 bucket upper bounds are B 8.389/16.777/16.777 ms and
+D 8.389/8.389/4.194 ms; fanout bounds are B 8.389/16.777/16.777 ms and
+D 8.389/8.389/8.389 ms. These are instrumented diagnostic results, not ordinary
+server performance measurements. D jointly changes application-pool allocation
+and ingress isolation; a seven-worker shared-runtime control was not run.
+The result does not identify a particular lock or prove endpoint scheduling is
+the unique cause of the earlier intermittent refusal.
+
+Canonical B/C/D source archives match their manifests; B→D changes exactly two
+files and does not include C's added receiver cooperation. The shared build
+source is restored to C, original A/B/C artifacts remain unchanged, and selected
+production image `1c8e2d56` remains unchanged. Exact generation fractions, lag,
+last submissions, per-role CPU, placement, sampling gaps, source/build hashes,
+receipts and cleanup limits are in the
+[dedicated-ingress report](reports/webtransport-client-dedicated-ingress-diagnostic-2026-11-06.json).
+Longer offers are recorded separately; this screen establishes no
+server-performance or reliability fix.
+
+## Live-kernel capacity accounting — 2026-11-06
+
+Two fresh ordinary 100,000-session runs use the same selected `1c8e2d56`
+server and fixed capacity client. Both verify 400,000 measured deliveries and
+return all connection, session and resource gauges to zero. Measured RSS is
+116.418 MiB for native WebSocket and 1890.367 MiB for WebTransport. Server CPU
+is 2.03 versus 6.27 s; setup is 0.7033 versus 10.9594 s. RTT p99 histogram
+upper bounds are 0.524288 versus 2.097152 ms. This paced capacity phase is not a
+maximum-throughput test, and one run per transport establishes no confidence
+interval.
+
+The kernel's readable BTF type information supplies a separate, reproducible
+protocol-object payload lower bound. An archived BTF image and matching boot,
+kernel and version identities before and after both runs bind the sizes to the
+live socket counts. Native owns 100,000 unique established IPv4 TCP sockets;
+`tcp_sock` is 2432 B, giving a 243,200,000 B (231.934 MiB) C-payload lower bound.
+WebTransport owns one UDP socket; the base `udp_sock` is 1344 B. The UDP census
+combines families, so the base type is a conservative bound rather than a claim
+of the exact IPv6 allocation size.
+
+These are C structure payloads, not physical slab sizes or complete kernel
+memory. Socket buffers, allocation rounding, socket/file/inode counts, FD
+tables, routes and other shared state remain outside this bound. Neither a
+complete kernel total nor a userspace-plus-kernel total or ratio is claimed.
+Logical cleanup does not require allocator RSS to return immediately.
+
+The earlier [conditional type-size report](reports/webtransport-live-kernel-object-payload-2026-11-06.json)
+remains unchanged because its older capacity receipts lack boot IDs. Fresh
+boot-bound receipts, full phase metrics, socket censuses, archived BTF, parser
+selfchecks, source/binary hashes and limits are in the
+[live-kernel capacity report](reports/webtransport-live-kernel-capacity-2026-11-06.json).
+Memory parity remains unmet.
