@@ -3525,3 +3525,64 @@ and equivalent receive/socket policy. Only then can the fixed-client throughput,
 experiment. The [direct owner progress report](reports/webtransport-owned-protocol-progress-2026-11-07.json)
 links the frozen implementation, receipts and concrete remaining integration
 contract. The goal remains active; no deployment or product selection changed.
+
+### Direct protocol owner experiment: rejected, 2026-11-07
+
+The integrated experiment now owns UDP/CID ingress and per-worker protocol and
+application state directly, retaining quinn-proto, Rustls, ring and the existing
+WebTransport parsers. Local stream ownership replaces connection mutexes and
+per-connection driver tasks/timer futures. The selected product is unchanged.
+
+Three rotated, serialized 12-second trials per arm/case all pass their healthy
+received-work gates. Median verified deliveries/s are:
+
+| Workload | Retained QUIC integration | Direct owner | Change |
+| --- | ---: | ---: | ---: |
+| Private | 1,508,570 | 1,314,303 | -12.88% |
+| Room fanout | 1,707,945 | 1,134,800 | -33.56% |
+| Mixed | 1,662,989 | 1,127,640 | -32.19% |
+
+At 100,000 sessions, ready process RSS falls from 1,843.92 to 1,699.98 MiB
+(7.81%). Both arms verify 400,000 measured deliveries and clean retirement.
+Separate allocation diagnostics show 107,010,342 fewer requested live bytes
+(about 102 MiB). Packet/header key and Rustls session construction sites remain
+substantial in both arms. Diagnostic heap bytes are not additive to process RSS.
+
+Fresh plaintext WebSocket controls show 1,261,798 / 1,684,481 / 1,644,858
+verified deliveries/s for private / room / mixed, and 113.89 MiB ready process RSS
+at 100,000 sessions. Those controls were a subsequent block, not interleaved;
+WebSocket is plaintext and its kernel TCP memory is excluded from RSS. These
+numbers do not establish TLS-equivalent or total-system parity.
+
+The offered-load datagram screen also worsens: median missing fraction rises
+from 0.35% to 2.21%; median private arrival-age p99 histogram upper bounds rise
+from 33.55 to 134.22 ms. These measure received-update arrival age, not freshest
+state age under injected loss. Reliable paced runs deliver all generated work.
+Removing redundant worker I/O reactors in a same-binary ablation removes file
+descriptors but does not recover throughput. Hardware VAES/AVX2 already executes
+in the crypto profile. Relative samples do not prove one dominant library fault.
+
+Targeted existing and experimental checks pass (219 tests, one existing ignored)
+and Clippy passes. This is not a full-suite passing claim: the previously
+reproduced native origin-budget assertion remains. Final source review found an
+additional unfixed experimental adapter gap: a policy close queued during an
+input error can be bypassed when the session exits in the same poll, allowing the
+outer generic close reason to win. Exact rate/idle/oversize close semantics need
+network regression checks and a newly frozen correction before any adoption.
+Healthy timing recipes disable rate and idle limits; their verified delivery
+counts do not establish general behavior parity.
+
+The experimental performance question is answered negatively. Reject this
+prototype; throughput and memory acceptance for the broader pivot remains unmet.
+No browser, injected-loss/bulk freshness or deployment acceptance is claimed for
+this rejected candidate. Retain protocol/TLS/crypto libraries and investigate
+bounded buffer, layout, batching or queue changes only after isolating their
+absolute cost. A full handwritten QUIC/TLS/crypto stack is not justified by these
+results.
+
+The [complete experiment report](reports/webtransport-direct-owner-experiment-2026-11-07.json)
+records identities, performance and allocation metrics, hashed raw receipts,
+profiles, failed-launch/controller history, known correctness gaps and the
+completion audit. All 374 retained product inputs, 387 candidate inputs and the
+selected `91337694` image were read back and verified. Frozen experiment source
+and binaries remain separate from the selected product.
