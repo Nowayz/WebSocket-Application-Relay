@@ -3586,3 +3586,71 @@ profiles, failed-launch/controller history, known correctness gaps and the
 completion audit. All 374 retained product inputs, 387 candidate inputs and the
 selected `91337694` image were read back and verified. Frozen experiment source
 and binaries remain separate from the selected product.
+
+### Profiled batching and storage recommendations: completed, 2026-11-07
+
+The follow-up investigation rejects every candidate under the requested joint
+throughput, memory and latency gate. Keep the selected `91337694` image and all
+374 product source inputs unchanged. Completing these experiments does not
+accept the broader transport pivot or establish plaintext-native memory parity.
+
+The final comparison uses the exact selected image, freshly built isolated-target
+candidates, the unchanged client, three rotated serialized 12-second repetitions
+per workload, and verified received deliveries:
+
+| Workload | Selected deliveries/s | Cold migration storage | Selective owner |
+| --- | ---: | ---: | ---: |
+| Private | 1,492,353 | 1,504,674 (+0.83%) | 1,305,924 (-12.49%) |
+| Room fanout | 1,708,547 | 1,711,632 (+0.18%) | 1,510,520 (-11.59%) |
+| Mixed | 1,666,794 | 1,651,827 (-0.90%) | 1,490,965 (-10.55%) |
+
+All 27 runs pass their received-work and cleanup checks. At 100,000 sessions,
+ready process RSS is 1,844.67 / 1,803.27 / 1,700.37 MiB respectively; all three
+verify 400,000 measured deliveries. Cold migration storage shrinks the protocol
+core from 4,656 to 4,224 bytes, but reliable paced private arrival-age p99 median
+histogram upper bounds worsen from 4.19 to 8.39 ms. Its initial datagram loss
+advantage does not reproduce in the subsequent stock-source control campaign.
+The unchanged selected image also varies across cohorts. No stable datagram tail
+or loss improvement can be attributed to the storage change.
+
+Same-image causal controls identify useful mechanisms without establishing a
+replacement winner. Selective cooperative coalescing improves owner fanout by
+36.05% and mixed throughput by 31.42% over its uncoalesced mode. Instrumented
+diagnostics show larger UDP submission batches and fewer submissions per verified
+delivery. These counters are not exact syscall counts. Disabling retained
+synchronous private/control admission costs 5.05% private and 1.38% mixed
+throughput; retained fanout already queues. These findings do not fully explain
+the residual owner gap. Sampled mutex acquisition spans do not establish a
+dominant lock bottleneck. The exact selected user-cycle profile reports no lost
+samples and already executes VAES/AVX2 crypto routines.
+
+The experimental queued-policy-close defect is reproduced and corrected before
+further measurement, with five actual UDP/TLS/H3 policy checks plus retained
+integration checks. The storage candidate passes 323 protocol tests and a real
+1 MiB echo before and after client UDP-port rebinding. Those fixes and tests stay
+with rejected experiment sources. The small-header variant saves only about
+2.55 MiB ordinary RSS at 100,000 sessions and has no consistent throughput gain.
+
+A separate fresh-client TLS1.3 deployment control measures QUIC versus trusted
+TLS-fronted WebSocket with the same clients and allowed server CPU set. Median
+private / room / mixed deliveries/s are 1,489,098 / 1,727,663 / 1,702,652 for QUIC
+and 1,045,029 / 936,689 / 921,769 for TLS-fronted WebSocket. Ready process RSS at
+100,000 sessions is 1,844.12 MiB QUIC, 2,570.02 MiB relay plus TLS frontend, and
+114.49 MiB plaintext WebSocket. The frontend adds a TCP hop, tasks and copy
+buffers; this is a deployment comparison, not an optimized integrated WSS lower
+bound. Summed process RSS may double-count shared pages and excludes kernel
+socket memory. Kernel SOCK_DIAG queries fail with ENOENT even for known live
+sockets, and the installed kernel's inet_diag module is unavailable. Total-system
+memory parity remains unverified.
+
+Retain QUIC/TLS/crypto libraries. Consider only bounded changes to measured packet
+batching, buffer ownership, connection storage and scheduling. Handwritten SIMD
+or a complete protocol rewrite has no measured whole-workload advantage here.
+Browser and injected-loss/bulk freshness adoption gates are not run for rejected
+candidates. The existing native origin-budget assertion remains outside these
+experiments; this is not a full-suite passing claim. No push or deployment occurs.
+
+The [profiled recommendations report](reports/webtransport-profiled-recommendations-2026-11-07.json)
+records the requirement audit, current performance and resource metrics, separate
+heap/profile diagnostics, 472 hashed evidence receipts, invalid trial exclusions,
+and the remaining acceptance gaps. All six original heap files are preserved.
