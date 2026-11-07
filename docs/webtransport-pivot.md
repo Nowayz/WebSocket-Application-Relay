@@ -3011,3 +3011,54 @@ this rejected CPU screen. All 32 completed cases, the failed logging preflight,
 source/build hashes, exact distributions, both-endpoint CPU, latency and
 datagram observation limits are in the
 [cipher screen report](reports/webtransport-chacha-preference-screen-2026-11-06.json).
+
+## Current connection and task layouts — 2026-11-06
+
+A source-identical release compiler diagnostic leaves the selected image and all
+373 build inputs unchanged. Checked field sums and repeated layouts connect the
+5344-byte heap allocation to a 5328-byte Quinn owner plus its 16-byte Arc header.
+Of that allocation, 4656 B is protocol state and 688 B is the wrapper, mutex,
+shared notifications, header and padding. Removing the wrapper alone cannot
+remove the protocol owner or prove a net saving after replacement storage.
+
+The current application task is 2048 B: 32 B header, 1888 B core, 48 B trailer,
+80 B padding. Its outer future is 1864 B and session future 1792 B. Established
+state peaks at 1791 B versus 1207 B for join setup; the active writer is 544 B
+and select tuple 880 B. Cold handshake boxing is already implemented. Further
+setup boxing therefore has no measured large saving to claim. The separate
+capsule task is 512 B and cannot be counted as removed by relocating its parser.
+
+Exact field/variant data, sum/repetition checks, toolchain, diagnostic flags and
+source bindings are in the
+[current layout report](reports/webtransport-current-state-layout-2026-11-06.json).
+These are storage-layout findings, not a new performance improvement. An owned
+session-state rewrite and a smaller routing continuation remain hypotheses.
+
+## Guarded inline assembler rejected — 2026-11-06
+
+This distinct candidate retains the earlier one-chunk inline storage but restores
+the original guarded partial-read algorithm through a safe inline/heap peek
+guard. All 323 protocol tests, 253 relay tests (one existing ignored), Clippy and
+matched 100k routing/cleanup checks pass. Ready live allocations fall
+1,847,927,909→1,793,103,409 B (52.2847 MiB); ordinary ready RSS falls
+1889.796875→1832.625 MiB (57.171875 MiB).
+
+The 300,000 legacy 224-byte assembler roots disappear, leaving 65 two-slot spill
+allocations totaling 7280 B. Connection and receive objects grow by 3.2 MB and
+9.6 MB respectively. Their direct net saving is 54,392,720 B; another 431,780 B
+of total difference is not attributed to the representation. Neither arm retains
+captured assembler staging at done.
+
+All 18 ordinary comparisons pass, but median verified throughput changes private
++0.3174%, room -0.2085%, mixed -1.7567%. Restoring the guarded read path does not
+remove the repeated mixed-workload cost. Reliable paced controls pass 0/3 for the
+baseline and 2/3 for the candidate; all four failures remain visible and establish
+no failure-rate ranking. Datagram controls pass 3/3 each. Both endpoint profiles
+pass with zero lost samples in four reports; no instruction/cache cause is claimed.
+
+Reject the candidate and retain the selected `1c8e2d56` source/image. Browser and
+loss/bulk freshness gates are skipped for this rejected variant. Two controller
+failures (a post-success return-value assumption and unavailable SOCK_DIAG) are
+recorded separately from application results; corrected allocation-only captures
+do not measure kernel memory. Full scripts, hashes, profiles and limits are in
+the [guarded assembler report](reports/webtransport-inline-peek-screen-2026-11-06.json).

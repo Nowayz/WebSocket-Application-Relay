@@ -1,0 +1,2380 @@
+{
+  "record_type": "read_only_current_state_compiler_layout_diagnostic",
+  "analysis_timestamp_utc": "2026-11-07T01:48:15.671563+00:00",
+  "status": "Checked current captured layout; no candidate implementation or memory saving measured.",
+  "conclusion": "The actual Quinn Arc owner is 5344 bytes: 4656 bytes of inline protocol state plus 688 bytes of Quinn/mutex/shared/header/padding storage. The application task is 2048 bytes and is dominated by established writer/select state, not the already boxed cold handshake. Replacing a wrapper or moving future state is not a measured net saving.",
+  "scope": "Compiler type/variant/owner layout for captured retained source, with selected ready heap-site cross-checks. This is not a fresh memory census, throughput measurement, kernel-memory total or native-parity acceptance.",
+  "worktree_root": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+  "analysis_checkout_head": "9cfc5a4a9f8edabfaeccffd8743c0b78bf7c342b",
+  "provenance": {
+    "compiler_build_manifest": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-stack-layout-build.json",
+      "sha256": "707d0bd3875d973683b63bdc598fb143fe6aae62d7c90263e38946d49da90ee0",
+      "bytes": 2730
+    },
+    "compiler_capture_controller": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/capture-current-stack-layout.py",
+      "sha256": "c8e2c9ac33fca7fe6dfe4f42c518c6627d6c56ef2e543e19148fe7487b09591b",
+      "bytes": 3515
+    },
+    "capture_checkout_head": "9cfc5a4a9f8edabfaeccffd8743c0b78bf7c342b",
+    "retained_product_commit": "49f266e8360c7c1d4c25849dc1ced92922f345eb",
+    "captured_source_manifest": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-stack-layout-49f266e/source-manifest.json",
+      "sha256": "5856a864744c353cddd1822145ebc5b3b2eab03f9b4d05e30ca69cc08dc88257",
+      "bytes": 96276
+    },
+    "captured_source_file_count": 373,
+    "source_and_selected_unchanged_at_capture": true,
+    "source_comparison_at_analysis": {
+      "matches_capture": true,
+      "mismatch_count": 0,
+      "first_mismatches_maximum_10": [],
+      "scope": "Point-in-time check; another parent-owned experiment may subsequently change mutable source without changing this captured report."
+    },
+    "captured_selected_reference": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+      "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+      "bytes": 7925208
+    },
+    "frozen_selected_binary_reverified": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/session-io-relay",
+      "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+      "bytes": 7925208
+    },
+    "mutable_release_binary_at_analysis": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+      "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+      "bytes": 7925208,
+      "matches_captured_selected": true
+    },
+    "compiler_log": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-stack-layout-49f266e/compiler.log",
+      "sha256": "5eb34bb89b8605b2c3b9be7ce73899f5c600f624d7ece9016ccc94a381d33f98",
+      "bytes": 30311788
+    },
+    "diagnostic_binary": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-stack-layout-49f266e/target/release/war-relay",
+      "sha256": "ec42157fed7115e36fa73e46a7fe3fdea83faa8a2e379da2c5e6d99f7b50991c",
+      "bytes": 7925600
+    },
+    "build_command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--bin",
+      "war-relay",
+      "--target-dir",
+      "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-stack-layout-49f266e/target"
+    ],
+    "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+    "diagnostic_environment": {
+      "RUSTC_BOOTSTRAP": "1",
+      "RUSTFLAGS": "-Zprint-type-sizes"
+    },
+    "prior_build_environment": {},
+    "toolchain": {
+      "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.91.1\nLLVM version: 21.1.2",
+      "cargo": "cargo 1.91.1 (ea2d97820 2025-10-10)\nrelease: 1.91.1\ncommit-hash: ea2d97820c16195b0ca3fadb4319fe512c199a43\ncommit-date: 2025-10-10\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.1 (sys:0.20.2 vendored)\nlibcurl: 8.15.0-DEV (sys:0.4.83+curl-8.15.0 vendored ssl:OpenSSL/3.5.2)\nssl: OpenSSL 3.5.2 5 Aug 2025\nos: Arch Linux [64-bit]"
+    },
+    "task_layout_extraction": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-session-task-layout-analysis-2026-11-06.json",
+      "sha256": "c427e89f78bd44e9948e6942fe296332709cea4de5e06ffd6fbe4706d229daa3",
+      "bytes": 129618
+    },
+    "task_layout_generator": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-current-session-task-layout.py",
+      "sha256": "87f1769aa60991293c095cde8938d179a30797ea10243b355555b84478bec9e1",
+      "bytes": 12666
+    },
+    "quinn_layout_extraction": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/current-quinn-owner-breakdown.json",
+      "sha256": "492808ba92412e2ed989684ed4a2ae82374f678f07e40bf656b371385321db88",
+      "bytes": 16807
+    },
+    "quinn_layout_generator": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/extract-current-quinn-layout.py",
+      "sha256": "ac7d2c9df2567eb898b9d71a7aa8b5673435bc556416627e6e321b7a4e0c1369",
+      "bytes": 6700
+    },
+    "report_generator": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/summarize-current-state-layout.py",
+      "sha256": "62c080c4bcdf85bf0aad6bd85638b4c0cdac59db46cb8053e1682d53e9040741",
+      "bytes": 13000
+    },
+    "selected_ready_heap_site_analysis": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/session-io-heap-candidate-ready-sites.json",
+      "sha256": "7d50c9ee01029f41efcb88574956394af998e8a59e2f922bd286b785ada689e5",
+      "bytes": 58835
+    }
+  },
+  "quinn_owner_summary": {
+    "actual_arc_allocation_bytes_per_connection": 5344,
+    "connection_inner_payload_bytes": 5328,
+    "state_mutex_bytes": 5088,
+    "state_payload_bytes": 5072,
+    "protocol_inline_bytes": 4656,
+    "wrapper_mutex_shared_header_padding_bytes": 688,
+    "wrapper_breakdown": {
+      "state_fields_and_padding_beyond_protocol": 416,
+      "state_mutex_overhead": 16,
+      "shared_notifications_and_ref_count": 232,
+      "connection_inner_padding": 8,
+      "arc_header": 16
+    },
+    "accounting_at_100000": {
+      "arc_header_bytes_per_connection": 16,
+      "connection_inner_bytes": 5328,
+      "actual_accept_allocation_bytes_per_connection": 5344,
+      "actual_accept_allocation_total_bytes": 534400000,
+      "protocol_inline_bytes_per_connection": 4656,
+      "protocol_inline_total_bytes": 465600000,
+      "quinn_wrapper_mutex_shared_header_padding_bytes_per_connection": 688,
+      "quinn_wrapper_mutex_shared_header_padding_total_bytes": 68800000
+    },
+    "inline_components_not_additional_allocations": {
+      "quinn_proto::connection::streams::state::StreamsState": 704,
+      "quinn_proto::connection::spaces::PacketSpaces": 560,
+      "quinn_proto::connection::spaces::PacketSpace": 544,
+      "quinn_proto::connection::paths::PathData": 408,
+      "quinn::connection::ConnectionInner": 5328,
+      "quinn::connection::State": 5072,
+      "quinn_proto::connection::Connection": 4656,
+      "quinn::connection::Shared": 232
+    }
+  },
+  "application_task_summary": {
+    "cell_bytes": 2048,
+    "cell_breakdown": {
+      "header": 32,
+      "core": 1888,
+      "trailer": 48,
+      "end_padding": 80
+    },
+    "outer_future_bytes": 1864,
+    "outer_handshake_variant_bytes": 183,
+    "outer_established_variant_bytes": 1863,
+    "session_future_bytes": 1792,
+    "session_join_variant_bytes": 1207,
+    "session_active_variant_bytes": 1791,
+    "writer_future_bytes": 544,
+    "select_tuple_bytes": 880,
+    "writer_plus_select_nested_bytes": 1424,
+    "select_components": {
+      "idle": 168,
+      "closed": 112,
+      "writer_pin_reference": 8,
+      "reliable_reader": 296,
+      "datagram_reader": 296,
+      "sum": 880
+    },
+    "capsule_receive_task_cell_bytes": 512,
+    "capsule_receive_future_bytes": 368,
+    "capsule_parser_future_bytes": 288,
+    "capsule_read_future_bytes": 168,
+    "output_arc_allocation_bytes": 288,
+    "established_io_arc_allocation_bytes": 112,
+    "main_plus_capsule_task_bytes_per_connection": 2560,
+    "main_capsule_output_io_owner_subset_bytes_per_connection": 2960,
+    "matching_selected_ready_heap_sites": [
+      {
+        "offset": "0x588282",
+        "function": "war_relay::main::{{closure}}",
+        "location": "war_relay.43295da09962f55c-cgu.0:?",
+        "objects": 100000,
+        "bytes": 204800000,
+        "mean_bytes": 2048.0
+      },
+      {
+        "offset": "0x59a031",
+        "function": "web_transport_quinn::session::Session::new",
+        "location": "??:?",
+        "objects": 100000,
+        "bytes": 51200000,
+        "mean_bytes": 512.0
+      },
+      {
+        "offset": "0x57623f",
+        "function": "war_relay::webtransport::session::{{closure}}",
+        "location": "war_relay.43295da09962f55c-cgu.0:?",
+        "objects": 100000,
+        "bytes": 28800000,
+        "mean_bytes": 288.0
+      },
+      {
+        "offset": "0x597c5b",
+        "function": "web_transport_quinn::session::Session::try_into_established",
+        "location": "??:?",
+        "objects": 100000,
+        "bytes": 11200000,
+        "mean_bytes": 112.0
+      }
+    ]
+  },
+  "bounded_raw_layouts": {
+    "quinn": {
+      "quinn_proto::connection::streams::state::StreamsState": {
+        "size_bytes": 704,
+        "alignment_bytes": 8,
+        "fields": [
+          {
+            "field": ".send",
+            "bytes": 144
+          },
+          {
+            "field": ".recv",
+            "bytes": 152
+          },
+          {
+            "field": ".pending",
+            "bytes": 64
+          },
+          {
+            "field": ".data_blocked_limit",
+            "bytes": 16
+          },
+          {
+            "field": ".free_recv",
+            "bytes": 24
+          },
+          {
+            "field": ".events",
+            "bytes": 32
+          },
+          {
+            "field": ".connection_blocked",
+            "bytes": 24
+          },
+          {
+            "field": ".next",
+            "bytes": 16
+          },
+          {
+            "field": ".max",
+            "bytes": 16
+          },
+          {
+            "field": ".max_remote",
+            "bytes": 16
+          },
+          {
+            "field": ".sent_max_remote",
+            "bytes": 16
+          },
+          {
+            "field": ".allocated_remote_count",
+            "bytes": 16
+          },
+          {
+            "field": ".max_concurrent_remote_count",
+            "bytes": 16
+          },
+          {
+            "field": ".next_remote",
+            "bytes": 16
+          },
+          {
+            "field": ".next_reported_remote",
+            "bytes": 16
+          },
+          {
+            "field": ".send_streams",
+            "bytes": 8
+          },
+          {
+            "field": ".max_data",
+            "bytes": 8
+          },
+          {
+            "field": ".receive_window",
+            "bytes": 8
+          },
+          {
+            "field": ".local_max_data",
+            "bytes": 8
+          },
+          {
+            "field": ".sent_max_data",
+            "bytes": 8
+          },
+          {
+            "field": ".data_sent",
+            "bytes": 8
+          },
+          {
+            "field": ".data_recvd",
+            "bytes": 8
+          },
+          {
+            "field": ".buffered_data",
+            "bytes": 8
+          },
+          {
+            "field": ".send_window",
+            "bytes": 8
+          },
+          {
+            "field": ".stream_receive_window",
+            "bytes": 8
+          },
+          {
+            "field": ".initial_max_stream_data_uni",
+            "bytes": 8
+          },
+          {
+            "field": ".initial_max_stream_data_bidi_local",
+            "bytes": 8
+          },
+          {
+            "field": ".initial_max_stream_data_bidi_remote",
+            "bytes": 8
+          },
+          {
+            "field": ".receive_window_shrink_debt",
+            "bytes": 8
+          },
+          {
+            "field": ".opened",
+            "bytes": 2
+          },
+          {
+            "field": ".side",
+            "bytes": 1
+          },
+          {
+            "field": ".flow_control_adjusted",
+            "bytes": 1
+          }
+        ],
+        "padding_bytes": 4,
+        "agreeing_records": 5
+      },
+      "quinn_proto::connection::spaces::PacketSpaces": {
+        "size_bytes": 560,
+        "alignment_bytes": 16,
+        "fields": [
+          {
+            "field": ".data",
+            "bytes": 544
+          },
+          {
+            "field": ".initial",
+            "bytes": 8
+          },
+          {
+            "field": ".handshake",
+            "bytes": 8
+          }
+        ],
+        "padding_bytes": 0,
+        "agreeing_records": 5
+      },
+      "quinn_proto::connection::spaces::PacketSpace": {
+        "size_bytes": 544,
+        "alignment_bytes": 16,
+        "fields": [
+          {
+            "field": ".pending_acks",
+            "bytes": 160
+          },
+          {
+            "field": ".largest_acked_packet",
+            "bytes": 16
+          },
+          {
+            "field": ".largest_acked_packet_sent",
+            "bytes": 16
+          },
+          {
+            "field": ".time_of_last_ack_eliciting_packet",
+            "bytes": 16
+          },
+          {
+            "field": ".loss_time",
+            "bytes": 16
+          },
+          {
+            "field": ".crypto",
+            "bytes": 64
+          },
+          {
+            "field": ".dedup",
+            "bytes": 32
+          },
+          {
+            "field": ".crypto_stream",
+            "bytes": 88
+          },
+          {
+            "field": ".rx_packet",
+            "bytes": 8
+          },
+          {
+            "field": ".pending",
+            "bytes": 8
+          },
+          {
+            "field": ".next_packet_number",
+            "bytes": 8
+          },
+          {
+            "field": ".largest_ack_eliciting_sent",
+            "bytes": 8
+          },
+          {
+            "field": ".unacked_non_ack_eliciting_tail",
+            "bytes": 8
+          },
+          {
+            "field": ".sent_packets",
+            "bytes": 24
+          },
+          {
+            "field": ".ecn_counters",
+            "bytes": 24
+          },
+          {
+            "field": ".ecn_feedback",
+            "bytes": 24
+          },
+          {
+            "field": ".crypto_offset",
+            "bytes": 8
+          },
+          {
+            "field": ".sent_with_keys",
+            "bytes": 8
+          },
+          {
+            "field": ".loss_probes",
+            "bytes": 4
+          },
+          {
+            "field": ".ping_pending",
+            "bytes": 1
+          },
+          {
+            "field": ".immediate_ack_pending",
+            "bytes": 1
+          }
+        ],
+        "padding_bytes": 2,
+        "agreeing_records": 5
+      },
+      "quinn_proto::connection::paths::PathData": {
+        "size_bytes": 408,
+        "alignment_bytes": 8,
+        "fields": [
+          {
+            "field": ".challenge",
+            "bytes": 16
+          },
+          {
+            "field": ".mtud",
+            "bytes": 152
+          },
+          {
+            "field": ".first_packet",
+            "bytes": 16
+          },
+          {
+            "field": ".pacing",
+            "bytes": 48
+          },
+          {
+            "field": ".rtt",
+            "bytes": 64
+          },
+          {
+            "field": ".remote",
+            "bytes": 32
+          },
+          {
+            "field": ".first_packet_after_rtt_sample",
+            "bytes": 16
+          },
+          {
+            "field": ".congestion",
+            "bytes": 16
+          },
+          {
+            "field": ".total_sent",
+            "bytes": 8
+          },
+          {
+            "field": ".total_recvd",
+            "bytes": 8
+          },
+          {
+            "field": ".in_flight",
+            "bytes": 16
+          },
+          {
+            "field": ".generation",
+            "bytes": 8
+          },
+          {
+            "field": ".sending_ecn",
+            "bytes": 1
+          },
+          {
+            "field": ".challenge_pending",
+            "bytes": 1
+          },
+          {
+            "field": ".validated",
+            "bytes": 1
+          }
+        ],
+        "padding_bytes": 5,
+        "agreeing_records": 5
+      },
+      "quinn::connection::ConnectionInner": {
+        "size_bytes": 5328,
+        "alignment_bytes": 16,
+        "fields": [
+          {
+            "field": ".state",
+            "bytes": 5088
+          },
+          {
+            "field": ".shared",
+            "bytes": 232
+          }
+        ],
+        "padding_bytes": 8,
+        "agreeing_records": 2
+      },
+      "quinn::connection::State": {
+        "size_bytes": 5072,
+        "alignment_bytes": 16,
+        "fields": [
+          {
+            "field": ".inner",
+            "bytes": 4656
+          },
+          {
+            "field": ".on_handshake_data",
+            "bytes": 16
+          },
+          {
+            "field": ".on_connected",
+            "bytes": 16
+          },
+          {
+            "field": ".buffered_transmit",
+            "bytes": 80
+          },
+          {
+            "field": ".timer_deadline",
+            "bytes": 16
+          },
+          {
+            "field": ".blocked_writers",
+            "bytes": 32
+          },
+          {
+            "field": ".blocked_readers",
+            "bytes": 32
+          },
+          {
+            "field": ".stopped",
+            "bytes": 32
+          },
+          {
+            "field": ".socket",
+            "bytes": 16
+          },
+          {
+            "field": ".runtime",
+            "bytes": 16
+          },
+          {
+            "field": ".driver",
+            "bytes": 16
+          },
+          {
+            "field": ".timer",
+            "bytes": 16
+          },
+          {
+            "field": ".io_poller",
+            "bytes": 16
+          },
+          {
+            "field": ".error",
+            "bytes": 56
+          },
+          {
+            "field": ".send_buffer",
+            "bytes": 24
+          },
+          {
+            "field": ".conn_events",
+            "bytes": 8
+          },
+          {
+            "field": ".endpoint_events",
+            "bytes": 8
+          },
+          {
+            "field": ".handle",
+            "bytes": 8
+          },
+          {
+            "field": ".connected",
+            "bytes": 1
+          }
+        ],
+        "padding_bytes": 7,
+        "agreeing_records": 2
+      },
+      "quinn_proto::connection::Connection": {
+        "size_bytes": 4656,
+        "alignment_bytes": 16,
+        "fields": [
+          {
+            "field": ".peer_params",
+            "bytes": 352
+          },
+          {
+            "field": ".spaces",
+            "bytes": 560
+          },
+          {
+            "field": ".packet_number_filter",
+            "bytes": 32
+          },
+          {
+            "field": ".ack_frequency",
+            "bytes": 80
+          },
+          {
+            "field": ".streams",
+            "bytes": 704
+          },
+          {
+            "field": ".prev_path",
+            "bytes": 432
+          },
+          {
+            "field": ".events",
+            "bytes": 32
+          },
+          {
+            "field": ".endpoint_events",
+            "bytes": 32
+          },
+          {
+            "field": ".local_cid_state",
+            "bytes": 112
+          },
+          {
+            "field": ".idle_timeout",
+            "bytes": 16
+          },
+          {
+            "field": ".next_bundled_ack_time",
+            "bytes": 16
+          },
+          {
+            "field": ".timers",
+            "bytes": 160
+          },
+          {
+            "field": ".prev_crypto",
+            "bytes": 64
+          },
+          {
+            "field": ".rem_cids",
+            "bytes": 208
+          },
+          {
+            "field": ".crypto",
+            "bytes": 16
+          },
+          {
+            "field": ".rng",
+            "bytes": 320
+          },
+          {
+            "field": ".zero_rtt_crypto",
+            "bytes": 32
+          },
+          {
+            "field": ".next_crypto",
+            "bytes": 32
+          },
+          {
+            "field": ".path",
+            "bytes": 408
+          },
+          {
+            "field": ".error",
+            "bytes": 56
+          },
+          {
+            "field": ".path_responses",
+            "bytes": 24
+          },
+          {
+            "field": ".datagrams",
+            "bytes": 88
+          },
+          {
+            "field": ".side",
+            "bytes": 72
+          },
+          {
+            "field": ".stats",
+            "bytes": 536
+          },
+          {
+            "field": ".state",
+            "bytes": 72
+          },
+          {
+            "field": ".endpoint_config",
+            "bytes": 8
+          },
+          {
+            "field": ".config",
+            "bytes": 8
+          },
+          {
+            "field": ".path_counter",
+            "bytes": 8
+          },
+          {
+            "field": ".key_phase_size",
+            "bytes": 8
+          },
+          {
+            "field": ".authentication_failures",
+            "bytes": 8
+          },
+          {
+            "field": ".total_authed_packets",
+            "bytes": 8
+          },
+          {
+            "field": ".pto_count",
+            "bytes": 4
+          },
+          {
+            "field": ".version",
+            "bytes": 4
+          },
+          {
+            "field": ".retry_src_cid",
+            "bytes": 22
+          },
+          {
+            "field": ".allow_mtud",
+            "bytes": 1
+          },
+          {
+            "field": ".zero_rtt_enabled",
+            "bytes": 1
+          },
+          {
+            "field": ".key_phase",
+            "bytes": 1
+          },
+          {
+            "field": ".spin_enabled",
+            "bytes": 1
+          },
+          {
+            "field": ".spin",
+            "bytes": 1
+          },
+          {
+            "field": ".accepted_0rtt",
+            "bytes": 1
+          },
+          {
+            "field": ".permit_idle_reset",
+            "bytes": 1
+          },
+          {
+            "field": ".close",
+            "bytes": 1
+          },
+          {
+            "field": ".receiving_ecn",
+            "bytes": 1
+          },
+          {
+            "field": ".app_limited",
+            "bytes": 1
+          },
+          {
+            "field": ".local_ip",
+            "bytes": 17
+          },
+          {
+            "field": ".highest_space",
+            "bytes": 1
+          },
+          {
+            "field": ".handshake_cid",
+            "bytes": 21
+          },
+          {
+            "field": ".rem_handshake_cid",
+            "bytes": 21
+          },
+          {
+            "field": ".orig_rem_cid",
+            "bytes": 21
+          },
+          {
+            "field": ".initial_dst_cid",
+            "bytes": 21
+          }
+        ],
+        "padding_bytes": 10,
+        "agreeing_records": 4
+      },
+      "quinn::connection::Shared": {
+        "size_bytes": 232,
+        "alignment_bytes": 8,
+        "fields": [
+          {
+            "field": ".stream_budget_available",
+            "bytes": 64
+          },
+          {
+            "field": ".stream_incoming",
+            "bytes": 64
+          },
+          {
+            "field": ".datagram_received",
+            "bytes": 32
+          },
+          {
+            "field": ".datagrams_unblocked",
+            "bytes": 32
+          },
+          {
+            "field": ".closed",
+            "bytes": 32
+          },
+          {
+            "field": ".ref_count",
+            "bytes": 8
+          }
+        ],
+        "padding_bytes": 0,
+        "agreeing_records": 2
+      }
+    },
+    "application_and_capsule": {
+      "app_task_cell": {
+        "name": "tokio::runtime::task::core::Cell<{async block@war_relay::webtransport::serve::{closure#0}::{closure#4}}, std::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+        "bytes": 2048,
+        "alignment": 128,
+        "header_log_line": 386724,
+        "details": [
+          "    field `.header`: 32 bytes",
+          "    field `.core`: 1888 bytes",
+          "    field `.trailer`: 48 bytes",
+          "    end padding: 80 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 2048,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 2048,
+          "matches_type_size": true
+        }
+      },
+      "app_outer_future": {
+        "name": "{async block@war_relay::webtransport::serve::{closure#0}::{closure#4}}",
+        "bytes": 1864,
+        "alignment": 8,
+        "header_log_line": 386760,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 56 bytes",
+          "        upvar `.permit`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 16 bytes",
+          "        upvar `.lease`: 8 bytes, alignment: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.handshake`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "    variant `Suspend0`: 183 bytes",
+          "        upvar `.permit`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `._lease`: 8 bytes",
+          "        local `._permit`: 8 bytes",
+          "        upvar `.lease`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.handshake`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        local `..coroutine_field6`: 1 bytes, type: bool",
+          "        padding: 1 bytes",
+          "        local `..coroutine_field8`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        padding: 4 bytes",
+          "        local `.__awaitee`: 120 bytes, alignment: 8 bytes, type: tokio::time::Timeout<Pin<Box<{async fn body of webtransport::accept_connection()}>>>",
+          "    variant `Suspend1`: 1863 bytes",
+          "        upvar `.permit`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `._lease`: 8 bytes",
+          "        local `._permit`: 8 bytes",
+          "        upvar `.lease`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.handshake`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        local `..coroutine_field6`: 1 bytes, type: bool",
+          "        local `..coroutine_field7`: 1 bytes, type: bool",
+          "        local `..coroutine_field8`: 1 bytes, type: bool",
+          "        padding: 4 bytes",
+          "        local `.connection`: 8 bytes, alignment: 8 bytes",
+          "        local `.__awaitee`: 1792 bytes, type: {async fn body of webtransport::session()}",
+          "    variant `Returned`: 56 bytes",
+          "        upvar `.permit`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 16 bytes",
+          "        upvar `.lease`: 8 bytes, alignment: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.handshake`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "    variant `Panicked`: 56 bytes",
+          "        upvar `.permit`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 16 bytes",
+          "        upvar `.lease`: 8 bytes, alignment: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.handshake`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            },
+            "Suspend0": {
+              "declared_bytes": 183,
+              "raw_field_and_padding_sum": 184
+            },
+            "Suspend1": {
+              "declared_bytes": 1863,
+              "raw_field_and_padding_sum": 1864
+            },
+            "Returned": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            },
+            "Panicked": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 1864,
+          "matches_type_size": true
+        }
+      },
+      "session_future": {
+        "name": "{async fn body of war_relay::webtransport::session()}",
+        "bytes": 1792,
+        "alignment": 8,
+        "header_log_line": 386821,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 784 bytes",
+          "        padding: 735 bytes",
+          "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "    variant `Suspend0`: 1207 bytes",
+          "        padding: 591 bytes",
+          "        local `.connection`: 8 bytes, alignment: 8 bytes",
+          "        local `.acceptor`: 24 bytes",
+          "        local `.relay`: 8 bytes",
+          "        padding: 104 bytes",
+          "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field22`: 1 bytes, type: bool",
+          "        padding: 1 bytes",
+          "        local `..coroutine_field24`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        padding: 13 bytes",
+          "        local `.retirement`: 8 bytes, alignment: 8 bytes",
+          "        local `.__awaitee`: 400 bytes, type: tokio::time::Timeout<{async block@webtransport::session::{closure#0}::{closure#0}}>",
+          "    variant `Suspend1`: 1791 bytes",
+          "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.writer`: 544 bytes",
+          "        local `.registration`: 16 bytes",
+          "        local `.connection`: 8 bytes",
+          "        local `.acceptor`: 24 bytes",
+          "        local `.relay`: 8 bytes",
+          "        local `.receive`: 56 bytes",
+          "        local `.activity`: 8 bytes",
+          "        local `.output`: 8 bytes",
+          "        local `.finishing`: 8 bytes",
+          "        local `.outgoing`: 8 bytes",
+          "        local `.record_quantum`: 8 bytes",
+          "        local `.writer`: 8 bytes",
+          "        upvar `.acceptor`: 24 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field22`: 1 bytes, type: bool",
+          "        local `..coroutine_field23`: 1 bytes, type: bool",
+          "        local `..coroutine_field24`: 1 bytes, type: bool",
+          "        padding: 1 bytes",
+          "        local `..coroutine_field26`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        local `..coroutine_field27`: 1 bytes, type: bool",
+          "        local `..coroutine_field28`: 1 bytes, type: bool",
+          "        local `..coroutine_field29`: 1 bytes, type: bool",
+          "        local `..coroutine_field30`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.disabled`: 1 bytes, alignment: 1 bytes",
+          "        padding: 7 bytes",
+          "        local `.limiter`: 56 bytes, alignment: 8 bytes",
+          "        local `.futures`: 880 bytes",
+          "        local `.__awaitee`: 16 bytes, type: PollFn<{closure@webtransport::session::{closure#0}::{closure#9}}>",
+          "        local `.route`: 32 bytes",
+          "    variant `Suspend2`: 919 bytes",
+          "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.writer`: 544 bytes",
+          "        local `.registration`: 16 bytes",
+          "        local `.connection`: 8 bytes",
+          "        local `.acceptor`: 24 bytes",
+          "        local `.relay`: 8 bytes",
+          "        local `.receive`: 56 bytes",
+          "        local `.activity`: 8 bytes",
+          "        local `.output`: 8 bytes",
+          "        local `.finishing`: 8 bytes",
+          "        local `.outgoing`: 8 bytes",
+          "        local `.record_quantum`: 8 bytes",
+          "        local `.writer`: 8 bytes",
+          "        upvar `.acceptor`: 24 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field22`: 1 bytes, type: bool",
+          "        local `..coroutine_field23`: 1 bytes, type: bool",
+          "        local `..coroutine_field24`: 1 bytes, type: bool",
+          "        local `..coroutine_field25`: 1 bytes, type: bool",
+          "        padding: 3 bytes",
+          "        local `..coroutine_field29`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        local `..coroutine_field30`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 120 bytes, alignment: 8 bytes, type: tokio::time::Timeout<&mut Pin<&mut {async block@webtransport::session::{closure#0}::{closure#4}}>>",
+          "    variant `Suspend3`: 1023 bytes",
+          "        local `.join`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.writer`: 544 bytes",
+          "        local `.registration`: 16 bytes",
+          "        local `.connection`: 8 bytes",
+          "        local `.acceptor`: 24 bytes",
+          "        local `.relay`: 8 bytes",
+          "        local `.receive`: 56 bytes",
+          "        local `.activity`: 8 bytes",
+          "        local `.output`: 8 bytes",
+          "        local `.finishing`: 8 bytes",
+          "        local `.outgoing`: 8 bytes",
+          "        local `.record_quantum`: 8 bytes",
+          "        local `.writer`: 8 bytes",
+          "        upvar `.acceptor`: 24 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "        local `..coroutine_field22`: 1 bytes, type: bool",
+          "        local `..coroutine_field23`: 1 bytes, type: bool",
+          "        local `..coroutine_field24`: 1 bytes, type: bool",
+          "        local `..coroutine_field25`: 1 bytes, type: bool",
+          "        padding: 3 bytes",
+          "        local `..coroutine_field29`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        local `..coroutine_field30`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 224 bytes, alignment: 8 bytes, type: tokio::time::Timeout<{async fn body of web_transport_quinn::session::EstablishedIo::closed()}>",
+          "    variant `Returned`: 784 bytes",
+          "        padding: 735 bytes",
+          "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes",
+          "    variant `Panicked`: 784 bytes",
+          "        padding: 735 bytes",
+          "        upvar `.acceptor`: 24 bytes, alignment: 8 bytes",
+          "        upvar `.connection`: 8 bytes",
+          "        upvar `.relay`: 8 bytes",
+          "        upvar `.retirement`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 784,
+              "raw_field_and_padding_sum": 783
+            },
+            "Suspend0": {
+              "declared_bytes": 1207,
+              "raw_field_and_padding_sum": 1207
+            },
+            "Suspend1": {
+              "declared_bytes": 1791,
+              "raw_field_and_padding_sum": 1792
+            },
+            "Suspend2": {
+              "declared_bytes": 919,
+              "raw_field_and_padding_sum": 920
+            },
+            "Suspend3": {
+              "declared_bytes": 1023,
+              "raw_field_and_padding_sum": 1024
+            },
+            "Returned": {
+              "declared_bytes": 784,
+              "raw_field_and_padding_sum": 783
+            },
+            "Panicked": {
+              "declared_bytes": 784,
+              "raw_field_and_padding_sum": 783
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 1792,
+          "matches_type_size": true
+        }
+      },
+      "writer_future": {
+        "name": "{async block@war_relay::webtransport::session::{closure#0}::{closure#4}}",
+        "bytes": 544,
+        "alignment": 8,
+        "header_log_line": 388101,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 272 bytes",
+          "        padding: 231 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "    variant `Suspend0`: 391 bytes",
+          "        padding: 79 bytes",
+          "        local `.remaining`: 8 bytes, alignment: 8 bytes",
+          "        padding: 144 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        local `.take`: 0 bytes",
+          "        padding: 8 bytes",
+          "        local `.__awaitee`: 112 bytes, alignment: 8 bytes, type: {async fn body of webtransport::queue::Receiver<'_, webtransport::QueuedOutput, webtransport::StreamOutput>::recv_with_idle_map<webtransport::QueuedOutput, {closure@webtransport::session::{closure#0}::{closure#4}::{closure#0}}>()}",
+          "    variant `Suspend1`: 479 bytes",
+          "        padding: 79 bytes",
+          "        local `.remaining`: 8 bytes, alignment: 8 bytes",
+          "        padding: 144 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        local `.take`: 0 bytes",
+          "        local `.disabled`: 1 bytes",
+          "        padding: 7 bytes",
+          "        local `.futures`: 184 bytes, alignment: 8 bytes",
+          "        local `.__awaitee`: 16 bytes, type: PollFn<{closure@webtransport::session::{closure#0}::{closure#4}::{closure#4}}>",
+          "    variant `Suspend2`: 391 bytes",
+          "        padding: 79 bytes",
+          "        local `.remaining`: 8 bytes, alignment: 8 bytes",
+          "        local `.output`: 88 bytes",
+          "        padding: 56 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        local `.take`: 0 bytes",
+          "        local `.disabled`: 1 bytes",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 112 bytes, alignment: 8 bytes, type: {async fn body of webtransport::queue::Receiver<'_, webtransport::QueuedOutput, webtransport::StreamOutput>::recv_with_idle_map<webtransport::QueuedOutput, {closure@webtransport::session::{closure#0}::{closure#4}::{closure#0}}>()}",
+          "    variant `Suspend3`: 543 bytes",
+          "        local `.packet`: 80 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.remaining`: 8 bytes",
+          "        padding: 88 bytes",
+          "        local `.packet`: 56 bytes, alignment: 8 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        local `.take`: 0 bytes",
+          "        padding: 1 bytes",
+          "        local `..coroutine_field14`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        padding: 6 bytes",
+          "        local `.__awaitee`: 264 bytes, alignment: 8 bytes, type: tokio::time::Timeout<{async fn body of webtransport::write_frame_from()}>",
+          "    variant `Suspend4`: 295 bytes",
+          "        local `.packet`: 80 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 96 bytes",
+          "        local `.packet`: 56 bytes, alignment: 8 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        local `.take`: 0 bytes",
+          "        padding: 1 bytes",
+          "        local `..coroutine_field14`: 1 bytes, alignment: 1 bytes, type: bool",
+          "        padding: 6 bytes",
+          "        local `.__awaitee`: 16 bytes, alignment: 8 bytes, type: {async fn body of tokio::task::yield_now::yield_now()}",
+          "    variant `Suspend5`: 367 bytes",
+          "        padding: 231 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "        padding: 8 bytes",
+          "        local `.__awaitee`: 56 bytes, alignment: 8 bytes, type: {async fn body of webtransport::write_output_chunks()}",
+          "        local `..coroutine_field12`: 32 bytes, type: [tokio_util::bytes::Bytes; 1]",
+          "    variant `Returned`: 272 bytes",
+          "        padding: 231 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes",
+          "    variant `Panicked`: 272 bytes",
+          "        padding: 231 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__finishing`: 8 bytes",
+          "        upvar `._ref__outgoing`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__output`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 272,
+              "raw_field_and_padding_sum": 271
+            },
+            "Suspend0": {
+              "declared_bytes": 391,
+              "raw_field_and_padding_sum": 391
+            },
+            "Suspend1": {
+              "declared_bytes": 479,
+              "raw_field_and_padding_sum": 479
+            },
+            "Suspend2": {
+              "declared_bytes": 391,
+              "raw_field_and_padding_sum": 391
+            },
+            "Suspend3": {
+              "declared_bytes": 543,
+              "raw_field_and_padding_sum": 544
+            },
+            "Suspend4": {
+              "declared_bytes": 295,
+              "raw_field_and_padding_sum": 296
+            },
+            "Suspend5": {
+              "declared_bytes": 367,
+              "raw_field_and_padding_sum": 367
+            },
+            "Returned": {
+              "declared_bytes": 272,
+              "raw_field_and_padding_sum": 271
+            },
+            "Panicked": {
+              "declared_bytes": 272,
+              "raw_field_and_padding_sum": 271
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 544,
+          "matches_type_size": true
+        }
+      },
+      "active_select_tuple": {
+        "name": "std::mem::ManuallyDrop<({async block@war_relay::webtransport::session::{closure#0}::{closure#8}}, {async fn body of web_transport_quinn::session::EstablishedIo::closed()}, &mut std::pin::Pin<&mut {async block@war_relay::webtransport::session::{closure#0}::{closure#4}}>, {async block@war_relay::webtransport::session::{closure#0}::{closure#6}}, {async block@war_relay::webtransport::session::{closure#0}::{closure#7}})>",
+        "bytes": 880,
+        "alignment": 8,
+        "header_log_line": 387482,
+        "details": [
+          "    field `.value`: 880 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 880,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 880,
+          "matches_type_size": true
+        }
+      },
+      "reliable_reader_future": {
+        "name": "{async block@war_relay::webtransport::session::{closure#0}::{closure#6}}",
+        "bytes": 296,
+        "alignment": 8,
+        "header_log_line": 388937,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "    variant `Suspend0`: 223 bytes",
+          "        padding: 31 bytes",
+          "        local `.remaining`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        padding: 8 bytes",
+          "        local `.__awaitee`: 144 bytes, alignment: 8 bytes, type: {async fn body of webtransport::read_record_budgeted<web_transport_quinn::recv::RecvStream>()}",
+          "    variant `Suspend1`: 295 bytes",
+          "        local `.bytes`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.remaining`: 8 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 216 bytes, alignment: 8 bytes, type: {async closure body@webtransport::session::{closure#0}::{closure#5}::{closure#0}<i16>}",
+          "    variant `Suspend2`: 95 bytes",
+          "        local `.bytes`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 8 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 16 bytes, alignment: 8 bytes, type: {async fn body of tokio::task::yield_now::yield_now()}",
+          "    variant `Returned`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "    variant `Panicked`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__record_quantum`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__receive`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            },
+            "Suspend0": {
+              "declared_bytes": 223,
+              "raw_field_and_padding_sum": 223
+            },
+            "Suspend1": {
+              "declared_bytes": 295,
+              "raw_field_and_padding_sum": 296
+            },
+            "Suspend2": {
+              "declared_bytes": 95,
+              "raw_field_and_padding_sum": 96
+            },
+            "Returned": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            },
+            "Panicked": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 296,
+          "matches_type_size": true
+        }
+      },
+      "datagram_reader_future": {
+        "name": "{async block@war_relay::webtransport::session::{closure#0}::{closure#7}}",
+        "bytes": 296,
+        "alignment": 8,
+        "header_log_line": 388986,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__connection`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "    variant `Suspend0`: 231 bytes",
+          "        padding: 31 bytes",
+          "        local `.remaining`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__connection`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        padding: 8 bytes",
+          "        local `.__awaitee`: 152 bytes, alignment: 8 bytes, type: {async fn body of web_transport_quinn::session::EstablishedIo::read_datagram()}",
+          "    variant `Suspend1`: 295 bytes",
+          "        local `.bytes`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.remaining`: 8 bytes",
+          "        upvar `._ref__connection`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 216 bytes, alignment: 8 bytes, type: {async closure body@webtransport::session::{closure#0}::{closure#5}::{closure#0}<i16>}",
+          "    variant `Suspend2`: 95 bytes",
+          "        local `.bytes`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        padding: 8 bytes",
+          "        upvar `._ref__connection`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "        local `..coroutine_field5`: 1 bytes, type: bool",
+          "        padding: 7 bytes",
+          "        local `.__awaitee`: 16 bytes, alignment: 8 bytes, type: {async fn body of tokio::task::yield_now::yield_now()}",
+          "    variant `Returned`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__connection`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes",
+          "    variant `Panicked`: 72 bytes",
+          "        padding: 39 bytes",
+          "        upvar `._ref__connection`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        upvar `._ref__route`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            },
+            "Suspend0": {
+              "declared_bytes": 231,
+              "raw_field_and_padding_sum": 231
+            },
+            "Suspend1": {
+              "declared_bytes": 295,
+              "raw_field_and_padding_sum": 296
+            },
+            "Suspend2": {
+              "declared_bytes": 95,
+              "raw_field_and_padding_sum": 96
+            },
+            "Returned": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            },
+            "Panicked": {
+              "declared_bytes": 72,
+              "raw_field_and_padding_sum": 71
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 296,
+          "matches_type_size": true
+        }
+      },
+      "route_future": {
+        "name": "{async closure body@war_relay::webtransport::session::{closure#0}::{closure#5}::{closure#0}<i16>}",
+        "bytes": 216,
+        "alignment": 8,
+        "header_log_line": 389557,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 211 bytes",
+          "        padding: 63 bytes",
+          "        upvar `.bytes`: 32 bytes, alignment: 8 bytes",
+          "        padding: 80 bytes",
+          "        upvar `._ref__activity`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__limiter`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration`: 8 bytes",
+          "        padding: 3 bytes",
+          "        upvar `.unreliable`: 1 bytes, alignment: 1 bytes",
+          "    variant `Suspend0`: 210 bytes",
+          "        local `.bytes`: 32 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.result`: 32 bytes",
+          "        upvar `.bytes`: 32 bytes",
+          "        local `.pending`: 16 bytes",
+          "        local `.__awaitee`: 16 bytes, type: {async fn body of tokio::task::yield_now::yield_now()}",
+          "        local `.batch`: 40 bytes",
+          "        local `.work`: 8 bytes",
+          "        upvar `._ref__activity`: 8 bytes",
+          "        upvar `._ref__limiter`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration`: 8 bytes",
+          "        local `..coroutine_field6`: 1 bytes, type: bool",
+          "        local `..coroutine_field7`: 1 bytes, type: bool",
+          "        padding: 1 bytes",
+          "        upvar `.unreliable`: 1 bytes, alignment: 1 bytes",
+          "    variant `Returned`: 211 bytes",
+          "        padding: 63 bytes",
+          "        upvar `.bytes`: 32 bytes, alignment: 8 bytes",
+          "        padding: 80 bytes",
+          "        upvar `._ref__activity`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__limiter`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration`: 8 bytes",
+          "        padding: 3 bytes",
+          "        upvar `.unreliable`: 1 bytes, alignment: 1 bytes",
+          "    variant `Panicked`: 211 bytes",
+          "        padding: 63 bytes",
+          "        upvar `.bytes`: 32 bytes, alignment: 8 bytes",
+          "        padding: 80 bytes",
+          "        upvar `._ref__activity`: 8 bytes, alignment: 8 bytes",
+          "        upvar `._ref__limiter`: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration`: 8 bytes",
+          "        padding: 3 bytes",
+          "        upvar `.unreliable`: 1 bytes, alignment: 1 bytes",
+          "    end padding: 4 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 5,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 211,
+              "raw_field_and_padding_sum": 211
+            },
+            "Suspend0": {
+              "declared_bytes": 210,
+              "raw_field_and_padding_sum": 212
+            },
+            "Returned": {
+              "declared_bytes": 211,
+              "raw_field_and_padding_sum": 211
+            },
+            "Panicked": {
+              "declared_bytes": 211,
+              "raw_field_and_padding_sum": 211
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 216,
+          "matches_type_size": true
+        }
+      },
+      "idle_future": {
+        "name": "{async block@war_relay::webtransport::session::{closure#0}::{closure#8}}",
+        "bytes": 168,
+        "alignment": 8,
+        "header_log_line": 390122,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 24 bytes",
+          "        upvar `._ref__activity`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "    variant `Suspend0`: 31 bytes",
+          "        upvar `._ref__activity`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        padding: 8 bytes",
+          "        local `.__awaitee`: 0 bytes, alignment: 1 bytes, type: std::future::Pending<Result<(), anyhow::Error>>",
+          "    variant `Suspend1`: 167 bytes",
+          "        upvar `._ref__activity`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "        padding: 8 bytes",
+          "        local `.activity`: 8 bytes, alignment: 8 bytes",
+          "        local `.duration`: 16 bytes",
+          "        local `.__awaitee`: 112 bytes, type: Sleep",
+          "    variant `Returned`: 24 bytes",
+          "        upvar `._ref__activity`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes",
+          "    variant `Panicked`: 24 bytes",
+          "        upvar `._ref__activity`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `._ref__relay`: 8 bytes",
+          "        upvar `._ref__registration__peer`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Suspend0": {
+              "declared_bytes": 31,
+              "raw_field_and_padding_sum": 32
+            },
+            "Suspend1": {
+              "declared_bytes": 167,
+              "raw_field_and_padding_sum": 168
+            },
+            "Returned": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Panicked": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 168,
+          "matches_type_size": true
+        }
+      },
+      "capsule_task_cell": {
+        "name": "tokio::runtime::task::core::Cell<{async fn body of session::Session::run_recv()}, std::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+        "bytes": 512,
+        "alignment": 128,
+        "header_log_line": 324175,
+        "details": [
+          "    field `.header`: 32 bytes",
+          "    field `.core`: 392 bytes",
+          "    field `.trailer`: 48 bytes",
+          "    end padding: 40 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 512,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 512,
+          "matches_type_size": true
+        }
+      },
+      "capsule_future": {
+        "name": "{async fn body of session::Session::run_recv()}",
+        "bytes": 368,
+        "alignment": 8,
+        "header_log_line": 324412,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 56 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.conn`: 8 bytes",
+          "        upvar `.error`: 8 bytes",
+          "    variant `Suspend0`: 360 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.conn`: 8 bytes",
+          "        upvar `.error`: 8 bytes",
+          "        local `.conn`: 8 bytes",
+          "        local `.error`: 8 bytes",
+          "        local `.__awaitee`: 288 bytes, type: {async fn body of session::Session::read_capsules()}",
+          "    variant `Returned`: 56 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.conn`: 8 bytes",
+          "        upvar `.error`: 8 bytes",
+          "    variant `Panicked`: 56 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.conn`: 8 bytes",
+          "        upvar `.error`: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            },
+            "Suspend0": {
+              "declared_bytes": 360,
+              "raw_field_and_padding_sum": 360
+            },
+            "Returned": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            },
+            "Panicked": {
+              "declared_bytes": 56,
+              "raw_field_and_padding_sum": 56
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 368,
+          "matches_type_size": true
+        }
+      },
+      "capsule_parser_future": {
+        "name": "{async fn body of session::Session::read_capsules()}",
+        "bytes": 288,
+        "alignment": 8,
+        "header_log_line": 324734,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 40 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Suspend0`: 280 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.reader`: 72 bytes",
+          "        local `.__awaitee`: 168 bytes, type: {async fn body of Http3CapsuleReader<quinn::RecvStream>::read()}",
+          "    variant `Returned`: 40 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Panicked`: 40 bytes",
+          "        upvar `.recv`: 40 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 40,
+              "raw_field_and_padding_sum": 40
+            },
+            "Suspend0": {
+              "declared_bytes": 280,
+              "raw_field_and_padding_sum": 280
+            },
+            "Returned": {
+              "declared_bytes": 40,
+              "raw_field_and_padding_sum": 40
+            },
+            "Panicked": {
+              "declared_bytes": 40,
+              "raw_field_and_padding_sum": 40
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 288,
+          "matches_type_size": true
+        }
+      },
+      "capsule_read_future": {
+        "name": "{async fn body of web_transport_proto::Http3CapsuleReader<quinn::RecvStream>::read()}",
+        "bytes": 168,
+        "alignment": 8,
+        "header_log_line": 325445,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Suspend0`: 160 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.self`: 8 bytes",
+          "        local `.__awaitee`: 144 bytes, type: {async fn body of Http3CapsuleReader<quinn::RecvStream>::read_data_frame()}",
+          "    variant `Returned`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Panicked`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Suspend0": {
+              "declared_bytes": 160,
+              "raw_field_and_padding_sum": 160
+            },
+            "Returned": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Panicked": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 168,
+          "matches_type_size": true
+        }
+      },
+      "io_closed_future": {
+        "name": "{async fn body of web_transport_quinn::session::EstablishedIo::closed()}",
+        "bytes": 112,
+        "alignment": 8,
+        "header_log_line": 391193,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Suspend0`: 104 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `..coroutine_field0`: 8 bytes, type: &web_transport_quinn::session::EstablishedIo",
+          "        local `.__awaitee`: 88 bytes, type: {async fn body of wtransport::quinn::Connection::closed()}",
+          "    variant `Returned`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Panicked`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Suspend0": {
+              "declared_bytes": 104,
+              "raw_field_and_padding_sum": 104
+            },
+            "Returned": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Panicked": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 112,
+          "matches_type_size": true
+        }
+      },
+      "io_datagram_future": {
+        "name": "{async fn body of web_transport_quinn::session::EstablishedIo::read_datagram()}",
+        "bytes": 152,
+        "alignment": 8,
+        "header_log_line": 390459,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Suspend0`: 144 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        local `.__awaitee`: 136 bytes, type: {async fn body of web_transport_quinn::session::Session::read_datagram_borrowed()}",
+          "    variant `Returned`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    variant `Panicked`: 8 bytes",
+          "        upvar `.self`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Suspend0": {
+              "declared_bytes": 144,
+              "raw_field_and_padding_sum": 144
+            },
+            "Returned": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            },
+            "Panicked": {
+              "declared_bytes": 8,
+              "raw_field_and_padding_sum": 8
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 152,
+          "matches_type_size": true
+        }
+      },
+      "record_reader_future": {
+        "name": "{async fn body of war_relay::webtransport::read_record_budgeted<web_transport_quinn::recv::RecvStream>()}",
+        "bytes": 144,
+        "alignment": 8,
+        "header_log_line": 390503,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 48 bytes",
+          "        upvar `.maximum`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.budget`: 8 bytes",
+          "        padding: 24 bytes",
+          "        upvar `.stream`: 8 bytes, alignment: 8 bytes",
+          "    variant `Suspend0`: 95 bytes",
+          "        upvar `.maximum`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.budget`: 8 bytes",
+          "        local `.stream`: 8 bytes",
+          "        local `.maximum`: 8 bytes",
+          "        local `.budget`: 8 bytes",
+          "        upvar `.stream`: 8 bytes",
+          "        local `.header`: 4 bytes",
+          "        padding: 4 bytes",
+          "        local `.__awaitee`: 40 bytes, alignment: 8 bytes, type: tokio::io::util::read_exact::ReadExact<'_, web_transport_quinn::recv::RecvStream>",
+          "    variant `Suspend1`: 143 bytes",
+          "        upvar `.maximum`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.budget`: 8 bytes",
+          "        local `.stream`: 8 bytes",
+          "        padding: 16 bytes",
+          "        upvar `.stream`: 8 bytes, alignment: 8 bytes",
+          "        local `.header`: 4 bytes",
+          "        local `..coroutine_field9`: 1 bytes, type: bool",
+          "        padding: 3 bytes",
+          "        local `.size`: 8 bytes, alignment: 8 bytes",
+          "        local `.body`: 24 bytes",
+          "        local `.__awaitee`: 40 bytes, type: tokio::io::util::read_exact::ReadExact<'_, web_transport_quinn::recv::RecvStream>",
+          "        local `._lease`: 16 bytes",
+          "    variant `Returned`: 48 bytes",
+          "        upvar `.maximum`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.budget`: 8 bytes",
+          "        padding: 24 bytes",
+          "        upvar `.stream`: 8 bytes, alignment: 8 bytes",
+          "    variant `Panicked`: 48 bytes",
+          "        upvar `.maximum`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.budget`: 8 bytes",
+          "        padding: 24 bytes",
+          "        upvar `.stream`: 8 bytes, alignment: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 1,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 48,
+              "raw_field_and_padding_sum": 48
+            },
+            "Suspend0": {
+              "declared_bytes": 95,
+              "raw_field_and_padding_sum": 96
+            },
+            "Suspend1": {
+              "declared_bytes": 143,
+              "raw_field_and_padding_sum": 144
+            },
+            "Returned": {
+              "declared_bytes": 48,
+              "raw_field_and_padding_sum": 48
+            },
+            "Panicked": {
+              "declared_bytes": 48,
+              "raw_field_and_padding_sum": 48
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 144,
+          "matches_type_size": true
+        }
+      },
+      "write_frame_future": {
+        "name": "{async fn body of war_relay::webtransport::write_frame_from()}",
+        "bytes": 152,
+        "alignment": 8,
+        "header_log_line": 390376,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.frame`: 8 bytes",
+          "        upvar `.offset`: 8 bytes",
+          "    variant `Suspend0`: 144 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.frame`: 8 bytes",
+          "        upvar `.offset`: 8 bytes",
+          "        local `..coroutine_field0`: 64 bytes, type: [tokio_util::bytes::Bytes; 2]",
+          "        local `.__awaitee`: 56 bytes, type: {async fn body of webtransport::write_output_chunks()}",
+          "    variant `Returned`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.frame`: 8 bytes",
+          "        upvar `.offset`: 8 bytes",
+          "    variant `Panicked`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.frame`: 8 bytes",
+          "        upvar `.offset`: 8 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Suspend0": {
+              "declared_bytes": 144,
+              "raw_field_and_padding_sum": 144
+            },
+            "Returned": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Panicked": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 152,
+          "matches_type_size": true
+        }
+      },
+      "write_chunks_future": {
+        "name": "{async fn body of war_relay::webtransport::write_output_chunks()}",
+        "bytes": 56,
+        "alignment": 8,
+        "header_log_line": 393855,
+        "details": [
+          "    discriminant: 1 bytes",
+          "    variant `Unresumed`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.chunks`: 16 bytes",
+          "    variant `Suspend0`: 48 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.chunks`: 16 bytes",
+          "        local `.__awaitee`: 24 bytes, type: PollFn<{closure@webtransport::write_output_chunks::{closure#0}::{closure#0}}>",
+          "    variant `Returned`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.chunks`: 16 bytes",
+          "    variant `Panicked`: 24 bytes",
+          "        upvar `.output`: 8 bytes, offset: 0 bytes, alignment: 8 bytes",
+          "        upvar `.chunks`: 16 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 8,
+          "variants": {
+            "Unresumed": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Suspend0": {
+              "declared_bytes": 48,
+              "raw_field_and_padding_sum": 48
+            },
+            "Returned": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            },
+            "Panicked": {
+              "declared_bytes": 24,
+              "raw_field_and_padding_sum": 24
+            }
+          },
+          "scalar_plus_max_declared_variant_bytes": 56,
+          "matches_type_size": true
+        }
+      },
+      "output_owner": {
+        "name": "war_relay::webtransport::Output",
+        "bytes": 272,
+        "alignment": 8,
+        "header_log_line": 389144,
+        "details": [
+          "    field `.connection`: 8 bytes",
+          "    field `.relay`: 8 bytes",
+          "    field `.retirement`: 8 bytes",
+          "    field `.queue`: 240 bytes",
+          "    field `.activity`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 272,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 272,
+          "matches_type_size": true
+        }
+      },
+      "established_io_owner": {
+        "name": "web_transport_quinn::EstablishedIo",
+        "bytes": 96,
+        "alignment": 8,
+        "header_log_line": 361616,
+        "details": [
+          "    field `.session_id`: 16 bytes",
+          "    field `.conn`: 8 bytes",
+          "    field `.header_datagram`: 32 bytes",
+          "    field `.connect_send`: 8 bytes",
+          "    field `.error`: 8 bytes",
+          "    field `._settings`: 8 bytes",
+          "    field `.retained_accept`: 16 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 96,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 96,
+          "matches_type_size": true
+        }
+      },
+      "queued_output": {
+        "name": "war_relay::webtransport::QueuedOutput",
+        "bytes": 80,
+        "alignment": 8,
+        "header_log_line": 392093,
+        "details": [
+          "    field `.offset`: 8 bytes",
+          "    field `.packet`: 56 bytes",
+          "    field `.started`: 16 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 80,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 80,
+          "matches_type_size": true
+        }
+      },
+      "stream_owner": {
+        "name": "war_relay::webtransport::StreamOutput",
+        "bytes": 72,
+        "alignment": 8,
+        "header_log_line": 392541,
+        "details": [
+          "    field `.stream`: 64 bytes",
+          "    field `.busy`: 1 bytes",
+          "    end padding: 7 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 72,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 72,
+          "matches_type_size": true
+        }
+      },
+      "acceptor_owner": {
+        "name": "web_transport_quinn::SessionAcceptor",
+        "bytes": 24,
+        "alignment": 8,
+        "header_log_line": 370703,
+        "details": [
+          "    field `.conn`: 8 bytes",
+          "    field `.error`: 8 bytes",
+          "    field `.accept`: 8 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 24,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 24,
+          "matches_type_size": true
+        }
+      },
+      "envelope_owner": {
+        "name": "war_relay::relay::Envelope",
+        "bytes": 56,
+        "alignment": 8,
+        "header_log_line": 393712,
+        "details": [
+          "    field `.budget`: 8 bytes",
+          "    field `.frame`: 48 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 56,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 56,
+          "matches_type_size": true
+        }
+      },
+      "frame_owner": {
+        "name": "war_relay::frame::Frame",
+        "bytes": 48,
+        "alignment": 8,
+        "header_log_line": 394380,
+        "details": [
+          "    field `.payload`: 32 bytes",
+          "    field `.prefix`: 14 bytes",
+          "    field `.prefix_len`: 1 bytes",
+          "    field `.unreliable`: 1 bytes"
+        ],
+        "validation": {
+          "top_level_scalar_field_or_tag_and_padding_bytes": 48,
+          "variants": {},
+          "scalar_plus_max_declared_variant_bytes": 48,
+          "matches_type_size": true
+        }
+      }
+    }
+  },
+  "validation": {
+    "quinn_field_padding_sums_checked": true,
+    "quinn_repeated_records": {
+      "quinn_proto::connection::streams::state::StreamsState": 5,
+      "quinn_proto::connection::spaces::PacketSpaces": 5,
+      "quinn_proto::connection::spaces::PacketSpace": 5,
+      "quinn_proto::connection::paths::PathData": 5,
+      "quinn::connection::ConnectionInner": 2,
+      "quinn::connection::State": 2,
+      "quinn_proto::connection::Connection": 4,
+      "quinn::connection::Shared": 2
+    },
+    "task_type_and_declared_variant_size_checks": true,
+    "task_repeated_type_checks": {
+      "capsule_task_cell": {
+        "records": 2,
+        "bytes": 512,
+        "numeric_field_signatures_agree": true
+      },
+      "capsule_future": {
+        "records": 1,
+        "bytes": 368,
+        "numeric_field_signatures_agree": true
+      },
+      "capsule_parser_future": {
+        "records": 1,
+        "bytes": 288,
+        "numeric_field_signatures_agree": true
+      },
+      "capsule_read_future": {
+        "records": 1,
+        "bytes": 168,
+        "numeric_field_signatures_agree": true
+      },
+      "io_datagram_future": {
+        "records": 3,
+        "bytes": 152,
+        "numeric_field_signatures_agree": true
+      },
+      "capsule_boxed_cell_context": {
+        "records": 2,
+        "bytes": 128,
+        "numeric_field_signatures_agree": true
+      },
+      "io_closed_future": {
+        "records": 3,
+        "bytes": 112,
+        "numeric_field_signatures_agree": true
+      },
+      "app_task_cell": {
+        "records": 4,
+        "bytes": 2048,
+        "numeric_field_signatures_agree": true
+      },
+      "app_outer_future": {
+        "records": 2,
+        "bytes": 1864,
+        "numeric_field_signatures_agree": true
+      },
+      "session_future": {
+        "records": 2,
+        "bytes": 1792,
+        "numeric_field_signatures_agree": true
+      },
+      "active_select_tuple": {
+        "records": 2,
+        "bytes": 880,
+        "numeric_field_signatures_agree": true
+      },
+      "writer_future": {
+        "records": 2,
+        "bytes": 544,
+        "numeric_field_signatures_agree": true
+      },
+      "reliable_reader_future": {
+        "records": 2,
+        "bytes": 296,
+        "numeric_field_signatures_agree": true
+      },
+      "datagram_reader_future": {
+        "records": 2,
+        "bytes": 296,
+        "numeric_field_signatures_agree": true
+      },
+      "join_future": {
+        "records": 2,
+        "bytes": 288,
+        "numeric_field_signatures_agree": true
+      },
+      "output_owner": {
+        "records": 2,
+        "bytes": 272,
+        "numeric_field_signatures_agree": true
+      },
+      "route_future": {
+        "records": 2,
+        "bytes": 216,
+        "numeric_field_signatures_agree": true
+      },
+      "idle_future": {
+        "records": 2,
+        "bytes": 168,
+        "numeric_field_signatures_agree": true
+      },
+      "write_frame_future": {
+        "records": 2,
+        "bytes": 152,
+        "numeric_field_signatures_agree": true
+      },
+      "record_reader_future": {
+        "records": 2,
+        "bytes": 144,
+        "numeric_field_signatures_agree": true
+      },
+      "app_task_boxed_cell_context": {
+        "records": 4,
+        "bytes": 128,
+        "numeric_field_signatures_agree": true
+      },
+      "established_io_owner": {
+        "records": 1,
+        "bytes": 96,
+        "numeric_field_signatures_agree": true
+      },
+      "queued_output": {
+        "records": 2,
+        "bytes": 80,
+        "numeric_field_signatures_agree": true
+      },
+      "stream_owner": {
+        "records": 2,
+        "bytes": 72,
+        "numeric_field_signatures_agree": true
+      },
+      "write_chunks_future": {
+        "records": 2,
+        "bytes": 56,
+        "numeric_field_signatures_agree": true
+      },
+      "acceptor_owner": {
+        "records": 1,
+        "bytes": 24,
+        "numeric_field_signatures_agree": true
+      },
+      "envelope_owner": {
+        "records": 1,
+        "bytes": 56,
+        "numeric_field_signatures_agree": true
+      },
+      "frame_owner": {
+        "records": 1,
+        "bytes": 48,
+        "numeric_field_signatures_agree": true
+      }
+    },
+    "root_compile_log_lines": [
+      338079
+    ],
+    "cross_crate_print_scope": "Parallel compiler output may interleave; selected complete blocks pass size checks and root/source-qualified repeated task records agree. Unqualified names that collide across crates are not merged.",
+    "generator_variant_arithmetic_scope": "Raw field/padding lists may overlap a discriminant byte. Type checks use top-level tags/padding plus maximum declared variant size; raw details remain available."
+  },
+  "interpretation": [
+    "The main permanent frame is dominated by the active session variant, not the already boxed handshake or join setup.",
+    "Writer and select tuple are nested within the session future, which is nested within the outer future and task cell. These sizes must not be summed as independent allocations.",
+    "The separate capsule task has its own cell and parser future. Removing its cell while retaining that future elsewhere is relocation; compute the enlarged main task and every surviving owner.",
+    "Both current outer and capsule futures are below even Tokio debug boxing threshold2048 and release threshold16384. The boxed-cell context records represent alternate generic branches, not an extra persistent allocation in these spawn calls.",
+    "Application types are identified by source location or complete qualified function identity. Unqualified frame::Frame names collide across crates and are not merged. Root/source-qualified repeated records agree numerically.",
+    "Exact structure sums and tag-plus-max-declared-variant sums are checked. Raw generator variant field/padding sums can differ by a discriminant byte due to offset/discriminant placement; they are retained rather than misreported as disjoint fields.",
+    "Cross-crate output can interleave in a parallel cargo build. Selected complete blocks pass size checks and repeated root types agree; this does not authenticate every unselected block in the full log.",
+    "The diagnostic binary differs from the ordinary selected release and is not an ordinary benchmark executable. Requested-live heap is historical selected-image evidence, not a fresh census.",
+    "Final Initial/Handshake packet-space retirement already removed 1072 inline bytes and remains retained.",
+    "Optional previous-path boxing was already rejected after a paced reliable failure; do not repeat unchanged.",
+    "Compact RNG storage was already rejected after private/room throughput regressions.",
+    "Streams704, Data-space544, statistics536, current-path408 and peer-parameters352 are live state, not one unused slab.",
+    "Untried independent cold-metadata targets are individually much smaller than 1KiB per connection.",
+    "Replacing Quinn driver/wrapper alone can remove at most its 688 inline bytes before replacement state costs; the 4656-byte protocol owner remains. Real savings require fewer or smaller owned states, not boxing them.",
+    "A major combined store/driver redesign must also remove duplicated per-connection dispatch/wakeup/map/task allocations and preserve stream, congestion, timer, FIFO and cancellation semantics; aggregate savings require actual heap proof."
+  ],
+  "next_candidate_status": {
+    "established_session_core": "Unmeasured representation proposal only. Its required state, new cells/boxes, Output/IO growth and independent routing/writer progress must all be counted before any saving claim.",
+    "recommendation": "Prototype one owned established SessionCore representation that polls the existing writer/read/route state without retaining nested async maxima and duplicate captures. Keep one application task, independent stream/datagram routing continuations and writer progress, all budgets/deadlines/cancellation semantics, and existing capsule behavior. First measure total task plus all persistent owners; a setup box, moved writer state, extra task, or merged capsule alone is not the proposed saving.",
+    "avoid_repeating": [
+      "Cold handshake boxing is already retained; current peak is established state.",
+      "A smaller task allocation plus a separately boxed live future is not a total-owner saving.",
+      "Capsule fusion retains required receive/parser state and changes construction/admission/teardown ownership.",
+      "Previous-path boxing, compact RNG and grouped Quinn-driver experiments have recorded rejections; their unchanged candidates are not proposed again."
+    ]
+  },
+  "prior_candidate_history": [
+    {
+      "report": "docs/reports/webtransport-lazy-migration-rejected-2026-10-21.json",
+      "sha256": "907b0f3104b840664c7714b7482210334d14b996d81b95b7e6284402c9f9684c"
+    },
+    {
+      "report": "docs/reports/webtransport-compact-rng-rejected-2026-11-06.json",
+      "sha256": "429fc6d330b32f31edd8fadcf0d43358e04c1e30147d666089a97ef99c00e236"
+    },
+    {
+      "report": "docs/reports/webtransport-packet-spaces-2026-10-22.json",
+      "sha256": "01e9d704343a56c30bda82f998082be330090c27c93f29e277822587905e94f6"
+    },
+    {
+      "report": "docs/reports/webtransport-grouped-drivers-2026-10-22.json",
+      "sha256": "3f0483fb9b36a461500a4887b1c7aa95666566b318c17037cabf86cb85009272"
+    }
+  ],
+  "limits": [
+    "No runtime benchmark or candidate memory-saving experiment was performed for this report.",
+    "The 5344-byte Arc allocation contains the 4656-byte protocol object; these are nested ownership and cannot be added as separate allocations.",
+    "The 688-byte wrapper is a ceiling on deleting that existing inline wrapper before replacement state; protocol state and separately owned channel/task/map allocations remain.",
+    "Large protocol members include live stream, packet-space, path, timer, statistics and peer state; their sizes alone do not establish cold or removable storage.",
+    "A changed allocator, future representation or owner boundary needs a net requested-live/RSS comparison and complete ordinary behavior/performance acceptance.",
+    "This capture excludes later parent-owned candidate builds, tests, heap screens and timings. Those require their own source and outcome reports."
+  ]
+}
