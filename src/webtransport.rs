@@ -22,7 +22,7 @@ use std::{
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::{sync::Notify, task::JoinSet};
 use tokio_util::sync::CancellationToken;
-use web_transport_quinn::{SendStream, Session as Connection};
+use web_transport_quinn::{EstablishedIo as Connection, SendStream, SessionAcceptor};
 use wtransport::quinn::{Endpoint, VarInt};
 
 mod queue;
@@ -345,11 +345,11 @@ pub async fn serve(
                 sessions.spawn(async move {
                     let _lease = lease;
                     let _permit = permit;
-                    let connection = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
+                    let (connection, acceptor) = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
                         Ok(Ok(connection)) => connection,
                         _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return; }
                     };
-                    if let Err(error) = session(connection.clone(), relay, retirement).await {
+                    if let Err(error) = session(connection.clone(), acceptor, relay, retirement).await {
                         tracing::debug!(%error, "WebTransport session ended");
                         connection.close(1002, b"Session ended");
                     }
@@ -376,7 +376,7 @@ pub async fn serve(
 async fn accept_connection(
     incoming: wtransport::quinn::Incoming,
     relay: Arc<Relay>,
-) -> Result<Arc<Connection>> {
+) -> Result<(Arc<Connection>, SessionAcceptor)> {
     let quic = incoming.await?;
     let request = web_transport_quinn::Request::accept(quic).await?;
     if request.url.path() != "/war" {
@@ -391,8 +391,9 @@ async fn accept_connection(
     request
         .ok()
         .await
-        .map(Arc::new)
-        .context("accept WebTransport")
+        .context("accept WebTransport")?
+        .try_into_established()
+        .map_err(|_| anyhow::anyhow!("new session unexpectedly has a pending poll operation"))
 }
 
 struct ConnectionLease(Arc<Relay>);
@@ -408,12 +409,13 @@ const INPUT_QUANTUM: usize = 256;
 
 async fn session(
     connection: Arc<Connection>,
+    acceptor: SessionAcceptor,
     relay: Arc<Relay>,
     retirement: Arc<Notify>,
 ) -> Result<()> {
-    let ((send, mut receive), join) =
+    let admission =
         tokio::time::timeout(Duration::from_secs(relay.config.join_timeout_secs), async {
-            let (send, mut receive) = connection.accept_bi().await?;
+            let (send, mut receive) = acceptor.accept_bi().await?;
             let join = read_record_budgeted(
                 &mut receive,
                 relay.config.max_message_bytes,
@@ -422,7 +424,10 @@ async fn session(
             .await?;
             Ok::<_, anyhow::Error>(((send, receive), join))
         })
-        .await??;
+        .await;
+    // Preserve extra stream ownership before either ordinary join error can return.
+    connection.finish_accepting(acceptor);
+    let ((send, mut receive), join) = admission??;
     let activity =
         (relay.config.idle_timeout_secs != 0).then(|| Arc::new(Mutex::new(Instant::now())));
     let output = Arc::new(Output {

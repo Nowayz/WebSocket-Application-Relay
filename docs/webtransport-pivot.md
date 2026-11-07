@@ -2653,3 +2653,54 @@ Remaining causal work is to distinguish ingress/future fairness, catch-up
 bursts, and loss/flow-control recovery. Throughput and memory parity remain
 unmet; the compact established-session IO prototype is an unverified next
 memory candidate, not a retained implementation.
+
+## Compact established-session IO retained — 2026-11-06
+
+The relay now consumes the generic WebTransport Session into established IO
+and temporary stream acceptance. Once its application stream and join record
+are admitted, empty acceptance machinery and unused request/open-operation
+metadata are released. Partial extra streams, QPACK state and state shared with
+legacy Session clones remain owned through close. Settings, CONNECT capsules,
+session-ID framing and error mapping remain intact. Busy raw operations and
+HTTP/3 poll-accept registrations return the original handle unchanged.
+
+The pinned `web-transport-quinn` 0.13.3 archive is newly vendored with one
+three-file patch. Root tests pass 253/1 existing ignored; all 28 library tests
+and root/library Clippy pass. Focused real-QUIC tests verify wake registrations,
+nonzero/raw IDs, empty-state release, partial/QPACK retention, clones and close
+capsules. The caller retains acceptance state before propagating join errors
+or timeouts. Full archive/provenance verification passes (300 files, six archives,
+five declared patches).
+
+Fresh matched 100k measurements reduce ordinary ready RSS from 2081.61 to
+1889.27 MiB. Separate requested live allocation totals fall from 2,018,321,529 B
+to 1,848,987,316 B, saving 161.49 MiB net. These totals include the relay task's
+increase from 1920 to 2048 B per session; the Quinn core stays 5344 B. Setup in
+the ordinary pair is 10.2477 versus 10.7656 s, and measured server CPU is 5.76
+versus 5.96 s. These single-pair values are preserved, not presented as gains.
+
+All 18 ordinary 12-second comparisons and all six paced reliable plus six
+datagram controls pass. Longer median changes against the retained-clock image
+are private -0.37%, room +0.99%, mixed +0.61%; no statistical speed claim is
+made. Both endpoint profile captures pass and all four reports have zero lost
+samples. Actual Chrome passes all nine checks, including 5 MiB and datagrams;
+connection, staging and output gauges return to zero. The browser bundle rebuild
+succeeds with piped output and matches the tested bytes; the initial redirected
+esbuild-wasm failure remains a separate recorded build attempt.
+
+The opaque UDP proxy's four checks pass with 20 ms per direction and independent
+2% loss. Candidate datagram p99 freshest-state age is 103.63 ms with 17/360
+updates missing, versus 5002.47 ms and no missing updates for streams. Bulk
+arrives at 9019.36 versus 5076.63 ms. Baseline datagram p99 is 110.42 ms with
+12 missing updates. These single runs preserve the freshness/bulk tradeoff;
+the fixture is not netem or a native TCP equivalence experiment.
+
+Selected frozen release image:
+`1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0`.
+Complete source, archive pin, receipts, failures, scripts and limits:
+[session IO screen](reports/webtransport-session-io-screen-2026-11-06.json).
+
+This is a retained reduction of avoidable session state. Full throughput and
+memory parity remains unproven, including the large remaining user-space
+memory gap and the receiver-pressure mechanism. Client-cooperation and cipher
+preference experiments are prepared separately and remain unexecuted.

@@ -344,3 +344,39 @@ turn negative RTT intervals into zero samples. The patch removes that stale
 timestamp plumbing. A fake-clock stateless-reset regression distinguishes
 after-receive sampling from both shared and before-receive timestamps.
 The complete change remains in `quinn-event-channel.patch`.
+
+## Established WebTransport session IO
+
+Published `web-transport-quinn` **0.13.3** retains request/response metadata,
+stream-opening headers, per-handle operation slots and acceptance machinery in
+every session. The relay needs one application bidirectional stream, followed by
+datagram IO and close handling. Its consuming `try_into_established` path splits
+that IO from a temporary `SessionAcceptor`. Neither handle keeps the original
+`Session` allocation alive.
+
+After admission, `finish_accepting` releases empty acceptance machinery. It keeps
+partially decoded extra streams, QPACK streams and acceptance state shared with
+other Session clones until the IO handle drops. The relay calls it before
+propagating either a join error or timeout, preserving ownership through the
+outer error-close path. Settings streams, CONNECT-send ownership, background
+capsule processing, session-ID framing and first-writer-wins errors remain owned
+by the compact IO handle. It exposes no raw Quinn stream-opening methods.
+
+Conversion refuses pending operation slots and HTTP/3 poll-accept waiters,
+returning the original handle intact. `Parked` explicitly tracks a live park;
+cloning starts empty and successful polls release it. This keeps consuming
+conversion from silently cancelling a registration or an owned operation.
+
+The complete archive-relative change is `web-transport-session-io.patch`.
+`provenance.json` pins the published archive and the three modified source files.
+Focused real-QUIC tests cover busy conversion, wake registration, raw/nonzero-ID
+datagrams, empty-state release, partial/QPACK retention, clones and close capsules.
+
+The matched 100k screen saves 161.49 MiB of requested live allocations and
+192.34 MiB of ordinary RSS. These net totals include growth of the relay task
+allocation from 1920 to 2048 bytes per session. Longer median throughput changes
+are -0.37% private, +0.99% room and +0.61% mixed; they establish no statistical
+speed claim. Browser, paced reliable/datagram, both-endpoint profile and user-space
+loss/bulk checks pass. Full throughput and memory parity remain unmet; see
+`docs/reports/webtransport-session-io-screen-2026-11-06.json` for measurements,
+reproduction and fixture limits.

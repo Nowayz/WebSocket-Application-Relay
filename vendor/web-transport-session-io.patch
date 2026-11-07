@@ -1,0 +1,601 @@
+--- a/web-transport-quinn/src/op.rs
++++ b/web-transport-quinn/src/op.rs
+@@ -34,6 +34,10 @@
+ }
+
+ impl<T: 'static> Op<T> {
++    pub(crate) fn is_idle(&mut self) -> bool {
++        self.future.get_mut().unwrap().is_none()
++    }
++
+     /// Poll an operation already in flight, if there is one.
+     ///
+     /// `Some` is its result; `None` means the slot is idle and the caller should
+--- a/web-transport-quinn/src/session.rs
++++ b/web-transport-quinn/src/session.rs
+@@ -125,7 +125,220 @@
+     parked_accept_bi: Parked,
+ }
+
++/// Established session IO without request metadata or stream-accept machinery.
++///
++/// HTTP/3 control-stream ownership, capsule handling and error mapping remain
++/// alive; stream acceptance is owned separately by [`SessionAcceptor`]. This
++/// handle intentionally exposes no raw QUIC open/accept methods that could
++/// bypass WebTransport stream framing.
++pub struct EstablishedIo {
++    conn: quinn::Connection,
++    session_id: Option<VarInt>,
++    header_datagram: Bytes,
++    _settings: Option<Arc<Settings>>,
++    retained_accept: Mutex<Option<Arc<Mutex<SessionAccept>>>>,
++    connect_send: Arc<Mutex<Option<quinn::SendStream>>>,
++    error: Arc<CloseReason>,
++}
++
++impl EstablishedIo {
++    /// Finish application stream admission, preserving already-owned HTTP/3 state.
++    ///
++    /// This does not poll additional streams. Empty acceptance machinery is freed;
++    /// partially decoded streams, QPACK streams and shared acceptance state live
++    /// until this session IO is dropped, including the outer error-close path.
++    ///
++    /// # Panics
++    /// Panics if the acceptor belongs to a different session.
++    pub fn finish_accepting(&self, acceptor: SessionAcceptor) {
++        assert!(
++            Arc::ptr_eq(&self.error, &acceptor.error),
++            "acceptor belongs to another session"
++        );
++        let Some(accept) = acceptor.accept else {
++            return;
++        };
++        let keep = if Arc::strong_count(&accept) != 1 {
++            true
++        } else {
++            let state = accept.lock().unwrap();
++            state.qpack_encoder.is_some()
++                || state.qpack_decoder.is_some()
++                || !state.pending_uni.is_empty()
++                || !state.pending_bi.is_empty()
++        };
++        if keep {
++            self.retained_accept.lock().unwrap().get_or_insert(accept);
++        }
++    }
++
++    fn map_error(&self, error: impl Into<SessionError>) -> SessionError {
++        map_error_with(&self.error, error)
++    }
++
++    /// Receive a datagram with the same session-ID validation as [`Session`].
++    pub async fn read_datagram(&self) -> Result<Bytes, SessionError> {
++        Session::read_datagram_borrowed(&self.conn, self.session_id, &self.error).await
++    }
++
++    /// Send an unreliable datagram with the negotiated session-ID header.
++    pub fn send_datagram(&self, data: Bytes) -> Result<(), SessionError> {
++        let data = if self.header_datagram.is_empty() {
++            data
++        } else {
++            Session::frame_datagram(&self.header_datagram, &data)
++        };
++        self.conn
++            .send_datagram(data)
++            .map_err(|error| self.map_error(error))
++    }
++
++    /// Send a datagram while waiting for local datagram-buffer space.
++    pub async fn send_datagram_wait(&self, data: Bytes) -> Result<(), SessionError> {
++        let data = if self.header_datagram.is_empty() {
++            data
++        } else {
++            Session::frame_datagram(&self.header_datagram, &data)
++        };
++        self.conn
++            .send_datagram_wait(data)
++            .await
++            .map_err(|error| self.map_error(error))
++    }
++
++    /// Maximum application datagram size after subtracting the session header.
++    pub fn max_datagram_size(&self) -> usize {
++        self.conn
++            .max_datagram_size()
++            .unwrap_or(0)
++            .saturating_sub(self.header_datagram.len())
++    }
++
++    /// Available datagram-buffer space after subtracting the session header.
++    pub fn datagram_send_buffer_space(&self) -> usize {
++        self.conn
++            .datagram_send_buffer_space()
++            .saturating_sub(self.header_datagram.len())
++    }
++
++    /// Close using the original first-writer-wins capsule and QUIC close path.
++    pub fn close(&self, code: u32, reason: &[u8]) {
++        Session::close_shared(
++            &self.conn,
++            self.session_id,
++            &self.connect_send,
++            &self.error,
++            code,
++            reason,
++        );
++    }
++
++    /// Wait for QUIC closure, including delivery of an initiated close capsule.
++    pub async fn closed(&self) -> SessionError {
++        self.map_error(self.conn.closed().await)
++    }
++
++    /// Return the mapped close reason, when closed.
++    pub fn close_reason(&self) -> Option<SessionError> {
++        self.conn.close_reason().map(|error| self.map_error(error))
++    }
++}
++
++/// Stream acceptance detached from established session IO.
++///
++/// Keep this handle while accepting more streams. After the relay's sole app
++/// stream is accepted, pass this to [`EstablishedIo::finish_accepting`] to keep
++/// already-owned HTTP/3 streams without retaining empty accept machinery.
++pub struct SessionAcceptor {
++    conn: quinn::Connection,
++    accept: Option<Arc<Mutex<SessionAccept>>>,
++    error: Arc<CloseReason>,
++}
++
++impl SessionAcceptor {
++    fn map_error(&self, error: impl Into<SessionError>) -> SessionError {
++        map_error_with(&self.error, error)
++    }
++
++    /// Accept a unidirectional stream with the original decoder and waiters.
++    pub async fn accept_uni(&self) -> Result<RecvStream, SessionError> {
++        if let Some(accept) = &self.accept {
++            kio::wait(|waiter| poll_accept_uni_shared(accept, waiter))
++                .await
++                .map_err(|error| self.map_error(error))
++        } else {
++            let recv = self
++                .conn
++                .accept_uni()
++                .await
++                .map_err(|error| self.map_error(error))?;
++            Ok(RecvStream::new(recv, self.error.clone(), true))
++        }
++    }
++
++    /// Accept a bidirectional stream with the original decoder and waiters.
++    pub async fn accept_bi(&self) -> Result<(SendStream, RecvStream), SessionError> {
++        if let Some(accept) = &self.accept {
++            kio::wait(|waiter| poll_accept_bi_shared(accept, waiter))
++                .await
++                .map_err(|error| self.map_error(error))
++        } else {
++            let (send, recv) = self
++                .conn
++                .accept_bi()
++                .await
++                .map_err(|error| self.map_error(error))?;
++            Ok((
++                SendStream::new(send, self.error.clone(), true),
++                RecvStream::new(recv, self.error.clone(), true),
++            ))
++        }
++    }
++}
++
+ impl Session {
++    /// Consume an idle handle, separating established IO from stream acceptance.
++    ///
++    /// Request/response metadata and unused per-handle operation slots are released.
++    /// An in-flight poll operation returns the original handle unchanged instead
++    /// of silently cancelling an owned send or losing its wake registration.
++    #[allow(
++        clippy::result_large_err,
++        reason = "Return a busy handle intact without allocating on refusal"
++    )]
++    pub fn try_into_established(mut self) -> Result<(Arc<EstablishedIo>, SessionAcceptor), Self> {
++        if ![
++            self.op_accept_uni.is_idle(),
++            self.op_accept_bi.is_idle(),
++            self.op_open_uni.is_idle(),
++            self.op_open_bi.is_idle(),
++            self.op_send_datagram.is_idle(),
++            self.op_recv_datagram.is_idle(),
++            self.op_closed.is_idle(),
++            self.parked_accept_uni.is_idle(),
++            self.parked_accept_bi.is_idle(),
++        ]
++        .into_iter()
++        .all(|idle| idle)
++        {
++            return Err(self);
++        }
++        let acceptor = SessionAcceptor {
++            conn: self.conn.clone(),
++            accept: self.accept,
++            error: self.error.clone(),
++        };
++        let io = Arc::new(EstablishedIo {
++            conn: self.conn,
++            session_id: self.session_id,
++            header_datagram: self.header_datagram,
++            _settings: self.settings,
++            retained_accept: Mutex::new(None),
++            connect_send: self.connect_send,
++            error: self.error,
++        });
++        Ok((io, acceptor))
++    }
+     pub(crate) fn new(conn: quinn::Connection, settings: Settings, connect: Connected) -> Self {
+         // The session ID is the stream ID of the CONNECT request.
+         let session_id = connect.session_id();
+@@ -395,27 +608,45 @@
+     /// Callers should `await` [`Session::closed()`] to ensure the capsule has been
+     /// delivered. Session operations will fail once the QUIC connection is closed.
+     pub fn close(&self, code: u32, reason: &[u8]) {
++        Self::close_shared(
++            &self.conn,
++            self.session_id,
++            &self.connect_send,
++            &self.error,
++            code,
++            reason,
++        );
++    }
++
++    fn close_shared(
++        conn: &quinn::Connection,
++        session_id: Option<VarInt>,
++        connect_send: &Mutex<Option<quinn::SendStream>>,
++        error: &CloseReason,
++        code: u32,
++        reason: &[u8],
++    ) {
+         // Record the local close error. First writer wins — if the background
+         // task already set a remote close error, or close() was already called,
+         // this is a no-op. A raw peer close that already arrived is latched first.
+-        if let Some(err) = self.conn.close_reason() {
+-            self.map_error(err);
++        if let Some(err) = conn.close_reason() {
++            map_error_with(error, err);
+         }
+         let err = SessionError::ConnectionError(quinn::ConnectionError::LocallyClosed);
+-        if self.error.set(err).is_err() {
++        if error.set(err).is_err() {
+             return;
+         }
+
+-        if self.session_id.is_some() {
++        if session_id.is_some() {
+             // Take the send stream for the capsule write.
+-            let send = self.connect_send.lock().unwrap().take();
++            let send = connect_send.lock().unwrap().take();
+
+             if let Some(send) = send {
+                 let reason = String::from_utf8_lossy(reason).into_owned();
+-                let conn = self.conn.clone();
++                let conn = conn.clone();
+                 let capsule =
+                     web_transport_proto::Capsule::CloseWebTransportSession { code, reason };
+-                let timeout = (self.rtt() * 3).max(Duration::from_millis(100));
++                let timeout = (conn.rtt() * 3).max(Duration::from_millis(100));
+
+                 tokio::spawn(async move {
+                     Self::close_with_capsule(conn, send, capsule, code, timeout).await;
+@@ -423,7 +654,7 @@
+             }
+         } else {
+             // Raw QUIC mode: no capsule needed.
+-            self.conn.close(code.into(), reason);
++            conn.close(code.into(), reason);
+         }
+     }
+
+@@ -1159,10 +1390,18 @@
+         session_id: Option<VarInt>,
+         error: Arc<CloseReason>,
+     ) -> Result<Bytes, SessionError> {
++        Self::read_datagram_borrowed(&conn, session_id, &error).await
++    }
++
++    async fn read_datagram_borrowed(
++        conn: &quinn::Connection,
++        session_id: Option<VarInt>,
++        error: &CloseReason,
++    ) -> Result<Bytes, SessionError> {
+         let mut datagram = conn
+             .read_datagram()
+             .await
+-            .map_err(|e| Self::map_error_owned(&error, e))?;
++            .map_err(|e| Self::map_error_owned(error, e))?;
+
+         let mut cursor = Cursor::new(&datagram);
+
+@@ -1303,7 +1542,15 @@
+
+ #[cfg(all(test, any(feature = "aws-lc-rs", feature = "ring")))]
+ mod tests {
+-    use std::{net::Ipv4Addr, sync::Arc};
++    use std::{
++        future::{poll_fn, Future},
++        net::Ipv4Addr,
++        sync::{
++            atomic::{AtomicBool, Ordering},
++            Arc,
++        },
++        task::{Context, Poll, Wake, Waker},
++    };
+
+     use rcgen::{CertifiedKey, KeyPair};
+     use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+@@ -1429,4 +1676,204 @@
+
+         assert_eq!(Session::raw(server).max_datagram_size(), 0);
+     }
+-}
++    use web_transport_trait::poll::Session as PollSession;
++
++    #[derive(Default)]
++    struct SplitWakeFlag(AtomicBool);
++    impl Wake for SplitWakeFlag {
++        fn wake(self: Arc<Self>) {
++            self.0.store(true, Ordering::SeqCst);
++        }
++        fn wake_by_ref(self: &Arc<Self>) {
++            self.0.store(true, Ordering::SeqCst);
++        }
++    }
++
++    // Consume an earlier bidi stream so the real CONNECT/session ID is nonzero.
++    async fn split_http3_pair() -> (Session, Session, [quinn::Endpoint; 2]) {
++        let (client, server, endpoints) = pair().await;
++        let (mut skipped, _recv) = client.open_bi().await.unwrap();
++        skipped.write_all(b"pre-CONNECT").await.unwrap();
++        let (_reply, mut received) = server.accept_bi().await.unwrap();
++        let mut bytes = [0; 11];
++        received.read_exact(&mut bytes).await.unwrap();
++        assert_eq!(&bytes, b"pre-CONNECT");
++        skipped.finish().unwrap();
++        let request = ConnectRequest::new("https://localhost/war".parse::<url::Url>().unwrap());
++        let (client, server) = tokio::join!(Session::connect(client, request), async {
++            crate::Request::accept(server)
++                .await
++                .unwrap()
++                .ok()
++                .await
++                .unwrap()
++        },);
++        let client = client.unwrap();
++        assert_ne!(client.session_id, Some(SESSION));
++        assert_eq!(client.session_id, server.session_id);
++        (client, server, endpoints)
++    }
++
++    #[tokio::test]
++    async fn split_preserves_pending_http3_waiter_then_releases_empty_state() {
++        let (client, mut server, _endpoints) = split_http3_pair().await;
++        let weak_accept = Arc::downgrade(server.accept.as_ref().unwrap());
++        let weak_settings = Arc::downgrade(server.settings.as_ref().unwrap());
++        let weak_alpn = Arc::downgrade(&server.alpn);
++        let flag = Arc::new(SplitWakeFlag::default());
++        let waker = Waker::from(flag.clone());
++        assert!(
++            PollSession::poll_accept_bi(&mut server, &mut Context::from_waker(&waker)).is_pending()
++        );
++        let mut server = match server.try_into_established() {
++            Err(original) => original,
++            Ok(_) => panic!("a parked HTTP/3 poll operation must prevent consuming split"),
++        };
++        flag.0.store(false, Ordering::SeqCst);
++        let _client_stream = client.open_bi().await.unwrap();
++        tokio::time::timeout(Duration::from_secs(2), async {
++            while !flag.0.load(Ordering::SeqCst) {
++                tokio::time::sleep(Duration::from_millis(1)).await;
++            }
++        })
++        .await
++        .expect("original waiter was lost by refused split");
++        let _server_stream = tokio::time::timeout(
++            Duration::from_secs(2),
++            poll_fn(|cx| PollSession::poll_accept_bi(&mut server, cx)),
++        )
++        .await
++        .unwrap()
++        .unwrap();
++        let (io, acceptor) = server.try_into_established().unwrap();
++        assert!(weak_alpn.upgrade().is_none());
++        io.finish_accepting(acceptor);
++        assert!(
++            weak_accept.upgrade().is_none(),
++            "empty accept state must actually be freed"
++        );
++        assert!(
++            weak_settings.upgrade().is_some(),
++            "H3 control streams must stay owned"
++        );
++        io.send_datagram(Bytes::from_static(b"server")).unwrap();
++        assert_eq!(client.read_datagram().await.unwrap(), b"server"[..]);
++        client.send_datagram(Bytes::from_static(b"client")).unwrap();
++        assert_eq!(io.read_datagram().await.unwrap(), b"client"[..]);
++        drop(io);
++        assert!(weak_settings.upgrade().is_none());
++
++        let (client, server, _raw_endpoints) = pair().await;
++        let mut raw = Session::raw(server);
++        assert!(
++            PollSession::poll_recv_datagram(&mut raw, &mut Context::from_waker(Waker::noop()),)
++                .is_pending()
++        );
++        let mut raw = match raw.try_into_established() {
++            Err(original) => original,
++            Ok(_) => panic!("a pending raw operation must prevent consuming split"),
++        };
++        client
++            .send_datagram(Bytes::from_static(b"pending raw"))
++            .unwrap();
++        assert_eq!(
++            poll_fn(|cx| PollSession::poll_recv_datagram(&mut raw, cx))
++                .await
++                .unwrap(),
++            b"pending raw"[..]
++        );
++        let (io, acceptor) = raw.try_into_established().unwrap();
++        io.finish_accepting(acceptor);
++        io.send_datagram(Bytes::from_static(b"raw")).unwrap();
++        assert_eq!(client.read_datagram().await.unwrap(), b"raw"[..]);
++        client
++            .send_datagram(Bytes::from_static(b"raw reply"))
++            .unwrap();
++        assert_eq!(io.read_datagram().await.unwrap(), b"raw reply"[..]);
++    }
++
++    #[tokio::test]
++    async fn split_retains_partial_or_qpack_state_through_the_close_path() {
++        for qpack in [false, true] {
++            let (client, server, _endpoints) = split_http3_pair().await;
++            let clone = server.clone();
++            let weak_accept = Arc::downgrade(server.accept.as_ref().unwrap());
++            let (io, acceptor) = server.try_into_established().unwrap();
++            let _client_stream = client.open_bi().await.unwrap();
++            let _server_stream = clone.accept_bi().await.unwrap();
++            drop(clone);
++            assert_eq!(Arc::strong_count(acceptor.accept.as_ref().unwrap()), 1);
++
++            // Keep the peer stream alive; retention must not depend on a Session clone.
++            let mut extra_bi = None;
++            let mut extra_uni = None;
++            if qpack {
++                let mut send = client.conn.open_uni().await.unwrap();
++                let mut header = Vec::new();
++                StreamUni::QPACK_ENCODER.encode(&mut header);
++                send.write_all(&header).await.unwrap();
++                extra_uni = Some(send);
++                let mut waiting = Box::pin(acceptor.accept_uni());
++                tokio::time::timeout(
++                    Duration::from_secs(2),
++                    poll_fn(|cx| {
++                        assert!(waiting.as_mut().poll(cx).is_pending());
++                        let state = acceptor.accept.as_ref().unwrap().lock().unwrap();
++                        if state.qpack_encoder.is_some() {
++                            Poll::Ready(())
++                        } else {
++                            Poll::Pending
++                        }
++                    }),
++                )
++                .await
++                .unwrap();
++                drop(waiting);
++                let state = acceptor.accept.as_ref().unwrap().lock().unwrap();
++                assert!(state.pending_uni.is_empty());
++                assert!(state.pending_bi.is_empty());
++            } else {
++                let (mut send, recv) = client.conn.open_bi().await.unwrap();
++                assert!(client.header_bi.len() > 1);
++                send.write_all(&client.header_bi[..1]).await.unwrap();
++                extra_bi = Some((send, recv));
++                let mut waiting = Box::pin(acceptor.accept_bi());
++                tokio::time::timeout(
++                    Duration::from_secs(2),
++                    poll_fn(|cx| {
++                        assert!(waiting.as_mut().poll(cx).is_pending());
++                        let state = acceptor.accept.as_ref().unwrap().lock().unwrap();
++                        if !state.pending_bi.is_empty() {
++                            Poll::Ready(())
++                        } else {
++                            Poll::Pending
++                        }
++                    }),
++                )
++                .await
++                .unwrap();
++                drop(waiting);
++            }
++            io.finish_accepting(acceptor);
++            assert!(
++                weak_accept.upgrade().is_some(),
++                "owned stream state was released early"
++            );
++            io.close(1234, b"retained close");
++            io.clone().close(5678, b"second close must lose");
++            let reason = tokio::time::timeout(Duration::from_secs(2), client.closed())
++                .await
++                .unwrap();
++            assert!(matches!(reason,
++                SessionError::WebTransportError(WebTransportError::Closed(1234, ref reason))
++                    if reason == "retained close"));
++            assert!(
++                weak_accept.upgrade().is_some(),
++                "retention must survive ordinary error close"
++            );
++            drop(io);
++            assert!(weak_accept.upgrade().is_none());
++            drop((extra_bi, extra_uni));
++        }
++    }
++}
+--- a/web-transport-quinn/src/waiters.rs
++++ b/web-transport-quinn/src/waiters.rs
+@@ -24,10 +24,20 @@
+ ///
+ /// The `async` methods have no need for any of it — [`kio::wait`] keeps the waiter inside
+ /// the future it builds, so dropping the future drops the registration.
+-#[derive(Clone, Default)]
+-pub(crate) struct Parked(Park);
++#[derive(Default)]
++pub(crate) struct Parked(Option<Park>);
++
++impl Clone for Parked {
++    fn clone(&self) -> Self {
++        Self::default()
++    }
++}
+
+ impl Parked {
++    pub(crate) fn is_idle(&self) -> bool {
++        self.0.is_none()
++    }
++
+     /// Run one poll with a retained waiter, releasing it if the poll finishes.
+     pub(crate) fn poll<T>(
+         &mut self,
+@@ -47,13 +57,13 @@
+     /// The returned clone shares the parked waiter's identity, so nothing is lost by
+     /// taking one, and it ends the borrow on the cell.
+     pub(crate) fn hold(&mut self, cx: &Context<'_>) -> Waiter {
+-        self.0.hold(cx).clone()
++        self.0.get_or_insert_with(Park::default).hold(cx).clone()
+     }
+
+     /// Release the held waiter if the poll finished.
+     pub(crate) fn settle<T>(&mut self, result: &Poll<T>) {
+         if result.is_ready() {
+-            self.0 = Park::default();
++            self.0 = None;
+         }
+     }
+ }
+@@ -89,6 +99,18 @@
+         }
+     }
+
++    #[test]
++    fn pending_state_clears_on_ready_and_clone_is_idle() {
++        let mut parked = Parked::default();
++        let cx = Context::from_waker(std::task::Waker::noop());
++        assert!(parked.is_idle());
++        assert!(parked.poll(&cx, |_| Poll::<()>::Pending).is_pending());
++        assert!(!parked.is_idle());
++        assert!(parked.clone().is_idle());
++        assert!(parked.poll(&cx, |_| Poll::Ready(())).is_ready());
++        assert!(parked.is_idle());
++    }
++
+     /// A clone starts empty, so it must not carry the original's parked poller. The rest
+     /// of the fan's behaviour is kio's and tested there; this is about `Parked`.
+     #[test]
