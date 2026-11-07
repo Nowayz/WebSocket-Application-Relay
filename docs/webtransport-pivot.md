@@ -2704,3 +2704,36 @@ This is a retained reduction of avoidable session state. Full throughput and
 memory parity remains unproven, including the large remaining user-space
 memory gap and the receiver-pressure mechanism. Client-cooperation and cipher
 preference experiments are prepared separately and remain unexecuted.
+
+## Current-image native parity refresh — 2026-11-06
+
+All 18 new native/WebTransport comparisons pass using the same selected `1c8e`
+release image in both modes and the unchanged inspection client. Three
+12-second repetitions per case rotate transport order. Verified received
+private-plus-fanout medians are:
+
+| Workload | Native WebSocket / s | WebTransport / s | WT change |
+| --- | ---: | ---: | ---: |
+| Private | 1,279,257 | 1,507,285 | +17.83% |
+| Room | 1,712,509 | 1,665,885 | -2.72% |
+| Mixed | 1,607,213 | 1,623,218 | +1.00% |
+
+Native room rates range 1.603-1.735 million/s, versus WebTransport
+1.664-1.678 million/s. Native mixed rates also vary widely, 1.473-1.678
+million/s, versus WebTransport 1.621-1.632 million/s. These small samples do
+not establish a broad statistical ordering; room throughput parity remains
+unproven and its observed median is behind native.
+
+A fresh native 100k control uses the same selected image and fixed capacity
+client as the current WebTransport capture. Both verify 400,000 deliveries
+and all cleanup gauges. Native ready RSS is 118.875 MiB versus 1889.266 MiB
+for WebTransport (15.8929x). Measured server CPU is 1.96 versus 5.96 s
+(3.0408x), and client-reported setup is 0.6525 versus 10.7656 s (16.4991x).
+This paced capacity phase does not measure maximum throughput. Kernel bytes
+remain unavailable, not zero. The older native live-allocation capture is
+explicitly historical; no current matched allocation ratio is claimed.
+
+Exact repeat values, workload/CPU identities, counters, latency histogram
+bounds, setup/retirement phases, current QUIC allocation scope and receipt
+hashes: [current parity report](reports/webtransport-session-io-current-parity-2026-11-06.json).
+The full goal remains active and unmet.
