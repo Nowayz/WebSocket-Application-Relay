@@ -2914,3 +2914,64 @@ It does not replace fixed-client ordinary server comparisons. All six raw
 receipts, immutable four-second references, duration-only recipe checks,
 generation/lag/age histograms, per-role CPU and observer limits are in the
 [long ingress report](reports/webtransport-client-dedicated-ingress-long-diagnostic-2026-11-06.json).
+
+## Remaining memory ownership — 2026-11-06
+
+A source/receipt review of the selected SessionIO ready heap verifies
+1,848,987,316 requested live bytes. This reuses the existing selected-image
+allocation capture; it is not a new heap measurement. The largest owners are:
+
+| Owner | Live objects | Requested MiB |
+| --- | ---: | ---: |
+| Quinn connection allocation | 100,000 | 509.64 |
+| Packet-encryption keys | 400,068 | 219.76 |
+| Header-protection keys | 200,000 | 48.83 |
+| Relay application tasks | 100,000 | 195.31 |
+| Rustls sessions and final state boxes | 200,000 | 119.78 |
+| HTTP CONNECT capsule tasks | 100,000 | 48.83 |
+
+The 5344-byte Quinn allocation includes protocol and high-level state,
+synchronization and handles; its size is not proof that all those bytes are
+avoidable. Likewise, aggregate vector and lookup-table sites require deeper
+attribution. Requested-live allocation bytes and ordinary RSS are distinct
+measurements and are not added together.
+
+The current key classes alone request 268.59 MiB, larger than the entire
+116.42 MiB native process RSS in the fresh same-boot capacity capture. Small
+adapter or pool fixes therefore cannot reach this RSS target while the current
+protocol, crypto and runtime representations remain. This describes the
+selected implementation footprint, not a universal QUIC lower bound. Direct
+`quinn-proto` integration still needs to earn its benefit by changing measured
+state or scheduling; deleting wrappers alone proves no saving.
+
+The next memory hypothesis is the staged ChaCha preference CPU/throughput
+screen, followed by compact Ring key representation only if whole-workload
+cost is acceptable. Cipher preference alone does not shrink current Ring
+objects. No new crypto, key deferral or discarded TLS/capsule behavior is
+proposed. Exact allocation sites, counts, source hashes, current phase-correct
+RSS and limits are in the
+[memory ownership review](reports/webtransport-session-io-memory-ownership-2026-11-06.json).
+
+## Stronger refusal probe did not reproduce — 2026-11-06
+
+A separate current-source diagnostic image adds first-refusal-only ownership,
+packetization, selective-ACK, retransmission, timer and event-queue snapshots.
+Two proto partition/budget tests, two output queue/partial-record unit tests and
+the existing blocked-output and partial-write integration tests pass. The
+diagnostic image is frozen separately; all seven temporary source files and
+the selected `1c8e2d56` image are restored and hash-verified before traffic.
+
+All six prescribed original-client attempts pass without a logged refusal.
+Client sampled UDP drops range 290–10,415 and RX peaks 6.394–7.084 MB, while all
+sampled server drops are zero. Every case generates all 4,000 fanout updates
+and 99.9842–99.9900% of planned private updates, verifies every generated
+delivery, closes 1,089 sessions, checks 1,024 departures and returns resource
+gauges to zero. The fixed six-attempt series ends without extension.
+
+The new send-buffer/recovery snapshot and pre-refusal correlation are therefore
+unavailable. This negative reproduction does not explain or fix the earlier
+intermittent closes. Drops alone remain insufficient evidence, and the hook
+does not cover earlier reservation rejection or an already-closed queue.
+Actual sample gaps, disabled scheduler-statistics limits, all receipts and
+44 verified immutable build/source/log references are retained in the
+[negative probe report](reports/webtransport-stronger-send-state-negative-probe-2026-11-06.json).
