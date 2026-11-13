@@ -42,6 +42,45 @@ throughput cost for lower idle memory; see the empty-packet-tree report. A
 worker-local empty-tree cache was tested and rejected because it did not improve
 the complete mixed workload.
 
+## Drained endpoint-event queue reclamation
+
+`Connection::poll_endpoint_events` releases the queue's storage when it pops the
+last event. Upstream keeps the handshake burst's four-slot buffer (192 bytes) in
+every connection for its whole lifetime, although the queue only carries
+control-plane events: reset tokens, connection-ID issue/retirement and drain.
+A conforming peer's data packets produce none, so the cost is one small
+allocation per later burst (about three per handshake instead of one retained).
+Order, producers and the endpoint's handling are unchanged; no depth limit or
+coalescing is introduced. `drained_endpoint_events_release_storage` checks both
+peers after a real handshake, alongside the upstream CID rotation and retirement
+tests. Ready RSS at 100,000 sessions falls by about 19 MiB. The change is part of
+`quinn-sparse-streams.patch`.
+
+## One-slot first receive-assembler growth
+
+`Assembler::insert` reserves one slot, not the default four, when it buffers the
+first chunk of a stream. A stream read as fast as it arrives holds one chunk at
+a time, and the two HTTP/3 control streams of every session receive once and
+then stay idle; upstream leaves each of them a 224-byte, four-slot heap holding
+nothing. A stream that ever queues a second chunk grows to four slots through
+the ordinary path and ends in the upstream state after one extra 56-byte move in
+its lifetime. Nothing is released on read, so steady traffic allocates exactly
+as before. This is not the inline-first-chunk design that was measured and
+rejected twice. Ready RSS at 100,000 sessions falls by a further 50 MiB with
+unchanged throughput; see
+`docs/reports/webtransport-allocator-idle-storage-2026-11-13.json`.
+
+## Boxed previous path
+
+`Connection::prev_path` is `Option<Box<(ConnectionId, PathData)>>`. Only a
+connection that has migrated and is still validating holds one; inline it cost
+every connection 432 bytes. The per-packet check in `can_send_1rtt` is the same
+null test, and migration allocates once. With jemalloc this moves the
+connection owner from the 6,144-byte to the 5,120-byte size class. An earlier
+out-of-line layout was rejected under the system allocator, where the saving
+was 41 MiB at 100,000 sessions; see the 2026-11-13 report for the present
+measurement. Upstream migration and path-validation tests cover the paths.
+
 ## QUIC packet-construction storage
 
 The same Quinn runtime patch reuses packet-construction buffers per runtime
@@ -334,6 +373,16 @@ range-tree algorithm. This removes the 300k x 192-byte range-tree site in the
 changes +0.14% private, +0.83% room, -1.14% mixed. Protocol, paced traffic,
 loss/reordering and Chrome checks pass. See
 `docs/reports/webtransport-ordered-ack-2026-10-22.json` for evidence and limits.
+
+## QUIC early secret and handshake queue
+
+`Quic::early_secret` is boxed: it is set only when a PSK handshake derives
+0-RTT keys, and inline its 80 bytes pushed every established session shell
+past 1,024 bytes. `ConnectionCommon::write_hs` releases the handshake message
+queue once the handshake is complete and the queue is empty (128 bytes); later
+post-handshake messages allocate it again for the moment they are queued. No
+key schedule, derivation point or key count changes. Both are part of
+`rustls-quic-record-ciphers.patch`.
 
 ## UDP receive-batch timestamps
 

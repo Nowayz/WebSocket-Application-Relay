@@ -72,7 +72,7 @@ impl KeyScheduleEarly {
         if common.is_quic() {
             // If 0-RTT should be rejected, this will be clobbered by ExtensionProcessing
             // before the application can see.
-            common.quic.early_secret = Some(client_early_traffic_secret);
+            common.quic.early_secret = Some(Box::new(client_early_traffic_secret));
         }
     }
 

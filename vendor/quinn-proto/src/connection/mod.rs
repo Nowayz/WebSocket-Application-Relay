@@ -149,7 +149,9 @@ pub struct Connection {
     path_counter: u64,
     /// Whether MTU detection is supported in this environment
     allow_mtud: bool,
-    prev_path: Option<(ConnectionId, PathData)>,
+    // Boxed: only a connection that has migrated holds one, and inline it costs every
+    // connection 432 bytes.
+    prev_path: Option<Box<(ConnectionId, PathData)>>,
     state: State,
     side: ConnectionSide,
     /// Whether or not 0-RTT was enabled during the handshake. Does not imply acceptance.
@@ -412,7 +414,14 @@ impl Connection {
     /// Return endpoint-facing events
     #[must_use]
     pub fn poll_endpoint_events(&mut self) -> Option<EndpointEvent> {
-        self.endpoint_events.pop_front().map(EndpointEvent)
+        let event = self.endpoint_events.pop_front()?;
+        if self.endpoint_events.is_empty() {
+            // Endpoint events are control-plane bursts (handshake, CID rotation, drain), never
+            // per-packet work. Releasing the drained burst's storage keeps an established idle
+            // connection from holding it for its whole lifetime.
+            self.endpoint_events = VecDeque::new();
+        }
+        Some(EndpointEvent(event))
     }
 
     /// Provide control over streams
@@ -1024,7 +1033,7 @@ impl Connection {
 
     /// Send PATH_CHALLENGE for a previous path if necessary
     fn send_path_challenge(&mut self, now: Instant, buf: &mut Vec<u8>) -> Option<Transmit> {
-        let (prev_cid, prev_path) = self.prev_path.as_mut()?;
+        let (prev_cid, prev_path) = &mut **self.prev_path.as_mut()?;
         if !prev_path.challenge_pending {
             return None;
         }
@@ -1232,8 +1241,8 @@ impl Connection {
                 }
                 Timer::PathValidation => {
                     debug!("path validation failed");
-                    if let Some((_, prev)) = self.prev_path.take() {
-                        self.path = prev;
+                    if let Some(prev) = self.prev_path.take() {
+                        self.path = prev.1;
                     }
                     self.path.challenge = None;
                     self.path.challenge_pending = false;
@@ -2869,9 +2878,9 @@ impl Connection {
                         self.timers.stop(Timer::PathValidation);
                         self.path.challenge = None;
                         self.path.validated = true;
-                        if let Some((_, ref mut prev_path)) = self.prev_path {
-                            prev_path.challenge = None;
-                            prev_path.challenge_pending = false;
+                        if let Some(prev) = &mut self.prev_path {
+                            prev.1.challenge = None;
+                            prev.1.challenge_pending = false;
                         }
                     } else {
                         debug!(token, "ignoring invalid PATH_RESPONSE");
@@ -3131,7 +3140,7 @@ impl Connection {
             prev.challenge_pending = true;
             // We haven't updated the remote CID yet, this captures the remote CID we were using on
             // the previous path.
-            self.prev_path = Some((self.rem_cids.active(), prev));
+            self.prev_path = Some(Box::new((self.rem_cids.active(), prev)));
         }
 
         self.timers.set(
@@ -3730,6 +3739,11 @@ impl Connection {
         self.local_cid_state.active_seq()
     }
 
+    #[cfg(test)]
+    pub(crate) fn endpoint_event_capacity(&self) -> usize {
+        self.endpoint_events.capacity()
+    }
+
     /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame
     /// with updated `retire_prior_to` field set to `v`
     #[cfg(test)]
@@ -3760,7 +3774,7 @@ impl Connection {
             || self
                 .prev_path
                 .as_ref()
-                .is_some_and(|(_, x)| x.challenge_pending)
+                .is_some_and(|prev| prev.1.challenge_pending)
             || !self.path_responses.is_empty()
             || self.datagrams.outgoing.can_send_1rtt(max_size)
     }
@@ -3770,7 +3784,7 @@ impl Connection {
         // Visit known paths from newest to oldest to find the one `packet` was sent on
         for path in [&mut self.path]
             .into_iter()
-            .chain(self.prev_path.as_mut().map(|(_, data)| data))
+            .chain(self.prev_path.as_mut().map(|prev| &mut prev.1))
         {
             if path.remove_in_flight(packet) {
                 return;

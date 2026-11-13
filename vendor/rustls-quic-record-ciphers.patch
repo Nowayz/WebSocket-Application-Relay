@@ -55,7 +55,7 @@
          let mut hs = HandshakeDeframer::default();
 --- a/rustls/src/quic.rs
 +++ b/rustls/src/quic.rs
-@@ -421,6 +421,17 @@
+@@ -421,6 +421,17 @@ mod connection {
              self.core
                  .process_new_packets(&mut self.deframer_buffer, &mut self.sendable_plaintext)?;
 
@@ -73,12 +73,35 @@
              Ok(())
          }
 
-@@ -477,8 +488,10 @@
+@@ -428,10 +439,14 @@ mod connection {
+         ///
+         /// When this returns `Some(_)`, the new keys must be used for future handshake data.
+         pub fn write_hs(&mut self, buf: &mut Vec<u8>) -> Option<KeyChange> {
+-            self.core
+-                .common_state
+-                .quic
+-                .write_hs(buf)
++            let common = &mut self.core.common_state;
++            let change = common.quic.write_hs(buf);
++            // An established connection queues handshake messages only for rare
++            // post-handshake events; do not keep the handshake flight's queue storage.
++            if !common.is_handshaking() && common.quic.hs_queue.is_empty() {
++                common.quic.hs_queue = Default::default();
++            }
++            change
+         }
+
+         /// Emit the TLS description code of a fatal alert, if one has arisen.
+@@ -476,9 +491,13 @@ pub(crate) struct Quic {
+     pub(crate) params: Option<Vec<u8>>,
      pub(crate) alert: Option<AlertDescription>,
      pub(crate) hs_queue: VecDeque<(bool, Vec<u8>)>,
-     pub(crate) early_secret: Option<OkmBlock>,
+-    pub(crate) early_secret: Option<OkmBlock>,
 -    pub(crate) hs_secrets: Option<Secrets>,
 -    pub(crate) traffic_secrets: Option<Secrets>,
++    // Boxed: set only for 0-RTT resumption, and inline it pushes every established
++    // session shell past a 1 KiB allocation.
++    pub(crate) early_secret: Option<Box<OkmBlock>>,
 +    // These handoff values are consumed during the handshake. Keep their
 +    // large storage out of every established connection, including TLS records.
 +    pub(crate) hs_secrets: Option<Box<Secrets>>,
@@ -86,7 +109,7 @@
      /// Whether keys derived from traffic_secrets have been passed to the QUIC implementation
      #[cfg(feature = "std")]
      pub(crate) returned_traffic_keys: bool,
-@@ -511,7 +524,7 @@
+@@ -511,7 +530,7 @@ impl Quic {
                  secrets.update();
                  return Some(KeyChange::OneRtt {
                      keys,
@@ -97,7 +120,7 @@
          }
 --- a/rustls/src/tls13/key_schedule.rs
 +++ b/rustls/src/tls13/key_schedule.rs
-@@ -5,7 +5,7 @@
+@@ -5,7 +5,7 @@ use alloc::string::ToString;
  use core::ops::Deref;
 
  use crate::common_state::{CommonState, Side};
@@ -106,7 +129,16 @@
  use crate::crypto::tls13::{Hkdf, HkdfExpander, OkmBlock, OutputLengthError, expand};
  use crate::crypto::{SharedSecret, hash, hmac};
  use crate::error::Error;
-@@ -246,14 +246,14 @@
+@@ -72,7 +72,7 @@ impl KeyScheduleEarly {
+         if common.is_quic() {
+             // If 0-RTT should be rejected, this will be clobbered by ExtensionProcessing
+             // before the application can see.
+-            common.quic.early_secret = Some(client_early_traffic_secret);
++            common.quic.early_secret = Some(Box::new(client_early_traffic_secret));
+         }
+     }
+
+@@ -246,14 +246,14 @@ impl KeyScheduleHandshakeStart {
          );
 
          if common.is_quic() {
@@ -123,7 +155,7 @@
          }
 
          KeyScheduleHandshake {
-@@ -289,6 +289,10 @@
+@@ -289,6 +289,10 @@ impl KeyScheduleHandshake {
      ) {
          debug_assert_eq!(common.side, Side::Server);
          let secret = &self.client_handshake_traffic_secret;
@@ -134,7 +166,7 @@
          match skip_requested {
              None => self.ks.set_decrypter(secret, common),
              Some(max_early_data_size) => common
-@@ -322,14 +326,14 @@
+@@ -322,14 +326,14 @@ impl KeyScheduleHandshake {
              .set_encrypter(server_secret, common);
 
          if common.is_quic() {
@@ -151,7 +183,7 @@
          }
 
          KeyScheduleTrafficWithClientFinishedPending {
-@@ -456,14 +460,14 @@
+@@ -456,14 +460,14 @@ impl KeyScheduleClientBeforeFinished {
              .set_encrypter(client_secret, common);
 
          if common.is_quic() {
@@ -168,7 +200,7 @@
          }
 
          next.into_traffic(hs_hash)
-@@ -752,6 +756,15 @@
+@@ -752,6 +756,15 @@ struct KeyScheduleSuite {
 
  impl KeyScheduleSuite {
      fn set_encrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
@@ -184,7 +216,7 @@
          let expander = self
              .suite
              .hkdf_provider
-@@ -768,6 +781,13 @@
+@@ -768,6 +781,13 @@ impl KeyScheduleSuite {
      }
 
      fn set_decrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
@@ -198,10 +230,11 @@
          common
              .record_layer
              .set_message_decrypter(self.derive_decrypter(secret));
-@@ -1054,6 +1074,29 @@
+@@ -1053,6 +1073,29 @@ mod tests {
+     use crate::KeyLog;
      use crate::msgs::enums::HashAlgorithm;
 
-     #[test]
++    #[test]
 +    fn quic_keeps_handshake_encryption_state_without_record_ciphers() {
 +        let ks = super::KeyScheduleSuite {
 +            suite: &TLS13_AES_128_GCM_SHA256_INTERNAL,
@@ -224,7 +257,6 @@
 +        assert!(common.record_layer.decrypt_incoming(message).is_err());
 +    }
 +
-+    #[test]
+     #[test]
      fn empty_hash() {
          let sha256 = super::provider::tls13::TLS13_AES_128_GCM_SHA256
-             .tls13()

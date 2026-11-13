@@ -439,10 +439,14 @@ mod connection {
         ///
         /// When this returns `Some(_)`, the new keys must be used for future handshake data.
         pub fn write_hs(&mut self, buf: &mut Vec<u8>) -> Option<KeyChange> {
-            self.core
-                .common_state
-                .quic
-                .write_hs(buf)
+            let common = &mut self.core.common_state;
+            let change = common.quic.write_hs(buf);
+            // An established connection queues handshake messages only for rare
+            // post-handshake events; do not keep the handshake flight's queue storage.
+            if !common.is_handshaking() && common.quic.hs_queue.is_empty() {
+                common.quic.hs_queue = Default::default();
+            }
+            change
         }
 
         /// Emit the TLS description code of a fatal alert, if one has arisen.
@@ -487,7 +491,9 @@ pub(crate) struct Quic {
     pub(crate) params: Option<Vec<u8>>,
     pub(crate) alert: Option<AlertDescription>,
     pub(crate) hs_queue: VecDeque<(bool, Vec<u8>)>,
-    pub(crate) early_secret: Option<OkmBlock>,
+    // Boxed: set only for 0-RTT resumption, and inline it pushes every established
+    // session shell past a 1 KiB allocation.
+    pub(crate) early_secret: Option<Box<OkmBlock>>,
     // These handoff values are consumed during the handshake. Keep their
     // large storage out of every established connection, including TLS records.
     pub(crate) hs_secrets: Option<Box<Secrets>>,

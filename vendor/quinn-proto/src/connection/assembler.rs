@@ -203,6 +203,12 @@ impl Assembler {
             let buffer = Buffer::new(offset, bytes, allocation_size);
             self.buffered += buffer.bytes.len();
             self.allocated += buffer.allocation_size;
+            if self.data.capacity() == 0 {
+                // A stream read as fast as it arrives holds one chunk at a time, and control
+                // streams receive once. Start with one slot instead of the default four; a
+                // stream that ever queues a second chunk grows to four as before.
+                self.data.reserve_exact(1);
+            }
             self.data.push(buffer);
         }
         // `self.buffered` also counts duplicate bytes, therefore we use
@@ -421,6 +427,22 @@ mod test {
         assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"456");
         x.insert(6, Bytes::from_static(b"789"), 3).unwrap();
         x.insert(9, Bytes::from_static(b"10"), 2).unwrap();
+        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"789");
+        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"10");
+        assert_matches!(next(&mut x, 32), None);
+    }
+
+    #[test]
+    fn in_order_stream_keeps_one_slot_until_two_chunks_queue() {
+        let mut x = Assembler::new();
+        for (offset, chunk) in [(0, b"123"), (3, b"456")] {
+            x.insert(offset, Bytes::from_static(chunk), 3).unwrap();
+            assert_eq!(x.data.capacity(), 1);
+            assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == chunk);
+        }
+        x.insert(6, Bytes::from_static(b"789"), 3).unwrap();
+        x.insert(9, Bytes::from_static(b"10"), 2).unwrap();
+        assert!(x.data.capacity() >= 2);
         assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"789");
         assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"10");
         assert_matches!(next(&mut x, 32), None);

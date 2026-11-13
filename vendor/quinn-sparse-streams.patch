@@ -1,24 +1,38 @@
 --- a/quinn-proto/src/connection/assembler.rs
 +++ b/quinn-proto/src/connection/assembler.rs
-@@ -35,6 +35,14 @@
-         *self = Self::default();
-         self.data = old_data;
+@@ -37,6 +37,14 @@ impl Assembler {
          self.data.clear();
-+    }
-+
+     }
+
 +    /// Release buffered data and its staging allocation without resetting the
 +    /// consumed offset or ordering history. Used when a crypto space retires.
 +    pub(super) fn discard_buffer(&mut self) {
 +        self.data = BinaryHeap::new();
 +        self.buffered = 0;
 +        self.allocated = 0;
-     }
-
++    }
++
      pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
-@@ -378,6 +386,31 @@
+         if ordered && !self.state.is_ordered() {
+             return Err(IllegalOrderedRead);
+@@ -195,6 +203,12 @@ impl Assembler {
+             let buffer = Buffer::new(offset, bytes, allocation_size);
+             self.buffered += buffer.bytes.len();
+             self.allocated += buffer.allocation_size;
++            if self.data.capacity() == 0 {
++                // A stream read as fast as it arrives holds one chunk at a time, and control
++                // streams receive once. Start with one slot instead of the default four; a
++                // stream that ever queues a second chunk grows to four as before.
++                self.data.reserve_exact(1);
++            }
+             self.data.push(buffer);
+         }
+         // `self.buffered` also counts duplicate bytes, therefore we use
+@@ -377,6 +391,31 @@ mod test {
+     use super::*;
      use assert_matches::assert_matches;
 
-     #[test]
++    #[test]
 +    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
 +        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
 +        struct Owned(Arc<AtomicUsize>);
@@ -43,10 +57,32 @@
 +        assert!(x.read(usize::MAX, true).is_none());
 +    }
 +
-+    #[test]
+     #[test]
      fn assemble_ordered() {
          let mut x = Assembler::new();
+@@ -393,6 +432,22 @@ mod test {
          assert_matches!(next(&mut x, 32), None);
+     }
+
++    #[test]
++    fn in_order_stream_keeps_one_slot_until_two_chunks_queue() {
++        let mut x = Assembler::new();
++        for (offset, chunk) in [(0, b"123"), (3, b"456")] {
++            x.insert(offset, Bytes::from_static(chunk), 3).unwrap();
++            assert_eq!(x.data.capacity(), 1);
++            assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == chunk);
++        }
++        x.insert(6, Bytes::from_static(b"789"), 3).unwrap();
++        x.insert(9, Bytes::from_static(b"10"), 2).unwrap();
++        assert!(x.data.capacity() >= 2);
++        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"789");
++        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"10");
++        assert_matches!(next(&mut x, 32), None);
++    }
++
+     #[test]
+     fn assemble_unordered() {
+         let mut x = Assembler::new();
 --- a/quinn-proto/src/connection/datagrams.rs
 +++ b/quinn-proto/src/connection/datagrams.rs
 @@ -4,7 +4,7 @@
@@ -69,7 +105,7 @@
      /// Compute the maximum size of datagrams that may passed to `send_datagram`
 --- a/quinn-proto/src/connection/mod.rs
 +++ b/quinn-proto/src/connection/mod.rs
-@@ -70,9 +70,9 @@
+@@ -70,9 +70,9 @@ mod send_buffer;
  mod spaces;
  #[cfg(fuzzing)]
  pub use spaces::Retransmits;
@@ -82,7 +118,18 @@
 
  mod stats;
  pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
-@@ -168,14 +168,14 @@
+@@ -149,7 +149,9 @@ pub struct Connection {
+     path_counter: u64,
+     /// Whether MTU detection is supported in this environment
+     allow_mtud: bool,
+-    prev_path: Option<(ConnectionId, PathData)>,
++    // Boxed: only a connection that has migrated holds one, and inline it costs every
++    // connection 432 bytes.
++    prev_path: Option<Box<(ConnectionId, PathData)>>,
+     state: State,
+     side: ConnectionSide,
+     /// Whether or not 0-RTT was enabled during the handshake. Does not imply acceptance.
+@@ -168,14 +170,14 @@ pub struct Connection {
      /// The value that the server included in the Source Connection ID field of a Retry packet, if
      /// one was received
      retry_src_cid: Option<ConnectionId>,
@@ -99,7 +146,7 @@
      /// Highest usable packet number space
      highest_space: SpaceId,
      /// 1-RTT keys used prior to a key update
-@@ -314,7 +314,7 @@
+@@ -314,7 +316,7 @@ impl Connection {
              endpoint_events: VecDeque::new(),
              spin_enabled: config.allow_spin && rng.random_ratio(7, 8),
              spin: false,
@@ -108,7 +155,7 @@
              highest_space: SpaceId::Initial,
              prev_crypto: None,
              next_crypto: None,
-@@ -395,7 +395,7 @@
+@@ -395,7 +397,7 @@ impl Connection {
      #[must_use]
      pub fn poll(&mut self) -> Option<Event> {
          if let Some(x) = self.events.pop_front() {
@@ -117,7 +164,23 @@
          }
 
          if let Some(event) = self.streams.poll() {
-@@ -431,7 +431,7 @@
+@@ -412,7 +414,14 @@ impl Connection {
+     /// Return endpoint-facing events
+     #[must_use]
+     pub fn poll_endpoint_events(&mut self) -> Option<EndpointEvent> {
+-        self.endpoint_events.pop_front().map(EndpointEvent)
++        let event = self.endpoint_events.pop_front()?;
++        if self.endpoint_events.is_empty() {
++            // Endpoint events are control-plane bursts (handshake, CID rotation, drain), never
++            // per-packet work. Releasing the drained burst's storage keeps an established idle
++            // connection from holding it for its whole lifetime.
++            self.endpoint_events = VecDeque::new();
++        }
++        Some(EndpointEvent(event))
+     }
+
+     /// Provide control over streams
+@@ -431,7 +440,7 @@ impl Connection {
          RecvStream {
              id,
              state: &mut self.streams,
@@ -126,7 +189,7 @@
          }
      }
 
-@@ -442,7 +442,7 @@
+@@ -442,7 +451,7 @@ impl Connection {
          SendStream {
              id,
              state: &mut self.streams,
@@ -135,7 +198,7 @@
              conn_state: &self.state,
          }
      }
-@@ -485,7 +485,9 @@
+@@ -485,7 +494,9 @@ impl Connection {
          for space in SpaceId::iter() {
              let request_immediate_ack =
                  space == SpaceId::Data && self.peer_supports_ack_frequency();
@@ -146,7 +209,7 @@
          }
 
          // Check whether we need to send a close message
-@@ -508,10 +510,14 @@
+@@ -508,10 +519,14 @@ impl Connection {
 
          // Check whether we need to send an ACK_FREQUENCY frame
          if let Some(config) = &self.config.ack_frequency_config {
@@ -165,7 +228,7 @@
                  && self.peer_supports_ack_frequency();
          }
 
-@@ -546,7 +552,7 @@
+@@ -546,7 +561,7 @@ impl Connection {
 
              // Is there data or a close message to send in this space?
              let can_send = self.space_can_send(space_id, frame_space_1rtt);
@@ -174,7 +237,7 @@
                  space_idx += 1;
                  continue;
              }
-@@ -758,7 +764,7 @@
+@@ -758,7 +773,7 @@ impl Connection {
              // From here on, we've determined that a packet will definitely be sent.
              //
 
@@ -183,7 +246,16 @@
                  && space_id == SpaceId::Handshake
                  && self.side.is_client()
              {
-@@ -1076,7 +1082,7 @@
+@@ -1018,7 +1033,7 @@ impl Connection {
+
+     /// Send PATH_CHALLENGE for a previous path if necessary
+     fn send_path_challenge(&mut self, now: Instant, buf: &mut Vec<u8>) -> Option<Transmit> {
+-        let (prev_cid, prev_path) = self.prev_path.as_mut()?;
++        let (prev_cid, prev_path) = &mut **self.prev_path.as_mut()?;
+         if !prev_path.challenge_pending {
+             return None;
+         }
+@@ -1076,7 +1091,7 @@ impl Connection {
 
      /// Indicate what types of frames are ready to send for the given space
      fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
@@ -192,7 +264,7 @@
              && (space_id != SpaceId::Data
                  || self.zero_rtt_crypto.is_none()
                  || self.side.is_server())
-@@ -1168,7 +1174,11 @@
+@@ -1168,7 +1183,11 @@ impl Connection {
              NewIdentifiers(ids, now) => {
                  self.local_cid_state.new_cids(&ids, now);
                  ids.into_iter().rev().for_each(|frame| {
@@ -205,7 +277,18 @@
                  });
                  // Update Timer::PushNewCid
                  if self.timers.get(Timer::PushNewCid).is_none_or(|x| x <= now) {
-@@ -1437,7 +1447,7 @@
+@@ -1222,8 +1241,8 @@ impl Connection {
+                 }
+                 Timer::PathValidation => {
+                     debug!("path validation failed");
+-                    if let Some((_, prev)) = self.prev_path.take() {
+-                        self.path = prev;
++                    if let Some(prev) = self.prev_path.take() {
++                        self.path = prev.1;
+                     }
+                     self.path.challenge = None;
+                     self.path.challenge_pending = false;
+@@ -1437,7 +1456,7 @@ impl Connection {
          self.streams.set_max_concurrent(dir, count);
          // If the limit was reduced, then a flow control update previously deemed insignificant may
          // now be significant.
@@ -214,7 +297,7 @@
          self.streams.queue_max_stream_id(pending);
      }
 
-@@ -1458,7 +1468,7 @@
+@@ -1458,7 +1477,7 @@ impl Connection {
      /// See [`TransportConfig::receive_window()`]
      pub fn set_receive_window(&mut self, receive_window: VarInt) {
          if self.streams.set_receive_window(receive_window) {
@@ -223,7 +306,7 @@
          }
      }
 
-@@ -1824,7 +1834,7 @@
+@@ -1824,7 +1843,7 @@ impl Connection {
 
      fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
          SpaceId::iter()
@@ -232,7 +315,7 @@
              .min_by_key(|&(time, _)| time)
      }
 
-@@ -1843,7 +1853,11 @@
+@@ -1843,7 +1862,11 @@ impl Connection {
 
          let mut result = None;
          for space in SpaceId::iter() {
@@ -245,7 +328,7 @@
                  continue;
              }
              if space == SpaceId::Data {
-@@ -1872,12 +1886,13 @@
+@@ -1872,12 +1895,13 @@ impl Connection {
          }
          // The server is guaranteed to have validated our address if any of our handshake or 1-RTT
          // packets are acknowledged or we've seen HANDSHAKE_DONE and discarded handshake keys.
@@ -262,7 +345,7 @@
      }
 
      fn set_loss_detection_timer(&mut self, now: Instant) {
-@@ -1953,7 +1968,7 @@
+@@ -1953,7 +1977,7 @@ impl Connection {
              None => return,
          };
          if self.side.is_server() {
@@ -271,7 +354,7 @@
                  // A server stops sending and processing Initial packets when it receives its first Handshake packet.
                  self.discard_space(now, SpaceId::Initial);
              }
-@@ -2136,7 +2151,7 @@
+@@ -2136,7 +2160,7 @@ impl Connection {
          while let Some(chunk) = space.crypto_stream.read(usize::MAX, true) {
              trace!("consumed {} CRYPTO bytes", chunk.bytes.len());
              if self.crypto.read_handshake(&chunk.bytes)? {
@@ -280,7 +363,7 @@
              }
          }
 
-@@ -2175,10 +2190,14 @@
+@@ -2175,10 +2199,14 @@ impl Connection {
              }
              self.spaces[space].crypto_offset += outgoing.len() as u64;
              trace!("wrote {} {:?} CRYPTO bytes", outgoing.len(), space);
@@ -299,7 +382,7 @@
          }
      }
 
-@@ -2208,6 +2227,11 @@
+@@ -2208,6 +2236,11 @@ impl Connection {
      }
 
      fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
@@ -311,7 +394,7 @@
          debug_assert!(space_id != SpaceId::Data);
          trace!("discarding {:?} keys", space_id);
          if space_id == SpaceId::Initial {
-@@ -2216,8 +2240,14 @@
+@@ -2216,8 +2249,14 @@ impl Connection {
                  *token = Bytes::new();
              }
          }
@@ -327,7 +410,7 @@
          space.time_of_last_ack_eliciting_packet = None;
          space.loss_time = None;
          let sent_packets = mem::take(&mut space.sent_packets);
-@@ -2509,7 +2539,7 @@
+@@ -2509,7 +2548,7 @@ impl Connection {
                      self.on_packet_acked(now, info);
                  };
 
@@ -336,7 +419,7 @@
                  self.spaces[SpaceId::Initial] = PacketSpace {
                      crypto: Some(self.crypto.initial_keys(&rem_cid, self.side.side())),
                      next_packet_number: self.spaces[SpaceId::Initial].next_packet_number,
-@@ -2518,6 +2548,7 @@
+@@ -2518,6 +2557,7 @@ impl Connection {
                  };
                  self.spaces[SpaceId::Initial]
                      .pending
@@ -344,7 +427,7 @@
                      .crypto
                      .push_back(frame::Crypto {
                          offset: 0,
-@@ -2587,7 +2618,7 @@
+@@ -2587,7 +2627,7 @@ impl Connection {
                              self.streams.zero_rtt_rejected();
 
                              // Discard already-queued frames
@@ -353,7 +436,7 @@
 
                              // Discard 0-RTT packets
                              let sent_packets =
-@@ -2608,11 +2639,14 @@
+@@ -2608,11 +2648,14 @@ impl Connection {
                      self.issue_first_cids(now);
                  } else {
                      // Server-only
@@ -370,7 +453,7 @@
                  self.state = State::Established;
                  trace!("established");
                  Ok(())
-@@ -2808,7 +2842,7 @@
+@@ -2808,7 +2851,7 @@ impl Connection {
                  }
                  Frame::Stream(frame) => {
                      if self.streams.received(frame, payload_len)?.should_transmit() {
@@ -379,7 +462,20 @@
                      }
                  }
                  Frame::Ack(ack) => {
-@@ -2854,7 +2888,7 @@
+@@ -2835,9 +2878,9 @@ impl Connection {
+                         self.timers.stop(Timer::PathValidation);
+                         self.path.challenge = None;
+                         self.path.validated = true;
+-                        if let Some((_, ref mut prev_path)) = self.prev_path {
+-                            prev_path.challenge = None;
+-                            prev_path.challenge_pending = false;
++                        if let Some(prev) = &mut self.prev_path {
++                            prev.1.challenge = None;
++                            prev.1.challenge_pending = false;
+                         }
+                     } else {
+                         debug!(token, "ignoring invalid PATH_RESPONSE");
+@@ -2854,7 +2897,7 @@ impl Connection {
                  }
                  Frame::ResetStream(frame) => {
                      if self.streams.received_reset(frame)?.should_transmit() {
@@ -388,7 +484,7 @@
                      }
                  }
                  Frame::DataBlocked { offset } => {
-@@ -2930,7 +2964,10 @@
+@@ -2930,7 +2973,10 @@ impl Connection {
                      match self.rem_cids.insert(frame) {
                          Ok(None) => {}
                          Ok(Some((retired, reset_token))) => {
@@ -400,7 +496,7 @@
                              self.set_reset_token(reset_token);
                          }
                          Err(InsertError::ExceedsLimit) => {
-@@ -2943,6 +2980,7 @@
+@@ -2943,6 +2989,7 @@ impl Connection {
                              // was retired all at once via retire_prior_to.
                              self.spaces[SpaceId::Data]
                                  .pending
@@ -408,7 +504,7 @@
                                  .retire_cids(frame.sequence..frame.sequence.saturating_add(1))?;
                              continue;
                          }
-@@ -2974,7 +3012,7 @@
+@@ -2974,7 +3021,7 @@ impl Connection {
                          .datagrams
                          .received(datagram, &self.config.datagram_receive_buffer_size)?
                      {
@@ -417,7 +513,7 @@
                      }
                  }
                  Frame::AckFrequency(ack_frequency) => {
-@@ -3010,7 +3048,7 @@
+@@ -3010,7 +3057,7 @@ impl Connection {
                              "client sent HANDSHAKE_DONE",
                          ));
                      }
@@ -426,7 +522,7 @@
                          self.discard_space(now, SpaceId::Handshake);
                      }
                  }
-@@ -3031,7 +3069,7 @@
+@@ -3031,7 +3078,7 @@ impl Connection {
          // on stopped streams. Incoming finishes/resets on open streams are not handled here as they
          // are only freed, and hence only issue credit, once the application has been notified
          // during a read on the stream.
@@ -435,7 +531,16 @@
          self.streams.queue_max_stream_id(pending);
 
          if let Some(reason) = close {
-@@ -3118,6 +3156,7 @@
+@@ -3093,7 +3140,7 @@ impl Connection {
+             prev.challenge_pending = true;
+             // We haven't updated the remote CID yet, this captures the remote CID we were using on
+             // the previous path.
+-            self.prev_path = Some((self.rem_cids.active(), prev));
++            self.prev_path = Some(Box::new((self.rem_cids.active(), prev)));
+         }
+
+         self.timers.set(
+@@ -3118,6 +3165,7 @@ impl Connection {
          // Retire the current remote CID and any CIDs we had to skip.
          self.spaces[SpaceId::Data]
              .pending
@@ -443,7 +548,7 @@
              .retire_cids
              .extend(retired);
          self.set_reset_token(reset_token);
-@@ -3166,7 +3205,7 @@
+@@ -3166,7 +3214,7 @@ impl Connection {
          let pre_payload_len = buf.len();
 
          // HANDSHAKE_DONE
@@ -452,7 +557,7 @@
              buf.write(frame::FrameType::HANDSHAKE_DONE);
              sent.retransmits.get_or_create().handshake_done = true;
              // This is just a u8 counter and the frame is typically just sent once
-@@ -3204,7 +3243,7 @@
+@@ -3204,7 +3252,7 @@ impl Connection {
          }
 
          // ACK_FREQUENCY
@@ -461,7 +566,7 @@
              let sequence_number = self.ack_frequency.next_sequence_number();
 
              // Safe to unwrap because this is always provided when ACK frequency is enabled
-@@ -3262,7 +3301,7 @@
+@@ -3262,7 +3310,7 @@ impl Connection {
 
          // CRYPTO
          while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
@@ -470,7 +575,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3298,14 +3337,14 @@
+@@ -3298,14 +3346,14 @@ impl Connection {
              sent.retransmits.get_or_create().crypto.push_back(truncated);
              if !frame.data.is_empty() {
                  frame.offset += len as u64;
@@ -487,7 +592,7 @@
                  &mut sent.retransmits,
                  &mut self.stats.frame_tx,
                  max_size,
-@@ -3314,7 +3353,7 @@
+@@ -3314,7 +3362,7 @@ impl Connection {
 
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
@@ -496,7 +601,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3336,7 +3375,7 @@
+@@ -3336,7 +3384,7 @@ impl Connection {
 
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
@@ -505,7 +610,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3360,12 +3399,12 @@
+@@ -3360,12 +3408,12 @@ impl Connection {
              }
          }
          if self.datagrams.send_blocked && sent_datagrams {
@@ -520,7 +625,7 @@
              debug_assert_eq!(space_id, SpaceId::Data);
              let ConnectionSide::Server { server_config } = &self.side else {
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
-@@ -3391,7 +3430,7 @@
+@@ -3391,7 +3439,7 @@ impl Connection {
              };
 
              if buf.len() + new_token.size() >= max_size {
@@ -529,7 +634,37 @@
                  break;
              }
 
-@@ -3792,7 +3831,10 @@
+@@ -3691,6 +3739,11 @@ impl Connection {
+         self.local_cid_state.active_seq()
+     }
+
++    #[cfg(test)]
++    pub(crate) fn endpoint_event_capacity(&self) -> usize {
++        self.endpoint_events.capacity()
++    }
++
+     /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame
+     /// with updated `retire_prior_to` field set to `v`
+     #[cfg(test)]
+@@ -3721,7 +3774,7 @@ impl Connection {
+             || self
+                 .prev_path
+                 .as_ref()
+-                .is_some_and(|(_, x)| x.challenge_pending)
++                .is_some_and(|prev| prev.1.challenge_pending)
+             || !self.path_responses.is_empty()
+             || self.datagrams.outgoing.can_send_1rtt(max_size)
+     }
+@@ -3731,7 +3784,7 @@ impl Connection {
+         // Visit known paths from newest to oldest to find the one `packet` was sent on
+         for path in [&mut self.path]
+             .into_iter()
+-            .chain(self.prev_path.as_mut().map(|(_, data)| data))
++            .chain(self.prev_path.as_mut().map(|prev| &mut prev.1))
+         {
+             if path.remove_in_flight(packet) {
+                 return;
+@@ -3792,7 +3845,10 @@ impl Connection {
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
          };
@@ -541,7 +676,7 @@
          new_tokens.clear();
          for _ in 0..server_config.validation_token.sent {
              new_tokens.push(self.path.remote);
-@@ -4023,6 +4065,26 @@
+@@ -4023,6 +4079,26 @@ mod state {
      }
  }
 
@@ -568,11 +703,10 @@
  /// Events of interest to the application
  #[derive(Debug)]
  pub enum Event {
-@@ -4113,6 +4175,49 @@
- #[cfg(test)]
+@@ -4114,6 +4190,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
  mod tests {
      use super::*;
-+
+
 +    #[test]
 +    fn queued_unit_events_preserve_fifo_duplicates_and_small_storage() {
 +        assert_eq!(mem::size_of::<QueuedEvent>(), 1);
@@ -615,9 +749,10 @@
 +        ));
 +        assert_eq!(queued.capacity(), capacity);
 +    }
-
++
      #[cfg(feature = "rustls-ring")]
      #[test]
+     fn large_initial_token_leaves_room_for_close() {
 --- a/quinn-proto/src/connection/packet_crypto.rs
 +++ b/quinn-proto/src/connection/packet_crypto.rs
 @@ -1,7 +1,7 @@
@@ -1228,11 +1363,10 @@
  }
 --- a/quinn-proto/src/tests/mod.rs
 +++ b/quinn-proto/src/tests/mod.rs
-@@ -44,6 +44,43 @@
- // Unfortunately it's either-or: Enable this and you can run in the browser, disable to run in nodejs.
+@@ -45,6 +45,43 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
  // #[cfg(all(target_family = "wasm", target_os = "unknown"))]
  // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-+
+
 +#[test]
 +fn replayed_early_packets_after_confirmation_preserve_application_io() {
 +    let _guard = subscribe();
@@ -1269,6 +1403,24 @@
 +    );
 +    assert_eq!(pair.client_datagrams(client).recv().unwrap(), b"reply"[..]);
 +}
-
++
  #[test]
  fn pending_incoming_survives_server_config_change() {
+     let _guard = subscribe();
+@@ -220,6 +257,16 @@ fn lifecycle() {
+     assert_eq!(pair.server.known_cids(), 0);
+ }
+
++#[test]
++fn drained_endpoint_events_release_storage() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let (client_ch, server_ch) = pair.connect();
++    // The handshake queued and delivered connection-ID and reset-token events on both sides.
++    assert_eq!(pair.client_conn_mut(client_ch).endpoint_event_capacity(), 0);
++    assert_eq!(pair.server_conn_mut(server_ch).endpoint_event_capacity(), 0);
++}
++
+ #[test]
+ fn draft_version_compat() {
+     let _guard = subscribe();

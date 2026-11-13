@@ -258,6 +258,16 @@ fn lifecycle() {
 }
 
 #[test]
+fn drained_endpoint_events_release_storage() {
+    let _guard = subscribe();
+    let mut pair = Pair::default();
+    let (client_ch, server_ch) = pair.connect();
+    // The handshake queued and delivered connection-ID and reset-token events on both sides.
+    assert_eq!(pair.client_conn_mut(client_ch).endpoint_event_capacity(), 0);
+    assert_eq!(pair.server_conn_mut(server_ch).endpoint_event_capacity(), 0);
+}
+
+#[test]
 fn draft_version_compat() {
     let _guard = subscribe();
 
