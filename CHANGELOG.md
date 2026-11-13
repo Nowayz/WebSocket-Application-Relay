@@ -11,6 +11,9 @@
   previous path and 0-RTT secret out of line; ready memory at 100,000 sessions
   falls from about 1,839 to about 1,671 MiB. See the
   [measurements](docs/reports/webtransport-allocator-idle-storage-2026-11-13.json).
+- `scripts/capacity.py` can run its connected-population check against TLS
+  WebSocket (`--transport websocket-tls`, through `examples/tls_front`), so
+  WebTransport is compared with an encrypted baseline at 100,000 sessions.
 - HTTP and CBOR channel listings omit empty or retired ordinary rooms captured
   during concurrent admission or departure; the permanent `re_globl` room
   remains visible when empty. The metadata collector stays out of line so

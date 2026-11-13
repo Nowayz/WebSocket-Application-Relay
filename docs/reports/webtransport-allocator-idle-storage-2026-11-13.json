@@ -10,7 +10,8 @@
   "early_secret": "rustls Quic::early_secret is boxed (80 B inline to 8 B), taking the QUIC session shell from the 1,280-byte to the 1,024-byte size class.",
   "handshake_queue": "rustls QUIC write_hs releases the drained handshake message queue once the handshake is complete (128 B).",
   "harness": "scripts/datagram-load.py strips ANSI colour codes before reading the development certificate pin, as benchmark_transport.py already does.",
-  "pending_control_queues": "quinn-proto populate_packet releases the Data-space CRYPTO, NEW_CONNECTION_ID and NEW_TOKEN queues when the frame it just sent leaves them empty (480 B per connection)."
+  "pending_control_queues": "quinn-proto populate_packet releases the Data-space CRYPTO, NEW_CONNECTION_ID and NEW_TOKEN queues when the frame it just sent leaves them empty (480 B per connection).",
+  "harness_tls_capacity": "scripts/capacity.py gains --transport websocket-tls; examples/tls_front gains --upstream-sources (to hold more than one loopback address has ports) and --copy-buffer-bytes."
  },
  "binaries": {
   "base2": {
@@ -1258,8 +1259,9 @@
   "Process memory remains far above the plaintext WebSocket transport: about 1.72 GiB versus about 0.12 GiB ready RSS at 100,000 sessions (WebSocket figure from the 2026-11-06 control). Each connection holds about 2.8 KiB of packet and header keys alone, so parity with a plaintext TCP process is not reachable by trimming.",
   "At paced load the plaintext WebSocket transport still has lower latency tails and about half the server CPU; WebTransport leads at saturation.",
   "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
-  "The encrypted comparison uses a TLS front-end proxy, not an integrated TLS WebSocket server.",
-  "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT."
+  "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT.",
+  "The encrypted WebSocket baseline is a TLS-terminating proxy fixture in front of the plaintext relay, which is how wss is commonly deployed but is not an optimized integrated TLS server; its default copy buffers alone are 1.6 GiB at 100,000 sessions, so the lean row is the fairer memory comparison.",
+  "Against encrypted WebSocket, WebTransport still uses about 18 to 25% more server CPU at paced load, takes about 2.3 times as long to establish 100,000 connections, and has a higher low-rate latency tail (about 1.2 ms against 0.35 ms p99)."
  ],
  "decision": "Keep jemalloc and all six storage changes. Reject mimalloc, shorter scheduler global-queue intervals, smaller fanout quanta and faster acknowledgement policies.",
  "capacity_100000_sessions_4s_second_batch": [
@@ -2018,6 +2020,17 @@
      "p99_ms": 17.92
     },
     "bulk_arrival_ms": 0.98
+   },
+   "websocket-tls": {
+    "image": "committed relay behind tls_front",
+    "arrival_age_ms": {
+     "p50_ms": 0.18,
+     "p99_ms": 0.349,
+     "max_ms": 0.703
+    },
+    "freshest_state_age_ms": {
+     "p99_ms": 16.7
+    }
    }
   }
  },
@@ -2560,5 +2573,99 @@
    }
   },
   "outcome": "Smaller quanta did not raise private throughput or lower its latency bound and cut fanout by 10 to 30%."
- }
+ },
+ "encrypted_websocket_100000_sessions_4s": {
+  "scope": "scripts/capacity.py --transport websocket-tls (added for this comparison): the committed relay with --legacy-websocket behind examples/tls_front (TLS 1.3, same server CPU set, one extra loopback TCP hop), against the same image over WebTransport. Deployment RSS and CPU are relay plus front end. The front end holds one copy buffer per direction per connection for its lifetime: 8 KiB each by default, 2 KiB in the lean row.",
+  "images": {
+   "relay": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+   "tls_front": "b1d69179dd3ae795c2e1ce9f79a24114001fea95d17e055af6ceff3d4cfe24dd",
+   "capacity_client": "13b5ca2d89f73f66dc7fab3334a4b409b044ada93166b9315e06c9bef568178d"
+  },
+  "results": {
+   "tls_websocket_proxy_default_8k": [
+    {
+     "passed": true,
+     "relay_rss_mib": 147.2,
+     "tls_front_rss_mib": 2429.8,
+     "deployment_rss_mib": 2577.0,
+     "host_slab_growth_mib": 1810,
+     "setup_seconds": 4.55,
+     "paced_cpu_seconds_per_400k": 4.48,
+     "round_trip": {
+      "p50_upper_ms": 1.048576,
+      "p99_upper_ms": 4.194304,
+      "max_ms": 4.3
+     },
+     "retired_deployment_rss_mib": 2501.5
+    },
+    {
+     "passed": true,
+     "relay_rss_mib": 147.0,
+     "tls_front_rss_mib": 2429.9,
+     "deployment_rss_mib": 2576.8,
+     "host_slab_growth_mib": 1779,
+     "setup_seconds": 4.63,
+     "paced_cpu_seconds_per_400k": 4.74,
+     "round_trip": {
+      "p50_upper_ms": 1.048576,
+      "p99_upper_ms": 4.194304,
+      "max_ms": 4.5
+     },
+     "retired_deployment_rss_mib": 2507.3
+    }
+   ],
+   "tls_websocket_proxy_lean_2k": [
+    {
+     "passed": true,
+     "relay_rss_mib": 143.0,
+     "tls_front_rss_mib": 1258.0,
+     "deployment_rss_mib": 1400.9,
+     "host_slab_growth_mib": 1776,
+     "setup_seconds": 4.43,
+     "paced_cpu_seconds_per_400k": 4.7,
+     "round_trip": {
+      "p50_upper_ms": 1.048576,
+      "p99_upper_ms": 4.194304,
+      "max_ms": 7.1
+     },
+     "retired_deployment_rss_mib": 1327.5
+    }
+   ],
+   "webtransport": [
+    {
+     "passed": true,
+     "relay_rss_mib": 1671.8,
+     "tls_front_rss_mib": 0,
+     "deployment_rss_mib": 1671.8,
+     "host_slab_growth_mib": 0,
+     "setup_seconds": 10.47,
+     "paced_cpu_seconds_per_400k": 5.58,
+     "round_trip": {
+      "p50_upper_ms": 0.524288,
+      "p99_upper_ms": 4.194304,
+      "max_ms": 11.2
+     },
+     "retired_deployment_rss_mib": 1318.8
+    },
+    {
+     "passed": true,
+     "relay_rss_mib": 1667.8,
+     "tls_front_rss_mib": 0,
+     "deployment_rss_mib": 1667.8,
+     "host_slab_growth_mib": -8,
+     "setup_seconds": 10.62,
+     "paced_cpu_seconds_per_400k": 5.58,
+     "round_trip": {
+      "p50_upper_ms": 0.524288,
+      "p99_upper_ms": 4.194304,
+      "max_ms": 5.9
+     },
+     "retired_deployment_rss_mib": 1381.1
+    }
+   ]
+  },
+  "kernel_estimate": "Host slab growth covers both ends on one host. The TLS-fronted deployment has 400,000 TCP sockets, 300,000 of them on the server side (client-facing and upstream at the front end, plus the relay). Taking three quarters of the growth as the server side gives about 1,357 MiB (default) and 1,332 MiB (lean); WebTransport adds none. Deployment totals are then about 3,934 MiB, 2,733 MiB and 1,672 MiB.",
+  "not_measured": "An integrated TLS WebSocket server (no proxy hop) does not exist in this repository. It would avoid the second socket pair and the copy buffers, so its memory would be below the lean proxy row and plausibly below WebTransport."
+ },
+ "comparison_basis": "The owner confirmed on 2026-11-13 that the intended baseline is TLS WebSocket, not plaintext. Plaintext results are kept as a lower bound for WebSocket cost."
 }
