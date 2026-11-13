@@ -1,0 +1,1942 @@
+{
+ "date": "2026-11-13",
+ "base_commit": "0608124",
+ "objective": "Follow the 2026-11-13 recommendation (rebuild a baseline, reclaim empty endpoint-event queues) and close the remaining reliable-throughput gap to the plaintext WebSocket transport without adding machinery.",
+ "changes": {
+  "endpoint_event_queue": "quinn-proto Connection::poll_endpoint_events releases the queue storage when it pops the last event (192 B per idle connection).",
+  "assembler_first_slot": "quinn-proto Assembler::insert reserves one slot instead of four for the first buffered chunk (168 B per receive stream that never queues two chunks).",
+  "allocator": "war-relay binary uses jemalloc (tikv-jemallocator 0.7) as its global allocator on non-MSVC targets. Library, examples and benchmark clients are unchanged.",
+  "previous_path": "quinn-proto Connection::prev_path is boxed (432 B inline to 8 B). With jemalloc the connection owner drops from the 6,144-byte to the 5,120-byte size class.",
+  "early_secret": "rustls Quic::early_secret is boxed (80 B inline to 8 B), taking the QUIC session shell from the 1,280-byte to the 1,024-byte size class.",
+  "handshake_queue": "rustls QUIC write_hs releases the drained handshake message queue once the handshake is complete (128 B).",
+  "harness": "scripts/datagram-load.py strips ANSI colour codes before reading the development certificate pin, as benchmark_transport.py already does."
+ },
+ "binaries": {
+  "base2": {
+   "sha256": "aeafb781159eff53d7ab52d14c72fa8fd126391a0b6f0763c5015f4fe144365c",
+   "meaning": "commit 0608124, cargo build --release --bin war-relay"
+  },
+  "candidate": {
+   "sha256": "56cdf982c78363552b95bd33ea9f3287997cb15f537d77732bae04fafe5f7951",
+   "meaning": "0608124 + endpoint-event release"
+  },
+  "cand2": {
+   "sha256": "d4d09080ff9ef0a7db0f051217ef3af006ad9818a4605d2523dc5fdb73fb8485",
+   "meaning": "0608124 + endpoint-event release + assembler first slot, system allocator"
+  },
+  "mi": {
+   "sha256": "2cf746755f4563c05353dea157cbb92d90cac8bab100b62f4841c8d5d210adbd",
+   "meaning": "cand2 + mimalloc 0.1 (screened, not adopted)"
+  },
+  "je": {
+   "sha256": "196bbdbef6dc0f7e01e1b956d14a028a7920dc3e0facd17301ca5fad2abe5f84",
+   "meaning": "cand2 + jemalloc behind an experiment feature"
+  },
+  "final": {
+   "sha256": "408c7ae2ec55f3b0d50043673acefbaadc2625ec2f19673cd9f0dbed18eae68d",
+   "meaning": "cand2 + jemalloc (before the second storage batch)"
+  },
+  "mem2": {
+   "sha256": "e9787c14a35d5cfb4ca3ee1b9dd29da6033f6e6cf391b02d44c8c952697df36b",
+   "meaning": "the committed tree: final + boxed previous path, boxed early secret, handshake queue release"
+  }
+ },
+ "clients": {
+  "inspection": "a2d6374d2139704eaf1a7db1a4411012bba3053b842a289d2ac19f1349d12e91",
+  "capacity": "13b5ca2d89f73f66dc7fab3334a4b409b044ada93166b9315e06c9bef568178d"
+ },
+ "method": {
+  "throughput": "scripts/inspection.py --rooms 0 --mode none --inspectors 0 --churn-workers 0 --workers 4 --client-workers 8 --server-cpus 0-3 --client-cpus 8-15 --pin-workers --pin-client-workers; private = --pairs 32; roomonly = --pairs 0 --fanout-readers 1024 --fanout-window 4; mixed = both. Rate is verified received private plus fanout deliveries per second. Runs are serialized and the arm order rotates each repetition.",
+  "capacity": "scripts/capacity.py defaults: 100,000 users, rooms of 16, 4 workers, 1 KiB, one message per user per second.",
+  "websocket_arm": "the base2 image with --legacy-websocket (plaintext TCP). WebTransport arms use pinned TLS 1.3 over QUIC."
+ },
+ "throughput_12s_three_repetitions": {
+  "private": {
+   "ws": {
+    "deliveries_per_second": [
+     1167579,
+     1200367,
+     1190610
+    ],
+    "median": 1190610,
+    "server_cpu_us_per_delivery_median": 1.76,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1167579,
+     1200367,
+     1190610
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1446858,
+     1457401,
+     1471995
+    ],
+    "median": 1457401,
+    "server_cpu_us_per_delivery_median": 2.28,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1446858,
+     1457401,
+     1471995
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.239,
+     1.214,
+     1.236
+    ]
+   },
+   "c2": {
+    "deliveries_per_second": [
+     1446673,
+     1435271,
+     1452474
+    ],
+    "median": 1446673,
+    "server_cpu_us_per_delivery_median": 2.297,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1446673,
+     1435271,
+     1452474
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.239,
+     1.196,
+     1.22
+    ]
+   },
+   "mi": {
+    "deliveries_per_second": [
+     1480988,
+     1454892,
+     1470831
+    ],
+    "median": 1470831,
+    "server_cpu_us_per_delivery_median": 2.052,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1480988,
+     1454892,
+     1470831
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.268,
+     1.212,
+     1.235
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     1488628,
+     1500258,
+     1525944
+    ],
+    "median": 1500258,
+    "server_cpu_us_per_delivery_median": 1.997,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1488628,
+     1500258,
+     1525944
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.275,
+     1.25,
+     1.282
+    ]
+   }
+  },
+  "roomonly": {
+   "ws": {
+    "deliveries_per_second": [
+     1559083,
+     1603375,
+     1518774
+    ],
+    "median": 1559083,
+    "server_cpu_us_per_delivery_median": 1.089,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1559083,
+     1603375,
+     1518774
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1486516,
+     1593495,
+     1626847
+    ],
+    "median": 1593495,
+    "server_cpu_us_per_delivery_median": 1.942,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1486516,
+     1593495,
+     1626847
+    ],
+    "ratio_to_ws_per_repetition": [
+     0.953,
+     0.994,
+     1.071
+    ]
+   },
+   "c2": {
+    "deliveries_per_second": [
+     1526945,
+     1651591,
+     1669063
+    ],
+    "median": 1651591,
+    "server_cpu_us_per_delivery_median": 1.853,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1526945,
+     1651591,
+     1669063
+    ],
+    "ratio_to_ws_per_repetition": [
+     0.979,
+     1.03,
+     1.099
+    ]
+   },
+   "mi": {
+    "deliveries_per_second": [
+     1699809,
+     1824334,
+     1894973
+    ],
+    "median": 1824334,
+    "server_cpu_us_per_delivery_median": 1.601,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1699809,
+     1824334,
+     1894973
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.09,
+     1.138,
+     1.248
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     1576834,
+     1868267,
+     1912830
+    ],
+    "median": 1868267,
+    "server_cpu_us_per_delivery_median": 1.566,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1576834,
+     1868267,
+     1912830
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.011,
+     1.165,
+     1.259
+    ]
+   }
+  },
+  "mixed": {
+   "ws": {
+    "deliveries_per_second": [
+     1296934,
+     1298753,
+     1470834
+    ],
+    "median": 1298753,
+    "server_cpu_us_per_delivery_median": 1.577,
+    "p99_upper_ms": {
+     "private": [
+      2.097152,
+      2.097152,
+      2.097152
+     ],
+     "fanout": [
+      8.388608,
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     718800,
+     763977,
+     758324
+    ],
+    "fanout_per_second": [
+     578134,
+     534776,
+     712510
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1322459,
+     1594047,
+     1598689
+    ],
+    "median": 1594047,
+    "server_cpu_us_per_delivery_median": 2.128,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     353491,
+     397094,
+     396118
+    ],
+    "fanout_per_second": [
+     968968,
+     1196953,
+     1202571
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.02,
+     1.227,
+     1.087
+    ]
+   },
+   "c2": {
+    "deliveries_per_second": [
+     1295639,
+     1610518,
+     1603103
+    ],
+    "median": 1603103,
+    "server_cpu_us_per_delivery_median": 2.119,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     343589,
+     398903,
+     397614
+    ],
+    "fanout_per_second": [
+     952050,
+     1211616,
+     1205490
+    ],
+    "ratio_to_ws_per_repetition": [
+     0.999,
+     1.24,
+     1.09
+    ]
+   },
+   "mi": {
+    "deliveries_per_second": [
+     1267402,
+     1720056,
+     1789092
+    ],
+    "median": 1720056,
+    "server_cpu_us_per_delivery_median": 1.87,
+    "p99_upper_ms": {
+     "private": [
+      8.388608,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     289123,
+     319715,
+     302417
+    ],
+    "fanout_per_second": [
+     978279,
+     1400341,
+     1486675
+    ],
+    "ratio_to_ws_per_repetition": [
+     0.977,
+     1.324,
+     1.216
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     1514442,
+     1726849,
+     1798943
+    ],
+    "median": 1726849,
+    "server_cpu_us_per_delivery_median": 1.865,
+    "p99_upper_ms": {
+     "private": [
+      8.388608,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     314568,
+     325286,
+     315809
+    ],
+    "fanout_per_second": [
+     1199874,
+     1401564,
+     1483133
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.168,
+     1.33,
+     1.223
+    ]
+   }
+  }
+ },
+ "throughput_final_binary_4s_two_repetitions": {
+  "private": {
+   "ws": {
+    "deliveries_per_second": [
+     1191575,
+     1191815
+    ],
+    "median": 1191695,
+    "server_cpu_us_per_delivery_median": 1.762,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1191575,
+     1191815
+    ],
+    "fanout_per_second": [
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1485961,
+     1461571
+    ],
+    "median": 1473766,
+    "server_cpu_us_per_delivery_median": 2.029,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1485961,
+     1461571
+    ],
+    "fanout_per_second": [
+     0,
+     0
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.247,
+     1.226
+    ]
+   }
+  },
+  "roomonly": {
+   "ws": {
+    "deliveries_per_second": [
+     1525649,
+     1563662
+    ],
+    "median": 1544655,
+    "server_cpu_us_per_delivery_median": 1.088,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1525649,
+     1563662
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1885816,
+     1826647
+    ],
+    "median": 1856232,
+    "server_cpu_us_per_delivery_median": 1.567,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1885816,
+     1826647
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.236,
+     1.168
+    ]
+   }
+  },
+  "mixed": {
+   "ws": {
+    "deliveries_per_second": [
+     1544238,
+     1291102
+    ],
+    "median": 1417670,
+    "server_cpu_us_per_delivery_median": 1.49,
+    "p99_upper_ms": {
+     "private": [
+      2.097152,
+      2.097152
+     ],
+     "fanout": [
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     742916,
+     731613
+    ],
+    "fanout_per_second": [
+     801322,
+     559489
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "wt": {
+    "deliveries_per_second": [
+     1602164,
+     1586711
+    ],
+    "median": 1594438,
+    "server_cpu_us_per_delivery_median": 2.023,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     313614,
+     310418
+    ],
+    "fanout_per_second": [
+     1288550,
+     1276293
+    ],
+    "ratio_to_ws_per_repetition": [
+     1.038,
+     1.229
+    ]
+   }
+  }
+ },
+ "allocator_preload_screen_12s_three_repetitions": {
+  "private": {
+   "wt": {
+    "deliveries_per_second": [
+     1284233,
+     1274821,
+     1279956
+    ],
+    "median": 1279956,
+    "server_cpu_us_per_delivery_median": 2.63,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1284233,
+     1274821,
+     1279956
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wtj": {
+    "deliveries_per_second": [
+     1316916,
+     1298786,
+     1303068
+    ],
+    "median": 1303068,
+    "server_cpu_us_per_delivery_median": 2.351,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1316916,
+     1298786,
+     1303068
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.025,
+     1.019,
+     1.018
+    ]
+   },
+   "wtt": {
+    "deliveries_per_second": [
+     1328212,
+     1331264,
+     1331400
+    ],
+    "median": 1331264,
+    "server_cpu_us_per_delivery_median": 2.306,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "private_per_second": [
+     1328212,
+     1331264,
+     1331400
+    ],
+    "fanout_per_second": [
+     0,
+     0,
+     0
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.034,
+     1.044,
+     1.04
+    ]
+   }
+  },
+  "roomonly": {
+   "wt": {
+    "deliveries_per_second": [
+     1387383,
+     1420319,
+     1394142
+    ],
+    "median": 1394142,
+    "server_cpu_us_per_delivery_median": 2.265,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1387383,
+     1420319,
+     1394142
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wtj": {
+    "deliveries_per_second": [
+     1632274,
+     1625764,
+     1589477
+    ],
+    "median": 1625764,
+    "server_cpu_us_per_delivery_median": 1.927,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1632274,
+     1625764,
+     1589477
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.177,
+     1.145,
+     1.14
+    ]
+   },
+   "wtt": {
+    "deliveries_per_second": [
+     1603203,
+     1548632,
+     1596727
+    ],
+    "median": 1596727,
+    "server_cpu_us_per_delivery_median": 1.967,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304,
+      4.194304
+     ]
+    },
+    "private_per_second": [
+     0,
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1603203,
+     1548632,
+     1596727
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.156,
+     1.09,
+     1.145
+    ]
+   }
+  },
+  "mixed": {
+   "wt": {
+    "deliveries_per_second": [
+     1340913,
+     1343162,
+     1336756
+    ],
+    "median": 1340913,
+    "server_cpu_us_per_delivery_median": 2.556,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     354334,
+     357730,
+     353500
+    ],
+    "fanout_per_second": [
+     986580,
+     985432,
+     983256
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "wtj": {
+    "deliveries_per_second": [
+     1460624,
+     1458640,
+     1447255
+    ],
+    "median": 1458640,
+    "server_cpu_us_per_delivery_median": 2.286,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     324055,
+     326090,
+     321666
+    ],
+    "fanout_per_second": [
+     1136570,
+     1132550,
+     1125589
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.089,
+     1.086,
+     1.083
+    ]
+   },
+   "wtt": {
+    "deliveries_per_second": [
+     1474590,
+     1449569,
+     1475771
+    ],
+    "median": 1474590,
+    "server_cpu_us_per_delivery_median": 2.257,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      8.388608,
+      8.388608,
+      8.388608
+     ]
+    },
+    "private_per_second": [
+     331092,
+     328012,
+     330539
+    ],
+    "fanout_per_second": [
+     1143498,
+     1121557,
+     1145233
+    ],
+    "ratio_to_wt_per_repetition": [
+     1.1,
+     1.079,
+     1.104
+    ]
+   }
+  }
+ },
+ "capacity_100000_sessions_10s": {
+  "base2": [
+   {
+    "passed": true,
+    "ready_rss_mib": 1838.96,
+    "retired_rss_mib": 1843.7,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.84,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.24
+   },
+   {
+    "passed": true,
+    "ready_rss_mib": 1839.93,
+    "retired_rss_mib": 1844.61,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.86,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.22
+   }
+  ],
+  "candidate": [
+   {
+    "passed": true,
+    "ready_rss_mib": 1821.42,
+    "retired_rss_mib": 1826.04,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.74,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.47
+   },
+   {
+    "passed": true,
+    "ready_rss_mib": 1819.76,
+    "retired_rss_mib": 1824.51,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.99,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.58
+   }
+  ],
+  "cand2": [
+   {
+    "passed": true,
+    "ready_rss_mib": 1769.73,
+    "retired_rss_mib": 1771.15,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.92,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.32
+   },
+   {
+    "passed": true,
+    "ready_rss_mib": 1769.76,
+    "retired_rss_mib": 1774.84,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 17.49,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.49
+   }
+  ],
+  "mi": [
+   {
+    "passed": true,
+    "ready_rss_mib": 1929.41,
+    "retired_rss_mib": 768.42,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 15.51,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.02
+   },
+   {
+    "passed": true,
+    "ready_rss_mib": 1929.21,
+    "retired_rss_mib": 1045.66,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 15.81,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.43
+   }
+  ],
+  "je": [
+   {
+    "passed": true,
+    "ready_rss_mib": 1849.8,
+    "retired_rss_mib": 1444.39,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 15.81,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.48
+   },
+   {
+    "passed": true,
+    "ready_rss_mib": 1853.69,
+    "retired_rss_mib": 1452.7,
+    "verified_deliveries": 1000000,
+    "server_cpu_seconds": 15.1,
+    "round_trip_p99_upper_ms": 4.194304,
+    "setup_seconds": 11.11
+   }
+  ]
+ },
+ "capacity_100000_sessions_final_binary": {
+  "passed": true,
+  "ready_rss_mib": 1849.85,
+  "verified_deliveries": 400000,
+  "server_cpu_seconds": 5.96,
+  "round_trip_p99_upper_ms": 4.194304,
+  "measured_seconds": 4
+ },
+ "arm_names": {
+  "ws": "plaintext WebSocket, base2",
+  "wt": "WebTransport, base2 (final binary in the 4 s check)",
+  "c2": "WebTransport, cand2",
+  "mi": "WebTransport, mimalloc",
+  "je": "WebTransport, jemalloc",
+  "wtj": "base image with LD_PRELOAD jemalloc 5.4",
+  "wtt": "base image with LD_PRELOAD tcmalloc_minimal"
+ },
+ "validation": {
+  "vendor": "scripts/check-vendor.py: 300 vendored files match pinned archives plus patches",
+  "format": "cargo fmt --check passes (src/lib.rs module order fixed)",
+  "clippy": "cargo clippy --locked --all-targets -- -D warnings passes",
+  "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun after the second batch)",
+  "vendored_quinn_proto": "324 library tests pass, including the two new storage tests and the upstream migration and path-validation tests",
+  "vendored_rustls": "scripts/test-rustls-vendor.py: 248 unit tests pass with pinned fixtures"
+ },
+ "limits": [
+  "One loopback host that also runs a desktop session; identical runs vary by several percent and two earlier passes were disturbed by other local work. Paired per-repetition ratios are the comparison to trust, not single medians.",
+  "An earlier baseline image built with --all-targets differed from bin-only candidate builds through feature unification; it is excluded. Every image above is built with the same command.",
+  "The WebSocket arm is plaintext; no integrated TLS WebSocket baseline exists. Kernel socket memory is not measured.",
+  "Raw receipts are under target/bench/out on the measuring host and are not versioned.",
+  "Process memory remains far above the plaintext WebSocket transport: about 1.72 GiB versus about 0.12 GiB ready RSS at 100,000 sessions (WebSocket figure from the 2026-11-06 control). Each connection holds about 2.8 KiB of packet and header keys alone, so parity with a plaintext TCP process is not reachable by trimming.",
+  "At paced load the plaintext WebSocket transport still has lower latency tails and about half the server CPU; WebTransport leads at saturation.",
+  "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
+  "Injected-loss freshness and kernel socket memory need privileged network namespaces and socket diagnostics; they were not run in this session.",
+  "The encrypted comparison uses a TLS front-end proxy, not an integrated TLS WebSocket server."
+ ],
+ "decision": "Keep jemalloc and all five storage changes. Reject mimalloc and shorter scheduler global-queue intervals.",
+ "capacity_100000_sessions_4s_second_batch": [
+  {
+   "image": "final",
+   "passed": true,
+   "ready_rss_mib": 1847.97,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.67,
+   "round_trip_p99_upper_ms": 8.388608,
+   "client_schedule_lag_max_ms": 5.8,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "final",
+   "passed": true,
+   "ready_rss_mib": 1849.83,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.53,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 2.7,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "final",
+   "passed": true,
+   "ready_rss_mib": 1849.83,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.5,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 2.6,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "mem2",
+   "passed": true,
+   "ready_rss_mib": 1717.92,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.82,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 3.2,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "mem2",
+   "passed": true,
+   "ready_rss_mib": 1715.75,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 12.6,
+   "round_trip_p99_upper_ms": 4294.967296,
+   "client_schedule_lag_max_ms": 4216.2,
+   "client_udp_receive_drops": 761893
+  },
+  {
+   "image": "mem2",
+   "passed": true,
+   "ready_rss_mib": 1715.73,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.56,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 3.2,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "mem2",
+   "passed": true,
+   "ready_rss_mib": 1719.78,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.5,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 3.8,
+   "client_udp_receive_drops": 0
+  },
+  {
+   "image": "mem2",
+   "passed": true,
+   "ready_rss_mib": 1715.8,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.68,
+   "round_trip_p99_upper_ms": 4.194304,
+   "client_schedule_lag_max_ms": 2.7,
+   "client_udp_receive_drops": 0
+  }
+ ],
+ "throughput_second_batch_4s_two_repetitions": {
+  "private": {
+   "ws": {
+    "deliveries_per_second": [
+     1322940,
+     1355739
+    ],
+    "median": 1339340,
+    "server_cpu_us_per_delivery_median": 1.578,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      0.524288
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     1579435,
+     1632304
+    ],
+    "median": 1605870,
+    "server_cpu_us_per_delivery_median": 1.902,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.194,
+     1.204
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     1616188,
+     1636141
+    ],
+    "median": 1626165,
+    "server_cpu_us_per_delivery_median": 1.895,
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.222,
+     1.207
+    ]
+   }
+  },
+  "roomonly": {
+   "ws": {
+    "deliveries_per_second": [
+     1737876,
+     1701033
+    ],
+    "median": 1719454,
+    "server_cpu_us_per_delivery_median": 1.033,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     2059149,
+     2097917
+    ],
+    "median": 2078533,
+    "server_cpu_us_per_delivery_median": 1.504,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.185,
+     1.233
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     2028178,
+     2079088
+    ],
+    "median": 2053633,
+    "server_cpu_us_per_delivery_median": 1.525,
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.167,
+     1.222
+    ]
+   }
+  },
+  "mixed": {
+   "ws": {
+    "deliveries_per_second": [
+     1838805,
+     1400810
+    ],
+    "median": 1619808,
+    "server_cpu_us_per_delivery_median": 1.336,
+    "p99_upper_ms": {
+     "private": [
+      2.097152,
+      2.097152
+     ],
+     "fanout": [
+      4.194304,
+      8.388608
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "je": {
+    "deliveries_per_second": [
+     1986568,
+     1957459
+    ],
+    "median": 1972013,
+    "server_cpu_us_per_delivery_median": 1.66,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.08,
+     1.397
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     1948546,
+     1975959
+    ],
+    "median": 1962252,
+    "server_cpu_us_per_delivery_median": 1.67,
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.06,
+     1.411
+    ]
+   }
+  }
+ },
+ "encrypted_comparison_4s_two_repetitions": {
+  "scope": "wss = base2 behind examples/tls_front (TLS 1.3, one extra loopback TCP hop; CPU includes the front end). wt = committed tree.",
+  "results": {
+   "private": {
+    "wss": {
+     "deliveries_per_second": [
+      1097579,
+      1095075
+     ],
+     "median": 1096327,
+     "server_cpu_us_per_delivery_median": 2.254,
+     "p99_upper_ms": {
+      "private": [
+       2.097152,
+       2.097152
+      ],
+      "fanout": [
+       0.0,
+       0.0
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "wt": {
+     "deliveries_per_second": [
+      1638265,
+      1636557
+     ],
+     "median": 1637411,
+     "server_cpu_us_per_delivery_median": 1.879,
+     "p99_upper_ms": {
+      "private": [
+       1.048576,
+       1.048576
+      ],
+      "fanout": [
+       0.0,
+       0.0
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      1.493,
+      1.494
+     ]
+    }
+   },
+   "roomonly": {
+    "wss": {
+     "deliveries_per_second": [
+      864652,
+      902259
+     ],
+     "median": 883456,
+     "server_cpu_us_per_delivery_median": 2.263,
+     "p99_upper_ms": {
+      "private": [
+       0.0,
+       0.0
+      ],
+      "fanout": [
+       8.388608,
+       8.388608
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "wt": {
+     "deliveries_per_second": [
+      2105345,
+      2091396
+     ],
+     "median": 2098370,
+     "server_cpu_us_per_delivery_median": 1.498,
+     "p99_upper_ms": {
+      "private": [
+       0.0,
+       0.0
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      2.435,
+      2.318
+     ]
+    }
+   },
+   "mixed": {
+    "wss": {
+     "deliveries_per_second": [
+      936238,
+      934643
+     ],
+     "median": 935440,
+     "server_cpu_us_per_delivery_median": 2.58,
+     "p99_upper_ms": {
+      "private": [
+       8.388608,
+       8.388608
+      ],
+      "fanout": [
+       16.777216,
+       16.777216
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "wt": {
+     "deliveries_per_second": [
+      1954477,
+      1948898
+     ],
+     "median": 1951687,
+     "server_cpu_us_per_delivery_median": 1.68,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_wss_per_repetition": [
+      2.088,
+      2.085
+     ]
+    }
+   }
+  }
+ },
+ "scheduler_interval_screen_mixed_4s": {
+  "scope": "global_queue_interval 31/16/8/4 against the default on the jemalloc image; rejected",
+  "results": {
+   "mixed": {
+    "d": {
+     "deliveries_per_second": [
+      1876072,
+      1744793
+     ],
+     "median": 1810432,
+     "server_cpu_us_per_delivery_median": 1.779,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "g31": {
+     "deliveries_per_second": [
+      1816232,
+      1851028
+     ],
+     "median": 1833630,
+     "server_cpu_us_per_delivery_median": 1.727,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.968,
+      1.061
+     ]
+    },
+    "g16": {
+     "deliveries_per_second": [
+      1736464,
+      1732089
+     ],
+     "median": 1734276,
+     "server_cpu_us_per_delivery_median": 1.826,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.926,
+      0.993
+     ]
+    },
+    "g8": {
+     "deliveries_per_second": [
+      1731562,
+      1631921
+     ],
+     "median": 1681742,
+     "server_cpu_us_per_delivery_median": 1.902,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.923,
+      0.935
+     ]
+    },
+    "g4": {
+     "deliveries_per_second": [
+      1551160,
+      1462225
+     ],
+     "median": 1506692,
+     "server_cpu_us_per_delivery_median": 2.121,
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       8.388608,
+       8.388608
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.827,
+      0.838
+     ]
+    }
+   }
+  }
+ },
+ "mixed_workload_per_receiver_service": {
+  "websocket": [
+   {
+    "fanout_deliveries_per_reader_per_second": 565,
+    "private_deliveries_per_receiver_per_second": 22463,
+    "jain_index_over_1056_receivers": 0.097,
+    "p99_upper_ms": {
+     "private": 2.097152,
+     "fanout": 8.388608
+    }
+   },
+   {
+    "fanout_deliveries_per_reader_per_second": 522,
+    "private_deliveries_per_receiver_per_second": 23874,
+    "jain_index_over_1056_receivers": 0.086,
+    "p99_upper_ms": {
+     "private": 2.097152,
+     "fanout": 8.388608
+    }
+   },
+   {
+    "fanout_deliveries_per_reader_per_second": 696,
+    "private_deliveries_per_receiver_per_second": 23698,
+    "jain_index_over_1056_receivers": 0.111,
+    "p99_upper_ms": {
+     "private": 2.097152,
+     "fanout": 8.388608
+    }
+   }
+  ],
+  "webtransport_jemalloc": [
+   {
+    "fanout_deliveries_per_reader_per_second": 1172,
+    "private_deliveries_per_receiver_per_second": 9830,
+    "jain_index_over_1056_receivers": 0.483,
+    "p99_upper_ms": {
+     "private": 8.388608,
+     "fanout": 8.388608
+    }
+   },
+   {
+    "fanout_deliveries_per_reader_per_second": 1369,
+    "private_deliveries_per_receiver_per_second": 10165,
+    "jain_index_over_1056_receivers": 0.54,
+    "p99_upper_ms": {
+     "private": 4.194304,
+     "fanout": 4.194304
+    }
+   },
+   {
+    "fanout_deliveries_per_reader_per_second": 1448,
+    "private_deliveries_per_receiver_per_second": 9869,
+    "jain_index_over_1056_receivers": 0.582,
+    "p99_upper_ms": {
+     "private": 4.194304,
+     "fanout": 4.194304
+    }
+   }
+  ]
+ },
+ "paced_load_4s": {
+  "scope": "scripts/datagram-load.py --pairs 32 --readers 1024 --private-rate 4000 --fanout-rate 500 --seconds 4 --drain-ms 1000 --payload-bytes 1024",
+  "results": {
+   "datagram": {
+    "passed": true,
+    "image": "mem2",
+    "server_cpu_cores": 1.37,
+    "private": {
+     "expected": 511904,
+     "verified": 511904,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 2.097152
+    },
+    "fanout": {
+     "expected": 2048000,
+     "verified": 2048000,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 2.097152
+    }
+   },
+   "stream": {
+    "passed": true,
+    "image": "mem2",
+    "server_cpu_cores": 1.61,
+    "private": {
+     "expected": 511943,
+     "verified": 511943,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 4.194304
+    },
+    "fanout": {
+     "expected": 2048000,
+     "verified": 2048000,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 8.388608
+    }
+   },
+   "websocket": {
+    "passed": true,
+    "image": "base2",
+    "server_cpu_cores": 0.73,
+    "private": {
+     "expected": 511904,
+     "verified": 511904,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 1.048576
+    },
+    "fanout": {
+     "expected": 2048000,
+     "verified": 2048000,
+     "missing": 0,
+     "duplicates": 0,
+     "out_of_order": 0,
+     "arrival_age_p99_upper_ms": 1.048576
+    }
+   }
+  }
+ },
+ "browser_check": {
+  "image": "mem2",
+  "browser": "Camoufox, Firefox 158 engine",
+  "page": "target/browser/index.html built by npm run build:browser",
+  "result": "Passed: all nine bundle checks (three sessions with datagrams, typed broadcast, cross-channel private, unreliable datagram, 128 KiB and 5 MiB payloads, variables, unsafe ID rejection, disconnect and clean closes); no errors"
+ }
+}

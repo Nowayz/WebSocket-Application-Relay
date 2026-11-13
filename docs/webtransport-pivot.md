@@ -3716,3 +3716,97 @@ full native-suite or deployment acceptance is claimed.
 The [receive-arena report](reports/webtransport-receive-arena-2026-11-07.json)
 records frozen sources, image identities, ordinary/allocator results, size and
 paced-load checks, configuration, validation and the completion audit.
+
+## jemalloc and idle-storage reclamation retained — 2026-11-13
+
+Changes on top of `0608124`, each measured against an identically built
+baseline with the frozen inspection and capacity clients:
+
+- The relay binary uses jemalloc as its global allocator (non-MSVC targets).
+  The QUIC path makes about nine allocations per delivery where the native
+  WebSocket path makes almost none, and no allocator had been evaluated.
+- Five idle-storage reductions, none of which adds work to steady traffic:
+  `poll_endpoint_events` releases its drained queue (192 B per connection);
+  the receive assembler starts with one slot instead of four (168 B per stream
+  that never queues two chunks); the previous-path option is boxed (432 B
+  inline to 8 B); rustls boxes the 0-RTT early secret (80 B to 8 B) and
+  releases the drained handshake queue after the handshake (128 B).
+
+Verified received deliveries per second, medians of three rotated 12-second
+repetitions, with the per-repetition ratio to plaintext WebSocket:
+
+| Workload | Plain WebSocket | WT before | WT, first two storage fixes | WT + jemalloc | jemalloc / WS per repetition |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Private | 1,190,610 | 1,457,401 | 1,446,673 | 1,500,258 | 1.275, 1.250, 1.282 |
+| Room fanout | 1,559,083 | 1,593,495 | 1,651,591 | 1,868,267 | 1.011, 1.165, 1.259 |
+| Mixed | 1,298,753 | 1,594,047 | 1,603,103 | 1,726,849 | 1.168, 1.330, 1.223 |
+
+Two further 4-second checks, two repetitions each, compare the later images
+with WebSocket: 1.247/1.226 private, 1.236/1.168 room and 1.038/1.229 mixed for
+the jemalloc image, then 1.222/1.207, 1.167/1.222 and 1.060/1.411 for the
+committed tree. WebTransport is ahead of the plaintext WebSocket transport in
+all 27 paired comparisons of jemalloc images. Median server CPU per verified
+delivery falls from 2.28 to 2.00 us private, 1.94 to 1.57 us room and 2.13 to
+1.87 us mixed. A preload screen of the unmodified image had already shown the
+effect: jemalloc +1.8 to +2.5% private, +14.0 to +17.7% room, +8.3 to +8.9%
+mixed in nine paired runs; tcmalloc was similar. mimalloc was built and
+rejected: no faster, and 79 MiB more ready RSS.
+
+Ready RSS at 100,000 sessions, all captures passing delivery and cleanup checks:
+
+| Image | Ready RSS, MiB |
+| --- | ---: |
+| `0608124`, system allocator | 1,838.96 / 1,839.93 |
+| + endpoint-event release | 1,821.42 / 1,819.76 |
+| + one-slot assembler | 1,769.73 / 1,769.76 |
+| + jemalloc | 1,849.80 / 1,853.69 |
+| + boxed previous path, boxed early secret, handshake-queue release | 1,715.73 to 1,719.78 (five captures) |
+
+jemalloc's size classes are why the last row matters: it rounded the
+5,344-byte connection owner up to 6,144 bytes and the 1,032-byte TLS session
+shell up to 1,280. Boxing the previous path takes the owner to the 5,120-byte
+class and boxing the early secret takes the shell to 1,024, about 1.3 KiB per
+connection together. The 2026-11-07 rejection of an out-of-line previous path
+rested on a 0.90% mixed difference and a histogram-bucket change; the saving
+is now 2.4 times larger, and the committed tree is within 1.3% of the jemalloc
+image on all three workloads in the paired 4-second check (private +1.3%, room
+-1.2%, mixed -0.5%). Paced server CPU for one million deliveries falls from
+17.84/17.86 s to 15.81/15.10 s with jemalloc. After retirement the process
+returns memory (1,334 to 1,402 MiB resident) where glibc kept 1,844 MiB.
+
+Against the TLS-fronted WebSocket fixture (TLS 1.3 front end, one extra
+loopback hop, front-end CPU included), two 4-second repetitions give the
+committed tree 1,637,411 versus 1,096,327 private, 2,098,370 versus 883,456
+room and 1,951,687 versus 935,440 mixed deliveries/s, with lower server CPU
+per delivery in each. No integrated TLS WebSocket server exists.
+
+Mixed-workload fairness was examined rather than changed. WebTransport carries
+more fanout and less private traffic than WebSocket for a similar total. Per
+receiving connection that is a more even service: each of 1,024 fanout readers
+gets 1,172 to 1,448 deliveries/s and each of 32 private receivers about 10,000,
+against 522 to 696 and about 23,000 on WebSocket. Jain's index over the 1,056
+receivers is 0.48 to 0.58 versus 0.09 to 0.11. Shorter scheduler global-queue
+intervals (31, 16, 8, 4) were screened as a way to favour private input and
+rejected: private throughput did not move and total throughput fell by up to 17%.
+
+Other checks on the committed tree: a 4-second paced run delivers every
+datagram and every reliable record in order (p99 arrival-age bounds 2.10 ms
+for datagrams, 4.19/8.39 ms private/fanout for streams); plaintext WebSocket
+at the same offered load has a 1.05 ms bound and about half the server CPU.
+The browser bundle check passes all nine steps in a Firefox 158 engine
+(Camoufox), the first non-Chromium run. `scripts/datagram-load.py` now strips
+colour codes before reading the certificate pin.
+
+Still unmet or not run: process memory is about 14 times the plaintext
+WebSocket control (packet and header keys alone are about 2.8 KiB per
+connection); paced-load latency and CPU favour WebSocket; injected-loss
+freshness and kernel socket memory need privileged namespaces and were not
+run. Two early passes on this host were disturbed by other local work and by
+a baseline built with a different cargo command; they are excluded, and one
+second-batch capacity run with a 4.2 s client stall is retained and explained
+in the report.
+
+Validation: 284 project tests, 324 vendored quinn-proto tests and 248 vendored
+rustls tests pass, with all-target Clippy, formatting and the vendor archive
+check. Full per-run values, image hashes, method and limits:
+[allocator and idle-storage report](reports/webtransport-allocator-idle-storage-2026-11-13.json).

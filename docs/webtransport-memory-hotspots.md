@@ -62,6 +62,11 @@ deliveries, and cleanup. Exactly 100,000 first-record snapshots were collected:
 | Application event queues | Zero queued events | 800,000 | 0.76 |
 | Inline previous-path field | Zero previous paths | 43,200,000 | 41.20 |
 
+Update 2026-11-13: the endpoint-event queues, the assembler's first growth and
+the inline previous-path field have since been addressed; see the
+[2026-11-13 report](reports/webtransport-allocator-idle-storage-2026-11-13.json).
+The table above remains the record for the audited image.
+
 The assembler keeps its BinaryHeap capacity after consuming chunks. A four-slot
 backing allocation is 224 bytes; there are three receive streams per connection
 here. This is a strong representation target. Freeing it after every read would
