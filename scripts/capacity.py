@@ -197,7 +197,9 @@ def run(args):
     if slab_file and not kernel_resources:
         raise ValueError("kernel-slab-sizes requires kernel-socket-resources")
     slab_sizes = json.loads(slab_file.read_text()) if slab_file else None
-    assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= args.users + 128, "descriptor limit too low"
+    # The TLS front end holds two sockets per session and inherits this limit.
+    descriptors = args.users * (2 if getattr(args, "transport", "") == "websocket-tls" else 1) + 128
+    assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= descriptors, "descriptor limit too low"
     port, admin = runtime.free_port(), runtime.free_port()
     while port == admin:
         admin = runtime.free_port()
@@ -262,7 +264,7 @@ def run(args):
               "profile_diagnostic": args.profile or kernel_resources,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
-              "scope": "Loopback. WebTransport uses pinned TLS and graceful stream close; legacy WebSocket uses plaintext and Close/EOF. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP or independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
+              "scope": "Loopback. WebTransport uses pinned TLS and graceful stream close; legacy WebSocket uses plaintext and Close/EOF; websocket-tls is that plaintext relay behind the TLS front end, whose figures are recorded separately and summed as deployment_*. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP or independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
     if kernel_resources:
         result["kernel_resource_diagnostic"] = {
             "scope": "Per-process SOCK_DIAG snapshots at quiescent phase gates. Diagnostic scan overhead excludes this run from ordinary timing comparisons. Kernel counters and slab object estimates are separate from RSS and are not a complete kernel allocation total.",
@@ -385,6 +387,7 @@ def run(args):
                              machine=machine(), udp_counters=udp_counters(), seconds=time.monotonic() - started)
                 if front is not None:
                     event["tls_front"] = process(front.pid)
+                    event["deployment_rss_kib"] = event["server"]["VmRSS"] + event["tls_front"]["VmRSS"]
                 census = established(port, server_inodes)
                 event["udp_server_census"] = udp_census(server_inodes)
                 event["udp_client_census"] = udp_census(client_inodes)
@@ -510,8 +513,10 @@ def run(args):
                 "round_trip": measured["details"]["round_trip"],
                 "schedule_lag": measured["details"]["schedule_lag"]})
                 if "tls_front" in measured:
-                    result["measurements"][-1]["tls_front_cpu_seconds"] = (
-                        measured["tls_front"]["cpu_seconds"] - ready["tls_front"]["cpu_seconds"])
+                    front_cpu = measured["tls_front"]["cpu_seconds"] - ready["tls_front"]["cpu_seconds"]
+                    result["measurements"][-1].update(
+                        tls_front_cpu_seconds=front_cpu,
+                        deployment_cpu_seconds=result["measurements"][-1]["server_cpu_seconds"] + front_cpu)
             result["measurement"] = result["measurements"][0]
             result["passed"] = True
         except Exception as error:
