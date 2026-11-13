@@ -1261,7 +1261,9 @@
   "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
   "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT.",
   "The encrypted WebSocket baseline is a TLS-terminating proxy fixture in front of the plaintext relay, which is how wss is commonly deployed but is not an optimized integrated TLS server; its default copy buffers alone are 1.6 GiB at 100,000 sessions, so the lean row is the fairer memory comparison.",
-  "Against encrypted WebSocket, WebTransport still uses about 18 to 25% more server CPU at paced load, takes about 2.3 times as long to establish 100,000 connections, and has a higher low-rate latency tail (about 1.2 ms against 0.35 ms p99)."
+  "Against the proxied TLS deployment WebTransport uses 18 to 25% more server CPU at paced load. Against an integrated TLS server (estimated, not built) memory, CPU per delivery and paced CPU would favour WebSocket.",
+  "Saturating throughput is a closed-loop rate at fixed concurrency; both WebSocket deployments left about half of the server CPU allowance idle.",
+  "Connection setup time is uncontrolled for TLS session resumption and is recorded, not interpreted."
  ],
  "decision": "Keep jemalloc and all six storage changes. Reject mimalloc, shorter scheduler global-queue intervals, smaller fanout quanta and faster acknowledgement policies.",
  "capacity_100000_sessions_4s_second_batch": [
@@ -1553,7 +1555,7 @@
   }
  },
  "encrypted_comparison_4s_two_repetitions": {
-  "scope": "wss = base2 behind examples/tls_front (TLS 1.3, one extra loopback TCP hop; CPU includes the front end). wt = committed tree.",
+  "scope": "SUPERSEDED: the wss arm ran the base2 image and the wt arm the mem2 image. Use same_image_throughput_4s_two_repetitions.",
   "results": {
    "private": {
     "wss": {
@@ -2665,7 +2667,336 @@
    ]
   },
   "kernel_estimate": "Host slab growth covers both ends on one host. The TLS-fronted deployment has 400,000 TCP sockets, 300,000 of them on the server side (client-facing and upstream at the front end, plus the relay). Taking three quarters of the growth as the server side gives about 1,357 MiB (default) and 1,332 MiB (lean); WebTransport adds none. Deployment totals are then about 3,934 MiB, 2,733 MiB and 1,672 MiB.",
-  "not_measured": "An integrated TLS WebSocket server (no proxy hop) does not exist in this repository. It would avoid the second socket pair and the copy buffers, so its memory would be below the lean proxy row and plausibly below WebTransport."
+  "not_measured": "An integrated TLS WebSocket server (no proxy hop). See integrated_tls_estimates.",
+  "paced_cpu_split": [
+   {
+    "run": "enc-wss8k-1",
+    "relay_user_s": 0.43,
+    "relay_system_s": 1.09,
+    "front_user_s": 0.66,
+    "front_system_s": 2.3
+   },
+   {
+    "run": "enc-wss8k-2",
+    "relay_user_s": 0.44,
+    "relay_system_s": 1.07,
+    "front_user_s": 0.6,
+    "front_system_s": 2.63
+   },
+   {
+    "run": "enc-wss2k-1",
+    "relay_user_s": 0.48,
+    "relay_system_s": 1.05,
+    "front_user_s": 0.58,
+    "front_system_s": 2.59
+   }
+  ],
+  "integrated_tls_estimates": {
+   "status": "Estimates only; no integrated TLS WebSocket server exists in this repository.",
+   "memory_mib": "Lean front end 13,191 B per connection less 4,096 B of copy buffers leaves about 870 MiB; plus 147 MiB relay and one socket share of slab (about 450 MiB) gives about 1,470 MiB on stock rustls, or about 1,015 MiB if its 4,736 B of idle staging per connection were released. WebTransport: about 1,670 MiB.",
+   "saturated_cpu_us_per_delivery": "Plaintext plus at most 0.32 us of front-end user time: about 1.9 / 1.4 / 2.0 (private / room / mixed). WebTransport: 1.99 / 1.64 / 2.24.",
+   "paced_cpu_seconds_per_400k": "Relay 1.5 s plus front-end user time 0.6 to 0.7 s: about 2.1 s. WebTransport: 5.58 s. Plaintext: 1.42 s."
+  }
  },
- "comparison_basis": "The owner confirmed on 2026-11-13 that the intended baseline is TLS WebSocket, not plaintext. Plaintext results are kept as a lower bound for WebSocket cost."
+ "comparison_basis": "The owner confirmed on 2026-11-13 that the intended baseline is TLS WebSocket, not plaintext. Plaintext results are kept as a lower bound for WebSocket cost.",
+ "same_image_throughput_4s_two_repetitions": {
+  "scope": "All three arms on the committed relay image (mem3); proxied TLS uses examples/tls_front at its default 8 KiB buffers; --churn-workers 0. Closed-loop rate at fixed concurrency under an equal server CPU allowance, not capacity per CPU.",
+  "relay_sha256": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+  "results": {
+   "private": {
+    "plaintext_websocket": {
+     "deliveries_per_second": [
+      1295716,
+      1321963
+     ],
+     "median": 1308839,
+     "server_cpu_us_per_delivery": [
+      1.63,
+      1.59
+     ],
+     "server_cores": [
+      2.11,
+      2.1
+     ],
+     "client_cores": [
+      3.68,
+      3.67
+     ]
+    },
+    "proxied_tls_websocket": {
+     "deliveries_per_second": [
+      991285,
+      1041496
+     ],
+     "median": 1016390,
+     "server_cpu_us_per_delivery": [
+      2.42,
+      2.26
+     ],
+     "server_cores": [
+      2.4,
+      2.36
+     ],
+     "client_cores": [
+      2.11,
+      2.14
+     ]
+    },
+    "webtransport": {
+     "deliveries_per_second": [
+      1399883,
+      1613203
+     ],
+     "median": 1506543,
+     "server_cpu_us_per_delivery": [
+      2.08,
+      1.91
+     ],
+     "server_cores": [
+      2.91,
+      3.08
+     ],
+     "client_cores": [
+      3.56,
+      3.96
+     ]
+    }
+   },
+   "roomonly": {
+    "plaintext_websocket": {
+     "deliveries_per_second": [
+      1501677,
+      1581696
+     ],
+     "median": 1541687,
+     "server_cpu_us_per_delivery": [
+      1.17,
+      1.05
+     ],
+     "server_cores": [
+      1.75,
+      1.66
+     ],
+     "client_cores": [
+      3.2,
+      3.34
+     ]
+    },
+    "proxied_tls_websocket": {
+     "deliveries_per_second": [
+      673438,
+      656560
+     ],
+     "median": 664999,
+     "server_cpu_us_per_delivery": [
+      2.99,
+      3.13
+     ],
+     "server_cores": [
+      2.01,
+      2.05
+     ],
+     "client_cores": [
+      1.8,
+      1.75
+     ]
+    },
+    "webtransport": {
+     "deliveries_per_second": [
+      1771602,
+      1942653
+     ],
+     "median": 1857127,
+     "server_cpu_us_per_delivery": [
+      1.72,
+      1.57
+     ],
+     "server_cores": [
+      3.05,
+      3.05
+     ],
+     "client_cores": [
+      4.3,
+      4.43
+     ]
+    }
+   },
+   "mixed": {
+    "plaintext_websocket": {
+     "deliveries_per_second": [
+      1351338,
+      1323419
+     ],
+     "median": 1337379,
+     "server_cpu_us_per_delivery": [
+      1.62,
+      1.68
+     ],
+     "server_cores": [
+      2.19,
+      2.22
+     ],
+     "client_cores": [
+      3.75,
+      3.67
+     ]
+    },
+    "proxied_tls_websocket": {
+     "deliveries_per_second": [
+      802465,
+      728641
+     ],
+     "median": 765553,
+     "server_cpu_us_per_delivery": [
+      2.99,
+      3.31
+     ],
+     "server_cores": [
+      2.4,
+      2.42
+     ],
+     "client_cores": [
+      2.25,
+      2.05
+     ]
+    },
+    "webtransport": {
+     "deliveries_per_second": [
+      1469198,
+      1510517
+     ],
+     "median": 1489857,
+     "server_cpu_us_per_delivery": [
+      2.27,
+      2.2
+     ],
+     "server_cores": [
+      3.34,
+      3.33
+     ],
+     "client_cores": [
+      4.1,
+      4.26
+     ]
+    }
+   }
+  }
+ },
+ "freshness_paired_4s_three_repetitions": {
+  "scope": "scripts/freshness.py at 60 updates/s, no impairment, committed relay image on every arm, modes interleaved. Supersedes the single unpaired runs in freshness_without_impairment_4s.",
+  "results": {
+   "websocket": {
+    "arrival_age_p50_ms": [
+     0.129,
+     0.125,
+     0.126
+    ],
+    "arrival_age_p99_ms": [
+     0.201,
+     0.201,
+     0.182
+    ],
+    "arrival_age_max_ms": [
+     0.6,
+     0.57,
+     0.49
+    ],
+    "missing": [
+     0,
+     0,
+     0
+    ]
+   },
+   "websocket-tls": {
+    "arrival_age_p50_ms": [
+     0.183,
+     0.178,
+     0.179
+    ],
+    "arrival_age_p99_ms": [
+     0.383,
+     0.339,
+     0.345
+    ],
+    "arrival_age_max_ms": [
+     0.86,
+     1.01,
+     1.06
+    ],
+    "missing": [
+     0,
+     0,
+     0
+    ]
+   },
+   "stream": {
+    "arrival_age_p50_ms": [
+     0.218,
+     0.22,
+     0.221
+    ],
+    "arrival_age_p99_ms": [
+     0.413,
+     0.357,
+     0.433
+    ],
+    "arrival_age_max_ms": [
+     1.42,
+     1.26,
+     1.48
+    ],
+    "missing": [
+     0,
+     0,
+     0
+    ]
+   },
+   "datagram": {
+    "arrival_age_p50_ms": [
+     0.214,
+     0.214,
+     0.216
+    ],
+    "arrival_age_p99_ms": [
+     0.346,
+     0.344,
+     0.314
+    ],
+    "arrival_age_max_ms": [
+     0.38,
+     0.36,
+     0.32
+    ],
+    "missing": [
+     0,
+     0,
+     0
+    ]
+   }
+  }
+ },
+ "fairness_audit": {
+  "method": "Two independent read-only source audits (the TLS front end; the harness accounting), each re-checked by a second reader.",
+  "verdict": "The fixture is a defensible baseline for a relay behind a same-host TLS-terminating proxy and not for a well-built integrated wss server.",
+  "handicaps_websocket": [
+   "Two 8 KiB copy buffers per connection for its lifetime: 1,562 MiB at 100,000 sessions, fully resident",
+   "An extra loopback hop: two more payload copies and four more system calls per message, and three server-side sockets per session",
+   "Stock rustls keeps about 4.7 KiB of idle staging per TCP connection that the vendored patch releases only for QUIC"
+  ],
+  "flatters_websocket": [
+   "The fixture is a bare byte tunnel without a real reverse proxy's HTTP handling, timeouts, limits or logging",
+   "Process-RSS-only tables hide kernel socket memory, which WebSocket uses and WebTransport does not"
+  ],
+  "corrected_after_audit": [
+   "Throughput rerun with one relay image on all arms",
+   "Low-rate latency rerun as paired repetitions; an earlier 1.2 ms p99 for WebTransport did not reproduce",
+   "Connection setup marked uncontrolled: wss clients share a resumption-enabled TLS configuration",
+   "capacity.py now records summed deployment RSS and CPU and a correct scope string; inspection.py scope string corrected"
+  ],
+  "left_open": [
+   "Slow-consumer and backpressure behaviour of the proxied deployment is untested",
+   "The front end runs on the system allocator while the relay uses jemalloc",
+   "The capacity client uses a larger read buffer for wss than for plaintext, which affects client memory only"
+  ]
+ }
 }

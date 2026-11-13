@@ -3778,11 +3778,9 @@ image on all three workloads in the paired 4-second check (private +1.3%, room
 17.84/17.86 s to 15.81/15.10 s with jemalloc. After retirement the process
 returns memory (1,334 to 1,402 MiB resident) where glibc kept 1,844 MiB.
 
-Against the TLS-fronted WebSocket fixture (TLS 1.3 front end, one extra
-loopback hop, front-end CPU included), two 4-second repetitions give the
-committed tree 1,637,411 versus 1,096,327 private, 2,098,370 versus 883,456
-room and 1,951,687 versus 935,440 mixed deliveries/s, with lower server CPU
-per delivery in each. No integrated TLS WebSocket server exists.
+An earlier TLS-fronted screen ran its WebSocket arm on the `0608124` image and
+its WebTransport arm on a later one, so it is superseded by the same-image
+comparison under "Encrypted WebSocket is the baseline" below.
 
 Mixed-workload fairness was examined rather than changed. WebTransport carries
 more fanout and less private traffic than WebSocket for a similar total. Per
@@ -3827,60 +3825,94 @@ and freshest-state age p99 of 16.6, 16.4 and 17.9 ms.
 ### Encrypted WebSocket is the baseline
 
 The owner confirmed on 2026-11-13 that the comparison that matters is TLS
-WebSocket, not plaintext. Plaintext figures above remain as a lower bound for
-WebSocket cost. `scripts/capacity.py` gained `--transport websocket-tls` for
-this, and `examples/tls_front` gained `--upstream-sources` (so one front end
-can hold 100,000 upstream connections) and `--copy-buffer-bytes`.
+WebSocket, not plaintext. The only encrypted WebSocket here is the plaintext
+relay behind `examples/tls_front`, a TLS 1.3 terminating proxy on the same CPU
+set. `scripts/capacity.py` gained `--transport websocket-tls` for it, and the
+fixture gained `--upstream-sources` (so one front end can hold 100,000
+upstream connections) and `--copy-buffer-bytes`. Every run in this subsection
+uses the committed relay image on all arms.
 
-At 100,000 sessions, 4-second paced phase, same relay image and server CPU set
-(two captures of each except the lean row; all pass delivery and cleanup):
+An independent source audit of the fixture, with a second reader checking each
+finding, concluded that it is a defensible model of a proxied wss deployment
+and not of a well-built integrated TLS server. Against an integrated server it
+handicaps WebSocket in three ways: two 8 KiB copy buffers held per connection
+for its lifetime (1.56 GiB at 100,000 sessions, fully resident), an extra
+loopback hop with two more copies and four more system calls per message, and
+three server-side sockets per session instead of one. Stock rustls also keeps
+about 4.7 KiB of idle staging per TCP connection that the vendored patch
+releases only for QUIC. In the other direction the fixture is a bare byte
+tunnel with none of a real reverse proxy's HTTP handling, timeouts or limits.
+Results are therefore reported as a bracket: plaintext WebSocket is the best
+case any TLS WebSocket could reach, and the proxy is the measured deployment.
 
-| | TLS WebSocket, default proxy | TLS WebSocket, lean proxy | WebTransport |
+Delivered rate at saturation, two rotated 4-second repetitions per arm:
+
+| Workload | Plaintext WS | Proxied TLS WS | WebTransport | WT / plaintext per repetition | WT / proxied TLS |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Private | 1,308,839 | 1,016,390 | 1,506,543 | 1.08, 1.22 | 1.48 |
+| Room fanout | 1,541,687 | 664,999 | 1,857,127 | 1.18, 1.23 | 2.79 |
+| Mixed | 1,337,379 | 765,553 | 1,489,857 | 1.09, 1.14 | 1.95 |
+
+WebTransport is ahead of plaintext WebSocket in all six pairs here and in all
+45 pairs recorded in this section. This is a closed-loop rate at fixed
+concurrency under an equal CPU allowance, not capacity per CPU: both WebSocket
+deployments used 1.7 to 2.4 of the four server cores and WebTransport 2.9 to
+3.3. Median server CPU per verified delivery is 1.61 / 1.11 / 1.65 us for
+plaintext, 2.34 / 3.06 / 3.15 us for proxied TLS and 1.99 / 1.64 / 2.24 us for
+WebTransport (private / room / mixed). The front end's user time is at most
+0.32 us per delivery, so an integrated TLS server would be near 1.9 / 1.4 /
+2.0 us: WebTransport is 15 to 46% cheaper per delivery than the proxied
+deployment and an estimated 3 to 15% dearer than an integrated one.
+
+At 100,000 sessions, 4-second paced phase (two captures of each except the
+lean row; all pass delivery and cleanup):
+
+| | Proxied TLS WS, 8 KiB buffers | Proxied TLS WS, 2 KiB buffers | WebTransport |
 | --- | ---: | ---: | ---: |
 | Deployment process RSS, MiB | 2,577.0 / 2,576.8 | 1,400.9 | 1,671.8 / 1,667.8 |
 | Host kernel slab growth, MiB | 1,810 / 1,779 | 1,776 | 0 / -8 |
-| Connection setup, s | 4.55 / 4.63 | 4.43 | 10.47 / 10.62 |
 | Server CPU for 400,000 paced deliveries, s | 4.48 / 4.74 | 4.70 | 5.58 / 5.58 |
-| Round-trip p50 / p99 upper bound, ms | 1.05 / 4.19 | 1.05 / 4.19 | 0.52 / 4.19 |
+| Round-trip p50 / p99 histogram bound, ms | 1.05 / 4.19 | 1.05 / 4.19 | 0.52 / 4.19 |
+| Connection setup, s | 4.55 / 4.63 | 4.43 | 10.47 / 10.62 |
 
-The TLS deployment is the relay plus the front end. The front end keeps one
-copy buffer per direction per connection for its lifetime; at the 8 KiB default
-those buffers are 1.6 GiB here, so the lean row (2 KiB) is the fairer memory
-comparison. Slab growth is host-wide and covers both ends: the TLS deployment
+Memory. Slab growth is host-wide and covers both ends: the proxied deployment
 has 400,000 TCP sockets, 300,000 of them on the server side, so about three
-quarters of it, roughly 1,350 MiB, is the server's. Estimated totals are then
-about 3,930 MiB (default proxy), 2,730 MiB (lean proxy) and 1,670 MiB
-(WebTransport). An integrated TLS WebSocket server would avoid the proxy's
-second socket pair and copy buffers and was not built; its memory would be
-below the lean row and plausibly below WebTransport.
+quarters, roughly 1,350 MiB, is the server's. Estimated totals are about 3,930
+MiB (8 KiB buffers), 2,730 MiB (2 KiB) and 1,670 MiB (WebTransport). For an
+integrated TLS server, which was not built, the audit's arithmetic from these
+runs is: the lean front end's 13.2 KiB per connection less 4 KiB of copy
+buffers leaves about 870 MiB of TLS and task state, plus 147 MiB of relay and
+one socket's share of slab (about 450 MiB), about 1,470 MiB; releasing the
+rustls staging would take it to about 1,015 MiB. WebTransport is therefore
+well below the proxied deployment and an estimated 14 to 65% above an
+integrated one. The plaintext figure of about 535 MiB contains no TLS state.
 
-Reliable throughput against the same fixture (earlier in this section) is
-1.49 times for private routing, 2.3 to 2.4 times for room fanout and 2.09
-times for mixed traffic. At 60 updates per second without impairment, TLS
-WebSocket arrival age is 0.18 ms median and 0.35 ms p99, against 0.23 ms and
-1.15 to 1.25 ms for WebTransport streams and datagrams.
+Paced CPU. Of the proxied deployment's 4.5 to 4.7 s, the relay is 1.5 s and
+the front end 3.0 to 3.2 s, of which only 0.6 to 0.7 s is user time; the rest
+is the extra hop's system calls. An integrated TLS server would be near 2.1 s,
+and plaintext is 1.42 s. WebTransport at 5.6 s is 18 to 25% above the proxied
+deployment and an estimated 2.6 times an integrated server.
 
-The proxy is a fair picture of how wss is usually deployed, but it is not the
-best an encrypted WebSocket server could do: each message crosses an extra
-loopback hop with two more copies and four more system calls, and each session
-holds three server-side sockets instead of one. An integrated TLS server would
-therefore sit between the plaintext and proxied results on every metric, and
-the two together bracket it:
+Latency. At 60 updates per second without impairment, three interleaved
+repetitions on one image give arrival-age medians of 0.13 ms plaintext, 0.18
+ms proxied TLS, 0.22 ms WebTransport streams and 0.21 ms datagrams, with p99
+of 0.18 to 0.20, 0.34 to 0.38, 0.36 to 0.43 and 0.31 to 0.35 ms. An earlier
+single-run figure of about 1.2 ms p99 for WebTransport did not reproduce. At
+100,000 paced sessions the round-trip histogram bounds are the same bucket at
+p99 and one bucket lower for WebTransport at the median.
 
-| | Plaintext WebSocket (best case for any TLS WebSocket) | Proxied TLS WebSocket | WebTransport |
-| --- | ---: | ---: | ---: |
-| Throughput, private / room / mixed | WT ahead in 39 of 39 pairs (+1% to +41%) | WT 1.5x / 2.3x / 2.1x | |
-| Server memory with kernel estimate, MiB | about 535 | about 2,730 to 3,930 | about 1,670 |
-| Server CPU for 400,000 paced deliveries, s | about 1.4 | 4.5 to 4.7 | 5.6 |
+Connection setup is the least controlled row. The wss clients share one TLS
+client configuration with resumption enabled, so many of their handshakes may
+be resumed, which distinct real clients would not be; whether the WebTransport
+client resumes was not determined. It is recorded, not interpreted.
 
-Against encrypted WebSocket, then: throughput is ahead of even the plaintext
-bound, so it is ahead of any TLS WebSocket. Memory is well below the proxied
-deployment and above the plaintext bound, so an integrated TLS server, which
-was not built, would probably use less than WebTransport. Paced round-trip
-latency is equal at p99 and better at the median. What remains behind is
-server CPU at paced load (18 to 25% above the proxied deployment), connection
-setup time (about 2.3 times), and the sub-millisecond latency tail at low
-rates.
+In short, against the proxied TLS deployment that was measured, WebTransport
+delivers 1.5 to 2.8 times the rate, spends less CPU per delivery at
+saturation, uses less memory once kernel sockets are counted, and matches it
+on latency, at 18 to 25% more CPU under paced load. Against an integrated TLS
+WebSocket server, which does not exist here, the delivered rate would still be
+ahead, while estimated memory, CPU per delivery and paced CPU would favour
+WebSocket by roughly 14 to 65%, 3 to 15% and 2.6 times.
 
 Not run: injected-loss freshness and per-socket kernel accounting. This host
 runs kernel 7.2.11 with only 7.2.15 modules installed, so the traffic-control
