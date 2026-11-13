@@ -36,6 +36,11 @@ papaya = "0.2.5"
 wtransport = { version = "0.7.2", features = ["quinn"] }
 web-transport-quinn = { version = "=0.13.3", default-features = false, features = ["ring"] }
 
+# The QUIC path allocates several small objects per delivery; jemalloc measurably
+# outperforms the system allocator there. MSVC targets keep the system allocator.
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.7"
+
 [dev-dependencies]
 url = "2"
 futures-util = { version = "0.3", features = ["sink"] }

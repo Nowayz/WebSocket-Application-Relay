@@ -5,6 +5,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use war_relay::{Config, Relay, serve};
 
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 fn main() -> Result<()> {
     let mut config = Config::parse();
     config.load_secrets()?;
