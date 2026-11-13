@@ -158,6 +158,8 @@ pub struct Connection {
     zero_rtt_enabled: bool,
     /// Set if 0-RTT is supported, then cleared when no longer needed.
     zero_rtt_crypto: Option<ZeroRttCrypto>,
+    /// 1-RTT packets that overtook the end of the handshake, kept until it completes
+    early_short_packets: Vec<(Option<EcnCodepoint>, BytesMut)>,
     key_phase: bool,
     /// How many packets are in the current key phase. Used only for `Data` space.
     key_phase_size: u64,
@@ -300,6 +302,7 @@ impl Connection {
             side: connection_side,
             zero_rtt_enabled: false,
             zero_rtt_crypto: None,
+            early_short_packets: Vec::new(),
             key_phase: false,
             // A small initial key phase size ensures peers that don't handle key updates correctly
             // fail sooner rather than later. It's okay for both peers to do this, as the first one
@@ -1166,6 +1169,10 @@ impl Connection {
                     self.handle_coalesced(now, remote, ecn, data);
                 }
 
+                if !self.early_short_packets.is_empty() && !self.state.is_handshake() {
+                    self.replay_early_short_packets(now, remote);
+                }
+
                 self.config.qlog_sink.emit_recovery_metrics(
                     self.pto_count,
                     &mut self.path,
@@ -1810,7 +1817,9 @@ impl Connection {
                 self.path.mtud.on_non_probe_lost(packet, info.size);
             }
 
-            if self.path.mtud.black_hole_detected(now) {
+            // The loss timer declares one send burst at a time. Only an ACK-driven pass ends the
+            // loss burst, so the black hole detector does not count one loss event as several.
+            if due_to_ack && self.path.mtud.black_hole_detected(now) {
                 self.stats.path.black_holes_detected += 1;
                 self.path
                     .congestion
@@ -2301,6 +2310,26 @@ impl Connection {
         ecn: Option<EcnCodepoint>,
         partial_decode: PartialDecode,
     ) {
+        if self.state.is_handshake()
+            && remote == self.path.remote
+            && partial_decode.space() == Some(SpaceId::Data)
+            && !partial_decode.is_0rtt()
+        {
+            // A 1-RTT packet that overtook the end of the handshake cannot be processed yet.
+            // Dropping it makes the peer see a loss and cut its congestion window on its first
+            // flight, so keep a bounded copy until the handshake completes (RFC 9001 §5.7).
+            let held: usize = self.early_short_packets.iter().map(|x| x.1.len()).sum();
+            let data = partial_decode.data();
+            if self.early_short_packets.len() < MAX_EARLY_SHORT_PACKETS
+                && held + data.len() <= MAX_EARLY_SHORT_BYTES
+            {
+                // Copied so a held packet does not pin its whole receive buffer.
+                self.early_short_packets.push((ecn, BytesMut::from(data)));
+            } else {
+                trace!("dropping short packet during handshake");
+            }
+            return;
+        }
         if let Some(decoded) = packet_crypto::unprotect_header(
             partial_decode,
             &self.spaces,
@@ -2308,6 +2337,23 @@ impl Connection {
             self.peer_params.stateless_reset_token,
         ) {
             self.handle_packet(now, remote, ecn, decoded.packet, decoded.stateless_reset);
+        }
+    }
+
+    /// Processes the packets held by `handle_decode` once the handshake is over
+    fn replay_early_short_packets(&mut self, now: Instant, remote: SocketAddr) {
+        for (ecn, data) in mem::take(&mut self.early_short_packets) {
+            if !self.state.is_established() {
+                return;
+            }
+            if let Ok((partial_decode, _)) = PartialDecode::new(
+                data,
+                &FixedLengthConnectionIdParser::new(self.local_cid_state.cid_len()),
+                &[self.version],
+                self.endpoint_config.grease_quic_bit,
+            ) {
+                self.handle_decode(now, remote, ecn, partial_decode);
+            }
         }
     }
 
@@ -2381,7 +2427,7 @@ impl Connection {
                     debug!("discarding possible duplicate packet");
                     return;
                 } else if self.state.is_handshake() && packet.header.is_short() {
-                    // TODO: SHOULD buffer these to improve reordering tolerance.
+                    // `handle_decode` holds these back, so none should arrive here.
                     trace!("dropping short packet during handshake");
                     return;
                 } else {
@@ -3550,6 +3596,7 @@ impl Connection {
         for &timer in &Timer::VALUES {
             self.timers.stop(timer);
         }
+        self.early_short_packets = Vec::new();
     }
 
     fn set_close_timer(&mut self, now: Instant) {
@@ -3755,6 +3802,11 @@ impl Connection {
     #[cfg(test)]
     pub(crate) fn endpoint_event_capacity(&self) -> usize {
         self.endpoint_events.capacity()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn early_short_packet_capacity(&self) -> usize {
+        self.early_short_packets.capacity()
     }
 
     /// Capacity still held by the Data-space queues that only handshake-time frames fill
@@ -4170,6 +4222,16 @@ const MAX_HANDSHAKE_OR_0RTT_HEADER_SIZE: usize =
 ///
 /// Chosen arbitrarily, intended to be large enough to prevent spurious connection loss.
 const KEY_UPDATE_MARGIN: u64 = 10_000;
+
+/// Most bytes of early 1-RTT packets held during the handshake
+///
+/// This is the largest initial congestion window RFC 9002 allows, so a conforming peer cannot have
+/// more than this in flight before its handshake is acknowledged.
+const MAX_EARLY_SHORT_BYTES: usize = 14_720;
+
+/// Most early 1-RTT packets held during the handshake, so that tiny packets cannot hold many times
+/// the byte bound in per-packet overhead
+const MAX_EARLY_SHORT_PACKETS: usize = 16;
 
 #[derive(Default)]
 struct SentFrames {

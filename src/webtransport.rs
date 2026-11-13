@@ -263,6 +263,12 @@ pub fn server_transport_config() -> wtransport::quinn::TransportConfig {
         .max_ack_delay(Some(Duration::from_millis(5)))
         .reordering_threshold(VarInt::from_u32(1));
     transport.ack_frequency_config(Some(acknowledgements));
+    // Detect loss by the time threshold alone (RFC 9002 section 6.1.2, 9/8 of the
+    // round trip). The packet threshold also declares a packet lost once three
+    // later ones are acknowledged, which reads ordinary reordering as congestion
+    // and collapses the window; under 2% real loss the time rule alone recovered
+    // as quickly. It relies on the immediate acknowledgement of reordering above.
+    transport.packet_threshold(u32::MAX);
     transport
 }
 

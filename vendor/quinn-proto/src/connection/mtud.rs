@@ -429,7 +429,9 @@ impl BlackHoleDetector {
         let end_last_burst = self
             .current_loss_burst
             .as_ref()
-            .is_some_and(|current| pn - current.latest_non_probe != 1);
+            // A burst can stay open between calls, and a later call may be for another packet
+            // number space, so `pn` is not always the larger of the two
+            .is_some_and(|current| pn.wrapping_sub(current.latest_non_probe) != 1);
 
         if end_last_burst {
             self.finish_loss_burst();
@@ -886,6 +888,21 @@ mod tests {
         assert!(!bhd.black_hole_detected());
         bhd.on_non_probe_lost(BLACK_HOLE_THRESHOLD as u64 * 2, 1400);
         assert!(bhd.black_hole_detected());
+    }
+
+    // Consecutive packets declared lost one call at a time form a single burst, and a smaller packet
+    // number from another space starts a new one
+    #[test]
+    fn burst_spans_calls_until_a_gap() {
+        let mut bhd = BlackHoleDetector::new(1200);
+        for pn in 10..20 {
+            bhd.on_non_probe_lost(pn, 1400);
+        }
+        assert!(bhd.suspicious_loss_bursts.is_empty());
+        bhd.on_non_probe_lost(3, 1400);
+        assert_eq!(bhd.suspicious_loss_bursts.len(), 1);
+        assert!(!bhd.black_hole_detected());
+        assert_eq!(bhd.suspicious_loss_bursts.len(), 2);
     }
 
     // Loss of packets followed in transmission order by confirmation of a larger packet should not

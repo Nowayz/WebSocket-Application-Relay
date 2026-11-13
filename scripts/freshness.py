@@ -89,6 +89,8 @@ def run(args):
             external_port = port
             url = f"https://127.0.0.1:{port}/war" if wt else f"ws://127.0.0.1:{port}"
             command = [str(args.client.resolve()), "--url", url, "--mode", args.mode, "--seconds", str(args.seconds), "--rate", str(args.rate), "--payload-bytes", str(args.payload_bytes), "--bulk-bytes", str(args.bulk_bytes)]
+            if args.client_packet_threshold is not None:
+                command += ["--packet-threshold", str(args.client_packet_threshold)]
             if wt:
                 text = os.pread(logs.fileno(), os.fstat(logs.fileno()).st_size, 0).decode()
                 text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
@@ -189,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--rate", type=int, default=60)
     parser.add_argument("--payload-bytes", type=int, default=1024)
     parser.add_argument("--bulk-bytes", type=int, default=1024*1024)
+    parser.add_argument("--client-packet-threshold", type=int, help="QUIC packet-count loss threshold for the client's own sending; 3 is the stock value, the client default matches the relay")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="8-11")
     parser.add_argument("--isolated-namespace")

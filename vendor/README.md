@@ -396,6 +396,36 @@ post-handshake messages allocate it again for the moment they are queued. No
 key schedule, derivation point or key count changes. Both are part of
 `rustls-quic-record-ciphers.patch`.
 
+## Early 1-RTT packets held during the handshake
+
+A 1-RTT packet that arrives while the connection is still in the handshake
+state used to be dropped; upstream marks this with a to-do to buffer it. On a
+path that reorders, the first data packet regularly overtakes the Finished, so
+the peer saw a loss on its first flight, cut its congestion window and left
+slow start. `Connection::handle_decode` now copies such a packet into
+`early_short_packets` when it comes from the handshake peer's address, up to
+16 packets and 14,720 bytes (the largest initial window RFC 9002 allows), and
+`handle_event` processes them once a datagram takes the connection out of the
+handshake state. The copy keeps a held packet from pinning its receive
+buffer; the list is released when replayed and on close. Packets beyond the
+bounds, or from another address, are dropped as before. Held packets are
+stamped with the time they are processed, so the hold is not reported in ACK
+delay. The upstream test `handshake_1rtt_handling` covered this case and
+asserted a loss; it now asserts none.
+
+## Loss bursts for MTU black-hole detection
+
+`detect_lost_packets` closed the black-hole detector's current loss burst on
+every pass. The relay detects loss by the time threshold only, so packets
+sent a few milliseconds apart in one loss event are declared by successive
+timer passes; each would have counted as its own burst and four suspicious
+bursts reset the path MTU for a minute. A burst now ends only on an
+ACK-driven pass, and `BlackHoleDetector::on_non_probe_lost` tolerates a
+smaller packet number from another packet number space arriving while a burst
+is open. A real black hole is still found with the packet threshold disabled
+(`blackhole_after_mtu_change_repairs_itself_without_packet_threshold`). The
+false positive was identified by review and not reproduced.
+
 ## UDP receive-batch timestamps
 
 The Quinn endpoint samples time immediately after each successful socket

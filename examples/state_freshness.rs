@@ -49,6 +49,10 @@ struct Args {
     payload_bytes: usize,
     #[arg(long, default_value_t=1024*1024)]
     bulk_bytes: usize,
+    /// QUIC packet-count loss threshold for this client's own sending. The default matches the
+    /// relay (time-based detection only); 3 is the stock QUIC value.
+    #[arg(long, default_value_t = u32::MAX)]
+    packet_threshold: u32,
 }
 type Ws = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 enum SendSide {
@@ -130,7 +134,13 @@ fn endpoint(args: &Args) -> Result<Option<Client>> {
         socket,
         Arc::new(wtransport::quinn::TokioRuntime),
     )?;
-    Ok(Some(Client::new(endpoint, config.quic_config().clone())))
+    // This client is the sender on the upload hop, so by default it uses the relay's loss
+    // detection; a browser brings its own.
+    let mut quic = config.quic_config().clone();
+    let mut transport = wtransport::quinn::TransportConfig::default();
+    transport.packet_threshold(args.packet_threshold);
+    quic.transport_config(Arc::new(transport));
+    Ok(Some(Client::new(endpoint, quic)))
 }
 struct Observed {
     seen: Vec<bool>,
@@ -462,7 +472,7 @@ async fn main() -> Result<()> {
     })
     .await??;
     let mut state = check.state.lock().unwrap();
-    let report = serde_json::json!({"mode":args.mode,"offered":count,"received_unique":state.unique,"missing":count-state.unique,"duplicates":state.duplicates,"out_of_order":state.reordered,"offered_seconds":args.seconds,"rate":args.rate,"payload_bytes":args.payload_bytes,"bulk_bytes":args.bulk_bytes,"bulk_arrival_ms":state.bulk_arrival_ms,"updates_before_bulk":state.updates_before_bulk,"arrival_age":distribution(std::mem::take(&mut state.arrival_age_ms)),"freshest_state_age":distribution(ages),"probes_before_first_state":no_state,"generation_lag":distribution(generation_lag),"elapsed_seconds":observation_end_seconds});
+    let report = serde_json::json!({"mode":args.mode,"offered":count,"received_unique":state.unique,"missing":count-state.unique,"duplicates":state.duplicates,"out_of_order":state.reordered,"offered_seconds":args.seconds,"rate":args.rate,"payload_bytes":args.payload_bytes,"bulk_bytes":args.bulk_bytes,"packet_threshold":args.packet_threshold,"bulk_arrival_ms":state.bulk_arrival_ms,"updates_before_bulk":state.updates_before_bulk,"arrival_age":distribution(std::mem::take(&mut state.arrival_age_ms)),"freshest_state_age":distribution(ages),"probes_before_first_state":no_state,"generation_lag":distribution(generation_lag),"elapsed_seconds":observation_end_seconds});
     println!("{report}");
     ensure!(
         state.unique > 0 && (!check.reliable || state.unique == count),

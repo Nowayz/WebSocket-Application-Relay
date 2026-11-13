@@ -24,7 +24,9 @@ def main():
     parser.add_argument("--tls-cert", type=Path, required=True)
     parser.add_argument("--tls-key", type=Path, required=True)
     parser.add_argument("--tls-ca", type=Path, required=True)
-    parser.add_argument("--profiles", nargs="+", choices=["clean", "loss", "reorder"], default=["clean", "loss", "reorder"])
+    parser.add_argument("--profiles", nargs="+", choices=["clean", "loss", "jitter", "reorder"], default=["clean", "loss", "reorder"])
+    parser.add_argument("--client-packet-threshold", type=int, help="Passed to freshness.py for the WebTransport modes")
+    parser.add_argument("--mtu", type=int, help="Loopback MTU inside the namespace. The default 65536 lets TCP count its window in 64 KiB segments while QUIC uses about 1.2 KiB packets; 1500 makes the two comparable")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seconds", type=int, default=6)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -40,6 +42,8 @@ def main():
         subprocess.run(["sudo", "-n", "ip", "netns", "add", namespace], check=True)
         made = True
         subprocess.run(["sudo", "-n", "ip", "-n", namespace, "link", "set", "lo", "up"], check=True)
+        if args.mtu:
+            subprocess.run(["sudo", "-n", "ip", "-n", namespace, "link", "set", "lo", "mtu", str(args.mtu)], check=True)
         for profile in args.profiles:
             for repetition in range(args.repeats):
                 modes = ["websocket-tls", "stream", "datagram"]
@@ -51,7 +55,12 @@ def main():
                     if mode == "websocket-tls":
                         for key in ("tls_front", "tls_cert", "tls_key", "tls_ca"):
                             command += ["--"+key.replace("_", "-"), str(getattr(args,key).resolve())]
-                    if profile != "clean":
+                    if args.client_packet_threshold is not None and mode != "websocket-tls":
+                        command += ["--client-packet-threshold", str(args.client_packet_threshold)]
+                    if profile == "jitter":
+                        # No loss: 50 ms each way with 3 ms of jitter, which netem turns into reordering.
+                        command += ["--delay-ms", "50", "--jitter-ms", "3"]
+                    elif profile != "clean":
                         command += ["--delay-ms", "20", "--loss-percent", "2"]
                     if profile == "reorder":
                         command += ["--jitter-ms", "8", "--reorder-percent", "25"]

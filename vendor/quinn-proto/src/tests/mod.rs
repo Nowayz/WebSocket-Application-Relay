@@ -2160,7 +2160,10 @@ fn handshake_1rtt_handling() {
 
     pair.drive();
 
-    assert!(pair.client_conn_mut(client_ch).stats().path.lost_packets != 0);
+    // The early packet is held until the handshake completes rather than dropped, so the client
+    // sees no loss on its first flight.
+    assert_eq!(pair.client_conn_mut(client_ch).stats().path.lost_packets, 0);
+    assert_eq!(pair.server_conn_mut(server_ch).early_short_packet_capacity(), 0);
     let mut recv = pair.server_recv(server_ch, s);
     let mut chunks = recv.read(false).unwrap();
     assert_matches!(
@@ -3070,10 +3073,24 @@ fn connect_runs_mtud_again_after_600_seconds() {
 
 #[test]
 fn blackhole_after_mtu_change_repairs_itself() {
+    blackhole_after_mtu_change(client_config());
+}
+
+/// A real black hole is still found when loss is detected by time alone
+#[test]
+fn blackhole_after_mtu_change_repairs_itself_without_packet_threshold() {
+    let mut transport = TransportConfig::default();
+    transport.packet_threshold(u32::MAX);
+    let mut config = client_config();
+    config.transport_config(Arc::new(transport));
+    blackhole_after_mtu_change(config);
+}
+
+fn blackhole_after_mtu_change(config: ClientConfig) {
     let _guard = subscribe();
     let mut pair = Pair::default();
     pair.mtu = 1500;
-    let (client_ch, server_ch) = pair.connect();
+    let (client_ch, server_ch) = pair.connect_with(config);
     pair.drive();
 
     // Sanity check
