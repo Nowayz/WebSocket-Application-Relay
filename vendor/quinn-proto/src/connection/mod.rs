@@ -160,6 +160,9 @@ pub struct Connection {
     zero_rtt_crypto: Option<ZeroRttCrypto>,
     /// 1-RTT packets that overtook the end of the handshake, kept until it completes
     early_short_packets: Vec<(Option<EcnCodepoint>, BytesMut)>,
+    /// Remote CIDs no longer used, retired once no Data packet numbered below the first is
+    /// outstanding
+    deferred_retire_cids: Option<(u64, std::ops::Range<u64>)>,
     key_phase: bool,
     /// How many packets are in the current key phase. Used only for `Data` space.
     key_phase_size: u64,
@@ -303,6 +306,7 @@ impl Connection {
             zero_rtt_enabled: false,
             zero_rtt_crypto: None,
             early_short_packets: Vec::new(),
+            deferred_retire_cids: None,
             key_phase: false,
             // A small initial key phase size ensures peers that don't handle key updates correctly
             // fail sooner rather than later. It's okay for both peers to do this, as the first one
@@ -1848,6 +1852,10 @@ impl Connection {
             self.path.mtud.on_probe_lost();
             self.stats.path.lost_plpmtud_probes += 1;
         }
+
+        if pn_space == SpaceId::Data {
+            self.retire_deferred_cids();
+        }
     }
 
     fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
@@ -3019,10 +3027,14 @@ impl Connection {
                     match self.rem_cids.insert(frame) {
                         Ok(None) => {}
                         Ok(Some((retired, reset_token))) => {
-                            self.spaces[SpaceId::Data]
-                                .pending
-                                .get_or_create()
-                                .retire_cids(retired)?;
+                            // The peer's Retire Prior To also covers any CIDs held back by
+                            // `update_rem_cid`, and they must be retired before the new one is used
+                            let deferred = self.deferred_retire_cids.take();
+                            let pending = self.spaces[SpaceId::Data].pending.get_or_create();
+                            if let Some((_, deferred)) = deferred {
+                                pending.retire_cids.extend(deferred);
+                            }
+                            pending.retire_cids(retired)?;
                             self.set_reset_token(reset_token);
                         }
                         Err(InsertError::ExceedsLimit) => {
@@ -3208,13 +3220,45 @@ impl Connection {
             None => return,
         };
 
-        // Retire the current remote CID and any CIDs we had to skip.
-        self.spaces[SpaceId::Data]
-            .pending
-            .get_or_create()
-            .retire_cids
-            .extend(retired);
+        // Retire the current remote CID and any CIDs we had to skip, but only once no packet sent
+        // with them is outstanding: a peer may stop routing a CID as soon as it is retired, and
+        // a retirement that overtakes such a packet would make the peer drop it.
+        let first_new = self.spaces[SpaceId::Data].next_packet_number;
+        let deferred = match self.deferred_retire_cids.take() {
+            Some((_, earlier)) if earlier.end == retired.start => earlier.start..retired.end,
+            Some((_, earlier)) => {
+                // Not adjacent: the peer retired the CIDs in between. Retire the earlier ones now.
+                self.spaces[SpaceId::Data]
+                    .pending
+                    .get_or_create()
+                    .retire_cids
+                    .extend(earlier);
+                retired
+            }
+            None => retired,
+        };
+        self.deferred_retire_cids = Some((first_new, deferred));
+        self.retire_deferred_cids();
         self.set_reset_token(reset_token);
+    }
+
+    /// Queues deferred CID retirements once every ack-eliciting packet sent with those CIDs is
+    /// acknowledged or declared lost
+    fn retire_deferred_cids(&mut self) {
+        let Some((first_new, _)) = self.deferred_retire_cids else {
+            return;
+        };
+        let space = &mut self.spaces[SpaceId::Data];
+        // A dropped ACK-only packet costs nothing: later ACKs cover its ranges.
+        if space
+            .sent_packets
+            .range(..first_new)
+            .any(|(_, packet)| packet.ack_eliciting)
+        {
+            return;
+        }
+        let (_, retired) = self.deferred_retire_cids.take().unwrap();
+        space.pending.get_or_create().retire_cids.extend(retired);
     }
 
     fn set_reset_token(&mut self, reset_token: ResetToken) {

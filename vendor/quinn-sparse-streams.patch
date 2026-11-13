@@ -118,7 +118,7 @@
 
  mod stats;
  pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
-@@ -149,13 +149,17 @@ pub struct Connection {
+@@ -149,13 +149,20 @@ pub struct Connection {
      path_counter: u64,
      /// Whether MTU detection is supported in this environment
      allow_mtud: bool,
@@ -134,10 +134,13 @@
      zero_rtt_crypto: Option<ZeroRttCrypto>,
 +    /// 1-RTT packets that overtook the end of the handshake, kept until it completes
 +    early_short_packets: Vec<(Option<EcnCodepoint>, BytesMut)>,
++    /// Remote CIDs no longer used, retired once no Data packet numbered below the first is
++    /// outstanding
++    deferred_retire_cids: Option<(u64, std::ops::Range<u64>)>,
      key_phase: bool,
      /// How many packets are in the current key phase. Used only for `Data` space.
      key_phase_size: u64,
-@@ -168,14 +172,14 @@ pub struct Connection {
+@@ -168,14 +175,14 @@ pub struct Connection {
      /// The value that the server included in the Source Connection ID field of a Retry packet, if
      /// one was received
      retry_src_cid: Option<ConnectionId>,
@@ -154,15 +157,16 @@
      /// Highest usable packet number space
      highest_space: SpaceId,
      /// 1-RTT keys used prior to a key update
-@@ -298,6 +302,7 @@ impl Connection {
+@@ -298,6 +305,8 @@ impl Connection {
              side: connection_side,
              zero_rtt_enabled: false,
              zero_rtt_crypto: None,
 +            early_short_packets: Vec::new(),
++            deferred_retire_cids: None,
              key_phase: false,
              // A small initial key phase size ensures peers that don't handle key updates correctly
              // fail sooner rather than later. It's okay for both peers to do this, as the first one
-@@ -314,7 +319,7 @@ impl Connection {
+@@ -314,7 +323,7 @@ impl Connection {
              endpoint_events: VecDeque::new(),
              spin_enabled: config.allow_spin && rng.random_ratio(7, 8),
              spin: false,
@@ -171,7 +175,7 @@
              highest_space: SpaceId::Initial,
              prev_crypto: None,
              next_crypto: None,
-@@ -395,7 +400,7 @@ impl Connection {
+@@ -395,7 +404,7 @@ impl Connection {
      #[must_use]
      pub fn poll(&mut self) -> Option<Event> {
          if let Some(x) = self.events.pop_front() {
@@ -180,7 +184,7 @@
          }
 
          if let Some(event) = self.streams.poll() {
-@@ -412,7 +417,14 @@ impl Connection {
+@@ -412,7 +421,14 @@ impl Connection {
      /// Return endpoint-facing events
      #[must_use]
      pub fn poll_endpoint_events(&mut self) -> Option<EndpointEvent> {
@@ -196,7 +200,7 @@
      }
 
      /// Provide control over streams
-@@ -431,7 +443,7 @@ impl Connection {
+@@ -431,7 +447,7 @@ impl Connection {
          RecvStream {
              id,
              state: &mut self.streams,
@@ -205,7 +209,7 @@
          }
      }
 
-@@ -442,7 +454,7 @@ impl Connection {
+@@ -442,7 +458,7 @@ impl Connection {
          SendStream {
              id,
              state: &mut self.streams,
@@ -214,7 +218,7 @@
              conn_state: &self.state,
          }
      }
-@@ -485,7 +497,9 @@ impl Connection {
+@@ -485,7 +501,9 @@ impl Connection {
          for space in SpaceId::iter() {
              let request_immediate_ack =
                  space == SpaceId::Data && self.peer_supports_ack_frequency();
@@ -225,7 +229,7 @@
          }
 
          // Check whether we need to send a close message
-@@ -508,10 +522,14 @@ impl Connection {
+@@ -508,10 +526,14 @@ impl Connection {
 
          // Check whether we need to send an ACK_FREQUENCY frame
          if let Some(config) = &self.config.ack_frequency_config {
@@ -244,7 +248,7 @@
                  && self.peer_supports_ack_frequency();
          }
 
-@@ -546,7 +564,7 @@ impl Connection {
+@@ -546,7 +568,7 @@ impl Connection {
 
              // Is there data or a close message to send in this space?
              let can_send = self.space_can_send(space_id, frame_space_1rtt);
@@ -253,7 +257,7 @@
                  space_idx += 1;
                  continue;
              }
-@@ -758,7 +776,7 @@ impl Connection {
+@@ -758,7 +780,7 @@ impl Connection {
              // From here on, we've determined that a packet will definitely be sent.
              //
 
@@ -262,7 +266,7 @@
                  && space_id == SpaceId::Handshake
                  && self.side.is_client()
              {
-@@ -1018,7 +1036,7 @@ impl Connection {
+@@ -1018,7 +1040,7 @@ impl Connection {
 
      /// Send PATH_CHALLENGE for a previous path if necessary
      fn send_path_challenge(&mut self, now: Instant, buf: &mut Vec<u8>) -> Option<Transmit> {
@@ -271,7 +275,7 @@
          if !prev_path.challenge_pending {
              return None;
          }
-@@ -1076,7 +1094,7 @@ impl Connection {
+@@ -1076,7 +1098,7 @@ impl Connection {
 
      /// Indicate what types of frames are ready to send for the given space
      fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
@@ -280,7 +284,7 @@
              && (space_id != SpaceId::Data
                  || self.zero_rtt_crypto.is_none()
                  || self.side.is_server())
-@@ -1151,6 +1169,10 @@ impl Connection {
+@@ -1151,6 +1173,10 @@ impl Connection {
                      self.handle_coalesced(now, remote, ecn, data);
                  }
 
@@ -291,7 +295,7 @@
                  self.config.qlog_sink.emit_recovery_metrics(
                      self.pto_count,
                      &mut self.path,
-@@ -1168,7 +1190,11 @@ impl Connection {
+@@ -1168,7 +1194,11 @@ impl Connection {
              NewIdentifiers(ids, now) => {
                  self.local_cid_state.new_cids(&ids, now);
                  ids.into_iter().rev().for_each(|frame| {
@@ -304,7 +308,7 @@
                  });
                  // Update Timer::PushNewCid
                  if self.timers.get(Timer::PushNewCid).is_none_or(|x| x <= now) {
-@@ -1222,8 +1248,8 @@ impl Connection {
+@@ -1222,8 +1252,8 @@ impl Connection {
                  }
                  Timer::PathValidation => {
                      debug!("path validation failed");
@@ -315,7 +319,7 @@
                      }
                      self.path.challenge = None;
                      self.path.challenge_pending = false;
-@@ -1437,7 +1463,7 @@ impl Connection {
+@@ -1437,7 +1467,7 @@ impl Connection {
          self.streams.set_max_concurrent(dir, count);
          // If the limit was reduced, then a flow control update previously deemed insignificant may
          // now be significant.
@@ -324,7 +328,7 @@
          self.streams.queue_max_stream_id(pending);
      }
 
-@@ -1458,7 +1484,7 @@ impl Connection {
+@@ -1458,7 +1488,7 @@ impl Connection {
      /// See [`TransportConfig::receive_window()`]
      pub fn set_receive_window(&mut self, receive_window: VarInt) {
          if self.streams.set_receive_window(receive_window) {
@@ -333,7 +337,7 @@
          }
      }
 
-@@ -1791,7 +1817,9 @@ impl Connection {
+@@ -1791,7 +1821,9 @@ impl Connection {
                  self.path.mtud.on_non_probe_lost(packet, info.size);
              }
 
@@ -344,7 +348,15 @@
                  self.stats.path.black_holes_detected += 1;
                  self.path
                      .congestion
-@@ -1824,7 +1852,7 @@ impl Connection {
+@@ -1820,11 +1852,15 @@ impl Connection {
+             self.path.mtud.on_probe_lost();
+             self.stats.path.lost_plpmtud_probes += 1;
+         }
++
++        if pn_space == SpaceId::Data {
++            self.retire_deferred_cids();
++        }
+     }
 
      fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
          SpaceId::iter()
@@ -353,7 +365,7 @@
              .min_by_key(|&(time, _)| time)
      }
 
-@@ -1843,7 +1871,11 @@ impl Connection {
+@@ -1843,7 +1879,11 @@ impl Connection {
 
          let mut result = None;
          for space in SpaceId::iter() {
@@ -366,7 +378,7 @@
                  continue;
              }
              if space == SpaceId::Data {
-@@ -1872,12 +1904,13 @@ impl Connection {
+@@ -1872,12 +1912,13 @@ impl Connection {
          }
          // The server is guaranteed to have validated our address if any of our handshake or 1-RTT
          // packets are acknowledged or we've seen HANDSHAKE_DONE and discarded handshake keys.
@@ -383,7 +395,7 @@
      }
 
      fn set_loss_detection_timer(&mut self, now: Instant) {
-@@ -1953,7 +1986,7 @@ impl Connection {
+@@ -1953,7 +1994,7 @@ impl Connection {
              None => return,
          };
          if self.side.is_server() {
@@ -392,7 +404,7 @@
                  // A server stops sending and processing Initial packets when it receives its first Handshake packet.
                  self.discard_space(now, SpaceId::Initial);
              }
-@@ -2136,7 +2169,7 @@ impl Connection {
+@@ -2136,7 +2177,7 @@ impl Connection {
          while let Some(chunk) = space.crypto_stream.read(usize::MAX, true) {
              trace!("consumed {} CRYPTO bytes", chunk.bytes.len());
              if self.crypto.read_handshake(&chunk.bytes)? {
@@ -401,7 +413,7 @@
              }
          }
 
-@@ -2175,10 +2208,14 @@ impl Connection {
+@@ -2175,10 +2216,14 @@ impl Connection {
              }
              self.spaces[space].crypto_offset += outgoing.len() as u64;
              trace!("wrote {} {:?} CRYPTO bytes", outgoing.len(), space);
@@ -420,7 +432,7 @@
          }
      }
 
-@@ -2208,6 +2245,11 @@ impl Connection {
+@@ -2208,6 +2253,11 @@ impl Connection {
      }
 
      fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
@@ -432,7 +444,7 @@
          debug_assert!(space_id != SpaceId::Data);
          trace!("discarding {:?} keys", space_id);
          if space_id == SpaceId::Initial {
-@@ -2216,8 +2258,14 @@ impl Connection {
+@@ -2216,8 +2266,14 @@ impl Connection {
                  *token = Bytes::new();
              }
          }
@@ -448,7 +460,7 @@
          space.time_of_last_ack_eliciting_packet = None;
          space.loss_time = None;
          let sent_packets = mem::take(&mut space.sent_packets);
-@@ -2262,6 +2310,26 @@ impl Connection {
+@@ -2262,6 +2318,26 @@ impl Connection {
          ecn: Option<EcnCodepoint>,
          partial_decode: PartialDecode,
      ) {
@@ -475,7 +487,7 @@
          if let Some(decoded) = packet_crypto::unprotect_header(
              partial_decode,
              &self.spaces,
-@@ -2272,6 +2340,23 @@ impl Connection {
+@@ -2272,6 +2348,23 @@ impl Connection {
          }
      }
 
@@ -499,7 +511,7 @@
      fn handle_packet(
          &mut self,
          now: Instant,
-@@ -2342,7 +2427,7 @@ impl Connection {
+@@ -2342,7 +2435,7 @@ impl Connection {
                      debug!("discarding possible duplicate packet");
                      return;
                  } else if self.state.is_handshake() && packet.header.is_short() {
@@ -508,7 +520,7 @@
                      trace!("dropping short packet during handshake");
                      return;
                  } else {
-@@ -2509,7 +2594,7 @@ impl Connection {
+@@ -2509,7 +2602,7 @@ impl Connection {
                      self.on_packet_acked(now, info);
                  };
 
@@ -517,7 +529,7 @@
                  self.spaces[SpaceId::Initial] = PacketSpace {
                      crypto: Some(self.crypto.initial_keys(&rem_cid, self.side.side())),
                      next_packet_number: self.spaces[SpaceId::Initial].next_packet_number,
-@@ -2518,6 +2603,7 @@ impl Connection {
+@@ -2518,6 +2611,7 @@ impl Connection {
                  };
                  self.spaces[SpaceId::Initial]
                      .pending
@@ -525,7 +537,7 @@
                      .crypto
                      .push_back(frame::Crypto {
                          offset: 0,
-@@ -2587,7 +2673,7 @@ impl Connection {
+@@ -2587,7 +2681,7 @@ impl Connection {
                              self.streams.zero_rtt_rejected();
 
                              // Discard already-queued frames
@@ -534,7 +546,7 @@
 
                              // Discard 0-RTT packets
                              let sent_packets =
-@@ -2608,11 +2694,14 @@ impl Connection {
+@@ -2608,11 +2702,14 @@ impl Connection {
                      self.issue_first_cids(now);
                  } else {
                      // Server-only
@@ -551,7 +563,7 @@
                  self.state = State::Established;
                  trace!("established");
                  Ok(())
-@@ -2808,7 +2897,7 @@ impl Connection {
+@@ -2808,7 +2905,7 @@ impl Connection {
                  }
                  Frame::Stream(frame) => {
                      if self.streams.received(frame, payload_len)?.should_transmit() {
@@ -560,7 +572,7 @@
                      }
                  }
                  Frame::Ack(ack) => {
-@@ -2835,9 +2924,9 @@ impl Connection {
+@@ -2835,9 +2932,9 @@ impl Connection {
                          self.timers.stop(Timer::PathValidation);
                          self.path.challenge = None;
                          self.path.validated = true;
@@ -573,7 +585,7 @@
                          }
                      } else {
                          debug!(token, "ignoring invalid PATH_RESPONSE");
-@@ -2854,7 +2943,7 @@ impl Connection {
+@@ -2854,7 +2951,7 @@ impl Connection {
                  }
                  Frame::ResetStream(frame) => {
                      if self.streams.received_reset(frame)?.should_transmit() {
@@ -582,19 +594,23 @@
                      }
                  }
                  Frame::DataBlocked { offset } => {
-@@ -2930,7 +3019,10 @@ impl Connection {
+@@ -2930,7 +3027,14 @@ impl Connection {
                      match self.rem_cids.insert(frame) {
                          Ok(None) => {}
                          Ok(Some((retired, reset_token))) => {
 -                            self.spaces[SpaceId::Data].pending.retire_cids(retired)?;
-+                            self.spaces[SpaceId::Data]
-+                                .pending
-+                                .get_or_create()
-+                                .retire_cids(retired)?;
++                            // The peer's Retire Prior To also covers any CIDs held back by
++                            // `update_rem_cid`, and they must be retired before the new one is used
++                            let deferred = self.deferred_retire_cids.take();
++                            let pending = self.spaces[SpaceId::Data].pending.get_or_create();
++                            if let Some((_, deferred)) = deferred {
++                                pending.retire_cids.extend(deferred);
++                            }
++                            pending.retire_cids(retired)?;
                              self.set_reset_token(reset_token);
                          }
                          Err(InsertError::ExceedsLimit) => {
-@@ -2943,6 +3035,7 @@ impl Connection {
+@@ -2943,6 +3047,7 @@ impl Connection {
                              // was retired all at once via retire_prior_to.
                              self.spaces[SpaceId::Data]
                                  .pending
@@ -602,7 +618,7 @@
                                  .retire_cids(frame.sequence..frame.sequence.saturating_add(1))?;
                              continue;
                          }
-@@ -2974,7 +3067,7 @@ impl Connection {
+@@ -2974,7 +3079,7 @@ impl Connection {
                          .datagrams
                          .received(datagram, &self.config.datagram_receive_buffer_size)?
                      {
@@ -611,7 +627,7 @@
                      }
                  }
                  Frame::AckFrequency(ack_frequency) => {
-@@ -3010,7 +3103,7 @@ impl Connection {
+@@ -3010,7 +3115,7 @@ impl Connection {
                              "client sent HANDSHAKE_DONE",
                          ));
                      }
@@ -620,7 +636,7 @@
                          self.discard_space(now, SpaceId::Handshake);
                      }
                  }
-@@ -3031,7 +3124,7 @@ impl Connection {
+@@ -3031,7 +3136,7 @@ impl Connection {
          // on stopped streams. Incoming finishes/resets on open streams are not handled here as they
          // are only freed, and hence only issue credit, once the application has been notified
          // during a read on the stream.
@@ -629,7 +645,7 @@
          self.streams.queue_max_stream_id(pending);
 
          if let Some(reason) = close {
-@@ -3093,7 +3186,7 @@ impl Connection {
+@@ -3093,7 +3198,7 @@ impl Connection {
              prev.challenge_pending = true;
              // We haven't updated the remote CID yet, this captures the remote CID we were using on
              // the previous path.
@@ -638,15 +654,60 @@
          }
 
          self.timers.set(
-@@ -3118,6 +3211,7 @@ impl Connection {
-         // Retire the current remote CID and any CIDs we had to skip.
-         self.spaces[SpaceId::Data]
-             .pending
-+            .get_or_create()
-             .retire_cids
-             .extend(retired);
+@@ -3115,14 +3220,47 @@ impl Connection {
+             None => return,
+         };
+
+-        // Retire the current remote CID and any CIDs we had to skip.
+-        self.spaces[SpaceId::Data]
+-            .pending
+-            .retire_cids
+-            .extend(retired);
++        // Retire the current remote CID and any CIDs we had to skip, but only once no packet sent
++        // with them is outstanding: a peer may stop routing a CID as soon as it is retired, and
++        // a retirement that overtakes such a packet would make the peer drop it.
++        let first_new = self.spaces[SpaceId::Data].next_packet_number;
++        let deferred = match self.deferred_retire_cids.take() {
++            Some((_, earlier)) if earlier.end == retired.start => earlier.start..retired.end,
++            Some((_, earlier)) => {
++                // Not adjacent: the peer retired the CIDs in between. Retire the earlier ones now.
++                self.spaces[SpaceId::Data]
++                    .pending
++                    .get_or_create()
++                    .retire_cids
++                    .extend(earlier);
++                retired
++            }
++            None => retired,
++        };
++        self.deferred_retire_cids = Some((first_new, deferred));
++        self.retire_deferred_cids();
          self.set_reset_token(reset_token);
-@@ -3166,7 +3260,7 @@ impl Connection {
+     }
+
++    /// Queues deferred CID retirements once every ack-eliciting packet sent with those CIDs is
++    /// acknowledged or declared lost
++    fn retire_deferred_cids(&mut self) {
++        let Some((first_new, _)) = self.deferred_retire_cids else {
++            return;
++        };
++        let space = &mut self.spaces[SpaceId::Data];
++        // A dropped ACK-only packet costs nothing: later ACKs cover its ranges.
++        if space
++            .sent_packets
++            .range(..first_new)
++            .any(|(_, packet)| packet.ack_eliciting)
++        {
++            return;
++        }
++        let (_, retired) = self.deferred_retire_cids.take().unwrap();
++        space.pending.get_or_create().retire_cids.extend(retired);
++    }
++
+     fn set_reset_token(&mut self, reset_token: ResetToken) {
+         self.endpoint_events
+             .push_back(EndpointEventInner::ResetToken(
+@@ -3166,7 +3304,7 @@ impl Connection {
          let pre_payload_len = buf.len();
 
          // HANDSHAKE_DONE
@@ -655,7 +716,7 @@
              buf.write(frame::FrameType::HANDSHAKE_DONE);
              sent.retransmits.get_or_create().handshake_done = true;
              // This is just a u8 counter and the frame is typically just sent once
-@@ -3204,7 +3298,7 @@ impl Connection {
+@@ -3204,7 +3342,7 @@ impl Connection {
          }
 
          // ACK_FREQUENCY
@@ -664,7 +725,7 @@
              let sequence_number = self.ack_frequency.next_sequence_number();
 
              // Safe to unwrap because this is always provided when ACK frequency is enabled
-@@ -3262,7 +3356,7 @@ impl Connection {
+@@ -3262,7 +3400,7 @@ impl Connection {
 
          // CRYPTO
          while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
@@ -673,7 +734,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3296,16 +3390,21 @@ impl Connection {
+@@ -3296,16 +3434,21 @@ impl Connection {
              truncated.encode(buf);
              self.stats.frame_tx.crypto += 1;
              sent.retransmits.get_or_create().crypto.push_back(truncated);
@@ -697,7 +758,7 @@
                  &mut sent.retransmits,
                  &mut self.stats.frame_tx,
                  max_size,
-@@ -3314,10 +3413,14 @@ impl Connection {
+@@ -3314,10 +3457,14 @@ impl Connection {
 
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
@@ -713,7 +774,7 @@
              trace!(
                  sequence = issued.sequence,
                  id = %issued.id,
-@@ -3336,7 +3439,7 @@ impl Connection {
+@@ -3336,7 +3483,7 @@ impl Connection {
 
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
@@ -722,7 +783,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3360,12 +3463,12 @@ impl Connection {
+@@ -3360,12 +3507,12 @@ impl Connection {
              }
          }
          if self.datagrams.send_blocked && sent_datagrams {
@@ -737,7 +798,7 @@
              debug_assert_eq!(space_id, SpaceId::Data);
              let ConnectionSide::Server { server_config } = &self.side else {
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
-@@ -3391,11 +3494,15 @@ impl Connection {
+@@ -3391,11 +3538,15 @@ impl Connection {
              };
 
              if buf.len() + new_token.size() >= max_size {
@@ -754,7 +815,7 @@
              sent.retransmits
                  .get_or_create()
                  .new_tokens
-@@ -3489,6 +3596,7 @@ impl Connection {
+@@ -3489,6 +3640,7 @@ impl Connection {
          for &timer in &Timer::VALUES {
              self.timers.stop(timer);
          }
@@ -762,7 +823,7 @@
      }
 
      fn set_close_timer(&mut self, now: Instant) {
-@@ -3691,6 +3799,24 @@ impl Connection {
+@@ -3691,6 +3843,24 @@ impl Connection {
          self.local_cid_state.active_seq()
      }
 
@@ -787,7 +848,7 @@
      /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame
      /// with updated `retire_prior_to` field set to `v`
      #[cfg(test)]
-@@ -3721,7 +3847,7 @@ impl Connection {
+@@ -3721,7 +3891,7 @@ impl Connection {
              || self
                  .prev_path
                  .as_ref()
@@ -796,7 +857,7 @@
              || !self.path_responses.is_empty()
              || self.datagrams.outgoing.can_send_1rtt(max_size)
      }
-@@ -3731,7 +3857,7 @@ impl Connection {
+@@ -3731,7 +3901,7 @@ impl Connection {
          // Visit known paths from newest to oldest to find the one `packet` was sent on
          for path in [&mut self.path]
              .into_iter()
@@ -805,7 +866,7 @@
          {
              if path.remove_in_flight(packet) {
                  return;
-@@ -3792,7 +3918,10 @@ impl Connection {
+@@ -3792,7 +3962,10 @@ impl Connection {
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
          };
@@ -817,7 +878,7 @@
          new_tokens.clear();
          for _ in 0..server_config.validation_token.sent {
              new_tokens.push(self.path.remote);
-@@ -4023,6 +4152,26 @@ mod state {
+@@ -4023,6 +4196,26 @@ mod state {
      }
  }
 
@@ -844,7 +905,7 @@
  /// Events of interest to the application
  #[derive(Debug)]
  pub enum Event {
-@@ -4074,6 +4223,16 @@ const MAX_HANDSHAKE_OR_0RTT_HEADER_SIZE: usize =
+@@ -4074,6 +4267,16 @@ const MAX_HANDSHAKE_OR_0RTT_HEADER_SIZE: usize =
  /// Chosen arbitrarily, intended to be large enough to prevent spurious connection loss.
  const KEY_UPDATE_MARGIN: u64 = 10_000;
 
@@ -861,7 +922,7 @@
  #[derive(Default)]
  struct SentFrames {
      retransmits: ThinRetransmits,
-@@ -4114,6 +4273,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
+@@ -4114,6 +4317,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
  mod tests {
      use super::*;
 
@@ -1639,7 +1700,98 @@
      let mut recv = pair.server_recv(server_ch, s);
      let mut chunks = recv.read(false).unwrap();
      assert_matches!(
-@@ -3013,10 +3073,24 @@ fn connect_runs_mtud_again_after_600_seconds() {
+@@ -2113,6 +2173,90 @@ fn handshake_1rtt_handling() {
+     let _ = chunks.finalize();
+ }
+
++#[test]
++fn server_retires_initial_client_cid_after_its_packets() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client_ch = pair.begin_connect(client_config());
++    pair.drive_client();
++    pair.drive_server();
++    let server_ch = pair.server.assert_accept();
++
++    // A server packet sent with the client's initial CID is held back in the network.
++    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
++    const MSG: &[u8] = b"sent with the initial CID";
++    pair.server_send(server_ch, s).write(MSG).unwrap();
++    pair.server.drive(pair.time, pair.client.addr);
++    assert!(!pair.server.outbound.is_empty());
++    pair.server.delay_outbound();
++
++    // The client's first 1-RTT flight issues new CIDs, so the server switches to one of them.
++    pair.drive_client();
++    pair.drive_server();
++    assert_ne!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 0);
++    // The initial CID is not retired while the held packet is outstanding: a client that stops
++    // routing it on retirement would drop that packet.
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        0
++    );
++
++    pair.server.finish_delay();
++    pair.drive();
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        1
++    );
++    assert_matches!(pair.client_streams(client_ch).accept(Dir::Uni), Some(stream) if stream == s);
++    let mut recv = pair.client_recv(client_ch, s);
++    let mut chunks = recv.read(false).unwrap();
++    assert_matches!(chunks.next(usize::MAX), Ok(Some(chunk)) if chunk.bytes == MSG);
++    let _ = chunks.finalize();
++}
++
++/// A peer's Retire Prior To and a later switch while a retirement is held back retire each CID
++/// exactly once
++#[test]
++fn deferred_cid_retirement_with_retire_prior_to() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client_ch = pair.begin_connect(client_config());
++    pair.drive_client();
++    pair.drive_server();
++    let server_ch = pair.server.assert_accept();
++    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
++    pair.server_send(server_ch, s).write(b"held").unwrap();
++    pair.server.drive(pair.time, pair.client.addr);
++    pair.server.delay_outbound();
++    pair.drive_client();
++    pair.drive_server();
++    assert_eq!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 1);
++
++    // The client retires the server's active CID and the held-back initial one.
++    let retire_prior_to = 2;
++    let now = pair.time;
++    pair.client_conn_mut(client_ch)
++        .rotate_local_cid(retire_prior_to, now);
++    pair.drive_client();
++    pair.drive_server();
++    assert_eq!(
++        pair.server_conn_mut(server_ch).active_rem_cid_seq(),
++        retire_prior_to
++    );
++    // Then the server switches again while its held packet is still outstanding.
++    pair.server_conn_mut(server_ch).local_address_changed();
++
++    pair.server.finish_delay();
++    pair.drive();
++    assert!(!pair.client_conn_mut(client_ch).is_closed());
++    assert!(!pair.server_conn_mut(server_ch).is_closed());
++    // Sequences 0 through `retire_prior_to`, once each
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        retire_prior_to + 1
++    );
++}
++
+ #[test]
+ fn stop_before_finish() {
+     let _guard = subscribe();
+@@ -3013,10 +3157,24 @@ fn connect_runs_mtud_again_after_600_seconds() {
 
  #[test]
  fn blackhole_after_mtu_change_repairs_itself() {

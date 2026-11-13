@@ -2174,6 +2174,90 @@ fn handshake_1rtt_handling() {
 }
 
 #[test]
+fn server_retires_initial_client_cid_after_its_packets() {
+    let _guard = subscribe();
+    let mut pair = Pair::default();
+    let client_ch = pair.begin_connect(client_config());
+    pair.drive_client();
+    pair.drive_server();
+    let server_ch = pair.server.assert_accept();
+
+    // A server packet sent with the client's initial CID is held back in the network.
+    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
+    const MSG: &[u8] = b"sent with the initial CID";
+    pair.server_send(server_ch, s).write(MSG).unwrap();
+    pair.server.drive(pair.time, pair.client.addr);
+    assert!(!pair.server.outbound.is_empty());
+    pair.server.delay_outbound();
+
+    // The client's first 1-RTT flight issues new CIDs, so the server switches to one of them.
+    pair.drive_client();
+    pair.drive_server();
+    assert_ne!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 0);
+    // The initial CID is not retired while the held packet is outstanding: a client that stops
+    // routing it on retirement would drop that packet.
+    assert_eq!(
+        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
+        0
+    );
+
+    pair.server.finish_delay();
+    pair.drive();
+    assert_eq!(
+        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
+        1
+    );
+    assert_matches!(pair.client_streams(client_ch).accept(Dir::Uni), Some(stream) if stream == s);
+    let mut recv = pair.client_recv(client_ch, s);
+    let mut chunks = recv.read(false).unwrap();
+    assert_matches!(chunks.next(usize::MAX), Ok(Some(chunk)) if chunk.bytes == MSG);
+    let _ = chunks.finalize();
+}
+
+/// A peer's Retire Prior To and a later switch while a retirement is held back retire each CID
+/// exactly once
+#[test]
+fn deferred_cid_retirement_with_retire_prior_to() {
+    let _guard = subscribe();
+    let mut pair = Pair::default();
+    let client_ch = pair.begin_connect(client_config());
+    pair.drive_client();
+    pair.drive_server();
+    let server_ch = pair.server.assert_accept();
+    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
+    pair.server_send(server_ch, s).write(b"held").unwrap();
+    pair.server.drive(pair.time, pair.client.addr);
+    pair.server.delay_outbound();
+    pair.drive_client();
+    pair.drive_server();
+    assert_eq!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 1);
+
+    // The client retires the server's active CID and the held-back initial one.
+    let retire_prior_to = 2;
+    let now = pair.time;
+    pair.client_conn_mut(client_ch)
+        .rotate_local_cid(retire_prior_to, now);
+    pair.drive_client();
+    pair.drive_server();
+    assert_eq!(
+        pair.server_conn_mut(server_ch).active_rem_cid_seq(),
+        retire_prior_to
+    );
+    // Then the server switches again while its held packet is still outstanding.
+    pair.server_conn_mut(server_ch).local_address_changed();
+
+    pair.server.finish_delay();
+    pair.drive();
+    assert!(!pair.client_conn_mut(client_ch).is_closed());
+    assert!(!pair.server_conn_mut(server_ch).is_closed());
+    // Sequences 0 through `retire_prior_to`, once each
+    assert_eq!(
+        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
+        retire_prior_to + 1
+    );
+}
+
+#[test]
 fn stop_before_finish() {
     let _guard = subscribe();
     let mut pair = Pair::default();

@@ -426,6 +426,21 @@ is open. A real black hole is still found with the packet threshold disabled
 (`blackhole_after_mtu_change_repairs_itself_without_packet_threshold`). The
 false positive was identified by review and not reproduced.
 
+## Connection-ID retirement after the packets that used it
+
+`Connection::update_rem_cid` used to queue RETIRE_CONNECTION_ID for the
+previous remote ID at once. A quinn server switches as soon as the client
+issues its first new ID, while packets sent to the handshake ID may still be
+in flight; if the retirement overtakes one, a peer that stops routing a
+retired ID at once (quinn's endpoint does) drops it, and the sender declares
+a first-flight loss. The retirement is now held in `deferred_retire_cids`
+until no ack-eliciting Data packet numbered below the switch is outstanding,
+and released by `retire_deferred_cids` from `detect_lost_packets`, which every
+ACK reaches. Held-back ranges merge only when adjacent, and a peer's Retire
+Prior To releases them at once. Tests:
+`server_retires_initial_client_cid_after_its_packets` and
+`deferred_cid_retirement_with_retire_prior_to`.
+
 ## UDP receive-batch timestamps
 
 The Quinn endpoint samples time immediately after each successful socket
