@@ -13,9 +13,11 @@
   [measurements](docs/reports/webtransport-allocator-idle-storage-2026-11-13.json).
 - WebTransport tolerates packet reordering. QUIC connections hold 1-RTT
   packets that overtake the end of the handshake instead of dropping them,
-  and the relay detects loss by the time threshold alone rather than also by
-  packet count. A 1 MiB reliable transfer over a 100 ms path with 3 ms of
-  jitter falls from 5.8-8.3 s to 1.45-1.47 s, level with TLS WebSocket; under
+  retire a peer's old connection ID only after the packets sent to it are
+  resolved, and the relay detects loss by the time threshold alone rather
+  than also by packet count. A 1 MiB reliable transfer over a 100 ms path
+  with 3 ms of jitter falls from 5.8-8.3 s to 1.36-1.47 s in every run, level
+  with TLS WebSocket; under
   2% loss it takes about 1.0 s against 2.9-3.8 s for TLS WebSocket.
   `scripts/freshness-matrix.py` gains `--mtu`, `--client-packet-threshold` and
   a `jitter` profile.

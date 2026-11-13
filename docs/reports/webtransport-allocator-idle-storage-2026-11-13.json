@@ -1248,7 +1248,7 @@
   "format": "cargo fmt --check passes (src/lib.rs module order fixed)",
   "clippy": "cargo clippy --locked --all-targets -- -D warnings passes",
   "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun on the final tree)",
-  "vendored_quinn_proto": "327 library tests pass. The upstream test for a 1-RTT packet that overtakes the client Finished now asserts no loss (it asserted a loss before), and a real black hole is still detected with the packet threshold disabled.",
+  "vendored_quinn_proto": "329 library tests pass, including the reordering, black-hole and connection-ID retirement tests described above",
   "vendored_rustls": "scripts/test-rustls-vendor.py: 248 unit tests pass with pinned fixtures"
  },
  "limits": [
@@ -4037,7 +4037,6 @@
   "review": "Three independent read-only reviews (protocol correctness, resources and security, loss detection), each finding re-checked by a second reader. No blocker. Applied: source-address check before holding, a packet-count cap beside the byte cap, release on close, the black-hole burst change, comment and option clean-ups. Not applied: reporting the hold time in ACK delay (one inflated RTT sample at most).",
   "residual": [
    "A relay-side change covers the relay as receiver of a client's first flight and the relay as sender. A browser's own sender and receiver are its own; with a stock-threshold client the jittered transfer still takes 3.5 to 4.7 s because the upload hop collapses.",
-   "In datagram mode under jitter the reliable transfer is still slow (about 5 s) in one or two of three runs. A trace of one such run shows the relay declaring three of its first 1-RTT packets lost by timer 117 ms after sending, against a 114.6 ms deadline, with no real drop; raising the time threshold to 5/4 did not remove it, so their acknowledgement is later than jitter alone explains and the cause is not fully identified. Undoing the window cut after a spurious loss is merged upstream but unreleased and was not backported.",
    "The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip, beyond any fixed time threshold; reliable streams improve from about 6.0 to about 4.9 s and TLS WebSocket takes 1.8 to 3.0 s at the same MTU."
   ],
   "rejected": [
@@ -4084,5 +4083,100 @@
     "reading": "The slow jittered datagram-mode run stays slow (5,070 ms, same seed), 2% loss becomes more variable (775 / 2,783 / 1,486 ms against 1,008 / 960 / 1,141 ms at 9/8) and reorder is not clearly better. Reverted; do not repeat without new evidence."
    }
   ]
+ },
+ "deferred_cid_retirement": {
+  "diagnosis": "Packet-level tracing of the slow jittered runs showed the server sending its first 1-RTT packets to the client's handshake connection ID, switching to a new client ID as soon as one arrived (an upstream quinn behaviour that enables client stateless resets) and retiring the old ID in its next packet. When that packet overtook the earlier ones, the client endpoint removed the old ID from its routing table, received the earlier packet for an unknown ID, answered with a stateless reset that the server discarded as an invalid ID, and the server declared its first-flight packet lost, cut its window and left slow start. It occurred in both datagram and stream mode, in roughly a third of jittered runs.",
+  "change": "vendor/quinn-proto: Connection::update_rem_cid holds back the RETIRE_CONNECTION_ID for the old remote IDs until no ack-eliciting Data packet sent before the switch is outstanding; it is released from detect_lost_packets, which every ACK reaches. A peer's Retire Prior To releases held-back IDs at once, and two held-back ranges are merged only when adjacent. Upstream main still retires immediately.",
+  "review": "Two independent read-only reviews, each finding re-checked. A blocker was found and fixed before commit: merging non-adjacent deferrals as earlier.start..retired.end could re-retire IDs, and with a peer-chosen Retire Prior To and a migration could make the server allocate an unbounded vector. Also applied: release on Retire Prior To (RFC 9000 section 5.1.2), and waiting only for ack-eliciting packets.",
+  "tests": [
+   "server_retires_initial_client_cid_after_its_packets fails without the deferral",
+   "deferred_cid_retirement_with_retire_prior_to fails with the pre-review merge (a sequence retired twice)"
+  ],
+  "jitter_bulk_1mib_ms": {
+   "with_trace_build_before_fix_30_runs": [
+    1363,
+    4982,
+    5035,
+    1462,
+    1455,
+    1477,
+    4972,
+    1369,
+    5070,
+    4565,
+    1461,
+    4579,
+    1374,
+    1386,
+    1380,
+    1458,
+    1453,
+    4487,
+    1367,
+    5098,
+    5055,
+    4478,
+    1455,
+    1463,
+    4971,
+    1358,
+    1375,
+    1460,
+    1460,
+    4589
+   ],
+   "after_fix_24_runs": [
+    1390,
+    1377,
+    1375,
+    1461,
+    1458,
+    1452,
+    1358,
+    1378,
+    1373,
+    1458,
+    1453,
+    1454,
+    1365,
+    1377,
+    1427,
+    1452,
+    1469,
+    1463,
+    1442,
+    1362,
+    1387,
+    1465,
+    1461,
+    1459
+   ],
+   "note": "jitter profile: 50 ms each way, 3 ms jitter, no loss, MTU 1500; TLS WebSocket 1,280 to 1,389 ms"
+  },
+  "cost": {
+   "capacity_100000": {
+    "ready_rss_mib": 1673.8,
+    "paced_cpu_seconds_per_400k": 5.53,
+    "note": "about 3 MiB more, one 32-byte field per connection; paced CPU within this host's 5.31 to 5.53 s range"
+   },
+   "saturation_throughput_paired_ratio_vs_mem3": {
+    "private": [
+     1.005,
+     1.026
+    ],
+    "room": [
+     0.997,
+     1.018
+    ],
+    "mixed": [
+     0.989,
+     0.983
+    ]
+   }
+  },
+  "images_sha256": {
+   "mem7-relay": "a3b69130da4c45f869a4def75d634934788ac8462827d5b57d31e6585614e13c",
+   "state_freshness7": "5f1a7ff4780453d96cf8804fd90a9e78a0f4339214b37f8970f159f237b5e43b"
+  }
  }
 }

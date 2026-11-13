@@ -4010,22 +4010,47 @@ What is left:
   that keeps the stock packet rule (`--client-packet-threshold 3`) the
   jittered transfer still takes 3.5 to 4.7 s, because the upload hop
   collapses in the client.
-- In datagram mode under jitter the 1 MiB transfer is still about 5 s in one
-  or two of three runs. A trace of one shows the relay declaring three of its
-  first 1-RTT packets lost by timer 117 ms after sending, against a 114.6 ms
-  deadline, with no real drop. Raising the time threshold to 5/4, the window
-  Linux RACK starts from, did not remove it and made the 2% loss case more
-  variable (775 / 2,783 / 1,486 ms), so it was reverted and the cause is not
-  fully identified. Undoing the window cut after a spurious loss is merged
-  upstream but unreleased, and was not backported.
+- Some jittered runs were still about 5 s; the next subsection traces and
+  fixes them. Raising the time threshold to 5/4, tried first, did not help and
+  made the 2% loss case more variable (775 / 2,783 / 1,486 ms), so it was
+  reverted.
 - The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip,
   beyond any fixed time threshold. WebTransport improves there but stays
   about twice as slow as TLS WebSocket for bulk.
 
-Regression checks on the final image: 100,000 sessions at 1,668 MiB and 5.31
+Regression checks on the image before the connection-ID fix below: 100,000 sessions at 1,668 MiB and 5.31
 s of paced CPU, unchanged; saturating throughput within 1% for private and
 room traffic and between -5% and +1% over six paired mixed runs, which is this
 host's noise. Three independent reviews with a second reader per finding
 found no blocker; their smaller findings are applied. Per-run values are in
 the report under `kernel_socket_accounting_100000_sessions`,
 `impaired_network_freshness_4s` and `reordering_tolerance_change`.
+
+### Connection-ID retirement overtaken by reordering
+
+Packet tracing of the remaining slow jittered runs found a third mechanism,
+in about a third of them, in stream and datagram mode alike. The server sends
+its first 1-RTT packets to the client's handshake connection ID. As soon as
+the client issues new IDs, quinn switches the server to one of them, to allow
+client stateless resets, and retires the old ID in its next packet. When that
+packet overtook the earlier ones, the client endpoint dropped the old ID from
+its routing table, received the earlier packet for an unknown ID and answered
+with a stateless reset, which the server discarded. The server then declared
+its first-flight packet lost and left slow start.
+
+The vendored stack now holds that retirement back until every ack-eliciting
+packet sent before the switch is acknowledged or declared lost. This is a
+change on the relay's side, so it also protects browsers, whose endpoints may
+drop a retired ID at once just as quinn's does. Upstream quinn still retires
+immediately. Review found a blocker before commit: merging two held-back
+ranges without checking that they were adjacent could re-retire IDs, and
+with a peer-chosen Retire Prior To and a migration could make the server
+allocate an unbounded vector. Merges are now adjacent-only, a peer's Retire
+Prior To releases held-back IDs at once (RFC 9000 section 5.1.2), and a test
+covers each case.
+
+On the jitter profile (50 ms each way, 3 ms jitter, no loss), 12 of 30 runs
+took 4.5 to 5.1 s before the fix; all 24 runs since take 1,358 to 1,469 ms,
+against 1,280 to 1,389 ms for TLS WebSocket. Memory at 100,000 sessions is
+1,674 MiB (one 32-byte field per connection), and paced CPU and saturating
+throughput are within this host's run-to-run range.
