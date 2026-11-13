@@ -4010,10 +4010,14 @@ What is left:
   that keeps the stock packet rule (`--client-packet-threshold 3`) the
   jittered transfer still takes 3.5 to 4.7 s, because the upload hop
   collapses in the client.
-- In datagram mode under jitter the 1 MiB transfer was still about 5 s in two
-  of three runs: a packet acknowledged later than 9/8 of the round trip is
-  declared lost once, early in the connection. Undoing the window cut after a
-  spurious loss is merged upstream but unreleased, and was not backported.
+- In datagram mode under jitter the 1 MiB transfer is still about 5 s in one
+  or two of three runs. A trace of one shows the relay declaring three of its
+  first 1-RTT packets lost by timer 117 ms after sending, against a 114.6 ms
+  deadline, with no real drop. Raising the time threshold to 5/4, the window
+  Linux RACK starts from, did not remove it and made the 2% loss case more
+  variable (775 / 2,783 / 1,486 ms), so it was reverted and the cause is not
+  fully identified. Undoing the window cut after a spurious loss is merged
+  upstream but unreleased, and was not backported.
 - The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip,
   beyond any fixed time threshold. WebTransport improves there but stays
   about twice as slow as TLS WebSocket for bulk.

@@ -4037,8 +4037,52 @@
   "review": "Three independent read-only reviews (protocol correctness, resources and security, loss detection), each finding re-checked by a second reader. No blocker. Applied: source-address check before holding, a packet-count cap beside the byte cap, release on close, the black-hole burst change, comment and option clean-ups. Not applied: reporting the hold time in ACK delay (one inflated RTT sample at most).",
   "residual": [
    "A relay-side change covers the relay as receiver of a client's first flight and the relay as sender. A browser's own sender and receiver are its own; with a stock-threshold client the jittered transfer still takes 3.5 to 4.7 s because the upload hop collapses.",
-   "In datagram mode under jitter the reliable transfer was still slow (about 5 s) in two of three runs: a packet acknowledged later than 9/8 of the round trip is still declared lost once, early in the connection. Undoing the window cut after a spurious loss is merged upstream but unreleased and was not backported.",
+   "In datagram mode under jitter the reliable transfer is still slow (about 5 s) in one or two of three runs. A trace of one such run shows the relay declaring three of its first 1-RTT packets lost by timer 117 ms after sending, against a 114.6 ms deadline, with no real drop; raising the time threshold to 5/4 did not remove it, so their acknowledgement is later than jitter alone explains and the cause is not fully identified. Undoing the window cut after a spurious loss is merged upstream but unreleased and was not backported.",
    "The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip, beyond any fixed time threshold; reliable streams improve from about 6.0 to about 4.9 s and TLS WebSocket takes 1.8 to 3.0 s at the same MTU."
+  ],
+  "rejected": [
+   {
+    "change": "time_threshold 5/4 on relay and client (the quarter-round-trip window Linux RACK starts from)",
+    "bulk_1mib_ms_three_repetitions_mtu_1500": {
+     "jitter": {
+      "datagram": [
+       5070,
+       1402,
+       1417
+      ],
+      "stream": [
+       1490,
+       1477,
+       1486
+      ]
+     },
+     "loss": {
+      "datagram": [
+       2820,
+       755,
+       4007
+      ],
+      "stream": [
+       775,
+       2783,
+       1486
+      ]
+     },
+     "reorder": {
+      "datagram": [
+       3292,
+       5675,
+       6075
+      ],
+      "stream": [
+       3564,
+       2004,
+       5374
+      ]
+     }
+    },
+    "reading": "The slow jittered datagram-mode run stays slow (5,070 ms, same seed), 2% loss becomes more variable (775 / 2,783 / 1,486 ms against 1,008 / 960 / 1,141 ms at 9/8) and reorder is not clearly better. Reverted; do not repeat without new evidence."
+   }
   ]
  }
 }
