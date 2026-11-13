@@ -396,8 +396,13 @@ def run(args):
                     event["kernel_sockets"] = {
                         "server": socket_resources.snapshot(server.pid, protocol, local_port=port, sizes=slab_sizes),
                         "client": socket_resources.snapshot(client.pid, protocol,
-                            remote_port=port if protocol == "tcp" else None, sizes=slab_sizes),
+                            remote_port=(port if front is None else front_port) if protocol == "tcp" else None,
+                            sizes=slab_sizes),
                     }
+                    if front is not None:
+                        # Both sides of every proxied session: client-facing and upstream.
+                        event["kernel_sockets"]["tls_front"] = socket_resources.snapshot(
+                            front.pid, "tcp", sizes=slab_sizes)
                     expected = (event["udp_server_census"]["owned_sockets"] if protocol == "udp"
                                 else census["owned_established"])
                     assert event["kernel_sockets"]["server"]["owned_sockets"] == expected
