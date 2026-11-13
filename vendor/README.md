@@ -70,6 +70,18 @@ rejected twice. Ready RSS at 100,000 sessions falls by a further 50 MiB with
 unchanged throughput; see
 `docs/reports/webtransport-allocator-idle-storage-2026-11-13.json`.
 
+## Sent handshake control-frame queues
+
+`populate_packet` releases the Data-space `crypto`, `new_cids` and `new_tokens`
+pending queues when the frame it has just written leaves them empty. A server
+fills each once around the handshake (session tickets, the first connection-ID
+issue, one address token) and upstream keeps their 480 bytes of storage for
+the life of the connection. The release sits on the path that has just sent
+such a frame, so packets without them run no new code; a truncated CRYPTO
+frame that is pushed back keeps its queue. Retransmission bookkeeping in
+`SentPacket` is unchanged. `sent_handshake_control_frames_release_pending_storage`
+checks both peers after a real handshake.
+
 ## Boxed previous path
 
 `Connection::prev_path` is `Option<Box<(ConnectionId, PathData)>>`. Only a

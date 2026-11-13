@@ -3344,9 +3344,14 @@ impl Connection {
             truncated.encode(buf);
             self.stats.frame_tx.crypto += 1;
             sent.retransmits.get_or_create().crypto.push_back(truncated);
+            let pending = space.pending.get_or_create();
             if !frame.data.is_empty() {
                 frame.offset += len as u64;
-                space.pending.get_or_create().crypto.push_front(frame);
+                pending.crypto.push_front(frame);
+            } else if pending.crypto.is_empty() {
+                // Handshake-time queues: release each once its burst is sent, rather than
+                // keeping the storage for the life of an established connection.
+                pending.crypto = VecDeque::new();
             }
         }
 
@@ -3362,10 +3367,14 @@ impl Connection {
 
         // NEW_CONNECTION_ID
         while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
-            let issued = match space.pending.get_or_create().new_cids.pop() {
+            let pending = space.pending.get_or_create();
+            let issued = match pending.new_cids.pop() {
                 Some(x) => x,
                 None => break,
             };
+            if pending.new_cids.is_empty() {
+                pending.new_cids = Vec::new();
+            }
             trace!(
                 sequence = issued.sequence,
                 id = %issued.id,
@@ -3444,6 +3453,10 @@ impl Connection {
             }
 
             new_token.encode(buf);
+            let pending = space.pending.get_or_create();
+            if pending.new_tokens.is_empty() {
+                pending.new_tokens = Vec::new();
+            }
             sent.retransmits
                 .get_or_create()
                 .new_tokens
@@ -3742,6 +3755,14 @@ impl Connection {
     #[cfg(test)]
     pub(crate) fn endpoint_event_capacity(&self) -> usize {
         self.endpoint_events.capacity()
+    }
+
+    /// Capacity still held by the Data-space queues that only handshake-time frames fill
+    #[cfg(test)]
+    pub(crate) fn pending_control_capacity(&self) -> usize {
+        self.spaces[SpaceId::Data].pending.get().map_or(0, |pending| {
+            pending.crypto.capacity() + pending.new_cids.capacity() + pending.new_tokens.capacity()
+        })
     }
 
     /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame

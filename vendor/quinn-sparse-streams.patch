@@ -575,12 +575,19 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3298,14 +3346,14 @@ impl Connection {
+@@ -3296,16 +3344,21 @@ impl Connection {
+             truncated.encode(buf);
+             self.stats.frame_tx.crypto += 1;
              sent.retransmits.get_or_create().crypto.push_back(truncated);
++            let pending = space.pending.get_or_create();
              if !frame.data.is_empty() {
                  frame.offset += len as u64;
 -                space.pending.crypto.push_front(frame);
-+                space.pending.get_or_create().crypto.push_front(frame);
++                pending.crypto.push_front(frame);
++            } else if pending.crypto.is_empty() {
++                // Handshake-time queues: release each once its burst is sent, rather than
++                // keeping the storage for the life of an established connection.
++                pending.crypto = VecDeque::new();
              }
          }
 
@@ -592,16 +599,23 @@
                  &mut sent.retransmits,
                  &mut self.stats.frame_tx,
                  max_size,
-@@ -3314,7 +3362,7 @@ impl Connection {
+@@ -3314,10 +3367,14 @@ impl Connection {
 
          // NEW_CONNECTION_ID
          while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
 -            let issued = match space.pending.new_cids.pop() {
-+            let issued = match space.pending.get_or_create().new_cids.pop() {
++            let pending = space.pending.get_or_create();
++            let issued = match pending.new_cids.pop() {
                  Some(x) => x,
                  None => break,
              };
-@@ -3336,7 +3384,7 @@ impl Connection {
++            if pending.new_cids.is_empty() {
++                pending.new_cids = Vec::new();
++            }
+             trace!(
+                 sequence = issued.sequence,
+                 id = %issued.id,
+@@ -3336,7 +3393,7 @@ impl Connection {
 
          // RETIRE_CONNECTION_ID
          while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
@@ -610,7 +624,7 @@
                  Some(x) => x,
                  None => break,
              };
-@@ -3360,12 +3408,12 @@ impl Connection {
+@@ -3360,12 +3417,12 @@ impl Connection {
              }
          }
          if self.datagrams.send_blocked && sent_datagrams {
@@ -625,7 +639,7 @@
              debug_assert_eq!(space_id, SpaceId::Data);
              let ConnectionSide::Server { server_config } = &self.side else {
                  panic!("NEW_TOKEN frames should not be enqueued by clients");
-@@ -3391,7 +3439,7 @@ impl Connection {
+@@ -3391,11 +3448,15 @@ impl Connection {
              };
 
              if buf.len() + new_token.size() >= max_size {
@@ -634,7 +648,15 @@
                  break;
              }
 
-@@ -3691,6 +3739,11 @@ impl Connection {
+             new_token.encode(buf);
++            let pending = space.pending.get_or_create();
++            if pending.new_tokens.is_empty() {
++                pending.new_tokens = Vec::new();
++            }
+             sent.retransmits
+                 .get_or_create()
+                 .new_tokens
+@@ -3691,6 +3752,19 @@ impl Connection {
          self.local_cid_state.active_seq()
      }
 
@@ -643,10 +665,18 @@
 +        self.endpoint_events.capacity()
 +    }
 +
++    /// Capacity still held by the Data-space queues that only handshake-time frames fill
++    #[cfg(test)]
++    pub(crate) fn pending_control_capacity(&self) -> usize {
++        self.spaces[SpaceId::Data].pending.get().map_or(0, |pending| {
++            pending.crypto.capacity() + pending.new_cids.capacity() + pending.new_tokens.capacity()
++        })
++    }
++
      /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame
      /// with updated `retire_prior_to` field set to `v`
      #[cfg(test)]
-@@ -3721,7 +3774,7 @@ impl Connection {
+@@ -3721,7 +3795,7 @@ impl Connection {
              || self
                  .prev_path
                  .as_ref()
@@ -655,7 +685,7 @@
              || !self.path_responses.is_empty()
              || self.datagrams.outgoing.can_send_1rtt(max_size)
      }
-@@ -3731,7 +3784,7 @@ impl Connection {
+@@ -3731,7 +3805,7 @@ impl Connection {
          // Visit known paths from newest to oldest to find the one `packet` was sent on
          for path in [&mut self.path]
              .into_iter()
@@ -664,7 +694,7 @@
          {
              if path.remove_in_flight(packet) {
                  return;
-@@ -3792,7 +3845,10 @@ impl Connection {
+@@ -3792,7 +3866,10 @@ impl Connection {
          let ConnectionSide::Server { server_config } = &self.side else {
              return;
          };
@@ -676,7 +706,7 @@
          new_tokens.clear();
          for _ in 0..server_config.validation_token.sent {
              new_tokens.push(self.path.remote);
-@@ -4023,6 +4079,26 @@ mod state {
+@@ -4023,6 +4100,26 @@ mod state {
      }
  }
 
@@ -703,7 +733,7 @@
  /// Events of interest to the application
  #[derive(Debug)]
  pub enum Event {
-@@ -4114,6 +4190,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
+@@ -4114,6 +4211,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
  mod tests {
      use super::*;
 
@@ -1407,7 +1437,7 @@
  #[test]
  fn pending_incoming_survives_server_config_change() {
      let _guard = subscribe();
-@@ -220,6 +257,16 @@ fn lifecycle() {
+@@ -220,6 +257,26 @@ fn lifecycle() {
      assert_eq!(pair.server.known_cids(), 0);
  }
 
@@ -1419,6 +1449,16 @@
 +    // The handshake queued and delivered connection-ID and reset-token events on both sides.
 +    assert_eq!(pair.client_conn_mut(client_ch).endpoint_event_capacity(), 0);
 +    assert_eq!(pair.server_conn_mut(server_ch).endpoint_event_capacity(), 0);
++}
++
++#[test]
++fn sent_handshake_control_frames_release_pending_storage() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let (client_ch, server_ch) = pair.connect();
++    // Both sides issued connection IDs; the server also sent tickets and an address token.
++    assert_eq!(pair.client_conn_mut(client_ch).pending_control_capacity(), 0);
++    assert_eq!(pair.server_conn_mut(server_ch).pending_control_capacity(), 0);
 +}
 +
  #[test]

@@ -268,6 +268,16 @@ fn drained_endpoint_events_release_storage() {
 }
 
 #[test]
+fn sent_handshake_control_frames_release_pending_storage() {
+    let _guard = subscribe();
+    let mut pair = Pair::default();
+    let (client_ch, server_ch) = pair.connect();
+    // Both sides issued connection IDs; the server also sent tickets and an address token.
+    assert_eq!(pair.client_conn_mut(client_ch).pending_control_capacity(), 0);
+    assert_eq!(pair.server_conn_mut(server_ch).pending_control_capacity(), 0);
+}
+
+#[test]
 fn draft_version_compat() {
     let _guard = subscribe();
 
