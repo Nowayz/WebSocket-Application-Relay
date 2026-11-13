@@ -1253,8 +1253,8 @@
   "Process memory remains far above the plaintext WebSocket transport: about 1.72 GiB versus about 0.12 GiB ready RSS at 100,000 sessions (WebSocket figure from the 2026-11-06 control). Each connection holds about 2.8 KiB of packet and header keys alone, so parity with a plaintext TCP process is not reachable by trimming.",
   "At paced load the plaintext WebSocket transport still has lower latency tails and about half the server CPU; WebTransport leads at saturation.",
   "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
-  "Injected-loss freshness and kernel socket memory need privileged network namespaces and socket diagnostics; they were not run in this session.",
-  "The encrypted comparison uses a TLS front-end proxy, not an integrated TLS WebSocket server."
+  "The encrypted comparison uses a TLS front-end proxy, not an integrated TLS WebSocket server.",
+  "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT."
  ],
  "decision": "Keep jemalloc and all five storage changes. Reject mimalloc and shorter scheduler global-queue intervals.",
  "capacity_100000_sessions_4s_second_batch": [
@@ -1938,5 +1938,149 @@
   "browser": "Camoufox, Firefox 158 engine",
   "page": "target/browser/index.html built by npm run build:browser",
   "result": "Passed: all nine bundle checks (three sessions with datagrams, typed broadcast, cross-channel private, unreliable datagram, 128 KiB and 5 MiB payloads, variables, unsafe ID rejection, disconnect and clean closes); no errors"
+ },
+ "host_wide_kernel_memory_100000_sessions": {
+  "scope": "Unprivileged /proc/meminfo and /proc/net/sockstat deltas from before the run to the ready gate, on one host that runs both endpoints. Host-wide, so other activity is included; the WebSocket slab growth covers 200,000 TCP sockets (100,000 at each end).",
+  "results": {
+   "websocket_base2": {
+    "passed": true,
+    "server_ready_rss_mib": 115.4,
+    "host_slab_mib_before": 2933,
+    "host_slab_mib_ready": 3771,
+    "host_slab_growth_mib": 838,
+    "host_unreclaimable_slab_growth_mib": 558,
+    "tcp_sockets_in_use_ready": 200021
+   },
+   "webtransport_committed": {
+    "passed": true,
+    "server_ready_rss_mib": 1719.8,
+    "host_slab_mib_before": 2887,
+    "host_slab_mib_ready": 2887,
+    "host_slab_growth_mib": -1,
+    "host_unreclaimable_slab_growth_mib": -1,
+    "tcp_sockets_in_use_ready": 17
+   }
+  },
+  "estimate": "Taking half of the 839 MiB WebSocket slab growth as the server side gives about 420 MiB of kernel memory beside 115 MiB of process RSS, about 535 MiB in all, against about 1,720 MiB for WebTransport, whose single UDP socket adds no measurable slab. That is about 3.2 times, not 14 times. Per-socket SOCK_DIAG accounting was not possible (see limits)."
+ },
+ "freshness_without_impairment_4s": {
+  "scope": "scripts/freshness.py at 60 updates/s beside a 1 MiB bulk value, no delay or loss",
+  "results": {
+   "datagram": {
+    "image": "committed",
+    "received_unique": 240,
+    "missing": 0,
+    "out_of_order": 0,
+    "arrival_age_ms": {
+     "p50_ms": 0.229,
+     "p99_ms": 1.253,
+     "max_ms": 1.29
+    },
+    "freshest_state_age_ms": {
+     "p50_ms": 10.0,
+     "p99_ms": 16.6
+    },
+    "bulk_arrival_ms": 2.19
+   },
+   "stream": {
+    "image": "committed",
+    "received_unique": 240,
+    "missing": 0,
+    "out_of_order": 0,
+    "arrival_age_ms": {
+     "p50_ms": 0.23,
+     "p99_ms": 1.146,
+     "max_ms": 2.342
+    },
+    "freshest_state_age_ms": {
+     "p50_ms": 10.08,
+     "p99_ms": 16.43
+    },
+    "bulk_arrival_ms": 2.12
+   },
+   "websocket": {
+    "image": "base2",
+    "received_unique": 240,
+    "missing": 0,
+    "out_of_order": 0,
+    "arrival_age_ms": {
+     "p50_ms": 0.209,
+     "p99_ms": 0.836,
+     "max_ms": 0.857
+    },
+    "freshest_state_age_ms": {
+     "p50_ms": 10.48,
+     "p99_ms": 17.92
+    },
+    "bulk_arrival_ms": 0.98
+   }
+  }
+ },
+ "paced_ack_policy_screen_stream_4s": {
+  "scope": "paced stream load; peer ack threshold and delay varied through a temporary knob; reverted",
+  "results": {
+   "ack-default": {
+    "server_cpu_cores": 1.48,
+    "private": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 2.3
+    },
+    "fanout": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 2.6
+    }
+   },
+   "ack-d1ms": {
+    "server_cpu_cores": 1.69,
+    "private": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 5.1
+    },
+    "fanout": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 5.2
+    }
+   },
+   "ack-t1d1ms": {
+    "server_cpu_cores": 1.9,
+    "private": {
+     "p99_upper_ms": 4.194304,
+     "max_ms": 6.7
+    },
+    "fanout": {
+     "p99_upper_ms": 4.194304,
+     "max_ms": 7.4
+    }
+   },
+   "ack-off": {
+    "server_cpu_cores": 1.57,
+    "private": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 3.1
+    },
+    "fanout": {
+     "p99_upper_ms": 2.097152,
+     "max_ms": 3.5
+    }
+   }
+  },
+  "outcome": "The retained policy (threshold 7, 5 ms) has the lowest CPU and no worse latency; faster acknowledgements raised CPU and worsened the tail."
+ },
+ "paced_cpu_profile_100000_sessions": {
+  "scope": "5 s of user-cycle samples (perf, 1999 Hz) on the committed image during the paced 100,000-session phase",
+  "top_self_symbols_percent": {
+   "quinn ConnectionDriver::poll": 9.36,
+   "quinn-proto poll_transmit": 3.76,
+   "quinn event_queue Sender::send": 3.42,
+   "tokio wake_by_val": 3.4,
+   "quinn RecvState::poll_socket": 3.09,
+   "tokio timer process_at_time": 2.57,
+   "tokio Sleep::reset": 2.39,
+   "quinn-proto Endpoint::handle": 2.38,
+   "clock_gettime": 2.28,
+   "quinn-proto populate_packet": 2.2,
+   "quinn-proto on_ack_received": 2.15
+  },
+  "outcome": "No dominant removable cost: per-delivery work is spread over driver polls, packet handling, timers, wakeups and crypto on cold per-connection state."
  }
 }

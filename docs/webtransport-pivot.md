@@ -3797,11 +3797,33 @@ The browser bundle check passes all nine steps in a Firefox 158 engine
 (Camoufox), the first non-Chromium run. `scripts/datagram-load.py` now strips
 colour codes before reading the certificate pin.
 
+Memory accounting beyond process RSS: per-socket SOCK_DIAG was unavailable, so
+host-wide `/proc/meminfo` deltas were taken from before each 100,000-session
+run to its ready gate. The plaintext WebSocket run grows kernel slab by 839 MiB
+(559 MiB unreclaimable) for 200,000 TCP sockets, 100,000 at each end; the
+WebTransport run grows it by nothing measurable. Counting half of that growth
+as the server's, plaintext WebSocket costs about 115 MiB of process RSS plus
+about 420 MiB of kernel memory, about 535 MiB, against about 1,720 MiB for
+WebTransport: about 3.2 times, not the 14 times that process RSS alone
+suggests. This is an estimate from host-wide counters, not socket accounting.
+
+Paced load was examined for a simple cause and none was found. Varying the
+peer acknowledgement policy (threshold 1 or 7, delay 1 or 5 ms, or none) left
+the retained policy with the lowest CPU and no worse latency. A user-cycle
+profile of the paced 100,000-session phase has no dominant entry: the largest
+self cost is `ConnectionDriver::poll` at 9.4%, followed by packet transmit
+and receive, event dispatch, wakeups, timers and crypto at 1 to 4% each. At 60
+updates per second without impairment, arrival age is 0.23 ms median for
+datagrams, streams and WebSocket alike, with p99 of 1.25, 1.15 and 0.84 ms,
+and freshest-state age p99 of 16.6, 16.4 and 17.9 ms.
+
 Still unmet or not run: process memory is about 14 times the plaintext
-WebSocket control (packet and header keys alone are about 2.8 KiB per
-connection); paced-load latency and CPU favour WebSocket; injected-loss
-freshness and kernel socket memory need privileged namespaces and were not
-run. Two early passes on this host were disturbed by other local work and by
+WebSocket control and about 3.2 times with estimated kernel memory (packet and
+header keys alone are about 2.8 KiB per connection); paced-load CPU and
+latency tails favour WebSocket. Injected-loss freshness and per-socket kernel
+accounting could not run on this host: it runs kernel 7.2.11 with only 7.2.15
+modules installed, so the traffic-control and socket-diagnostic modules cannot
+load until it reboots. Two early passes on this host were disturbed by other local work and by
 a baseline built with a different cargo command; they are excluded, and one
 second-batch capacity run with a 4.2 s client stall is retained and explained
 in the report.
