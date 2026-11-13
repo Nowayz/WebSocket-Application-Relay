@@ -16,6 +16,7 @@ from pathlib import Path
 import platform
 import resource
 import select
+import socket
 import signal
 import subprocess
 import tempfile
@@ -219,7 +220,23 @@ def run(args):
     if args.tcp_receive_buffer_bytes:
         server_command += ["--tcp-receive-buffer-bytes", str(args.tcp_receive_buffer_bytes)]
     data_url = benchmark_transport.prepare(args, server_command, server_environment, port)
+    # Encrypted WebSocket control: the plaintext relay behind the TLS front-end fixture.
+    tls = getattr(args, "transport", "websocket") == "websocket-tls"
+    front_command = None
+    if tls:
+        if not all(getattr(args, name, None) for name in ("tls_front", "tls_cert", "tls_key", "tls_ca")):
+            raise ValueError("websocket-tls needs --tls-front, --tls-cert, --tls-key and --tls-ca")
+        front_port = runtime.free_port()
+        while front_port in (port, admin):
+            front_port = runtime.free_port()
+        data_url = f"wss://127.0.0.1:{front_port}"
+        front_command = [str(args.tls_front.resolve()), "--bind", f"127.0.0.1:{front_port}",
+                         "--upstream", f"127.0.0.1:{port}", "--cert", str(args.tls_cert.resolve()),
+                         "--key", str(args.tls_key.resolve()), "--workers", str(args.workers),
+                         "--upstream-sources", "8", "--copy-buffer-bytes", str(args.tls_copy_buffer_bytes)]
     client_command = [str(args.client.resolve()), "--url", data_url]
+    if tls:
+        client_command += ["--ca-certificate", str(args.tls_ca.resolve())]
     for name in ("users", "room_size", "concurrency", "source_addresses", "seconds",
                  "payload_bytes", "active_percent", "client_workers", "messages_per_second", "churn_workers", "waves"):
         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
@@ -231,6 +248,8 @@ def run(args):
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
         client_command = ["taskset", "-c", args.client_cpus] + client_command
+    if front_command and args.server_cpus:
+        front_command = ["taskset", "-c", args.server_cpus] + front_command
     result = {"timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "host": platform.platform(), "server_command": server_command, "client_command": client_command,
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
@@ -251,7 +270,7 @@ def run(args):
         }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = client = None
+        server = client = front = None
         pressure = pressure_result = None
         perf = perf_log = None
         try:
@@ -272,6 +291,20 @@ def run(args):
             client_command += benchmark_transport.certificate(args, logs)
             if getattr(args, "transport", "websocket") == "webtransport":
                 client_command += ["--udp-receive-buffer-bytes", str(args.udp_receive_buffer_bytes)]
+            if front_command:
+                front = subprocess.Popen(front_command, env=environment, stdout=logs, stderr=logs)
+                result["tls_front"] = {"command": front_command, "sha256": digest(args.tls_front),
+                                       "scope": "TLS 1.3 front end with one extra loopback TCP hop on the server CPU set. "
+                                                "Deployment RSS and CPU are the relay plus this process; each event records both."}
+                deadline = time.monotonic() + 10
+                while True:
+                    try:
+                        socket.create_connection(("127.0.0.1", front_port), timeout=1).close()
+                        break
+                    except OSError:
+                        if front.poll() is not None or time.monotonic() >= deadline:
+                            raise RuntimeError("TLS front end did not start")
+                        time.sleep(.02)
             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
             events = []
@@ -350,6 +383,8 @@ def run(args):
                 event.update(metrics=observed, server_pid=server.pid, client_pid=client.pid,
                              server=process(server.pid, server_inodes), client=process(client.pid, client_inodes),
                              machine=machine(), udp_counters=udp_counters(), seconds=time.monotonic() - started)
+                if front is not None:
+                    event["tls_front"] = process(front.pid)
                 census = established(port, server_inodes)
                 event["udp_server_census"] = udp_census(server_inodes)
                 event["udp_client_census"] = udp_census(client_inodes)
@@ -454,6 +489,9 @@ def run(args):
             assert events == ["connected", "ready", "measured", "postcheck", "done"] * args.waves, events
             result["client_exit_code"] = client.wait(timeout=10)
             assert result["client_exit_code"] == 0
+            if front is not None:
+                front.terminate()
+                front.wait(timeout=15)
             server.send_signal(signal.SIGTERM)
             result["server_exit_code"] = server.wait(timeout=15)
             assert result["server_exit_code"] == 0
@@ -471,13 +509,16 @@ def run(args):
                 "server_system_cpu_seconds": measured["server"]["system_cpu_seconds"] - ready["server"]["system_cpu_seconds"],
                 "round_trip": measured["details"]["round_trip"],
                 "schedule_lag": measured["details"]["schedule_lag"]})
+                if "tls_front" in measured:
+                    result["measurements"][-1]["tls_front_cpu_seconds"] = (
+                        measured["tls_front"]["cpu_seconds"] - ready["tls_front"]["cpu_seconds"])
             result["measurement"] = result["measurements"][0]
             result["passed"] = True
         except Exception as error:
             result["error"] = repr(error)
             raise
         finally:
-            for child in (perf, pressure, client, server):
+            for child in (perf, pressure, client, front, server):
                 if child is not None and child.poll() is None:
                     child.terminate()
                     try:
@@ -500,7 +541,13 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--udp-receive-buffer-bytes", type=int, default=4 * 1024 * 1024)
-    parser.add_argument("--transport", choices=["webtransport", "websocket"], default="webtransport")
+    parser.add_argument("--transport", choices=["webtransport", "websocket", "websocket-tls"], default="webtransport")
+    parser.add_argument("--tls-front", type=Path, default=ROOT / "target/release/examples/tls_front")
+    parser.add_argument("--tls-cert", type=Path)
+    parser.add_argument("--tls-key", type=Path)
+    parser.add_argument("--tls-ca", type=Path, help="DER certificate trusted only for this local TLS comparison")
+    parser.add_argument("--tls-copy-buffer-bytes", type=int, default=8192,
+                        help="TLS front-end relay buffer per direction and connection; 8192 is its default")
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")
     parser.add_argument("--server-preload", type=runtime.preload_library,
