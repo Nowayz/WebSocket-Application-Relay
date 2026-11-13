@@ -3914,16 +3914,114 @@ WebSocket server, which does not exist here, the delivered rate would still be
 ahead, while estimated memory, CPU per delivery and paced CPU would favour
 WebSocket by roughly 14 to 65%, 3 to 15% and 2.6 times.
 
-Not run: injected-loss freshness and per-socket kernel accounting. This host
-runs kernel 7.2.11 with only 7.2.15 modules installed, so the traffic-control
-and socket-diagnostic modules cannot load until it reboots.
+Injected-loss freshness and per-socket kernel accounting could not run until
+the host was rebooted onto a kernel with its modules installed; they are in
+the next subsection.
 
 Two early passes on this host were disturbed by other local work and by a
 baseline built with a different cargo command; they are excluded. One
 second-batch capacity run with a 4.2 s client stall is retained and explained
 in the report.
 
-Validation: 284 project tests, 325 vendored quinn-proto tests and 248 vendored
+Validation: 284 project tests, 327 vendored quinn-proto tests and 248 vendored
 rustls tests pass, with all-target Clippy, formatting and the vendor archive
 check. Full per-run values, image hashes, method and limits:
 [allocator and idle-storage report](reports/webtransport-allocator-idle-storage-2026-11-13.json).
+
+### Kernel sockets and impaired networks, after the reboot
+
+Per-socket kernel accounting at 100,000 sessions (kernel 7.2.15, one run per
+transport, same relay image, all pass):
+
+| | Plaintext WS | Proxied TLS WS | WebTransport |
+| --- | ---: | ---: | ---: |
+| Deployment process RSS, MiB | 147 | 2,577 | 1,668 |
+| Server-side sockets | 100,000 | 300,000 | 1 |
+| Host slab growth, MiB (both ends) | 957 | 1,890 | -1 |
+| Server-side share of slab, MiB | 478 | 1,417 | 0 |
+| Process plus server-side kernel, MiB | 626 | 3,994 | 1,668 |
+
+Both TCP runs grow kernel slab by the same 4.8 to 4.9 KiB per socket, about
+twice the 2,432-byte socket object, and hold no queued buffer memory at the
+gate. This replaces the earlier halved host-wide estimate with a count of the
+sockets each process owns and changes little: WebTransport is 2.7 times
+plaintext WebSocket in total memory, 0.42 times the proxied TLS deployment,
+and an estimated 11 to 60% above an integrated TLS server (about 1,500 MiB,
+or 1,040 MiB with its TLS staging released; still not built).
+
+Impaired networks. The freshness fixture ran for the first time on this
+branch's images, and its reorder case showed reliable WebTransport streams
+taking about 6 s for a 1 MiB transfer. Two things in the fixture distort that
+comparison, and two things in the QUIC stack were wrong.
+
+The fixture: loopback's 65,536-byte MTU lets TCP count its window in 64 KiB
+segments, so 1 MiB fits inside TCP's initial window while QUIC sends 1.2 KiB
+packets. `scripts/freshness-matrix.py --mtu 1500` removes that; the tables
+below use it. And netem delays each packet independently, so its jitter and
+reorder profiles reorder far more than ordinary paths do. A `jitter` profile
+(50 ms each way, 3 ms jitter, no loss) was added because it isolates
+reordering from loss.
+
+The stack, found with temporary counters and confirmed by experiment:
+
+1. Under jitter the first 1-RTT packets of a connection overtake the end of
+   the handshake. The receiving stack dropped them (its source carried a
+   to-do to buffer them), so the sender saw a loss on its first flight, cut
+   its window from 12,000 to 8,400 bytes and left slow start for good.
+2. The packet-count loss rule, three later packets acknowledged, then read
+   ordinary reordering as loss: 41 such declarations for one 1 MiB transfer
+   with no real drops.
+
+With the first excluded experimentally, the packet rule alone left the
+jittered transfer at 2.9 to 5.4 s; with both gone it took 1.47 s, the same as
+with delay and no jitter. The changes:
+
+- The vendored stack holds 1-RTT packets that arrive from the handshake peer
+  before the handshake completes, at most 16 packets and 14,720 bytes, and
+  processes them when it completes.
+- `server_transport_config()` disables the packet threshold, so loss is
+  detected by the RFC 9002 time threshold (9/8 of the round trip) alone.
+  Under 2% real loss three paired runs show no cost (700/989/624 ms with the
+  packet rule, 673/1,010/717 ms without).
+- A review of that setting found that timer-declared neighbours of one loss
+  event would count as separate bursts in the MTU black-hole detector, so a
+  burst now ends only on an ACK-driven pass. This is preventive; it was not
+  reproduced.
+
+1 MiB reliable transfer, ms, three repetitions at MTU 1500 (all runs pass
+delivery and cleanup):
+
+| Profile | WebTransport stream, before | WebTransport stream, after | TLS WebSocket |
+| --- | ---: | ---: | ---: |
+| 2% loss, 20 ms | 1,281 / 2,765 / 2,931 | 1,008 / 960 / 1,141 | 2,903 / 3,766 / 3,413 |
+| Jitter, 50 ms | 7,225 / 5,814 / 8,270 | 1,448 / 1,455 / 1,473 | 1,296 / 1,298 / 1,389 |
+| Reorder, 20 ms | 5,368 / 6,032 / 6,523 | 4,110 / 5,255 / 4,916 | 2,993 / 2,446 / 1,808 |
+
+Datagram state updates stay fresh where reliable delivery cannot: p99
+newest-state age is 69 to 109 ms under loss, 168 to 180 ms under jitter and
+109 to 150 ms under reorder, against 0.9 to 1.1 s, 1.4 s and 4.0 s for
+reliable streams and 2.9 to 3.7 s, 1.2 to 1.3 s and 1.8 to 2.9 s for TLS
+WebSocket; 4 to 14 of 240 datagrams were unreceived under loss and reorder,
+none under jitter. Without impairment all three arrive within 0.4 ms at p99.
+
+What is left:
+
+- The relay controls its own sending and its own receiving. With a client
+  that keeps the stock packet rule (`--client-packet-threshold 3`) the
+  jittered transfer still takes 3.5 to 4.7 s, because the upload hop
+  collapses in the client.
+- In datagram mode under jitter the 1 MiB transfer was still about 5 s in two
+  of three runs: a packet acknowledged later than 9/8 of the round trip is
+  declared lost once, early in the connection. Undoing the window cut after a
+  spurious loss is merged upstream but unreleased, and was not backported.
+- The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip,
+  beyond any fixed time threshold. WebTransport improves there but stays
+  about twice as slow as TLS WebSocket for bulk.
+
+Regression checks on the final image: 100,000 sessions at 1,668 MiB and 5.31
+s of paced CPU, unchanged; saturating throughput within 1% for private and
+room traffic and between -5% and +1% over six paired mixed runs, which is this
+host's noise. Three independent reviews with a second reader per finding
+found no blocker; their smaller findings are applied. Per-run values are in
+the report under `kernel_socket_accounting_100000_sessions`,
+`impaired_network_freshness_4s` and `reordering_tolerance_change`.

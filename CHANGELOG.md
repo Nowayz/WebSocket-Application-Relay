@@ -11,6 +11,14 @@
   previous path and 0-RTT secret out of line; ready memory at 100,000 sessions
   falls from about 1,839 to about 1,671 MiB. See the
   [measurements](docs/reports/webtransport-allocator-idle-storage-2026-11-13.json).
+- WebTransport tolerates packet reordering. QUIC connections hold 1-RTT
+  packets that overtake the end of the handshake instead of dropping them,
+  and the relay detects loss by the time threshold alone rather than also by
+  packet count. A 1 MiB reliable transfer over a 100 ms path with 3 ms of
+  jitter falls from 5.8-8.3 s to 1.45-1.47 s, level with TLS WebSocket; under
+  2% loss it takes about 1.0 s against 2.9-3.8 s for TLS WebSocket.
+  `scripts/freshness-matrix.py` gains `--mtu`, `--client-packet-threshold` and
+  a `jitter` profile.
 - `scripts/capacity.py` can run its connected-population check against TLS
   WebSocket (`--transport websocket-tls`, through `examples/tls_front`), so
   WebTransport is compared with an encrypted baseline at 100,000 sessions.

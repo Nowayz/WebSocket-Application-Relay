@@ -236,6 +236,12 @@ parameters, not limits on application traffic. The batch request targets the
 measured ACK-heavy receive path in room/mixed workloads; the delay bound limits
 waiting on sparse traffic. Peers that do not support the extension ignore it.
 
+The same factory disables QUIC's packet-count loss rule, so loss is detected
+by the time threshold alone (9/8 of the round trip). The packet rule declares
+a packet lost once three later ones are acknowledged, which treats ordinary
+reordering as congestion; `packet_threshold(3)` restores it. The time rule
+depends on the immediate acknowledgement of reordering requested above.
+
 Callers building custom endpoints retain control over their transport config;
 `EndpointIngress::bind` does not overwrite it. A caller can start from this
 factory and disable requests with `ack_frequency_config(None)`. The standard

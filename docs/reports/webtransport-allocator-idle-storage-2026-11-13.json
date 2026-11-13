@@ -1247,19 +1247,18 @@
   "vendor": "scripts/check-vendor.py: 300 vendored files match pinned archives plus patches",
   "format": "cargo fmt --check passes (src/lib.rs module order fixed)",
   "clippy": "cargo clippy --locked --all-targets -- -D warnings passes",
-  "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun after the second batch)",
-  "vendored_quinn_proto": "325 library tests pass, including three new storage tests (each fails without its change) and the upstream migration and path-validation tests",
+  "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun on the final tree)",
+  "vendored_quinn_proto": "327 library tests pass. The upstream test for a 1-RTT packet that overtakes the client Finished now asserts no loss (it asserted a loss before), and a real black hole is still detected with the packet threshold disabled.",
   "vendored_rustls": "scripts/test-rustls-vendor.py: 248 unit tests pass with pinned fixtures"
  },
  "limits": [
   "One loopback host that also runs a desktop session; identical runs vary by several percent and two earlier passes were disturbed by other local work. Paired per-repetition ratios are the comparison to trust, not single medians.",
   "An earlier baseline image built with --all-targets differed from bin-only candidate builds through feature unification; it is excluded. Every image above is built with the same command.",
-  "The WebSocket arm is plaintext; no integrated TLS WebSocket baseline exists. Kernel socket memory is not measured.",
+  "The WebSocket arm of the first comparison is plaintext; no integrated TLS WebSocket baseline exists. Kernel socket memory was measured after a reboot (kernel_socket_accounting_100000_sessions).",
   "Raw receipts are under target/bench/out on the measuring host and are not versioned.",
   "Process memory remains far above the plaintext WebSocket transport: about 1.72 GiB versus about 0.12 GiB ready RSS at 100,000 sessions (WebSocket figure from the 2026-11-06 control). Each connection holds about 2.8 KiB of packet and header keys alone, so parity with a plaintext TCP process is not reachable by trimming.",
   "At paced load the plaintext WebSocket transport still has lower latency tails and about half the server CPU; WebTransport leads at saturation.",
   "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
-  "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT.",
   "The encrypted WebSocket baseline is a TLS-terminating proxy fixture in front of the plaintext relay, which is how wss is commonly deployed but is not an optimized integrated TLS server; its default copy buffers alone are 1.6 GiB at 100,000 sessions, so the lean row is the fairer memory comparison.",
   "Against the proxied TLS deployment WebTransport uses 18 to 25% more server CPU at paced load. Against an integrated TLS server (estimated, not built) memory, CPU per delivery and paced CPU would favour WebSocket.",
   "Saturating throughput is a closed-loop rate at fixed concurrency; both WebSocket deployments left about half of the server CPU allowance idle.",
@@ -2997,6 +2996,1049 @@
    "Slow-consumer and backpressure behaviour of the proxied deployment is untested",
    "The front end runs on the system allocator while the relay uses jemalloc",
    "The capacity client uses a larger read buffer for wss than for plaintext, which affects client memory only"
+  ]
+ },
+ "kernel_socket_accounting_100000_sessions": {
+  "kernel": "7.2.15-arch1-1 after reboot; inet_diag, tcp_diag and udp_diag loaded",
+  "method": "scripts/capacity.py --kernel-socket-resources at the ready gate, relay image mem3 on every arm, 4-second paced phase. SOCK_DIAG counts the sockets each process owns; object sizes are the kernel slab object sizes read as root (TCP 2,432 B, UDP 1,344 B). Host slab growth is /proc/meminfo from before the run to the ready gate and covers both ends of every connection, so the server side is charged its share by socket count.",
+  "slab_object_sizes_bytes": {
+   "TCP": 2432,
+   "TCPv6": 2560,
+   "UDP": 1344,
+   "UDPv6": 1472
+  },
+  "results": {
+   "plaintext_websocket": {
+    "passed": true,
+    "deployment_process_rss_mib": 147.3,
+    "server_side_sockets": 100000,
+    "client_sockets": 100000,
+    "server_side_socket_object_mib": 231.9,
+    "server_side_queued_buffer_bytes": 0,
+    "host_slab_growth_mib": 957,
+    "host_unreclaimable_slab_growth_mib": 603,
+    "slab_kib_per_tcp_socket": 4.9,
+    "server_side_slab_share_mib": 478,
+    "process_plus_server_kernel_mib": 626,
+    "paced_cpu_seconds_per_400k": 1.33
+   },
+   "proxied_tls_websocket": {
+    "passed": true,
+    "deployment_process_rss_mib": 2577.2,
+    "server_side_sockets": 300000,
+    "client_sockets": 100000,
+    "server_side_socket_object_mib": 695.8,
+    "server_side_queued_buffer_bytes": 0,
+    "host_slab_growth_mib": 1890,
+    "host_unreclaimable_slab_growth_mib": 1189,
+    "slab_kib_per_tcp_socket": 4.84,
+    "server_side_slab_share_mib": 1417,
+    "process_plus_server_kernel_mib": 3994,
+    "paced_cpu_seconds_per_400k": 4.51
+   },
+   "webtransport": {
+    "passed": true,
+    "deployment_process_rss_mib": 1667.8,
+    "server_side_sockets": 1,
+    "client_sockets": 1,
+    "server_side_socket_object_mib": 0.0,
+    "server_side_queued_buffer_bytes": 0,
+    "host_slab_growth_mib": -1,
+    "host_unreclaimable_slab_growth_mib": 0,
+    "slab_kib_per_tcp_socket": null,
+    "server_side_slab_share_mib": 0,
+    "process_plus_server_kernel_mib": 1668,
+    "paced_cpu_seconds_per_400k": 5.44
+   }
+  },
+  "reading": "Both TCP runs grow host slab by the same 4.8 to 4.9 KiB per socket, about twice the bare socket object. Charged by socket count, kernel memory beside the relay is about 480 MiB for plaintext WebSocket, about 1,420 MiB for the proxied TLS deployment and nothing measurable for WebTransport, which owns one UDP socket. No socket held queued buffer memory at the gate.",
+  "integrated_tls_estimate_mib": {
+   "default": 1496,
+   "with_tls_staging_released": 1044,
+   "basis": "870 MiB of TLS and task state from the lean front end, 147 MiB relay, 479 MiB kernel share for one socket per session; not built"
+  },
+  "harness_change": "With websocket-tls the snapshot now includes the front end's two sockets per session."
+ },
+ "impaired_network_freshness_4s": {
+  "method": "scripts/freshness-matrix.py in a temporary network namespace: 60 state updates per second of 1 KiB plus one 1 MiB reliable transfer, netem on both directions of the relay's external port, repetitions with rotated mode order. Profiles: loss = 20 ms each way and 2% loss; jitter = 50 ms each way with 3 ms jitter and no loss (netem turns jitter into reordering); reorder = 20 ms, 8 ms jitter, 2% loss and 25% of packets skipping the delay. All runs pass delivery, payload and cleanup checks.",
+  "profiles_note": "netem delays each packet independently, so jitter and reorder are stress models with far more reordering than ordinary paths show.",
+  "default_loopback_mtu_previous_images_2_repetitions": {
+   "clean": {
+    "datagram": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      2,
+      2
+     ],
+     "arrival_age_p50_ms": [
+      0.2,
+      0.6
+     ],
+     "arrival_age_p99_ms": [
+      0.8,
+      1.1
+     ],
+     "freshest_state_age_p99_ms": [
+      17.4,
+      16.7
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    },
+    "stream": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      2,
+      2
+     ],
+     "arrival_age_p50_ms": [
+      0.3,
+      0.3
+     ],
+     "arrival_age_p99_ms": [
+      1.0,
+      1.0
+     ],
+     "freshest_state_age_p99_ms": [
+      17.5,
+      16.5
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    },
+    "websocket-tls": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      1,
+      1
+     ],
+     "arrival_age_p50_ms": [
+      0.2,
+      0.1
+     ],
+     "arrival_age_p99_ms": [
+      0.9,
+      1.1
+     ],
+     "freshest_state_age_p99_ms": [
+      17.7,
+      17.4
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    }
+   },
+   "loss": {
+    "datagram": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      2422,
+      679
+     ],
+     "arrival_age_p50_ms": [
+      40.7,
+      40.3
+     ],
+     "arrival_age_p99_ms": [
+      75.4,
+      53.3
+     ],
+     "freshest_state_age_p99_ms": [
+      87.1,
+      70.5
+     ],
+     "missing_of_240": [
+      10,
+      8
+     ]
+    },
+    "stream": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      797,
+      1313
+     ],
+     "arrival_age_p50_ms": [
+      40.6,
+      40.6
+     ],
+     "arrival_age_p99_ms": [
+      762.3,
+      1280.3
+     ],
+     "freshest_state_age_p99_ms": [
+      750.0,
+      1261.8
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    },
+    "websocket-tls": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      1384,
+      888
+     ],
+     "arrival_age_p50_ms": [
+      48.3,
+      40.7
+     ],
+     "arrival_age_p99_ms": [
+      1349.8,
+      854.1
+     ],
+     "freshest_state_age_p99_ms": [
+      1340.3,
+      840.5
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    }
+   },
+   "reorder": {
+    "datagram": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      6941,
+      6620
+     ],
+     "arrival_age_p50_ms": [
+      52.6,
+      51.5
+     ],
+     "arrival_age_p99_ms": [
+      86.9,
+      91.7
+     ],
+     "freshest_state_age_p99_ms": [
+      95.0,
+      102.2
+     ],
+     "missing_of_240": [
+      6,
+      8
+     ]
+    },
+    "stream": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      6037,
+      5516
+     ],
+     "arrival_age_p50_ms": [
+      4470.6,
+      3845.2
+     ],
+     "arrival_age_p99_ms": [
+      6017.6,
+      5511.9
+     ],
+     "freshest_state_age_p99_ms": [
+      3960.7,
+      3961.3
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    },
+    "websocket-tls": {
+     "passed": [
+      true,
+      true
+     ],
+     "bulk_1mib_ms": [
+      723,
+      666
+     ],
+     "arrival_age_p50_ms": [
+      43.0,
+      46.0
+     ],
+     "arrival_age_p99_ms": [
+      688.4,
+      631.8
+     ],
+     "freshest_state_age_p99_ms": [
+      681.0,
+      621.5
+     ],
+     "missing_of_240": [
+      0,
+      0
+     ]
+    }
+   }
+  },
+  "default_mtu_note": "Loopback MTU is 65,536, so TCP counts its congestion window in 64 KiB segments and finishes 1 MiB inside its initial window, while QUIC uses about 1.2 KiB packets. The TLS WebSocket bulk times in this block are not comparable with QUIC; --mtu 1500 below removes that.",
+  "mtu_1500_3_repetitions": {
+   "previous_images": {
+    "relay": "mem3",
+    "client": "stock quinn loss detection",
+    "results": {
+     "jitter": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        9994,
+        8450,
+        10234
+       ],
+       "arrival_age_p50_ms": [
+        126.8,
+        109.2,
+        127.2
+       ],
+       "arrival_age_p99_ms": [
+        196.4,
+        186.7,
+        189.6
+       ],
+       "freshest_state_age_p99_ms": [
+        200.5,
+        181.5,
+        197.0
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        7225,
+        5814,
+        8270
+       ],
+       "arrival_age_p50_ms": [
+        5619.1,
+        4217.1,
+        6523.8
+       ],
+       "arrival_age_p99_ms": [
+        7190.4,
+        5779.8,
+        8240.3
+       ],
+       "freshest_state_age_p99_ms": [
+        3961.3,
+        3960.9,
+        3961.6
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "loss": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        2889,
+        2910,
+        853
+       ],
+       "arrival_age_p50_ms": [
+        43.2,
+        42.9,
+        40.5
+       ],
+       "arrival_age_p99_ms": [
+        79.2,
+        67.7,
+        53.2
+       ],
+       "freshest_state_age_p99_ms": [
+        87.2,
+        74.8,
+        73.1
+       ],
+       "missing_of_240": [
+        10,
+        6,
+        12
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        1281,
+        2765,
+        2931
+       ],
+       "arrival_age_p50_ms": [
+        40.2,
+        780.5,
+        1166.7
+       ],
+       "arrival_age_p99_ms": [
+        1246.8,
+        2730.8,
+        2896.7
+       ],
+       "freshest_state_age_p99_ms": [
+        1240.9,
+        2720.5,
+        2881.6
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "reorder": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        7077,
+        6062,
+        7164
+       ],
+       "arrival_age_p50_ms": [
+        48.8,
+        51.3,
+        51.5
+       ],
+       "arrival_age_p99_ms": [
+        84.0,
+        100.7,
+        134.3
+       ],
+       "freshest_state_age_p99_ms": [
+        93.3,
+        116.1,
+        147.2
+       ],
+       "missing_of_240": [
+        2,
+        7,
+        3
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        5368,
+        6032,
+        6523
+       ],
+       "arrival_age_p50_ms": [
+        3690.3,
+        4440.2,
+        4955.4
+       ],
+       "arrival_age_p99_ms": [
+        5360.2,
+        5997.7,
+        6488.3
+       ],
+       "freshest_state_age_p99_ms": [
+        3961.3,
+        3961.5,
+        3960.1
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     }
+    }
+   },
+   "final_images": {
+    "relay": "mem5",
+    "client": "relay loss detection",
+    "results": {
+     "clean": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        2,
+        2,
+        2
+       ],
+       "arrival_age_p50_ms": [
+        0.1,
+        0.2,
+        0.2
+       ],
+       "arrival_age_p99_ms": [
+        0.4,
+        0.3,
+        0.3
+       ],
+       "freshest_state_age_p99_ms": [
+        17.7,
+        17.5,
+        16.7
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        2,
+        2,
+        2
+       ],
+       "arrival_age_p50_ms": [
+        0.2,
+        0.1,
+        0.2
+       ],
+       "arrival_age_p99_ms": [
+        0.3,
+        0.3,
+        0.3
+       ],
+       "freshest_state_age_p99_ms": [
+        16.9,
+        17.6,
+        17.7
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "websocket-tls": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        1,
+        1,
+        1
+       ],
+       "arrival_age_p50_ms": [
+        0.2,
+        0.2,
+        0.2
+       ],
+       "arrival_age_p99_ms": [
+        0.4,
+        0.4,
+        0.3
+       ],
+       "freshest_state_age_p99_ms": [
+        17.7,
+        17.6,
+        17.7
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "jitter": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        4982,
+        5049,
+        1380
+       ],
+       "arrival_age_p50_ms": [
+        111.9,
+        112.6,
+        100.5
+       ],
+       "arrival_age_p99_ms": [
+        179.2,
+        179.5,
+        169.0
+       ],
+       "freshest_state_age_p99_ms": [
+        180.0,
+        180.3,
+        167.5
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        1448,
+        1455,
+        1473
+       ],
+       "arrival_age_p50_ms": [
+        101.4,
+        102.0,
+        102.0
+       ],
+       "arrival_age_p99_ms": [
+        1414.0,
+        1420.2,
+        1438.9
+       ],
+       "freshest_state_age_p99_ms": [
+        1401.2,
+        1401.8,
+        1421.2
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "websocket-tls": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        1296,
+        1298,
+        1389
+       ],
+       "arrival_age_p50_ms": [
+        102.2,
+        101.9,
+        101.8
+       ],
+       "arrival_age_p99_ms": [
+        1262.2,
+        1263.6,
+        1355.1
+       ],
+       "freshest_state_age_p99_ms": [
+        1240.5,
+        1241.5,
+        1340.3
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "loss": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        648,
+        1152,
+        3735
+       ],
+       "arrival_age_p50_ms": [
+        40.3,
+        40.3,
+        49.8
+       ],
+       "arrival_age_p99_ms": [
+        53.3,
+        57.5,
+        86.4
+       ],
+       "freshest_state_age_p99_ms": [
+        72.3,
+        69.2,
+        109.1
+       ],
+       "missing_of_240": [
+        9,
+        7,
+        14
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        1008,
+        960,
+        1141
+       ],
+       "arrival_age_p50_ms": [
+        40.5,
+        40.3,
+        40.2
+       ],
+       "arrival_age_p99_ms": [
+        975.8,
+        925.6,
+        1106.6
+       ],
+       "freshest_state_age_p99_ms": [
+        961.7,
+        901.4,
+        1081.7
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "websocket-tls": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        2903,
+        3766,
+        3413
+       ],
+       "arrival_age_p50_ms": [
+        1240.7,
+        1782.4,
+        2075.7
+       ],
+       "arrival_age_p99_ms": [
+        2869.4,
+        3732.2,
+        3378.2
+       ],
+       "freshest_state_age_p99_ms": [
+        2861.5,
+        3721.4,
+        3361.4
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "reorder": {
+      "datagram": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        6041,
+        5927,
+        6040
+       ],
+       "arrival_age_p50_ms": [
+        50.1,
+        53.6,
+        50.8
+       ],
+       "arrival_age_p99_ms": [
+        92.2,
+        112.4,
+        132.4
+       ],
+       "freshest_state_age_p99_ms": [
+        109.3,
+        117.1,
+        149.8
+       ],
+       "missing_of_240": [
+        6,
+        4,
+        7
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        4110,
+        5255,
+        4916
+       ],
+       "arrival_age_p50_ms": [
+        2520.7,
+        3558.4,
+        3219.7
+       ],
+       "arrival_age_p99_ms": [
+        4076.0,
+        5220.9,
+        4881.5
+       ],
+       "freshest_state_age_p99_ms": [
+        3961.8,
+        3961.8,
+        3962.0
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      },
+      "websocket-tls": {
+       "passed": [
+        true,
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        2993,
+        2446,
+        1808
+       ],
+       "arrival_age_p50_ms": [
+        1137.9,
+        627.1,
+        76.2
+       ],
+       "arrival_age_p99_ms": [
+        2958.7,
+        2411.4,
+        1773.6
+       ],
+       "freshest_state_age_p99_ms": [
+        2940.6,
+        2401.8,
+        1760.9
+       ],
+       "missing_of_240": [
+        0,
+        0,
+        0
+       ]
+      }
+     }
+    }
+   },
+   "final_relay_with_stock_client_2_repetitions": {
+    "note": "--client-packet-threshold 3: the upload hop keeps the stock packet rule, as a client that does not adapt would",
+    "results": {
+     "jitter": {
+      "datagram": {
+       "passed": [
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        6544,
+        5334
+       ],
+       "arrival_age_p50_ms": [
+        121.3,
+        111.6
+       ],
+       "arrival_age_p99_ms": [
+        188.8,
+        185.7
+       ],
+       "freshest_state_age_p99_ms": [
+        200.1,
+        180.9
+       ],
+       "missing_of_240": [
+        0,
+        0
+       ]
+      },
+      "stream": {
+       "passed": [
+        true,
+        true
+       ],
+       "bulk_1mib_ms": [
+        4707,
+        3543
+       ],
+       "arrival_age_p50_ms": [
+        3002.6,
+        1580.2
+       ],
+       "arrival_age_p99_ms": [
+        4679.8,
+        3509.3
+       ],
+       "freshest_state_age_p99_ms": [
+        3961.5,
+        3500.8
+       ],
+       "missing_of_240": [
+        0,
+        0
+       ]
+      }
+     }
+    }
+   }
+  },
+  "images_sha256": {
+   "mem3-relay": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+   "mem5-relay": "bbb840d21a6cad69ae0766a4d555b10a83f0120aeba19c10abe8e50f20a81ae1",
+   "state_freshness (previous)": "4ca1c6ec099cf13142172fa3c34aa1b541a44fdc9d44184e75a14076e172086e",
+   "state_freshness5": "761eec2c48249e545562108bcf3f1ee49474950f7480972c4ae05fb0ea957fe4",
+   "tls_front": "b1d69179dd3ae795c2e1ce9f79a24114001fea95d17e055af6ceff3d4cfe24dd"
+  }
+ },
+ "reordering_tolerance_change": {
+  "diagnosis": [
+   "Under jitter the relay and the test client each lost one or two of their first 1-RTT packets: the packet overtook the end of the handshake and the receiving quinn stack dropped it (its source carried a to-do to buffer these). The sender counted a congestion event on its first flight, cut the window from 12,000 to 8,400 bytes and left slow start for good.",
+   "After that, the packet-count loss rule (three later packets acknowledged) declared ordinary reordering as loss and kept cutting the window. Temporary counters showed 41 packet-rule losses on the relay for a 1 MiB transfer with zero real drops.",
+   "With the early loss excluded experimentally, the packet rule alone left the jittered 1 MiB transfer at 2.9 to 5.4 s; with both removed it took 1.47 s, the same as with delay and no jitter.",
+   "The upstream lead recorded earlier (quinn issue 2710, receive dedup window) is a different mechanism and does not apply at these rates."
+  ],
+  "changes": [
+   "vendor/quinn-proto: 1-RTT packets that arrive from the handshake peer before the handshake completes are copied and held (at most 16 packets and 14,720 bytes, the largest RFC 9002 initial window) and processed when it completes; released on close.",
+   "src/webtransport.rs: server_transport_config() sets packet_threshold(u32::MAX), so loss is detected by the RFC 9002 time threshold (9/8 RTT) only.",
+   "vendor/quinn-proto: the MTU black-hole detector ends a loss burst only on an ACK-driven pass, so timer-declared neighbours of one loss event are one burst. Preventive: found by review of the time-only setting, not reproduced.",
+   "examples/state_freshness.rs: --packet-threshold (default matches the relay) and the value in its report; scripts/freshness.py --client-packet-threshold; scripts/freshness-matrix.py --mtu, --client-packet-threshold and a jitter profile."
+  ],
+  "cost_checks": {
+   "plain_2_percent_loss_bulk_ms_packet_rule_3_vs_off_three_pairs": [
+    [
+     700,
+     673
+    ],
+    [
+     989,
+     1010
+    ],
+    [
+     624,
+     717
+    ]
+   ],
+   "saturation_throughput_final_vs_previous_image_paired_ratio": {
+    "private": [
+     1.0,
+     1.006,
+     1.004
+    ],
+    "room": [
+     0.999,
+     1.016,
+     1.007
+    ],
+    "mixed": [
+     1.012,
+     0.99,
+     0.95,
+     0.965,
+     0.995,
+     1.012
+    ],
+    "note": "first two of each from the image before the review fixes"
+   },
+   "capacity_100000_final_image": {
+    "ready_rss_mib": 1667.7,
+    "paced_cpu_seconds_per_400k": 5.31,
+    "round_trip_p50_p99_bound_ms": [
+     0.52,
+     4.19
+    ]
+   }
+  },
+  "review": "Three independent read-only reviews (protocol correctness, resources and security, loss detection), each finding re-checked by a second reader. No blocker. Applied: source-address check before holding, a packet-count cap beside the byte cap, release on close, the black-hole burst change, comment and option clean-ups. Not applied: reporting the hold time in ACK delay (one inflated RTT sample at most).",
+  "residual": [
+   "A relay-side change covers the relay as receiver of a client's first flight and the relay as sender. A browser's own sender and receiver are its own; with a stock-threshold client the jittered transfer still takes 3.5 to 4.7 s because the upload hop collapses.",
+   "In datagram mode under jitter the reliable transfer was still slow (about 5 s) in two of three runs: a packet acknowledged later than 9/8 of the round trip is still declared lost once, early in the connection. Undoing the window cut after a spurious loss is merged upstream but unreleased and was not backported.",
+   "The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip, beyond any fixed time threshold; reliable streams improve from about 6.0 to about 4.9 s and TLS WebSocket takes 1.8 to 3.0 s at the same MTU."
   ]
  }
 }
