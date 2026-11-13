@@ -71,6 +71,7 @@ def run(args):
             if wt:
                 import re
                 text = os.pread(logs.fileno(), os.fstat(logs.fileno()).st_size, 0).decode()
+                text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)  # colored logs, as in benchmark_transport
                 match = re.search(r'certificate_sha256=([0-9a-fA-F:]{95})', text)
                 if not match:
                     raise RuntimeError('development certificate pin missing')
