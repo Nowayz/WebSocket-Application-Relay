@@ -9,7 +9,8 @@
   "previous_path": "quinn-proto Connection::prev_path is boxed (432 B inline to 8 B). With jemalloc the connection owner drops from the 6,144-byte to the 5,120-byte size class.",
   "early_secret": "rustls Quic::early_secret is boxed (80 B inline to 8 B), taking the QUIC session shell from the 1,280-byte to the 1,024-byte size class.",
   "handshake_queue": "rustls QUIC write_hs releases the drained handshake message queue once the handshake is complete (128 B).",
-  "harness": "scripts/datagram-load.py strips ANSI colour codes before reading the development certificate pin, as benchmark_transport.py already does."
+  "harness": "scripts/datagram-load.py strips ANSI colour codes before reading the development certificate pin, as benchmark_transport.py already does.",
+  "pending_control_queues": "quinn-proto populate_packet releases the Data-space CRYPTO, NEW_CONNECTION_ID and NEW_TOKEN queues when the frame it just sent leaves them empty (480 B per connection)."
  },
  "binaries": {
   "base2": {
@@ -38,7 +39,11 @@
   },
   "mem2": {
    "sha256": "e9787c14a35d5cfb4ca3ee1b9dd29da6033f6e6cf391b02d44c8c952697df36b",
-   "meaning": "the committed tree: final + boxed previous path, boxed early secret, handshake queue release"
+   "meaning": "final + boxed previous path, boxed early secret, handshake queue release"
+  },
+  "mem3": {
+   "sha256": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+   "meaning": "the committed tree: mem2 + pending control-queue release"
   }
  },
  "clients": {
@@ -1242,7 +1247,7 @@
   "format": "cargo fmt --check passes (src/lib.rs module order fixed)",
   "clippy": "cargo clippy --locked --all-targets -- -D warnings passes",
   "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun after the second batch)",
-  "vendored_quinn_proto": "324 library tests pass, including the two new storage tests and the upstream migration and path-validation tests",
+  "vendored_quinn_proto": "325 library tests pass, including three new storage tests (each fails without its change) and the upstream migration and path-validation tests",
   "vendored_rustls": "scripts/test-rustls-vendor.py: 248 unit tests pass with pinned fixtures"
  },
  "limits": [
@@ -1256,7 +1261,7 @@
   "The encrypted comparison uses a TLS front-end proxy, not an integrated TLS WebSocket server.",
   "Injected-loss freshness and per-socket kernel accounting could not run: the host runs kernel 7.2.11 but only 7.2.15 modules are installed, so sch_prio/sch_netem and inet_diag cannot load until it reboots. The freshness harness created and removed its temporary namespace and failed at the first tc command; SOCK_DIAG returned ENOENT."
  ],
- "decision": "Keep jemalloc and all five storage changes. Reject mimalloc and shorter scheduler global-queue intervals.",
+ "decision": "Keep jemalloc and all six storage changes. Reject mimalloc, shorter scheduler global-queue intervals, smaller fanout quanta and faster acknowledgement policies.",
  "capacity_100000_sessions_4s_second_batch": [
   {
    "image": "final",
@@ -2082,5 +2087,478 @@
    "quinn-proto on_ack_received": 2.15
   },
   "outcome": "No dominant removable cost: per-delivery work is spread over driver polls, packet handling, timers, wakeups and crypto on cold per-connection state."
+ },
+ "capacity_100000_sessions_4s_third_batch": [
+  {
+   "image": "mem3",
+   "passed": true,
+   "ready_rss_mib": 1669.86,
+   "retired_rss_mib": 1346.75,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.66,
+   "round_trip_p99_upper_ms": 4.194304
+  },
+  {
+   "image": "mem3",
+   "passed": true,
+   "ready_rss_mib": 1671.81,
+   "retired_rss_mib": 1373.04,
+   "verified_deliveries": 400000,
+   "server_cpu_seconds": 5.24,
+   "round_trip_p99_upper_ms": 4.194304
+  }
+ ],
+ "throughput_third_batch_4s_two_repetitions": {
+  "private": {
+   "ws": {
+    "deliveries_per_second": [
+     1333232,
+     1334646
+    ],
+    "median": 1333939,
+    "private_per_second": [
+     1333232,
+     1334646
+    ],
+    "fanout_per_second": [
+     0,
+     0
+    ],
+    "p99_upper_ms": {
+     "private": [
+      0.524288,
+      0.524288
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     1640605,
+     1648777
+    ],
+    "median": 1644691,
+    "private_per_second": [
+     1640605,
+     1648777
+    ],
+    "fanout_per_second": [
+     0,
+     0
+    ],
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.231,
+     1.235
+    ]
+   },
+   "m3": {
+    "deliveries_per_second": [
+     1648908,
+     1646728
+    ],
+    "median": 1647818,
+    "private_per_second": [
+     1648908,
+     1646728
+    ],
+    "fanout_per_second": [
+     0,
+     0
+    ],
+    "p99_upper_ms": {
+     "private": [
+      1.048576,
+      1.048576
+     ],
+     "fanout": [
+      0.0,
+      0.0
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.237,
+     1.234
+    ]
+   }
+  },
+  "roomonly": {
+   "ws": {
+    "deliveries_per_second": [
+     1733698,
+     1619364
+    ],
+    "median": 1676531,
+    "private_per_second": [
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     1733698,
+     1619364
+    ],
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     2172292,
+     2147095
+    ],
+    "median": 2159694,
+    "private_per_second": [
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     2172292,
+     2147095
+    ],
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.253,
+     1.326
+    ]
+   },
+   "m3": {
+    "deliveries_per_second": [
+     2189431,
+     2161365
+    ],
+    "median": 2175398,
+    "private_per_second": [
+     0,
+     0
+    ],
+    "fanout_per_second": [
+     2189431,
+     2161365
+    ],
+    "p99_upper_ms": {
+     "private": [
+      0.0,
+      0.0
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.263,
+     1.335
+    ]
+   }
+  },
+  "mixed": {
+   "ws": {
+    "deliveries_per_second": [
+     1575629,
+     1522389
+    ],
+    "median": 1549009,
+    "private_per_second": [
+     799824,
+     863469
+    ],
+    "fanout_per_second": [
+     775804,
+     658920
+    ],
+    "p99_upper_ms": {
+     "private": [
+      2.097152,
+      2.097152
+     ],
+     "fanout": [
+      8.388608,
+      8.388608
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.0,
+     1.0
+    ]
+   },
+   "m2": {
+    "deliveries_per_second": [
+     2029626,
+     1988946
+    ],
+    "median": 2009286,
+    "private_per_second": [
+     428008,
+     418501
+    ],
+    "fanout_per_second": [
+     1601618,
+     1570445
+    ],
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.288,
+     1.306
+    ]
+   },
+   "m3": {
+    "deliveries_per_second": [
+     2030652,
+     2036321
+    ],
+    "median": 2033487,
+    "private_per_second": [
+     430704,
+     427945
+    ],
+    "fanout_per_second": [
+     1599948,
+     1608376
+    ],
+    "p99_upper_ms": {
+     "private": [
+      4.194304,
+      4.194304
+     ],
+     "fanout": [
+      4.194304,
+      4.194304
+     ]
+    },
+    "ratio_to_ws_per_repetition": [
+     1.289,
+     1.338
+    ]
+   }
+  }
+ },
+ "fanout_quantum_screen_4s": {
+  "scope": "WebTransport fanout work quantum 256 and 64 against the retained 1,024 on the mem2 image; rejected and reverted",
+  "results": {
+   "mixed": {
+    "d": {
+     "deliveries_per_second": [
+      1977073,
+      2006047
+     ],
+     "median": 1991560,
+     "private_per_second": [
+      414325,
+      417129
+     ],
+     "fanout_per_second": [
+      1562748,
+      1588918
+     ],
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "q256": {
+     "deliveries_per_second": [
+      1803192,
+      1801166
+     ],
+     "median": 1802179,
+     "private_per_second": [
+      403698,
+      392722
+     ],
+     "fanout_per_second": [
+      1399495,
+      1408444
+     ],
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.912,
+      0.898
+     ]
+    },
+    "q64": {
+     "deliveries_per_second": [
+      1449841,
+      1521758
+     ],
+     "median": 1485800,
+     "private_per_second": [
+      365310,
+      390558
+     ],
+     "fanout_per_second": [
+      1084531,
+      1131201
+     ],
+     "p99_upper_ms": {
+      "private": [
+       4.194304,
+       4.194304
+      ],
+      "fanout": [
+       8.388608,
+       8.388608
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.733,
+      0.759
+     ]
+    }
+   },
+   "roomonly": {
+    "d": {
+     "deliveries_per_second": [
+      2101647,
+      2030513
+     ],
+     "median": 2066080,
+     "private_per_second": [
+      0,
+      0
+     ],
+     "fanout_per_second": [
+      2101647,
+      2030513
+     ],
+     "p99_upper_ms": {
+      "private": [
+       0.0,
+       0.0
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      1.0,
+      1.0
+     ]
+    },
+    "q256": {
+     "deliveries_per_second": [
+      1958090,
+      1899356
+     ],
+     "median": 1928723,
+     "private_per_second": [
+      0,
+      0
+     ],
+     "fanout_per_second": [
+      1958090,
+      1899356
+     ],
+     "p99_upper_ms": {
+      "private": [
+       0.0,
+       0.0
+      ],
+      "fanout": [
+       4.194304,
+       4.194304
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.932,
+      0.935
+     ]
+    },
+    "q64": {
+     "deliveries_per_second": [
+      1542515,
+      1253365
+     ],
+     "median": 1397940,
+     "private_per_second": [
+      0,
+      0
+     ],
+     "fanout_per_second": [
+      1542515,
+      1253365
+     ],
+     "p99_upper_ms": {
+      "private": [
+       0.0,
+       0.0
+      ],
+      "fanout": [
+       4.194304,
+       8.388608
+      ]
+     },
+     "ratio_to_d_per_repetition": [
+      0.734,
+      0.617
+     ]
+    }
+   }
+  },
+  "outcome": "Smaller quanta did not raise private throughput or lower its latency bound and cut fanout by 10 to 30%."
  }
 }

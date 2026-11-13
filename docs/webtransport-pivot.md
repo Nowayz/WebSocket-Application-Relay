@@ -3725,12 +3725,14 @@ baseline with the frozen inspection and capacity clients:
 - The relay binary uses jemalloc as its global allocator (non-MSVC targets).
   The QUIC path makes about nine allocations per delivery where the native
   WebSocket path makes almost none, and no allocator had been evaluated.
-- Five idle-storage reductions, none of which adds work to steady traffic:
+- Six idle-storage reductions, none of which adds work to steady traffic:
   `poll_endpoint_events` releases its drained queue (192 B per connection);
   the receive assembler starts with one slot instead of four (168 B per stream
   that never queues two chunks); the previous-path option is boxed (432 B
   inline to 8 B); rustls boxes the 0-RTT early secret (80 B to 8 B) and
-  releases the drained handshake queue after the handshake (128 B).
+  releases the drained handshake queue after the handshake (128 B); and the
+  Data-space CRYPTO, NEW_CONNECTION_ID and NEW_TOKEN queues are released when
+  the frame just sent empties them (480 B).
 
 Verified received deliveries per second, medians of three rotated 12-second
 repetitions, with the per-repetition ratio to plaintext WebSocket:
@@ -3743,9 +3745,10 @@ repetitions, with the per-repetition ratio to plaintext WebSocket:
 
 Two further 4-second checks, two repetitions each, compare the later images
 with WebSocket: 1.247/1.226 private, 1.236/1.168 room and 1.038/1.229 mixed for
-the jemalloc image, then 1.222/1.207, 1.167/1.222 and 1.060/1.411 for the
+the jemalloc image, then 1.222/1.207, 1.167/1.222 and 1.060/1.411 with the
+second storage batch and 1.237/1.234, 1.263/1.335 and 1.289/1.338 for the
 committed tree. WebTransport is ahead of the plaintext WebSocket transport in
-all 27 paired comparisons of jemalloc images. Median server CPU per verified
+all 39 paired comparisons of jemalloc images. Median server CPU per verified
 delivery falls from 2.28 to 2.00 us private, 1.94 to 1.57 us room and 2.13 to
 1.87 us mixed. A preload screen of the unmodified image had already shown the
 effect: jemalloc +1.8 to +2.5% private, +14.0 to +17.7% room, +8.3 to +8.9%
@@ -3761,6 +3764,7 @@ Ready RSS at 100,000 sessions, all captures passing delivery and cleanup checks:
 | + one-slot assembler | 1,769.73 / 1,769.76 |
 | + jemalloc | 1,849.80 / 1,853.69 |
 | + boxed previous path, boxed early secret, handshake-queue release | 1,715.73 to 1,719.78 (five captures) |
+| + pending control-queue release (committed tree) | 1,669.86 / 1,671.81 |
 
 jemalloc's size classes are why the last row matters: it rounded the
 5,344-byte connection owner up to 6,144 bytes and the 1,032-byte TLS session
@@ -3788,6 +3792,9 @@ against 522 to 696 and about 23,000 on WebSocket. Jain's index over the 1,056
 receivers is 0.48 to 0.58 versus 0.09 to 0.11. Shorter scheduler global-queue
 intervals (31, 16, 8, 4) were screened as a way to favour private input and
 rejected: private throughput did not move and total throughput fell by up to 17%.
+A smaller fanout work quantum (256 or 64 recipients instead of 1,024) was
+screened for the same purpose and rejected: private throughput and its latency
+bound did not improve and fanout fell by 10 to 30%.
 
 Other checks on the committed tree: a 4-second paced run delivers every
 datagram and every reliable record in order (p99 arrival-age bounds 2.10 ms
@@ -3803,8 +3810,8 @@ run to its ready gate. The plaintext WebSocket run grows kernel slab by 839 MiB
 (559 MiB unreclaimable) for 200,000 TCP sockets, 100,000 at each end; the
 WebTransport run grows it by nothing measurable. Counting half of that growth
 as the server's, plaintext WebSocket costs about 115 MiB of process RSS plus
-about 420 MiB of kernel memory, about 535 MiB, against about 1,720 MiB for
-WebTransport: about 3.2 times, not the 14 times that process RSS alone
+about 420 MiB of kernel memory, about 535 MiB, against about 1,670 MiB for
+WebTransport: about 3.1 times, not the 14 times that process RSS alone
 suggests. This is an estimate from host-wide counters, not socket accounting.
 
 Paced load was examined for a simple cause and none was found. Varying the
@@ -3818,7 +3825,7 @@ datagrams, streams and WebSocket alike, with p99 of 1.25, 1.15 and 0.84 ms,
 and freshest-state age p99 of 16.6, 16.4 and 17.9 ms.
 
 Still unmet or not run: process memory is about 14 times the plaintext
-WebSocket control and about 3.2 times with estimated kernel memory (packet and
+WebSocket control and about 3.1 times with estimated kernel memory (packet and
 header keys alone are about 2.8 KiB per connection); paced-load CPU and
 latency tails favour WebSocket. Injected-loss freshness and per-socket kernel
 accounting could not run on this host: it runs kernel 7.2.11 with only 7.2.15
@@ -3828,7 +3835,7 @@ a baseline built with a different cargo command; they are excluded, and one
 second-batch capacity run with a 4.2 s client stall is retained and explained
 in the report.
 
-Validation: 284 project tests, 324 vendored quinn-proto tests and 248 vendored
+Validation: 284 project tests, 325 vendored quinn-proto tests and 248 vendored
 rustls tests pass, with all-target Clippy, formatting and the vendor archive
 check. Full per-run values, image hashes, method and limits:
 [allocator and idle-storage report](reports/webtransport-allocator-idle-storage-2026-11-13.json).

@@ -204,7 +204,7 @@ arenas/queues stay warm for reconnects.
 
 The server binary uses jemalloc on non-MSVC targets. It returns freed pages to
 the OS gradually (after a 100,000-session population retires, resident memory
-falls from about 1,720 to about 1,400 MiB within seconds), and it honours
+falls from about 1,670 to about 1,350 MiB within seconds), and it honours
 jemalloc settings through `_RJEM_MALLOC_CONF` for hosts that need different decay
 or arena policy. No setting is required.
 
