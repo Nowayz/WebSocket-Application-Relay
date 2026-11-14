@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run checked freshness comparisons in a temporary, isolated Linux netns.
+"""Run checked stream/datagram freshness comparisons in a temporary, isolated Linux netns.
 
 Requires passwordless sudo for ip/tc, not permission to change host networking.
 Workload processes run as the invoking user. The namespace is removed on exit.
@@ -20,13 +20,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/state_freshness")
-    parser.add_argument("--tls-front", type=Path, default=ROOT / "target/release/examples/tls_front")
-    parser.add_argument("--tls-cert", type=Path, required=True)
-    parser.add_argument("--tls-key", type=Path, required=True)
-    parser.add_argument("--tls-ca", type=Path, required=True)
     parser.add_argument("--profiles", nargs="+", choices=["clean", "loss", "jitter", "reorder"], default=["clean", "loss", "reorder"])
-    parser.add_argument("--client-packet-threshold", type=int, help="Passed to freshness.py for the WebTransport modes")
-    parser.add_argument("--mtu", type=int, help="Loopback MTU inside the namespace. The default 65536 lets TCP count its window in 64 KiB segments while QUIC uses about 1.2 KiB packets; 1500 makes the two comparable")
+    parser.add_argument("--client-packet-threshold", type=int, help="Passed to freshness.py")
+    parser.add_argument("--mtu", type=int, help="Loopback MTU inside the namespace; the default is 65536, 1500 matches a typical Ethernet path")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seconds", type=int, default=6)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -46,16 +42,13 @@ def main():
             subprocess.run(["sudo", "-n", "ip", "-n", namespace, "link", "set", "lo", "mtu", str(args.mtu)], check=True)
         for profile in args.profiles:
             for repetition in range(args.repeats):
-                modes = ["websocket-tls", "stream", "datagram"]
+                modes = ["stream", "datagram"]
                 shift = repetition % len(modes)
                 modes = modes[shift:] + modes[:shift]
                 for mode in modes:
                     name = f"{profile}-{mode}-{repetition+1}"
                     command = ["sudo", "-n", "ip", "netns", "exec", namespace, "runuser", "-u", user, "--", "python3", str(ROOT / "scripts/freshness.py"), "--isolated-namespace", namespace, "--server", str(args.server.resolve()), "--client", str(args.client.resolve()), "--mode", mode, "--seconds", str(args.seconds), "--seed", str(42+repetition), "--output", str((args.output_dir / (name+".json")).resolve())]
-                    if mode == "websocket-tls":
-                        for key in ("tls_front", "tls_cert", "tls_key", "tls_ca"):
-                            command += ["--"+key.replace("_", "-"), str(getattr(args,key).resolve())]
-                    if args.client_packet_threshold is not None and mode != "websocket-tls":
+                    if args.client_packet_threshold is not None:
                         command += ["--client-packet-threshold", str(args.client_packet_threshold)]
                     if profile == "jitter":
                         # No loss: 50 ms each way with 3 ms of jitter, which netem turns into reordering.

@@ -89,17 +89,11 @@ impl Frame {
     }
 
     /// `value_start` comes from validation of this complete CBOR envelope.
-    /// A compact copy is reserved for small views of a much larger read slab.
-    pub(crate) fn routed(sender: u64, mut input: Bytes, value_start: usize, compact: bool) -> Self {
-        let payload = if compact {
-            Bytes::copy_from_slice(&input[value_start..])
-        } else {
-            // Transfer the input owner directly into the body. Advancing this
-            // owned view needs no additional shared-buffer reference.
-            input.advance(value_start);
-            input
-        };
-        Self::envelope(sender, payload)
+    pub(crate) fn routed(sender: u64, mut input: Bytes, value_start: usize) -> Self {
+        // Transfer the input owner directly into the body. Advancing this
+        // owned view needs no additional shared-buffer reference.
+        input.advance(value_start);
+        Self::envelope(sender, input)
     }
 
     pub(crate) fn prefix(&self) -> &[u8] {
@@ -228,7 +222,7 @@ mod tests {
                     let backing = retain.then(|| input.clone());
                     let unique = input.is_unique();
                     let pointer = input[offset..].as_ptr();
-                    let frame = Frame::routed(sender, input, offset, false);
+                    let frame = Frame::routed(sender, input, offset);
                     assert_eq!(frame.payload().as_ptr(), pointer);
                     assert_eq!(frame.payload.is_unique(), unique);
                     if let Some(backing) = &backing {
@@ -267,21 +261,11 @@ mod tests {
             u32::MAX as u64 + 1,
             u64::MAX,
         ] {
-            let frame = Frame::routed(sender, input.clone(), offset, false);
+            let frame = Frame::routed(sender, input.clone(), offset);
             assert_eq!(frame.payload().as_ptr(), pointer);
             let mut wire = frame.prefix().to_vec();
             wire.extend_from_slice(frame.payload());
             assert_eq!(protocol::parse(&wire).unwrap(), (sender, value));
         }
-    }
-
-    #[test]
-    fn compaction_detaches_a_small_value_from_shared_receive_storage() {
-        let input = protocol::envelope(42, &[0xf6]);
-        let backing = input.clone();
-        let frame = Frame::routed(7, input, 3, true);
-        assert_ne!(frame.payload().as_ptr(), backing[3..].as_ptr());
-        assert_eq!(frame.payload(), [0xf6]);
-        assert_eq!(frame.prefix(), [0x82, 7]);
     }
 }

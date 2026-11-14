@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import time
 import benchmark as runtime
+import benchmark_transport
 import capacity
 import inspection
 
@@ -31,27 +32,24 @@ def run(args):
         raise FileExistsError(args.output)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     port, admin = runtime.free_port(), runtime.free_port()
-    wt = args.mode != 'websocket'
     sessions = args.pairs * 2 + (args.readers + 1 if args.readers else 0)
     command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}', '--admin-bind', f'127.0.0.1:{admin}',
                '--workers', str(args.workers), '--pin-workers', '--messages-per-second', '0', '--bytes-per-second', '0',
                '--ping-interval-secs', '0', '--max-connections', str(sessions),
                '--max-channels', str(args.pairs * 2 + 2), '--max-channel-members', str(max(1, args.readers + 1))]
-    command += ['--dev-cert', '--udp-receive-buffer-bytes', str(args.udp_receive_buffer_bytes)] if wt else ['--legacy-websocket']
+    environment = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
+    url = benchmark_transport.prepare(args, command, environment, port)
     command = ['taskset', '-c', args.server_cpus] + command
-    client_command = [str(args.client.resolve()), '--url', f'https://127.0.0.1:{port}/war' if wt else f'ws://127.0.0.1:{port}',
-                      '--mode', args.mode]
+    client_command = [str(args.client.resolve()), '--url', url, '--mode', args.mode]
     for name in ['pairs', 'readers', 'private_rate', 'fanout_rate', 'seconds', 'drain_ms', 'payload_bytes',
                  'client_workers', 'udp_receive_buffer_bytes', 'io_timeout_secs']:
         client_command += ['--' + name.replace('_', '-'), str(getattr(args, name))]
     result = {'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'args': {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               'host': {'uname': list(os.uname()), 'machine_before': capacity.machine()}, 'server_command': command, 'server_sha256': digest(args.server), 'client_sha256': digest(args.client),
-              'source_sha256': {p: digest(ROOT / p) for p in ['examples/datagram_load.rs', 'examples/support/socket.rs', 'scripts/datagram-load.py']},
+              'source_sha256': {p: digest(ROOT / p) for p in ['examples/datagram_load.rs', 'examples/support/socket.rs', 'scripts/datagram-load.py', 'scripts/benchmark_transport.py']},
               'events': [], 'passed': False,
               'scope': 'Independent body/sender/sequence/generation-stamp checking at every recipient. Paced open loop; rates count verified unique arrivals during offer, with drain arrivals separate. Unreceived means within configured observation window, not attributed network loss. RSS is phase-gate sampling and excludes kernel storage. UDP queue/drop census is separately owned-inode scoped. Client generation lag/shortfall reported; this alone does not prove server saturation.'}
-    environment = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
-    environment['RUST_LOG'] = 'war_relay=info'
     with tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as errors:
         server = client = None
         ready = measured = None
@@ -68,14 +66,7 @@ def run(args):
                     if time.monotonic() >= deadline:
                         raise
                     time.sleep(.02)
-            if wt:
-                import re
-                text = os.pread(logs.fileno(), os.fstat(logs.fileno()).st_size, 0).decode()
-                text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)  # colored logs, as in benchmark_transport
-                match = re.search(r'certificate_sha256=([0-9a-fA-F:]{95})', text)
-                if not match:
-                    raise RuntimeError('development certificate pin missing')
-                client_command += ['--certificate', match[1]]
+            client_command += benchmark_transport.certificate(logs)
             client_command = ['taskset', '-c', args.client_cpus] + client_command
             result['client_command'] = client_command
             client = subprocess.Popen(client_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -114,7 +105,7 @@ def run(args):
                     ready = event
                     assert current['war_sessions'] == sessions
                     assert current['war_connections'] == sessions
-                    assert current['war_quic_connections'] == (sessions if wt else 0)
+                    assert current['war_quic_connections'] == sessions
                     result['thread_affinity'] = runtime.pin_child_workers(server.pid, args.workers, True, apply=False)
                     result['thread_affinity'] += runtime.pin_child_workers(client.pid, args.client_workers, False)
                 elif event['event'] == 'measured':
@@ -186,7 +177,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--server', type=Path, default=ROOT / 'target/release/war-relay')
     parser.add_argument('--client', type=Path, default=ROOT / 'target/release/examples/datagram_load')
-    parser.add_argument('--mode', choices=['websocket', 'stream', 'datagram'], required=True)
+    parser.add_argument('--mode', choices=['stream', 'datagram'], required=True)
     for name, default in [('pairs', 32), ('readers', 0), ('private-rate', 1000), ('fanout-rate', 1000),
                           ('seconds', 4), ('drain-ms', 1000), ('payload-bytes', 1024), ('workers', 4),
                           ('client-workers', 8), ('udp-receive-buffer-bytes', 4194304), ('io-timeout-secs', 30), ('timeout', 180)]:

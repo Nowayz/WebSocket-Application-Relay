@@ -102,8 +102,6 @@ pub struct Relay {
 struct InputTotals {
     messages: u64,
     bytes: u64,
-    reused: u64,
-    copied: u64,
 }
 
 /// One worker publishes cumulative input statistics at its ready-batch boundary.
@@ -143,30 +141,23 @@ impl From<Disconnect> for RoutingFailure {
 
 impl ReceiveBatch<'_> {
     #[cfg(test)]
-    pub(crate) fn receive(
-        &mut self,
-        peer: &Peer,
-        bytes: Bytes,
-        storage_capacity: usize,
-    ) -> Result<usize, Disconnect> {
+    pub(crate) fn receive(&mut self, peer: &Peer, bytes: Bytes) -> Result<usize, Disconnect> {
         self.relay
-            .receive_with_totals::<false>(peer, bytes, storage_capacity, &mut self.totals, None)
+            .receive_with_totals::<false>(peer, bytes, &mut self.totals, None)
             .map_err(|error| error.reason)
     }
 
-    /// Native workers keep one reusable continuation slot per large publisher.
+    /// Workers keep one reusable continuation slot per large publisher.
     pub(crate) fn receive_bounded(
         &mut self,
         peer: &Peer,
         bytes: Bytes,
-        storage_capacity: usize,
         pending: &mut Option<Box<RoomFanout>>,
         quantum: usize,
     ) -> Result<usize, RoutingFailure> {
         self.relay.receive_with_totals::<false>(
             peer,
             bytes,
-            storage_capacity,
             &mut self.totals,
             Some((pending, quantum)),
         )
@@ -179,11 +170,9 @@ impl ReceiveBatch<'_> {
         pending: &mut Option<Box<RoomFanout>>,
         quantum: usize,
     ) -> Result<usize, RoutingFailure> {
-        let size = bytes.len();
         self.relay.receive_with_totals::<true>(
             peer,
             bytes,
-            size,
             &mut self.totals,
             Some((pending, quantum)),
         )
@@ -195,8 +184,6 @@ impl ReceiveBatch<'_> {
         for (counter, value) in [
             (&metrics.incoming_messages, totals.messages),
             (&metrics.incoming_bytes, totals.bytes),
-            (&metrics.routing_reused_bytes, totals.reused),
-            (&metrics.routing_copied_bytes, totals.copied),
         ] {
             if value != 0 {
                 counter.fetch_add(value, Relaxed);
@@ -1362,7 +1349,7 @@ impl Relay {
         channels.pin().insert(global.clone(), Channel::new(global));
         let users = Users::new(config.max_connections);
         let read_budget = (config.total_read_buffer_bytes > 0)
-            .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
+            .then(|| crate::read_budget::ReadBudget::new(config.total_read_buffer_bytes));
         let receive_arena = crate::receive_arena::ReceiveArena::new(
             config.receive_arena_bytes,
             config.receive_arena_page_bytes,
@@ -1430,7 +1417,10 @@ impl Relay {
             .is_ok()
     }
 
-    pub(crate) fn begin_shutdown(&self) {
+    /// Stop admission permanently. `webtransport::serve` calls this when its
+    /// shutdown token is cancelled; embedders may call it earlier to refuse
+    /// new sessions while established ones finish.
+    pub fn begin_shutdown(&self) {
         self.admission.store(Admission::Stopping as u8, Relaxed);
         // Terminal shutdown sends no departure notices. Release listener views
         // once instead of searching them for every retiring global session.
@@ -1739,8 +1729,7 @@ impl Relay {
 
     #[cfg(test)]
     pub(crate) fn receive(&self, peer: &Peer, bytes: Bytes) -> Result<(), Disconnect> {
-        let capacity = self.config.read_buffer_bytes.max(bytes.len());
-        self.receive_with_storage(peer, bytes, capacity).map(|_| ())
+        self.receive_batch().receive(peer, bytes).map(|_| ())
     }
 
     pub(crate) fn receive_batch(&self) -> ReceiveBatch<'_> {
@@ -1750,21 +1739,10 @@ impl Relay {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn receive_with_storage(
-        &self,
-        peer: &Peer,
-        bytes: Bytes,
-        storage_capacity: usize,
-    ) -> Result<usize, Disconnect> {
-        self.receive_batch().receive(peer, bytes, storage_capacity)
-    }
-
     fn receive_with_totals<const UNRELIABLE: bool>(
         &self,
         peer: &Peer,
         bytes: Bytes,
-        storage_capacity: usize,
         totals: &mut InputTotals,
         native: Option<(&mut Option<Box<RoomFanout>>, usize)>,
     ) -> Result<usize, RoutingFailure> {
@@ -1799,17 +1777,8 @@ impl Relay {
             }
         };
         let value_start = bytes.len() - value.len();
-        let compact = storage_capacity > self.config.read_buffer_bytes
-            && bytes.len().saturating_mul(8) < storage_capacity
-            && !bytes.is_unique();
-        let mut frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        let mut frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start);
         frame.unreliable = UNRELIABLE;
-        let counter = if compact {
-            &mut totals.copied
-        } else {
-            &mut totals.reused
-        };
-        *counter = counter.wrapping_add(frame.payload().len() as u64);
         // One lock-free load of the observer snapshot per routed frame. Its
         // generation travels with any capture, so a concurrent revocation is
         // honoured by the capture itself.

@@ -39,7 +39,7 @@ fn a_room_continuation_owns_its_snapshot_borrows_the_body_and_releases_its_charg
     let mut batch = relay.receive_batch();
     assert_eq!(
         batch
-            .receive_bounded(&source.peer, input, 0, &mut slot, 256)
+            .receive_bounded(&source.peer, input, &mut slot, 256)
             .unwrap(),
         256
     );
@@ -79,7 +79,7 @@ fn a_room_continuation_owns_its_snapshot_borrows_the_body_and_releases_its_charg
     }
     let input = protocol::envelope(BROADCAST, &[0xf5]);
     batch
-        .receive_bounded(&source.peer, input, 0, &mut slot, 256)
+        .receive_bounded(&source.peer, input, &mut slot, 256)
         .unwrap();
     let work = slot.as_mut().unwrap();
     assert_eq!(
@@ -136,7 +136,6 @@ fn continuation_metadata_cannot_escape_the_global_queue_budget() {
             .receive_bounded(
                 &source.peer,
                 protocol::envelope(BROADCAST, &[0xf5]),
-                0,
                 &mut slot,
                 256
             )
@@ -336,7 +335,6 @@ fn retirement_turn_budget_bounds_visits_without_reordering_jobs() {
         }
     }
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     relay.begin_shutdown();
     drop(observers);
     assert_eq!(relay.counts(), (0, 1));
@@ -635,7 +633,6 @@ fn a_pending_departure_cannot_notify_a_recreated_room() {
 }
 
 struct WakeCounter {
-    wake: mio::Waker,
     calls: AtomicUsize,
 }
 impl PeerOutput for WakeCounter {
@@ -648,16 +645,13 @@ impl PeerOutput for WakeCounter {
     }
     fn wake_retirement(&self) {
         self.calls.fetch_add(1, Relaxed);
-        self.wake.wake().unwrap();
     }
 }
 
 #[test]
 fn retirement_publications_share_one_wake_until_the_queue_drains() {
     let relay = Relay::new(Config::default()).unwrap();
-    let poll = mio::Poll::new().unwrap();
     let output = Arc::new(WakeCounter {
-        wake: mio::Waker::new(poll.registry(), mio::Token(1)).unwrap(),
         calls: AtomicUsize::new(0),
     });
     let first = relay
@@ -1519,7 +1513,6 @@ fn captured_view_storage_retires_before_its_queue_credit() {
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -1577,7 +1570,6 @@ fn a_source_that_leaves_mid_publication_still_reaches_every_recipient_before_its
             .receive_bounded(
                 &source.peer,
                 protocol::envelope(BROADCAST, &value),
-                0,
                 &mut slot,
                 256,
             )

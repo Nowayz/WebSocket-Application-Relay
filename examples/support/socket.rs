@@ -1,68 +1,36 @@
 //! Benchmark transport adapter. Workload generation and delivery assertions stay
-//! in the maintained clients. QUIC close is explicit; never fabricate a WS ACK.
-use anyhow::{Context, Result, bail, ensure};
+//! in the maintained clients.
+use anyhow::{Context, Result, ensure};
 use bytes::{Bytes, BytesMut};
-use futures_util::{SinkExt, StreamExt};
-use std::{
-    path::Path,
-    sync::{Arc, OnceLock},
-};
-use tokio::net::TcpStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
+use std::sync::OnceLock;
 use web_transport_quinn::{Client, RecvStream, SendStream, Session as Connection};
 static ENDPOINT: OnceLock<Client> = OnceLock::new();
-static TLS_CONFIG: OnceLock<Arc<tokio_rustls::rustls::ClientConfig>> = OnceLock::new();
-pub fn initialize(
-    pin: Option<&str>,
-    receive_buffer_bytes: usize,
-    ca_certificate: Option<&Path>,
-) -> Result<()> {
-    if let Some(path) = ca_certificate {
-        let mut roots = tokio_rustls::rustls::RootCertStore::empty();
-        roots.add(tokio_rustls::rustls::pki_types::CertificateDer::from(
-            std::fs::read(path)?,
-        ))?;
-        let tls = tokio_rustls::rustls::ClientConfig::builder_with_protocol_versions(&[
-            &tokio_rustls::rustls::version::TLS13,
-        ])
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-        ensure!(
-            TLS_CONFIG.set(Arc::new(tls)).is_ok(),
-            "TLS fixture already initialized"
-        );
+pub fn initialize(pin: &str, receive_buffer_bytes: usize) -> Result<()> {
+    let hash = pin.parse::<wtransport::tls::Sha256Digest>()?;
+    let config = wtransport::ClientConfig::builder()
+        .with_bind_default()
+        .with_server_certificate_hashes([hash])
+        .build();
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
+    // This one socket receives bursts from the complete connected population.
+    if receive_buffer_bytes != 0 {
+        socket2::SockRef::from(&socket).set_recv_buffer_size(receive_buffer_bytes)?;
     }
-    if let Some(pin) = pin {
-        let hash = pin.parse::<wtransport::tls::Sha256Digest>()?;
-        let config = wtransport::ClientConfig::builder()
-            .with_bind_default()
-            .with_server_certificate_hashes([hash])
-            .build();
-        let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
-        // This one socket receives bursts from the complete connected population.
-        if receive_buffer_bytes != 0 {
-            socket2::SockRef::from(&socket).set_recv_buffer_size(receive_buffer_bytes)?;
-        }
-        socket.set_nonblocking(true)?;
-        let endpoint = wtransport::quinn::Endpoint::new(
-            config.quic_endpoint_config().clone(),
-            None,
-            socket,
-            std::sync::Arc::new(wtransport::quinn::TokioRuntime),
-        )?;
-        let endpoint = web_transport_quinn::Client::new(endpoint, config.quic_config().clone());
-        ensure!(
-            ENDPOINT.set(endpoint).is_ok(),
-            "transport already initialized"
-        );
-    }
+    socket.set_nonblocking(true)?;
+    let endpoint = wtransport::quinn::Endpoint::new(
+        config.quic_endpoint_config().clone(),
+        None,
+        socket,
+        std::sync::Arc::new(wtransport::quinn::TokioRuntime),
+    )?;
+    let endpoint = web_transport_quinn::Client::new(endpoint, config.quic_config().clone());
+    ensure!(
+        ENDPOINT.set(endpoint).is_ok(),
+        "transport already initialized"
+    );
     Ok(())
 }
-pub enum Socket {
-    WebSocket(Box<WebSocketStream<MaybeTlsStream<TcpStream>>>),
-    WebTransport(Box<Transport>),
-}
-pub struct Transport {
+pub struct Socket {
     connection: Connection,
     send: SendStream,
     receive: RecvStream,
@@ -110,107 +78,58 @@ impl Reader {
     }
 }
 impl Socket {
-    pub fn websocket(socket: WebSocketStream<MaybeTlsStream<TcpStream>>) -> Self {
-        Self::WebSocket(Box::new(socket))
-    }
-    pub async fn connect_tls(url: &str, bound: Option<TcpStream>) -> Result<Self> {
-        let config = TLS_CONFIG
-            .get()
-            .context("wss fixture requires --ca-certificate DER")?
-            .clone();
-        let connector = Some(tokio_tungstenite::Connector::Rustls(config));
-        let options =
-            Some(tungstenite::protocol::WebSocketConfig::default().read_buffer_size(4096));
-        let (socket, _) = if let Some(stream) = bound {
-            tokio_tungstenite::client_async_tls_with_config(url, stream, options, connector).await?
-        } else {
-            tokio_tungstenite::connect_async_tls_with_config(url, options, true, connector).await?
-        };
-        Ok(Self::websocket(socket))
-    }
     pub async fn connect(url: &str) -> Result<Self> {
         let connection = ENDPOINT
             .get()
             .context("WebTransport requires --certificate SHA256 pin")?
-            .connect(url::Url::parse(url)?)
+            .connect(url.parse::<url::Url>()?)
             .await?;
         let (send, receive) = connection.open_bi().await?;
-        Ok(Self::WebTransport(Box::new(Transport {
+        Ok(Self {
             connection,
             send,
             receive,
             reader: Reader::default(),
-        })))
+        })
     }
-    pub async fn send(&mut self, message: Message) -> Result<()> {
-        match self {
-            Self::WebSocket(socket) => Ok(socket.send(message).await?),
-            Self::WebTransport(socket) => match message {
-                Message::Binary(bytes) => {
-                    war_relay::webtransport::write_record(&mut socket.send, &bytes).await
-                }
-                _ => bail!("use close_transport for WebTransport teardown"),
-            },
-        }
+    pub async fn send(&mut self, bytes: &[u8]) -> Result<()> {
+        war_relay::webtransport::write_record(&mut self.send, bytes).await
     }
-    pub async fn next(&mut self) -> Option<Result<Message>> {
-        match self {
-            Self::WebSocket(socket) => socket.next().await.map(|result| result.map_err(Into::into)),
-            Self::WebTransport(socket) => Some(
-                socket
-                    .reader
-                    .next(&mut socket.receive)
-                    .await
-                    .map(Message::Binary),
-            ),
-        }
+    /// The next reliable record. State survives cancellation.
+    pub async fn next(&mut self) -> Result<Bytes> {
+        self.reader.next(&mut self.receive).await
     }
-    #[allow(dead_code)] // Used by the open-loop load client, not reliable-only fixtures.
+    #[allow(dead_code)] // Used by the datagram load client, not reliable-only fixtures.
     pub fn send_datagram(&self, bytes: Bytes) -> Result<()> {
-        let Self::WebTransport(socket) = self else {
-            bail!("datagrams require WebTransport")
-        };
         ensure!(
-            bytes.len() <= socket.connection.max_datagram_size(),
+            bytes.len() <= self.connection.max_datagram_size(),
             "datagram exceeds negotiated maximum"
         );
-        Ok(socket.connection.send_datagram(bytes)?)
+        Ok(self.connection.send_datagram(bytes)?)
     }
 
     #[allow(dead_code)]
     pub async fn next_datagram_checked(&mut self) -> Result<Bytes> {
-        let Self::WebTransport(socket) = self else {
-            bail!("datagrams require WebTransport")
-        };
         tokio::select! {
-            packet = socket.connection.read_datagram() => Ok(packet?),
-            record = socket.reader.next(&mut socket.receive) => {
-                bail!("unexpected reliable record on datagram load lane: {} bytes", record?.len())
+            packet = self.connection.read_datagram() => Ok(packet?),
+            record = self.reader.next(&mut self.receive) => {
+                anyhow::bail!("unexpected reliable record on datagram load lane: {} bytes", record?.len())
             }
         }
     }
 
-    pub async fn flush(&mut self) -> Result<()> {
-        match self {
-            Self::WebSocket(socket) => Ok(socket.flush().await?),
-            Self::WebTransport(_) => Ok(()),
-        }
-    }
-    /// Local QUIC closure is not a WebSocket Close exchange. Callers separately
-    /// verify peer departure messages and the server's zero-resource gates.
-    pub async fn close_transport(&mut self) -> Result<bool> {
-        if let Self::WebTransport(socket) = self {
-            war_relay::webtransport::write_record(&mut socket.send, &[]).await?;
-            let ack = socket.reader.next(&mut socket.receive).await?;
-            ensure!(
-                ack.is_empty(),
-                "unconsumed application message before close acknowledgement"
-            );
-            socket.connection.close(1000, b"benchmark complete");
-            socket.connection.closed().await;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    /// Graceful departure: an empty record, the relay's empty acknowledgement,
+    /// then a local QUIC close. Callers separately verify peer departure
+    /// messages and the server's zero-resource gates.
+    pub async fn close(&mut self) -> Result<()> {
+        war_relay::webtransport::write_record(&mut self.send, &[]).await?;
+        let ack = self.reader.next(&mut self.receive).await?;
+        ensure!(
+            ack.is_empty(),
+            "unconsumed application message before close acknowledgement"
+        );
+        self.connection.close(1000, b"benchmark complete");
+        self.connection.closed().await;
+        Ok(())
     }
 }

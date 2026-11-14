@@ -63,8 +63,8 @@ deliveries, and cleanup. Exactly 100,000 first-record snapshots were collected:
 | Inline previous-path field | Zero previous paths | 43,200,000 | 41.20 |
 
 Update 2026-11-13: the endpoint-event queues, the assembler's first growth and
-the inline previous-path field have since been addressed; see the
-[2026-11-13 report](reports/webtransport-allocator-idle-storage-2026-11-13.json).
+the inline previous-path field have since been addressed; see
+[vendor/README.md](../vendor/README.md) and [performance.md](performance.md#memory).
 The table above remains the record for the audited image.
 
 The assembler keeps its BinaryHeap capacity after consuming chunks. A four-slot

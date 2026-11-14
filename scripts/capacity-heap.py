@@ -20,7 +20,7 @@ import inspection
 
 
 PATH_ARGS = ('server', 'client', 'output', 'server_preload', 'user_latency_output',
-             'user_latency_histogram_output', 'pressure_client', 'kernel_slab_sizes')
+             'user_latency_histogram_output', 'kernel_slab_sizes')
 
 
 def signal_state(pid):
@@ -76,6 +76,9 @@ def capture(pid, prefix, timeout):
 def run(options):
     source = json.loads(options.receipt.read_text())
     values = source.get('args', source).copy()
+    # Older receipts may describe workloads the WebTransport-only harness cannot repeat.
+    if values.get('transport', 'webtransport') != 'webtransport' or values.get('pressure_client'):
+        raise ValueError('receipt is not a plain WebTransport capacity workload')
     values.update(output=options.output, server_preload=options.library,
                   kernel_socket_resources=True, kernel_slab_sizes=options.slab_sizes)
     for key in ('profile', 'profile_counters', 'profile_client', 'profile_scheduling', 'profile_kernel'):

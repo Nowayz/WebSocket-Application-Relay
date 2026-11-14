@@ -2,10 +2,10 @@
 
 Terms used across the relay documentation, in the order they usually come up.
 The implementation is in [src/relay.rs](../src/relay.rs) and
-[src/server.rs](../src/server.rs); the design is in
+[src/webtransport.rs](../src/webtransport.rs); the design is in
 [architecture.md](architecture.md).
 
-**Session.** One joined WebSocket connection. A session has a 64-bit ID, one
+**Session.** One joined WebTransport session (one QUIC connection). A session has a 64-bit ID, one
 channel for its whole life, an output budget and one FIFO of outgoing frames.
 The relay publishes the session to its channel only after the welcome frame
 carrying its ID has been written.
@@ -32,8 +32,8 @@ messages in each recipient's FIFO.
 
 **Departure queue.** A FIFO of bounded jobs for one recipient population. Each
 room has one. `re_globl` room departures and disconnect-observer notices share
-one. Workers advance queues in rotation, one turn at a time, so a large job in
-one room cannot delay another room's notices.
+one. Departure turns advance queues in rotation, one turn at a time, so a large
+job in one room cannot delay another room's notices.
 
 **Detached fanout.** A broadcast whose source connection closed before the
 broadcast reached every recipient in its captured view. The unfinished job is
@@ -69,16 +69,16 @@ have been flushed. A barrier submits the observer's still-pending notices and
 advances the watermark, so deferred jobs do not replay them later and
 re-subscribing does not deliver them twice.
 
-**Turn, quantum.** The bounded unit of worker progress. A live broadcast
-advances 1,024 recipients per turn; a departure job advances 128. A worker
-service phase visits at most 1,024 connections and spends at most 4,096
-recipient visits before yielding. These constants are `FANOUT_QUANTUM`,
-`RETIREMENT_QUANTUM`, `READY_QUANTUM` and `POLL_TICK` in the source.
+**Turn, quantum.** The bounded unit of routing progress. A live broadcast
+advances 1,024 recipients per turn; a departure job advances 128. A session
+task routes at most 256 received messages before yielding to other tasks. These
+constants are `FANOUT_QUANTUM`, `RETIREMENT_QUANTUM` and `INPUT_QUANTUM` in the
+source.
 
 **Drain versus shutdown.** Drain is reversible: `POST /v1/drain` stops
 admitting new connections, readiness returns 503, existing sessions keep
 running, and `POST /v1/resume` reopens admission. Shutdown is terminal: a
-signal, a worker failure or embedder cancellation stops admission, suppresses
-departure notices, clears the departure queues and listener indexes, sends
-`1001` to every session within `WAR_SHUTDOWN_TIMEOUT_SECS`, and cannot be
+signal or embedder cancellation stops admission, suppresses departure notices,
+clears the departure queues and listener indexes, closes every connection with
+`1001`, gives sessions `WAR_SHUTDOWN_TIMEOUT_SECS` to finish, and cannot be
 resumed.

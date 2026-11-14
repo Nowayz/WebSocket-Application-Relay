@@ -8,41 +8,33 @@ session, channel, departure notice and staging credit are defined in the
 ## Runtime shape
 
 The process is one binary, `war-relay`. `main` parses the configuration, loads
-secrets, binds the relay and management listeners, then starts a single-threaded
-Tokio runtime. Tokio owns two things: the management HTTP service in
-[src/admin.rs](../src/admin.rs) and the SIGINT/SIGTERM handler. Everything on
-the data path runs outside Tokio.
+secrets, binds the management listener and starts a multi-threaded Tokio
+runtime for the data path. The default worker count is the number of available
+CPUs, capped at 16; `WAR_WORKERS` overrides it. With the default
+`WAR_PIN_WORKERS=auto`, workers are pinned one per CPU when the process may use
+exactly one CPU per worker; `on` and `off` force the choice.
 
-Data sockets belong to a fixed set of Mio readiness workers in
-[src/server.rs](../src/server.rs). Each worker is an OS thread named
-`war-io-N`. The default count is the number of available CPUs, capped at 16;
-`WAR_WORKERS` overrides it and `WAR_PIN_WORKERS=on` pins each thread to one CPU
-(the default `auto` pins only WebTransport workers).
-On Linux each worker has its own listening socket; the sockets share the port
-with `SO_REUSEPORT`, so the kernel spreads new connections across workers. On
-other platforms only the first worker listens. It accepts and hands each new
-stream to the worker selected by a hash of the peer address, through that
-worker's wake signal, and the stream is registered only with the poller of
-the worker that owns it. Hashing mirrors the kernel's placement on Linux;
-strict rotation was tried first and left workers idle under a client that
-opens sender and receiver sockets alternately, because a sender's worker
-does that sender's read, routing and inline write.
-Registering duplicated handles of one listening socket in several pollers
-stalled workers on Windows, which is why the listener is never shared. Either
-way a connection stays with one worker for its whole life. That worker owns the
-WebSocket decoder, the timers and the output queue for that socket.
+[src/webtransport.rs](../src/webtransport.rs) binds one UDP socket for every
+session. A separate thread, `war-ingress`, owns a current-thread runtime that
+services that socket and dispatches each packet to its QUIC connection; it shares
+the process CPU allowance rather than reserving a CPU. Each connection is then
+driven on the worker runtime. One task per session accepts the WebTransport
+request (path `/war`, optional origin check), the bidirectional stream and the
+join record, then serves the session: it reads length-prefixed CBOR records from
+the stream and datagrams from the connection, routes them, and writes the
+session's queued output. The management HTTP service in
+[src/admin.rs](../src/admin.rs) and the SIGINT/SIGTERM handler run on the same
+runtime.
 
-A worker loop has four steps. It services fresh input, then buffered output and
-continuations, then one turn of departure work, then it polls. Each of the two
-service phases visits at most 1,024 connections and spends at most 4,096
-recipient visits on routing before yielding. The poll waits for the next timer
-but never longer than `POLL_TICK`, which is one second. A missed wakeup can
-therefore delay work by at most one tick instead of stalling the worker.
+The accept loop also runs departure turns (see below) whenever a departing
+session or a large broadcast notifies it, so queued notices make progress
+independently of any one session.
 
-Shutdown starts when the Tokio side is cancelled by a signal, by a worker
-failure or by an embedder. The relay enters the stopping state, workers receive
-a stop signal and have `WAR_SHUTDOWN_TIMEOUT_SECS` to send `1001` and retire
-their sockets. The supervisor waits one extra second for their reports.
+Shutdown starts when the serving token is cancelled by a signal or by an
+embedder. The relay enters the stopping state, the endpoint closes every
+connection with application code `1001`, and sessions have
+`WAR_SHUTDOWN_TIMEOUT_SECS` to finish before their tasks are aborted. The
+ingress runtime is stopped and joined after the sessions.
 
 ## Locking model
 
@@ -57,7 +49,7 @@ into concurrent indexes, atomic snapshots and independently locked objects:
   one, so a route that still finds the old key during that step reaches the
   session that owned it, and a route begun after the assignment reply uses
   the new key. The map holds weak handles: a lock-free map reclaims removed
-  entries lazily, and a session's socket and budgets are released by its own
+  entries lazily, and a session's output and budgets are released by its own
   connection the moment it leaves, never by the map's reclamation schedule.
 - The channel index (name to channel) is a lock-free concurrent map with an
   atomic channel count. Lookup is a lock-free read. Creation reserves a slot
@@ -88,7 +80,7 @@ into concurrent indexes, atomic snapshots and independently locked objects:
 - Admission counters are atomics: the admission state, the session count and
   each channel's reservation count.
 - The list of departure queues with pending work is a lock-free queue.
-  Workers pop an entry, run one bounded turn and push it back while it has
+  Departure turns pop an entry, run one bounded turn and push it back while it has
   work, without a relay-owned mutex around the list.
 - Each departure queue is a mutex around a FIFO of jobs. Disconnect notices
   and `re_globl` departures use sixteen such queues, chosen by the departing
@@ -99,35 +91,35 @@ Where locks nest, they nest in this order, from outer to inner:
 1. channel
 2. one publication job
 3. one departure queue
-4. socket output state
+4. session output state
 
 Nothing holds two locks of one kind at once. The channel index, session
 ownership, the observer snapshot, the two caches, the list of pending
 departure queues and the publication index are all lock-free. Every lock
 that remains belongs to one object: a channel, a departure queue (an
-observer shard is one), a publication job or a socket.
+observer shard is one), a publication job or a session's output.
 
 A path may skip levels but never takes an outer lock while holding an inner
 one. Session ownership, the listener snapshot, the two caches (global
 recipient view, disconnect snapshot) and the active list of departure queues
 are not locks at all; see below.
 
-No socket write happens while a registry lock is held. Output is either
-submitted after the guard has been dropped or queued for the socket's owning
-worker, which writes it later. The welcome frame is written before the new
+No stream write happens while a registry lock is held. Output is either
+submitted after the guard has been dropped or queued for the recipient's
+session task, which writes it later. The welcome frame is written before the new
 session is inserted into its channel, with no registry lock held, so nothing
 can address the session before the welcome and the welcome is first in the
 session's FIFO. Revocation barriers follow the same rule: when a global
 observer clears a listener bit, its still pending notices are collected and its
 watermarks are advanced under each affected queue or publication-job lock.
-The notices are submitted to the observer's socket after those locks are released, ahead of the
-acknowledgement.
+The notices are submitted to the observer's output after those locks are
+released, ahead of the acknowledgement.
 
 ### Shared locks that remain, and what bounds them
 
 Process-wide routing indexes and observer snapshots have no registry mutex.
 Queue and publication work is chunked, but cold view construction and snapshot
-updates still scale with population. Registry guards never span socket I/O:
+updates still scale with population. Registry guards never span stream I/O:
 
 - The listener snapshot is loaded and replaced atomically. Routing does not
   acquire an observer-list mutex. Flag changes clone the observer lists and
@@ -175,12 +167,12 @@ updates still scale with population. Registry guards never span socket I/O:
   views are built from an immutable observer snapshot. A lost publication race
   stores an identical view or defers to the one already published.
 - The active list of departure queues is a lock-free queue
-  (`crossbeam_queue::SegQueue`). Workers pop an entry and push it back while
-  it has work; departures append one entry when a queue becomes non-empty.
+  (`crossbeam_queue::SegQueue`). Departure turns pop an entry and push it back
+  while it has work; departures append one entry when a queue becomes non-empty.
   There is no relay-owned mutex around that list.
 - Observer notices (disconnect notices and `re_globl` departures) are spread
   over sixteen departure queues by the departing session's room. A
-  departure, a worker turn or a revocation barrier locks one of them at a
+  departure, a departure turn or a revocation barrier locks one of them at a
   time, and the barrier inspects at most 128 jobs per hold: each shard
   numbers its jobs in queue order and an observer keeps one watermark per
   shard, advanced under the lock after every chunk, so no turn can deliver
@@ -198,7 +190,7 @@ updates still scale with population. Registry guards never span socket I/O:
   are single-key writes.
 
 The test `unrelated_traffic_stays_responsive_under_large_room_churn_and_revocation`
-in `tests/relay_integration.rs` exercises all of them at once: a room of 1,100
+in [tests/relay_integration.rs](../tests/relay_integration.rs) exercises all of them at once: a room of 1,100
 members receives a stream of broadcasts (each a continuation), members join and
 leave so every departure is a deferred job, and a global observer clears and
 restores its disconnect and channel-message flags so barriers scan the
@@ -216,7 +208,7 @@ rebuilds the invalidated global recipient view from every room on every
 broadcast, an admin client pages through the channel listing, which walks
 the whole index, a crowd of 130 disconnect observers (more than one
 retirement turn) turns every departure into a queued observer job that
-worker turns drain shard by shard, and one more observer keeps clearing and
+departure turns drain shard by shard, and one more observer keeps clearing and
 restoring its flag, so every clear is a chunked barrier scan racing those
 departures and turns. A session in a stable room must keep echoing, and
 every listing must answer, within one second.
@@ -229,29 +221,30 @@ critical section. A channel's lock protects membership, variables and cached
 views. A cache hit clones one handle, but a cold view scans the members, and
 removing a member from a uniquely owned cached view searches that view.
 Inspection and global-view construction also read channel state. Those costs
-scale with the room, with no socket I/O inside. A departure queue's lock is held for one
+scale with the room, with no stream I/O inside. A departure queue's lock is held for one
 bounded turn of at most 128 recipient submissions, which are queue pushes,
-never socket writes; a publication job's lock is held for one bounded turn or
+never stream writes; a publication job's lock is held for one bounded turn or
 one barrier inspection; an observer shard's lock is held for one push, one
 bounded turn, one chunk of at most 128 barrier inspections, or at most eight
 turns of a synchronous fallback. None of them is taken on the private-message
-path. A socket's own output lock is the one lock held across I/O, and only
-its own: one non-blocking write of at most 256 KiB to that socket, which a
-sender performs on the recipient's behalf when the queue is empty. Only
-other senders to that same socket can wait on it.
+path. A session's own output lock is the one lock held across a write, and
+only its own: one non-blocking stream write, which a sender performs on the
+recipient's behalf when the queue is empty. Only other senders to that same
+session can wait on it.
 
 These per-object locks preserve necessary invariants. A room's
 membership must be a consistent set when a broadcast view is built, a
 queue must hand out jobs in order, a job's cursor must advance under one
-owner and a socket's FIFO must be written by one thread at a time. Each
+owner and a session's FIFO must be written by one thread at a time. Each
 lock is associated with one object and never nested with another of its kind.
 This removes global lock contention; it does not eliminate scheduling delays
-for other sockets sharing a worker or CPU, or make every operation constant-time.
+for other sessions sharing a worker or CPU, or make every operation constant-time.
 
 ## The data path of one message
 
-1. The owning worker reads a complete binary WebSocket message from the
-   decoder. Decoder storage is charged against `WAR_TOTAL_READ_BUFFER_BYTES`.
+1. The session task reads one complete length-prefixed record from its
+   stream, or one datagram. A record's staging storage is charged against
+   `WAR_TOTAL_READ_BUFFER_BYTES` while it is being received.
 2. `Relay::receive` parses the CBOR envelope `[target, value]`. The value is
    validated but never materialized as an object graph.
 3. Target `0` is a relay command. It is handled inline and gets one reply.
@@ -259,22 +252,22 @@ for other sockets sharing a worker or CPU, or make every operation constant-time
    the message. The lookup and an ID reassignment are atomic with respect to
    each other.
 5. The relay builds a routed frame. The sender prefix is stored separately and
-   the application value stays in the shared receive storage, so recipients
-   share one body. The body is copied only when the receive slab is much larger
-   than the message.
+   the application value stays in the received record's storage, so recipients
+   share one body.
 6. A private message is charged to the recipient's output budget and handed to
-   the recipient's socket. If that socket's queue is empty, the sending worker
-   writes it immediately. Otherwise the frame is queued and the owning worker
-   is woken.
+   the recipient's session. If that session's queue is empty, the sending task
+   writes it to the stream immediately. Otherwise the frame is queued and the
+   recipient's task is woken. A datagram is handed straight to the recipient's
+   connection and is dropped if it exceeds the negotiated size.
 7. A room broadcast takes the channel's cached recipient view. The view is an
    immutable snapshot of membership. Each recipient except the sender is
-   charged and queued. The owning workers write queued output in vectored
+   charged and queued. Each recipient's task writes its queued output in
    batches. A `re_globl` broadcast uses a cached view of every member of every
    room; the cache is rebuilt after any membership change.
 8. A broadcast to more than 1,024 recipients becomes a continuation owned by
    the source connection. The source reserves staging credit for the captured
    view, delivers 1,024 recipients per turn and yields between turns, so one
-   large broadcast cannot monopolize a worker. The next message from that
+   large broadcast cannot monopolize a worker thread. The next message from that
    source waits until the broadcast finishes, which keeps per-source FIFO.
 9. If staging credit cannot be reserved for the view, the relay delivers the
    whole broadcast synchronously in one longer turn rather than refusing it.
@@ -299,7 +292,7 @@ room's queue is idle, the notice is delivered immediately, after the lock is
 dropped. Otherwise a job is appended to the room's queue. A job holds the
 captured view, one charged copy of the frame and a cursor.
 
-Workers rotate across queues that have work. One turn advances the front job
+Departure turns rotate across queues that have work. One turn advances the front job
 of one queue by 128 recipients and then moves the queue to the back of the
 rotation. A large job need not finish before another queue gets a turn;
 observer rooms that hash to one shard still share that queue. A job that cannot reserve staging credit makes the relay finish that
@@ -365,8 +358,10 @@ recipient received. Already submitted output is never rolled back.
   recipient while others receive it.
 - Delivery to a session that is being closed. Frames addressed to a closing
   session are discarded.
-- Receipt of a departure notice because the departed peer completed its Close
-  handshake. That handshake is not an acknowledgement from other recipients.
+- Receipt of a departure notice because the departed peer completed its
+  graceful close. That close is not an acknowledgement from other recipients.
+- Delivery or order of datagrams. A datagram may be lost or overtake other
+  datagrams and reliable messages.
 - Persistence, replay or reconnection. The relay stores nothing across
   sessions except channel variables, and `re_globl` variables only until
   restart.

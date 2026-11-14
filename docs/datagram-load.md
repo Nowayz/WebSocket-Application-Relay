@@ -1,6 +1,6 @@
 # Verified open-loop transport load
 
-`examples/datagram_load.rs` and `scripts/datagram-load.py` compare native WebSocket, WebTransport reliable streams, and WebTransport datagrams with the same body, routing shape, and arrival verification. Sources generate paced traffic independently of replies. Each recipient checks sender, sequence, generation stamp, and the complete payload. Preallocated sequence bitsets identify unique arrivals, duplicates, reordering, and missing updates without retaining a delivery log.
+`examples/datagram_load.rs` and `scripts/datagram-load.py` compare WebTransport reliable streams and datagrams with the same body, routing shape, and arrival verification. Sources generate paced traffic independently of replies. Each recipient checks sender, sequence, generation stamp, and the complete payload. Preallocated sequence bitsets identify unique arrivals, duplicates, reordering, and missing updates without retaining a delivery log.
 
 Build and run a mixed workload:
 
@@ -13,7 +13,7 @@ python scripts/datagram-load.py --mode datagram \
   --output artifacts/webtransport/load-example.json
 ```
 
-Use `--mode websocket` or `--mode stream` with otherwise identical arguments. Use `--readers 0` for private-only traffic, or `--pairs 0` for fanout-only traffic. Private rate is per source; fanout rate is source messages per second, multiplied by recipient count for offered deliveries. Use a fresh output path for every run. Freeze server and client binaries with `--server` and `--client` when comparing server revisions. Run measurements sequentially, without concurrent compilation, profiling, or browser work; rotate variant order across repeated runs.
+Use `--mode stream` with otherwise identical arguments for the reliable comparison. Use `--readers 0` for private-only traffic, or `--pairs 0` for fanout-only traffic. Private rate is per source; fanout rate is source messages per second, multiplied by recipient count for offered deliveries. Use a fresh output path for every run. Freeze server and client binaries with `--server` and `--client` when comparing server revisions. Run measurements sequentially, without concurrent compilation, profiling, or browser work; rotate variant order across repeated runs.
 
 The runner disables application rate limits for the measured load and derives population limits from the requested session count. It preserves production output queue and byte budgets. It records source and binary hashes, process CPU, phase-gate RSS, owned UDP socket queues/drop counters, server metrics, and client verification results.
 

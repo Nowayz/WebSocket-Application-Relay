@@ -1,7 +1,6 @@
 //! Matched self-route probe. Run against a separate relay process.
 use anyhow::{Result, ensure};
 use clap::Parser;
-use futures_util::{SinkExt, StreamExt};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -15,7 +14,7 @@ struct Args {
     #[arg(long, default_value = "stream")]
     mode: String,
     #[arg(long)]
-    certificate: Option<String>,
+    certificate: String,
     #[arg(long, default_value_t = 32)]
     clients: usize,
     #[arg(long, default_value_t = 1024)]
@@ -26,20 +25,16 @@ struct Args {
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    let endpoint = if args.mode == "websocket" {
-        None
-    } else {
-        let hash = wtransport::tls::Sha256Digest::from_str_fmt(
-            args.certificate.as_ref().expect("--certificate"),
-            wtransport::tls::Sha256DigestFmt::DottedHex,
-        )?;
-        Some(Arc::new(wtransport::Endpoint::client(
-            wtransport::ClientConfig::builder()
-                .with_bind_default()
-                .with_server_certificate_hashes([hash])
-                .build(),
-        )?))
-    };
+    let hash = wtransport::tls::Sha256Digest::from_str_fmt(
+        &args.certificate,
+        wtransport::tls::Sha256DigestFmt::DottedHex,
+    )?;
+    let endpoint = Arc::new(wtransport::Endpoint::client(
+        wtransport::ClientConfig::builder()
+            .with_bind_default()
+            .with_server_certificate_hashes([hash])
+            .build(),
+    )?);
     let barrier = Arc::new(Barrier::new(args.clients));
     let mut tasks = tokio::task::JoinSet::new();
     for index in 0..args.clients {
@@ -51,60 +46,29 @@ async fn main() -> Result<()> {
             let mut join = Vec::new();
             minicbor::Encoder::new(&mut join).str(&format!("probe{index}"))?;
             let mut samples = Vec::new();
-            if let Some(endpoint) = endpoint {
-                let connection = endpoint.connect(&args.url).await?;
-                let (mut send, mut recv) = connection.open_bi().await?.await?;
-                write_record(&mut send, &join).await?;
-                let id = minicbor::Decoder::new(&read_record(&mut recv, 1024).await?).u64()?;
-                let packet = packet(id, &payload)?;
-                barrier.wait().await;
-                let start = Instant::now();
-                while start.elapsed() < Duration::from_secs(args.seconds) {
-                    let tick = Instant::now();
-                    let response = if args.mode == "datagram" {
-                        connection.send_datagram(&packet)?;
-                        tokio::time::timeout(Duration::from_secs(2), connection.receive_datagram())
-                            .await??
-                            .payload()
-                    } else {
-                        write_record(&mut send, &packet).await?;
-                        read_record(&mut recv, args.bytes + 32).await?
-                    };
-                    samples.push(tick.elapsed().as_nanos() as u64);
-                    ensure!(response.as_ref() == packet, "response mismatch");
-                }
-                connection.close(wtransport::VarInt::from_u32(0), b"done");
-                Ok::<_, anyhow::Error>((samples, start.elapsed().as_secs_f64()))
-            } else {
-                let (mut ws, _) = tokio_tungstenite::connect_async(&args.url).await?;
-                ws.send(tungstenite::Message::Binary(bytes::Bytes::from(join)))
-                    .await?;
-                let id = minicbor::Decoder::new(&ws.next().await.unwrap()?.into_data()).u64()?;
-                let packet = bytes::Bytes::from(packet(id, &payload)?);
-                barrier.wait().await;
-                let start = Instant::now();
-                while start.elapsed() < Duration::from_secs(args.seconds) {
-                    let tick = Instant::now();
-                    ws.send(tungstenite::Message::Binary(packet.clone()))
-                        .await?;
-                    let response = loop {
-                        match ws.next().await.unwrap()? {
-                            tungstenite::Message::Binary(bytes) => break bytes,
-                            tungstenite::Message::Ping(_) => ws.flush().await?,
-                            other => anyhow::bail!("unexpected message {other:?}"),
-                        }
-                    };
-                    samples.push(tick.elapsed().as_nanos() as u64);
-                    ensure!(
-                        response == packet,
-                        "response mismatch: got {:?}, expected {:?}",
-                        &response[..response.len().min(20)],
-                        &packet[..packet.len().min(20)]
-                    );
-                }
-                ws.close(None).await?;
-                Ok((samples, start.elapsed().as_secs_f64()))
+            let connection = endpoint.connect(&args.url).await?;
+            let (mut send, mut recv) = connection.open_bi().await?.await?;
+            write_record(&mut send, &join).await?;
+            let id = minicbor::Decoder::new(&read_record(&mut recv, 1024).await?).u64()?;
+            let packet = packet(id, &payload)?;
+            barrier.wait().await;
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(args.seconds) {
+                let tick = Instant::now();
+                let response = if args.mode == "datagram" {
+                    connection.send_datagram(&packet)?;
+                    tokio::time::timeout(Duration::from_secs(2), connection.receive_datagram())
+                        .await??
+                        .payload()
+                } else {
+                    write_record(&mut send, &packet).await?;
+                    read_record(&mut recv, args.bytes + 32).await?
+                };
+                samples.push(tick.elapsed().as_nanos() as u64);
+                ensure!(response.as_ref() == packet, "response mismatch");
             }
+            connection.close(wtransport::VarInt::from_u32(0), b"done");
+            Ok::<_, anyhow::Error>((samples, start.elapsed().as_secs_f64()))
         });
     }
     let mut samples = Vec::new();

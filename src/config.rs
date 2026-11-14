@@ -3,14 +3,12 @@ use std::{net::SocketAddr, time::Duration};
 use anyhow::{Result, bail, ensure};
 use clap::{CommandFactory, FromArgMatches, Parser};
 
-pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum PinWorkers {
-    /// Pin WebTransport workers when the allowed CPUs number exactly one per worker.
-    /// That partitions only the CPUs the process was given. Under the historical
+    /// Pin workers when the allowed CPUs number exactly one per worker. That
+    /// partitions only the CPUs the process was given. Under the historical
     /// closed-loop workload it raised private delivery 5-29% at equal CPU per
-    /// delivery; legacy WebSocket measured no gain and stays unpinned.
+    /// delivery.
     Auto,
     #[value(alias = "true", alias = "1", alias = "yes")]
     On,
@@ -23,7 +21,6 @@ impl Config {
     pub fn worker_cores(&self, workers: usize) -> Result<Option<Vec<core_affinity::CoreId>>> {
         let wanted = match self.pin_workers {
             PinWorkers::Off => return Ok(None),
-            PinWorkers::Auto if self.legacy_websocket => return Ok(None),
             PinWorkers::Auto => false,
             PinWorkers::On => true,
         };
@@ -46,11 +43,8 @@ impl Config {
 
 /// Resource limits apply to each process. Secrets are loaded separately and never formatted.
 #[derive(Clone, Parser)]
-#[command(version, about = "WebSocket Application Relay (Rust)")]
+#[command(version, about = "WebTransport Application Relay")]
 pub struct Config {
-    /// Explicit legacy comparison listener; normal operation uses WebTransport.
-    #[arg(long, env = "WAR_LEGACY_WEBSOCKET")]
-    pub legacy_websocket: bool,
     /// TLS certificate chain in PEM format.
     #[arg(long, env = "WAR_TLS_CERT", requires = "tls_key")]
     pub tls_cert: Option<std::path::PathBuf>,
@@ -67,26 +61,17 @@ pub struct Config {
     pub admin_bind: SocketAddr,
     #[arg(long, env = "WAR_NO_ADMIN")]
     pub no_admin: bool,
-    /// Requested pending TCP queue per native listener; the OS may cap it.
-    #[arg(long, env = "WAR_LISTEN_BACKLOG", default_value_t = 1024, value_parser = clap::value_parser!(u16).range(1..))]
-    pub listen_backlog: u16,
     /// Requested shared QUIC UDP receive buffer; zero keeps the OS default.
     #[arg(long, env = "WAR_UDP_RECEIVE_BUFFER_BYTES", default_value_t = 4 * 1024 * 1024)]
     pub udp_receive_buffer_bytes: usize,
     /// Requested shared QUIC UDP send buffer; zero keeps the OS default.
     #[arg(long, env = "WAR_UDP_SEND_BUFFER_BYTES", default_value_t = 0)]
     pub udp_send_buffer_bytes: usize,
-    /// Requested per-socket kernel send buffer; zero keeps OS autotuning/defaults.
-    #[arg(long, env = "WAR_TCP_SEND_BUFFER_BYTES", default_value_t = 0)]
-    pub tcp_send_buffer_bytes: usize,
-    /// Requested per-socket kernel receive buffer; zero keeps OS autotuning/defaults.
-    #[arg(long, env = "WAR_TCP_RECEIVE_BUFFER_BYTES", default_value_t = 0)]
-    pub tcp_receive_buffer_bytes: usize,
     #[command(flatten)]
     pub origin_policy: crate::origin::OriginPolicy,
     #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
     pub max_connections: usize,
-    /// Maximum admitted TCP connections per direct peer IP; zero disables.
+    /// Maximum admitted sessions per direct peer IP; zero disables.
     #[arg(long, env = "WAR_MAX_CONNECTIONS_PER_IP", default_value_t = 0)]
     pub max_connections_per_ip: usize,
     #[arg(long, env = "WAR_MAX_CHANNELS", default_value_t = 10_000)]
@@ -101,20 +86,16 @@ pub struct Config {
     pub queue_bytes: usize,
     #[arg(long, env = "WAR_TOTAL_QUEUE_BYTES", default_value_t = 256 * 1024 * 1024)]
     pub total_queue_bytes: usize,
-    #[arg(long, env = "WAR_READ_BUFFER_BYTES", default_value_t = 4 * 1024)]
-    pub read_buffer_bytes: usize,
     /// Maximum backing storage for shared reliable-message slabs; zero disables.
     #[arg(long, env = "WAR_RECEIVE_ARENA_BYTES", default_value_t = 0)]
     pub receive_arena_bytes: usize,
     /// Minimum slab allocation on first use by a worker, shared across connections.
     #[arg(long, env = "WAR_RECEIVE_ARENA_PAGE_BYTES", default_value_t = 64 * 1024)]
     pub receive_arena_page_bytes: usize,
-    /// Shared decoder staging allowance, including growth headroom; zero disables admission.
+    /// Shared staging allowance for records being received, including growth headroom;
+    /// zero disables admission.
     #[arg(long, env = "WAR_TOTAL_READ_BUFFER_BYTES", default_value_t = 1024 * 1024 * 1024)]
     pub total_read_buffer_bytes: usize,
-    /// Reclaim enlarged decoder storage after this many seconds without large input; zero disables.
-    #[arg(long, env = "WAR_READ_BUFFER_IDLE_SECS", default_value_t = 5)]
-    pub read_buffer_idle_secs: u64,
     #[arg(long, env = "WAR_MAX_VARIABLES", default_value_t = 256)]
     pub max_variables: usize,
     #[arg(long, env = "WAR_MAX_VARIABLE_BYTES", default_value_t = 1024 * 1024)]
@@ -132,9 +113,10 @@ pub struct Config {
     pub join_timeout_secs: u64,
     #[arg(long, env = "WAR_WRITE_TIMEOUT_SECS", default_value_t = 5)]
     pub write_timeout_secs: u64,
-    /// Zero disables server heartbeats.
+    /// QUIC keep-alive interval; zero disables keep-alives and the idle timeout.
     #[arg(long, env = "WAR_PING_INTERVAL_SECS", default_value_t = 15)]
     pub ping_interval_secs: u64,
+    /// QUIC idle timeout; a connection silent this long ends without a close code.
     #[arg(long, env = "WAR_PONG_TIMEOUT_SECS", default_value_t = 45)]
     pub pong_timeout_secs: u64,
     /// Joined sessions with no application input/output expire; zero disables.
@@ -201,19 +183,6 @@ impl Config {
             "receive-arena-bytes must be zero or at least receive-arena-page-bytes; both must fit the address space"
         );
         ensure!(
-            self.listen_backlog > 0,
-            "listen-backlog must be in 1..=65535"
-        );
-        for (name, bytes) in [
-            ("tcp-send-buffer-bytes", self.tcp_send_buffer_bytes),
-            ("tcp-receive-buffer-bytes", self.tcp_receive_buffer_bytes),
-        ] {
-            ensure!(
-                bytes == 0 || (4096..=16 * 1024 * 1024).contains(&bytes),
-                "{name} must be zero (OS default) or in 4096..=16777216"
-            );
-        }
-        ensure!(
             self.max_connections_per_ip <= u32::MAX as usize,
             "max-connections-per-ip must be in 0..=4294967295"
         );
@@ -222,7 +191,6 @@ impl Config {
             ("max-channels", self.max_channels),
             ("max-channel-members", self.max_channel_members),
             ("queue-messages", self.queue_messages),
-            ("read-buffer-bytes", self.read_buffer_bytes),
             ("max-variables", self.max_variables),
             ("max-variable-bytes", self.max_variable_bytes),
         ] {
@@ -254,14 +222,8 @@ impl Config {
             "total-variable-bytes must fit one channel budget and the addressable range"
         );
         ensure!(
-            self.read_buffer_bytes <= 1024 * 1024,
-            "read-buffer-bytes cannot exceed 1048576"
-        );
-        ensure!(
-            self.total_read_buffer_bytes == 0
-                || (self.total_read_buffer_bytes >= self.handshake_read_reservation()
-                    && self.total_read_buffer_bytes <= isize::MAX as usize),
-            "total-read-buffer-bytes must be zero or fit one handshake staging reservation and the addressable range"
+            self.total_read_buffer_bytes <= isize::MAX as usize,
+            "total-read-buffer-bytes exceeds the addressable range"
         );
         ensure!(
             self.max_connections <= tokio::sync::Semaphore::MAX_PERMITS,
@@ -293,10 +255,6 @@ impl Config {
         ensure!(
             self.idle_timeout_secs <= 86_400,
             "idle timeout exceeds one day"
-        );
-        ensure!(
-            self.read_buffer_idle_secs <= 86_400,
-            "read buffer idle interval exceeds one day"
         );
         ensure!(
             (1..=86_400).contains(&self.pong_timeout_secs),
@@ -334,16 +292,10 @@ impl Config {
     pub fn write_timeout(&self) -> Duration {
         Duration::from_secs(self.write_timeout_secs)
     }
-
-    pub(crate) fn handshake_read_reservation(&self) -> usize {
-        // The HTTP reader retains a bounded Vec plus a 4 KiB chunk. Two times
-        // their sum covers growth and transfer into the decoder's BytesMut.
-        2 * self.read_buffer_bytes.max(MAX_HTTP_UPGRADE_BYTES + 4096)
-    }
 }
 
 #[cfg(test)]
-mod backlog_tests {
+mod tests {
     use super::*;
 
     #[test]
@@ -399,29 +351,6 @@ mod backlog_tests {
     }
 
     #[test]
-    fn listen_backlog_is_bounded_for_cli_and_embedding() {
-        assert_eq!(Config::default().listen_backlog, 1024);
-        for value in ["0", "65536"] {
-            assert!(Config::try_parse_from(["war-relay", "--listen-backlog", value]).is_err());
-        }
-        for backlog in [1, u16::MAX] {
-            let config = Config {
-                listen_backlog: backlog,
-                ..Config::default()
-            };
-            config.validate().unwrap();
-        }
-        assert!(
-            Config {
-                listen_backlog: 0,
-                ..Config::default()
-            }
-            .validate()
-            .is_err()
-        );
-    }
-
-    #[test]
     fn pin_workers_defaults_to_auto_and_keeps_the_bare_flag() {
         let parse = |args: &[&str]| {
             Config::try_parse_from(["war-relay"].iter().chain(args))
@@ -437,23 +366,21 @@ mod backlog_tests {
         assert_eq!(parse(&["--pin-workers=true"]), Some(PinWorkers::On));
         assert_eq!(parse(&["--pin-workers=off"]), Some(PinWorkers::Off));
         assert_eq!(parse(&["--pin-workers=sometimes"]), None);
-        let unpinned = |pin_workers, legacy_websocket, workers| {
+        let unpinned = |pin_workers, workers| {
             Config {
                 pin_workers,
-                legacy_websocket,
                 ..Config::default()
             }
             .worker_cores(workers)
             .unwrap()
             .is_none()
         };
-        assert!(unpinned(PinWorkers::Off, false, 1));
-        assert!(unpinned(PinWorkers::Auto, true, 1));
+        assert!(unpinned(PinWorkers::Off, 1));
         // Auto never claims fewer CPUs than it was given, and never fails.
         let allowed = core_affinity::get_core_ids().map_or(0, |cores| cores.len());
         if allowed > 1 {
-            assert!(unpinned(PinWorkers::Auto, false, allowed - 1));
-            assert!(unpinned(PinWorkers::Auto, false, allowed + 1));
+            assert!(unpinned(PinWorkers::Auto, allowed - 1));
+            assert!(unpinned(PinWorkers::Auto, allowed + 1));
             assert!(
                 Config {
                     pin_workers: PinWorkers::On,
@@ -483,42 +410,6 @@ mod backlog_tests {
                 Config {
                     receive_arena_bytes: bytes,
                     receive_arena_page_bytes: page,
-                    ..Config::default()
-                }
-                .validate()
-                .is_err()
-            );
-        }
-    }
-
-    #[test]
-    fn kernel_buffer_requests_are_optional_and_bounded_for_cli_and_embedding() {
-        let default = Config::default();
-        assert_eq!(default.tcp_send_buffer_bytes, 0);
-        assert_eq!(default.tcp_receive_buffer_bytes, 0);
-        let parsed = Config::try_parse_from([
-            "war-relay",
-            "--tcp-send-buffer-bytes",
-            "16384",
-            "--tcp-receive-buffer-bytes",
-            "24576",
-        ])
-        .unwrap();
-        parsed.validate().unwrap();
-        assert_eq!(parsed.tcp_send_buffer_bytes, 16384);
-        assert_eq!(parsed.tcp_receive_buffer_bytes, 24576);
-        for invalid in [1, 4095, 16 * 1024 * 1024 + 1] {
-            assert!(
-                Config {
-                    tcp_send_buffer_bytes: invalid,
-                    ..Config::default()
-                }
-                .validate()
-                .is_err()
-            );
-            assert!(
-                Config {
-                    tcp_receive_buffer_bytes: invalid,
                     ..Config::default()
                 }
                 .validate()

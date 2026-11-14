@@ -10,18 +10,17 @@ fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
     let bytes = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf5]);
     let mut batch = relay.receive_batch();
     batch
-        .receive(&sender.registration.peer, bytes.clone(), 4096)
+        .receive(&sender.registration.peer, bytes.clone())
         .unwrap();
     let held = recipient.outgoing.try_recv().unwrap();
     assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 0);
-    assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     assert_eq!(
         recipient.registration.peer.budget.used.load(Relaxed),
         held.frame.len()
     );
     assert_eq!(
-        batch.receive(&sender.registration.peer, Bytes::from_static(b"\xff"), 4096),
+        batch.receive(&sender.registration.peer, Bytes::from_static(b"\xff")),
         Err(Disconnect::PROTOCOL)
     );
     batch.publish();
@@ -31,9 +30,8 @@ fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
         relay.metrics.incoming_bytes.load(Relaxed),
         bytes.len() as u64 + 1
     );
-    assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 1);
     batch
-        .receive(&sender.registration.peer, bytes.clone(), 4096)
+        .receive(&sender.registration.peer, bytes.clone())
         .unwrap();
     drop(batch);
     assert_eq!(relay.metrics.incoming_messages.load(Relaxed), 3);
@@ -41,7 +39,6 @@ fn input_batch_defers_only_cumulative_statistics_and_publishes_once() {
         relay.metrics.incoming_bytes.load(Relaxed),
         bytes.len() as u64 * 2 + 1
     );
-    assert_eq!(relay.metrics.routing_reused_bytes.load(Relaxed), 2);
     drop((sender, recipient));
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     drop(held);
@@ -63,13 +60,11 @@ fn input_batches_keep_instance_identity_and_publish_during_unwind() {
             a.receive(
                 &one.registration.peer,
                 protocol::envelope(one.registration.peer.id.load(Relaxed), &[0xf5]),
-                4096,
             )
             .unwrap();
             b.receive(
                 &two.registration.peer,
                 protocol::envelope(two.registration.peer.id.load(Relaxed), &[0xf5]),
-                4096,
             )
             .unwrap();
             b.publish();
@@ -154,11 +149,6 @@ fn fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns() {
     assert_eq!(first_frame.frame.payload().as_ptr(), pointer);
     assert_eq!(second_frame.frame.payload().as_ptr(), pointer);
     assert_eq!(first_frame.frame.payload(), value.as_ref());
-    assert_eq!(
-        relay.metrics.routing_reused_bytes.load(Relaxed),
-        value.len() as u64
-    );
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     drop(sender);
     drop(first);
     drop(second);
@@ -167,33 +157,6 @@ fn fanout_shares_the_received_value_and_keeps_it_alive_after_receive_returns() {
     assert!(relay.metrics.queued_bytes.load(Relaxed) > 0);
     drop(first_frame);
     drop(second_frame);
-    assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
-}
-
-#[test]
-fn tiny_views_of_a_large_current_allocation_are_compacted() {
-    let relay = Relay::new(config()).unwrap();
-    let mut sender = relay.subscribe(b"a").unwrap();
-    let mut recipient = relay.subscribe(b"a").unwrap();
-    sender.outgoing.try_recv().unwrap();
-    recipient.outgoing.try_recv().unwrap();
-    let small = protocol::envelope(recipient.registration.peer.id.load(Relaxed), &[0xf6]);
-    let mut read_slab = bytes::BytesMut::with_capacity(65536);
-    read_slab.extend_from_slice(&small);
-    let input = read_slab.split().freeze();
-    let backing = input.clone();
-    let pointer = protocol::parse(&input).unwrap().1.as_ptr();
-    relay
-        .receive_with_storage(&sender.registration.peer, input, 65536)
-        .unwrap();
-    let packet = recipient.outgoing.try_recv().unwrap();
-    assert_ne!(packet.frame.payload().as_ptr(), pointer);
-    assert_eq!(packet.frame.payload(), [0xf6]);
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 1);
-    assert!(!backing.is_empty());
-    drop(packet);
-    drop(sender);
-    drop(recipient);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
 }
 
@@ -322,7 +285,6 @@ fn sparse_id_registry_rehash_preserves_owners_and_in_flight_payloads() {
     assert_eq!(relay.users_len(), 0);
     assert_eq!(packet.frame.payload().as_ptr(), payload_pointer);
     assert_eq!(packet.frame.payload(), value.as_ref());
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), packet.frame.len());
     drop(packet);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -472,7 +434,6 @@ fn sparse_membership_keeps_peers_variables_and_published_payloads_alive() {
         );
         assert_eq!(held.frame.payload().as_ptr(), pointer);
         assert_eq!(held.frame.payload(), value.as_ref());
-        assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
         drop(held);
         assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -591,7 +552,6 @@ fn sparse_channel_registry_preserves_names_variables_and_published_storage() {
     assert_eq!(relay.counts(), (0, 1));
     assert_eq!(held.frame.payload().as_ptr(), pointer);
     assert_eq!(held.frame.payload(), value.as_ref());
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -679,7 +639,6 @@ fn channel_snapshots_own_metadata_and_leave_the_registry_writable() {
     assert_eq!(captured.members, 2);
     assert_eq!(held.frame.payload().as_ptr(), body_pointer);
     assert_eq!(held.frame.payload(), value.as_ref());
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);

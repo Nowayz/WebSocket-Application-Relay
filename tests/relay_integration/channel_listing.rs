@@ -20,6 +20,16 @@ async fn listing(server: &Server, path: &str) -> Vec<serde_json::Value> {
     serde_json::from_str(body).unwrap()
 }
 
+/// Join one session per binary channel name.
+async fn join_names(server: &Server, names: &[&[u8]]) -> Vec<Client> {
+    let mut clients = Vec::new();
+    for name in names {
+        let join = protocol::byte_string(name);
+        clients.push(Client::join(&server.endpoint, server.options(), &join).await);
+    }
+    clients
+}
+
 #[tokio::test]
 async fn bounded_http_pages_preserve_order_binary_names_variables_and_validation() {
     let server = Server::new(config()).await;
@@ -33,22 +43,11 @@ async fn bounded_http_pages_preserve_order_binary_names_variables_and_validation
         "π世界".as_bytes(),
         b"1234567890abcdef",
     ];
-    let mut sockets = Vec::new();
-    for name in names {
-        let mut request = server.url.as_str().into_client_request().unwrap();
-        request.headers_mut().insert(
-            "sec-websocket-protocol",
-            protocol::SUBPROTOCOL.parse().unwrap(),
-        );
-        let (mut socket, _) = connect_async(request).await.unwrap();
-        socket
-            .send(Message::Binary(protocol::byte_string(name)))
-            .await
-            .unwrap();
-        data(&mut socket).await;
-        sockets.push(socket);
-    }
-    command(&mut sockets[0], 4, b"\x82\x43key\xf5").await;
+    let mut clients = join_names(&server, names).await;
+    assert_eq!(
+        clients[0].command(4, b"\x82\x43key\xf5").await,
+        protocol::reply(4, b"\xf5")
+    );
     let expected = listing(&server, "/v1/channels").await;
     assert_eq!(
         listing(&server, "/v1/channels?cache_bust=1").await,
@@ -116,25 +115,20 @@ async fn bounded_http_pages_preserve_order_binary_names_variables_and_validation
     }
     assert_eq!(listing(&server, "/v1/channels").await, expected);
     server.stop().await;
-    drop(sockets);
 }
 
 #[tokio::test]
 async fn a_cursor_survives_channel_retirement_and_observes_later_membership() {
     let server = Server::new(config()).await;
-    let (mut a, _) = server.join("a").await;
-    let (b, _) = server.join("b").await;
+    let a = server.join("a").await;
+    let _b = server.join("b").await;
     let page = listing(&server, "/v1/channels?limit=1").await;
     assert_eq!(page[0]["name"], "a");
     let cursor = query_escape(page[0]["name_base64"].as_str().unwrap());
-    a.close(None).await.unwrap();
-    assert!(matches!(
-        a.next().await.unwrap().unwrap(),
-        Message::Close(_)
-    ));
-    let (behind, _) = server.join("\0").await;
-    let (ahead, _) = server.join("c").await;
-    let (b2, _) = server.join("b").await;
+    a.close().await;
+    let _behind = server.join("\0").await;
+    let _ahead = server.join("c").await;
+    let _b2 = server.join("b").await;
     let page = listing(&server, &format!("/v1/channels?limit=100&after={cursor}")).await;
     let expected = listing(&server, "/v1/channels")
         .await
@@ -149,19 +143,20 @@ async fn a_cursor_survives_channel_retirement_and_observes_later_membership() {
     assert!(page.iter().any(|row| row["name"] == "c"));
     assert!(!page.iter().any(|row| row["name"] == "\0"));
     server.stop().await;
-    drop((a, b, behind, ahead, b2));
 }
 
 #[tokio::test]
 async fn large_escaped_channel_names_preserve_the_complete_http_response() {
     let server = Server::new(config()).await;
-    let mut sockets = Vec::new();
-    for last in 1..=32 {
-        let mut name = [1; 16];
-        name[15] = last;
-        let (socket, _) = server.join(std::str::from_utf8(&name).unwrap()).await;
-        sockets.push(socket);
-    }
+    let names: Vec<[u8; 16]> = (1..=32)
+        .map(|last| {
+            let mut name = [1; 16];
+            name[15] = last;
+            name
+        })
+        .collect();
+    let names: Vec<&[u8]> = names.iter().map(|name| &name[..]).collect();
+    let _clients = join_names(&server, &names).await;
     let response = server.http("GET", "/v1/channels", Some("admin-test")).await;
     let (headers, body) = response.split_once("\r\n\r\n").unwrap();
     assert!(headers.starts_with("HTTP/1.1 200"));
@@ -174,20 +169,12 @@ async fn large_escaped_channel_names_preserve_the_complete_http_response() {
     assert_eq!(rows.as_array().unwrap().len(), 33);
     // Six-byte JSON escapes make these rows exceed a normal row-size hint.
     // Check every name, including the final row after the buffer has grown.
-    for last in 1..=32 {
-        let mut name = [1; 16];
-        name[15] = last;
-        assert_eq!(
-            rows.as_array()
-                .unwrap()
-                .iter()
-                .filter(|row| row["name"] == std::str::from_utf8(&name).unwrap())
-                .count(),
-            1
-        );
+    for name in names {
+        let name = std::str::from_utf8(name).unwrap();
+        let rows = rows.as_array().unwrap().iter();
+        assert_eq!(rows.filter(|row| row["name"] == name).count(), 1);
     }
     server.stop().await;
-    drop(sockets);
 }
 
 #[tokio::test]
@@ -203,24 +190,9 @@ async fn http_channel_listing_preserves_exact_json_and_authentication() {
         "π世界".as_bytes(),
         b"1234567890abcdef",
     ];
-    let mut sockets = Vec::new();
-    for name in names {
-        let mut request = server.url.as_str().into_client_request().unwrap();
-        request.headers_mut().insert(
-            "sec-websocket-protocol",
-            protocol::SUBPROTOCOL.parse().unwrap(),
-        );
-        let (mut socket, _) = connect_async(request).await.unwrap();
-        socket
-            .send(Message::Binary(protocol::byte_string(name)))
-            .await
-            .unwrap();
-        let welcome = data(&mut socket).await;
-        assert_ne!(Decoder::new(&welcome).u64().unwrap(), 0);
-        sockets.push(socket);
-    }
+    let mut clients = join_names(&server, names).await;
     assert_eq!(
-        command(&mut sockets[0], 4, b"\x82\x43key\xf5").await,
+        clients[0].command(4, b"\x82\x43key\xf5").await,
         protocol::reply(4, b"\xf5")
     );
     for token in [None, Some("wrong")] {
@@ -250,5 +222,4 @@ async fn http_channel_listing_preserves_exact_json_and_authentication() {
         serde_json::json!({"name":null, "name_base64":"/w==", "members":1, "variables":0, "variable_bytes":0})
     );
     server.stop().await;
-    drop(sockets);
 }

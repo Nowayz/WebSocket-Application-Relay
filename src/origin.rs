@@ -1,10 +1,7 @@
-//! Optional browser-origin admission, evaluated once during HTTP upgrade.
+//! Optional browser-origin admission, evaluated once per WebTransport session request.
 use anyhow::{Context, Result, ensure};
 use clap::Args;
-use tungstenite::{
-    handshake::server::ErrorResponse,
-    http::{HeaderMap, Response, Uri, header},
-};
+use http::{HeaderMap, Uri, header};
 
 /// Exact serialized browser origins. Missing Origin remains allowed for native
 /// clients; this browser boundary is not authentication of non-browser clients.
@@ -77,21 +74,10 @@ impl OriginPolicy {
     }
 }
 
-pub(crate) fn forbidden() -> ErrorResponse {
-    const BODY: &str = "Origin Not Allowed\n";
-    Response::builder()
-        .status(403)
-        .header(header::CONNECTION, "close")
-        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .header(header::CONTENT_LENGTH, BODY.len())
-        .body(Some(BODY.into()))
-        .expect("static origin rejection")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tungstenite::http::HeaderValue;
+    use http::HeaderValue;
 
     #[test]
     fn exact_origins_preserve_native_clients_and_reject_ambiguous_values() {

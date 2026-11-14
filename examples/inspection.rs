@@ -9,8 +9,6 @@ use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 use clap::{Parser, ValueEnum};
-#[cfg(test)]
-use futures_util::{SinkExt, StreamExt};
 use minicbor::Decoder;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -23,13 +21,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     time::{MissedTickBehavior, timeout},
-};
-use tokio_tungstenite::{
-    MaybeTlsStream, connect_async_with_config,
-    tungstenite::{
-        Message,
-        protocol::{CloseFrame, WebSocketConfig},
-    },
 };
 use war_relay::protocol;
 
@@ -80,9 +71,7 @@ impl ValueKind {
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
-    certificate: Option<String>,
-    #[arg(long)]
-    ca_certificate: Option<std::path::PathBuf>,
+    certificate: String,
     /// Shared QUIC socket receive buffer; zero selects the OS default.
     #[arg(long, default_value_t = 4 * 1024 * 1024)]
     udp_receive_buffer_bytes: usize,
@@ -413,79 +402,17 @@ fn gate(event: &str, details: serde_json::Value) -> Result<()> {
     Ok(())
 }
 async fn data(socket: &mut Socket) -> Result<Bytes> {
-    match timeout(Duration::from_secs(5), socket.next())
+    timeout(Duration::from_secs(5), socket.next())
         .await?
-        .context("missing data")??
-    {
-        Message::Binary(b) => Ok(b),
-        m => anyhow::bail!("unexpected {m:?}"),
-    }
+        .context("missing data")
 }
 async fn join(url: &str, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
-    if url.starts_with("wss://") {
-        return joined(
-            timeout(Duration::from_secs(5), Socket::connect_tls(url, None)).await??,
-            name,
-            counts,
-        )
-        .await;
-    }
-    if url.starts_with("https://") {
-        let socket = timeout(Duration::from_secs(5), Socket::connect(url)).await??;
-        return joined(socket, name, counts).await;
-    }
-    let (socket, _) = timeout(
-        Duration::from_secs(5),
-        connect_async_with_config(
-            url,
-            Some(WebSocketConfig::default().read_buffer_size(4096)),
-            true,
-        ),
-    )
-    .await??;
-    joined(Socket::websocket(socket), name, counts).await
-}
-
-async fn join_bound(
-    url: &str,
-    name: &Bytes,
-    counts: &mut Counts,
-    index: usize,
-) -> Result<(Socket, u64)> {
-    if url.starts_with("https://") {
-        return join(url, name, counts).await;
-    }
-    let uri: tokio_tungstenite::tungstenite::http::Uri = url.parse()?;
-    ensure!(
-        uri.scheme_str() == Some("ws") && uri.host() == Some("127.0.0.1"),
-        "bound global fixture requires loopback ws"
-    );
-    let socket = tokio::net::TcpSocket::new_v4()?;
-    let address = std::net::Ipv4Addr::new(127, 0, (index / 12000).try_into()?, 2);
-    socket.bind((address, 0).into())?;
-    let stream = socket
-        .connect(
-            (
-                std::net::Ipv4Addr::LOCALHOST,
-                uri.port_u16().context("missing port")?,
-            )
-                .into(),
-        )
-        .await?;
-    stream.set_nodelay(true)?;
-    let (socket, _) = tokio_tungstenite::client_async_with_config(
-        url,
-        MaybeTlsStream::Plain(stream),
-        Some(WebSocketConfig::default().read_buffer_size(4096)),
-    )
-    .await?;
-    joined(Socket::websocket(socket), name, counts).await
+    let socket = timeout(Duration::from_secs(5), Socket::connect(url)).await??;
+    joined(socket, name, counts).await
 }
 
 async fn joined(mut socket: Socket, name: &Bytes, counts: &mut Counts) -> Result<(Socket, u64)> {
-    socket
-        .send(Message::Binary(protocol::byte_string(name)))
-        .await?;
+    socket.send(&protocol::byte_string(name)).await?;
     let welcome = data(&mut socket).await?;
     let mut d = Decoder::new(&welcome);
     let id = d.u64()?;
@@ -503,7 +430,7 @@ async fn joined(mut socket: Socket, name: &Bytes, counts: &mut Counts) -> Result
 }
 async fn exchange(socket: &mut Socket, request: Bytes, counts: &mut Counts) -> Result<Bytes> {
     counts.sent(&request);
-    socket.send(Message::Binary(request)).await?;
+    socket.send(&request).await?;
     let result = data(socket).await?;
     counts.received(&result);
     Ok(result)
@@ -519,29 +446,7 @@ async fn authenticate(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
     Ok(())
 }
 async fn close(socket: &mut Socket, counts: &mut Counts) -> Result<()> {
-    if timeout(Duration::from_secs(5), socket.close_transport()).await?? {
-        counts.normal_closes += 1;
-        return Ok(());
-    }
-    let frame = CloseFrame {
-        code: 1000.into(),
-        reason: "inspection".into(),
-    };
-    socket.send(Message::Close(Some(frame.clone()))).await?;
-    let reply = timeout(Duration::from_secs(5), socket.next())
-        .await?
-        .context("missing Close")??;
-    ensure!(
-        reply == Message::Close(Some(frame)),
-        "Close mismatch: {reply:?}"
-    );
-    socket.flush().await?;
-    ensure!(
-        timeout(Duration::from_secs(5), socket.next())
-            .await?
-            .is_none(),
-        "missing EOF"
-    );
+    timeout(Duration::from_secs(5), socket.close()).await??;
     counts.normal_closes += 1;
     Ok(())
 }
@@ -604,7 +509,7 @@ async fn healthy(mut pair: Pair, until: Instant) -> Result<(Pair, Counts, Histog
             let packet = pair.packets[sent % 64].0.clone();
             counts.sent(&packet);
             counts.value_bytes += pair.value_bytes;
-            pair.source.send(Message::Binary(packet)).await?;
+            pair.source.send(&packet).await?;
             sent += 1;
         }
         for (i, stamp) in stamps.iter().enumerate() {
@@ -718,11 +623,7 @@ fn main() -> Result<()> {
 }
 
 async fn run(args: Args) -> Result<()> {
-    transport_socket::initialize(
-        args.certificate.as_deref(),
-        args.udp_receive_buffer_bytes,
-        args.ca_certificate.as_deref(),
-    )?;
+    transport_socket::initialize(&args.certificate, args.udp_receive_buffer_bytes)?;
     if args.audit_ids {
         ensure!(
             AUDITED_IDS

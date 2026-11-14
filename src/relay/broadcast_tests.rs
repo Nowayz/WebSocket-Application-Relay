@@ -41,7 +41,6 @@ fn broadcast_output_releases_the_registry_and_retains_the_original_body() {
     drop(source);
     assert_eq!(relay.counts(), (0, 1));
     assert_eq!(held.frame.payload(), value.as_ref());
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -101,7 +100,6 @@ fn membership_changes_invalidate_views_without_changing_captured_owners() {
     drop(late);
     assert_eq!(relay.counts(), (0, 1));
     assert_eq!(held.frame.payload(), value.as_ref());
-    assert_eq!(relay.metrics.routing_copied_bytes.load(Relaxed), 0);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), held.frame.len());
     drop(held);
     assert_eq!(relay.metrics.queued_bytes.load(Relaxed), 0);

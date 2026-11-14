@@ -12,7 +12,8 @@ export interface RelayOptions {
   WebTransportClass?: typeof WebTransport;
   serverCertificateHashes?: WebTransportHash[];
   congestionControl?: WebTransportCongestionControl;
-  WebSocketClass?: new (url: string | URL, protocols?: string | string[]) => WebSocket;
+  /** Alternative transport, for example a test double; defaults to WebTransport. */
+  TransportClass?: new (url: string | URL, options: { closeTimeoutMs: number }) => RelayTransport;
 }
 export interface RelayEventMap {
   message: CustomEvent<{ sender: bigint; value: unknown; unreliable?: true }>;
@@ -27,11 +28,11 @@ export interface RelayTransport extends EventTarget {
   close(code?: number, reason?: string): void;
 }
 
-/** WebTransport client; explicit ws URLs retain the legacy comparison path. */
+/** WebTransport client. */
 export class Relay extends EventTarget {
-  constructor(ws: RelayTransport, userId: UserId, requestTimeoutMs?: number);
+  constructor(transport: RelayTransport, userId: UserId, requestTimeoutMs?: number);
   static connect(url: string | URL, channel: Channel, options?: RelayOptions): Promise<Relay>;
-  readonly ws: RelayTransport;
+  readonly transport: RelayTransport;
   readonly userId: bigint;
   readonly ready: boolean;
   requestTimeoutMs: number;

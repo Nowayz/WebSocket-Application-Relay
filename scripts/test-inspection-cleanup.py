@@ -57,7 +57,6 @@ class CleanupTest(unittest.TestCase):
                     heap_profile=None, workers=4, mode='none', rooms=0, seconds=1,
                     inspectors=0, inspection_interval_ms=10, pairs=1, churn_workers=0,
                     fanout_readers=0, fanout_window=16, server_cpus='', client_cpus='',
-                    read_storage='worker',
                 )
                 events = [
                     {'event': 'ready', 'details': {'stable_sessions': 2, 'stable_channels': 1}},
@@ -78,6 +77,8 @@ class CleanupTest(unittest.TestCase):
                 with patch.object(inspection.platform, 'platform', return_value='controlled-host'), \
                      patch.object(inspection.subprocess, 'Popen', side_effect=launch), \
                      patch.object(inspection, 'metrics', return_value={}), \
+                     patch.object(inspection.benchmark_transport, 'certificate',
+                                  return_value=['--certificate', 'controlled-pin']), \
                      patch.object(inspection, 'check', side_effect=checks), \
                      patch.object(inspection.runtime, 'snapshot', return_value={'cpu_seconds': 0}), \
                      patch.object(inspection.select, 'select', return_value=([client.stdout], [], [])), \

@@ -1,7 +1,7 @@
 # Contributing
 
-Rust 1.91+ and Node 22+ are required. Before opening a pull request, run the
-same checks CI runs:
+Rust 1.91+ and Node 22+ are required. Before opening a pull request, run these
+checks:
 
 ```sh
 cargo fmt --check
@@ -15,9 +15,9 @@ npm run build:browser --prefix clients/js
 
 Rules that keep the relay correct:
 
-- No socket I/O may be performed while holding a registry lock (a session
-  shard, the channel index, a channel, the listener set or a departure queue).
-  Submit output after the guard drops, or queue it for the owning worker. The
+- No stream I/O may be performed while holding a registry lock (a channel, a
+  publication job or a departure queue). Submit output after the guard drops,
+  or queue it for the recipient's session task. The
   lock order is listed in [docs/architecture.md](docs/architecture.md).
 - Every new configuration option in `src/config.rs` or `src/origin.rs` must be
   added to the reference table in [docs/operations.md](docs/operations.md)

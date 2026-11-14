@@ -1,7 +1,7 @@
 import { Relay, BROADCAST, LISTEN, type RelayEventMap } from '@war/relay-client';
 
 async function example() {
-  const relay = await Relay.connect('ws://localhost:1338', 'typed');
+  const relay = await Relay.connect('https://localhost:1338/war', 'typed');
   const id: bigint = relay.userId;
   relay.send(id, { bytes: new Uint8Array([1, 2]), text: 'hello', count: 42n });
   relay.send(BROADCAST, [true, null, 1.5]);
@@ -23,6 +23,6 @@ async function example() {
   // @ts-expect-error Full uint64 IDs use bigint, not decimal strings.
   relay.send('18446744073709551615', null);
   // @ts-expect-error Channels are strings or bytes, not arbitrary objects.
-  await Relay.connect('ws://localhost:1338', { channel: 'typed' });
+  await Relay.connect('https://localhost:1338/war', { channel: 'typed' });
 }
 void example;

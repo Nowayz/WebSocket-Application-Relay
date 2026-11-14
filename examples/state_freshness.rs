@@ -3,12 +3,7 @@
 use anyhow::{Context, Result, ensure};
 use bytes::{Bytes, BytesMut};
 use clap::{Parser, ValueEnum};
-use futures_util::{
-    SinkExt, StreamExt,
-    stream::{SplitSink, SplitStream},
-};
 use std::{
-    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering::Relaxed},
@@ -16,7 +11,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 use war_relay::{
     protocol,
     webtransport::{read_record, write_record},
@@ -26,8 +20,6 @@ use web_transport_quinn::{Client, RecvStream, SendStream, Session};
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum Mode {
-    Websocket,
-    WebsocketTls,
     Stream,
     Datagram,
 }
@@ -38,9 +30,7 @@ struct Args {
     #[arg(long, value_enum)]
     mode: Mode,
     #[arg(long)]
-    certificate: Option<String>,
-    #[arg(long)]
-    ca_certificate: Option<PathBuf>,
+    certificate: String,
     #[arg(long, default_value_t = 10)]
     seconds: u64,
     #[arg(long, default_value_t = 60)]
@@ -54,73 +44,27 @@ struct Args {
     #[arg(long, default_value_t = u32::MAX)]
     packet_threshold: u32,
 }
-type Ws = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
-enum SendSide {
-    Ws(SplitSink<Ws, Message>),
-    Wt(Box<Session>, SendStream),
-}
-enum ReadSide {
-    Ws(SplitStream<Ws>),
-    Wt(Box<Session>, RecvStream),
-}
+struct SendSide(Box<Session>, SendStream);
+struct ReadSide(Box<Session>, RecvStream);
 struct Peer {
     send: SendSide,
     read: ReadSide,
     id: u64,
 }
-async fn peer(args: &Args, endpoint: Option<&Client>) -> Result<Peer> {
+async fn peer(args: &Args, endpoint: &Client) -> Result<Peer> {
     let join = protocol::text("freshness");
-    if let Some(endpoint) = endpoint {
-        let connection = endpoint.connect(url::Url::parse(&args.url)?).await?;
-        let (mut send, mut read) = connection.open_bi().await?;
-        write_record(&mut send, &join).await?;
-        let id = minicbor::Decoder::new(&read_record(&mut read, 1024).await?).u64()?;
-        Ok(Peer {
-            send: SendSide::Wt(Box::new(connection.clone()), send),
-            read: ReadSide::Wt(Box::new(connection), read),
-            id,
-        })
-    } else {
-        let connector = if args.mode == Mode::WebsocketTls {
-            let cert = std::fs::read(
-                args.ca_certificate
-                    .as_ref()
-                    .context("TLS comparison requires --ca-certificate")?,
-            )?;
-            let mut roots = tokio_rustls::rustls::RootCertStore::empty();
-            roots.add(tokio_rustls::rustls::pki_types::CertificateDer::from(cert))?;
-            let config = tokio_rustls::rustls::ClientConfig::builder_with_protocol_versions(&[
-                &tokio_rustls::rustls::version::TLS13,
-            ])
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-            Some(tokio_tungstenite::Connector::Rustls(Arc::new(config)))
-        } else {
-            None
-        };
-        let (mut ws, _) =
-            tokio_tungstenite::connect_async_tls_with_config(&args.url, None, true, connector)
-                .await?;
-        ws.send(Message::Binary(join)).await?;
-        let id =
-            minicbor::Decoder::new(&ws.next().await.context("welcome EOF")??.into_data()).u64()?;
-        let (send, read) = ws.split();
-        Ok(Peer {
-            send: SendSide::Ws(send),
-            read: ReadSide::Ws(read),
-            id,
-        })
-    }
+    let connection = endpoint.connect(url::Url::parse(&args.url)?).await?;
+    let (mut send, mut read) = connection.open_bi().await?;
+    write_record(&mut send, &join).await?;
+    let id = minicbor::Decoder::new(&read_record(&mut read, 1024).await?).u64()?;
+    Ok(Peer {
+        send: SendSide(Box::new(connection.clone()), send),
+        read: ReadSide(Box::new(connection), read),
+        id,
+    })
 }
-fn endpoint(args: &Args) -> Result<Option<Client>> {
-    if matches!(args.mode, Mode::Websocket | Mode::WebsocketTls) {
-        return Ok(None);
-    }
-    let pin = args
-        .certificate
-        .as_ref()
-        .context("WebTransport requires --certificate")?
-        .parse::<wtransport::tls::Sha256Digest>()?;
+fn endpoint(args: &Args) -> Result<Client> {
+    let pin = args.certificate.parse::<wtransport::tls::Sha256Digest>()?;
     let config = wtransport::ClientConfig::builder()
         .with_bind_default()
         .with_server_certificate_hashes([pin])
@@ -140,7 +84,7 @@ fn endpoint(args: &Args) -> Result<Option<Client>> {
     let mut transport = wtransport::quinn::TransportConfig::default();
     transport.packet_threshold(args.packet_threshold);
     quic.transport_config(Arc::new(transport));
-    Ok(Some(Client::new(endpoint, quic)))
+    Ok(Client::new(endpoint, quic))
 }
 struct Observed {
     seen: Vec<bool>,
@@ -232,32 +176,22 @@ async fn receive(
     check: Arc<Check>,
     stop: tokio_util::sync::CancellationToken,
 ) -> Result<ReadSide> {
-    let work = async {
-        match &mut read {
-            ReadSide::Ws(stream) => {
-                while let Some(packet) = stream.next().await {
-                    let Message::Binary(bytes) = packet? else {
-                        anyhow::bail!("unexpected WebSocket frame");
-                    };
-                    check.receive(&bytes)?;
-                }
-                anyhow::bail!("unexpected receiver EOF")
-            }
-            ReadSide::Wt(connection, stream) => loop {
-                // Preserve a partially read reliable record while datagrams arrive.
-                let record = read_record(stream, check.bulk_bytes + 32);
-                tokio::pin!(record);
-                loop {
-                    tokio::select! {
-                        result=&mut record => {check.receive(&result?)?; break;},
-                        result=connection.read_datagram(), if datagrams => check.receive(&result?)?,
-                    }
-                }
-            },
-        }
-    };
-    tokio::select! { result=work => { result?; }, _=stop.cancelled() => {} }
+    tokio::select! { result=receive_until_error(&mut read, datagrams, &check) => { result?; }, _=stop.cancelled() => {} }
     Ok(read)
+}
+async fn receive_until_error(read: &mut ReadSide, datagrams: bool, check: &Check) -> Result<()> {
+    let ReadSide(connection, stream) = read;
+    loop {
+        // Preserve a partially read reliable record while datagrams arrive.
+        let record = read_record(stream, check.bulk_bytes + 32);
+        tokio::pin!(record);
+        loop {
+            tokio::select! {
+                result=&mut record => {check.receive(&result?)?; break;},
+                result=connection.read_datagram(), if datagrams => check.receive(&result?)?,
+            }
+        }
+    }
 }
 async fn publish(
     mut send: SendSide,
@@ -265,71 +199,37 @@ async fn publish(
     bulk: Bytes,
     datagrams: bool,
 ) -> Result<SendSide> {
-    match &mut send {
-        SendSide::Ws(sink) => {
-            sink.send(Message::Binary(bulk)).await?;
+    let SendSide(connection, stream) = &mut send;
+    if datagrams {
+        let reliable = write_record(stream, &bulk);
+        let states = async {
             while let Some(packet) = updates.recv().await {
-                sink.send(Message::Binary(packet)).await?;
+                connection.send_datagram(packet)?;
             }
-        }
-        SendSide::Wt(connection, stream) if datagrams => {
-            let reliable = write_record(stream, &bulk);
-            let states = async {
-                while let Some(packet) = updates.recv().await {
-                    connection.send_datagram(packet)?;
-                }
-                Ok::<(), anyhow::Error>(())
-            };
-            tokio::try_join!(reliable, states)?;
-        }
-        SendSide::Wt(_, stream) => {
-            write_record(stream, &bulk).await?;
-            while let Some(packet) = updates.recv().await {
-                write_record(stream, &packet).await?;
-            }
+            Ok::<(), anyhow::Error>(())
+        };
+        tokio::try_join!(reliable, states)?;
+    } else {
+        write_record(stream, &bulk).await?;
+        while let Some(packet) = updates.recv().await {
+            write_record(stream, &packet).await?;
         }
     }
     Ok(send)
 }
 async fn close(mut send: SendSide, mut read: ReadSide, other: u64) -> Result<()> {
     let departure = protocol::envelope(protocol::BROADCAST, &protocol::uint(other));
-    match (&mut send, &mut read) {
-        (SendSide::Wt(connection, stream), ReadSide::Wt(_, receive)) => {
-            write_record(stream, &[]).await?;
-            loop {
-                let packet = read_record(receive, 1024).await?;
-                if packet.is_empty() {
-                    break;
-                }
-                ensure!(packet == departure, "unexpected stream data during close");
-            }
-            connection.close(1000, b"freshness complete");
-            wtransport::quinn::Connection::closed(connection).await;
+    let (SendSide(connection, stream), ReadSide(_, receive)) = (&mut send, &mut read);
+    write_record(stream, &[]).await?;
+    loop {
+        let packet = read_record(receive, 1024).await?;
+        if packet.is_empty() {
+            break;
         }
-        (SendSide::Ws(sink), ReadSide::Ws(stream)) => {
-            let frame = tokio_tungstenite::tungstenite::protocol::CloseFrame {
-                code: 1000.into(),
-                reason: "freshness".into(),
-            };
-            sink.send(Message::Close(Some(frame.clone()))).await?;
-            let mut acknowledged = false;
-            while let Some(packet) = stream.next().await {
-                match packet? {
-                    Message::Binary(bytes) => {
-                        ensure!(bytes == departure, "unexpected data during close")
-                    }
-                    Message::Close(Some(reply)) => {
-                        ensure!(reply == frame, "close acknowledgement mismatch");
-                        acknowledged = true;
-                        sink.flush().await?;
-                    }
-                    other => anyhow::bail!("unexpected close frame {other:?}"),
-                }
-            }
-            ensure!(acknowledged, "missing close acknowledgement");
-        }
-        _ => anyhow::bail!("mismatched transport halves"),
+        ensure!(packet == departure, "unexpected stream data during close");
     }
+    connection.close(1000, b"freshness complete");
+    wtransport::quinn::Connection::closed(connection).await;
     Ok(())
 }
 
@@ -357,8 +257,8 @@ async fn main() -> Result<()> {
             .context("workload count overflow")?,
     )?;
     let endpoint = endpoint(&args)?;
-    let source = peer(&args, endpoint.as_ref()).await?;
-    let target = peer(&args, endpoint.as_ref()).await?;
+    let source = peer(&args, &endpoint).await?;
+    let target = peer(&args, &endpoint).await?;
     // Prepare finite test storage and complete CBOR packets before measurement.
     let mut templates = Vec::with_capacity(count);
     for sequence in 0..count {

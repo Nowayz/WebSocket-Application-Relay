@@ -1,27 +1,38 @@
 # WAR CBOR v1
 
-## Framing
+## Transport
 
-HTTP upgrades optionally enforce an exact browser Origin allowlist through
-`--allowed-origin` / `WAR_ALLOWED_ORIGINS`, on the native listener.
-The default remains unrestricted. With a list, denied or duplicate Origin
-headers receive HTTP `403` before upgrade; missing Origin remains allowed for
-native clients. This is separate from authentication and leaves CBOR routing
-unchanged. See [operations](operations.md#browser-origin-admission).
+A session is one WebTransport session (HTTP/3 over QUIC) at the path `/war`, for
+example `https://relay.example/war`. Any other path is refused with HTTP `404`.
+The session request optionally enforces an exact browser Origin allowlist through
+`--allowed-origin` / `WAR_ALLOWED_ORIGINS`. The default remains unrestricted.
+With a list, denied or duplicate Origin headers receive HTTP `403`; a missing
+Origin remains allowed for native clients. This is separate from authentication
+and leaves CBOR routing unchanged. See
+[operations](operations.md#browser-origin-admission).
 
-One CBOR item per binary WebSocket message. WebSocket fragmentation is reassembled
-by tungstenite; the relay processes complete messages. Text WebSocket messages
-close with `1003`. The first CBOR item is a definite-length text or byte string
-containing a channel name, 0–16 decoded bytes. Text uses strict UTF-8. The reply is
-a CBOR uint64, excluding 0 and `18446744073709551615`.
+The client opens one bidirectional stream. Each direction carries records: a
+4-byte big-endian length followed by that many bytes of one CBOR item. The
+first client record is a definite-length text or byte string containing a
+channel name, 0–16 decoded bytes. Text uses strict UTF-8. The reply record is a
+CBOR uint64, excluding 0 and `18446744073709551615`.
 
-Subsequent messages are `[target: uint64, value: CBOR]`. Forwarded messages are
+Subsequent records are `[target: uint64, value: CBOR]`. Forwarded records are
 `[sender: uint64, value: CBOR]`. CBOR integer byte order is independent of the
-machine.
-The sender prefix is stored separately from the received application value and
-gathered into one ordinary binary WebSocket message at write time. Both compact
-and full-width target IDs remain accepted; no fixed-width CBOR requirement or
-additional WebSocket fragmentation is introduced by routing.
+machine. The sender prefix is stored separately from the received application
+value and gathered into one record at write time. Both compact and full-width
+target IDs remain accepted.
+
+A datagram carries exactly one complete `[target, value]` item with no length
+prefix. Datagrams are unreliable and unordered; they share the session's
+membership, routing and rate limits with its stream. Relay commands (target
+`0`) are refused on datagrams: the session closes with `1002`. A datagram
+forwarded to a recipient whose negotiated maximum datagram size is smaller is
+dropped for that recipient.
+
+An empty record (length zero) from the client is a graceful close: the relay
+removes the session from routing, delivers its departure notices, and answers
+with an empty record. The client then closes the connection.
 
 Values support all definite-length CBOR major types, tags, half/single/double
 floats, null, undefined, and simple values. Non-minimal integer encodings are
@@ -49,9 +60,9 @@ encodings, which remain accepted and unchanged.
 | Sender `0` | Command reply |
 | Sender `18446744073709551615` | Disconnect event; value is departed uint64 ID |
 
-Unknown destinations are dropped. A connection's messages retain order;
-concurrent senders have no global total-order guarantee. A new connection's first
-received item is its ID. A socket remains tied to its channel until disconnection.
+Unknown destinations are dropped. A session's reliable messages retain order;
+concurrent senders have no global total-order guarantee. A new session's first
+received record is its ID. A session remains tied to its channel until it ends.
 
 `re_globl` broadcasts reach all sessions, while privileged listeners in that
 channel can receive selected traffic. `--disable-global-broadcast` requires
@@ -90,8 +101,10 @@ behind them is in [architecture.md](architecture.md); terms are in the
 - **Departure notices are ordered within a room, not across rooms.** Within
   one room a departure notice follows the departed session's last messages.
   Notices for different rooms are advanced by independent queues and have no
-  order relative to each other. A departed peer completing its Close handshake
+  order relative to each other. A departed peer completing its graceful close
   does not prove that other recipients received its notice.
+- **Datagrams are best-effort.** A datagram may be lost or arrive out of order
+  relative to other datagrams and to reliable records. It is never retransmitted.
 - **ID takeover.** Assigning an ID held by another session closes that session
   with `4001`. Routing looks up the target atomically with reassignment: a
   message routed after the assignment reply goes to the new owner, while
@@ -169,15 +182,16 @@ See [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html) for CBOR encoding ru
 
 ## Close codes
 
+Policy closes end the WebTransport session with one of these codes and its
+reason (browsers report them through `WebTransport.closed`).
+
 | Code | Cause |
 | --- | --- |
-| `1000` | Normal close |
-| `1001` | Shutdown, heartbeat timeout, or configured application-idle timeout |
-| `1002` | Invalid CBOR/WAR or WebSocket framing |
-| `1003` | WebSocket text at the CBOR endpoint |
-| `1008` | Authentication, rate, join-timeout, reserved-ID, or global-send policy |
-| `1009` | Incoming message exceeds configured size |
-| `1013` | Join refused by admission or drain; channel variable capacity; the session's own command reply could not be funded; the session is a slow consumer; decoder staging budget exhausted |
+| `1000` | Normal close after a graceful close request |
+| `1001` | Shutdown or configured application-idle timeout |
+| `1002` | Invalid CBOR/WAR, a record longer than `WAR_MAX_MESSAGE_BYTES`, a command sent as a datagram, a join record that does not arrive within `WAR_JOIN_TIMEOUT_SECS`, or any other session failure |
+| `1008` | Authentication, rate, reserved-ID, or global-send policy |
+| `1013` | Join refused by admission or drain; channel variable capacity; the session's own command reply could not be funded; the session is a slow consumer |
 | `4000` | Operator disconnect |
 | `4001` | Privileged fixed-ID takeover |
 
@@ -187,27 +201,14 @@ channel variable write exceeded the per-channel or global variable budget. The
 session's own command reply, including its welcome, could not be funded from
 its output budget. The session is a slow consumer: its per-session queue is
 full, or it holds at least a quarter of its own `WAR_QUEUE_BYTES` while the
-global budget is exhausted. After upgrade, exhausting the shared decoder
-staging budget (`WAR_TOTAL_READ_BUFFER_BYTES`) also closes with `1013`. A
-session is never closed with `1013` because of its recipients, and a recipient
-is never closed only because the global output budget is exhausted.
+global budget is exhausted. A session is never closed with `1013` because of
+its recipients, and a recipient is never closed only because the global output
+budget is exhausted.
 
-Admission refusals before upgrade can end with a TCP close instead of a WebSocket
-close frame.
-
-After a successful HTTP upgrade, native decoder rejections use the same policy
-before and after channel join: protocol errors send `1002`, excessive message
-size sends `1009`, and decoder staging exhaustion sends `1013`. Size/admission
-decisions made from a frame header do not wait for its body. A failed decoder
-can only send a best-effort Close; it does not resume parsing untrusted input to
-wait for an acknowledgement. Complete CBOR-message policy failures use the
-ordinary bounded closing handshake. This follows the distinction in
-[RFC 6455 section 7.1.7](https://www.rfc-editor.org/rfc/rfc6455.html#section-7.1.7)
-between reporting failure and continuing to process input after failure.
-
-Close codes describe the intended policy. If a transport is blocked partway
-through a frame, cancellation drops it instead of queueing another write behind
-the blocked data. Such a peer may observe an abnormal close/reset; `1006` is a
-client-side report and is never transmitted as a close frame. A cooperative peer's
-valid Close code and reason are echoed before dropping its transport, including
-connections that close before joining a channel.
+Shutdown closes every QUIC connection with application error `1001`. A
+connection refused before the WebTransport session is established (connection
+limit, per-address limit, drain) is refused at the QUIC layer and has no session
+close code. QUIC keep-alives are sent every `WAR_PING_INTERVAL_SECS`; a
+connection that stays silent for `WAR_PONG_TIMEOUT_SECS` times out without a
+close code. Exhausting the shared record staging budget
+(`WAR_TOTAL_READ_BUFFER_BYTES`) ends the session with `1002`.
