@@ -87,19 +87,7 @@ pub async fn serve(
             .map_or(2, usize::from)
             .min(16)
     });
-    let worker_cores = if relay.config.pin_workers {
-        let mut cores = core_affinity::get_core_ids()
-            .context("cannot discover allowed CPUs for native worker affinity")?;
-        anyhow::ensure!(
-            cores.len() >= workers,
-            "pin-workers needs one allowed CPU per native worker: {} CPUs for {workers} workers",
-            cores.len()
-        );
-        cores.truncate(workers);
-        Some(cores)
-    } else {
-        None
-    };
+    let worker_cores = relay.config.worker_cores(workers)?;
     let mut prepared = Vec::new();
     prepared
         .try_reserve_exact(workers)

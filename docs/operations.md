@@ -20,7 +20,10 @@ In WebTransport mode, `--workers` controls the connection and application runtim
 One additional `war-ingress` thread owns a current-thread runtime for the shared
 UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
 `--pin-workers` pins the application workers and does not reserve an extra CPU
-for ingress. Session shutdown completes before this runtime is stopped and joined.
+for ingress. By default (`auto`) the workers are pinned when the process may use
+exactly one CPU per worker, which is the case with the default worker count on
+hosts of up to 16 CPUs; the relay then only partitions CPUs it was given. Use
+`--pin-workers=off` when the host shares those CPUs with other busy work. Session shutdown completes before this runtime is stopped and joined.
 Startup failure also stops and joins it. Reliable private/control output attempts
 an immediate chunk write when there is no older output; partial writes retain
 FIFO position, charged credit, and their write deadline. The queue ordering lock
@@ -101,7 +104,7 @@ socket memory, application storage and file descriptors in capacity planning.
 Linux commonly reports doubled socket-buffer requests; check effective settings.
 Small TCP windows can limit throughput on high bandwidth-delay networks.
 
-Choose worker count and optional `WAR_PIN_WORKERS` for the actual host. Keep load
+Choose worker count and `WAR_PIN_WORKERS` (default `auto`) for the actual host. Keep load
 generators on different physical cores during comparisons, and record SMT
 siblings, worker affinity and CPU topology. The fixed masks in mixed-load scripts
 assume the original 32-logical-CPU test host; adjust them before another host.
@@ -255,7 +258,7 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--shutdown-timeout-secs` | `WAR_SHUTDOWN_TIMEOUT_SECS` | `10` | 1 to 86400 | Worker grace to send `1001` and retire sockets at terminal shutdown |
 | `--disable-global-broadcast` | `WAR_DISABLE_GLOBAL_BROADCAST` | off | Flag | `re_globl` broadcasts require an authenticated sender |
 | `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Native I/O workers, or WebTransport connection/application workers (plus one ingress thread) |
-| `--pin-workers` | `WAR_PIN_WORKERS` | off | Flag; needs one allowed CPU per worker | Pin each worker thread to one CPU |
+| `--pin-workers` | `WAR_PIN_WORKERS` | `auto` | `auto`, `on` (bare flag, `true`), `off` (`false`); `on` needs one allowed CPU per worker | Pin each worker thread to one CPU; `auto` pins WebTransport workers when the allowed CPUs number exactly one per worker |
 
 Two secrets are environment-only and never appear in `--help` or logs:
 

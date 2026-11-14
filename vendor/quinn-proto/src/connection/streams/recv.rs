@@ -286,6 +286,34 @@ impl<'a> Chunks<'a> {
     ///
     /// Should call finalize() when done calling this.
     pub fn next(&mut self, max_length: usize) -> Result<Option<Chunk>, ReadError> {
+        let ordered = self.ordered;
+        self.read_from(|assembler| {
+            let chunk = assembler.read(max_length, ordered)?;
+            let len = chunk.bytes.len();
+            Some((chunk, len))
+        })
+    }
+
+    /// Pass up to `max_length` (nonzero) ordered bytes to `consume` without splitting the
+    /// shared packet buffer, and return how many were passed
+    ///
+    /// Copying readers use this in place of [`Self::next`]. Should call finalize() when done.
+    pub fn read_with(
+        &mut self,
+        max_length: usize,
+        consume: impl FnOnce(&[u8]),
+    ) -> Result<Option<usize>, ReadError> {
+        debug_assert!(self.ordered && max_length != 0);
+        self.read_from(|assembler| {
+            let len = assembler.read_with(max_length, consume);
+            (len != 0).then_some((len, len))
+        })
+    }
+
+    fn read_from<T>(
+        &mut self,
+        read: impl FnOnce(&mut Assembler) -> Option<(T, usize)>,
+    ) -> Result<Option<T>, ReadError> {
         let rs = match self.state {
             ChunksState::Readable(ref mut rs) => rs,
             ChunksState::Reset(error_code) => {
@@ -297,9 +325,9 @@ impl<'a> Chunks<'a> {
             ChunksState::Finalized => panic!("must not call next() after finalize()"),
         };
 
-        if let Some(chunk) = rs.assembler.read(max_length, self.ordered) {
-            self.read += chunk.bytes.len() as u64;
-            return Ok(Some(chunk));
+        if let Some((data, len)) = read(&mut rs.assembler) {
+            self.read += len as u64;
+            return Ok(Some(data));
         }
 
         match rs.state {

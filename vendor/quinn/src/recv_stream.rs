@@ -144,9 +144,9 @@ impl RecvStream {
                     return ReadStatus::Readable(());
                 }
 
-                match chunks.next(buf.remaining()) {
-                    Ok(Some(chunk)) => {
-                        buf.put_slice(&chunk.bytes);
+                // Copy in place: splitting a chunk would clone and drop its shared buffer.
+                match chunks.read_with(buf.remaining(), |data| buf.put_slice(data)) {
+                    Ok(Some(_)) => {
                         read = true;
                     }
                     res => return (if read { Some(()) } else { None }, res.err()).into(),

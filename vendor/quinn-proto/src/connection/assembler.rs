@@ -106,6 +106,40 @@ impl Assembler {
         }
     }
 
+    /// Pass up to `max_length` ordered bytes from the next chunk to `consume`
+    ///
+    /// Unlike [`Self::read`], a partly read chunk is advanced in place rather than split, so
+    /// copying readers make no reference-count updates on the shared packet buffer.
+    pub(super) fn read_with(&mut self, max_length: usize, consume: impl FnOnce(&[u8])) -> usize {
+        loop {
+            let Some(mut chunk) = self.data.peek_mut() else {
+                return 0;
+            };
+            if chunk.offset > self.bytes_read {
+                return 0;
+            } else if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {
+                self.buffered -= chunk.bytes.len();
+                self.allocated -= chunk.allocation_size;
+                PeekMut::pop(chunk);
+                continue;
+            }
+            let start = (self.bytes_read - chunk.offset) as usize;
+            let len = max_length.min(chunk.bytes.len() - start);
+            consume(&chunk.bytes[start..start + len]);
+            self.bytes_read += len as u64;
+            if start + len == chunk.bytes.len() {
+                self.buffered -= chunk.bytes.len();
+                self.allocated -= chunk.allocation_size;
+                PeekMut::pop(chunk);
+            } else {
+                chunk.bytes.advance(start + len);
+                chunk.offset += (start + len) as u64;
+                self.buffered -= start + len;
+            }
+            return len;
+        }
+    }
+
     /// Copy fragmented chunk data to new chunks backed by a single buffer
     ///
     /// This makes sure we're not unnecessarily holding on to many larger allocations.
@@ -842,6 +876,27 @@ mod test {
 
     fn next_unordered(x: &mut Assembler) -> Chunk {
         x.read(usize::MAX, false).unwrap()
+    }
+
+    #[test]
+    fn read_with_copies_in_place_across_overlaps() {
+        let mut x = Assembler::new();
+        let packet = Bytes::from(b"0123456789".to_vec());
+        x.insert(0, packet.slice(0..6), 6).unwrap();
+        // Overlaps the unread tail of the first chunk.
+        x.insert(4, packet.slice(4..10), 6).unwrap();
+        let mut out = Vec::new();
+        let mut read = |x: &mut Assembler, max| x.read_with(max, |d| out.extend_from_slice(d));
+        assert_eq!(read(&mut x, 4), 4);
+        assert_eq!(x.buffered, 2 + 6);
+        // Both remaining chunks start at offset 4; either may come first.
+        while read(&mut x, 32) != 0 {}
+        assert_eq!(out, b"0123456789");
+        assert_eq!((x.buffered, x.allocated, x.bytes_read()), (0, 0, 10));
+        // Only `packet` holds the buffer now: in-place reads kept no split handles.
+        assert!(packet.is_unique());
+        x.insert(12, Bytes::from_static(b"cd"), 2).unwrap();
+        assert_eq!(x.read_with(32, |_| unreachable!()), 0);
     }
 
     fn next(x: &mut Assembler, size: usize) -> Option<Bytes> {

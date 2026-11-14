@@ -78,14 +78,9 @@ fn build_runtime(config: &Config, workers: usize) -> Result<tokio::runtime::Runt
         .worker_threads(workers)
         .enable_all()
         .event_interval(1);
-    if !config.pin_workers {
+    let Some(cores) = config.worker_cores(workers)? else {
         return Ok(builder.build()?);
-    }
-    let cores = core_affinity::get_core_ids().context("cannot discover allowed CPUs")?;
-    anyhow::ensure!(
-        cores.len() >= workers,
-        "pin-workers needs one allowed CPU per worker"
-    );
+    };
     let next = std::sync::atomic::AtomicUsize::new(0);
     builder.thread_name_fn(move || {
         let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

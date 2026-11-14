@@ -5,6 +5,45 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 
 pub(crate) const MAX_HTTP_UPGRADE_BYTES: usize = 16 * 1024;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum PinWorkers {
+    /// Pin WebTransport workers when the allowed CPUs number exactly one per worker.
+    /// That partitions only the CPUs the process was given. Under the historical
+    /// closed-loop workload it raised private delivery 5-29% at equal CPU per
+    /// delivery; legacy WebSocket measured no gain and stays unpinned.
+    Auto,
+    #[value(alias = "true", alias = "1", alias = "yes")]
+    On,
+    #[value(alias = "false", alias = "0", alias = "no")]
+    Off,
+}
+
+impl Config {
+    /// CPUs for each data worker, or `None` to leave workers unpinned.
+    pub fn worker_cores(&self, workers: usize) -> Result<Option<Vec<core_affinity::CoreId>>> {
+        let wanted = match self.pin_workers {
+            PinWorkers::Off => return Ok(None),
+            PinWorkers::Auto if self.legacy_websocket => return Ok(None),
+            PinWorkers::Auto => false,
+            PinWorkers::On => true,
+        };
+        let Some(mut cores) = core_affinity::get_core_ids() else {
+            ensure!(!wanted, "cannot discover allowed CPUs for worker affinity");
+            return Ok(None);
+        };
+        if !wanted && cores.len() != workers {
+            return Ok(None);
+        }
+        ensure!(
+            cores.len() >= workers,
+            "pin-workers needs one allowed CPU per worker: {} CPUs for {workers} workers",
+            cores.len()
+        );
+        cores.truncate(workers);
+        Ok(Some(cores))
+    }
+}
+
 /// Resource limits apply to each process. Secrets are loaded separately and never formatted.
 #[derive(Clone, Parser)]
 #[command(version, about = "WebSocket Application Relay (Rust)")]
@@ -108,9 +147,11 @@ pub struct Config {
     pub disable_global_broadcast: bool,
     #[arg(long, env = "WAR_WORKERS")]
     pub workers: Option<usize>,
-    /// Pin native data workers one per CPU from the process's allowed mask.
-    #[arg(long, env = "WAR_PIN_WORKERS")]
-    pub pin_workers: bool,
+    /// Pin data workers one per CPU from the process's allowed mask. `auto` pins
+    /// WebTransport workers when there is exactly one allowed CPU per worker.
+    #[arg(long, env = "WAR_PIN_WORKERS", value_enum, default_value_t = PinWorkers::Auto,
+          num_args = 0..=1, require_equals = true, default_missing_value = "on")]
+    pub pin_workers: PinWorkers,
     #[arg(skip)]
     pub auth_password: Option<String>,
     #[arg(skip)]
@@ -378,6 +419,50 @@ mod backlog_tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn pin_workers_defaults_to_auto_and_keeps_the_bare_flag() {
+        let parse = |args: &[&str]| {
+            Config::try_parse_from(["war-relay"].iter().chain(args))
+                .map(|config| config.pin_workers)
+                .ok()
+        };
+        assert_eq!(Config::default().pin_workers, PinWorkers::Auto);
+        assert_eq!(parse(&["--pin-workers"]), Some(PinWorkers::On));
+        assert_eq!(
+            parse(&["--pin-workers", "--workers", "2"]),
+            Some(PinWorkers::On)
+        );
+        assert_eq!(parse(&["--pin-workers=true"]), Some(PinWorkers::On));
+        assert_eq!(parse(&["--pin-workers=off"]), Some(PinWorkers::Off));
+        assert_eq!(parse(&["--pin-workers=sometimes"]), None);
+        let unpinned = |pin_workers, legacy_websocket, workers| {
+            Config {
+                pin_workers,
+                legacy_websocket,
+                ..Config::default()
+            }
+            .worker_cores(workers)
+            .unwrap()
+            .is_none()
+        };
+        assert!(unpinned(PinWorkers::Off, false, 1));
+        assert!(unpinned(PinWorkers::Auto, true, 1));
+        // Auto never claims fewer CPUs than it was given, and never fails.
+        let allowed = core_affinity::get_core_ids().map_or(0, |cores| cores.len());
+        if allowed > 1 {
+            assert!(unpinned(PinWorkers::Auto, false, allowed - 1));
+            assert!(unpinned(PinWorkers::Auto, false, allowed + 1));
+            assert!(
+                Config {
+                    pin_workers: PinWorkers::On,
+                    ..Config::default()
+                }
+                .worker_cores(allowed + 1)
+                .is_err()
+            );
+        }
     }
 
     #[test]

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- WebTransport workers are pinned one per CPU by default when the process may
+  use exactly one CPU per worker (`--pin-workers` is now `auto`, `on` or `off`;
+  the bare flag and `WAR_PIN_WORKERS=true` still mean `on`). Under the
+  historical closed-loop workload private delivery rises 14-16% and room
+  fanout 0-4%. Legacy WebSocket stays unpinned unless asked. QUIC stream reads
+  copy from the receive assembler in place instead of splitting the shared
+  packet buffer, removing two atomic updates per record; CPU per delivery
+  falls 1-4%.
+
 - The relay binary uses jemalloc as its global allocator on non-MSVC targets.
   WebTransport reliable throughput rises 2-3% for private routing, about 17%
   for room fanout and about 8% for mixed traffic, which puts it ahead of the

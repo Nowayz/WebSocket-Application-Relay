@@ -16,7 +16,8 @@ the data path runs outside Tokio.
 Data sockets belong to a fixed set of Mio readiness workers in
 [src/server.rs](../src/server.rs). Each worker is an OS thread named
 `war-io-N`. The default count is the number of available CPUs, capped at 16;
-`WAR_WORKERS` overrides it and `WAR_PIN_WORKERS` pins each thread to one CPU.
+`WAR_WORKERS` overrides it and `WAR_PIN_WORKERS=on` pins each thread to one CPU
+(the default `auto` pins only WebTransport workers).
 On Linux each worker has its own listening socket; the sockets share the port
 with `SO_REUSEPORT`, so the kernel spreads new connections across workers. On
 other platforms only the first worker listens. It accepts and hands each new

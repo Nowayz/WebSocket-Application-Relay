@@ -4054,3 +4054,29 @@ took 4.5 to 5.1 s before the fix; all 24 runs since take 1,358 to 1,469 ms,
 against 1,280 to 1,389 ms for TLS WebSocket. Memory at 100,000 sessions is
 1,674 MiB (one 32-byte field per connection), and paced CPU and saturating
 throughput are within this host's run-to-run range.
+
+### Worker pinning by default and in-place stream reads
+
+Under the historical closed-loop workload (four relay workers, 8,192 idle rooms,
+16-message windows) none of the transports saturate the relay: WebTransport used
+2.4 to 3.2 of its four cores on private routing and 1.8 on fanout, with every
+worker and client thread well below one core. Delivery is set by the round trip,
+and pinning shortens the wake-ups in it. Pinned workers raised private delivery
+5 to 29% per paired run at equal or lower CPU per delivery, and fanout about 1%.
+`--pin-workers` is now `auto` by default. It pins WebTransport workers when the
+process may use exactly one CPU per worker, which partitions only the CPUs it was
+given; the bare flag still means `on`, and `off` restores the old default. Legacy
+WebSocket stays unpinned unless asked.
+
+Call-graph profiling traced the largest buffer reference-count cost to the
+relay's 4-byte record-length reads. Quinn's copying read asked the receive
+assembler for a chunk no larger than the caller's buffer, which split the shared
+packet buffer and dropped the clone after copying. The vendored stack now copies
+from the head chunk and advances it in place (`Chunks::read_with`). Reference-count
+functions fell from 6.6% to 4.3% of relay samples; delivery was level over five
+paired runs and CPU per delivery fell 1 to 4%. Together, the new default delivers
+14 to 16% more private traffic than the old one and 0 to 4% more fanout. The
+remaining updates sit in packet decode, UDP batch splitting and send-buffer release,
+where removing them would need a different buffer design. Details are under
+`worker_pinning_default_and_in_place_stream_reads` in the
+[report](reports/webtransport-allocator-idle-storage-2026-11-13.json).

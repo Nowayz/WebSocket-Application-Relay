@@ -731,6 +731,21 @@
  #[derive(Debug)]
  enum ConnectionEvent {
      Close {
+--- a/quinn/src/recv_stream.rs
++++ b/quinn/src/recv_stream.rs
+@@ -144,9 +144,9 @@ impl RecvStream {
+                     return ReadStatus::Readable(());
+                 }
+
+-                match chunks.next(buf.remaining()) {
+-                    Ok(Some(chunk)) => {
+-                        buf.put_slice(&chunk.bytes);
++                // Copy in place: splitting a chunk would clone and drop its shared buffer.
++                match chunks.read_with(buf.remaining(), |data| buf.put_slice(data)) {
++                    Ok(Some(_)) => {
+                         read = true;
+                     }
+                     res => return (if read { Some(()) } else { None }, res.err()).into(),
 --- a/quinn/src/tests.rs
 +++ b/quinn/src/tests.rs
 @@ -1109,3 +1109,126 @@

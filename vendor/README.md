@@ -441,6 +441,23 @@ Prior To releases them at once. Tests:
 `server_retires_initial_client_cid_after_its_packets` and
 `deferred_cid_retirement_with_retire_prior_to`.
 
+## Copying stream reads without splitting packet buffers
+
+`RecvStream::poll_read_buf` used to take each chunk from the receive
+assembler with `Chunks::next(buf.remaining())`. When the caller's buffer was
+smaller than the chunk, as for the relay's 4-byte record-length reads, the
+assembler split the chunk, which clones the shared packet buffer, and the
+copy then dropped the clone: two atomic updates per record on a buffer the
+ingress thread had just written. `Chunks::read_with` passes the head chunk's
+ordered bytes to a closure and advances or pops the chunk in place, so a
+copying read touches a reference count only when it finishes a chunk.
+`next` and `read_with` share the stream-state handling. Under the historical
+private-routing workload the read path's clone fell from 1.2% to 0.1% of
+relay samples and its drop from 2.6% to 1.0%; CPU per delivery fell 1-4%.
+Test: `read_with_copies_in_place_across_overlaps`. The quinn-proto part is in
+`quinn-sparse-streams.patch` and the quinn caller in
+`quinn-event-channel.patch`.
+
 ## UDP receive-batch timestamps
 
 The Quinn endpoint samples time immediately after each successful socket

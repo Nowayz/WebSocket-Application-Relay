@@ -15,7 +15,48 @@
      pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
          if ordered && !self.state.is_ordered() {
              return Err(IllegalOrderedRead);
-@@ -195,6 +203,12 @@ impl Assembler {
+@@ -98,6 +106,40 @@ impl Assembler {
+         }
+     }
+
++    /// Pass up to `max_length` ordered bytes from the next chunk to `consume`
++    ///
++    /// Unlike [`Self::read`], a partly read chunk is advanced in place rather than split, so
++    /// copying readers make no reference-count updates on the shared packet buffer.
++    pub(super) fn read_with(&mut self, max_length: usize, consume: impl FnOnce(&[u8])) -> usize {
++        loop {
++            let Some(mut chunk) = self.data.peek_mut() else {
++                return 0;
++            };
++            if chunk.offset > self.bytes_read {
++                return 0;
++            } else if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {
++                self.buffered -= chunk.bytes.len();
++                self.allocated -= chunk.allocation_size;
++                PeekMut::pop(chunk);
++                continue;
++            }
++            let start = (self.bytes_read - chunk.offset) as usize;
++            let len = max_length.min(chunk.bytes.len() - start);
++            consume(&chunk.bytes[start..start + len]);
++            self.bytes_read += len as u64;
++            if start + len == chunk.bytes.len() {
++                self.buffered -= chunk.bytes.len();
++                self.allocated -= chunk.allocation_size;
++                PeekMut::pop(chunk);
++            } else {
++                chunk.bytes.advance(start + len);
++                chunk.offset += (start + len) as u64;
++                self.buffered -= start + len;
++            }
++            return len;
++        }
++    }
++
+     /// Copy fragmented chunk data to new chunks backed by a single buffer
+     ///
+     /// This makes sure we're not unnecessarily holding on to many larger allocations.
+@@ -195,6 +237,12 @@ impl Assembler {
              let buffer = Buffer::new(offset, bytes, allocation_size);
              self.buffered += buffer.bytes.len();
              self.allocated += buffer.allocation_size;
@@ -28,7 +69,7 @@
              self.data.push(buffer);
          }
          // `self.buffered` also counts duplicate bytes, therefore we use
-@@ -377,6 +391,31 @@ mod test {
+@@ -377,6 +425,31 @@ mod test {
      use super::*;
      use assert_matches::assert_matches;
 
@@ -60,7 +101,7 @@
      #[test]
      fn assemble_ordered() {
          let mut x = Assembler::new();
-@@ -393,6 +432,22 @@ mod test {
+@@ -393,6 +466,22 @@ mod test {
          assert_matches!(next(&mut x, 32), None);
      }
 
@@ -83,6 +124,34 @@
      #[test]
      fn assemble_unordered() {
          let mut x = Assembler::new();
+@@ -789,6 +878,27 @@ mod test {
+         x.read(usize::MAX, false).unwrap()
+     }
+
++    #[test]
++    fn read_with_copies_in_place_across_overlaps() {
++        let mut x = Assembler::new();
++        let packet = Bytes::from(b"0123456789".to_vec());
++        x.insert(0, packet.slice(0..6), 6).unwrap();
++        // Overlaps the unread tail of the first chunk.
++        x.insert(4, packet.slice(4..10), 6).unwrap();
++        let mut out = Vec::new();
++        let mut read = |x: &mut Assembler, max| x.read_with(max, |d| out.extend_from_slice(d));
++        assert_eq!(read(&mut x, 4), 4);
++        assert_eq!(x.buffered, 2 + 6);
++        // Both remaining chunks start at offset 4; either may come first.
++        while read(&mut x, 32) != 0 {}
++        assert_eq!(out, b"0123456789");
++        assert_eq!((x.buffered, x.allocated, x.bytes_read()), (0, 0, 10));
++        // Only `packet` holds the buffer now: in-place reads kept no split handles.
++        assert!(packet.is_unique());
++        x.insert(12, Bytes::from_static(b"cd"), 2).unwrap();
++        assert_eq!(x.read_with(32, |_| unreachable!()), 0);
++    }
++
+     fn next(x: &mut Assembler, size: usize) -> Option<Bytes> {
+         x.read(size, true).map(|chunk| chunk.bytes)
+     }
 --- a/quinn-proto/src/connection/datagrams.rs
 +++ b/quinn-proto/src/connection/datagrams.rs
 @@ -4,7 +4,7 @@
@@ -1352,6 +1421,56 @@
  mod state;
  #[allow(unreachable_pub)] // fuzzing only
  pub use state::StreamsState;
+--- a/quinn-proto/src/connection/streams/recv.rs
++++ b/quinn-proto/src/connection/streams/recv.rs
+@@ -286,6 +286,34 @@ impl<'a> Chunks<'a> {
+     ///
+     /// Should call finalize() when done calling this.
+     pub fn next(&mut self, max_length: usize) -> Result<Option<Chunk>, ReadError> {
++        let ordered = self.ordered;
++        self.read_from(|assembler| {
++            let chunk = assembler.read(max_length, ordered)?;
++            let len = chunk.bytes.len();
++            Some((chunk, len))
++        })
++    }
++
++    /// Pass up to `max_length` (nonzero) ordered bytes to `consume` without splitting the
++    /// shared packet buffer, and return how many were passed
++    ///
++    /// Copying readers use this in place of [`Self::next`]. Should call finalize() when done.
++    pub fn read_with(
++        &mut self,
++        max_length: usize,
++        consume: impl FnOnce(&[u8]),
++    ) -> Result<Option<usize>, ReadError> {
++        debug_assert!(self.ordered && max_length != 0);
++        self.read_from(|assembler| {
++            let len = assembler.read_with(max_length, consume);
++            (len != 0).then_some((len, len))
++        })
++    }
++
++    fn read_from<T>(
++        &mut self,
++        read: impl FnOnce(&mut Assembler) -> Option<(T, usize)>,
++    ) -> Result<Option<T>, ReadError> {
+         let rs = match self.state {
+             ChunksState::Readable(ref mut rs) => rs,
+             ChunksState::Reset(error_code) => {
+@@ -297,9 +325,9 @@ impl<'a> Chunks<'a> {
+             ChunksState::Finalized => panic!("must not call next() after finalize()"),
+         };
+
+-        if let Some(chunk) = rs.assembler.read(max_length, self.ordered) {
+-            self.read += chunk.bytes.len() as u64;
+-            return Ok(Some(chunk));
++        if let Some((data, len)) = read(&mut rs.assembler) {
++            self.read += len as u64;
++            return Ok(Some(data));
+         }
+
+         match rs.state {
 --- /dev/null
 +++ b/quinn-proto/src/connection/streams/sparse.rs
 @@ -0,0 +1,189 @@
