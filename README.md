@@ -79,26 +79,30 @@ profiles support these. Applications can import `Relay` from the generated
 
 ## Architecture
 
-- [WebTransport](src/webtransport.rs): one shared UDP socket, serviced by a
+The whole relay is one file, [src/lib.rs](src/lib.rs); each part below is a
+module in it. [src/main.rs](src/main.rs) is the command-line entry point and
+[src/tests/](src/tests) holds the unit tests.
+
+- WebTransport (`webtransport`): one shared UDP socket, serviced by a
   dedicated ingress thread, feeds QUIC connections driven on a multi-threaded
   Tokio runtime whose workers are pinned one per CPU when the process owns
   exactly that many. Each session reads length-prefixed CBOR records from its
   bidirectional stream and datagrams from the connection. The QUIC and TLS
   stack is vendored with storage, scheduling and loss-recovery patches; see
   [vendor/README.md](vendor/README.md).
-- [Routing](src/relay.rs): no global registry lock. Session and channel indexes
+- Routing (`relay`): no global registry lock. Session and channel indexes
   are concurrent maps; each channel locks its own membership, variables and
   cached recipient view. Global observers use atomic immutable snapshots, and
   admission counters are atomics. No stream write happens while a registry lock
   is held. Large broadcasts capture an immutable recipient view and advance in
   bounded turns; ordinary rooms have their own departure queues and observer
   notices use sixteen shards. See [docs/architecture.md](docs/architecture.md).
-- [Output](src/webtransport/queue.rs): private sends attempt an immediate stream
+- Output (`webtransport::queue`): private sends attempt an immediate stream
   write; otherwise each session's output queue keeps FIFO order, partial writes
   and write deadlines.
-- [Frames](src/frame.rs): inline routing prefixes and shared `Bytes` bodies avoid
+- Frames (`frame`): inline routing prefixes and shared `Bytes` bodies avoid
   rebuilding the application payload for each destination.
-- [Management](src/admin.rs): health/readiness, metrics, paginated channel
+- Management (`admin`): health/readiness, metrics, paginated channel
   inspection, administrative disconnect and reversible drain/resume.
 
 Admission, record staging, retained output and channel variables have explicit

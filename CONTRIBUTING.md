@@ -19,9 +19,10 @@ Rules that keep the relay correct:
   publication job or a departure queue). Submit output after the guard drops,
   or queue it for the recipient's session task. The
   lock order is listed in [docs/architecture.md](docs/architecture.md).
-- Every new configuration option in `src/config.rs` or `src/origin.rs` must be
-  added to the reference table in [docs/operations.md](docs/operations.md)
-  with its environment variable, default, valid range and meaning.
+- Every new configuration option in the `config` or `origin` module of
+  `src/lib.rs` must be added to the reference table in
+  [docs/operations.md](docs/operations.md) with its environment variable,
+  default, valid range and meaning.
 - A behavior change that users can observe goes in `CHANGELOG.md` under
   "Unreleased".
 - Measurement reports go under `docs/reports/` with the date in the text. They

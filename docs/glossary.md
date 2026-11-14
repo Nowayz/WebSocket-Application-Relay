@@ -1,8 +1,8 @@
 # Glossary
 
 Terms used across the relay documentation, in the order they usually come up.
-The implementation is in [src/relay.rs](../src/relay.rs) and
-[src/webtransport.rs](../src/webtransport.rs); the design is in
+The implementation is the `relay` and `webtransport` modules of
+[src/lib.rs](../src/lib.rs); the design is in
 [architecture.md](architecture.md).
 
 **Session.** One joined WebTransport session (one QUIC connection). A session has a 64-bit ID, one

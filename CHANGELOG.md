@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The relay is one source file, `src/lib.rs`, with its former module files
+  folded in as inline modules; `src/main.rs` is the command-line entry point and
+  the unit tests live in `src/tests/`. Behavior and the public API are
+  unchanged.
 - **No synthetic limits.** The per-session rate limits and the connection,
   per-address, channel, room-member and variable-count caps are removed, along
   with the 64 MiB ceiling on `--max-message-bytes` (it may now be set up to the
