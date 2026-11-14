@@ -25,13 +25,11 @@ use tokio::{
     time::timeout,
 };
 use transport_socket::Socket;
-use tungstenite::{Message, protocol::CloseFrame};
 use war_relay::protocol;
 
 #[derive(Clone, Copy, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum Mode {
-    Websocket,
     Stream,
     Datagram,
 }
@@ -42,7 +40,7 @@ struct Args {
     #[arg(long, value_enum)]
     mode: Mode,
     #[arg(long)]
-    certificate: Option<String>,
+    certificate: String,
     #[arg(long, default_value_t = 32)]
     pairs: usize,
     #[arg(long, default_value_t = 0)]
@@ -173,26 +171,11 @@ fn elapsed_ns(start: Instant) -> Result<u64> {
     Ok(start.elapsed().as_nanos().try_into()?)
 }
 async fn binary(socket: &mut Socket) -> Result<Bytes> {
-    match socket.next().await.context("unexpected reliable EOF")?? {
-        Message::Binary(bytes) => Ok(bytes),
-        other => anyhow::bail!("unexpected frame {other:?}"),
-    }
+    socket.next().await
 }
 async fn peer(args: &Args, room: &str) -> Result<(Socket, u64)> {
-    let mut socket = if args.mode == Mode::Websocket {
-        Socket::websocket(
-            tokio_tungstenite::connect_async_with_config(
-                &args.url,
-                Some(tungstenite::protocol::WebSocketConfig::default().read_buffer_size(4096)),
-                true,
-            )
-            .await?
-            .0,
-        )
-    } else {
-        Socket::connect(&args.url).await?
-    };
-    socket.send(Message::Binary(protocol::text(room))).await?;
+    let mut socket = Socket::connect(&args.url).await?;
+    socket.send(&protocol::text(room)).await?;
     let bytes = binary(&mut socket).await?;
     let mut d = minicbor::Decoder::new(&bytes);
     let id = d.u64()?;
@@ -234,7 +217,7 @@ async fn publish(
         if args.mode == Mode::Datagram {
             result.source.socket.send_datagram(packet)?;
         } else {
-            result.source.socket.send(Message::Binary(packet)).await?;
+            result.source.socket.send(&packet).await?;
         }
         result.generated += 1;
         result.lag.record(now.saturating_sub(scheduled));
@@ -362,25 +345,7 @@ fn departure(packet: &[u8]) -> Result<u64> {
     Ok(id)
 }
 async fn close(mut socket: Socket) -> Result<()> {
-    if socket.close_transport().await? {
-        return Ok(());
-    }
-    let frame = CloseFrame {
-        code: 1000.into(),
-        reason: "load complete".into(),
-    };
-    socket.send(Message::Close(Some(frame.clone()))).await?;
-    ensure!(
-        socket
-            .next()
-            .await
-            .context("close EOF before acknowledgement")??
-            == Message::Close(Some(frame)),
-        "close acknowledgement mismatch"
-    );
-    socket.flush().await?;
-    ensure!(socket.next().await.is_none(), "missing EOF after close");
-    Ok(())
+    socket.close().await
 }
 
 async fn close_room(readers: Vec<Socket>, ids: Arc<Vec<u64>>, sender: u64) -> Result<()> {
@@ -507,11 +472,7 @@ async fn run(args: Arc<Args>) -> Result<()> {
     args.seconds
         .checked_mul(1_000_000_000)
         .context("duration overflow")?;
-    transport_socket::initialize(
-        args.certificate.as_deref(),
-        args.udp_receive_buffer_bytes,
-        None,
-    )?;
+    transport_socket::initialize(&args.certificate, args.udp_receive_buffer_bytes)?;
     let mut sources = Vec::new();
     let mut recipients = Vec::new();
     for index in 0..args.pairs {
@@ -706,7 +667,16 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     fn args(mode: &str) -> Args {
-        Args::try_parse_from(["load", "--url", "ws://localhost", "--mode", mode]).unwrap()
+        Args::try_parse_from([
+            "load",
+            "--url",
+            "https://localhost",
+            "--certificate",
+            "00",
+            "--mode",
+            mode,
+        ])
+        .unwrap()
     }
     fn packet(sender: u64, seq: u64, stamp: u64, bytes: usize) -> Bytes {
         let mut body = vec![0x5a; bytes];

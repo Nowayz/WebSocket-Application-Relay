@@ -23,7 +23,7 @@ function decodeMessage(data) {
   if (typeof data === 'string') throw new TypeError('Relay requires binary CBOR messages');
   return decoder.decode(new Uint8Array(data));
 }
-// WebSocket.close() permits 1000 or application codes in 3000..4999.
+// Application close codes for client-detected protocol failures.
 const CLIENT_PROTOCOL_ERROR = 4002;
 
 function requestTimeout(value) {
@@ -69,13 +69,13 @@ export class Relay extends EventTarget {
   #pending = null;
   #controls = Promise.resolve();
 
-  constructor(ws, userId, requestTimeoutMs = 10_000) {
+  constructor(transport, userId, requestTimeoutMs = 10_000) {
     super();
-    this.ws = ws;
+    this.transport = transport;
     this.userId = wireId(userId, true);
     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
     const message = event => {
-      if (ws.readyState === 2) return;
+      if (transport.readyState === 2) return;
       try {
         const envelope = decodeMessage(event.data);
         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
@@ -107,81 +107,79 @@ export class Relay extends EventTarget {
       } catch (error) {
         this.#pending?.reject(error);
         this.dispatchEvent(new CustomEvent('error', { detail: error }));
-        ws.close(CLIENT_PROTOCOL_ERROR, 'Invalid Relay Response');
+        transport.close(CLIENT_PROTOCOL_ERROR, 'Invalid Relay Response');
       }
     };
     const closed = event => {
-      ws.removeEventListener('message', message);
-      ws.removeEventListener('close', closed);
+      transport.removeEventListener('message', message);
+      transport.removeEventListener('close', closed);
       this.#pending?.reject(new Error(`Relay closed (${event.code}): ${event.reason}`));
       this.dispatchEvent(new CustomEvent('close', { detail: { code: event.code, reason: event.reason } }));
     };
-    ws.addEventListener('message', message);
-    ws.addEventListener('close', closed);
+    transport.addEventListener('message', message);
+    transport.addEventListener('close', closed);
   }
 
-  static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass, ...transportOptions } = {}) {
+  static async connect(url, channel, { requestTimeoutMs = 10_000, TransportClass = WebTransportChannel, ...transportOptions } = {}) {
     requestTimeout(requestTimeoutMs);
     const channelBytes = typeof channel === 'string' ? new TextEncoder().encode(channel) : channel;
     if (!(channelBytes instanceof Uint8Array) || channelBytes.length > 16) throw new RangeError('Channel must contain at most 16 bytes');
     // Capture the channel before asynchronous socket setup lets its owner reuse it.
     const subscription = encode(channel);
-    const LegacySocket = WebSocketClass ?? (/^wss?:/.test(String(url)) ? globalThis.WebSocket : undefined);
-    const ws = LegacySocket ? new LegacySocket(url, 'war.cbor.v1') : new WebTransportChannel(url, { closeTimeoutMs: requestTimeoutMs, ...transportOptions });
-    ws.binaryType = 'arraybuffer';
+    const transport = new TransportClass(url, { closeTimeoutMs: requestTimeoutMs, ...transportOptions });
     return new Promise((resolve, reject) => {
       const cleanup = () => {
         clearTimeout(timer);
-        ws.removeEventListener('open', open);
-        ws.removeEventListener('message', welcome);
-        ws.removeEventListener('close', closed);
-        ws.removeEventListener('error', closed);
+        transport.removeEventListener('open', open);
+        transport.removeEventListener('message', welcome);
+        transport.removeEventListener('close', closed);
+        transport.removeEventListener('error', closed);
       };
       const fail = (error, code, reason) => {
         cleanup();
         reject(error);
-        ws.close(code, reason);
+        transport.close(code, reason);
       };
       const closed = () => fail(new Error('Relay closed before subscription'));
       const open = () => {
-        try { ws.send(subscription); } catch (error) { fail(error); }
+        try { transport.send(subscription); } catch (error) { fail(error); }
       };
       const welcome = event => {
         cleanup();
         try {
           const id = decodeMessage(event.data);
-          resolve(new Relay(ws, id, requestTimeoutMs));
+          resolve(new Relay(transport, id, requestTimeoutMs));
         } catch (error) { fail(error, CLIENT_PROTOCOL_ERROR, 'Invalid Subscription'); }
       };
       const timer = setTimeout(() => fail(new Error('Relay join timeout')), requestTimeoutMs);
-      ws.addEventListener('close', closed, { once: true });
-      ws.addEventListener('error', closed, { once: true });
-      ws.addEventListener('open', open, { once: true });
-      ws.addEventListener('message', welcome, { once: true });
+      transport.addEventListener('close', closed, { once: true });
+      transport.addEventListener('error', closed, { once: true });
+      transport.addEventListener('open', open, { once: true });
+      transport.addEventListener('message', welcome, { once: true });
     });
   }
 
-  get ready() { return this.ws.readyState === 1; }
+  get ready() { return this.transport.readyState === 1; }
 
   send(target, value) {
     if (!this.ready) throw new Error('Relay is closed');
     // Number inputs larger than the safe-integer range have already lost precision.
     target = asUserId(target);
-    this.ws.send(encode([target, value]));
+    this.transport.send(encode([target, value]));
   }
 
   broadcast(value) { this.send(BROADCAST, value); }
   sendUnreliable(target, value) {
     target = asUserId(target);
     if (target === RELAY) throw new Error('Commands require reliable delivery');
-    if (!this.ws.sendUnreliable) throw new Error('Transport does not support datagrams');
-    return this.ws.sendUnreliable(encode([target, value]));
+    if (!this.transport.sendUnreliable) throw new Error('Transport does not support datagrams');
+    return this.transport.sendUnreliable(encode([target, value]));
   }
   broadcastUnreliable(value) { return this.sendUnreliable(BROADCAST, value); }
-  get maxDatagramSize() { return this.ws.maxDatagramSize ?? 0; }
+  get maxDatagramSize() { return this.transport.maxDatagramSize ?? 0; }
   close() {
     this.#pending?.reject(new Error('Relay is closed'));
-    this.ws.close(1000);
+    this.transport.close(1000);
   }
 
   /** Serialize commands: the deliberately small wire protocol has no request IDs. */
@@ -197,16 +195,16 @@ export class Relay extends EventTarget {
         this.#pending = null;
         reject(new Error('Relay request timeout'));
         // A late reply cannot be assigned to another request after a timeout.
-        this.ws.close(CLIENT_PROTOCOL_ERROR, 'Relay Request Timeout');
+        this.transport.close(CLIENT_PROTOCOL_ERROR, 'Relay Request Timeout');
       }, delay);
       this.#pending = { op: op === 5 ? 200 : op, resolve: finish(resolve), reject: finish(reject) };
       try {
         if (!this.ready) throw new Error('Relay is closed');
-        this.ws.send(packet);
+        this.transport.send(packet);
       } catch (error) {
         this.#pending.reject(error);
         // A forwarded command may still reply; do not reuse its response slot.
-        if (this.ready) this.ws.close(CLIENT_PROTOCOL_ERROR, 'Relay Command Send Failed');
+        if (this.ready) this.transport.close(CLIENT_PROTOCOL_ERROR, 'Relay Command Send Failed');
       }
     }));
     this.#controls = result.catch(() => {});

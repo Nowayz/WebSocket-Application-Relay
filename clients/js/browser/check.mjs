@@ -106,13 +106,13 @@ form.addEventListener('submit', async event => {
     pass('Unsafe Number IDs were rejected before sending.');
 
     const disconnect = once(a, 'disconnect');
-    const closed = once(b.ws, 'close');
+    const closed = once(b.transport, 'close');
     b.close();
     assert((await disconnect).detail.userId === b.userId, 'Disconnect ID changed');
     const closedEvent = await closed;
     assert(closedEvent.code === 1000, 'Peer session closure failed');
     for (const client of [a, outsider]) {
-      const closed = once(client.ws, 'close');
+      const closed = once(client.transport, 'close');
       client.close();
       const event = await closed;
       assert(event.code === 1000, 'Final session closure failed');
@@ -127,8 +127,8 @@ form.addEventListener('submit', async event => {
     status.textContent = 'Failed';
   } finally {
     // Failure also releases sessions; never leave test data/variables behind.
-    await Promise.allSettled(clients.filter(client => client.ws.readyState < 2).map(async client => {
-      const closed = once(client.ws, 'close');
+    await Promise.allSettled(clients.filter(client => client.transport.readyState < 2).map(async client => {
+      const closed = once(client.transport, 'close');
       client.close();
       await closed;
     }));

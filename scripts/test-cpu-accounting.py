@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """CPU snapshots must preserve stat field positions across Linux comm names."""
-import importlib.util
 import math
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import benchmark
-spec = importlib.util.spec_from_file_location('mixed_cpu_accounting', Path(__file__).with_name('mixed-capacity.py'))
-mixed = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mixed)
 
 
 def stat(name):
@@ -44,23 +40,20 @@ class CpuAccountingTest(unittest.TestCase):
 
     def test_process_and_thread_totals_ignore_spaces_and_parentheses_in_comm(self):
         for name in ['relay', 'relay worker', 'relay ) worker', 'relay (a) )b']:
-            for capture in [benchmark.snapshot, mixed.snapshot]:
-                with self.subTest(name=name, capture=capture.__module__):
-                    result = self.capture(capture, name)
-                    self.assertEqual(result['cpu_seconds'], 3.75)
-                    if capture is benchmark.snapshot:
-                        self.assertEqual(result['thread_cpu_seconds'], {'124': 3.75})
+            with self.subTest(name=name):
+                result = self.capture(benchmark.snapshot, name)
+                self.assertEqual(result['cpu_seconds'], 3.75)
+                self.assertEqual(result['thread_cpu_seconds'], {'124': 3.75})
 
     def test_user_and_system_times_exclude_children_and_use_clock_ticks(self):
         for ticks in [100, 250, 1000]:
-            for capture in [benchmark.snapshot, mixed.snapshot]:
-                with self.subTest(ticks=ticks, capture=capture.__module__):
-                    result = self.capture(capture, 'relay', ticks)
-                    self.assertEqual(result['user_cpu_seconds'], 250 / ticks)
-                    self.assertEqual(result['system_cpu_seconds'], 125 / ticks)
-                    self.assertEqual(result['cpu_seconds'], 375 / ticks)
-                    self.assertTrue(math.isclose(result['cpu_seconds'],
-                        result['user_cpu_seconds'] + result['system_cpu_seconds']))
+            with self.subTest(ticks=ticks):
+                result = self.capture(benchmark.snapshot, 'relay', ticks)
+                self.assertEqual(result['user_cpu_seconds'], 250 / ticks)
+                self.assertEqual(result['system_cpu_seconds'], 125 / ticks)
+                self.assertEqual(result['cpu_seconds'], 375 / ticks)
+                self.assertTrue(math.isclose(result['cpu_seconds'],
+                    result['user_cpu_seconds'] + result['system_cpu_seconds']))
 
 
 if __name__ == '__main__':

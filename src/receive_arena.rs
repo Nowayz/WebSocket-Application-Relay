@@ -1,7 +1,7 @@
 //! Bounded slabs shared by received records; published slices retain their slab.
+use crate::read_budget::{ReadBudget, ReadLease};
 use bytes::{Bytes, BytesMut};
 use std::{cell::RefCell, sync::Arc};
-use tungstenite::protocol::{ReadBudget, ReadLease};
 
 thread_local! {
     static PAGE: RefCell<Option<Page>> = const { RefCell::new(None) };

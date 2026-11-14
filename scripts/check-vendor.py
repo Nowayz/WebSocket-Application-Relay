@@ -46,7 +46,7 @@ def main():
         # Apply in a separate, disposable filesystem tree. Ambient Git settings
         # must not redirect this verification into the calling worktree.
         environment = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        patches = dict.fromkeys(info.get("patch", "read-buffer-reclaim.patch")
+        patches = dict.fromkeys(info["patch"]
                                 for info in provenance.values())
         for patch in patches:
             subprocess.run(["git", "apply", str(ROOT / "vendor" / patch)],

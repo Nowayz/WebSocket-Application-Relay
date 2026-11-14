@@ -2,8 +2,8 @@
 """Verify a real connected population, paced private traffic and complete cleanup.
 
 Build --release --bins --example capacity. Runs one fresh server at a time.
-The source-IP pool avoids the single-client ephemeral-port ceiling. No sysctls
-or machine-wide descriptor limits are changed. Gate scans are outside traffic.
+No sysctls or machine-wide descriptor limits are changed. Gate scans are
+outside traffic.
 """
 import benchmark_transport
 import argparse
@@ -16,7 +16,6 @@ from pathlib import Path
 import platform
 import resource
 import select
-import socket
 import signal
 import subprocess
 import tempfile
@@ -24,16 +23,13 @@ import time
 import urllib.request
 
 import benchmark as runtime
-import capacity_pressure
 import socket_resources
 
 ROOT = runtime.ROOT
 TOKEN = "capacity-benchmark"  # Only the disposable local server.
-ERRORS = ["war_accept_errors_total", "war_setup_errors_total", "war_handshake_errors_total",
-          "war_origin_rejected_total", "war_join_rejected_total", "war_rejected_total",
-          "war_protocol_errors_total", "war_rate_limited_total", "war_write_timeouts_total",
-          "war_write_errors_total", "war_close_failures_total", "war_aborted_writes_total",
-          "war_transport_disconnects_total", "war_slow_consumers_total", "war_global_pressure_total",
+ERRORS = ["war_handshake_errors_total", "war_origin_rejected_total", "war_rejected_total",
+          "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total",
+          "war_slow_consumers_total", "war_global_pressure_total",
           "war_read_buffer_reservations_rejected_total", "war_idle_timeouts_total"]
 
 
@@ -106,24 +102,6 @@ def process(pid, socket_inodes=None):
     return snapshot
 
 
-def established(port, owned_inodes):
-    """Count distinct server-owned sockets, retaining host-wide alias diagnostics."""
-    rows = 0
-    matching = set()
-    with open("/proc/net/tcp") as tcp:
-        next(tcp)
-        for row in tcp:
-            columns = row.split()
-            address, local_port = columns[1].split(":")
-            if address == "0100007F" and int(local_port, 16) == port and columns[3] == "01":
-                rows += 1
-                matching.add(columns[9])
-    return {"owned_established": len(matching & owned_inodes),
-            "raw_matching_rows": rows, "unique_matching_inodes": len(matching),
-            "foreign_matching_inodes": len(matching - owned_inodes),
-            "duplicate_rows": rows - len(matching)}
-
-
 def udp_census(owned_inodes):
     total = {"owned_sockets": 0, "receive_queue_bytes": 0, "send_queue_bytes": 0, "receive_drops": 0}
     for name in ("udp", "udp6"):
@@ -139,7 +117,7 @@ def udp_census(owned_inodes):
     return total
 
 
-def check(observed, event, args, pressure=None):
+def check(observed, event, args):
     counts = event["counts"]
     done = event["event"] == "done"
     expected = {"war_connections": 0 if done else args.users,
@@ -151,17 +129,13 @@ def check(observed, event, args, pressure=None):
                 "war_incoming_bytes_total": counts["sent_bytes"],
                 "war_deliveries_total": counts["deliveries"],
                 "war_delivered_bytes_total": counts["delivered_bytes"],
-                "war_routing_reused_bytes_total": counts["value_bytes"],
-                "war_routing_copied_bytes_total": 0,
+                "war_quic_connections": 0 if done else args.users,
+                # Every record is complete at a gate, so no staging lease remains.
+                "war_read_buffer_reserved_bytes": 0,
                 "war_queued_bytes": 0, "war_variable_bytes": 0}
     expected.update({name: 0 for name in ERRORS})
-    if pressure is not None:
-        capacity_pressure.adapt_checks(expected, observed, counts, pressure, event)
     for key, value in expected.items():
         assert observed[key] == value, (event["event"], key, observed[key], value)
-    allowance = 0 if done else (args.users * 28 if args.read_storage == "completion" else args.workers * 8192)
-    assert 0 <= observed["war_read_buffer_reserved_bytes"] <= allowance
-    event["read_allowance_bound"] = allowance
     event["exact_counter_checks"] = expected
 
 
@@ -197,50 +171,26 @@ def run(args):
     if slab_file and not kernel_resources:
         raise ValueError("kernel-slab-sizes requires kernel-socket-resources")
     slab_sizes = json.loads(slab_file.read_text()) if slab_file else None
-    # The TLS front end holds two sockets per session and inherits this limit.
-    descriptors = args.users * (2 if getattr(args, "transport", "") == "websocket-tls" else 1) + 128
-    assert resource.getrlimit(resource.RLIMIT_NOFILE)[0] >= descriptors, "descriptor limit too low"
     port, admin = runtime.free_port(), runtime.free_port()
     while port == admin:
         admin = runtime.free_port()
     environment = {k: v for k, v in os.environ.items() if not k.startswith("WAR_")}
     environment.update(WAR_ADMIN_TOKEN=TOKEN)
     server_environment = runtime.preload_environment(environment, args.server_preload)
-    extra = 10 if args.pressure_client else 0
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", str(args.workers),
-                      "--max-connections", str(args.users + max(args.connection_headroom, args.churn_workers * args.room_size + extra)),
-                      "--max-channels", str(args.users // args.room_size + args.churn_workers + 1 + bool(extra)),
+                      "--max-connections", str(args.users + max(args.connection_headroom, args.churn_workers * args.room_size)),
+                      "--max-channels", str(args.users // args.room_size + args.churn_workers + 1),
                       "--max-message-bytes", "65536", "--queue-bytes", "262144",
                       "--total-read-buffer-bytes", "268435456",
                       "--messages-per-second", "0", "--bytes-per-second", "0",
                       "--ping-interval-secs", str(args.ping_interval_secs), "--disable-global-broadcast"]
     if args.pin_workers:
         server_command.append("--pin-workers")
-    if args.tcp_send_buffer_bytes:
-        server_command += ["--tcp-send-buffer-bytes", str(args.tcp_send_buffer_bytes)]
-    if args.tcp_receive_buffer_bytes:
-        server_command += ["--tcp-receive-buffer-bytes", str(args.tcp_receive_buffer_bytes)]
     data_url = benchmark_transport.prepare(args, server_command, server_environment, port)
-    # Encrypted WebSocket control: the plaintext relay behind the TLS front-end fixture.
-    tls = getattr(args, "transport", "websocket") == "websocket-tls"
-    front_command = None
-    if tls:
-        if not all(getattr(args, name, None) for name in ("tls_front", "tls_cert", "tls_key", "tls_ca")):
-            raise ValueError("websocket-tls needs --tls-front, --tls-cert, --tls-key and --tls-ca")
-        front_port = runtime.free_port()
-        while front_port in (port, admin):
-            front_port = runtime.free_port()
-        data_url = f"wss://127.0.0.1:{front_port}"
-        front_command = [str(args.tls_front.resolve()), "--bind", f"127.0.0.1:{front_port}",
-                         "--upstream", f"127.0.0.1:{port}", "--cert", str(args.tls_cert.resolve()),
-                         "--key", str(args.tls_key.resolve()), "--workers", str(args.workers),
-                         "--upstream-sources", "8", "--copy-buffer-bytes", str(args.tls_copy_buffer_bytes)]
     client_command = [str(args.client.resolve()), "--url", data_url]
-    if tls:
-        client_command += ["--ca-certificate", str(args.tls_ca.resolve())]
-    for name in ("users", "room_size", "concurrency", "source_addresses", "seconds",
-                 "payload_bytes", "active_percent", "client_workers", "messages_per_second", "churn_workers", "waves"):
+    for name in ("users", "room_size", "concurrency", "seconds", "payload_bytes", "active_percent",
+                 "client_workers", "messages_per_second", "churn_workers", "waves", "udp_receive_buffer_bytes"):
         client_command += ["--" + name.replace("_", "-"), str(getattr(args, name))]
     if args.user_latency_output:
         client_command += ["--user-latency-output", str(args.user_latency_output.resolve())]
@@ -250,21 +200,18 @@ def run(args):
         server_command = ["taskset", "-c", args.server_cpus] + server_command
     if args.client_cpus:
         client_command = ["taskset", "-c", args.client_cpus] + client_command
-    if front_command and args.server_cpus:
-        front_command = ["taskset", "-c", args.server_cpus] + front_command
     result = {"timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "host": platform.platform(), "server_command": server_command, "client_command": client_command,
               "server_sha256": digest(args.server), "client_sha256": digest(args.client),
               "client_source_sha256": digest(ROOT / "examples/capacity.rs"), "runner_sha256": digest(__file__),
               "runner_sources_sha256": {name: digest(ROOT / name) for name in
-                  ("scripts/capacity.py", "scripts/capacity_pressure.py", "scripts/socket_resources.py", "scripts/benchmark.py", "scripts/benchmark_transport.py", "examples/support/socket.rs")},
+                  ("scripts/capacity.py", "scripts/socket_resources.py", "scripts/benchmark.py", "scripts/benchmark_transport.py", "examples/support/socket.rs")},
               "source_attribution": "Source snapshot; binary association requires the accompanying build record.",
               "fd_limit": resource.getrlimit(resource.RLIMIT_NOFILE),
-              "ephemeral_ports": Path("/proc/sys/net/ipv4/ip_local_port_range").read_text().strip(),
               "profile_diagnostic": args.profile or kernel_resources,
               "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
               "events": [], "management_samples": [], "thread_affinity": [], "passed": False,
-              "scope": "Loopback. WebTransport uses pinned TLS and graceful stream close; legacy WebSocket uses plaintext and Close/EOF; websocket-tls is that plaintext relay behind the TLS front end, whose figures are recorded separately and summed as deployment_*. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/Close/EOF cycles while the stable population remains connected. Inactive sockets answer heartbeat Pings. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every Close acknowledgement, EOF and room departure is checked. Process/descriptor/TCP or independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. Heartbeat policy and bounded message/queue/staging limits recorded in server_command."}
+              "scope": "Loopback WebTransport with a pinned development certificate; each session departs with an empty record, its acknowledgement and a QUIC close. Real connected CBOR users in small rooms. All live welcome IDs unique; every stable user routes a complete independently checked private ring message before measurement. Selected rooms send configurable payloads at staggered per-user deadlines. Optional additional rooms complete paced join/ring/close cycles while the stable population remains connected. Full sender/body/sequence and exact counters checked. Round-trip includes client sending and verification; logarithmic quantiles are upper bounds. Scheduling lag and churn lifecycle measured separately. Authenticated management is polled during traffic. Every session close and room departure is checked. Process/descriptor and independent QUIC-connection scans are quiescent gates outside traffic. Global socket/slab measurements include both clients and unrelated machine activity; server RSS excludes kernel socket memory. QUIC keep-alive policy and bounded message/queue/staging limits recorded in server_command."}
     if kernel_resources:
         result["kernel_resource_diagnostic"] = {
             "scope": "Per-process SOCK_DIAG snapshots at quiescent phase gates. Diagnostic scan overhead excludes this run from ordinary timing comparisons. Kernel counters and slab object estimates are separate from RSS and are not a complete kernel allocation total.",
@@ -272,8 +219,7 @@ def run(args):
         }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
-        server = client = front = None
-        pressure = pressure_result = None
+        server = client = None
         perf = perf_log = None
         try:
             server = subprocess.Popen(server_command, env=server_environment, stdout=logs, stderr=logs)
@@ -290,29 +236,12 @@ def run(args):
                     time.sleep(.02)
             result["baseline"] = {"server": process(server.pid), "machine": machine(), "metrics": observed}
             result["server_preload"] = runtime.preload_metadata(args.server_preload, server.pid)
-            client_command += benchmark_transport.certificate(args, logs)
-            if getattr(args, "transport", "websocket") == "webtransport":
-                client_command += ["--udp-receive-buffer-bytes", str(args.udp_receive_buffer_bytes)]
-            if front_command:
-                front = subprocess.Popen(front_command, env=environment, stdout=logs, stderr=logs)
-                result["tls_front"] = {"command": front_command, "sha256": digest(args.tls_front),
-                                       "scope": "TLS 1.3 front end with one extra loopback TCP hop on the server CPU set. "
-                                                "Deployment RSS and CPU are the relay plus this process; each event records both."}
-                deadline = time.monotonic() + 10
-                while True:
-                    try:
-                        socket.create_connection(("127.0.0.1", front_port), timeout=1).close()
-                        break
-                    except OSError:
-                        if front.poll() is not None or time.monotonic() >= deadline:
-                            raise RuntimeError("TLS front end did not start")
-                        time.sleep(.02)
+            client_command += benchmark_transport.certificate(logs)
             client = subprocess.Popen(client_command, env=environment, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE, stderr=client_errors, text=True)
             events = []
             monitoring = False
             next_sample = 0
-            pressure_start = None
             while True:
                 if time.monotonic() - started > (args.seconds + args.timeout) * args.waves:
                     raise TimeoutError("capacity workload exceeded outer deadline")
@@ -325,25 +254,18 @@ def run(args):
                         # Preserve the full numeric snapshot before a live
                         # assertion so a failed trial can identify its cause.
                         result["last_monitoring_metrics"] = current
-                        assert args.users <= current["war_sessions"] <= args.users + args.churn_workers * args.room_size + extra, (
+                        assert args.users <= current["war_sessions"] <= args.users + args.churn_workers * args.room_size, (
                             "live sessions", current["war_sessions"], args.users,
-                            args.users + args.churn_workers * args.room_size + extra)
+                            args.users + args.churn_workers * args.room_size)
                         assert current["war_queued_bytes"] <= 256 * 1024**2
                         assert current["war_read_buffer_reserved_bytes"] <= 256 * 1024**2
-                        allowed = capacity_pressure.EXPECTED_ERRORS if args.pressure_client else set()
-                        assert all(current[name] == 0 for name in ERRORS if name not in allowed)
-                        assert all(0 <= current[name] <= 8 for name in allowed)
+                        assert all(current[name] == 0 for name in ERRORS)
                         result["management_samples"].append({"seconds":began-started,
                             "response_ms":(time.monotonic()-began)*1000,"sessions":current["war_sessions"],
                             "connections":current["war_connections"],"queued_bytes":current["war_queued_bytes"],
                             "read_reserved_bytes":current["war_read_buffer_reserved_bytes"],
                             "server_rss_kib":resident_kib(server.pid), "client_rss_kib":resident_kib(client.pid)})
                         next_sample = time.monotonic() + .25
-                    if args.pressure_client and pressure is None and pressure_start is not None and time.monotonic() >= pressure_start:
-                        cmd = capacity_pressure.command(args.pressure_client, f"ws://127.0.0.1:{port}", args.client_cpus)
-                        result["pressure_command"] = cmd
-                        result["pressure_client_sha256"] = digest(args.pressure_client)
-                        pressure = subprocess.Popen(cmd, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     continue
                 row = client.stdout.readline()
                 if not row:
@@ -353,10 +275,6 @@ def run(args):
                     for pinned in result["thread_affinity"]:
                         assert os.sched_getaffinity(pinned["tid"]) == {pinned["cpu"]}, "thread affinity changed during measurement"
                         pinned["verified_after_measurement"] = True
-                if event["event"] == "measured" and args.pressure_client:
-                    assert pressure is not None, "pressure sidecar never started"
-                    pressure_result = capacity_pressure.finish(pressure)
-                    result["pressure"] = pressure_result
                 if event["event"] == "measured" and perf is not None:
                     perf.send_signal(signal.SIGINT)
                     result["perf_exit_code"] = perf.wait(timeout=15)
@@ -367,14 +285,12 @@ def run(args):
                     result["perf_log"] = perf_log.read().decode(errors="replace")
                     perf_log.close()
                     perf = perf_log = None
-                # The final socket may release its admission permit immediately after EOF.
+                # The final session may release its admission permit just after its close.
                 deadline = time.monotonic() + 5
                 while True:
                     observed = metrics(admin)
                     try:
-                        check(observed, event, args, pressure_result)
-                        if getattr(args, "transport", "websocket") == "webtransport":
-                            assert observed["war_quic_connections"] == (0 if event["event"] == "done" else args.users)
+                        check(observed, event, args)
                         break
                     except AssertionError:
                         if time.monotonic() >= deadline:
@@ -385,50 +301,25 @@ def run(args):
                 event.update(metrics=observed, server_pid=server.pid, client_pid=client.pid,
                              server=process(server.pid, server_inodes), client=process(client.pid, client_inodes),
                              machine=machine(), udp_counters=udp_counters(), seconds=time.monotonic() - started)
-                if front is not None:
-                    event["tls_front"] = process(front.pid)
-                    event["deployment_rss_kib"] = event["server"]["VmRSS"] + event["tls_front"]["VmRSS"]
-                census = established(port, server_inodes)
                 event["udp_server_census"] = udp_census(server_inodes)
                 event["udp_client_census"] = udp_census(client_inodes)
                 if kernel_resources:
-                    protocol = "udp" if getattr(args, "transport", "websocket") == "webtransport" else "tcp"
                     event["kernel_sockets"] = {
-                        "server": socket_resources.snapshot(server.pid, protocol, local_port=port, sizes=slab_sizes),
-                        "client": socket_resources.snapshot(client.pid, protocol,
-                            remote_port=(port if front is None else front_port) if protocol == "tcp" else None,
-                            sizes=slab_sizes),
+                        "server": socket_resources.snapshot(server.pid, local_port=port, sizes=slab_sizes),
+                        "client": socket_resources.snapshot(client.pid, sizes=slab_sizes),
                     }
-                    if front is not None:
-                        # Both sides of every proxied session: client-facing and upstream.
-                        event["kernel_sockets"]["tls_front"] = socket_resources.snapshot(
-                            front.pid, "tcp", sizes=slab_sizes)
-                    expected = (event["udp_server_census"]["owned_sockets"] if protocol == "udp"
-                                else census["owned_established"])
-                    assert event["kernel_sockets"]["server"]["owned_sockets"] == expected
+                    assert event["kernel_sockets"]["server"]["owned_sockets"] == event["udp_server_census"]["owned_sockets"]
                     for snapshot in event["kernel_sockets"].values():
                         assert snapshot["missing_skmem_sockets"] == 0, "owned socket memory accounting unavailable"
                 del server_inodes, client_inodes  # Release gate-only storage before traffic resumes.
-                event.update(tcp_census=census, established_server_sockets=census["owned_established"])
-                expected_population = 0 if event["event"] == "done" else args.users
                 result["events"].append(event)
-                if getattr(args, "transport", "websocket") == "webtransport":
-                    assert observed["war_quic_connections"] == expected_population
-                    assert event["established_server_sockets"] == 0
-                    assert event["server"]["socket_fd_count"] >= 1
-                    assert event["client"]["socket_fd_count"] >= 1
-                else:
-                    assert event["established_server_sockets"] == expected_population, (
-                        event["event"], event["established_server_sockets"], expected_population)
-                    assert event["server"]["socket_fd_count"] >= expected_population
-                    assert event["client"]["socket_fd_count"] >= expected_population
+                # QUIC multiplexes every session over the endpoint's UDP socket(s).
+                assert event["server"]["socket_fd_count"] >= 1
+                assert event["client"]["socket_fd_count"] >= 1
                 if event["event"] == "done":
                     assert event["server"]["fd_count"] <= result["baseline"]["server"]["fd_count"] + 2
                     connected = result["events"][-5]["client"]["fd_count"]
-                    if getattr(args, "transport", "websocket") == "webtransport":
-                        assert event["client"]["fd_count"] <= connected + 2
-                    else:
-                        assert event["client"]["fd_count"] <= connected - args.users + 2
+                    assert event["client"]["fd_count"] <= connected + 2
                 events.append(event["event"])
                 print(json.dumps({"event":event["event"],"server_pid":server.pid,"client_pid":client.pid,"sessions":observed["war_sessions"],
                                   "rss_mib":event["server"]["VmRSS"]/1024,
@@ -490,16 +381,11 @@ def run(args):
                 client.stdin.write("continue\n")
                 client.stdin.flush()
                 monitoring = event["event"] == "ready"
-                if monitoring and args.pressure_client:
-                    pressure_start = time.monotonic() + 1
                 if event["event"] == "done" and event["wave"] == args.waves:
                     break
             assert events == ["connected", "ready", "measured", "postcheck", "done"] * args.waves, events
             result["client_exit_code"] = client.wait(timeout=10)
             assert result["client_exit_code"] == 0
-            if front is not None:
-                front.terminate()
-                front.wait(timeout=15)
             server.send_signal(signal.SIGTERM)
             result["server_exit_code"] = server.wait(timeout=15)
             assert result["server_exit_code"] == 0
@@ -517,18 +403,13 @@ def run(args):
                 "server_system_cpu_seconds": measured["server"]["system_cpu_seconds"] - ready["server"]["system_cpu_seconds"],
                 "round_trip": measured["details"]["round_trip"],
                 "schedule_lag": measured["details"]["schedule_lag"]})
-                if "tls_front" in measured:
-                    front_cpu = measured["tls_front"]["cpu_seconds"] - ready["tls_front"]["cpu_seconds"]
-                    result["measurements"][-1].update(
-                        tls_front_cpu_seconds=front_cpu,
-                        deployment_cpu_seconds=result["measurements"][-1]["server_cpu_seconds"] + front_cpu)
             result["measurement"] = result["measurements"][0]
             result["passed"] = True
         except Exception as error:
             result["error"] = repr(error)
             raise
         finally:
-            for child in (perf, pressure, client, front, server):
+            for child in (perf, client, server):
                 if child is not None and child.poll() is None:
                     child.terminate()
                     try:
@@ -551,13 +432,6 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--udp-receive-buffer-bytes", type=int, default=4 * 1024 * 1024)
-    parser.add_argument("--transport", choices=["webtransport", "websocket", "websocket-tls"], default="webtransport")
-    parser.add_argument("--tls-front", type=Path, default=ROOT / "target/release/examples/tls_front")
-    parser.add_argument("--tls-cert", type=Path)
-    parser.add_argument("--tls-key", type=Path)
-    parser.add_argument("--tls-ca", type=Path, help="DER certificate trusted only for this local TLS comparison")
-    parser.add_argument("--tls-copy-buffer-bytes", type=int, default=8192,
-                        help="TLS front-end relay buffer per direction and connection; 8192 is its default")
     parser.add_argument("--server", type=Path, default=ROOT / "target/release/war-relay")
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/capacity")
     parser.add_argument("--server-preload", type=runtime.preload_library,
@@ -565,7 +439,6 @@ if __name__ == "__main__":
     parser.add_argument("--users", type=int, default=100_000)
     parser.add_argument("--room-size", type=int, default=16)
     parser.add_argument("--concurrency", type=int, default=64)
-    parser.add_argument("--source-addresses", type=int, default=64)
     parser.add_argument("--seconds", type=int, default=10)
     parser.add_argument("--waves", type=int, default=1)
     parser.add_argument("--payload-bytes", type=int, default=1024)
@@ -576,9 +449,7 @@ if __name__ == "__main__":
     parser.add_argument("--user-latency-histogram-output", type=Path,
                         help="Bounded per-user histogram CSV; percentile columns are bounds, not exact samples")
     parser.add_argument("--churn-workers", type=int, default=0)
-    parser.add_argument("--ping-interval-secs", type=int, default=0)
-    parser.add_argument("--tcp-send-buffer-bytes", type=int, default=0)
-    parser.add_argument("--tcp-receive-buffer-bytes", type=int, default=0)
+    parser.add_argument("--ping-interval-secs", type=int, default=0, help="Relay QUIC keep-alive interval; zero disables")
     parser.add_argument("--connection-headroom", type=int, default=0)
     parser.add_argument("--pin-workers", action="store_true", help="Request and verify native --pin-workers startup policy")
     parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
@@ -598,10 +469,7 @@ if __name__ == "__main__":
                         help="With --profile, capture server/client context-switch sideband; diagnostic only")
     parser.add_argument("--profile-kernel", action="store_true",
                         help="Include kernel cycles in --profile; requires suitable perf permissions")
-    parser.add_argument("--pressure-client", type=Path, help="Verified stress client: eight unread recipients beside the stable population")
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--read-storage", choices=["worker", "completion"], default="worker",
-                        help="quiescent staging contract; completion rents one 14-byte header with 2x allowance per live user")
     parser.add_argument("--server-cpus", default="0-3")
     parser.add_argument("--client-cpus", default="4-11")
     parser.add_argument("--timeout", type=int, default=240)
@@ -629,13 +497,8 @@ if __name__ == "__main__":
         parser.error("profile-frequency must be positive")
     if args.profile_kernel and not args.profile:
         parser.error("--profile-kernel requires --profile")
-    if args.pressure_client and (args.waves != 1 or args.seconds < 25 or args.profile):
-        parser.error("pressure requires one ordinary wave lasting at least 25 seconds")
     if args.connection_headroom < 0:
         parser.error("connection-headroom must be nonnegative")
-    if any(value != 0 and not 4096 <= value <= 16*1024**2
-           for value in (args.tcp_send_buffer_bytes, args.tcp_receive_buffer_bytes)):
-        parser.error("TCP buffer requests must be zero or in 4096..=16777216")
     try:
         run(args)
     except FileExistsError as error:

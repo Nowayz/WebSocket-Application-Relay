@@ -7,8 +7,8 @@ use crate::{
     Relay,
     frame::Frame,
     protocol::{self, Disconnect},
+    rate::RateLimiter,
     relay::{Envelope, FANOUT_QUANTUM, PeerOutput, Submission},
-    server::RateLimiter,
 };
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;
@@ -184,7 +184,7 @@ pub async fn read_record<S: AsyncRead + Unpin>(stream: &mut S, maximum: usize) -
 async fn read_record_budgeted<S: AsyncRead + Unpin>(
     stream: &mut S,
     maximum: usize,
-    budget: Option<&Arc<tungstenite::protocol::ReadBudget>>,
+    budget: Option<&Arc<crate::read_budget::ReadBudget>>,
 ) -> Result<Bytes> {
     let mut header = [0; 4];
     stream.read_exact(&mut header).await?;
@@ -315,6 +315,10 @@ pub async fn serve(
             .is_ok(),
         "relay already has a WebTransport endpoint"
     );
+    let stop = StopOnExit {
+        relay: relay.clone(),
+        endpoint: endpoint.clone(),
+    };
     let mut sessions = JoinSet::new();
     let retirement = Arc::new(Notify::new());
     loop {
@@ -335,7 +339,7 @@ pub async fn serve(
                 let permit = if let Some(limit) = &relay.ip_limit {
                     match limit.acquire(incoming.remote_address().ip()) {
                         Some(permit) => Some(permit),
-                        None => { incoming.refuse(); relay.metrics.connections.fetch_sub(1, Relaxed); relay.metrics.ip_rejected.fetch_add(1, Relaxed); continue; }
+                        None => { incoming.refuse(); relay.metrics.connections.fetch_sub(1, Relaxed); relay.metrics.ip_rejected.fetch_add(1, Relaxed); relay.metrics.rejected.fetch_add(1, Relaxed); continue; }
                     }
                 } else { None };
                 relay.metrics.accepted.fetch_add(1, Relaxed);
@@ -350,6 +354,7 @@ pub async fn serve(
                     let _permit = permit;
                     let (connection, acceptor) = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
                         Ok(Ok(connection)) => connection,
+                        Ok(Err(error)) if error.is::<Refused>() => return,
                         _ => { relay.metrics.handshake_errors.fetch_add(1, Relaxed); return; }
                     };
                     if let Err(error) = session(connection.clone(), acceptor, relay, retirement).await {
@@ -360,8 +365,7 @@ pub async fn serve(
             }
         }
     }
-    relay.begin_shutdown();
-    endpoint.close(VarInt::from_u32(1001), b"Server Shutdown");
+    drop(stop);
     let drained = async { while sessions.join_next().await.is_some() {} };
     if tokio::time::timeout(
         Duration::from_secs(relay.config.shutdown_timeout_secs),
@@ -388,8 +392,9 @@ async fn accept_connection(
     }
     if !relay.config.origin_policy.allows(&request.headers) {
         relay.metrics.origin_rejected.fetch_add(1, Relaxed);
+        relay.metrics.rejected.fetch_add(1, Relaxed);
         request.reject(axum::http::StatusCode::FORBIDDEN).await?;
-        bail!("origin rejected");
+        return Err(Refused.into());
     }
     request
         .ok()
@@ -397,6 +402,31 @@ async fn accept_connection(
         .context("accept WebTransport")?
         .try_into_established()
         .map_err(|_| anyhow::anyhow!("new session unexpectedly has a pending poll operation"))
+}
+
+/// A session request refused by policy, counted as a rejection rather than a
+/// failed handshake.
+#[derive(Debug)]
+struct Refused;
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("session request refused by policy")
+    }
+}
+impl std::error::Error for Refused {}
+
+/// Stops admission and closes every connection with `1001` when `serve` ends,
+/// including when its task is aborted rather than cancelled.
+struct StopOnExit {
+    relay: Arc<Relay>,
+    endpoint: Arc<Endpoint>,
+}
+impl Drop for StopOnExit {
+    fn drop(&mut self) {
+        self.relay.begin_shutdown();
+        self.endpoint
+            .close(VarInt::from_u32(1001), b"Server Shutdown");
+    }
 }
 
 struct ConnectionLease(Arc<Relay>);
@@ -446,12 +476,14 @@ async fn session(
         retirement,
         activity: activity.clone(),
     });
+    // A refused join closes with its own reason; the caller's generic 1002 then has no effect.
+    let refuse = |e: Disconnect| {
+        connection.close(u32::from(e.code), e.reason.as_bytes());
+        anyhow::anyhow!(e.reason)
+    };
     let registration = relay
-        .subscribe_with_output(
-            protocol::join(&join).map_err(|e| anyhow::anyhow!(e.reason))?,
-            output.clone(),
-        )
-        .map_err(|e| anyhow::anyhow!(e.reason))?;
+        .subscribe_with_output(protocol::join(&join).map_err(refuse)?, output.clone())
+        .map_err(refuse)?;
     let record_quantum = INPUT_QUANTUM.min(relay.config.queue_messages);
     let mut writer = application::WriterState::new(output.queue.receiver(), record_quantum);
     let writing = None;

@@ -1,181 +1,103 @@
-//! Direct-peer admission includes unfinished HTTP and both public protocols.
+//! Direct-peer admission counts QUIC connections by remote address.
 use super::*;
-use std::net::{Ipv4Addr, SocketAddr};
-use tokio::net::TcpSocket;
-use tokio_tungstenite::client_async;
 
-async fn connect_from(url: &str, address: u8) -> TcpStream {
-    let destination: SocketAddr = url
-        .strip_prefix("ws://")
-        .unwrap()
-        .split('/')
-        .next()
-        .unwrap()
-        .parse()
-        .unwrap();
-    let socket = TcpSocket::new_v4().unwrap();
-    socket
-        .bind(SocketAddr::from((Ipv4Addr::new(127, 0, 0, address), 0)))
-        .unwrap();
-    socket.connect(destination).await.unwrap()
+fn from(server: &Server, address: u8) -> ClientEndpoint {
+    client_endpoint(&server.hash, [127, 0, 0, address], None)
 }
 
-async fn upgrade_from(
-    url: &str,
-    address: u8,
-    cbor: bool,
-) -> Result<Socket, tokio_tungstenite::tungstenite::Error> {
-    let stream = connect_from(url, address).await;
-    let mut request = url.into_client_request().unwrap();
-    if cbor {
-        request.headers_mut().insert(
-            "sec-websocket-protocol",
-            protocol::SUBPROTOCOL.parse().unwrap(),
-        );
-    }
-    client_async(request, MaybeTlsStream::Plain(stream))
-        .await
-        .map(|(socket, _)| socket)
+async fn join_from(server: &Server, endpoint: &ClientEndpoint) -> Client {
+    Client::join(endpoint, server.options(), &protocol::text("admission")).await
 }
 
-async fn join_from(url: &str, address: u8) -> (Socket, u64) {
-    let mut socket = upgrade_from(url, address, true).await.unwrap();
-    socket
-        .send(Message::Binary(protocol::text(&format!("ip{address}"))))
+/// The relay counts a refusal just after sending it, so callers wait for counters.
+async fn refused(endpoint: &ClientEndpoint, options: ConnectOptions) {
+    let attempt = timeout(Duration::from_secs(3), endpoint.connect(options))
         .await
         .unwrap();
-    let id = Decoder::new(&data(&mut socket).await).u64().unwrap();
-    (socket, id)
-}
-
-async fn denied(mut socket: TcpStream) {
-    use std::io::ErrorKind::{ConnectionAborted, ConnectionReset};
-    let result = timeout(Duration::from_secs(3), socket.read(&mut [0]))
-        .await
-        .unwrap();
-    // A refused transport is dropped unread, which the peer sees as a FIN
-    // or a reset. Windows reports the reset as either WSAECONNRESET or
-    // WSAECONNABORTED depending on timing.
-    assert!(
-        matches!(result, Ok(0))
-            || matches!(result, Err(ref error) if matches!(error.kind(), ConnectionReset | ConnectionAborted)),
-        "a refused transport must be closed, got {result:?}"
-    );
+    assert!(attempt.is_err(), "a refused connection was admitted");
 }
 
 async fn connections(server: &Server, expected: usize) {
-    timeout(Duration::from_secs(3), async {
-        while server.relay.metrics.connections.load(Relaxed) != expected {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-}
-
-async fn clean_close(socket: &mut Socket) {
-    socket.close(None).await.unwrap();
-    assert_eq!(
-        timeout(Duration::from_secs(3), socket.next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap(),
-        Message::Close(None)
-    );
-    assert!(
-        timeout(Duration::from_secs(3), socket.next())
-            .await
-            .unwrap()
-            .is_none()
-    );
+    eventually(|| server.relay.metrics.connections.load(Relaxed) == expected).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn per_ip_admission_spans_workers_and_keeps_other_addresses_usable() {
+async fn per_ip_admission_limits_each_address_and_keeps_other_addresses_usable() {
     let server = Server::new(Config {
-        workers: Some(4),
         max_connections: 4,
         max_connections_per_ip: 1,
-        handshake_timeout_secs: 30,
         ..config()
     })
     .await;
-    let half = connect_from(&server.url, 2).await;
+    let two = from(&server, 2);
+    let first = join_from(&server, &two).await;
+    for _ in 0..8 {
+        // Forwarding headers cannot claim another address.
+        let options = ConnectOptions::builder(&server.url)
+            .add_header("x-forwarded-for", "127.0.0.9")
+            .add_header("forwarded", "for=127.0.0.9")
+            .build();
+        refused(&two, options).await;
+    }
+    eventually(|| server.relay.metrics.ip_rejected.load(Relaxed) == 8).await;
     connections(&server, 1).await;
-    timeout(Duration::from_secs(3), async {
-        while server
-            .relay
-            .metrics
-            .read_budget
-            .as_ref()
-            .unwrap()
-            .reserved()
-            == 0
-        {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    futures_util::future::join_all((0..32).map(|_| async {
-        denied(connect_from(&server.url, 2).await).await;
-    }))
-    .await;
-    // The global cap is checked first. Parallel accepts can temporarily reserve
-    // its other three slots before their IP checks, so either limit may reject
-    // an attempt. Every attempted transport must still have been refused.
-    let ip_rejections = server.relay.metrics.ip_rejected.load(Relaxed);
-    assert!((1..=32).contains(&ip_rejections));
-    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 32);
-    connections(&server, 1).await;
-    let mut spoof = connect_from(&server.url, 2).await;
-    let _ = spoof.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 127.0.0.9\r\nForwarded: for=127.0.0.9\r\n\r\n").await;
-    denied(spoof).await;
-    assert_eq!(
-        server.relay.metrics.ip_rejected.load(Relaxed),
-        ip_rejections + 1
-    );
-    let (mut healthy, id) = join_from(&server.url, 3).await;
+    let mut healthy = join_from(&server, &from(&server, 3)).await;
     let value = protocol::byte_string(&vec![0x7b; 32 * 1024]);
-    send(&mut healthy, id, &value).await;
-    assert_eq!(data(&mut healthy).await, protocol::envelope(id, &value));
-    let (mut fourth, _) = join_from(&server.url, 4).await;
-    let (mut fifth, _) = join_from(&server.url, 5).await;
+    healthy.send(healthy.id, &value).await;
+    assert_eq!(healthy.read().await, protocol::envelope(healthy.id, &value));
+    let fourth = join_from(&server, &from(&server, 4)).await;
+    let fifth = join_from(&server, &from(&server, 5)).await;
     connections(&server, 4).await;
-    denied(connect_from(&server.url, 6).await).await;
-    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 34);
-    assert_eq!(
-        server.relay.metrics.ip_rejected.load(Relaxed),
-        ip_rejections + 1
-    );
-    clean_close(&mut fourth).await;
-    clean_close(&mut fifth).await;
-    drop(half);
+    // The global limit refuses a fresh address too.
+    refused(&from(&server, 6), server.options()).await;
+    // The eight per-address refusals plus this one.
+    eventually(|| server.relay.metrics.rejected.load(Relaxed) == 9).await;
+    assert_eq!(server.relay.metrics.ip_rejected.load(Relaxed), 8);
+    fourth.close().await;
+    fifth.close().await;
+    first.close().await;
     connections(&server, 1).await;
-    let (mut replacement, _) = join_from(&server.url, 2).await;
-    clean_close(&mut replacement).await;
-    clean_close(&mut healthy).await;
+    join_from(&server, &two).await.close().await;
+    healthy.close().await;
     connections(&server, 0).await;
-    assert_eq!(server.relay.metrics.join_rejected.load(Relaxed), 0);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn handshake_timeout_releases_the_address_lease() {
+async fn unfinished_handshakes_time_out_and_release_connection_and_address_admission() {
     let server = Server::new(Config {
-        workers: Some(1),
+        max_connections: 2,
         max_connections_per_ip: 1,
         handshake_timeout_secs: 1,
         ..config()
     })
     .await;
-    let _half = connect_from(&server.url, 2).await;
+    // Complete QUIC (with the HTTP/3 ALPN) but never send the session request.
+    let client = wtransport::ClientConfig::builder()
+        .with_bind_default()
+        .with_server_certificate_hashes([server.hash.clone()])
+        .build();
+    let quic = wtransport::quinn::Endpoint::client(SocketAddr::from(([127, 0, 0, 2], 0))).unwrap();
+    let half = quic
+        .connect_with(client.quic_config().clone(), server.address, "localhost")
+        .unwrap()
+        .await
+        .unwrap();
     connections(&server, 1).await;
-    denied(connect_from(&server.url, 2).await).await;
-    wait_counter(&server.relay.metrics.handshake_errors, 1).await;
-    connections(&server, 0).await;
-    let (mut replacement, _) = join_from(&server.url, 2).await;
-    clean_close(&mut replacement).await;
+    let two = from(&server, 2);
+    refused(&two, server.options()).await;
+    eventually(|| server.relay.metrics.ip_rejected.load(Relaxed) == 1).await;
+    let other = join_from(&server, &from(&server, 3)).await;
+    refused(&from(&server, 4), server.options()).await;
+    // The per-address refusal plus this global one.
+    eventually(|| server.relay.metrics.rejected.load(Relaxed) == 2).await;
+    // The deadline frees both the global slot and the address lease.
+    timeout(Duration::from_secs(3), half.closed())
+        .await
+        .unwrap();
+    assert_eq!(server.relay.metrics.handshake_errors.load(Relaxed), 1);
+    connections(&server, 1).await;
+    join_from(&server, &two).await.close().await;
+    other.close().await;
     server.stop().await;
 }

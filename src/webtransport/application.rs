@@ -3,8 +3,8 @@ use super::{Output, Pending, QueuedOutput, StreamOutput, frame_chunks, poll_outp
 use crate::{
     Relay,
     protocol::Disconnect,
+    rate::RateLimiter,
     relay::{Envelope, FANOUT_QUANTUM, Registration, RoutingFailure},
-    server::RateLimiter,
 };
 use anyhow::Result;
 use bytes::Bytes;
@@ -38,7 +38,7 @@ pub(super) struct RecordReader {
     size: Option<usize>,
     body: RecordBody,
     body_read: usize,
-    lease: Option<tungstenite::protocol::ReadLease>,
+    lease: Option<crate::read_budget::ReadLease>,
 }
 
 enum RecordBody {
@@ -80,7 +80,7 @@ impl RecordReader {
         &mut self,
         stream: &mut S,
         maximum: usize,
-        budget: Option<&Arc<tungstenite::protocol::ReadBudget>>,
+        budget: Option<&Arc<crate::read_budget::ReadBudget>>,
         arena: Option<&crate::receive_arena::ReceiveArena>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Bytes>> {
@@ -219,14 +219,7 @@ impl<'a> InputState<'a> {
         let result = if unreliable {
             batch.receive_datagram(&registration.peer, bytes, &mut pending.work, FANOUT_QUANTUM)
         } else {
-            let size = bytes.len();
-            batch.receive_bounded(
-                &registration.peer,
-                bytes,
-                size,
-                &mut pending.work,
-                FANOUT_QUANTUM,
-            )
+            batch.receive_bounded(&registration.peer, bytes, &mut pending.work, FANOUT_QUANTUM)
         };
         batch.publish();
         drop(batch);
@@ -527,7 +520,7 @@ mod tests {
             let mut bytes = (payload.len() as u32).to_be_bytes().to_vec();
             bytes.extend_from_slice(&payload);
             bytes.extend_from_slice(&[0; 4]);
-            let budget = tungstenite::protocol::ReadBudget::new(payload.len() * 2);
+            let budget = crate::read_budget::ReadBudget::new(payload.len() * 2);
             let mut cx = Context::from_waker(std::task::Waker::noop());
             let mut cancelled = RecordReader::default();
             let mut stream = Fragmented {

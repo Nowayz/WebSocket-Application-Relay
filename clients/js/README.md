@@ -13,7 +13,7 @@ the bundler runs as WebAssembly.
 ```js
 import { Relay, BROADCAST, LISTEN } from './relay.js'; // browser bundle
 
-const client = await Relay.connect('wss://relay.example', 'room');
+const client = await Relay.connect('https://relay.example:1338/war', 'room');
 client.addEventListener('message', event => {
   const { sender, value } = event.detail; // sender is always bigint
   console.log(sender, value);
@@ -25,7 +25,7 @@ client.close();
 
 Channels are strings or `Uint8Array` values with at most 16 encoded bytes. An
 empty channel is valid. A connection stays in its initial channel. Joining
-captures the supplied channel before socket setup so later caller mutations do
+captures the supplied channel before session setup so later caller mutations do
 not change the requested channel.
 
 `send(target, value)` accepts `bigint` IDs and safe integer numbers. Use `bigint`
@@ -63,11 +63,18 @@ dispatch permits callers to mutate their objects.
 
 `message` events carry `{ sender, value }`, `disconnect` events carry
 `{ userId }` for a departed peer, `close` events carry `{ code, reason }`, and
-`error` events carry the decoding/protocol error. `ready` reports the socket's
-open state. `ws` exposes the underlying WebSocket for lifecycle observation.
-`Relay.connect(url, channel, { requestTimeoutMs, WebSocketClass })` permits a
-custom WebSocket constructor and timeout. The default request/join timeout is ten
-seconds. A command timeout closes the connection so its late reply cannot be
+`error` events carry the decoding/protocol error. `ready` reports the session's
+open state. `transport` exposes the underlying `WebTransportChannel` for lifecycle
+observation. `Relay.connect(url, channel, options)` accepts `requestTimeoutMs`
+(default ten seconds, also the join timeout), the browser `WebTransport` options
+`serverCertificateHashes` and `congestionControl`, `WebTransportClass` for a
+custom constructor, and `TransportClass` to replace the whole transport, for
+example with a test double.
+
+Reliable messages travel in order on one bidirectional stream.
+`sendUnreliable(target, value)` and `broadcastUnreliable(value)` send one
+datagram each: it may be lost or reordered, must fit `maxDatagramSize`, and
+cannot carry relay commands. Use them for state that the next update replaces. A command timeout closes the connection so its late reply cannot be
 mistaken for another command. The client does not silently reconnect or replay
 messages: applications decide whether those actions are safe.
 
@@ -75,7 +82,8 @@ In TypeScript, message values default to `unknown`. Narrow them in application
 code. `getVariable<MyState>(key)` provides a discriminated result: after checking
 `found`, the value is typed as `MyState`; a missing result has `value: null`.
 
-Run `bash scripts/check-js.sh` from the repository root for a fresh native server,
-real WebSocket integration and resource-cleanup checks. Run `npm run check:types
---prefix clients/js` for the public declaration contract. The browser page checks
+Run `npm test --prefix clients/js` for the client unit tests and `npm run
+check:types --prefix clients/js` for the public declaration contract. Node has no
+`WebTransport`, so integration with a real relay runs in a browser: the page that
+`build:browser` writes checks the generated bundle against a live relay. The browser page checks
 the generated deliverable rather than a separate source-only example.

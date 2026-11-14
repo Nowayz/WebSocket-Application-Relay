@@ -41,7 +41,7 @@ function noSetupListeners(socket) {
 
 test('failed connection removes setup listeners before delayed socket events', async () => {
   for (const type of ['error', 'close']) {
-    const pending = Relay.connect('ws://fixture', 'lifecycle', { WebSocketClass: Socket });
+    const pending = Relay.connect('https://fixture', 'lifecycle', { TransportClass: Socket });
     const socket = Socket.instance;
     socket.dispatchEvent(new Event(type));
     await assert.rejects(pending, /Relay closed before subscription/);
@@ -55,8 +55,8 @@ test('failed connection removes setup listeners before delayed socket events', a
 });
 
 test('join timeout removes listeners and closes without a peer Close event', async () => {
-  const pending = Relay.connect('ws://fixture', 'lifecycle', {
-    WebSocketClass: Socket, requestTimeoutMs: 1,
+  const pending = Relay.connect('https://fixture', 'lifecycle', {
+    TransportClass: Socket, requestTimeoutMs: 1,
   });
   const socket = Socket.instance;
   await assert.rejects(pending, /Relay join timeout/);
@@ -67,7 +67,7 @@ test('join timeout removes listeners and closes without a peer Close event', asy
 test('join send failure rejects immediately with its original error', async () => {
   const failure = new Error('controlled join send failure');
   class FailingSocket extends Socket { send() { throw failure; } }
-  const pending = Relay.connect('ws://fixture', 'lifecycle', { WebSocketClass: FailingSocket });
+  const pending = Relay.connect('https://fixture', 'lifecycle', { TransportClass: FailingSocket });
   const socket = Socket.instance;
   socket.dispatchEvent(new Event('open'));
   await assert.rejects(pending, error => error === failure);
@@ -76,7 +76,7 @@ test('join send failure rejects immediately with its original error', async () =
 });
 
 test('successful welcome replaces setup listeners with the live relay listeners', async () => {
-  const pending = Relay.connect('ws://fixture', 'lifecycle', { WebSocketClass: Socket });
+  const pending = Relay.connect('https://fixture', 'lifecycle', { TransportClass: Socket });
   const socket = Socket.instance;
   socket.dispatchEvent(new Event('open'));
   socket.welcome();
@@ -95,8 +95,8 @@ test('overflowing join timeout is rejected before creating a socket', async () =
     constructor() { super(); CountedSocket.created++; }
   }
   for (const requestTimeoutMs of [2147483648, Number.MAX_VALUE]) {
-    await assert.rejects(Relay.connect('ws://fixture', 'timeout', {
-      WebSocketClass: CountedSocket, requestTimeoutMs,
+    await assert.rejects(Relay.connect('https://fixture', 'timeout', {
+      TransportClass: CountedSocket, requestTimeoutMs,
     }), RangeError);
     assert.equal(CountedSocket.created, 0);
   }
@@ -134,8 +134,8 @@ test('timer ceiling is inclusive and direct construction uses the standard defau
   assert.equal(direct.requestTimeoutMs, 10000);
   direct.close();
   for (const requestTimeoutMs of [0.5, 1, 2147483647]) {
-    const pending = Relay.connect('ws://fixture', 'timeout', {
-      WebSocketClass: Socket, requestTimeoutMs,
+    const pending = Relay.connect('https://fixture', 'timeout', {
+      TransportClass: Socket, requestTimeoutMs,
     });
     const socket = Socket.instance;
     socket.dispatchEvent(new Event('open'));
@@ -149,7 +149,7 @@ test('timer ceiling is inclusive and direct construction uses the standard defau
 test('connect captures a byte channel before the delayed socket open', async () => {
   const backing = new Uint8Array([99, 97, 98, 99, 99]);
   const channel = backing.subarray(1, 4);
-  const pending = Relay.connect('ws://fixture', channel, { WebSocketClass: CaptureSocket });
+  const pending = Relay.connect('https://fixture', channel, { TransportClass: CaptureSocket });
   const socket = Socket.instance;
   channel.fill(120);
   socket.dispatchEvent(new Event('open'));
@@ -162,7 +162,7 @@ test('connect captures a byte channel before the delayed socket open', async () 
 
 test('connect does not depend on the channel buffer remaining attached', async () => {
   const channel = new Uint8Array([97, 98, 99]);
-  const pending = Relay.connect('ws://fixture', channel, { WebSocketClass: CaptureSocket });
+  const pending = Relay.connect('https://fixture', channel, { TransportClass: CaptureSocket });
   const socket = Socket.instance;
   structuredClone(channel.buffer, { transfer: [channel.buffer] });
   socket.dispatchEvent(new Event('open'));
@@ -174,9 +174,9 @@ test('connect does not depend on the channel buffer remaining attached', async (
 });
 
 test('prepared subscriptions survive concurrent joins and encoder buffer growth', async () => {
-  const first = Relay.connect('ws://fixture', new Uint8Array([1, 2]), { WebSocketClass: CaptureSocket });
+  const first = Relay.connect('https://fixture', new Uint8Array([1, 2]), { TransportClass: CaptureSocket });
   const a = Socket.instance;
-  const second = Relay.connect('ws://fixture', new Uint8Array([3, 4]), { WebSocketClass: CaptureSocket });
+  const second = Relay.connect('https://fixture', new Uint8Array([3, 4]), { TransportClass: CaptureSocket });
   const b = Socket.instance;
   const unrelated = new Relay(new Socket(), 50n);
   unrelated.send(51n, new Uint8Array(65536));
@@ -351,7 +351,7 @@ test('a reentrant connect rejects before creating a socket without corrupting th
   class NestedSocket extends Socket { constructor() { super(); created++; } }
   try {
     assert.doesNotThrow(() => relay.send(99n, { get child() {
-      pending = Relay.connect('ws://fixture', 'nested', { WebSocketClass: NestedSocket });
+      pending = Relay.connect('https://fixture', 'nested', { TransportClass: NestedSocket });
       pending.catch(() => {});
       return 'outer';
     } }));
@@ -462,7 +462,7 @@ for (const phase of ['welcome', 'reply']) {
   test(`text ${phase} is rejected before typed-array length coercion`, async () => {
     let socket, outcomes;
     if (phase === 'welcome') {
-      const pending = Relay.connect('ws://fixture', 'text-frame', { WebSocketClass: Socket });
+      const pending = Relay.connect('https://fixture', 'text-frame', { TransportClass: Socket });
       socket = Socket.instance;
       outcomes = Promise.allSettled([pending]);
     } else {

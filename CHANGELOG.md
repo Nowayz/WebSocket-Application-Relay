@@ -2,51 +2,59 @@
 
 ## Unreleased
 
-- WebTransport workers are pinned one per CPU by default when the process may
-  use exactly one CPU per worker (`--pin-workers` is now `auto`, `on` or `off`;
-  the bare flag and `WAR_PIN_WORKERS=true` still mean `on`). Under the
-  historical closed-loop workload private delivery rises 14-16% and room
-  fanout 0-4%. Legacy WebSocket stays unpinned unless asked. QUIC stream reads
-  copy from the receive assembler in place instead of splitting the shared
-  packet buffer, removing two atomic updates per record; CPU per delivery
-  falls 1-4%.
-
+- **WebTransport is the only transport.** The WebSocket server
+  (`--legacy-websocket`), its vendored `tungstenite` and `tokio-tungstenite`
+  copies, the TLS front-end fixture and every WebSocket-only test, example and
+  benchmark script are removed. Clients connect to `https://HOST/war`; the
+  relay terminates TLS itself with `--tls-cert`/`--tls-key` (or `--dev-cert`
+  locally), so the Caddy reverse proxy is no longer part of the deployment.
+  Removed options: `--legacy-websocket`, `--listen-backlog`,
+  `--tcp-send-buffer-bytes`, `--tcp-receive-buffer-bytes`,
+  `--read-buffer-bytes` and `--read-buffer-idle-secs`. Removed metrics: the
+  routing reuse/copy, accept/setup error, decoder reclaim, aborted/cancelled
+  write, close-failure, transport-disconnect, join-rejected, native slot and
+  peak output-queue counters. The JavaScript client drops `WebSocketClass`
+  (use `TransportClass` to inject a transport) and renames `relay.ws` to
+  `relay.transport`. The systemd unit receives the certificate as systemd
+  credentials and binds UDP 443.
+- A refused join now closes the WebTransport session with its own code
+  (`1013` for admission or drain) instead of a generic `1002`. Origin and
+  per-address refusals now count in `war_rejected_total`, as documented, and an
+  origin refusal no longer counts as a handshake error. Aborting the
+  `webtransport::serve` task, not only cancelling it, now stops admission and
+  closes every connection with `1001`.
+- Workers are pinned one per CPU by default when the process may use exactly
+  one CPU per worker (`--pin-workers` is now `auto`, `on` or `off`; the bare
+  flag and `WAR_PIN_WORKERS=true` still mean `on`). Under a closed-loop
+  workload private delivery rises 14-16% and room fanout 0-4%. QUIC stream
+  reads copy from the receive assembler in place instead of splitting the
+  shared packet buffer, removing two atomic updates per record; CPU per
+  delivery falls 1-4%.
 - The relay binary uses jemalloc as its global allocator on non-MSVC targets.
-  WebTransport reliable throughput rises 2-3% for private routing, about 17%
-  for room fanout and about 8% for mixed traffic, which puts it ahead of the
-  plaintext WebSocket transport in every paired run of all three workloads.
-  Idle QUIC connections release their drained endpoint-event, handshake and
-  handshake-frame queues, start receive assemblers with one slot, and keep the
-  previous path and 0-RTT secret out of line; ready memory at 100,000 sessions
-  falls from about 1,839 to about 1,671 MiB. See the
-  [measurements](docs/reports/webtransport-allocator-idle-storage-2026-11-13.json).
-- WebTransport tolerates packet reordering. QUIC connections hold 1-RTT
-  packets that overtake the end of the handshake instead of dropping them,
-  retire a peer's old connection ID only after the packets sent to it are
-  resolved, and the relay detects loss by the time threshold alone rather
-  than also by packet count. A 1 MiB reliable transfer over a 100 ms path
-  with 3 ms of jitter falls from 5.8-8.3 s to 1.36-1.47 s in every run, level
-  with TLS WebSocket; under
-  2% loss it takes about 1.0 s against 2.9-3.8 s for TLS WebSocket.
-  `scripts/freshness-matrix.py` gains `--mtu`, `--client-packet-threshold` and
-  a `jitter` profile.
-- `scripts/capacity.py` can run its connected-population check against TLS
-  WebSocket (`--transport websocket-tls`, through `examples/tls_front`), so
-  WebTransport is compared with an encrypted baseline at 100,000 sessions.
+  Reliable throughput rises 2-3% for private routing, about 17% for room
+  fanout and about 8% for mixed traffic. Idle QUIC connections release their
+  drained endpoint-event, handshake and handshake-frame queues, start receive
+  assemblers with one slot, and keep the previous path and 0-RTT secret out of
+  line; ready memory at 100,000 sessions falls from about 1,839 to about
+  1,671 MiB.
+- The relay tolerates packet reordering. QUIC connections hold 1-RTT packets
+  that overtake the end of the handshake instead of dropping them, retire a
+  peer's old connection ID only after the packets sent to it are resolved, and
+  the relay detects loss by the time threshold alone rather than also by
+  packet count. A 1 MiB reliable transfer over a 100 ms path with 3 ms of
+  jitter falls from 5.8-8.3 s to 1.36-1.47 s in every run; under 2% loss it
+  takes about 1.0 s. `scripts/freshness-matrix.py` gains `--mtu`,
+  `--client-packet-threshold` and a `jitter` profile.
 - HTTP and CBOR channel listings omit empty or retired ordinary rooms captured
   during concurrent admission or departure; the permanent `re_globl` room
   remains visible when empty. The metadata collector stays out of line so
-  the pinned release compiler preserves native routing specialization.
-- The observer-barrier acceptance fixture checks each cross-room departure
-  exactly once before acknowledgement without imposing a global order, and
-  rejects duplicate, missing or late notices. Same-room FIFO remains covered
-  by the relay tests. See the [acceptance and fanout measurements](docs/reports/acceptance-fanout-2026-10-21.md).
+  the pinned release compiler preserves routing specialization.
 - The routing registry no longer has a global lock. Session ownership and
   the channel index are lock-free concurrent maps, pre-sized to reduce resize
   work, each channel has its own
   lock, global observers are an atomically swapped snapshot and admission
   counters are atomics, including an exact channel count that enforces
-  `WAR_MAX_CHANNELS` under concurrent creation. No socket write happens
+  `WAR_MAX_CHANNELS` under concurrent creation. No output write happens
   while a registry lock is held. The welcome frame is still written before a
   session is published to its room, so it remains first in the session's FIFO.
 - The global observer list is an immutable snapshot swapped atomically, with
@@ -77,7 +85,7 @@
   per queue, so nothing holds two of them and a long scan releases the shard
   between chunks. The synchronous fallback a departure takes when
   staging credit is refused drains the queue in holds of at most eight
-  turns. Workers rotate across queues in bounded turns (128
+  turns. Departure turns rotate across queues in bounded turns (128
   recipients for departures, 1,024 for live broadcasts), allowing other queues
   to receive service before a large room finishes. Notices for different rooms, including
   disconnect notices for sessions of different rooms, are no longer ordered
@@ -97,23 +105,10 @@
 - Close code `1013` now means exactly: join refused by admission or drain,
   channel variable capacity, the session's own command reply could not be
   funded, or the session is a slow consumer. See docs/protocol.md.
-- Workers poll with a one-second upper bound (`POLL_TICK`), so a missed wakeup
-  delays work by at most one tick instead of stalling a worker.
-- On non-Linux hosts only the first worker listens and hands accepted streams
-  to the other workers, placed by a hash of the peer address as the kernel
-  places them on Linux. Sharing one listening socket between every worker's
-  poller left workers stalled at random on Windows: shutdowns ran to their
-  full grace period and queued output was not flushed. Linux keeps one
-  `SO_REUSEPORT` listener per worker. Strict rotation was tried first and
-  left workers idle under a client that opens sender and receiver sockets
-  alternately, since a sender's worker does that sender's read, routing and
-  inline write.
-- A handshake refused for lack of decoder staging credit now sends a FIN after
-  its HTTP 503, so the reply reaches the peer instead of being reset.
 - `Config::default()` no longer reads `WAR_*` environment variables; only
   `Config::parse()` does. Embedded relays and tests are reproducible regardless
   of the calling shell.
-- The base deployment profile's decoder staging allowance drops from 1 GiB to
+- The base deployment profile's staging allowance drops from 1 GiB to
   256 MiB so that every budget fits under the unit's `MemoryMax=1G`, and the
   unit gains `MemoryHigh=768M`.
 - New end-to-end test for a slow consumer, a unit test that a publication
@@ -133,17 +128,14 @@
   through the synchronous fallback in order. The room-churn responsiveness
   test also runs 130 disconnect observers, so every departure is a queued
   observer job, plus one that keeps clearing and restoring its flag, so
-  every clear is a chunked barrier scan racing those jobs. The per-IP admission test accepts the
-  `ConnectionAborted` report Windows sometimes gives for a refused transport.
-- CI is split into a fast `verify` job and a scheduled `fixtures` job, with a
-  cargo cache, `cargo audit`, Dependabot and a pinned `rust-toolchain.toml`.
-  `check-release.py` uses explicit checks instead of `assert` and verifies
+  every clear is a chunked barrier scan racing those jobs.
+- `check-release.py` uses explicit checks instead of `assert` and verifies
   `SHA256SUMS`; the operator archive no longer includes `docs/reports`.
 - Removed the unreferenced `examples/encode_cost.rs`, `examples/placement.rs`
   and `scripts/plot-user-latency.py`.
 - Documentation: dated measurement reports moved to `docs/reports/`; new
-  `docs/architecture.md`, `docs/glossary.md`, a configuration reference in
-  `docs/operations.md`, and an old-to-new API table in `docs/migration.md`.
+  `docs/architecture.md`, `docs/glossary.md`, `docs/performance.md` and a
+  configuration reference in `docs/operations.md`.
 
 ## 0.1.0
 

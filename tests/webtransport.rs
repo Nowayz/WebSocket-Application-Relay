@@ -622,3 +622,274 @@ async fn receive_arena_fallback_preserves_mixed_record_sizes_and_order() {
     assert_eq!(relay.counts().0, 0);
     assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
 }
+
+async fn admin(
+    relay: Arc<Relay>,
+) -> (
+    std::net::SocketAddr,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let stop = CancellationToken::new();
+    let stopped = stop.clone();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, war_relay::admin_router(relay))
+            .with_graceful_shutdown(stopped.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    (address, stop, task)
+}
+
+async fn http(
+    address: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    let auth = token
+        .map(|token| format!("Authorization: Bearer {token}\r\n"))
+        .unwrap_or_default();
+    stream
+        .write_all(format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Length: 0\r\nConnection: close\r\n\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut bytes = Vec::new();
+    tokio::time::timeout(Duration::from_secs(3), stream.read_to_end(&mut bytes))
+        .await
+        .unwrap()
+        .unwrap();
+    String::from_utf8(bytes).unwrap()
+}
+
+/// Wait for the relay to end `connection`. A QUIC application close carries its
+/// code; this client reports a WebTransport session-close capsule as a local
+/// close without one, so that case returns `None`.
+async fn close_code(connection: &Connection) -> Option<u64> {
+    match tokio::time::timeout(Duration::from_secs(3), connection.closed())
+        .await
+        .unwrap()
+    {
+        wtransport::error::ConnectionError::ApplicationClosed(close) => {
+            Some(close.code().into_inner())
+        }
+        wtransport::error::ConnectionError::LocallyClosed => None,
+        other => panic!("expected the relay to close the session, got {other}"),
+    }
+}
+
+impl Client {
+    async fn command(&mut self, op: u8, value: &[u8]) -> Bytes {
+        write_record(&mut self.send, &war_relay::protocol::request(op, value))
+            .await
+            .unwrap();
+        self.read().await
+    }
+}
+
+#[tokio::test]
+async fn administrative_disconnect_targets_exact_uint64_sessions_and_preserves_neighbours() {
+    use war_relay::protocol::{BROADCAST, byte_string, envelope, reply, uint};
+    const TOKEN: &str = "admin-test";
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        ping_interval_secs: 0,
+        auth_password: Some("admin-id-auth".into()),
+        admin_token: Some(TOKEN.into()),
+        ..Config::default()
+    })
+    .await;
+    let (admin_address, admin_stop, admin_task) = admin(relay.clone()).await;
+    let assigned = |id: u64| {
+        let (endpoint, url) = (&endpoint, &url);
+        async move {
+            let mut client = Client::open(endpoint, url, "admin-ids").await;
+            let old = client.id;
+            assert_eq!(
+                client.command(0, &byte_string(b"admin-id-auth")).await,
+                reply(0, b"\xf5")
+            );
+            assert_eq!(client.command(3, &uint(id)).await, reply(3, &uint(id)));
+            client.id = id;
+            (client, old)
+        }
+    };
+    for target in [u32::MAX as u64 + 1, (1u64 << 53) + 1, u64::MAX - 1] {
+        let neighbour = target - 1;
+        let (mut guard, _) = assigned(neighbour).await;
+        let (mut victim, old_id) = assigned(target).await;
+        let path = format!("/v1/sessions/{target}/disconnect");
+        assert!(
+            http(admin_address, "POST", &path, None)
+                .await
+                .starts_with("HTTP/1.1 401")
+        );
+        // Absent and superseded IDs must not affect either session.
+        for absent in [old_id, target + 1] {
+            let path = format!("/v1/sessions/{absent}/disconnect");
+            assert!(
+                http(admin_address, "POST", &path, Some(TOKEN))
+                    .await
+                    .starts_with("HTTP/1.1 404")
+            );
+        }
+        let probe = envelope(target, &uint(17));
+        write_record(&mut victim.send, &probe).await.unwrap();
+        assert_eq!(victim.read().await, probe);
+        assert!(
+            http(admin_address, "POST", &path, Some(TOKEN))
+                .await
+                .starts_with("HTTP/1.1 204")
+        );
+        close_code(&victim.connection).await;
+        // The live neighbour receives exactly this departed uint64 ID.
+        assert_eq!(guard.read().await, envelope(BROADCAST, &uint(target)));
+        let probe = envelope(neighbour, &uint(42));
+        write_record(&mut guard.send, &probe).await.unwrap();
+        assert_eq!(guard.read().await, probe);
+        assert!(
+            http(admin_address, "POST", &path, Some(TOKEN))
+                .await
+                .starts_with("HTTP/1.1 404")
+        );
+        guard.connection.close(VarInt::from_u32(1000), b"done");
+    }
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while relay
+            .metrics
+            .connections
+            .load(std::sync::atomic::Ordering::Relaxed)
+            != 0
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(
+        relay
+            .metrics
+            .queued_bytes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
+    stop.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(
+        relay
+            .metrics
+            .output_queue_capacity_bytes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    admin_stop.cancel();
+    admin_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn management_readiness_and_admission_stay_stopped_after_shutdown_begins() {
+    const TOKEN: &str = "admin-test";
+    let (relay, endpoint, url, stop, task) = fixture_with(Config {
+        ping_interval_secs: 0,
+        admin_token: Some(TOKEN.into()),
+        ..Config::default()
+    })
+    .await;
+    let (admin_address, admin_stop, admin_task) = admin(relay.clone()).await;
+    let mut existing = Client::open(&endpoint, &url, "shutdown-one").await;
+    assert!(
+        http(admin_address, "POST", "/v1/drain", Some(TOKEN))
+            .await
+            .starts_with("HTTP/1.1 204")
+    );
+    assert!(
+        http(admin_address, "GET", "/readyz", None)
+            .await
+            .starts_with("HTTP/1.1 503")
+    );
+    // Draining refuses new sessions but keeps established ones routing.
+    let packet = war_relay::protocol::envelope(existing.id, &war_relay::protocol::uint(7));
+    write_record(&mut existing.send, &packet).await.unwrap();
+    assert_eq!(existing.read().await, packet);
+    assert!(
+        http(admin_address, "POST", "/v1/resume", Some(TOKEN))
+            .await
+            .starts_with("HTTP/1.1 204")
+    );
+    assert!(
+        http(admin_address, "GET", "/readyz", None)
+            .await
+            .starts_with("HTTP/1.1 200")
+    );
+
+    relay.begin_shutdown();
+    assert!(
+        http(admin_address, "POST", "/v1/resume", None)
+            .await
+            .starts_with("HTTP/1.1 401")
+    );
+    assert!(
+        http(admin_address, "POST", "/v1/resume", Some(TOKEN))
+            .await
+            .starts_with("HTTP/1.1 409")
+    );
+    assert!(
+        http(admin_address, "POST", "/v1/drain", Some(TOKEN))
+            .await
+            .starts_with("HTTP/1.1 204")
+    );
+    assert!(
+        http(admin_address, "GET", "/readyz", None)
+            .await
+            .starts_with("HTTP/1.1 503")
+    );
+    assert!(
+        http(admin_address, "GET", "/metrics", Some(TOKEN))
+            .await
+            .contains("war_draining 1\n")
+    );
+    // A stopping relay admits no new session.
+    let refused = tokio::time::timeout(Duration::from_secs(3), async {
+        let connection = endpoint.connect(&url).await?;
+        let (mut send, mut receive) = connection.open_bi().await?.await?;
+        write_record(&mut send, &war_relay::protocol::text("shutdown-pending")).await?;
+        read_record(&mut receive, 1024).await
+    })
+    .await
+    .unwrap();
+    assert!(refused.is_err(), "stopping relay admitted a pending join");
+
+    stop.cancel();
+    assert_eq!(close_code(&existing.connection).await, Some(1001));
+    tokio::time::timeout(Duration::from_secs(3), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        http(admin_address, "POST", "/v1/resume", Some(TOKEN))
+            .await
+            .starts_with("HTTP/1.1 409")
+    );
+    assert!(
+        http(admin_address, "GET", "/readyz", None)
+            .await
+            .starts_with("HTTP/1.1 503")
+    );
+    assert_eq!(relay.counts(), (0, 1));
+    assert_eq!(
+        relay
+            .metrics
+            .connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    assert_eq!(relay.metrics.read_budget.as_ref().unwrap().reserved(), 0);
+    admin_stop.cancel();
+    admin_task.await.unwrap();
+}

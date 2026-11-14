@@ -1,5 +1,5 @@
 [Unit]
-Description=WebSocket Application Relay (CBOR)
+Description=WebTransport Application Relay (CBOR)
 After=network.target
 
 [Service]
@@ -7,10 +7,19 @@ Type=simple
 DynamicUser=yes
 ExecStart=/usr/local/bin/war-relay
 EnvironmentFile=-/etc/war-relay.env
+# The relay terminates TLS itself. systemd copies the certificate and key into a
+# private credentials directory readable only by this service's dynamic user.
+LoadCredential=tls-cert:/etc/war-relay/fullchain.pem
+LoadCredential=tls-key:/etc/war-relay/privkey.pem
+Environment=WAR_TLS_CERT=%d/tls-cert WAR_TLS_KEY=%d/tls-key
+# HTTP/3 clients connect to UDP 443 by default.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Restart=on-failure
 RestartSec=2s
 TimeoutStopSec=15s
-LimitNOFILE=65536
+# QUIC shares one UDP socket, so descriptors do not grow with sessions.
+LimitNOFILE=4096
 # Keep the WAR_TOTAL_* budgets in /etc/war-relay.env well below this limit.
 MemoryHigh=768M
 MemoryMax=1G

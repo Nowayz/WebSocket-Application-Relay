@@ -1,14 +1,8 @@
 # Measurement and decision records
 
-The [October 21 acceptance and fanout follow-up](acceptance-fanout-2026-10-21.md)
-covers concurrent listing repair, sharded observer validation and repeat
-measurements of the current architecture.
-
-These files are dated measurement and decision records from the October 2026
-Rust rewrite. They are kept for provenance. Each one describes the
-implementation as it was on the date in its text, including its routing code,
-test fixtures and measured numbers. They are not updated when the code changes.
-
-The single global registry lock and the single global departure FIFO that these
-reports discuss have since been replaced by per-channel locks and per-room
-departure queues. For the current design, read [docs/architecture.md](../architecture.md).
+These are dated measurement and decision records from the WebTransport work in
+October and November 2026, kept for provenance. Each describes the
+implementation as it was on its date, including its code, fixtures and measured
+numbers; they are not updated when the code changes. For the current design read
+[architecture.md](../architecture.md), and for current results
+[performance.md](../performance.md).

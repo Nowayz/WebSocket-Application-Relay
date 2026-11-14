@@ -146,127 +146,6 @@ mod tests {
         assert_eq!(String::from_utf8(out).unwrap(), "42,100,99,100,109,110\n");
         assert!(ExactLatency::new(1).write(&mut Vec::new(), 0).is_err());
     }
-
-    #[tokio::test]
-    async fn corruption_at_a_non_primary_reader_is_rejected() {
-        check_corruption(false, false).await;
-    }
-
-    #[tokio::test]
-    async fn a_changed_departure_at_a_non_primary_reader_is_rejected() {
-        check_corruption(true, false).await;
-    }
-
-    #[tokio::test]
-    async fn corruption_at_a_non_primary_global_observer_is_rejected() {
-        check_corruption(false, true).await;
-    }
-
-    async fn check_corruption(bad_departure: bool, global_observers: bool) {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("ws://{}/", listener.local_addr().unwrap());
-        let fake = tokio::spawn(async move {
-            let mut peers = Vec::new();
-            for id in 1..=3 {
-                let (stream, _) = listener.accept().await?;
-                let mut socket = tokio_tungstenite::accept_async(stream).await?;
-                ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
-                socket.send(Message::Binary(protocol::uint(id))).await?;
-                if global_observers && id != 1 {
-                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
-                    socket
-                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\0\xf5")))
-                        .await?;
-                    ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
-                    socket
-                        .send(Message::Binary(Bytes::from_static(b"\x82\0\x82\x01\x01")))
-                        .await?;
-                }
-                peers.push(socket);
-            }
-            let mut transient = if bad_departure {
-                let (stream, _) = listener.accept().await?;
-                let mut socket = tokio_tungstenite::accept_async(stream).await?;
-                ensure!(matches!(socket.next().await, Some(Ok(Message::Binary(_)))));
-                socket.send(Message::Binary(protocol::uint(4))).await?;
-                Some(socket)
-            } else {
-                None
-            };
-            let Some(Ok(Message::Binary(request))) = peers[0].next().await else {
-                anyhow::bail!("missing fake broadcast");
-            };
-            let (target, value) =
-                protocol::parse(&request).map_err(|_| anyhow::anyhow!("invalid fake request"))?;
-            ensure!(target == protocol::BROADCAST);
-            let good = protocol::envelope(1, value);
-            let mut corrupt = good.to_vec();
-            *corrupt.last_mut().unwrap() ^= 1;
-            peers[1].send(Message::Binary(good.clone())).await?;
-            peers[2]
-                .send(Message::Binary(if bad_departure {
-                    good.clone()
-                } else {
-                    corrupt.into()
-                }))
-                .await?;
-            if let Some(mut socket) = transient.take() {
-                socket.send(Message::Binary(good)).await?;
-                ensure!(matches!(
-                    socket.next().await,
-                    Some(Ok(Message::Close(Some(_))))
-                ));
-                socket.flush().await?;
-                drop(socket);
-                let notice = departure(4);
-                for (index, peer) in peers.iter_mut().enumerate() {
-                    let packet = if index == 2 {
-                        departure(5)
-                    } else {
-                        notice.clone()
-                    };
-                    peer.send(Message::Binary(packet)).await?;
-                }
-            }
-            // Keep all transports open: an EOF at the primary reader must not
-            // mask the secondary reader's full-body validation failure.
-            std::future::pending::<Result<()>>().await
-        });
-        let mut counts = Counts::default();
-        let group = Fanout::new(
-            &url,
-            2,
-            ValueKind::Bytes,
-            global_observers,
-            false,
-            &mut counts,
-        )
-        .await
-        .unwrap();
-        let error = timeout(
-            Duration::from_secs(2),
-            group.run(
-                Instant::now()..Instant::now() + Duration::from_secs(1),
-                url,
-                if bad_departure { 2 } else { 0 },
-                if bad_departure { 1 } else { WINDOW },
-                0,
-                None,
-            ),
-        )
-        .await
-        .unwrap()
-        .err()
-        .expect("corrupt non-primary delivery was accepted");
-        let expected = if bad_departure {
-            "reader 1: departure changed"
-        } else {
-            "reader 1: body/sender/FIFO changed"
-        };
-        assert!(error.to_string().contains(expected), "{error}");
-        fake.abort();
-        assert!(fake.await.unwrap_err().is_cancelled());
-    }
 }
 
 impl Fanout {
@@ -297,11 +176,7 @@ impl Fanout {
             } else {
                 name.clone()
             };
-            let (mut socket, id) = if global_broadcast {
-                join_bound(url, &reader_name, counts, index).await?
-            } else {
-                join(url, &reader_name, counts).await?
-            };
+            let (mut socket, id) = join(url, &reader_name, counts).await?;
             if global_observers {
                 authenticate(&mut socket, counts).await?;
                 ensure!(
@@ -466,7 +341,7 @@ impl Fanout {
                 let packet = packets[(sequence + offset) % 64].0.clone();
                 counts.sent(&packet);
                 counts.value_bytes += 1027;
-                sender.send(Message::Binary(packet)).await?;
+                sender.send(&packet).await?;
             }
             let sent = if controller_timing.is_some() {
                 Instant::now()

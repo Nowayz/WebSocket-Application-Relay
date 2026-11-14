@@ -3,7 +3,7 @@ use clap::Parser;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use war_relay::{Config, Relay, serve};
+use war_relay::{Config, Relay};
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -25,9 +25,8 @@ fn main() -> Result<()> {
             .min(16)
     });
     build_runtime(&config, workers)?.block_on(async move {
-        let listener = if config.legacy_websocket { Some(TcpListener::bind(config.bind).await.context("cannot bind relay listener")?) } else { None };
         let admin = if config.no_admin { None } else { Some(TcpListener::bind(config.admin_bind).await.context("cannot bind admin listener")?) };
-        info!(address = %config.bind, workers, listen_backlog = config.listen_backlog, protocol = "war.cbor.v1", "relay listening");
+        info!(address = %config.bind, workers, protocol = "war.cbor.v1", "relay listening");
         if let Some(admin) = &admin { info!(address = %admin.local_addr()?, "admin listening"); }
         let relay = Relay::new(config)?;
         let shutdown = CancellationToken::new();
@@ -40,7 +39,6 @@ fn main() -> Result<()> {
             #[cfg(not(unix))] { let _ = tokio::signal::ctrl_c().await; }
             signal.cancel();
         });
-        if let Some(listener) = listener { return serve(listener, admin, relay, shutdown).await; }
         let identity = match (&relay.config.tls_cert, &relay.config.tls_key) {
             (Some(cert), Some(key)) => wtransport::Identity::load_pemfiles(cert, key).await?,
             _ if relay.config.dev_cert => wtransport::Identity::self_signed(["localhost", "127.0.0.1", "::1"] )?,
@@ -56,7 +54,7 @@ fn main() -> Result<()> {
         let (endpoint, _ingress) = war_relay::webtransport::EndpointIngress::bind(&relay.config, transport)
             .context("cannot bind relay listener")?;
         let admin_task = admin.map(|listener| {
-            let router = war_relay::server::admin_router(relay.clone());
+            let router = war_relay::admin_router(relay.clone());
             let stop = shutdown.clone();
             tokio::spawn(async move { axum::serve(listener, router).with_graceful_shutdown(stop.cancelled_owned()).await })
         });
@@ -68,11 +66,6 @@ fn main() -> Result<()> {
 }
 
 fn build_runtime(config: &Config, workers: usize) -> Result<tokio::runtime::Runtime> {
-    if config.legacy_websocket {
-        return Ok(tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?);
-    }
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     builder
         .worker_threads(workers)

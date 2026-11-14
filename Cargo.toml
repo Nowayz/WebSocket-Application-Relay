@@ -3,7 +3,7 @@ name = "war-relay"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91"
-description = "A bounded WebSocket relay with native CBOR routing"
+description = "A bounded WebTransport relay with native CBOR routing"
 license = "MIT"
 repository = "https://github.com/Nowayz/WebSocket-Application-Relay"
 default-run = "war-relay"
@@ -18,12 +18,11 @@ clap = { version = "4", features = ["derive", "env"] }
 core_affinity = "0.8.3"
 crossbeam-queue = "0.3"
 getrandom = { version = "0.3", features = ["std"] }
+http = "1"
 minicbor = { version = "2", features = ["std", "half"] }
-mio = { version = "1.2.4", features = ["net", "os-poll"] }
 parking_lot = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-slab = "0.4"
 simdutf8 = "0.1.5"
 socket2 = { version = "0.6", features = ["all"] }
 subtle = "2"
@@ -31,7 +30,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync",
 tokio-util = { version = "0.7", features = ["rt"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tungstenite = "0.30.0"
 papaya = "0.2.5"
 wtransport = { version = "0.7.2", features = ["quinn"] }
 web-transport-quinn = { version = "=0.13.3", default-features = false, features = ["ring"] }
@@ -43,9 +41,7 @@ tikv-jemallocator = "0.7"
 
 [dev-dependencies]
 url = "2"
-futures-util = { version = "0.3", features = ["sink"] }
-tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+futures-util = "0.3"
 
 [profile.release]
 lto = "thin"
@@ -55,14 +51,8 @@ strip = "debuginfo"
 [lints.rust]
 unsafe_code = "forbid"
 
-[[example]]
-name = "load"
-path = "examples/load.rs"
-
 [patch.crates-io]
 # Protocol storage and QUIC integration patches; pinned origins are in vendor/README.md.
-tungstenite = { path = "vendor/tungstenite" }
-tokio-tungstenite = { path = "vendor/tokio-tungstenite" }
 quinn-proto = { path = "vendor/quinn-proto" }
 quinn = { path = "vendor/quinn" }
 rustls = { path = "vendor/rustls" }

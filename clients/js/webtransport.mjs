@@ -1,5 +1,4 @@
 // Event facade keeps the relay's command serialization and CBOR validation shared.
-// No WebSocket connection is created by this transport.
 export class WebTransportChannel extends EventTarget {
   readyState = 0;
   #writer;

@@ -1,4 +1,4 @@
-# Operating the native relay
+# Operating the relay
 
 `war-relay --help` lists every option; the [configuration reference](#configuration-reference)
 below gives each one's environment variable, default and valid range. Secrets
@@ -8,59 +8,61 @@ Empty values retain absent-secret behavior. Set configuration explicitly for
 each deployment. Terms such as session, room, departure queue and staging
 credit are defined in the [glossary](glossary.md).
 
-## Listeners and ingress
+## Endpoint and certificates
 
-The relay defaults to `127.0.0.1:1338` and management to `127.0.0.1:1339`.
-Deploy behind a TLS WebSocket ingress; [Caddyfile.example](../deploy/Caddyfile.example)
-shows the native route.
+The relay serves WebTransport (HTTP/3 over QUIC) on one UDP socket, by default
+`127.0.0.1:1338`, at the path `/war`. Management HTTP defaults to
+`127.0.0.1:1339`. The relay terminates TLS itself: production uses a publicly
+trusted certificate chain and key with `--tls-cert` and `--tls-key`, read at
+startup, so restart the relay after a certificate renewal. `--dev-cert`
+generates a temporary certificate for `localhost`, `127.0.0.1` and `::1` and
+logs its SHA-256 pin; browsers accept it only through
+`serverCertificateHashes`. [deploy/README.md](../deploy/README.md) installs the
+systemd unit, which passes the certificate files as systemd credentials.
 
-### WebTransport endpoint servicing
+### Endpoint servicing
 
-In WebTransport mode, `--workers` controls the connection and application runtime.
-One additional `war-ingress` thread owns a current-thread runtime for the shared
-UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
-`--pin-workers` pins the application workers and does not reserve an extra CPU
-for ingress. By default (`auto`) the workers are pinned when the process may use
-exactly one CPU per worker, which is the case with the default worker count on
-hosts of up to 16 CPUs; the relay then only partitions CPUs it was given. Use
-`--pin-workers=off` when the host shares those CPUs with other busy work. Session shutdown completes before this runtime is stopped and joined.
-Startup failure also stops and joins it. Reliable private/control output attempts
-an immediate chunk write when there is no older output; partial writes retain
-FIFO position, charged credit, and their write deadline. The queue ordering lock
-also protects the stream and in-flight marker; a pending write holds no lock
-across an await and cannot be overtaken. Fanout remains queued
-for recipient batching. The TCP/WebSocket details below apply to
-`--legacy-websocket`. See the [measured endpoint-servicing comparison](reports/webtransport-dedicated-ingress-2026-10-21.json)
-for the mixed-load gain and reliable-only throughput tradeoffs.
+`--workers` controls the multi-threaded runtime that drives QUIC connections and
+sessions. One additional `war-ingress` thread owns a current-thread runtime for
+the shared UDP socket and endpoint dispatch. It shares the process CPU
+allowance; `--pin-workers` pins the application workers and does not reserve an
+extra CPU for ingress. By default (`auto`) the workers are pinned when the
+process may use exactly one CPU per worker, which is the case with the default
+worker count on hosts of up to 16 CPUs; the relay then only partitions CPUs it
+was given. Use `--pin-workers=off` when the host shares those CPUs with other
+busy work. Session shutdown completes before the ingress runtime is stopped and
+joined; startup failure also stops and joins it.
+
+Reliable private and control output attempts an immediate stream write when
+there is no older output; partial writes retain FIFO position, charged credit
+and their write deadline. The queue ordering lock also protects the stream and
+in-flight marker; a pending write holds no lock across an await and cannot be
+overtaken. Fanout stays queued for recipient batching.
+
+The shared socket's receive buffer is requested with
+`WAR_UDP_RECEIVE_BUFFER_BYTES` (4 MiB by default). Linux caps the request at
+`net.core.rmem_max` and commonly reports double the request; check the logged
+effective size and raise the sysctl on busy hosts, or bursts from many sessions
+are dropped in the kernel and recovered as QUIC loss.
+
+The relay's QUIC transport detects loss by the RFC 9002 time threshold only,
+not by packet count, so ordinary path reordering does not collapse the
+congestion window; it requests an acknowledgement every eight packets with a
+5 ms maximum delay. The vendored stack's patches are described in
+[vendor/README.md](../vendor/README.md).
 
 ### Browser origin admission
 
 `WAR_ALLOWED_ORIGINS` (or repeated `--allowed-origin`) lists exact browser
 origins such as `https://app.example` or `http://localhost:4180`; the literal
-`null` origin can be listed too. Up to 64 entries are accepted. With a list,
-an upgrade whose `Origin` header is absent is still admitted, because native
-clients send none; an `Origin` that is not listed, or a request with more than
-one `Origin` header, receives HTTP `403` before the upgrade and counts in
+`null` origin can be listed too. Up to 64 entries are accepted. With a list, a
+session request whose `Origin` header is absent is still admitted, because
+native clients send none; an `Origin` that is not listed, or a request with more
+than one `Origin` header, receives HTTP `403` and counts in
 `war_origin_rejected_total`. Without a list every origin is admitted. Origin
 checking is separate from relay authentication and application authorization.
 
-Accepted relay and management connections use `TCP_NODELAY` to disable Nagle.
-The relay does not use `TCP_CORK`, `MSG_MORE` or a timed output batching window.
-Private output attempts a socket write immediately; fanout wakes the owning
-workers immediately and combines only output already queued. Bounded worker
-quanta preserve FIFO and give other ready users a turn without a batching timer.
-TCP flow/congestion control and the peer's receive window still govern progress.
-Browser WebSocket implementations and TLS ingress own their separate socket
-settings. Linux `TCP_QUICKACK` controls local ACK behavior temporarily, not the
-peer's ACK policy or a permanent transmit delay switch; it is not reapplied on
-every read. See [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html).
-
-Linux also has a separate `net.ipv4.tcp_autocorking` policy, which coalesces small
-writes while an earlier packet is still in the device/qdisc queue. On a dedicated
-relay host or network namespace, `sysctl -w net.ipv4.tcp_autocorking=0` disables
-that policy. This is a privileged, namespace-wide setting rather than a socket
-option; the relay does not change shared-host sysctls at startup. See the
-[kernel reference](https://www.kernel.org/doc/html/latest/networking/ip-sysctl.html).
+### Management and authentication
 
 Health and readiness are `/healthz` and `/readyz`. Management provides `/metrics`,
 `GET /v1/channels?limit=...&after=...`, `POST /v1/drain`, `POST /v1/resume` and
@@ -76,55 +78,42 @@ IDs route across channels. Applications provide their own identity and permissio
 model. `WAR_DISABLE_GLOBAL_BROADCAST=true` requires authentication for global
 sends without changing listener authorization.
 
-## 100,000 native connections
+## 100,000 sessions
 
 Use the [100k environment](../deploy/war-relay-100k.env.example) and
 [systemd override](../deploy/war-relay-100k.conf.example) as a starting profile.
-The profile includes 110,000 physical connection slots for joining/closing
-headroom, a 262,144 descriptor limit, 64 KiB requested send buffers, 64 KiB
-requested receive buffers, 16 MiB maximum encoded messages and 256 MiB global allowances
-for output and decoder staging. The room ceiling is 1,024 members. These are
-operating ceilings and safeguards, not preallocated memory or a universal
-capacity promise. Large-room diagnostics raise that room ceiling explicitly.
+The profile includes 110,000 connection slots for joining and closing headroom,
+a 16 MiB UDP receive buffer request, 16 MiB maximum encoded messages and 256 MiB
+global allowances for output and record staging. The room ceiling is 1,024
+members. These are operating ceilings and safeguards, not preallocated memory or
+a universal capacity promise. Large-room diagnostics raise that room ceiling
+explicitly. Every session shares the one UDP socket, so descriptor limits do not
+grow with the population. About 1.7 GiB of process memory was measured with
+100,000 idle sessions joined, before message traffic; see
+[performance.md](performance.md).
 
 Both supplied deployment profiles retain large-file support: a 5 MiB image can
 be sent in one CBOR byte string, with its normal routing envelope. The encoded
 message limit is 16 MiB and the per-session output ceiling is 32 MiB; neither is
-preallocated for idle sockets. Keep large files as bytes instead of Base64 text.
-Global decoder/output budgets still apply, so concurrent large transfers and
+preallocated for idle sessions. Keep large files as bytes instead of Base64 text.
+Global staging/output budgets still apply, so concurrent large transfers and
 large multicast audiences must fit available credit. Payload bodies are shared
 across recipients, while per-recipient pending delivery remains conservatively
 charged. Use backpressure or reduce the offered rate when these budgets fill.
-The [large-file check](reports/large-files.md) records the acceptance and socket-buffer
-comparison behind this profile.
 
-The base [systemd unit](../deploy/war-relay.service) has lower limits and is not
-sufficient for 100,000 sockets without its override. Include cgroup-charged kernel
-socket memory, application storage and file descriptors in capacity planning.
-Linux commonly reports doubled socket-buffer requests; check effective settings.
-Small TCP windows can limit throughput on high bandwidth-delay networks.
-
-Choose worker count and `WAR_PIN_WORKERS` (default `auto`) for the actual host. Keep load
-generators on different physical cores during comparisons, and record SMT
-siblings, worker affinity and CPU topology. The fixed masks in mixed-load scripts
-assume the original 32-logical-CPU test host; adjust them before another host.
-Multiple relay processes do not share routing state. SO_REUSEPORT is used between
-workers of one relay, not as a distributed membership mechanism.
+Choose worker count and `WAR_PIN_WORKERS` (default `auto`) for the actual host.
+Keep load generators on different physical cores during comparisons, and record
+SMT siblings, worker affinity and CPU topology. Multiple relay processes do not
+share routing state; each process is an independent relay.
 
 ## Memory and backpressure
 
-Idle native sockets own no task, message channel or private receive slab. Workers
-reuse base receive storage. Partial frames retain admitted storage; published
-payloads retain immutable owners until their consumers finish. Oversized completed
-worker slabs retire before reuse. `WAR_READ_BUFFER_IDLE_SECS` reclaims quiet
-high-water decoder/fragment storage; incomplete messages and published payloads
-keep their required ownership.
-
-`WAR_TOTAL_READ_BUFFER_BYTES` bounds staging allowances. Growth reserves headroom
-for overlapping old/new allocations before copying unfinished input. A zero
-configured staging allowance disables that safeguard; do so only with an
-articulated alternative resource plan. Codec provenance and exact Rust patches
-are in [vendor/README.md](../vendor/README.md).
+Idle sessions own no receive buffer. A record being received reserves twice its
+declared length against `WAR_TOTAL_READ_BUFFER_BYTES` before its body is
+allocated, and releases the reservation when the record is published to
+routing; a refused reservation ends that session with `1002`. A zero allowance
+disables that safeguard; do so only with an articulated alternative resource
+plan. Published payloads retain immutable owners until their consumers finish.
 
 ### Output queues and pressure
 
@@ -134,76 +123,75 @@ body and captured recipient view. `war_queued_bytes` reports global
 reservations as logical credit, not RSS; a reservation is held until the write
 completes or is cancelled. A session that exhausts its own allowance is closed
 with `1013`; it is the slow consumer. When the global budget is exhausted, the
-frame for the recipient being charged is dropped and `war_global_pressure_total`
-increments. That recipient is closed with `1013` only if it already holds at
-least a quarter of its own `WAR_QUEUE_BYTES`, or if the dropped frame was the
-reply to its own command. Senders are never closed because of their recipients.
-Delivery under pressure is best-effort: later recipients of one broadcast may
-miss a frame that earlier recipients received.
+message for the recipient being charged is dropped and
+`war_global_pressure_total` increments. That recipient is closed with `1013`
+only if it already holds at least a quarter of its own `WAR_QUEUE_BYTES`, or if
+the dropped message was the reply to its own command. Senders are never closed
+because of their recipients. Delivery under pressure is best-effort: later
+recipients of one broadcast may miss a message that earlier recipients received.
+Datagrams bypass the queue: each is handed to the recipient's connection, and
+is dropped when it exceeds that recipient's maximum datagram size or the QUIC
+datagram buffer is full (`war_datagrams_dropped_total`).
 
 Departure notices use one queue per ordinary room, sixteen source-room-hashed
 queues for `re_globl` departures and disconnect-observer notices, and one for
 detached global/observer publications. Different rooms' observer notices have
 no shared order. Notices to at most 128 recipients are delivered immediately
-when the room's queue is idle. Larger ones become jobs that workers advance in
-128-recipient turns, rotating across queues so a large room need not finish
-before another queue receives service. Live broadcasts above 1,024 recipients advance in
-1,024-recipient turns owned by the source. Each job reserves staging credit for
-its captured view from the global budget; a refused reservation falls back to
-synchronous delivery, in order, and counts in `war_global_pressure_total`, so
-that counter records refused reservations, not lost messages. A departing
-peer's normal Close does not prove that recipients got its notice; verify the
-expected recipient matrix. The design is in [architecture.md](architecture.md).
+when the room's queue is idle. Larger ones become jobs that departure turns
+advance 128 recipients at a time, rotating across queues so a large room need
+not finish before another queue receives service. Live broadcasts above 1,024
+recipients advance in 1,024-recipient turns owned by the source. Each job
+reserves staging credit for its captured view from the global budget; a refused
+reservation falls back to synchronous delivery, in order, and counts in
+`war_global_pressure_total`, so that counter records refused reservations, not
+lost messages. A departing peer's graceful close does not prove that recipients
+got its notice; verify the expected recipient matrix. The design is in
+[architecture.md](architecture.md).
 
 ## Lifecycle and deadlines
 
 Terminal membership removal discards each room's cached recipient index instead
 of maintaining it for future broadcasts. Captured fanouts keep their own owners;
-reversible drain retains ordinary cache maintenance. The
-[warmed-room shutdown check](reports/shutdown-views.md) covers a large room after real
-delivery, all shutdown Close frames and transport EOFs.
+reversible drain retains ordinary cache maintenance.
 
-Handshake, join, write, heartbeat, application-idle and shutdown deadlines are
-independent controls. `WAR_IDLE_TIMEOUT_SECS=0` preserves application-idle sessions.
-Heartbeat interval zero disables server heartbeat generation. Tune idle policies
-for your application; input/output activity and deadline semantics are covered by
-native tests. Queued writes keep their own retention deadline.
+Handshake, join, write, keep-alive, application-idle and shutdown deadlines are
+independent controls. `WAR_HANDSHAKE_TIMEOUT_SECS` bounds the QUIC handshake and
+WebTransport session request. `WAR_PING_INTERVAL_SECS` sends QUIC keep-alives and
+`WAR_PONG_TIMEOUT_SECS` is the QUIC idle timeout: a connection silent that long
+ends without a close code. An interval of zero disables both.
+`WAR_IDLE_TIMEOUT_SECS` retires joined sessions with no application input or
+output (keep-alives do not count); zero preserves idle sessions. Queued writes
+keep their own retention deadline.
 
 Manual drain stops admission but allows existing sessions to run. Readiness
 returns 503 while drained. An authenticated resume reverses a manual drain.
-SIGINT/SIGTERM, worker failure and embedding cancellation start terminal shutdown;
-management cannot reopen it. `Relay::set_draining(false)` reports failure after
-terminal stopping. Construct a new Relay when restarting an embedded service.
+SIGINT/SIGTERM and embedding cancellation start terminal shutdown; management
+cannot reopen it. `Relay::set_draining(false)` reports failure after terminal
+stopping. Construct a new Relay when restarting an embedded service.
 
 Terminal shutdown suppresses departure traffic, clears the departure queues and
 releases global listener indexes before retiring sessions, avoiding quadratic
-notification and index-search work. It flushes `1001` before TCP retirement
-where possible and does not wait for a peer acknowledgment during process
-shutdown. A blocked partial frame can force an abnormal close instead. Ten
-seconds is the default worker grace (`WAR_SHUTDOWN_TIMEOUT_SECS`); supervisor
-cleanup gives workers one additional second to report. The systemd unit's stop
-deadline must cover this process-level cleanup.
+notification and index-search work. The endpoint closes every connection with
+application code `1001`; sessions then have `WAR_SHUTDOWN_TIMEOUT_SECS` (ten
+seconds by default) to finish before their tasks are aborted. The systemd unit's
+stop deadline must cover this cleanup.
 
-A strict 100,000-global-listener check verified every normal Close with the default
-grace. A shortened two-second diagnostic verified only 72,846 normal Close frames
-even though the server exited successfully. Size grace for population cleanup;
-process exit alone does not prove all clients received a normal Close.
-
-The embedding API is `Relay::new(config)` plus `serve(listener, admin, relay,
-shutdown)`. Configuration loading/validation is fallible and should be propagated.
-The runtime joins workers on shutdown and partial startup failure. Socket lifetime
-retains physical admission while in-flight routes hold output owners, including
-after routing membership is removed.
+The embedding API is `Relay::new(config)`, then
+`webtransport::EndpointIngress::bind(&config, server_config)` and
+`webtransport::serve(endpoint, relay, shutdown)`, with
+`webtransport::server_transport_config()` as the QUIC transport policy.
+`admin_router(relay)` serves management. Configuration loading/validation is
+fallible and should be propagated. Keep the `EndpointIngress` alive until
+`serve` returns.
 
 ## Monitoring and checks
 
-Track connections/sessions, accepted/rejected/closed counts, queued bytes,
-decoder reservations, output queue capacity, native arena slots, variable bytes,
-write/close errors, slow consumers, pressure and routing-copy counters. A zero
-routing-copy counter describes application routing; it does not imply zero
-kernel copying or zero first-use allocation. RSS can remain above initial values
-after logical resources reach zero because allocators keep pages and small
-arenas/queues stay warm for reconnects.
+Track connections/sessions, QUIC connections, accepted/rejected/handshake-error
+counts, queued bytes, staging reservations, output queue capacity, variable
+bytes, write errors and timeouts, slow consumers, pressure, rate-limited and
+idle-timeout closes, and the datagram counters. RSS can remain above initial
+values after logical resources reach zero because allocators keep pages and
+small queues stay warm for reconnects.
 
 The server binary uses jemalloc on non-MSVC targets. It returns freed pages to
 the OS gradually (after a 100,000-session population retires, resident memory
@@ -212,10 +200,9 @@ jemalloc settings through `_RJEM_MALLOC_CONF` for hosts that need different deca
 or arena policy. No setting is required.
 
 Use [short recipes](performance-guide.md) to check the workload on its intended
-host. Test normal Close, EOF, exact payloads/FIFO and final resource release.
-Do not overlap compilation, profiling or multiple timed generators. Record failed
-runs as failures. [Historical findings](reports/performance-history.md) explain selected
-changes, rejected optimizations and their scope.
+host. Test graceful close, exact payloads/FIFO and final resource release. Do
+not overlap compilation, profiling or multiple timed generators. Record failed
+runs as failures.
 
 ## Configuration reference
 
@@ -224,41 +211,41 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 
 | Flag | Environment | Default | Valid range | Meaning |
 | --- | --- | --- | --- | --- |
-| `--bind` | `WAR_BIND` | `127.0.0.1:1338` | Socket address | Relay WebSocket listener |
+| `--bind` | `WAR_BIND` | `127.0.0.1:1338` | Socket address | WebTransport UDP listener |
+| `--tls-cert` | `WAR_TLS_CERT` | unset | PEM file; requires `--tls-key` | Certificate chain served to clients |
+| `--tls-key` | `WAR_TLS_KEY` | unset | PEM file; requires `--tls-cert` | Private key for the certificate |
+| `--dev-cert` | `WAR_DEV_CERT` | off | Flag; conflicts with `--tls-cert` | Temporary localhost certificate whose SHA-256 pin is logged |
 | `--admin-bind` | `WAR_ADMIN_BIND` | `127.0.0.1:1339` | Socket address; non-loopback requires `WAR_ADMIN_TOKEN` | Management HTTP listener |
 | `--no-admin` | `WAR_NO_ADMIN` | off | Flag | Do not bind the management listener at all |
-| `--listen-backlog` | `WAR_LISTEN_BACKLOG` | `1024` | 1 to 65535 | Requested pending TCP queue per worker listener; the OS may cap it |
-| `--tcp-send-buffer-bytes` | `WAR_TCP_SEND_BUFFER_BYTES` | `0` | 0, or 4096 to 16777216 | Requested kernel send buffer per socket; 0 keeps the OS default |
-| `--tcp-receive-buffer-bytes` | `WAR_TCP_RECEIVE_BUFFER_BYTES` | `0` | 0, or 4096 to 16777216 | Requested kernel receive buffer per socket; 0 keeps the OS default |
+| `--udp-receive-buffer-bytes` | `WAR_UDP_RECEIVE_BUFFER_BYTES` | `4194304` (4 MiB) | Any; 0 keeps the OS default | Requested receive buffer of the shared UDP socket |
+| `--udp-send-buffer-bytes` | `WAR_UDP_SEND_BUFFER_BYTES` | `0` | Any; 0 keeps the OS default | Requested send buffer of the shared UDP socket |
 | `--allowed-origin` | `WAR_ALLOWED_ORIGINS` | unset (all origins) | Up to 64 entries of 1 to 1024 bytes, each an exact `http(s)://host[:port]` or `null`; repeat or comma-separate | Browser Origin allowlist; see [Browser origin admission](#browser-origin-admission) |
-| `--max-connections` | `WAR_MAX_CONNECTIONS` | `10000` | 1 to 4294967295 | Admitted TCP connections per process, including handshakes |
-| `--max-connections-per-ip` | `WAR_MAX_CONNECTIONS_PER_IP` | `0` | 0 to 4294967295 | Admitted connections per direct peer IP; 0 disables |
+| `--max-connections` | `WAR_MAX_CONNECTIONS` | `10000` | 1 to 4294967295 | Admitted QUIC connections per process, including handshakes |
+| `--max-connections-per-ip` | `WAR_MAX_CONNECTIONS_PER_IP` | `0` | 0 to 4294967295 | Admitted connections per client IP address; 0 disables |
 | `--max-channels` | `WAR_MAX_CHANNELS` | `10000` | 1 to 4294967295 | Channels, including `re_globl` |
 | `--max-channel-members` | `WAR_MAX_CHANNEL_MEMBERS` | `10000` | 1 to 4294967295 | Sessions per channel |
 | `--max-message-bytes` | `WAR_MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | 17 to 67108864 (64 MiB) | Largest encoded message, including the routing envelope |
-| `--queue-messages` | `WAR_QUEUE_MESSAGES` | `64` | 1 to 4294967295 | Queued frames per session before it is a slow consumer |
+| `--queue-messages` | `WAR_QUEUE_MESSAGES` | `64` | 1 to 4294967295 | Queued messages per session before it is a slow consumer |
 | `--queue-bytes` | `WAR_QUEUE_BYTES` | `33554432` (32 MiB) | At least `max-message-bytes` + 10 | Per-session output byte allowance |
 | `--total-queue-bytes` | `WAR_TOTAL_QUEUE_BYTES` | `268435456` (256 MiB) | At least `queue-bytes` | Global output budget shared by all sessions, bodies and captured views |
-| `--read-buffer-bytes` | `WAR_READ_BUFFER_BYTES` | `4096` | 1 to 1048576 | Base decoder receive storage per connection |
-| `--receive-arena-bytes` | `WAR_RECEIVE_ARENA_BYTES` | `0` (disabled) | 0, or at least `receive-arena-page-bytes`; must fit the address space | Process-wide backing-store cap for reliable WebTransport receive slabs, including retained published slices |
+| `--receive-arena-bytes` | `WAR_RECEIVE_ARENA_BYTES` | `0` (disabled) | 0, or at least `receive-arena-page-bytes`; must fit the address space | Process-wide backing-store cap for reliable receive slabs, including retained published slices |
 | `--receive-arena-page-bytes` | `WAR_RECEIVE_ARENA_PAGE_BYTES` | `65536` (64 KiB) | Positive and fits the address space | Minimum slab allocation on first use by a worker, shared across its connections |
-| `--total-read-buffer-bytes` | `WAR_TOTAL_READ_BUFFER_BYTES` | `1073741824` (1 GiB) | 0, or at least 2 × max(`read-buffer-bytes`, 20480) | Shared decoder staging allowance; 0 disables that admission check |
-| `--read-buffer-idle-secs` | `WAR_READ_BUFFER_IDLE_SECS` | `5` | 0 to 86400 | Reclaim enlarged decoder storage after this long without large input; 0 disables |
+| `--total-read-buffer-bytes` | `WAR_TOTAL_READ_BUFFER_BYTES` | `1073741824` (1 GiB) | Fits the address space; 0 disables | Shared staging allowance for records being received |
 | `--max-variables` | `WAR_MAX_VARIABLES` | `256` | 1 to 4294967295 | Variables per channel |
 | `--max-variable-bytes` | `WAR_MAX_VARIABLE_BYTES` | `1048576` (1 MiB) | 1 to 4294967295 | Key plus value bytes per channel |
 | `--total-variable-bytes` | `WAR_TOTAL_VARIABLE_BYTES` | `67108864` (64 MiB) | At least `max-variable-bytes` | Global channel variable budget |
-| `--messages-per-second` | `WAR_MESSAGES_PER_SECOND` | `1000` | Any; 0 disables | Per-connection inbound message token bucket; exceeding it closes with `1008` |
-| `--bytes-per-second` | `WAR_BYTES_PER_SECOND` | `16777216` | Any; 0 disables | Per-connection inbound byte token bucket; exceeding it closes with `1008` |
-| `--handshake-timeout-secs` | `WAR_HANDSHAKE_TIMEOUT_SECS` | `5` | 1 to 86400 | Time allowed to complete the HTTP upgrade after accept |
-| `--join-timeout-secs` | `WAR_JOIN_TIMEOUT_SECS` | `10` | 1 to 86400 | Time allowed after upgrade to send the channel name; expiry closes with `1008` |
+| `--messages-per-second` | `WAR_MESSAGES_PER_SECOND` | `1000` | Any; 0 disables | Per-session inbound message token bucket, records and datagrams together; exceeding it closes with `1008` |
+| `--bytes-per-second` | `WAR_BYTES_PER_SECOND` | `16777216` | Any; 0 disables | Per-session inbound byte token bucket; exceeding it closes with `1008` |
+| `--handshake-timeout-secs` | `WAR_HANDSHAKE_TIMEOUT_SECS` | `5` | 1 to 86400 | Time allowed for the QUIC handshake and WebTransport session request |
+| `--join-timeout-secs` | `WAR_JOIN_TIMEOUT_SECS` | `10` | 1 to 86400 | Time allowed after the session opens to send the channel name; expiry closes with `1002` |
 | `--write-timeout-secs` | `WAR_WRITE_TIMEOUT_SECS` | `5` | 1 to 86400 | Retention deadline for a queued write |
-| `--ping-interval-secs` | `WAR_PING_INTERVAL_SECS` | `15` | 0 to 86400 | Server heartbeat interval; 0 disables heartbeats |
-| `--pong-timeout-secs` | `WAR_PONG_TIMEOUT_SECS` | `45` | 1 to 86400 | Missing-pong deadline; expiry closes with `1001` |
-| `--idle-timeout-secs` | `WAR_IDLE_TIMEOUT_SECS` | `0` | 0 to 86400 | Close joined sessions with no application input or output; 0 disables |
-| `--shutdown-timeout-secs` | `WAR_SHUTDOWN_TIMEOUT_SECS` | `10` | 1 to 86400 | Worker grace to send `1001` and retire sockets at terminal shutdown |
+| `--ping-interval-secs` | `WAR_PING_INTERVAL_SECS` | `15` | 0 to 86400 | QUIC keep-alive interval; 0 disables keep-alives and the idle timeout |
+| `--pong-timeout-secs` | `WAR_PONG_TIMEOUT_SECS` | `45` | 1 to 86400 | QUIC idle timeout; a silent connection ends without a close code |
+| `--idle-timeout-secs` | `WAR_IDLE_TIMEOUT_SECS` | `0` | 0 to 86400 | Close joined sessions with no application input or output with `1001`; 0 disables |
+| `--shutdown-timeout-secs` | `WAR_SHUTDOWN_TIMEOUT_SECS` | `10` | 1 to 86400 | Grace for sessions to finish after terminal shutdown begins |
 | `--disable-global-broadcast` | `WAR_DISABLE_GLOBAL_BROADCAST` | off | Flag | `re_globl` broadcasts require an authenticated sender |
-| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Native I/O workers, or WebTransport connection/application workers (plus one ingress thread) |
-| `--pin-workers` | `WAR_PIN_WORKERS` | `auto` | `auto`, `on` (bare flag, `true`), `off` (`false`); `on` needs one allowed CPU per worker | Pin each worker thread to one CPU; `auto` pins WebTransport workers when the allowed CPUs number exactly one per worker |
+| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Connection and application workers (plus one ingress thread) |
+| `--pin-workers` | `WAR_PIN_WORKERS` | `auto` | `auto`, `on` (bare flag, `true`), `off` (`false`); `on` needs one allowed CPU per worker | Pin each worker thread to one CPU; `auto` pins when the allowed CPUs number exactly one per worker |
 
 Two secrets are environment-only and never appear in `--help` or logs:
 
@@ -273,14 +260,14 @@ The three global budgets exist so the relay refuses work before the kernel
 kills the process. Their sum, `WAR_TOTAL_READ_BUFFER_BYTES` plus
 `WAR_TOTAL_QUEUE_BYTES` plus `WAR_TOTAL_VARIABLE_BYTES`, is the application
 memory the relay may commit under load; at the defaults that is 1 GiB plus
-256 MiB plus 64 MiB. Add kernel socket buffers, roughly the connection count
-times the sum of the two TCP buffer sizes (requested or autotuned, and Linux
-commonly doubles a request), plus the resident baseline of the process. That
-total must fit under the cgroup memory limit with headroom, or the OOM killer
-ends the process instead of the budgets refusing admission. Raise a budget
-only together with the limit that contains it.
+256 MiB plus 64 MiB. Add per-session QUIC connection state (about 17 KiB per
+idle session in the 100,000-session measurement), the UDP socket buffers and
+the resident baseline of the process. That total must fit under the cgroup
+memory limit with headroom, or the OOM killer ends the process instead of the
+budgets refusing admission. Raise a budget only together with the limit that
+contains it.
 
-When enabling the reliable WebTransport receive arena, also allow up to
+When enabling the reliable receive arena, also allow up to
 `WAR_RECEIVE_ARENA_BYTES` of backing storage. For example,
 `--receive-arena-bytes 8388608 --receive-arena-page-bytes 65536` permits up to
 8 MiB of slabs, allocating a 64 KiB page lazily on a worker's first eligible
@@ -294,17 +281,17 @@ The arena budget includes those retained pages and worker caches. Once that cap
 is reached, or a record exceeds the page size, the reader uses its ordinary
 budgeted allocation path. Arena pressure therefore does not reject otherwise
 admissible messages. Message-size, staging, queue, rate and timeout limits still
-apply. Datagram payload allocation and the legacy WebSocket decoder are unchanged.
+apply. Datagram payload allocation is unchanged.
 
 `war_receive_arena_reserved_bytes` and `war_receive_arena_peak_reserved_bytes`
-report backing reservations separately from decoder staging. Arena storage may
+report backing reservations separately from record staging. Arena storage may
 remain cached after connections retire and is released when the worker runtime
 exits; its reservation must remain within the configured cap. A larger page can
 reduce payload allocations but lets one retained small slice pin more capacity.
 Choose the page size and cap using actual message sizes and slow-recipient load.
 
-After a load test, check that the six gauges the release gate requires to be
-zero have returned to zero: `war_connections`, `war_sessions`,
-`war_queued_bytes`, `war_variable_bytes`, `war_read_buffer_reserved_bytes`
-and `war_output_queue_capacity_bytes`. A gauge that stays non-zero after every
-client has closed is a leak, not warm capacity.
+After a load test, check that these gauges have returned to zero:
+`war_connections`, `war_sessions`, `war_quic_connections`, `war_queued_bytes`,
+`war_variable_bytes`, `war_read_buffer_reserved_bytes` and
+`war_output_queue_capacity_bytes`. A gauge
+that stays non-zero after every client has closed is a leak, not warm capacity.

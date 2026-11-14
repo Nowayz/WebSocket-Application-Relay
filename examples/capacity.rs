@@ -3,7 +3,7 @@
 use std::{
     collections::HashSet,
     io::{self, Write},
-    net::{Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     time::{Duration, Instant},
 };
 
@@ -14,16 +14,8 @@ use futures_util::StreamExt;
 use minicbor::Decoder;
 use serde::Serialize;
 use tokio::{
-    net::TcpSocket,
     task::JoinSet,
     time::{sleep_until, timeout},
-};
-use tokio_tungstenite::{
-    MaybeTlsStream, client_async_with_config,
-    tungstenite::{
-        Message,
-        protocol::{CloseFrame, WebSocketConfig},
-    },
 };
 use war_relay::protocol;
 
@@ -35,9 +27,7 @@ const DEADLINE: Duration = Duration::from_secs(15);
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
-    certificate: Option<String>,
-    #[arg(long)]
-    ca_certificate: Option<std::path::PathBuf>,
+    certificate: String,
     /// Shared QUIC socket receive buffer; zero selects the OS default.
     #[arg(long, default_value_t = 4 * 1024 * 1024)]
     udp_receive_buffer_bytes: usize,
@@ -50,8 +40,6 @@ struct Args {
     /// Bound concurrent setup/teardown rooms, rather than spawning per user.
     #[arg(long, default_value_t = 64)]
     concurrency: usize,
-    #[arg(long, default_value_t = 64)]
-    source_addresses: usize,
     #[arg(long, default_value_t = 10)]
     seconds: u64,
     /// Refill the same relay after complete retirement, preserving exact totals.
@@ -69,7 +57,7 @@ struct Args {
     churn_workers: usize,
     #[arg(long, default_value_t = 8)]
     client_workers: usize,
-    /// Diagnostic per-user CSV plus a companion .windows.json latency/Ping timeline.
+    /// Diagnostic per-user CSV plus a companion .windows.json latency timeline.
     #[arg(long)]
     user_latency_output: Option<std::path::PathBuf>,
     /// Diagnostic clock decomposition; adds clocks/storage, never a throughput mode.
@@ -167,21 +155,18 @@ impl Histogram {
 struct UserLatencyHistogram {
     send: Histogram,
     scheduled: Histogram,
-    pings: u64,
 }
 
 impl UserLatencyHistogram {
-    fn record(&mut self, send: Duration, scheduled: Duration, pings: u64) {
+    fn record(&mut self, send: Duration, scheduled: Duration) {
         self.send.record(send);
         self.scheduled.record(scheduled);
-        self.pings += pings;
     }
 }
 
 struct LatencySample {
     send_ns: u64,
     scheduled_ns: u64,
-    pings: u64,
 }
 
 const LATENCY_STAGES: [&str; 5] = [
@@ -236,7 +221,6 @@ struct LatencyWindow {
     pre_send: Vec<u64>,
     stages: [Vec<u64>; 5],
     worst_probes: [Option<StageProbe>; 3],
-    pings: u64,
 }
 
 fn exact_latency_report(values: &mut [u64]) -> serde_json::Value {
@@ -296,10 +280,6 @@ fn main() -> Result<()> {
         "concurrency must be in 1..=256"
     );
     ensure!(
-        (1..=4096).contains(&args.source_addresses),
-        "source-addresses must be in 1..=4096"
-    );
-    ensure!(
         (1..=3600).contains(&args.seconds),
         "seconds must be in 1..=3600"
     );
@@ -326,16 +306,12 @@ fn main() -> Result<()> {
     );
     let authority = args
         .url
-        .strip_prefix("ws://")
-        .or_else(|| args.url.strip_prefix("wss://"))
-        .or_else(|| args.url.strip_prefix("https://"))
-        .context("requires ws:// or https:// IPv4 loopback URL")?
+        .strip_prefix("https://")
+        .context("requires an https:// IPv4 loopback URL")?
         .split('/')
         .next()
         .unwrap();
-    let destination: SocketAddr = authority
-        .parse()
-        .context("requires ws://IPv4:port without a path")?;
+    let destination: SocketAddr = authority.parse().context("requires https://IPv4:port")?;
     ensure!(
         destination.is_ipv4() && destination.ip().is_loopback(),
         "requires IPv4 loopback"
@@ -344,7 +320,7 @@ fn main() -> Result<()> {
         .worker_threads(args.client_workers)
         .enable_all()
         .build()?
-        .block_on(run(args, destination))
+        .block_on(run(args))
 }
 
 fn gate(event: &str, counts: &Counts, details: serde_json::Value, wave: usize) -> Result<()> {
@@ -360,60 +336,18 @@ fn gate(event: &str, counts: &Counts, details: serde_json::Value, wave: usize) -
 }
 
 async fn data(socket: &mut Socket) -> Result<Bytes> {
-    data_counted(socket).await.map(|(bytes, _)| bytes)
+    timeout(DEADLINE, socket.next())
+        .await?
+        .context("missing application data")
 }
 
-async fn data_counted(socket: &mut Socket) -> Result<(Bytes, u64)> {
-    let mut pings = 0;
-    loop {
-        match timeout(DEADLINE, socket.next())
-            .await?
-            .context("missing application data")??
-        {
-            Message::Binary(bytes) => return Ok((bytes, pings)),
-            Message::Ping(_) => {
-                pings += 1;
-                socket.flush().await?;
-            }
-            other => anyhow::bail!("unexpected message: {other:?}"),
-        }
-    }
-}
-
-async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result<(Room, Counts)> {
+async fn join_room(index: usize, args: &Args) -> Result<(Room, Counts)> {
     let name = protocol::text(&format!("cap{index:x}"));
     let mut peers = Vec::with_capacity(args.room_size);
     let mut counts = Counts::default();
-    for member in 0..args.room_size {
-        let mut socket = if args.url.starts_with("https://") {
-            timeout(DEADLINE, Socket::connect(&args.url)).await??
-        } else {
-            let source = 1 + (index * args.room_size + member) % args.source_addresses;
-            let source = Ipv4Addr::new(127, 80, (source >> 8) as u8, source as u8);
-            let socket = TcpSocket::new_v4()?;
-            socket.bind((source, 0).into())?;
-            let stream = timeout(DEADLINE, socket.connect(destination)).await??;
-            stream.set_nodelay(true)?;
-            if args.url.starts_with("wss://") {
-                timeout(DEADLINE, Socket::connect_tls(&args.url, Some(stream))).await??
-            } else {
-                let (socket, _) = timeout(
-                    DEADLINE,
-                    client_async_with_config(
-                        &args.url,
-                        MaybeTlsStream::Plain(stream),
-                        Some(
-                            WebSocketConfig::default()
-                                .read_buffer_size(256)
-                                .write_buffer_size(0),
-                        ),
-                    ),
-                )
-                .await??;
-                Socket::websocket(socket)
-            }
-        };
-        socket.send(Message::Binary(name.clone())).await?;
+    for _ in 0..args.room_size {
+        let mut socket = timeout(DEADLINE, Socket::connect(&args.url)).await??;
+        socket.send(&name).await?;
         let welcome = data(&mut socket).await?;
         let mut decoder = Decoder::new(&welcome);
         let id = decoder.u64()?;
@@ -478,10 +412,7 @@ async fn ring(
         if diagnostic {
             sent_at.push(Instant::now());
         }
-        room.peers[member]
-            .socket
-            .send(Message::Binary(packet))
-            .await?;
+        room.peers[member].socket.send(&packet).await?;
         if stage_timing {
             flushed_at.push(Instant::now());
         }
@@ -490,12 +421,11 @@ async fn ring(
         let mut receives = futures_util::stream::FuturesUnordered::new();
         for (member, peer) in room.peers.iter_mut().enumerate() {
             receives.push(async move {
-                let (packet, pings) = data_counted(&mut peer.socket).await?;
+                let packet = data(&mut peer.socket).await?;
                 Ok::<_, anyhow::Error>((
                     member,
                     packet,
                     Instant::now(),
-                    pings,
                     &mut peer.latency,
                     &mut peer.histogram,
                     &mut peer.stages,
@@ -503,7 +433,7 @@ async fn ring(
             });
         }
         while let Some(received) = receives.next().await {
-            let (member, packet, received, pings, samples, histogram, stages) = received?;
+            let (member, packet, received, samples, histogram, stages) = received?;
             let previous = (member + values.len() - 1) % values.len();
             let latency = received.duration_since(sent_at[previous]);
             check_packet(&packet, ids[previous], &values[previous])?;
@@ -512,7 +442,6 @@ async fn ring(
                 samples.push(LatencySample {
                     send_ns: latency.as_nanos() as u64,
                     scheduled_ns: scheduled.as_nanos() as u64,
-                    pings,
                 });
             }
             if let Some(stages) = stages {
@@ -531,7 +460,7 @@ async fn ring(
                 stages.push(stage);
             }
             if let Some(histogram) = histogram {
-                histogram.record(latency, scheduled, pings);
+                histogram.record(latency, scheduled);
             }
             observations.round_trip.record(latency);
             observations.counts.received(&packet);
@@ -567,18 +496,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bounded_user_histograms_keep_separate_clocks_counts_and_ping_totals() {
+    fn bounded_user_histograms_keep_separate_clocks_and_counts() {
         let mut histogram = UserLatencyHistogram::default();
         for millis in [1, 2, 3, 100] {
             histogram.record(
                 Duration::from_millis(millis),
                 Duration::from_millis(millis + 200),
-                2,
             );
         }
         assert_eq!(histogram.send.n, 4);
         assert_eq!(histogram.scheduled.n, 4);
-        assert_eq!(histogram.pings, 8);
         assert_eq!(histogram.send.maximum, 100_000_000);
         assert_eq!(histogram.send.percentile_upper_ms(99), 134.217728);
         assert_eq!(histogram.scheduled.percentile_upper_ms(99), 536.870912);
@@ -640,30 +567,7 @@ async fn retire(mut room: Room) -> Result<Counts> {
     let mut counts = Counts::default();
     // Retire backwards so each still-live member can verify every departure.
     while let Some(mut peer) = room.peers.pop() {
-        if !timeout(DEADLINE, peer.socket.close_transport()).await?? {
-            let close = CloseFrame {
-                code: 1000.into(),
-                reason: "capacity".into(),
-            };
-            peer.socket
-                .send(Message::Close(Some(close.clone())))
-                .await?;
-            loop {
-                match timeout(DEADLINE, peer.socket.next())
-                    .await?
-                    .context("missing Close acknowledgement")??
-                {
-                    Message::Close(Some(frame)) if frame == close => break,
-                    Message::Ping(_) => peer.socket.flush().await?,
-                    other => anyhow::bail!("Close mismatch: {other:?}"),
-                }
-            }
-            peer.socket.flush().await?;
-            ensure!(
-                timeout(DEADLINE, peer.socket.next()).await?.is_none(),
-                "missing transport EOF"
-            );
-        }
+        timeout(DEADLINE, peer.socket.close()).await??;
         counts.normal_closes += 1;
         let expected = protocol::envelope(protocol::BROADCAST, &protocol::uint(peer.id));
         for remaining in &mut room.peers {
@@ -687,34 +591,24 @@ fn merge(total: &mut Observations, part: Observations) {
     total.lifecycle.merge(&part.lifecycle);
 }
 
-/// Poll every inactive socket so the server's real heartbeat policy stays active.
+/// Hold idle sessions until `until`, failing if any unexpected record arrives.
 async fn wait_idle(room: &mut Room, until: Instant) -> Result<()> {
-    while Instant::now() < until {
-        let next = async {
-            let futures = room
-                .peers
-                .iter_mut()
-                .map(|peer| Box::pin(peer.socket.next()));
-            let (message, member, pending) = futures_util::future::select_all(futures).await;
-            drop(pending);
-            (message, member)
-        };
-        let (message, member) = tokio::select! {
-            _ = sleep_until(until.into()) => return Ok(()),
-            result = next => result,
-        };
-        match message.context("idle socket ended")?? {
-            Message::Ping(_) => room.peers[member].socket.flush().await?,
-            other => anyhow::bail!("unexpected idle message: {other:?}"),
-        }
+    let next = async {
+        let futures = room
+            .peers
+            .iter_mut()
+            .map(|peer| Box::pin(peer.socket.next()));
+        futures_util::future::select_all(futures).await.0
+    };
+    tokio::select! {
+        _ = sleep_until(until.into()) => Ok(()),
+        record = next => anyhow::bail!("unexpected idle record: {:?}", record.map(|b| b.len())),
     }
-    Ok(())
 }
 
 async fn churn(
     worker: usize,
     args: std::sync::Arc<Args>,
-    destination: SocketAddr,
     start: Instant,
     audit: std::sync::Arc<parking_lot::Mutex<HashSet<u64>>>,
 ) -> Result<Observations> {
@@ -729,8 +623,7 @@ async fn churn(
             break;
         }
         let began = Instant::now();
-        let (mut room, counts) =
-            join_room(args.users / args.room_size + worker, &args, destination).await?;
+        let (mut room, counts) = join_room(args.users / args.room_size + worker, &args).await?;
         observations.counts.merge(&counts);
         let ids: Vec<_> = room.peers.iter().map(|peer| peer.id).collect();
         {
@@ -788,26 +681,17 @@ async fn prove_rooms(
     Ok((checked, total))
 }
 
-async fn run(args: Args, destination: SocketAddr) -> Result<()> {
-    transport_socket::initialize(
-        args.certificate.as_deref(),
-        args.udp_receive_buffer_bytes,
-        args.ca_certificate.as_deref(),
-    )?;
+async fn run(args: Args) -> Result<()> {
+    transport_socket::initialize(&args.certificate, args.udp_receive_buffer_bytes)?;
     let args = std::sync::Arc::new(args);
     let mut cumulative = Counts::default();
     for wave in 1..=args.waves {
-        cumulative = run_wave(args.clone(), destination, cumulative, wave).await?;
+        cumulative = run_wave(args.clone(), cumulative, wave).await?;
     }
     Ok(())
 }
 
-async fn run_wave(
-    args: std::sync::Arc<Args>,
-    destination: SocketAddr,
-    cumulative: Counts,
-    wave: usize,
-) -> Result<Counts> {
+async fn run_wave(args: std::sync::Arc<Args>, cumulative: Counts, wave: usize) -> Result<Counts> {
     let room_count = args.users / args.room_size;
     let mut rooms = Vec::with_capacity(room_count);
     let mut jobs = JoinSet::new();
@@ -818,7 +702,7 @@ async fn run_wave(
     let started = Instant::now();
     for index in 0..room_count {
         let setup_args = args.clone();
-        jobs.spawn(async move { join_room(index, &setup_args, destination).await });
+        jobs.spawn(async move { join_room(index, &setup_args).await });
         if jobs.len() == args.concurrency {
             let (room, counts) = jobs
                 .join_next()
@@ -877,13 +761,7 @@ async fn run_wave(
     let until = start + Duration::from_secs(args.seconds);
     let mut churn_jobs = JoinSet::new();
     for worker in 0..args.churn_workers {
-        churn_jobs.spawn(churn(
-            worker,
-            args.clone(),
-            destination,
-            start,
-            audit.clone(),
-        ));
+        churn_jobs.spawn(churn(worker, args.clone(), start, audit.clone()));
     }
     let active_rooms = (room_count * args.active_percent).div_ceil(100);
     for mut room in checked {
@@ -993,7 +871,6 @@ async fn run_wave(
                                 column.push(value);
                             }
                         }
-                        window.pings += sample.pings;
                     }
                 }
             }
@@ -1005,13 +882,13 @@ async fn run_wave(
             serde_json::json!({"worst_stage_probes":{"intended_to_receive":window.worst_probes[0],
                 "pre_send_delay":window.worst_probes[1],"after_send":window.worst_probes[2]},
                 "client_stages":stages,"intended_second":second,"send_to_receive":exact_latency_report(&mut window.send),
-                "intended_to_receive":exact_latency_report(&mut window.scheduled),"pre_send_delay":exact_latency_report(&mut window.pre_send),"pings_encountered":window.pings})
+                "intended_to_receive":exact_latency_report(&mut window.scheduled),"pre_send_delay":exact_latency_report(&mut window.pre_send)})
         }).collect();
         let mut timeline_output =
             BufWriter::new(std::fs::File::create(path.with_extension("windows.json"))?);
         serde_json::to_writer_pretty(
             &mut timeline_output,
-            &serde_json::json!({"stage_order":LATENCY_STAGES,"stage_scope":"Opt-in client clocks: wake_delay=due to ring entry; prepare=entry to all payloads ready; room_send_delay=ready to this sender's send call (includes earlier room sends); socket_send=send call through flush completion; after_send=flush completion to application read. Runtime preemption counts toward the interval it interrupts. after_send includes client receive scheduling, kernel and relay; it is not server-only latency. Component percentiles cannot be summed.","scope":"One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Ping counts are control frames encountered while reading probes in that cohort, not kernel arrival timestamps. Includes client scheduling and room batching.","windows":timeline}),
+            &serde_json::json!({"stage_order":LATENCY_STAGES,"stage_scope":"Opt-in client clocks: wake_delay=due to ring entry; prepare=entry to all payloads ready; room_send_delay=ready to this sender's send call (includes earlier room sends); socket_send=send call through flush completion; after_send=flush completion to application read. Runtime preemption counts toward the interval it interrupts. after_send includes client receive scheduling, kernel and relay; it is not server-only latency. Component percentiles cannot be summed.","scope":"One-second intended-send cohorts. Exact latency quantiles aggregated after timing. Includes client scheduling and room batching.","windows":timeline}),
         )?;
         timeline_output.flush()?;
         let mut output = BufWriter::new(std::fs::File::create(path)?);
@@ -1055,7 +932,7 @@ async fn run_wave(
         let mut output = BufWriter::new(std::fs::File::create(path)?);
         writeln!(
             output,
-            "room,member,id,samples,p50_upper_ms,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms,pings"
+            "room,member,id,samples,p50_upper_ms,p99_upper_ms,max_ms,schedule_p99_upper_ms,schedule_max_ms"
         )?;
         for room in &mut rooms {
             for (member, peer) in room.peers.iter_mut().enumerate() {
@@ -1064,7 +941,7 @@ async fn run_wave(
                 };
                 writeln!(
                     output,
-                    "{},{},{},{},{},{},{},{},{},{}",
+                    "{},{},{},{},{},{},{},{},{}",
                     room.index,
                     member,
                     peer.id,
@@ -1074,14 +951,13 @@ async fn run_wave(
                     histogram.send.maximum as f64 / 1e6,
                     histogram.scheduled.percentile_upper_ms(99),
                     histogram.scheduled.maximum as f64 / 1e6,
-                    histogram.pings
                 )?;
             }
         }
         output.flush()?;
     }
 
-    // Idle heartbeat responses alone do not prove application routing survived.
+    // Surviving the idle period alone does not prove application routing survived.
     let (rooms, proof) = prove_rooms(
         rooms,
         args.seconds * args.messages_per_second + 1,

@@ -1,8 +1,7 @@
 # /etc/systemd/system/war-relay.service.d/100k.conf
-# The base unit's 65,536 descriptors cannot admit 100,000 sessions.
+# About 1.7 GiB of process memory was measured at 100,000 idle sessions, before
+# message traffic and the admitted WAR_TOTAL_* budgets. These are operational
+# guardrails, not a reservation; validate on the target host.
 [Service]
-LimitNOFILE=262144
-# Includes the cgroup's charged kernel socket memory and admitted buffer budgets.
-# These are operational guardrails, not a reservation; validate on the target host.
 MemoryHigh=6G
 MemoryMax=8G

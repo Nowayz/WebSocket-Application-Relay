@@ -1,24 +1,15 @@
-# WebSocket Application Relay
+# WebTransport Application Relay
 
-> **WebTransport migration branch — in progress.** The default data listener now uses
-> HTTP/3 at `https://127.0.0.1:1338/war`. Start locally with
-> `cargo run --release -- --dev-cert`; supply the logged SHA256 certificate pin to
-> the browser client. Production certificates use `--tls-cert` and `--tls-key`.
-> The previous listener remains explicitly available with `--legacy-websocket` for
-> comparisons. Performance parity and the full migration acceptance suite are not
-> yet established. See [the implementation and acceptance ledger](docs/webtransport-pivot.md).
-> Sections below that describe WebSocket deployment are the baseline documentation
-> and are still being migrated.
-
-
-A Rust WebSocket relay with a native CBOR JavaScript client. Clients join a
+A Rust WebTransport relay with a native CBOR JavaScript client. Clients join a
 channel, receive a 64-bit session ID, and send typed values to another session or
 their channel. Applications own message meaning, game logic and application state.
 
 The design targets large connected populations with consistently low latency,
-shared immutable payloads, per-recipient FIFO and bounded retained memory. A
-100,000-user operating profile and short reproducible diagnostics are included;
-capacity and latency depend on the workload and host.
+shared immutable payloads, per-recipient FIFO and bounded retained memory. Each
+session is one QUIC connection: reliable messages travel in order on one
+bidirectional stream, and unreliable state updates can use datagrams. A
+100,000-session operating profile and short reproducible diagnostics are
+included; capacity and latency depend on the workload and host.
 
 ## Build and run
 
@@ -30,22 +21,26 @@ compiler and `make`. Node 22+ is needed for the JavaScript tools.
 
 ```sh
 cargo build --locked --release --bin war-relay
-./target/release/war-relay
+./target/release/war-relay --dev-cert
 ```
 
-Defaults are `ws://127.0.0.1:1338` and local management at
-`http://127.0.0.1:1339`. Run `war-relay --help` for configuration and environment
-variables. `WAR_AUTH_PASSWORD` enables privileged relay commands;
-`WAR_ADMIN_TOKEN` enables authenticated management operations. Neither grants
-privileges when absent. Secrets are environment-only and diagnostics omit values.
+The data endpoint is `https://127.0.0.1:1338/war` (HTTP/3 over UDP) and local
+management is `http://127.0.0.1:1339`. `--dev-cert` generates a temporary
+localhost certificate and logs its SHA-256 pin, which local clients pass as
+`serverCertificateHashes`. Production uses a publicly trusted certificate with
+`--tls-cert` and `--tls-key`; see [deploy/README.md](deploy/README.md). Run
+`war-relay --help` for configuration and environment variables.
+`WAR_AUTH_PASSWORD` enables privileged relay commands; `WAR_ADMIN_TOKEN` enables
+authenticated management operations. Neither grants privileges when absent.
+Secrets are environment-only and diagnostics omit values.
 
 ## JavaScript and TypeScript
 
-The sole client is [clients/js/relay.mjs](clients/js/relay.mjs). It uses standard
-CBOR, keeps received IDs as `bigint`, supports browsers and Node 22+, and includes
-native TypeScript declarations. The client uses the JavaScript codec entry points;
-optional native codec addons are omitted. The browser build uses a WebAssembly
-bundler and requires no native addon installation or install scripts.
+The client is [clients/js/relay.mjs](clients/js/relay.mjs). It uses standard
+CBOR, keeps received IDs as `bigint`, runs wherever `WebTransport` is available
+(current browsers), and includes native TypeScript declarations. The browser
+build uses a WebAssembly bundler and requires no native addon installation or
+install scripts.
 
 ```sh
 npm ci --prefix clients/js --omit=optional --ignore-scripts
@@ -53,27 +48,23 @@ npm run check:types --prefix clients/js
 npm run build:browser --prefix clients/js
 ```
 
-From Node, run this in the repository root:
-
 ```js
-import { Relay } from './clients/js/relay.mjs';
+import { Relay } from './relay.js'; // browser bundle
 
-const relay = await Relay.connect('ws://127.0.0.1:1338', 'lobby');
+const relay = await Relay.connect('https://relay.example/war', 'lobby');
 relay.addEventListener('message', ({ detail: { sender, value } }) => {
   console.log(sender, value);
 });
 relay.broadcast({ text: 'hello π', bytes: new Uint8Array([0, 255]), turn: 42n });
 relay.send(relay.userId, ['self', true, null]);
+relay.broadcastUnreliable({ position: [1.5, 2] }); // one datagram, may be lost
 await relay.setVariable('state', { round: 1 });
 console.log(await relay.getVariable('state')); // { found: true, value: { round: 1 } }
 relay.close();
 ```
 
-Use `bigint` for IDs outside JavaScript's safe integer range. CBOR strings and
-byte arrays are ordinary application values carried in binary WebSocket frames.
-The old Binary/Text wire formats and their bridge are retired; see the
-[migration notes](docs/migration.md). Detailed client usage is in
-[clients/js/README.md](clients/js/README.md).
+Use `bigint` for IDs outside JavaScript's safe integer range. Detailed client
+usage is in [clients/js/README.md](clients/js/README.md).
 
 The browser bundle and interactive check are written to `target/browser/`:
 
@@ -81,36 +72,36 @@ The browser bundle and interactive check are written to `target/browser/`:
 python3 -m http.server 4181 --bind 127.0.0.1 --directory target/browser
 ```
 
-Open `http://127.0.0.1:4181`, enter the relay URL and run the check. It includes
-128 KiB and 5 MiB binary values; both supplied deployment profiles support these.
-Applications
-can import `Relay` from the generated `relay.js` ES module.
+Open `http://127.0.0.1:4181`, enter the relay URL and certificate pin, and run
+the check. It includes 128 KiB and 5 MiB binary values; both supplied deployment
+profiles support these. Applications can import `Relay` from the generated
+`relay.js` ES module.
 
 ## Architecture
 
-- [Native I/O](src/server.rs): fixed Mio readiness workers own decoding and
-  timers. Idle sockets need no task, message channel or private receive slab.
-  Fresh readiness and buffered/output work receive separate bounded turns;
-  [scheduling measurements](docs/reports/worker-scheduling.md) document the latency/CPU
-  tradeoff. Tokio handles management and process signals.
+- [WebTransport](src/webtransport.rs): one shared UDP socket, serviced by a
+  dedicated ingress thread, feeds QUIC connections driven on a multi-threaded
+  Tokio runtime whose workers are pinned one per CPU when the process owns
+  exactly that many. Each session reads length-prefixed CBOR records from its
+  bidirectional stream and datagrams from the connection. The QUIC and TLS
+  stack is vendored with storage, scheduling and loss-recovery patches; see
+  [vendor/README.md](vendor/README.md).
 - [Routing](src/relay.rs): no global registry lock. Session and channel indexes
   are concurrent maps; each channel locks its own membership, variables and
   cached recipient view. Global observers use atomic immutable snapshots, and
-  admission counters are atomics. No socket write happens while a registry lock is held.
-  Large broadcasts capture an immutable recipient view and advance in bounded
-  turns; ordinary rooms have their own departure queues and observer notices
-  use sixteen shards. See
-  [docs/architecture.md](docs/architecture.md).
-- [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
-  multicast uses recipient-owner output and bounded vectored batches. Each socket
-  serializes output so partial writes, commands and control frames retain order.
+  admission counters are atomics. No stream write happens while a registry lock
+  is held. Large broadcasts capture an immutable recipient view and advance in
+  bounded turns; ordinary rooms have their own departure queues and observer
+  notices use sixteen shards. See [docs/architecture.md](docs/architecture.md).
+- [Output](src/webtransport/queue.rs): private sends attempt an immediate stream
+  write; otherwise each session's output queue keeps FIFO order, partial writes
+  and write deadlines.
 - [Frames](src/frame.rs): inline routing prefixes and shared `Bytes` bodies avoid
-  rebuilding the application payload for each destination. This does not mean
-  zero kernel copying or zero first-use allocation.
+  rebuilding the application payload for each destination.
 - [Management](src/admin.rs): health/readiness, metrics, paginated channel
   inspection, administrative disconnect and reversible drain/resume.
 
-Admission, decoder staging, retained output and channel variables have explicit
+Admission, record staging, retained output and channel variables have explicit
 resource budgets. Slow recipients cannot grow unbounded application queues.
 Terminal shutdown suppresses departure traffic and releases listener indexes
 before bulk session retirement. Applications provide their own authorization
@@ -124,40 +115,32 @@ python3 scripts/check-vendor.py
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
 bash scripts/check-js.sh
-npm run check:types --prefix clients/js
 npm run build:browser --prefix clients/js
 ```
 
 [Protocol](docs/protocol.md), [operations](docs/operations.md),
 [short performance recipes](docs/performance-guide.md),
-[verified open-loop transport loads](docs/datagram-load.md),
-[historical findings](docs/reports/performance-history.md) and
-[stability checks](docs/reports/stability.md) describe the contracts and measurement limits.
-The [consolidation record](docs/reports/consolidation.md) lists this migration's local
-acceptance checks and the next performance milestone.
-The [roadmap](docs/roadmap.md) defines the Rust/CBOR product boundary and the
-next latency and operational acceptance work.
+[measured performance](docs/performance.md) and
+[verified open-loop transport loads](docs/datagram-load.md) describe the
+contracts and measurement limits. The [roadmap](docs/roadmap.md) defines the
+product boundary and the next work.
 
 ## Delivery guarantees
 
-Everything one session sends reaches each recipient in order, followed by that
-session's departure notice. A broadcast reaches every recipient captured when
-it started, even if the sender leaves before delivery finishes. Under output
-pressure delivery is best-effort: a slow recipient is closed with `1013`, and
-when the global budget is exhausted the frame is dropped for that recipient
-while the sender is never closed. Departure notices are ordered within a room,
-not across rooms. The full list, with the exact drop policy, is in
+Everything one session sends reliably reaches each recipient in order, followed
+by that session's departure notice. A broadcast reaches every recipient captured
+when it started, even if the sender leaves before delivery finishes. Under
+output pressure delivery is best-effort: a slow recipient is closed with `1013`,
+and when the global budget is exhausted the message is dropped for that
+recipient while the sender is never closed. Datagrams are unreliable and
+unordered. Departure notices are ordered within a room, not across rooms. The
+full list, with the exact drop policy, is in
 [docs/protocol.md](docs/protocol.md#delivery-guarantees); the design is in
-[docs/architecture.md](docs/architecture.md) and the dated measurement records
-are in [docs/reports/](docs/reports/README.md).
+[docs/architecture.md](docs/architecture.md).
 
 ## Provenance
 
-This repository is [Nowayz/WebSocket-Application-Relay](https://github.com/Nowayz/WebSocket-Application-Relay).
-The Rust implementation replaced the original 2018 C++ server in October 2026.
-The original server, its `relay.js` client and the comparison candidates with
-their complete benchmark records are preserved in Git history at commit
-`587c1cd`; see [docs/migration.md](docs/migration.md) for retrieval commands.
-The maintained implementation is Rust/CBOR. [MIT license](LICENSE). Vendored
-Rust codec sources retain their licenses and
-[recorded patch provenance](vendor/README.md).
+This repository is [Nowayz/WebSocket-Application-Relay](https://github.com/Nowayz/WebSocket-Application-Relay);
+the name predates the move to WebTransport. Earlier transports remain in Git
+history. [MIT license](LICENSE). Vendored Rust sources retain their licenses
+and [recorded patch provenance](vendor/README.md).

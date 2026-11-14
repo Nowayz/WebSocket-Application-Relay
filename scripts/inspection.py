@@ -16,7 +16,6 @@ from pathlib import Path
 import platform
 import select
 import signal
-import socket
 import subprocess
 import tempfile
 import time
@@ -26,11 +25,10 @@ import benchmark as runtime
 
 ROOT = runtime.ROOT
 TOKEN = "inspection-benchmark"  # Disposable fresh loopback process only.
-ERRORS = ["war_handshake_errors_total", "war_origin_rejected_total", "war_join_rejected_total",
-          "war_rejected_total", "war_protocol_errors_total", "war_rate_limited_total",
-          "war_write_timeouts_total", "war_write_errors_total", "war_close_failures_total",
-          "war_aborted_writes_total", "war_transport_disconnects_total", "war_slow_consumers_total",
-          "war_global_pressure_total", "war_read_buffer_reservations_rejected_total", "war_idle_timeouts_total"]
+ERRORS = ["war_handshake_errors_total", "war_origin_rejected_total", "war_rejected_total",
+          "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total",
+          "war_slow_consumers_total", "war_global_pressure_total",
+          "war_read_buffer_reservations_rejected_total", "war_idle_timeouts_total"]
 
 
 def digest(path):
@@ -64,44 +62,21 @@ def metrics(port):
                     (line.split() for line in response.read().decode().splitlines() if line.startswith("war_")))
 
 
-def check(event, stable_sessions, stable_channels, read_storage="worker", workers=4, variable_bytes=6):
+def check(event, stable_sessions, stable_channels, variable_bytes=6):
     observed, counts = event["metrics"], event["details"]["counts"]
-    # Older frozen binaries predate the admission error counters.
-    assert observed.get("war_accept_errors_total", 0) == 0
-    assert observed.get("war_setup_errors_total", 0) == 0
     expected = {"war_accepted_total": counts["joins"], "war_joined_total": counts["joins"],
                 "war_disconnected_total": counts["normal_closes"],
                 "war_incoming_messages_total": counts["sent_messages"],
                 "war_incoming_bytes_total": counts["sent_bytes"],
                 "war_deliveries_total": counts["deliveries"],
                 "war_delivered_bytes_total": counts["delivered_bytes"],
-                "war_routing_reused_bytes_total": counts["value_bytes"],
-                "war_routing_copied_bytes_total": 0, "war_queued_bytes": 0}
+                # Every record is complete at a gate, so no staging lease remains.
+                "war_read_buffer_reserved_bytes": 0, "war_queued_bytes": 0}
     done = event["event"] == "done"
     expected.update(war_connections=0 if done else stable_sessions,
                     war_sessions=0 if done else stable_sessions,
                     war_channels=1 if done else stable_channels,
                     war_variable_bytes=0 if done else variable_bytes)
-    reserved = observed["war_read_buffer_reserved_bytes"]
-    if read_storage == "connection":
-        expected["war_read_buffer_reserved_bytes"] = 0 if done else stable_sessions * 8192
-    elif read_storage == "completion":
-        # This experimental backend rents one maximum WebSocket header (14
-        # bytes) per idle receive, with the decoder's 2x growth allowance. All
-        # application input is complete at these gates. Large body/fragment
-        # leases must have retired; final cleanup still requires exactly zero.
-        bound = 0 if done else stable_sessions * 28
-        assert 0 <= reserved <= bound, (event["event"], "completion receive allowance", reserved, bound)
-        expected["war_read_buffer_reserved_bytes"] = reserved
-        event["completion_read_allowance_bound"] = bound
-    else:
-        # At these quiescent gates all application input is complete. Empty
-        # decoders own no receive allocation; each worker may keep one 4KiB
-        # scratch slab and its 2x growth allowance. An empty worker releases it.
-        bound = 0 if done else workers * 8192
-        assert 0 <= reserved <= bound, (event["event"], "worker receive allowance", reserved, bound)
-        expected["war_read_buffer_reserved_bytes"] = reserved
-        event["worker_read_allowance_bound"] = bound
     expected.update({key: 0 for key in ERRORS})
     for key, value in expected.items():
         assert observed[key] == value, (event["event"], key, observed[key], value)
@@ -129,13 +104,7 @@ def run(args):
     profile = args.output.with_suffix(".perf.data") if args.profile else None
     if profile is not None and os.path.lexists(profile):
         raise FileExistsError(errno.EEXIST, "profile output already exists", str(profile))
-    tls_mode = getattr(args, "transport", "websocket") == "websocket-tls"
-    if tls_mode and (args.profile or args.heap_profile):
-        raise ValueError("TLS deployment profiles require profiling both fixture components separately")
-    if tls_mode and not all((args.tls_cert, args.tls_key, args.tls_ca)):
-        raise ValueError("TLS comparison requires --tls-cert, --tls-key and --tls-ca")
     port, admin = runtime.free_port(), runtime.free_port()
-    front_port = runtime.free_port() if tls_mode else None
     while admin == port:
         admin = runtime.free_port()
     environment = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
@@ -155,17 +124,15 @@ def run(args):
     if getattr(args, "fanout_global_broadcast", False):
         server_command += ["--max-connections", str(args.fanout_readers + 2),
                            "--max-channels", str(args.fanout_readers + 2),
-                           "--max-channel-members", "1", "--idle-timeout-secs", "0",
-                           "--tcp-send-buffer-bytes", "16384", "--tcp-receive-buffer-bytes", "65536"]
+                           "--max-channel-members", "1", "--idle-timeout-secs", "0"]
     if getattr(args, "pin_workers", False):
         server_command.append("--pin-workers")
     data_url = benchmark_transport.prepare(args, server_command, server_environment, port)
-    if tls_mode:
-        data_url = f"wss://127.0.0.1:{front_port}"
     command = [str(args.client.resolve()), "--url", data_url, "--admin", f"127.0.0.1:{admin}",
                "--mode", args.mode, "--rooms", str(args.rooms), "--seconds", str(args.seconds),
                "--inspectors", str(args.inspectors), "--inspection-interval-ms", str(args.inspection_interval_ms),
-               "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers)]
+               "--pairs", str(args.pairs), "--churn-workers", str(args.churn_workers),
+               "--udp-receive-buffer-bytes", str(getattr(args, "udp_receive_buffer_bytes", 4 * 1024 * 1024))]
     if getattr(args, "private_payload_bytes", 1024) != 1024:
         command += ["--private-payload-bytes", str(args.private_payload_bytes)]
     if getattr(args, "value_kind", "bytes") != "bytes":
@@ -208,7 +175,7 @@ def run(args):
                                        [source_root / "examples/inspection.rs"] + sorted((source_root / "examples/inspection").glob("*.rs")) + sorted((source_root / "examples/support").glob("*.rs"))},
               "args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
               "profile_diagnostic": args.profile or bool(args.heap_profile), "events": [], "thread_affinity": [], "passed": False,
-              "transport": getattr(args, "transport", "websocket"), "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic private templates at args.private_payload_bytes (default 1 KiB) and 16-message windows; fanout remains 1 KiB; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery, normal Close and EOF. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback; WebTransport uses pinned TLS, legacy WebSocket is plaintext, and websocket-tls is that plaintext relay behind the TLS front end. Rates/heartbeat disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
+              "scope": "Gated setup/mixed workload/cleanup. Stable single-member rooms include binary and Unicode names, private pairs have distinct rooms, health0 keeps a variable. Inspectors use authenticated HTTP or CBOR on a fixed per-worker interval, skipping missed ticks; every name, member count, field, ordering and complete response is verified. During churn, known churn rooms may appear with one member; quiescent snapshots before and after must contain exactly the stable rooms. Healthy traffic uses 64 cyclic private templates at args.private_payload_bytes (default 1 KiB) and 16-message windows; fanout remains 1 KiB; full sender/value/FIFO checked. Churn verifies welcome, exact 8-byte-counter self delivery and an acknowledged graceful close. All stable peers stay connected until the mixed workload ends; every close and final resource/counter/byte total is checked. Latencies include client-side verification and competing client tasks on separate CPU cores. Native CPU covers all mixed work, not an isolated cost per delivery. Loopback WebTransport with a pinned development certificate. Rates/QUIC keep-alive disabled, default queues. Event-boundary RSS is not continuous peak or allocated bytes. Profiles excluded from timing medians."}
     if args.heap_profile:
         result["heap_profiler"] = {"library": str(args.heap_library.resolve()),
                                    "library_sha256": digest(args.heap_library),
@@ -216,18 +183,8 @@ def run(args):
                                                    if key == "LD_PRELOAD" or key.startswith("HEAP")},
                                    "scope": "Server allocator replaced by gperftools. Requested live allocations only; profile timing and RSS are diagnostic and excluded from ordinary comparisons."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors, tempfile.TemporaryFile() as front_logs:
-        server = client = perf = front = None
-        def deployment_snapshot():
-            base = runtime.snapshot(server.pid)
-            if front is not None:
-                proxy = runtime.snapshot(front.pid)
-                base["relay_process"] = base.copy()
-                base["tls_front_process"] = proxy
-                for key in ("cpu_seconds", "user_cpu_seconds", "system_cpu_seconds", "VmSize", "VmRSS", "RssAnon", "Threads"):
-                    if key in base and key in proxy:
-                        base[key] += proxy[key]
-            return base
+    with args.output.open("x") as receipt, tempfile.TemporaryFile() as logs, tempfile.TemporaryFile() as client_errors:
+        server = client = perf = None
         perf_log = None
         try:
             server = subprocess.Popen(server_command, stdout=logs, stderr=logs, env=server_environment)
@@ -242,23 +199,7 @@ def run(args):
                     if time.monotonic() - started > 5:
                         raise
                     time.sleep(.02)
-            if tls_mode:
-                front_command = [str(args.tls_front.resolve()), "--bind", f"127.0.0.1:{front_port}", "--upstream", f"127.0.0.1:{port}", "--cert", str(args.tls_cert.resolve()), "--key", str(args.tls_key.resolve()), "--workers", str(args.workers)]
-                if args.server_cpus: front_command = ["taskset", "-c", args.server_cpus] + front_command
-                front = subprocess.Popen(front_command, stdout=front_logs, stderr=front_logs, env=server_environment)
-                result["tls_front"] = {"command":front_command, "sha256":digest(args.tls_front), "trusted_certificate_sha256":digest(args.tls_ca), "scope":"TLS1.3 verified front end with an additional loopback TCP hop; process CPU/RSS include relay plus front end."}
-                deadline = time.monotonic() + 5
-                while True:
-                    if front.poll() is not None: raise RuntimeError("TLS fixture exited before readiness")
-                    try:
-                        with socket.create_connection(("127.0.0.1", front_port), timeout=.2): break
-                    except OSError:
-                        if time.monotonic() >= deadline: raise
-                        time.sleep(.02)
-                command += ["--ca-certificate", str(args.tls_ca.resolve())]
-            command += benchmark_transport.certificate(args, logs)
-            if getattr(args, "transport", "websocket") == "webtransport":
-                command += ["--udp-receive-buffer-bytes", str(args.udp_receive_buffer_bytes)]
+            command += benchmark_transport.certificate(logs)
             client = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                       stderr=client_errors, text=True, env=environment)
             ready = None
@@ -272,7 +213,7 @@ def run(args):
                 if not line:
                     raise RuntimeError("inspection client stopped before final gate")
                 event = json.loads(line)
-                event.update(metrics=metrics(admin), process=deployment_snapshot(),
+                event.update(metrics=metrics(admin), process=runtime.snapshot(server.pid),
                              client_process=runtime.snapshot(client.pid), seconds=time.monotonic() - started)
                 result["events"].append(event)
                 if event["event"] == "ready":
@@ -281,7 +222,7 @@ def run(args):
                     if getattr(args, "pin_client_workers", False):
                         result["thread_affinity"].extend(runtime.pin_child_workers(client.pid, args.client_workers, False))
                     stable_sessions, stable_channels = event["details"]["stable_sessions"], event["details"]["stable_channels"]
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
+                    check(event, stable_sessions, stable_channels, 6 if args.pairs else 0)
                     if args.profile:
                         perf_log = tempfile.TemporaryFile()
                         perf = subprocess.Popen(["perf", "record", "-e", "cycles:u", "-F", "499", "--call-graph", "dwarf,8192",
@@ -292,7 +233,7 @@ def run(args):
                         result["profile_path"] = str(profile)
                     ready = event
                 elif event["event"] == "measured":
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
+                    check(event, stable_sessions, stable_channels, 6 if args.pairs else 0)
                     if perf is not None:
                         result["perf_exit_code"], result["perf_forced_kill"] = _stop_perf(perf)
                         perf_log.seek(0)
@@ -324,7 +265,7 @@ def run(args):
                     result["mixed"] = mixed
                     print(json.dumps(mixed), flush=True)
                 elif event["event"] == "done":
-                    check(event, stable_sessions, stable_channels, args.read_storage, args.workers, 6 if args.pairs else 0)
+                    check(event, stable_sessions, stable_channels, 6 if args.pairs else 0)
                     assert event["details"]["passed"]
                     assert event["details"]["counts"]["joins"] == event["details"]["counts"]["normal_closes"]
                 else:
@@ -358,13 +299,6 @@ def run(args):
                 result["client_exit_code"] = client.returncode
                 client.stdin.close()
                 client.stdout.close()
-            if front is not None:
-                front.terminate()
-                try: result["tls_front_exit_code"] = front.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    front.kill(); result["tls_front_exit_code"] = front.wait()
-                front_logs.seek(0)
-                result["tls_front_log"] = front_logs.read().decode(errors="replace")
             result["server_forced_kill"] = False
             result["server_exit_code"] = None
             if server is not None:
@@ -388,11 +322,6 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--udp-receive-buffer-bytes", type=int, default=4 * 1024 * 1024)
-    parser.add_argument("--transport", choices=["webtransport", "websocket", "websocket-tls"], default="webtransport")
-    parser.add_argument("--tls-front", type=Path, default=ROOT / "target/release/examples/tls_front")
-    parser.add_argument("--tls-cert", type=Path)
-    parser.add_argument("--tls-key", type=Path)
-    parser.add_argument("--tls-ca", type=Path, help="DER certificate trusted only for this local TLS comparison")
     parser.add_argument("--server", type=Path, default=runtime.SERVER)
     parser.add_argument("--client", type=Path, default=ROOT / "target/release/examples/inspection")
     parser.add_argument("--client-source-root", type=Path,
@@ -426,8 +355,6 @@ if __name__ == "__main__":
                         help="Broadcast window size in 1..=32; requires updated client when not16")
     parser.add_argument("--fanout-close-window", type=int, choices=range(1, 33), default=1,
                         help="Departure drain batch outside timing; 32 shortens large-audience cleanup")
-    parser.add_argument("--read-storage", choices=["worker", "connection", "completion"], default="worker",
-                        help="staging contract: worker scratch, frozen async connection, or experimental completion header receives")
     parser.add_argument("--pin-workers", action="store_true",
                         help="Request and verify native --pin-workers startup policy")
     parser.add_argument("--pin-client-workers", action="store_true",

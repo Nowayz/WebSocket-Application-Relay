@@ -188,7 +188,7 @@ fn string_bytes<'a>(d: &mut Decoder<'a>) -> Result<&'a [u8], Disconnect> {
 ///
 /// `value` must contain exactly one valid definite-length CBOR value. This helper
 /// copies those encoded bytes into the result without validating or transcoding
-/// them. Cloning the returned [`Bytes`] shares its buffer. Native relay forwarding
+/// them. Cloning the returned [`Bytes`] shares its buffer. Relay forwarding
 /// instead keeps the routing prefix separate and borrows the shared value body.
 pub fn envelope(sender: u64, value: &[u8]) -> Bytes {
     let mut e = Encoder::new(Vec::with_capacity(1 + uint_len(sender) + value.len()));

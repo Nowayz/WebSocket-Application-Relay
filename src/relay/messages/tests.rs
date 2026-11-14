@@ -85,13 +85,7 @@ fn observer_pressure_drops_output_without_failing_the_source() {
         let mut pending = None;
         relay
             .receive_batch()
-            .receive_bounded(
-                &source.registration.peer,
-                input,
-                0,
-                &mut pending,
-                first_turn,
-            )
+            .receive_bounded(&source.registration.peer, input, &mut pending, first_turn)
             .unwrap();
         pending
             .as_mut()
@@ -153,7 +147,7 @@ fn partial_observer_publications_flush_only_the_revoking_peer_and_never_replay()
         let mut pending = None;
         relay
             .receive_batch()
-            .receive_bounded(&source.peer, input, 0, &mut pending, 1)
+            .receive_bounded(&source.peer, input, &mut pending, 1)
             .unwrap();
         assert!(pending.as_ref().unwrap().active());
         let allocation = Arc::as_ptr(&pending.as_ref().unwrap().observed.as_ref().unwrap().work);
@@ -200,7 +194,7 @@ fn partial_observer_publications_flush_only_the_revoking_peer_and_never_replay()
         let next = protocol::envelope(destination, b"\xf5");
         relay
             .receive_batch()
-            .receive_bounded(&source.peer, next, 0, &mut pending, 1)
+            .receive_bounded(&source.peer, next, &mut pending, 1)
             .unwrap();
         pending.as_mut().unwrap().resume(usize::MAX).unwrap();
         for (_, output) in &observers {
@@ -230,7 +224,6 @@ fn private_primary_deduplicates_and_a_global_source_can_observe_its_own_message(
             .receive_bounded(
                 &source.peer,
                 protocol::envelope(recipient.id.load(Relaxed), b"\xf5"),
-                0,
                 &mut pending,
                 1,
             )
@@ -260,7 +253,6 @@ fn a_barrier_orders_both_message_classes_without_suppressing_an_unflushed_job() 
         .receive_bounded(
             &channel_source.peer,
             protocol::envelope(BROADCAST, b"\xf4"),
-            0,
             &mut channel_job,
             0,
         )
@@ -270,7 +262,6 @@ fn a_barrier_orders_both_message_classes_without_suppressing_an_unflushed_job() 
         .receive_bounded(
             &private_source.peer,
             protocol::envelope(target.peer.id.load(Relaxed), b"\xf5"),
-            0,
             &mut private_job,
             0,
         )
@@ -308,7 +299,6 @@ fn observer_views_invalidate_by_class_and_pending_eligibility_excludes_late_subs
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -334,7 +324,6 @@ fn observer_views_invalidate_by_class_and_pending_eligibility_excludes_late_subs
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf4"),
-            0,
             &mut pending,
             1,
         )
@@ -357,7 +346,6 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -372,7 +360,6 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -400,7 +387,6 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -430,7 +416,6 @@ fn observer_cancellation_budget_refusal_and_sequence_exhaustion_leave_no_staging
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, &protocol::byte_string(&[0x22; 512])),
-            0,
             &mut pending,
             1,
         )
@@ -465,7 +450,6 @@ fn private_primary_delivery_precedes_an_unfunded_observer_snapshot() {
         .receive_bounded(
             &source.peer,
             protocol::envelope(target.peer.id.load(Relaxed), b"\xf5"),
-            0,
             &mut pending,
             1,
         )
@@ -507,7 +491,7 @@ fn a_combined_room_and_observer_publication_reserves_its_body_once() {
     let mut pending = None;
     relay
         .receive_batch()
-        .receive_bounded(&source.peer, input, 0, &mut pending, 1)
+        .receive_bounded(&source.peer, input, &mut pending, 1)
         .unwrap();
     assert_eq!(source.peer.budget.used.load(Relaxed), expected_bytes);
     let before: Vec<_> = members
@@ -554,7 +538,6 @@ fn captured_observer_eligibility_survives_id_takeover_and_stale_registration_rem
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -578,7 +561,6 @@ fn captured_observer_eligibility_survives_id_takeover_and_stale_registration_rem
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf4"),
-            0,
             &mut pending,
             1,
         )
@@ -591,7 +573,6 @@ fn captured_observer_eligibility_survives_id_takeover_and_stale_registration_rem
         .receive_bounded(
             &source.peer,
             protocol::envelope(id, b"\x07"),
-            0,
             &mut pending,
             1,
         )
@@ -634,7 +615,6 @@ fn alternating_view_cache_distinguishes_equal_sized_generations_and_cached_absen
             .receive_bounded(
                 &sources[index].0.peer,
                 protocol::envelope(destination, &protocol::uint(index as u64)),
-                0,
                 &mut jobs[index],
                 0,
             )
@@ -734,7 +714,6 @@ fn a_progressing_observer_job_releases_membership_and_serializes_a_concurrent_ba
         .receive_bounded(
             &source.peer,
             protocol::envelope(BROADCAST, b"\xf5"),
-            0,
             &mut pending,
             0,
         )
@@ -854,7 +833,6 @@ fn observer_barrier_event_screen() {
                 .receive_bounded(
                     &source.peer,
                     protocol::envelope(destination, &protocol::uint(round as u64)),
-                    0,
                     job,
                     0,
                 )
