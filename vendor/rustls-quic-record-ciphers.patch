@@ -1,0 +1,262 @@
+--- a/rustls/src/msgs/deframer/handshake.rs
++++ b/rustls/src/msgs/deframer/handshake.rs
+@@ -91,6 +91,14 @@
+         !self.spans.is_empty()
+     }
+
++    /// Release idle staging storage without resetting offsets or ordering state.
++    /// Active fragments, including incomplete messages, retain their storage.
++    pub(crate) fn discard_empty_storage(&mut self) {
++        if self.spans.is_empty() {
++            self.spans = Vec::new();
++        }
++    }
++
+     /// We are "aligned" if there are no pending handshake messages, complete or partial.
+     pub(crate) fn is_aligned(&self) -> bool {
+         // If we have any handshake spans, either:
+@@ -394,6 +402,37 @@
+     }
+
+     #[test]
++    fn idle_storage_release_preserves_fragments_progress_and_reuse() {
++        let mut hs = HandshakeDeframer::default();
++        assert!(hs.spans.capacity() >= 16);
++        hs.discard_empty_storage();
++        assert_eq!(hs.spans.capacity(), 0);
++
++        let mut input = vec![0x21, 0, 0, 1, 0x7f];
++        add_bytes(&mut hs, &input[..2], &input);
++        let capacity = hs.spans.capacity();
++        hs.discard_empty_storage();
++        assert_eq!(hs.spans.capacity(), capacity);
++        assert!(hs.is_active());
++        assert_eq!(hs.outer_discard, 2);
++        assert_eq!(hs.spans[0].bounds, 0..2);
++        assert_eq!(hs.spans[0].size, None);
++
++        add_bytes(&mut hs, &input[2..], &input);
++        hs.coalesce(&mut input).unwrap();
++        assert_eq!(hs.iter(&input).next().unwrap().0.payload, &input[..]);
++        assert!(!hs.is_active());
++        let progress = hs.outer_discard;
++        hs.discard_empty_storage();
++        assert_eq!(hs.spans.capacity(), 0);
++        assert_eq!(hs.outer_discard, progress);
++
++        add_bytes(&mut hs, &input, &input);
++        assert_eq!(hs.iter(&input).next().unwrap().0.payload, &input[..]);
++        assert!(!hs.is_active());
++    }
++
++    #[test]
+     fn coalesce() {
+         let mut input = vec![0, 0, 0, 0x21, 0, 0, 0, 0, 0x01, 0xff, 0x00, 0x01];
+         let mut hs = HandshakeDeframer::default();
+--- a/rustls/src/quic.rs
++++ b/rustls/src/quic.rs
+@@ -421,6 +421,17 @@ mod connection {
+             self.core
+                 .process_new_packets(&mut self.deframer_buffer, &mut self.sendable_plaintext)?;
+
++            // Completed QUIC handshakes no longer need their input high-water
++            // allocation. Never discard a partial post-handshake message or
++            // reset the deframer's ordering/progress state.
++            if !self.core.common_state.is_handshaking()
++                && !self.core.hs_deframer.is_active()
++                && self.deframer_buffer.filled().is_empty()
++            {
++                self.deframer_buffer = DeframerVecBuffer::default();
++                self.core.hs_deframer.discard_empty_storage();
++            }
++
+             Ok(())
+         }
+
+@@ -428,10 +439,14 @@ mod connection {
+         ///
+         /// When this returns `Some(_)`, the new keys must be used for future handshake data.
+         pub fn write_hs(&mut self, buf: &mut Vec<u8>) -> Option<KeyChange> {
+-            self.core
+-                .common_state
+-                .quic
+-                .write_hs(buf)
++            let common = &mut self.core.common_state;
++            let change = common.quic.write_hs(buf);
++            // An established connection queues handshake messages only for rare
++            // post-handshake events; do not keep the handshake flight's queue storage.
++            if !common.is_handshaking() && common.quic.hs_queue.is_empty() {
++                common.quic.hs_queue = Default::default();
++            }
++            change
+         }
+
+         /// Emit the TLS description code of a fatal alert, if one has arisen.
+@@ -476,9 +491,13 @@ pub(crate) struct Quic {
+     pub(crate) params: Option<Vec<u8>>,
+     pub(crate) alert: Option<AlertDescription>,
+     pub(crate) hs_queue: VecDeque<(bool, Vec<u8>)>,
+-    pub(crate) early_secret: Option<OkmBlock>,
+-    pub(crate) hs_secrets: Option<Secrets>,
+-    pub(crate) traffic_secrets: Option<Secrets>,
++    // Boxed: set only for 0-RTT resumption, and inline it pushes every established
++    // session shell past a 1 KiB allocation.
++    pub(crate) early_secret: Option<Box<OkmBlock>>,
++    // These handoff values are consumed during the handshake. Keep their
++    // large storage out of every established connection, including TLS records.
++    pub(crate) hs_secrets: Option<Box<Secrets>>,
++    pub(crate) traffic_secrets: Option<Box<Secrets>>,
+     /// Whether keys derived from traffic_secrets have been passed to the QUIC implementation
+     #[cfg(feature = "std")]
+     pub(crate) returned_traffic_keys: bool,
+@@ -511,7 +530,7 @@ impl Quic {
+                 secrets.update();
+                 return Some(KeyChange::OneRtt {
+                     keys,
+-                    next: secrets,
++                    next: *secrets,
+                 });
+             }
+         }
+--- a/rustls/src/tls13/key_schedule.rs
++++ b/rustls/src/tls13/key_schedule.rs
+@@ -5,7 +5,7 @@ use alloc::string::ToString;
+ use core::ops::Deref;
+
+ use crate::common_state::{CommonState, Side};
+-use crate::crypto::cipher::{AeadKey, Iv, MessageDecrypter, Tls13AeadAlgorithm};
++use crate::crypto::cipher::{AeadKey, Iv, MessageDecrypter, MessageEncrypter, Tls13AeadAlgorithm};
+ use crate::crypto::tls13::{Hkdf, HkdfExpander, OkmBlock, OutputLengthError, expand};
+ use crate::crypto::{SharedSecret, hash, hmac};
+ use crate::error::Error;
+@@ -72,7 +72,7 @@ impl KeyScheduleEarly {
+         if common.is_quic() {
+             // If 0-RTT should be rejected, this will be clobbered by ExtensionProcessing
+             // before the application can see.
+-            common.quic.early_secret = Some(client_early_traffic_secret);
++            common.quic.early_secret = Some(Box::new(client_early_traffic_secret));
+         }
+     }
+
+@@ -246,14 +246,14 @@ impl KeyScheduleHandshakeStart {
+         );
+
+         if common.is_quic() {
+-            common.quic.hs_secrets = Some(quic::Secrets::new(
++            common.quic.hs_secrets = Some(Box::new(quic::Secrets::new(
+                 client_secret.clone(),
+                 server_secret.clone(),
+                 self.ks.suite,
+                 self.ks.suite.quic.unwrap(),
+                 common.side,
+                 common.quic.version,
+-            ));
++            )));
+         }
+
+         KeyScheduleHandshake {
+@@ -289,6 +289,10 @@ impl KeyScheduleHandshake {
+     ) {
+         debug_assert_eq!(common.side, Side::Server);
+         let secret = &self.client_handshake_traffic_secret;
++        if common.is_quic() {
++            self.ks.set_decrypter(secret, common);
++            return;
++        }
+         match skip_requested {
+             None => self.ks.set_decrypter(secret, common),
+             Some(max_early_data_size) => common
+@@ -322,14 +326,14 @@ impl KeyScheduleHandshake {
+             .set_encrypter(server_secret, common);
+
+         if common.is_quic() {
+-            common.quic.traffic_secrets = Some(quic::Secrets::new(
++            common.quic.traffic_secrets = Some(Box::new(quic::Secrets::new(
+                 _client_secret.clone(),
+                 server_secret.clone(),
+                 before_finished.ks.suite,
+                 before_finished.ks.suite.quic.unwrap(),
+                 common.side,
+                 common.quic.version,
+-            ));
++            )));
+         }
+
+         KeyScheduleTrafficWithClientFinishedPending {
+@@ -456,14 +460,14 @@ impl KeyScheduleClientBeforeFinished {
+             .set_encrypter(client_secret, common);
+
+         if common.is_quic() {
+-            common.quic.traffic_secrets = Some(quic::Secrets::new(
++            common.quic.traffic_secrets = Some(Box::new(quic::Secrets::new(
+                 client_secret.clone(),
+                 server_secret.clone(),
+                 next.ks.suite,
+                 next.ks.suite.quic.unwrap(),
+                 common.side,
+                 common.quic.version,
+-            ));
++            )));
+         }
+
+         next.into_traffic(hs_hash)
+@@ -752,6 +756,15 @@ struct KeyScheduleSuite {
+
+ impl KeyScheduleSuite {
+     fn set_encrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
++        if common.is_quic() {
++            // QUIC protects packets using its separate keys, not TLS records.
++            // Keep the active flag: it labels queued handshake encryption levels.
++            common.record_layer.set_message_encrypter(
++                <dyn MessageEncrypter>::invalid(),
++                self.suite.common.confidentiality_limit,
++            );
++            return;
++        }
+         let expander = self
+             .suite
+             .hkdf_provider
+@@ -768,6 +781,13 @@ impl KeyScheduleSuite {
+     }
+
+     fn set_decrypter(&self, secret: &OkmBlock, common: &mut CommonState) {
++        if common.is_quic() {
++            // An accidental record operation must still fail closed.
++            common.record_layer.set_message_decrypter(
++                <dyn MessageDecrypter>::invalid(),
++            );
++            return;
++        }
+         common
+             .record_layer
+             .set_message_decrypter(self.derive_decrypter(secret));
+@@ -1053,6 +1073,29 @@ mod tests {
+     use crate::KeyLog;
+     use crate::msgs::enums::HashAlgorithm;
+
++    #[test]
++    fn quic_keeps_handshake_encryption_state_without_record_ciphers() {
++        let ks = super::KeyScheduleSuite {
++            suite: &TLS13_AES_128_GCM_SHA256_INTERNAL,
++        };
++        let secret = crate::crypto::tls13::OkmBlock::new(&[0u8; 32]);
++        let mut common = crate::common_state::CommonState::new(crate::common_state::Side::Server);
++        common.protocol = crate::common_state::Protocol::Quic;
++        ks.set_encrypter(&secret, &mut common);
++        ks.set_decrypter(&secret, &mut common);
++        // send_msg uses this state to label QUIC handshake encryption levels.
++        assert!(common.record_layer.is_encrypting());
++        // Unlike an uninitialized record layer, an active sentinel must reject
++        // ciphertext rather than treating it as plaintext.
++        let mut ciphertext = [0u8; 16];
++        let message = crate::msgs::message::InboundOpaqueMessage::new(
++            crate::ContentType::ApplicationData,
++            crate::ProtocolVersion::TLSv1_2,
++            &mut ciphertext,
++        );
++        assert!(common.record_layer.decrypt_incoming(message).is_err());
++    }
++
+     #[test]
+     fn empty_hash() {
+         let sha256 = super::provider::tls13::TLS13_AES_128_GCM_SHA256

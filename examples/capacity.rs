@@ -10,16 +10,16 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
 use clap::Parser;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use minicbor::Decoder;
 use serde::Serialize;
 use tokio::{
-    net::{TcpSocket, TcpStream},
+    net::TcpSocket,
     task::JoinSet,
     time::{sleep_until, timeout},
 };
 use tokio_tungstenite::{
-    WebSocketStream, client_async_with_config,
+    MaybeTlsStream, client_async_with_config,
     tungstenite::{
         Message,
         protocol::{CloseFrame, WebSocketConfig},
@@ -27,11 +27,20 @@ use tokio_tungstenite::{
 };
 use war_relay::protocol;
 
-type Socket = WebSocketStream<TcpStream>;
+#[path = "support/socket.rs"]
+mod transport_socket;
+use transport_socket::Socket;
 const DEADLINE: Duration = Duration::from_secs(15);
 
 #[derive(Parser)]
 struct Args {
+    #[arg(long)]
+    certificate: Option<String>,
+    #[arg(long)]
+    ca_certificate: Option<std::path::PathBuf>,
+    /// Shared QUIC socket receive buffer; zero selects the OS default.
+    #[arg(long, default_value_t = 4 * 1024 * 1024)]
+    udp_receive_buffer_bytes: usize,
     #[arg(long)]
     url: String,
     #[arg(long, default_value_t = 100_000)]
@@ -318,7 +327,12 @@ fn main() -> Result<()> {
     let authority = args
         .url
         .strip_prefix("ws://")
-        .context("requires ws:// IPv4 loopback URL")?;
+        .or_else(|| args.url.strip_prefix("wss://"))
+        .or_else(|| args.url.strip_prefix("https://"))
+        .context("requires ws:// or https:// IPv4 loopback URL")?
+        .split('/')
+        .next()
+        .unwrap();
     let destination: SocketAddr = authority
         .parse()
         .context("requires ws://IPv4:port without a path")?;
@@ -371,25 +385,34 @@ async fn join_room(index: usize, args: &Args, destination: SocketAddr) -> Result
     let mut peers = Vec::with_capacity(args.room_size);
     let mut counts = Counts::default();
     for member in 0..args.room_size {
-        let source = 1 + (index * args.room_size + member) % args.source_addresses;
-        let source = Ipv4Addr::new(127, 80, (source >> 8) as u8, source as u8);
-        let socket = TcpSocket::new_v4()?;
-        socket.bind((source, 0).into())?;
-        let stream = timeout(DEADLINE, socket.connect(destination)).await??;
-        stream.set_nodelay(true)?;
-        let (mut socket, _) = timeout(
-            DEADLINE,
-            client_async_with_config(
-                &args.url,
-                stream,
-                Some(
-                    WebSocketConfig::default()
-                        .read_buffer_size(256)
-                        .write_buffer_size(0),
-                ),
-            ),
-        )
-        .await??;
+        let mut socket = if args.url.starts_with("https://") {
+            timeout(DEADLINE, Socket::connect(&args.url)).await??
+        } else {
+            let source = 1 + (index * args.room_size + member) % args.source_addresses;
+            let source = Ipv4Addr::new(127, 80, (source >> 8) as u8, source as u8);
+            let socket = TcpSocket::new_v4()?;
+            socket.bind((source, 0).into())?;
+            let stream = timeout(DEADLINE, socket.connect(destination)).await??;
+            stream.set_nodelay(true)?;
+            if args.url.starts_with("wss://") {
+                timeout(DEADLINE, Socket::connect_tls(&args.url, Some(stream))).await??
+            } else {
+                let (socket, _) = timeout(
+                    DEADLINE,
+                    client_async_with_config(
+                        &args.url,
+                        MaybeTlsStream::Plain(stream),
+                        Some(
+                            WebSocketConfig::default()
+                                .read_buffer_size(256)
+                                .write_buffer_size(0),
+                        ),
+                    ),
+                )
+                .await??;
+                Socket::websocket(socket)
+            }
+        };
         socket.send(Message::Binary(name.clone())).await?;
         let welcome = data(&mut socket).await?;
         let mut decoder = Decoder::new(&welcome);
@@ -617,28 +640,30 @@ async fn retire(mut room: Room) -> Result<Counts> {
     let mut counts = Counts::default();
     // Retire backwards so each still-live member can verify every departure.
     while let Some(mut peer) = room.peers.pop() {
-        let close = CloseFrame {
-            code: 1000.into(),
-            reason: "capacity".into(),
-        };
-        peer.socket
-            .send(Message::Close(Some(close.clone())))
-            .await?;
-        loop {
-            match timeout(DEADLINE, peer.socket.next())
-                .await?
-                .context("missing Close acknowledgement")??
-            {
-                Message::Close(Some(frame)) if frame == close => break,
-                Message::Ping(_) => peer.socket.flush().await?,
-                other => anyhow::bail!("Close mismatch: {other:?}"),
+        if !timeout(DEADLINE, peer.socket.close_transport()).await?? {
+            let close = CloseFrame {
+                code: 1000.into(),
+                reason: "capacity".into(),
+            };
+            peer.socket
+                .send(Message::Close(Some(close.clone())))
+                .await?;
+            loop {
+                match timeout(DEADLINE, peer.socket.next())
+                    .await?
+                    .context("missing Close acknowledgement")??
+                {
+                    Message::Close(Some(frame)) if frame == close => break,
+                    Message::Ping(_) => peer.socket.flush().await?,
+                    other => anyhow::bail!("Close mismatch: {other:?}"),
+                }
             }
+            peer.socket.flush().await?;
+            ensure!(
+                timeout(DEADLINE, peer.socket.next()).await?.is_none(),
+                "missing transport EOF"
+            );
         }
-        peer.socket.flush().await?;
-        ensure!(
-            timeout(DEADLINE, peer.socket.next()).await?.is_none(),
-            "missing transport EOF"
-        );
         counts.normal_closes += 1;
         let expected = protocol::envelope(protocol::BROADCAST, &protocol::uint(peer.id));
         for remaining in &mut room.peers {
@@ -764,6 +789,11 @@ async fn prove_rooms(
 }
 
 async fn run(args: Args, destination: SocketAddr) -> Result<()> {
+    transport_socket::initialize(
+        args.certificate.as_deref(),
+        args.udp_receive_buffer_bytes,
+        args.ca_certificate.as_deref(),
+    )?;
     let args = std::sync::Arc::new(args);
     let mut cumulative = Counts::default();
     for wave in 1..=args.waves {

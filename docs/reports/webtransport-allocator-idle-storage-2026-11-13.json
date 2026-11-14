@@ -1,0 +1,4596 @@
+{
+  "date": "2026-11-13",
+  "base_commit": "0608124",
+  "objective": "Follow the 2026-11-13 recommendation (rebuild a baseline, reclaim empty endpoint-event queues) and close the remaining reliable-throughput gap to the plaintext WebSocket transport without adding machinery.",
+  "changes": {
+    "endpoint_event_queue": "quinn-proto Connection::poll_endpoint_events releases the queue storage when it pops the last event (192 B per idle connection).",
+    "assembler_first_slot": "quinn-proto Assembler::insert reserves one slot instead of four for the first buffered chunk (168 B per receive stream that never queues two chunks).",
+    "allocator": "war-relay binary uses jemalloc (tikv-jemallocator 0.7) as its global allocator on non-MSVC targets. Library, examples and benchmark clients are unchanged.",
+    "previous_path": "quinn-proto Connection::prev_path is boxed (432 B inline to 8 B). With jemalloc the connection owner drops from the 6,144-byte to the 5,120-byte size class.",
+    "early_secret": "rustls Quic::early_secret is boxed (80 B inline to 8 B), taking the QUIC session shell from the 1,280-byte to the 1,024-byte size class.",
+    "handshake_queue": "rustls QUIC write_hs releases the drained handshake message queue once the handshake is complete (128 B).",
+    "harness": "scripts/datagram-load.py strips ANSI colour codes before reading the development certificate pin, as benchmark_transport.py already does.",
+    "pending_control_queues": "quinn-proto populate_packet releases the Data-space CRYPTO, NEW_CONNECTION_ID and NEW_TOKEN queues when the frame it just sent leaves them empty (480 B per connection).",
+    "harness_tls_capacity": "scripts/capacity.py gains --transport websocket-tls; examples/tls_front gains --upstream-sources (to hold more than one loopback address has ports) and --copy-buffer-bytes."
+  },
+  "binaries": {
+    "base2": {
+      "sha256": "aeafb781159eff53d7ab52d14c72fa8fd126391a0b6f0763c5015f4fe144365c",
+      "meaning": "commit 0608124, cargo build --release --bin war-relay"
+    },
+    "candidate": {
+      "sha256": "56cdf982c78363552b95bd33ea9f3287997cb15f537d77732bae04fafe5f7951",
+      "meaning": "0608124 + endpoint-event release"
+    },
+    "cand2": {
+      "sha256": "d4d09080ff9ef0a7db0f051217ef3af006ad9818a4605d2523dc5fdb73fb8485",
+      "meaning": "0608124 + endpoint-event release + assembler first slot, system allocator"
+    },
+    "mi": {
+      "sha256": "2cf746755f4563c05353dea157cbb92d90cac8bab100b62f4841c8d5d210adbd",
+      "meaning": "cand2 + mimalloc 0.1 (screened, not adopted)"
+    },
+    "je": {
+      "sha256": "196bbdbef6dc0f7e01e1b956d14a028a7920dc3e0facd17301ca5fad2abe5f84",
+      "meaning": "cand2 + jemalloc behind an experiment feature"
+    },
+    "final": {
+      "sha256": "408c7ae2ec55f3b0d50043673acefbaadc2625ec2f19673cd9f0dbed18eae68d",
+      "meaning": "cand2 + jemalloc (before the second storage batch)"
+    },
+    "mem2": {
+      "sha256": "e9787c14a35d5cfb4ca3ee1b9dd29da6033f6e6cf391b02d44c8c952697df36b",
+      "meaning": "final + boxed previous path, boxed early secret, handshake queue release"
+    },
+    "mem3": {
+      "sha256": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+      "meaning": "the committed tree: mem2 + pending control-queue release"
+    }
+  },
+  "clients": {
+    "inspection": "a2d6374d2139704eaf1a7db1a4411012bba3053b842a289d2ac19f1349d12e91",
+    "capacity": "13b5ca2d89f73f66dc7fab3334a4b409b044ada93166b9315e06c9bef568178d"
+  },
+  "method": {
+    "throughput": "scripts/inspection.py --rooms 0 --mode none --inspectors 0 --churn-workers 0 --workers 4 --client-workers 8 --server-cpus 0-3 --client-cpus 8-15 --pin-workers --pin-client-workers; private = --pairs 32; roomonly = --pairs 0 --fanout-readers 1024 --fanout-window 4; mixed = both. Rate is verified received private plus fanout deliveries per second. Runs are serialized and the arm order rotates each repetition.",
+    "capacity": "scripts/capacity.py defaults: 100,000 users, rooms of 16, 4 workers, 1 KiB, one message per user per second.",
+    "websocket_arm": "the base2 image with --legacy-websocket (plaintext TCP). WebTransport arms use pinned TLS 1.3 over QUIC."
+  },
+  "throughput_12s_three_repetitions": {
+    "private": {
+      "ws": {
+        "deliveries_per_second": [
+          1167579,
+          1200367,
+          1190610
+        ],
+        "median": 1190610,
+        "server_cpu_us_per_delivery_median": 1.76,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1167579,
+          1200367,
+          1190610
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1446858,
+          1457401,
+          1471995
+        ],
+        "median": 1457401,
+        "server_cpu_us_per_delivery_median": 2.28,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1446858,
+          1457401,
+          1471995
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.239,
+          1.214,
+          1.236
+        ]
+      },
+      "c2": {
+        "deliveries_per_second": [
+          1446673,
+          1435271,
+          1452474
+        ],
+        "median": 1446673,
+        "server_cpu_us_per_delivery_median": 2.297,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1446673,
+          1435271,
+          1452474
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.239,
+          1.196,
+          1.22
+        ]
+      },
+      "mi": {
+        "deliveries_per_second": [
+          1480988,
+          1454892,
+          1470831
+        ],
+        "median": 1470831,
+        "server_cpu_us_per_delivery_median": 2.052,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1480988,
+          1454892,
+          1470831
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.268,
+          1.212,
+          1.235
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          1488628,
+          1500258,
+          1525944
+        ],
+        "median": 1500258,
+        "server_cpu_us_per_delivery_median": 1.997,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1488628,
+          1500258,
+          1525944
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.275,
+          1.25,
+          1.282
+        ]
+      }
+    },
+    "roomonly": {
+      "ws": {
+        "deliveries_per_second": [
+          1559083,
+          1603375,
+          1518774
+        ],
+        "median": 1559083,
+        "server_cpu_us_per_delivery_median": 1.089,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1559083,
+          1603375,
+          1518774
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1486516,
+          1593495,
+          1626847
+        ],
+        "median": 1593495,
+        "server_cpu_us_per_delivery_median": 1.942,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1486516,
+          1593495,
+          1626847
+        ],
+        "ratio_to_ws_per_repetition": [
+          0.953,
+          0.994,
+          1.071
+        ]
+      },
+      "c2": {
+        "deliveries_per_second": [
+          1526945,
+          1651591,
+          1669063
+        ],
+        "median": 1651591,
+        "server_cpu_us_per_delivery_median": 1.853,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1526945,
+          1651591,
+          1669063
+        ],
+        "ratio_to_ws_per_repetition": [
+          0.979,
+          1.03,
+          1.099
+        ]
+      },
+      "mi": {
+        "deliveries_per_second": [
+          1699809,
+          1824334,
+          1894973
+        ],
+        "median": 1824334,
+        "server_cpu_us_per_delivery_median": 1.601,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1699809,
+          1824334,
+          1894973
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.09,
+          1.138,
+          1.248
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          1576834,
+          1868267,
+          1912830
+        ],
+        "median": 1868267,
+        "server_cpu_us_per_delivery_median": 1.566,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1576834,
+          1868267,
+          1912830
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.011,
+          1.165,
+          1.259
+        ]
+      }
+    },
+    "mixed": {
+      "ws": {
+        "deliveries_per_second": [
+          1296934,
+          1298753,
+          1470834
+        ],
+        "median": 1298753,
+        "server_cpu_us_per_delivery_median": 1.577,
+        "p99_upper_ms": {
+          "private": [
+            2.097152,
+            2.097152,
+            2.097152
+          ],
+          "fanout": [
+            8.388608,
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          718800,
+          763977,
+          758324
+        ],
+        "fanout_per_second": [
+          578134,
+          534776,
+          712510
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1322459,
+          1594047,
+          1598689
+        ],
+        "median": 1594047,
+        "server_cpu_us_per_delivery_median": 2.128,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          353491,
+          397094,
+          396118
+        ],
+        "fanout_per_second": [
+          968968,
+          1196953,
+          1202571
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.02,
+          1.227,
+          1.087
+        ]
+      },
+      "c2": {
+        "deliveries_per_second": [
+          1295639,
+          1610518,
+          1603103
+        ],
+        "median": 1603103,
+        "server_cpu_us_per_delivery_median": 2.119,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          343589,
+          398903,
+          397614
+        ],
+        "fanout_per_second": [
+          952050,
+          1211616,
+          1205490
+        ],
+        "ratio_to_ws_per_repetition": [
+          0.999,
+          1.24,
+          1.09
+        ]
+      },
+      "mi": {
+        "deliveries_per_second": [
+          1267402,
+          1720056,
+          1789092
+        ],
+        "median": 1720056,
+        "server_cpu_us_per_delivery_median": 1.87,
+        "p99_upper_ms": {
+          "private": [
+            8.388608,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          289123,
+          319715,
+          302417
+        ],
+        "fanout_per_second": [
+          978279,
+          1400341,
+          1486675
+        ],
+        "ratio_to_ws_per_repetition": [
+          0.977,
+          1.324,
+          1.216
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          1514442,
+          1726849,
+          1798943
+        ],
+        "median": 1726849,
+        "server_cpu_us_per_delivery_median": 1.865,
+        "p99_upper_ms": {
+          "private": [
+            8.388608,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          314568,
+          325286,
+          315809
+        ],
+        "fanout_per_second": [
+          1199874,
+          1401564,
+          1483133
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.168,
+          1.33,
+          1.223
+        ]
+      }
+    }
+  },
+  "throughput_final_binary_4s_two_repetitions": {
+    "private": {
+      "ws": {
+        "deliveries_per_second": [
+          1191575,
+          1191815
+        ],
+        "median": 1191695,
+        "server_cpu_us_per_delivery_median": 1.762,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1191575,
+          1191815
+        ],
+        "fanout_per_second": [
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1485961,
+          1461571
+        ],
+        "median": 1473766,
+        "server_cpu_us_per_delivery_median": 2.029,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1485961,
+          1461571
+        ],
+        "fanout_per_second": [
+          0,
+          0
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.247,
+          1.226
+        ]
+      }
+    },
+    "roomonly": {
+      "ws": {
+        "deliveries_per_second": [
+          1525649,
+          1563662
+        ],
+        "median": 1544655,
+        "server_cpu_us_per_delivery_median": 1.088,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1525649,
+          1563662
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1885816,
+          1826647
+        ],
+        "median": 1856232,
+        "server_cpu_us_per_delivery_median": 1.567,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1885816,
+          1826647
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.236,
+          1.168
+        ]
+      }
+    },
+    "mixed": {
+      "ws": {
+        "deliveries_per_second": [
+          1544238,
+          1291102
+        ],
+        "median": 1417670,
+        "server_cpu_us_per_delivery_median": 1.49,
+        "p99_upper_ms": {
+          "private": [
+            2.097152,
+            2.097152
+          ],
+          "fanout": [
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          742916,
+          731613
+        ],
+        "fanout_per_second": [
+          801322,
+          559489
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "wt": {
+        "deliveries_per_second": [
+          1602164,
+          1586711
+        ],
+        "median": 1594438,
+        "server_cpu_us_per_delivery_median": 2.023,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          313614,
+          310418
+        ],
+        "fanout_per_second": [
+          1288550,
+          1276293
+        ],
+        "ratio_to_ws_per_repetition": [
+          1.038,
+          1.229
+        ]
+      }
+    }
+  },
+  "allocator_preload_screen_12s_three_repetitions": {
+    "private": {
+      "wt": {
+        "deliveries_per_second": [
+          1284233,
+          1274821,
+          1279956
+        ],
+        "median": 1279956,
+        "server_cpu_us_per_delivery_median": 2.63,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1284233,
+          1274821,
+          1279956
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wtj": {
+        "deliveries_per_second": [
+          1316916,
+          1298786,
+          1303068
+        ],
+        "median": 1303068,
+        "server_cpu_us_per_delivery_median": 2.351,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1316916,
+          1298786,
+          1303068
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.025,
+          1.019,
+          1.018
+        ]
+      },
+      "wtt": {
+        "deliveries_per_second": [
+          1328212,
+          1331264,
+          1331400
+        ],
+        "median": 1331264,
+        "server_cpu_us_per_delivery_median": 2.306,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "private_per_second": [
+          1328212,
+          1331264,
+          1331400
+        ],
+        "fanout_per_second": [
+          0,
+          0,
+          0
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.034,
+          1.044,
+          1.04
+        ]
+      }
+    },
+    "roomonly": {
+      "wt": {
+        "deliveries_per_second": [
+          1387383,
+          1420319,
+          1394142
+        ],
+        "median": 1394142,
+        "server_cpu_us_per_delivery_median": 2.265,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1387383,
+          1420319,
+          1394142
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wtj": {
+        "deliveries_per_second": [
+          1632274,
+          1625764,
+          1589477
+        ],
+        "median": 1625764,
+        "server_cpu_us_per_delivery_median": 1.927,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1632274,
+          1625764,
+          1589477
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.177,
+          1.145,
+          1.14
+        ]
+      },
+      "wtt": {
+        "deliveries_per_second": [
+          1603203,
+          1548632,
+          1596727
+        ],
+        "median": 1596727,
+        "server_cpu_us_per_delivery_median": 1.967,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304,
+            4.194304
+          ]
+        },
+        "private_per_second": [
+          0,
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1603203,
+          1548632,
+          1596727
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.156,
+          1.09,
+          1.145
+        ]
+      }
+    },
+    "mixed": {
+      "wt": {
+        "deliveries_per_second": [
+          1340913,
+          1343162,
+          1336756
+        ],
+        "median": 1340913,
+        "server_cpu_us_per_delivery_median": 2.556,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          354334,
+          357730,
+          353500
+        ],
+        "fanout_per_second": [
+          986580,
+          985432,
+          983256
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "wtj": {
+        "deliveries_per_second": [
+          1460624,
+          1458640,
+          1447255
+        ],
+        "median": 1458640,
+        "server_cpu_us_per_delivery_median": 2.286,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          324055,
+          326090,
+          321666
+        ],
+        "fanout_per_second": [
+          1136570,
+          1132550,
+          1125589
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.089,
+          1.086,
+          1.083
+        ]
+      },
+      "wtt": {
+        "deliveries_per_second": [
+          1474590,
+          1449569,
+          1475771
+        ],
+        "median": 1474590,
+        "server_cpu_us_per_delivery_median": 2.257,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            8.388608,
+            8.388608,
+            8.388608
+          ]
+        },
+        "private_per_second": [
+          331092,
+          328012,
+          330539
+        ],
+        "fanout_per_second": [
+          1143498,
+          1121557,
+          1145233
+        ],
+        "ratio_to_wt_per_repetition": [
+          1.1,
+          1.079,
+          1.104
+        ]
+      }
+    }
+  },
+  "capacity_100000_sessions_10s": {
+    "base2": [
+      {
+        "passed": true,
+        "ready_rss_mib": 1838.96,
+        "retired_rss_mib": 1843.7,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.84,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.24
+      },
+      {
+        "passed": true,
+        "ready_rss_mib": 1839.93,
+        "retired_rss_mib": 1844.61,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.86,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.22
+      }
+    ],
+    "candidate": [
+      {
+        "passed": true,
+        "ready_rss_mib": 1821.42,
+        "retired_rss_mib": 1826.04,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.74,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.47
+      },
+      {
+        "passed": true,
+        "ready_rss_mib": 1819.76,
+        "retired_rss_mib": 1824.51,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.99,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.58
+      }
+    ],
+    "cand2": [
+      {
+        "passed": true,
+        "ready_rss_mib": 1769.73,
+        "retired_rss_mib": 1771.15,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.92,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.32
+      },
+      {
+        "passed": true,
+        "ready_rss_mib": 1769.76,
+        "retired_rss_mib": 1774.84,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 17.49,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.49
+      }
+    ],
+    "mi": [
+      {
+        "passed": true,
+        "ready_rss_mib": 1929.41,
+        "retired_rss_mib": 768.42,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 15.51,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.02
+      },
+      {
+        "passed": true,
+        "ready_rss_mib": 1929.21,
+        "retired_rss_mib": 1045.66,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 15.81,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.43
+      }
+    ],
+    "je": [
+      {
+        "passed": true,
+        "ready_rss_mib": 1849.8,
+        "retired_rss_mib": 1444.39,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 15.81,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.48
+      },
+      {
+        "passed": true,
+        "ready_rss_mib": 1853.69,
+        "retired_rss_mib": 1452.7,
+        "verified_deliveries": 1000000,
+        "server_cpu_seconds": 15.1,
+        "round_trip_p99_upper_ms": 4.194304,
+        "setup_seconds": 11.11
+      }
+    ]
+  },
+  "capacity_100000_sessions_final_binary": {
+    "passed": true,
+    "ready_rss_mib": 1849.85,
+    "verified_deliveries": 400000,
+    "server_cpu_seconds": 5.96,
+    "round_trip_p99_upper_ms": 4.194304,
+    "measured_seconds": 4
+  },
+  "arm_names": {
+    "ws": "plaintext WebSocket, base2",
+    "wt": "WebTransport, base2 (final binary in the 4 s check)",
+    "c2": "WebTransport, cand2",
+    "mi": "WebTransport, mimalloc",
+    "je": "WebTransport, jemalloc",
+    "wtj": "base image with LD_PRELOAD jemalloc 5.4",
+    "wtt": "base image with LD_PRELOAD tcmalloc_minimal"
+  },
+  "validation": {
+    "vendor": "scripts/check-vendor.py: 300 vendored files match pinned archives plus patches",
+    "format": "cargo fmt --check passes (src/lib.rs module order fixed)",
+    "clippy": "cargo clippy --locked --all-targets -- -D warnings passes",
+    "tests": "cargo test --locked --all-targets: 284 passed, 0 failed, 1 ignored (rerun on the final tree)",
+    "vendored_quinn_proto": "329 library tests pass, including the reordering, black-hole and connection-ID retirement tests described above",
+    "vendored_rustls": "scripts/test-rustls-vendor.py: 248 unit tests pass with pinned fixtures"
+  },
+  "limits": [
+    "One loopback host that also runs a desktop session; identical runs vary by several percent and two earlier passes were disturbed by other local work. Paired per-repetition ratios are the comparison to trust, not single medians.",
+    "An earlier baseline image built with --all-targets differed from bin-only candidate builds through feature unification; it is excluded. Every image above is built with the same command.",
+    "The WebSocket arm of the first comparison is plaintext; no integrated TLS WebSocket baseline exists. Kernel socket memory was measured after a reboot (kernel_socket_accounting_100000_sessions).",
+    "Raw receipts are under target/bench/out on the measuring host and are not versioned.",
+    "Process memory remains far above the plaintext WebSocket transport: about 1.72 GiB versus about 0.12 GiB ready RSS at 100,000 sessions (WebSocket figure from the 2026-11-06 control). Each connection holds about 2.8 KiB of packet and header keys alone, so parity with a plaintext TCP process is not reachable by trimming.",
+    "At paced load the plaintext WebSocket transport still has lower latency tails and about half the server CPU; WebTransport leads at saturation.",
+    "One 100,000-session run of the second batch recorded a 4.2 s client scheduling stall with 761,893 client UDP receive drops; the other four runs of that image and all runs of the previous image are clean. It is retained above and attributed to the measuring host.",
+    "The encrypted WebSocket baseline is a TLS-terminating proxy fixture in front of the plaintext relay, which is how wss is commonly deployed but is not an optimized integrated TLS server; its default copy buffers alone are 1.6 GiB at 100,000 sessions, so the lean row is the fairer memory comparison.",
+    "Against the proxied TLS deployment WebTransport uses 18 to 25% more server CPU at paced load. Against an integrated TLS server (estimated, not built) memory, CPU per delivery and paced CPU would favour WebSocket.",
+    "Saturating throughput is a closed-loop rate at fixed concurrency; both WebSocket deployments left about half of the server CPU allowance idle.",
+    "Connection setup time is uncontrolled for TLS session resumption and is recorded, not interpreted."
+  ],
+  "decision": "Keep jemalloc and all six storage changes. Reject mimalloc, shorter scheduler global-queue intervals, smaller fanout quanta and faster acknowledgement policies.",
+  "capacity_100000_sessions_4s_second_batch": [
+    {
+      "image": "final",
+      "passed": true,
+      "ready_rss_mib": 1847.97,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.67,
+      "round_trip_p99_upper_ms": 8.388608,
+      "client_schedule_lag_max_ms": 5.8,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "final",
+      "passed": true,
+      "ready_rss_mib": 1849.83,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.53,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 2.7,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "final",
+      "passed": true,
+      "ready_rss_mib": 1849.83,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.5,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 2.6,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "mem2",
+      "passed": true,
+      "ready_rss_mib": 1717.92,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.82,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 3.2,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "mem2",
+      "passed": true,
+      "ready_rss_mib": 1715.75,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 12.6,
+      "round_trip_p99_upper_ms": 4294.967296,
+      "client_schedule_lag_max_ms": 4216.2,
+      "client_udp_receive_drops": 761893
+    },
+    {
+      "image": "mem2",
+      "passed": true,
+      "ready_rss_mib": 1715.73,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.56,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 3.2,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "mem2",
+      "passed": true,
+      "ready_rss_mib": 1719.78,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.5,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 3.8,
+      "client_udp_receive_drops": 0
+    },
+    {
+      "image": "mem2",
+      "passed": true,
+      "ready_rss_mib": 1715.8,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.68,
+      "round_trip_p99_upper_ms": 4.194304,
+      "client_schedule_lag_max_ms": 2.7,
+      "client_udp_receive_drops": 0
+    }
+  ],
+  "throughput_second_batch_4s_two_repetitions": {
+    "private": {
+      "ws": {
+        "deliveries_per_second": [
+          1322940,
+          1355739
+        ],
+        "median": 1339340,
+        "server_cpu_us_per_delivery_median": 1.578,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            0.524288
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          1579435,
+          1632304
+        ],
+        "median": 1605870,
+        "server_cpu_us_per_delivery_median": 1.902,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.194,
+          1.204
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          1616188,
+          1636141
+        ],
+        "median": 1626165,
+        "server_cpu_us_per_delivery_median": 1.895,
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.222,
+          1.207
+        ]
+      }
+    },
+    "roomonly": {
+      "ws": {
+        "deliveries_per_second": [
+          1737876,
+          1701033
+        ],
+        "median": 1719454,
+        "server_cpu_us_per_delivery_median": 1.033,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          2059149,
+          2097917
+        ],
+        "median": 2078533,
+        "server_cpu_us_per_delivery_median": 1.504,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.185,
+          1.233
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          2028178,
+          2079088
+        ],
+        "median": 2053633,
+        "server_cpu_us_per_delivery_median": 1.525,
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.167,
+          1.222
+        ]
+      }
+    },
+    "mixed": {
+      "ws": {
+        "deliveries_per_second": [
+          1838805,
+          1400810
+        ],
+        "median": 1619808,
+        "server_cpu_us_per_delivery_median": 1.336,
+        "p99_upper_ms": {
+          "private": [
+            2.097152,
+            2.097152
+          ],
+          "fanout": [
+            4.194304,
+            8.388608
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "je": {
+        "deliveries_per_second": [
+          1986568,
+          1957459
+        ],
+        "median": 1972013,
+        "server_cpu_us_per_delivery_median": 1.66,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.08,
+          1.397
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          1948546,
+          1975959
+        ],
+        "median": 1962252,
+        "server_cpu_us_per_delivery_median": 1.67,
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.06,
+          1.411
+        ]
+      }
+    }
+  },
+  "encrypted_comparison_4s_two_repetitions": {
+    "scope": "SUPERSEDED: the wss arm ran the base2 image and the wt arm the mem2 image. Use same_image_throughput_4s_two_repetitions.",
+    "results": {
+      "private": {
+        "wss": {
+          "deliveries_per_second": [
+            1097579,
+            1095075
+          ],
+          "median": 1096327,
+          "server_cpu_us_per_delivery_median": 2.254,
+          "p99_upper_ms": {
+            "private": [
+              2.097152,
+              2.097152
+            ],
+            "fanout": [
+              0.0,
+              0.0
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "wt": {
+          "deliveries_per_second": [
+            1638265,
+            1636557
+          ],
+          "median": 1637411,
+          "server_cpu_us_per_delivery_median": 1.879,
+          "p99_upper_ms": {
+            "private": [
+              1.048576,
+              1.048576
+            ],
+            "fanout": [
+              0.0,
+              0.0
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            1.493,
+            1.494
+          ]
+        }
+      },
+      "roomonly": {
+        "wss": {
+          "deliveries_per_second": [
+            864652,
+            902259
+          ],
+          "median": 883456,
+          "server_cpu_us_per_delivery_median": 2.263,
+          "p99_upper_ms": {
+            "private": [
+              0.0,
+              0.0
+            ],
+            "fanout": [
+              8.388608,
+              8.388608
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "wt": {
+          "deliveries_per_second": [
+            2105345,
+            2091396
+          ],
+          "median": 2098370,
+          "server_cpu_us_per_delivery_median": 1.498,
+          "p99_upper_ms": {
+            "private": [
+              0.0,
+              0.0
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            2.435,
+            2.318
+          ]
+        }
+      },
+      "mixed": {
+        "wss": {
+          "deliveries_per_second": [
+            936238,
+            934643
+          ],
+          "median": 935440,
+          "server_cpu_us_per_delivery_median": 2.58,
+          "p99_upper_ms": {
+            "private": [
+              8.388608,
+              8.388608
+            ],
+            "fanout": [
+              16.777216,
+              16.777216
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "wt": {
+          "deliveries_per_second": [
+            1954477,
+            1948898
+          ],
+          "median": 1951687,
+          "server_cpu_us_per_delivery_median": 1.68,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_wss_per_repetition": [
+            2.088,
+            2.085
+          ]
+        }
+      }
+    }
+  },
+  "scheduler_interval_screen_mixed_4s": {
+    "scope": "global_queue_interval 31/16/8/4 against the default on the jemalloc image; rejected",
+    "results": {
+      "mixed": {
+        "d": {
+          "deliveries_per_second": [
+            1876072,
+            1744793
+          ],
+          "median": 1810432,
+          "server_cpu_us_per_delivery_median": 1.779,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "g31": {
+          "deliveries_per_second": [
+            1816232,
+            1851028
+          ],
+          "median": 1833630,
+          "server_cpu_us_per_delivery_median": 1.727,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.968,
+            1.061
+          ]
+        },
+        "g16": {
+          "deliveries_per_second": [
+            1736464,
+            1732089
+          ],
+          "median": 1734276,
+          "server_cpu_us_per_delivery_median": 1.826,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.926,
+            0.993
+          ]
+        },
+        "g8": {
+          "deliveries_per_second": [
+            1731562,
+            1631921
+          ],
+          "median": 1681742,
+          "server_cpu_us_per_delivery_median": 1.902,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.923,
+            0.935
+          ]
+        },
+        "g4": {
+          "deliveries_per_second": [
+            1551160,
+            1462225
+          ],
+          "median": 1506692,
+          "server_cpu_us_per_delivery_median": 2.121,
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              8.388608,
+              8.388608
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.827,
+            0.838
+          ]
+        }
+      }
+    }
+  },
+  "mixed_workload_per_receiver_service": {
+    "websocket": [
+      {
+        "fanout_deliveries_per_reader_per_second": 565,
+        "private_deliveries_per_receiver_per_second": 22463,
+        "jain_index_over_1056_receivers": 0.097,
+        "p99_upper_ms": {
+          "private": 2.097152,
+          "fanout": 8.388608
+        }
+      },
+      {
+        "fanout_deliveries_per_reader_per_second": 522,
+        "private_deliveries_per_receiver_per_second": 23874,
+        "jain_index_over_1056_receivers": 0.086,
+        "p99_upper_ms": {
+          "private": 2.097152,
+          "fanout": 8.388608
+        }
+      },
+      {
+        "fanout_deliveries_per_reader_per_second": 696,
+        "private_deliveries_per_receiver_per_second": 23698,
+        "jain_index_over_1056_receivers": 0.111,
+        "p99_upper_ms": {
+          "private": 2.097152,
+          "fanout": 8.388608
+        }
+      }
+    ],
+    "webtransport_jemalloc": [
+      {
+        "fanout_deliveries_per_reader_per_second": 1172,
+        "private_deliveries_per_receiver_per_second": 9830,
+        "jain_index_over_1056_receivers": 0.483,
+        "p99_upper_ms": {
+          "private": 8.388608,
+          "fanout": 8.388608
+        }
+      },
+      {
+        "fanout_deliveries_per_reader_per_second": 1369,
+        "private_deliveries_per_receiver_per_second": 10165,
+        "jain_index_over_1056_receivers": 0.54,
+        "p99_upper_ms": {
+          "private": 4.194304,
+          "fanout": 4.194304
+        }
+      },
+      {
+        "fanout_deliveries_per_reader_per_second": 1448,
+        "private_deliveries_per_receiver_per_second": 9869,
+        "jain_index_over_1056_receivers": 0.582,
+        "p99_upper_ms": {
+          "private": 4.194304,
+          "fanout": 4.194304
+        }
+      }
+    ]
+  },
+  "paced_load_4s": {
+    "scope": "scripts/datagram-load.py --pairs 32 --readers 1024 --private-rate 4000 --fanout-rate 500 --seconds 4 --drain-ms 1000 --payload-bytes 1024",
+    "results": {
+      "datagram": {
+        "passed": true,
+        "image": "mem2",
+        "server_cpu_cores": 1.37,
+        "private": {
+          "expected": 511904,
+          "verified": 511904,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 2.097152
+        },
+        "fanout": {
+          "expected": 2048000,
+          "verified": 2048000,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 2.097152
+        }
+      },
+      "stream": {
+        "passed": true,
+        "image": "mem2",
+        "server_cpu_cores": 1.61,
+        "private": {
+          "expected": 511943,
+          "verified": 511943,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 4.194304
+        },
+        "fanout": {
+          "expected": 2048000,
+          "verified": 2048000,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 8.388608
+        }
+      },
+      "websocket": {
+        "passed": true,
+        "image": "base2",
+        "server_cpu_cores": 0.73,
+        "private": {
+          "expected": 511904,
+          "verified": 511904,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 1.048576
+        },
+        "fanout": {
+          "expected": 2048000,
+          "verified": 2048000,
+          "missing": 0,
+          "duplicates": 0,
+          "out_of_order": 0,
+          "arrival_age_p99_upper_ms": 1.048576
+        }
+      }
+    }
+  },
+  "browser_check": {
+    "image": "mem2",
+    "browser": "Camoufox, Firefox 158 engine",
+    "page": "target/browser/index.html built by npm run build:browser",
+    "result": "Passed: all nine bundle checks (three sessions with datagrams, typed broadcast, cross-channel private, unreliable datagram, 128 KiB and 5 MiB payloads, variables, unsafe ID rejection, disconnect and clean closes); no errors"
+  },
+  "host_wide_kernel_memory_100000_sessions": {
+    "scope": "Unprivileged /proc/meminfo and /proc/net/sockstat deltas from before the run to the ready gate, on one host that runs both endpoints. Host-wide, so other activity is included; the WebSocket slab growth covers 200,000 TCP sockets (100,000 at each end).",
+    "results": {
+      "websocket_base2": {
+        "passed": true,
+        "server_ready_rss_mib": 115.4,
+        "host_slab_mib_before": 2933,
+        "host_slab_mib_ready": 3771,
+        "host_slab_growth_mib": 838,
+        "host_unreclaimable_slab_growth_mib": 558,
+        "tcp_sockets_in_use_ready": 200021
+      },
+      "webtransport_committed": {
+        "passed": true,
+        "server_ready_rss_mib": 1719.8,
+        "host_slab_mib_before": 2887,
+        "host_slab_mib_ready": 2887,
+        "host_slab_growth_mib": -1,
+        "host_unreclaimable_slab_growth_mib": -1,
+        "tcp_sockets_in_use_ready": 17
+      }
+    },
+    "estimate": "Taking half of the 839 MiB WebSocket slab growth as the server side gives about 420 MiB of kernel memory beside 115 MiB of process RSS, about 535 MiB in all, against about 1,720 MiB for WebTransport, whose single UDP socket adds no measurable slab. That is about 3.2 times, not 14 times. Per-socket SOCK_DIAG accounting was not possible (see limits)."
+  },
+  "freshness_without_impairment_4s": {
+    "scope": "scripts/freshness.py at 60 updates/s beside a 1 MiB bulk value, no delay or loss",
+    "results": {
+      "datagram": {
+        "image": "committed",
+        "received_unique": 240,
+        "missing": 0,
+        "out_of_order": 0,
+        "arrival_age_ms": {
+          "p50_ms": 0.229,
+          "p99_ms": 1.253,
+          "max_ms": 1.29
+        },
+        "freshest_state_age_ms": {
+          "p50_ms": 10.0,
+          "p99_ms": 16.6
+        },
+        "bulk_arrival_ms": 2.19
+      },
+      "stream": {
+        "image": "committed",
+        "received_unique": 240,
+        "missing": 0,
+        "out_of_order": 0,
+        "arrival_age_ms": {
+          "p50_ms": 0.23,
+          "p99_ms": 1.146,
+          "max_ms": 2.342
+        },
+        "freshest_state_age_ms": {
+          "p50_ms": 10.08,
+          "p99_ms": 16.43
+        },
+        "bulk_arrival_ms": 2.12
+      },
+      "websocket": {
+        "image": "base2",
+        "received_unique": 240,
+        "missing": 0,
+        "out_of_order": 0,
+        "arrival_age_ms": {
+          "p50_ms": 0.209,
+          "p99_ms": 0.836,
+          "max_ms": 0.857
+        },
+        "freshest_state_age_ms": {
+          "p50_ms": 10.48,
+          "p99_ms": 17.92
+        },
+        "bulk_arrival_ms": 0.98
+      },
+      "websocket-tls": {
+        "image": "committed relay behind tls_front",
+        "arrival_age_ms": {
+          "p50_ms": 0.18,
+          "p99_ms": 0.349,
+          "max_ms": 0.703
+        },
+        "freshest_state_age_ms": {
+          "p99_ms": 16.7
+        }
+      }
+    }
+  },
+  "paced_ack_policy_screen_stream_4s": {
+    "scope": "paced stream load; peer ack threshold and delay varied through a temporary knob; reverted",
+    "results": {
+      "ack-default": {
+        "server_cpu_cores": 1.48,
+        "private": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 2.3
+        },
+        "fanout": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 2.6
+        }
+      },
+      "ack-d1ms": {
+        "server_cpu_cores": 1.69,
+        "private": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 5.1
+        },
+        "fanout": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 5.2
+        }
+      },
+      "ack-t1d1ms": {
+        "server_cpu_cores": 1.9,
+        "private": {
+          "p99_upper_ms": 4.194304,
+          "max_ms": 6.7
+        },
+        "fanout": {
+          "p99_upper_ms": 4.194304,
+          "max_ms": 7.4
+        }
+      },
+      "ack-off": {
+        "server_cpu_cores": 1.57,
+        "private": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 3.1
+        },
+        "fanout": {
+          "p99_upper_ms": 2.097152,
+          "max_ms": 3.5
+        }
+      }
+    },
+    "outcome": "The retained policy (threshold 7, 5 ms) has the lowest CPU and no worse latency; faster acknowledgements raised CPU and worsened the tail."
+  },
+  "paced_cpu_profile_100000_sessions": {
+    "scope": "5 s of user-cycle samples (perf, 1999 Hz) on the committed image during the paced 100,000-session phase",
+    "top_self_symbols_percent": {
+      "quinn ConnectionDriver::poll": 9.36,
+      "quinn-proto poll_transmit": 3.76,
+      "quinn event_queue Sender::send": 3.42,
+      "tokio wake_by_val": 3.4,
+      "quinn RecvState::poll_socket": 3.09,
+      "tokio timer process_at_time": 2.57,
+      "tokio Sleep::reset": 2.39,
+      "quinn-proto Endpoint::handle": 2.38,
+      "clock_gettime": 2.28,
+      "quinn-proto populate_packet": 2.2,
+      "quinn-proto on_ack_received": 2.15
+    },
+    "outcome": "No dominant removable cost: per-delivery work is spread over driver polls, packet handling, timers, wakeups and crypto on cold per-connection state."
+  },
+  "capacity_100000_sessions_4s_third_batch": [
+    {
+      "image": "mem3",
+      "passed": true,
+      "ready_rss_mib": 1669.86,
+      "retired_rss_mib": 1346.75,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.66,
+      "round_trip_p99_upper_ms": 4.194304
+    },
+    {
+      "image": "mem3",
+      "passed": true,
+      "ready_rss_mib": 1671.81,
+      "retired_rss_mib": 1373.04,
+      "verified_deliveries": 400000,
+      "server_cpu_seconds": 5.24,
+      "round_trip_p99_upper_ms": 4.194304
+    }
+  ],
+  "throughput_third_batch_4s_two_repetitions": {
+    "private": {
+      "ws": {
+        "deliveries_per_second": [
+          1333232,
+          1334646
+        ],
+        "median": 1333939,
+        "private_per_second": [
+          1333232,
+          1334646
+        ],
+        "fanout_per_second": [
+          0,
+          0
+        ],
+        "p99_upper_ms": {
+          "private": [
+            0.524288,
+            0.524288
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          1640605,
+          1648777
+        ],
+        "median": 1644691,
+        "private_per_second": [
+          1640605,
+          1648777
+        ],
+        "fanout_per_second": [
+          0,
+          0
+        ],
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.231,
+          1.235
+        ]
+      },
+      "m3": {
+        "deliveries_per_second": [
+          1648908,
+          1646728
+        ],
+        "median": 1647818,
+        "private_per_second": [
+          1648908,
+          1646728
+        ],
+        "fanout_per_second": [
+          0,
+          0
+        ],
+        "p99_upper_ms": {
+          "private": [
+            1.048576,
+            1.048576
+          ],
+          "fanout": [
+            0.0,
+            0.0
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.237,
+          1.234
+        ]
+      }
+    },
+    "roomonly": {
+      "ws": {
+        "deliveries_per_second": [
+          1733698,
+          1619364
+        ],
+        "median": 1676531,
+        "private_per_second": [
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          1733698,
+          1619364
+        ],
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          2172292,
+          2147095
+        ],
+        "median": 2159694,
+        "private_per_second": [
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          2172292,
+          2147095
+        ],
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.253,
+          1.326
+        ]
+      },
+      "m3": {
+        "deliveries_per_second": [
+          2189431,
+          2161365
+        ],
+        "median": 2175398,
+        "private_per_second": [
+          0,
+          0
+        ],
+        "fanout_per_second": [
+          2189431,
+          2161365
+        ],
+        "p99_upper_ms": {
+          "private": [
+            0.0,
+            0.0
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.263,
+          1.335
+        ]
+      }
+    },
+    "mixed": {
+      "ws": {
+        "deliveries_per_second": [
+          1575629,
+          1522389
+        ],
+        "median": 1549009,
+        "private_per_second": [
+          799824,
+          863469
+        ],
+        "fanout_per_second": [
+          775804,
+          658920
+        ],
+        "p99_upper_ms": {
+          "private": [
+            2.097152,
+            2.097152
+          ],
+          "fanout": [
+            8.388608,
+            8.388608
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.0,
+          1.0
+        ]
+      },
+      "m2": {
+        "deliveries_per_second": [
+          2029626,
+          1988946
+        ],
+        "median": 2009286,
+        "private_per_second": [
+          428008,
+          418501
+        ],
+        "fanout_per_second": [
+          1601618,
+          1570445
+        ],
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.288,
+          1.306
+        ]
+      },
+      "m3": {
+        "deliveries_per_second": [
+          2030652,
+          2036321
+        ],
+        "median": 2033487,
+        "private_per_second": [
+          430704,
+          427945
+        ],
+        "fanout_per_second": [
+          1599948,
+          1608376
+        ],
+        "p99_upper_ms": {
+          "private": [
+            4.194304,
+            4.194304
+          ],
+          "fanout": [
+            4.194304,
+            4.194304
+          ]
+        },
+        "ratio_to_ws_per_repetition": [
+          1.289,
+          1.338
+        ]
+      }
+    }
+  },
+  "fanout_quantum_screen_4s": {
+    "scope": "WebTransport fanout work quantum 256 and 64 against the retained 1,024 on the mem2 image; rejected and reverted",
+    "results": {
+      "mixed": {
+        "d": {
+          "deliveries_per_second": [
+            1977073,
+            2006047
+          ],
+          "median": 1991560,
+          "private_per_second": [
+            414325,
+            417129
+          ],
+          "fanout_per_second": [
+            1562748,
+            1588918
+          ],
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "q256": {
+          "deliveries_per_second": [
+            1803192,
+            1801166
+          ],
+          "median": 1802179,
+          "private_per_second": [
+            403698,
+            392722
+          ],
+          "fanout_per_second": [
+            1399495,
+            1408444
+          ],
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.912,
+            0.898
+          ]
+        },
+        "q64": {
+          "deliveries_per_second": [
+            1449841,
+            1521758
+          ],
+          "median": 1485800,
+          "private_per_second": [
+            365310,
+            390558
+          ],
+          "fanout_per_second": [
+            1084531,
+            1131201
+          ],
+          "p99_upper_ms": {
+            "private": [
+              4.194304,
+              4.194304
+            ],
+            "fanout": [
+              8.388608,
+              8.388608
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.733,
+            0.759
+          ]
+        }
+      },
+      "roomonly": {
+        "d": {
+          "deliveries_per_second": [
+            2101647,
+            2030513
+          ],
+          "median": 2066080,
+          "private_per_second": [
+            0,
+            0
+          ],
+          "fanout_per_second": [
+            2101647,
+            2030513
+          ],
+          "p99_upper_ms": {
+            "private": [
+              0.0,
+              0.0
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            1.0,
+            1.0
+          ]
+        },
+        "q256": {
+          "deliveries_per_second": [
+            1958090,
+            1899356
+          ],
+          "median": 1928723,
+          "private_per_second": [
+            0,
+            0
+          ],
+          "fanout_per_second": [
+            1958090,
+            1899356
+          ],
+          "p99_upper_ms": {
+            "private": [
+              0.0,
+              0.0
+            ],
+            "fanout": [
+              4.194304,
+              4.194304
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.932,
+            0.935
+          ]
+        },
+        "q64": {
+          "deliveries_per_second": [
+            1542515,
+            1253365
+          ],
+          "median": 1397940,
+          "private_per_second": [
+            0,
+            0
+          ],
+          "fanout_per_second": [
+            1542515,
+            1253365
+          ],
+          "p99_upper_ms": {
+            "private": [
+              0.0,
+              0.0
+            ],
+            "fanout": [
+              4.194304,
+              8.388608
+            ]
+          },
+          "ratio_to_d_per_repetition": [
+            0.734,
+            0.617
+          ]
+        }
+      }
+    },
+    "outcome": "Smaller quanta did not raise private throughput or lower its latency bound and cut fanout by 10 to 30%."
+  },
+  "encrypted_websocket_100000_sessions_4s": {
+    "scope": "scripts/capacity.py --transport websocket-tls (added for this comparison): the committed relay with --legacy-websocket behind examples/tls_front (TLS 1.3, same server CPU set, one extra loopback TCP hop), against the same image over WebTransport. Deployment RSS and CPU are relay plus front end. The front end holds one copy buffer per direction per connection for its lifetime: 8 KiB each by default, 2 KiB in the lean row.",
+    "images": {
+      "relay": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+      "tls_front": "b1d69179dd3ae795c2e1ce9f79a24114001fea95d17e055af6ceff3d4cfe24dd",
+      "capacity_client": "13b5ca2d89f73f66dc7fab3334a4b409b044ada93166b9315e06c9bef568178d"
+    },
+    "results": {
+      "tls_websocket_proxy_default_8k": [
+        {
+          "passed": true,
+          "relay_rss_mib": 147.2,
+          "tls_front_rss_mib": 2429.8,
+          "deployment_rss_mib": 2577.0,
+          "host_slab_growth_mib": 1810,
+          "setup_seconds": 4.55,
+          "paced_cpu_seconds_per_400k": 4.48,
+          "round_trip": {
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "max_ms": 4.3
+          },
+          "retired_deployment_rss_mib": 2501.5
+        },
+        {
+          "passed": true,
+          "relay_rss_mib": 147.0,
+          "tls_front_rss_mib": 2429.9,
+          "deployment_rss_mib": 2576.8,
+          "host_slab_growth_mib": 1779,
+          "setup_seconds": 4.63,
+          "paced_cpu_seconds_per_400k": 4.74,
+          "round_trip": {
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "max_ms": 4.5
+          },
+          "retired_deployment_rss_mib": 2507.3
+        }
+      ],
+      "tls_websocket_proxy_lean_2k": [
+        {
+          "passed": true,
+          "relay_rss_mib": 143.0,
+          "tls_front_rss_mib": 1258.0,
+          "deployment_rss_mib": 1400.9,
+          "host_slab_growth_mib": 1776,
+          "setup_seconds": 4.43,
+          "paced_cpu_seconds_per_400k": 4.7,
+          "round_trip": {
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "max_ms": 7.1
+          },
+          "retired_deployment_rss_mib": 1327.5
+        }
+      ],
+      "webtransport": [
+        {
+          "passed": true,
+          "relay_rss_mib": 1671.8,
+          "tls_front_rss_mib": 0,
+          "deployment_rss_mib": 1671.8,
+          "host_slab_growth_mib": 0,
+          "setup_seconds": 10.47,
+          "paced_cpu_seconds_per_400k": 5.58,
+          "round_trip": {
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 4.194304,
+            "max_ms": 11.2
+          },
+          "retired_deployment_rss_mib": 1318.8
+        },
+        {
+          "passed": true,
+          "relay_rss_mib": 1667.8,
+          "tls_front_rss_mib": 0,
+          "deployment_rss_mib": 1667.8,
+          "host_slab_growth_mib": -8,
+          "setup_seconds": 10.62,
+          "paced_cpu_seconds_per_400k": 5.58,
+          "round_trip": {
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 4.194304,
+            "max_ms": 5.9
+          },
+          "retired_deployment_rss_mib": 1381.1
+        }
+      ]
+    },
+    "kernel_estimate": "Host slab growth covers both ends on one host. The TLS-fronted deployment has 400,000 TCP sockets, 300,000 of them on the server side (client-facing and upstream at the front end, plus the relay). Taking three quarters of the growth as the server side gives about 1,357 MiB (default) and 1,332 MiB (lean); WebTransport adds none. Deployment totals are then about 3,934 MiB, 2,733 MiB and 1,672 MiB.",
+    "not_measured": "An integrated TLS WebSocket server (no proxy hop). See integrated_tls_estimates.",
+    "paced_cpu_split": [
+      {
+        "run": "enc-wss8k-1",
+        "relay_user_s": 0.43,
+        "relay_system_s": 1.09,
+        "front_user_s": 0.66,
+        "front_system_s": 2.3
+      },
+      {
+        "run": "enc-wss8k-2",
+        "relay_user_s": 0.44,
+        "relay_system_s": 1.07,
+        "front_user_s": 0.6,
+        "front_system_s": 2.63
+      },
+      {
+        "run": "enc-wss2k-1",
+        "relay_user_s": 0.48,
+        "relay_system_s": 1.05,
+        "front_user_s": 0.58,
+        "front_system_s": 2.59
+      }
+    ],
+    "integrated_tls_estimates": {
+      "status": "Estimates only; no integrated TLS WebSocket server exists in this repository.",
+      "memory_mib": "Lean front end 13,191 B per connection less 4,096 B of copy buffers leaves about 870 MiB; plus 147 MiB relay and one socket share of slab (about 450 MiB) gives about 1,470 MiB on stock rustls, or about 1,015 MiB if its 4,736 B of idle staging per connection were released. WebTransport: about 1,670 MiB.",
+      "saturated_cpu_us_per_delivery": "Plaintext plus at most 0.32 us of front-end user time: about 1.9 / 1.4 / 2.0 (private / room / mixed). WebTransport: 1.99 / 1.64 / 2.24.",
+      "paced_cpu_seconds_per_400k": "Relay 1.5 s plus front-end user time 0.6 to 0.7 s: about 2.1 s. WebTransport: 5.58 s. Plaintext: 1.42 s."
+    }
+  },
+  "comparison_basis": "The owner confirmed on 2026-11-13 that the intended baseline is TLS WebSocket, not plaintext. Plaintext results are kept as a lower bound for WebSocket cost.",
+  "same_image_throughput_4s_two_repetitions": {
+    "scope": "All three arms on the committed relay image (mem3); proxied TLS uses examples/tls_front at its default 8 KiB buffers; --churn-workers 0. Closed-loop rate at fixed concurrency under an equal server CPU allowance, not capacity per CPU.",
+    "relay_sha256": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+    "results": {
+      "private": {
+        "plaintext_websocket": {
+          "deliveries_per_second": [
+            1295716,
+            1321963
+          ],
+          "median": 1308839,
+          "server_cpu_us_per_delivery": [
+            1.63,
+            1.59
+          ],
+          "server_cores": [
+            2.11,
+            2.1
+          ],
+          "client_cores": [
+            3.68,
+            3.67
+          ]
+        },
+        "proxied_tls_websocket": {
+          "deliveries_per_second": [
+            991285,
+            1041496
+          ],
+          "median": 1016390,
+          "server_cpu_us_per_delivery": [
+            2.42,
+            2.26
+          ],
+          "server_cores": [
+            2.4,
+            2.36
+          ],
+          "client_cores": [
+            2.11,
+            2.14
+          ]
+        },
+        "webtransport": {
+          "deliveries_per_second": [
+            1399883,
+            1613203
+          ],
+          "median": 1506543,
+          "server_cpu_us_per_delivery": [
+            2.08,
+            1.91
+          ],
+          "server_cores": [
+            2.91,
+            3.08
+          ],
+          "client_cores": [
+            3.56,
+            3.96
+          ]
+        }
+      },
+      "roomonly": {
+        "plaintext_websocket": {
+          "deliveries_per_second": [
+            1501677,
+            1581696
+          ],
+          "median": 1541687,
+          "server_cpu_us_per_delivery": [
+            1.17,
+            1.05
+          ],
+          "server_cores": [
+            1.75,
+            1.66
+          ],
+          "client_cores": [
+            3.2,
+            3.34
+          ]
+        },
+        "proxied_tls_websocket": {
+          "deliveries_per_second": [
+            673438,
+            656560
+          ],
+          "median": 664999,
+          "server_cpu_us_per_delivery": [
+            2.99,
+            3.13
+          ],
+          "server_cores": [
+            2.01,
+            2.05
+          ],
+          "client_cores": [
+            1.8,
+            1.75
+          ]
+        },
+        "webtransport": {
+          "deliveries_per_second": [
+            1771602,
+            1942653
+          ],
+          "median": 1857127,
+          "server_cpu_us_per_delivery": [
+            1.72,
+            1.57
+          ],
+          "server_cores": [
+            3.05,
+            3.05
+          ],
+          "client_cores": [
+            4.3,
+            4.43
+          ]
+        }
+      },
+      "mixed": {
+        "plaintext_websocket": {
+          "deliveries_per_second": [
+            1351338,
+            1323419
+          ],
+          "median": 1337379,
+          "server_cpu_us_per_delivery": [
+            1.62,
+            1.68
+          ],
+          "server_cores": [
+            2.19,
+            2.22
+          ],
+          "client_cores": [
+            3.75,
+            3.67
+          ]
+        },
+        "proxied_tls_websocket": {
+          "deliveries_per_second": [
+            802465,
+            728641
+          ],
+          "median": 765553,
+          "server_cpu_us_per_delivery": [
+            2.99,
+            3.31
+          ],
+          "server_cores": [
+            2.4,
+            2.42
+          ],
+          "client_cores": [
+            2.25,
+            2.05
+          ]
+        },
+        "webtransport": {
+          "deliveries_per_second": [
+            1469198,
+            1510517
+          ],
+          "median": 1489857,
+          "server_cpu_us_per_delivery": [
+            2.27,
+            2.2
+          ],
+          "server_cores": [
+            3.34,
+            3.33
+          ],
+          "client_cores": [
+            4.1,
+            4.26
+          ]
+        }
+      }
+    }
+  },
+  "freshness_paired_4s_three_repetitions": {
+    "scope": "scripts/freshness.py at 60 updates/s, no impairment, committed relay image on every arm, modes interleaved. Supersedes the single unpaired runs in freshness_without_impairment_4s.",
+    "results": {
+      "websocket": {
+        "arrival_age_p50_ms": [
+          0.129,
+          0.125,
+          0.126
+        ],
+        "arrival_age_p99_ms": [
+          0.201,
+          0.201,
+          0.182
+        ],
+        "arrival_age_max_ms": [
+          0.6,
+          0.57,
+          0.49
+        ],
+        "missing": [
+          0,
+          0,
+          0
+        ]
+      },
+      "websocket-tls": {
+        "arrival_age_p50_ms": [
+          0.183,
+          0.178,
+          0.179
+        ],
+        "arrival_age_p99_ms": [
+          0.383,
+          0.339,
+          0.345
+        ],
+        "arrival_age_max_ms": [
+          0.86,
+          1.01,
+          1.06
+        ],
+        "missing": [
+          0,
+          0,
+          0
+        ]
+      },
+      "stream": {
+        "arrival_age_p50_ms": [
+          0.218,
+          0.22,
+          0.221
+        ],
+        "arrival_age_p99_ms": [
+          0.413,
+          0.357,
+          0.433
+        ],
+        "arrival_age_max_ms": [
+          1.42,
+          1.26,
+          1.48
+        ],
+        "missing": [
+          0,
+          0,
+          0
+        ]
+      },
+      "datagram": {
+        "arrival_age_p50_ms": [
+          0.214,
+          0.214,
+          0.216
+        ],
+        "arrival_age_p99_ms": [
+          0.346,
+          0.344,
+          0.314
+        ],
+        "arrival_age_max_ms": [
+          0.38,
+          0.36,
+          0.32
+        ],
+        "missing": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "fairness_audit": {
+    "method": "Two independent read-only source audits (the TLS front end; the harness accounting), each re-checked by a second reader.",
+    "verdict": "The fixture is a defensible baseline for a relay behind a same-host TLS-terminating proxy and not for a well-built integrated wss server.",
+    "handicaps_websocket": [
+      "Two 8 KiB copy buffers per connection for its lifetime: 1,562 MiB at 100,000 sessions, fully resident",
+      "An extra loopback hop: two more payload copies and four more system calls per message, and three server-side sockets per session",
+      "Stock rustls keeps about 4.7 KiB of idle staging per TCP connection that the vendored patch releases only for QUIC"
+    ],
+    "flatters_websocket": [
+      "The fixture is a bare byte tunnel without a real reverse proxy's HTTP handling, timeouts, limits or logging",
+      "Process-RSS-only tables hide kernel socket memory, which WebSocket uses and WebTransport does not"
+    ],
+    "corrected_after_audit": [
+      "Throughput rerun with one relay image on all arms",
+      "Low-rate latency rerun as paired repetitions; an earlier 1.2 ms p99 for WebTransport did not reproduce",
+      "Connection setup marked uncontrolled: wss clients share a resumption-enabled TLS configuration",
+      "capacity.py now records summed deployment RSS and CPU and a correct scope string; inspection.py scope string corrected"
+    ],
+    "left_open": [
+      "Slow-consumer and backpressure behaviour of the proxied deployment is untested",
+      "The front end runs on the system allocator while the relay uses jemalloc",
+      "The capacity client uses a larger read buffer for wss than for plaintext, which affects client memory only"
+    ]
+  },
+  "kernel_socket_accounting_100000_sessions": {
+    "kernel": "7.2.15-arch1-1 after reboot; inet_diag, tcp_diag and udp_diag loaded",
+    "method": "scripts/capacity.py --kernel-socket-resources at the ready gate, relay image mem3 on every arm, 4-second paced phase. SOCK_DIAG counts the sockets each process owns; object sizes are the kernel slab object sizes read as root (TCP 2,432 B, UDP 1,344 B). Host slab growth is /proc/meminfo from before the run to the ready gate and covers both ends of every connection, so the server side is charged its share by socket count.",
+    "slab_object_sizes_bytes": {
+      "TCP": 2432,
+      "TCPv6": 2560,
+      "UDP": 1344,
+      "UDPv6": 1472
+    },
+    "results": {
+      "plaintext_websocket": {
+        "passed": true,
+        "deployment_process_rss_mib": 147.3,
+        "server_side_sockets": 100000,
+        "client_sockets": 100000,
+        "server_side_socket_object_mib": 231.9,
+        "server_side_queued_buffer_bytes": 0,
+        "host_slab_growth_mib": 957,
+        "host_unreclaimable_slab_growth_mib": 603,
+        "slab_kib_per_tcp_socket": 4.9,
+        "server_side_slab_share_mib": 478,
+        "process_plus_server_kernel_mib": 626,
+        "paced_cpu_seconds_per_400k": 1.33
+      },
+      "proxied_tls_websocket": {
+        "passed": true,
+        "deployment_process_rss_mib": 2577.2,
+        "server_side_sockets": 300000,
+        "client_sockets": 100000,
+        "server_side_socket_object_mib": 695.8,
+        "server_side_queued_buffer_bytes": 0,
+        "host_slab_growth_mib": 1890,
+        "host_unreclaimable_slab_growth_mib": 1189,
+        "slab_kib_per_tcp_socket": 4.84,
+        "server_side_slab_share_mib": 1417,
+        "process_plus_server_kernel_mib": 3994,
+        "paced_cpu_seconds_per_400k": 4.51
+      },
+      "webtransport": {
+        "passed": true,
+        "deployment_process_rss_mib": 1667.8,
+        "server_side_sockets": 1,
+        "client_sockets": 1,
+        "server_side_socket_object_mib": 0.0,
+        "server_side_queued_buffer_bytes": 0,
+        "host_slab_growth_mib": -1,
+        "host_unreclaimable_slab_growth_mib": 0,
+        "slab_kib_per_tcp_socket": null,
+        "server_side_slab_share_mib": 0,
+        "process_plus_server_kernel_mib": 1668,
+        "paced_cpu_seconds_per_400k": 5.44
+      }
+    },
+    "reading": "Both TCP runs grow host slab by the same 4.8 to 4.9 KiB per socket, about twice the bare socket object. Charged by socket count, kernel memory beside the relay is about 480 MiB for plaintext WebSocket, about 1,420 MiB for the proxied TLS deployment and nothing measurable for WebTransport, which owns one UDP socket. No socket held queued buffer memory at the gate.",
+    "integrated_tls_estimate_mib": {
+      "default": 1496,
+      "with_tls_staging_released": 1044,
+      "basis": "870 MiB of TLS and task state from the lean front end, 147 MiB relay, 479 MiB kernel share for one socket per session; not built"
+    },
+    "harness_change": "With websocket-tls the snapshot now includes the front end's two sockets per session."
+  },
+  "impaired_network_freshness_4s": {
+    "method": "scripts/freshness-matrix.py in a temporary network namespace: 60 state updates per second of 1 KiB plus one 1 MiB reliable transfer, netem on both directions of the relay's external port, repetitions with rotated mode order. Profiles: loss = 20 ms each way and 2% loss; jitter = 50 ms each way with 3 ms jitter and no loss (netem turns jitter into reordering); reorder = 20 ms, 8 ms jitter, 2% loss and 25% of packets skipping the delay. All runs pass delivery, payload and cleanup checks.",
+    "profiles_note": "netem delays each packet independently, so jitter and reorder are stress models with far more reordering than ordinary paths show.",
+    "default_loopback_mtu_previous_images_2_repetitions": {
+      "clean": {
+        "datagram": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            2,
+            2
+          ],
+          "arrival_age_p50_ms": [
+            0.2,
+            0.6
+          ],
+          "arrival_age_p99_ms": [
+            0.8,
+            1.1
+          ],
+          "freshest_state_age_p99_ms": [
+            17.4,
+            16.7
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        },
+        "stream": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            2,
+            2
+          ],
+          "arrival_age_p50_ms": [
+            0.3,
+            0.3
+          ],
+          "arrival_age_p99_ms": [
+            1.0,
+            1.0
+          ],
+          "freshest_state_age_p99_ms": [
+            17.5,
+            16.5
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        },
+        "websocket-tls": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            1,
+            1
+          ],
+          "arrival_age_p50_ms": [
+            0.2,
+            0.1
+          ],
+          "arrival_age_p99_ms": [
+            0.9,
+            1.1
+          ],
+          "freshest_state_age_p99_ms": [
+            17.7,
+            17.4
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        }
+      },
+      "loss": {
+        "datagram": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            2422,
+            679
+          ],
+          "arrival_age_p50_ms": [
+            40.7,
+            40.3
+          ],
+          "arrival_age_p99_ms": [
+            75.4,
+            53.3
+          ],
+          "freshest_state_age_p99_ms": [
+            87.1,
+            70.5
+          ],
+          "missing_of_240": [
+            10,
+            8
+          ]
+        },
+        "stream": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            797,
+            1313
+          ],
+          "arrival_age_p50_ms": [
+            40.6,
+            40.6
+          ],
+          "arrival_age_p99_ms": [
+            762.3,
+            1280.3
+          ],
+          "freshest_state_age_p99_ms": [
+            750.0,
+            1261.8
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        },
+        "websocket-tls": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            1384,
+            888
+          ],
+          "arrival_age_p50_ms": [
+            48.3,
+            40.7
+          ],
+          "arrival_age_p99_ms": [
+            1349.8,
+            854.1
+          ],
+          "freshest_state_age_p99_ms": [
+            1340.3,
+            840.5
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        }
+      },
+      "reorder": {
+        "datagram": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            6941,
+            6620
+          ],
+          "arrival_age_p50_ms": [
+            52.6,
+            51.5
+          ],
+          "arrival_age_p99_ms": [
+            86.9,
+            91.7
+          ],
+          "freshest_state_age_p99_ms": [
+            95.0,
+            102.2
+          ],
+          "missing_of_240": [
+            6,
+            8
+          ]
+        },
+        "stream": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            6037,
+            5516
+          ],
+          "arrival_age_p50_ms": [
+            4470.6,
+            3845.2
+          ],
+          "arrival_age_p99_ms": [
+            6017.6,
+            5511.9
+          ],
+          "freshest_state_age_p99_ms": [
+            3960.7,
+            3961.3
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        },
+        "websocket-tls": {
+          "passed": [
+            true,
+            true
+          ],
+          "bulk_1mib_ms": [
+            723,
+            666
+          ],
+          "arrival_age_p50_ms": [
+            43.0,
+            46.0
+          ],
+          "arrival_age_p99_ms": [
+            688.4,
+            631.8
+          ],
+          "freshest_state_age_p99_ms": [
+            681.0,
+            621.5
+          ],
+          "missing_of_240": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    "default_mtu_note": "Loopback MTU is 65,536, so TCP counts its congestion window in 64 KiB segments and finishes 1 MiB inside its initial window, while QUIC uses about 1.2 KiB packets. The TLS WebSocket bulk times in this block are not comparable with QUIC; --mtu 1500 below removes that.",
+    "mtu_1500_3_repetitions": {
+      "previous_images": {
+        "relay": "mem3",
+        "client": "stock quinn loss detection",
+        "results": {
+          "jitter": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                9994,
+                8450,
+                10234
+              ],
+              "arrival_age_p50_ms": [
+                126.8,
+                109.2,
+                127.2
+              ],
+              "arrival_age_p99_ms": [
+                196.4,
+                186.7,
+                189.6
+              ],
+              "freshest_state_age_p99_ms": [
+                200.5,
+                181.5,
+                197.0
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                7225,
+                5814,
+                8270
+              ],
+              "arrival_age_p50_ms": [
+                5619.1,
+                4217.1,
+                6523.8
+              ],
+              "arrival_age_p99_ms": [
+                7190.4,
+                5779.8,
+                8240.3
+              ],
+              "freshest_state_age_p99_ms": [
+                3961.3,
+                3960.9,
+                3961.6
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          "loss": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                2889,
+                2910,
+                853
+              ],
+              "arrival_age_p50_ms": [
+                43.2,
+                42.9,
+                40.5
+              ],
+              "arrival_age_p99_ms": [
+                79.2,
+                67.7,
+                53.2
+              ],
+              "freshest_state_age_p99_ms": [
+                87.2,
+                74.8,
+                73.1
+              ],
+              "missing_of_240": [
+                10,
+                6,
+                12
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                1281,
+                2765,
+                2931
+              ],
+              "arrival_age_p50_ms": [
+                40.2,
+                780.5,
+                1166.7
+              ],
+              "arrival_age_p99_ms": [
+                1246.8,
+                2730.8,
+                2896.7
+              ],
+              "freshest_state_age_p99_ms": [
+                1240.9,
+                2720.5,
+                2881.6
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          "reorder": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                7077,
+                6062,
+                7164
+              ],
+              "arrival_age_p50_ms": [
+                48.8,
+                51.3,
+                51.5
+              ],
+              "arrival_age_p99_ms": [
+                84.0,
+                100.7,
+                134.3
+              ],
+              "freshest_state_age_p99_ms": [
+                93.3,
+                116.1,
+                147.2
+              ],
+              "missing_of_240": [
+                2,
+                7,
+                3
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                5368,
+                6032,
+                6523
+              ],
+              "arrival_age_p50_ms": [
+                3690.3,
+                4440.2,
+                4955.4
+              ],
+              "arrival_age_p99_ms": [
+                5360.2,
+                5997.7,
+                6488.3
+              ],
+              "freshest_state_age_p99_ms": [
+                3961.3,
+                3961.5,
+                3960.1
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "final_images": {
+        "relay": "mem5",
+        "client": "relay loss detection",
+        "results": {
+          "clean": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                2,
+                2,
+                2
+              ],
+              "arrival_age_p50_ms": [
+                0.1,
+                0.2,
+                0.2
+              ],
+              "arrival_age_p99_ms": [
+                0.4,
+                0.3,
+                0.3
+              ],
+              "freshest_state_age_p99_ms": [
+                17.7,
+                17.5,
+                16.7
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                2,
+                2,
+                2
+              ],
+              "arrival_age_p50_ms": [
+                0.2,
+                0.1,
+                0.2
+              ],
+              "arrival_age_p99_ms": [
+                0.3,
+                0.3,
+                0.3
+              ],
+              "freshest_state_age_p99_ms": [
+                16.9,
+                17.6,
+                17.7
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "websocket-tls": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                1,
+                1,
+                1
+              ],
+              "arrival_age_p50_ms": [
+                0.2,
+                0.2,
+                0.2
+              ],
+              "arrival_age_p99_ms": [
+                0.4,
+                0.4,
+                0.3
+              ],
+              "freshest_state_age_p99_ms": [
+                17.7,
+                17.6,
+                17.7
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          "jitter": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                4982,
+                5049,
+                1380
+              ],
+              "arrival_age_p50_ms": [
+                111.9,
+                112.6,
+                100.5
+              ],
+              "arrival_age_p99_ms": [
+                179.2,
+                179.5,
+                169.0
+              ],
+              "freshest_state_age_p99_ms": [
+                180.0,
+                180.3,
+                167.5
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                1448,
+                1455,
+                1473
+              ],
+              "arrival_age_p50_ms": [
+                101.4,
+                102.0,
+                102.0
+              ],
+              "arrival_age_p99_ms": [
+                1414.0,
+                1420.2,
+                1438.9
+              ],
+              "freshest_state_age_p99_ms": [
+                1401.2,
+                1401.8,
+                1421.2
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "websocket-tls": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                1296,
+                1298,
+                1389
+              ],
+              "arrival_age_p50_ms": [
+                102.2,
+                101.9,
+                101.8
+              ],
+              "arrival_age_p99_ms": [
+                1262.2,
+                1263.6,
+                1355.1
+              ],
+              "freshest_state_age_p99_ms": [
+                1240.5,
+                1241.5,
+                1340.3
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          "loss": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                648,
+                1152,
+                3735
+              ],
+              "arrival_age_p50_ms": [
+                40.3,
+                40.3,
+                49.8
+              ],
+              "arrival_age_p99_ms": [
+                53.3,
+                57.5,
+                86.4
+              ],
+              "freshest_state_age_p99_ms": [
+                72.3,
+                69.2,
+                109.1
+              ],
+              "missing_of_240": [
+                9,
+                7,
+                14
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                1008,
+                960,
+                1141
+              ],
+              "arrival_age_p50_ms": [
+                40.5,
+                40.3,
+                40.2
+              ],
+              "arrival_age_p99_ms": [
+                975.8,
+                925.6,
+                1106.6
+              ],
+              "freshest_state_age_p99_ms": [
+                961.7,
+                901.4,
+                1081.7
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "websocket-tls": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                2903,
+                3766,
+                3413
+              ],
+              "arrival_age_p50_ms": [
+                1240.7,
+                1782.4,
+                2075.7
+              ],
+              "arrival_age_p99_ms": [
+                2869.4,
+                3732.2,
+                3378.2
+              ],
+              "freshest_state_age_p99_ms": [
+                2861.5,
+                3721.4,
+                3361.4
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          "reorder": {
+            "datagram": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                6041,
+                5927,
+                6040
+              ],
+              "arrival_age_p50_ms": [
+                50.1,
+                53.6,
+                50.8
+              ],
+              "arrival_age_p99_ms": [
+                92.2,
+                112.4,
+                132.4
+              ],
+              "freshest_state_age_p99_ms": [
+                109.3,
+                117.1,
+                149.8
+              ],
+              "missing_of_240": [
+                6,
+                4,
+                7
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                4110,
+                5255,
+                4916
+              ],
+              "arrival_age_p50_ms": [
+                2520.7,
+                3558.4,
+                3219.7
+              ],
+              "arrival_age_p99_ms": [
+                4076.0,
+                5220.9,
+                4881.5
+              ],
+              "freshest_state_age_p99_ms": [
+                3961.8,
+                3961.8,
+                3962.0
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            },
+            "websocket-tls": {
+              "passed": [
+                true,
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                2993,
+                2446,
+                1808
+              ],
+              "arrival_age_p50_ms": [
+                1137.9,
+                627.1,
+                76.2
+              ],
+              "arrival_age_p99_ms": [
+                2958.7,
+                2411.4,
+                1773.6
+              ],
+              "freshest_state_age_p99_ms": [
+                2940.6,
+                2401.8,
+                1760.9
+              ],
+              "missing_of_240": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "final_relay_with_stock_client_2_repetitions": {
+        "note": "--client-packet-threshold 3: the upload hop keeps the stock packet rule, as a client that does not adapt would",
+        "results": {
+          "jitter": {
+            "datagram": {
+              "passed": [
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                6544,
+                5334
+              ],
+              "arrival_age_p50_ms": [
+                121.3,
+                111.6
+              ],
+              "arrival_age_p99_ms": [
+                188.8,
+                185.7
+              ],
+              "freshest_state_age_p99_ms": [
+                200.1,
+                180.9
+              ],
+              "missing_of_240": [
+                0,
+                0
+              ]
+            },
+            "stream": {
+              "passed": [
+                true,
+                true
+              ],
+              "bulk_1mib_ms": [
+                4707,
+                3543
+              ],
+              "arrival_age_p50_ms": [
+                3002.6,
+                1580.2
+              ],
+              "arrival_age_p99_ms": [
+                4679.8,
+                3509.3
+              ],
+              "freshest_state_age_p99_ms": [
+                3961.5,
+                3500.8
+              ],
+              "missing_of_240": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      }
+    },
+    "images_sha256": {
+      "mem3-relay": "14ea24e32cdd06d85c97a6e3b759428aec1093d2f6701a16ce6a5b67a17a6616",
+      "mem5-relay": "bbb840d21a6cad69ae0766a4d555b10a83f0120aeba19c10abe8e50f20a81ae1",
+      "state_freshness (previous)": "4ca1c6ec099cf13142172fa3c34aa1b541a44fdc9d44184e75a14076e172086e",
+      "state_freshness5": "761eec2c48249e545562108bcf3f1ee49474950f7480972c4ae05fb0ea957fe4",
+      "tls_front": "b1d69179dd3ae795c2e1ce9f79a24114001fea95d17e055af6ceff3d4cfe24dd"
+    }
+  },
+  "reordering_tolerance_change": {
+    "diagnosis": [
+      "Under jitter the relay and the test client each lost one or two of their first 1-RTT packets: the packet overtook the end of the handshake and the receiving quinn stack dropped it (its source carried a to-do to buffer these). The sender counted a congestion event on its first flight, cut the window from 12,000 to 8,400 bytes and left slow start for good.",
+      "After that, the packet-count loss rule (three later packets acknowledged) declared ordinary reordering as loss and kept cutting the window. Temporary counters showed 41 packet-rule losses on the relay for a 1 MiB transfer with zero real drops.",
+      "With the early loss excluded experimentally, the packet rule alone left the jittered 1 MiB transfer at 2.9 to 5.4 s; with both removed it took 1.47 s, the same as with delay and no jitter.",
+      "The upstream lead recorded earlier (quinn issue 2710, receive dedup window) is a different mechanism and does not apply at these rates."
+    ],
+    "changes": [
+      "vendor/quinn-proto: 1-RTT packets that arrive from the handshake peer before the handshake completes are copied and held (at most 16 packets and 14,720 bytes, the largest RFC 9002 initial window) and processed when it completes; released on close.",
+      "src/webtransport.rs: server_transport_config() sets packet_threshold(u32::MAX), so loss is detected by the RFC 9002 time threshold (9/8 RTT) only.",
+      "vendor/quinn-proto: the MTU black-hole detector ends a loss burst only on an ACK-driven pass, so timer-declared neighbours of one loss event are one burst. Preventive: found by review of the time-only setting, not reproduced.",
+      "examples/state_freshness.rs: --packet-threshold (default matches the relay) and the value in its report; scripts/freshness.py --client-packet-threshold; scripts/freshness-matrix.py --mtu, --client-packet-threshold and a jitter profile."
+    ],
+    "cost_checks": {
+      "plain_2_percent_loss_bulk_ms_packet_rule_3_vs_off_three_pairs": [
+        [
+          700,
+          673
+        ],
+        [
+          989,
+          1010
+        ],
+        [
+          624,
+          717
+        ]
+      ],
+      "saturation_throughput_final_vs_previous_image_paired_ratio": {
+        "private": [
+          1.0,
+          1.006,
+          1.004
+        ],
+        "room": [
+          0.999,
+          1.016,
+          1.007
+        ],
+        "mixed": [
+          1.012,
+          0.99,
+          0.95,
+          0.965,
+          0.995,
+          1.012
+        ],
+        "note": "first two of each from the image before the review fixes"
+      },
+      "capacity_100000_final_image": {
+        "ready_rss_mib": 1667.7,
+        "paced_cpu_seconds_per_400k": 5.31,
+        "round_trip_p50_p99_bound_ms": [
+          0.52,
+          4.19
+        ]
+      }
+    },
+    "review": "Three independent read-only reviews (protocol correctness, resources and security, loss detection), each finding re-checked by a second reader. No blocker. Applied: source-address check before holding, a packet-count cap beside the byte cap, release on close, the black-hole burst change, comment and option clean-ups. Not applied: reporting the hold time in ACK delay (one inflated RTT sample at most).",
+    "residual": [
+      "A relay-side change covers the relay as receiver of a client's first flight and the relay as sender. A browser's own sender and receiver are its own; with a stock-threshold client the jittered transfer still takes 3.5 to 4.7 s because the upload hop collapses.",
+      "The reorder profile displaces packets by 12 to 28 ms on a 40 ms round trip, beyond any fixed time threshold; reliable streams improve from about 6.0 to about 4.9 s and TLS WebSocket takes 1.8 to 3.0 s at the same MTU."
+    ],
+    "rejected": [
+      {
+        "change": "time_threshold 5/4 on relay and client (the quarter-round-trip window Linux RACK starts from)",
+        "bulk_1mib_ms_three_repetitions_mtu_1500": {
+          "jitter": {
+            "datagram": [
+              5070,
+              1402,
+              1417
+            ],
+            "stream": [
+              1490,
+              1477,
+              1486
+            ]
+          },
+          "loss": {
+            "datagram": [
+              2820,
+              755,
+              4007
+            ],
+            "stream": [
+              775,
+              2783,
+              1486
+            ]
+          },
+          "reorder": {
+            "datagram": [
+              3292,
+              5675,
+              6075
+            ],
+            "stream": [
+              3564,
+              2004,
+              5374
+            ]
+          }
+        },
+        "reading": "The slow jittered datagram-mode run stays slow (5,070 ms, same seed), 2% loss becomes more variable (775 / 2,783 / 1,486 ms against 1,008 / 960 / 1,141 ms at 9/8) and reorder is not clearly better. Reverted; do not repeat without new evidence."
+      }
+    ]
+  },
+  "deferred_cid_retirement": {
+    "diagnosis": "Packet-level tracing of the slow jittered runs showed the server sending its first 1-RTT packets to the client's handshake connection ID, switching to a new client ID as soon as one arrived (an upstream quinn behaviour that enables client stateless resets) and retiring the old ID in its next packet. When that packet overtook the earlier ones, the client endpoint removed the old ID from its routing table, received the earlier packet for an unknown ID, answered with a stateless reset that the server discarded as an invalid ID, and the server declared its first-flight packet lost, cut its window and left slow start. It occurred in both datagram and stream mode, in roughly a third of jittered runs.",
+    "change": "vendor/quinn-proto: Connection::update_rem_cid holds back the RETIRE_CONNECTION_ID for the old remote IDs until no ack-eliciting Data packet sent before the switch is outstanding; it is released from detect_lost_packets, which every ACK reaches. A peer's Retire Prior To releases held-back IDs at once, and two held-back ranges are merged only when adjacent. Upstream main still retires immediately.",
+    "review": "Two independent read-only reviews, each finding re-checked. A blocker was found and fixed before commit: merging non-adjacent deferrals as earlier.start..retired.end could re-retire IDs, and with a peer-chosen Retire Prior To and a migration could make the server allocate an unbounded vector. Also applied: release on Retire Prior To (RFC 9000 section 5.1.2), and waiting only for ack-eliciting packets.",
+    "tests": [
+      "server_retires_initial_client_cid_after_its_packets fails without the deferral",
+      "deferred_cid_retirement_with_retire_prior_to fails with the pre-review merge (a sequence retired twice)"
+    ],
+    "jitter_bulk_1mib_ms": {
+      "with_trace_build_before_fix_30_runs": [
+        1363,
+        4982,
+        5035,
+        1462,
+        1455,
+        1477,
+        4972,
+        1369,
+        5070,
+        4565,
+        1461,
+        4579,
+        1374,
+        1386,
+        1380,
+        1458,
+        1453,
+        4487,
+        1367,
+        5098,
+        5055,
+        4478,
+        1455,
+        1463,
+        4971,
+        1358,
+        1375,
+        1460,
+        1460,
+        4589
+      ],
+      "after_fix_24_runs": [
+        1390,
+        1377,
+        1375,
+        1461,
+        1458,
+        1452,
+        1358,
+        1378,
+        1373,
+        1458,
+        1453,
+        1454,
+        1365,
+        1377,
+        1427,
+        1452,
+        1469,
+        1463,
+        1442,
+        1362,
+        1387,
+        1465,
+        1461,
+        1459
+      ],
+      "note": "jitter profile: 50 ms each way, 3 ms jitter, no loss, MTU 1500; TLS WebSocket 1,280 to 1,389 ms"
+    },
+    "cost": {
+      "capacity_100000": {
+        "ready_rss_mib": 1673.8,
+        "paced_cpu_seconds_per_400k": 5.53,
+        "note": "about 3 MiB more, one 32-byte field per connection; paced CPU within this host's 5.31 to 5.53 s range"
+      },
+      "saturation_throughput_paired_ratio_vs_mem3": {
+        "private": [
+          1.005,
+          1.026
+        ],
+        "room": [
+          0.997,
+          1.018
+        ],
+        "mixed": [
+          0.989,
+          0.983
+        ]
+      }
+    },
+    "images_sha256": {
+      "mem7-relay": "a3b69130da4c45f869a4def75d634934788ac8462827d5b57d31e6585614e13c",
+      "state_freshness7": "5f1a7ff4780453d96cf8804fd90a9e78a0f4339214b37f8970f159f237b5e43b"
+    }
+  },
+  "worker_pinning_default_and_in_place_stream_reads": {
+    "question": "Do the two cheapest measured levers, default worker pinning and fewer receive-buffer reference-count updates, raise WebTransport delivery or lower its CPU?",
+    "workload": "Historical 2026-10-17 study shape: webtransport only, 4 relay workers on CPUs 0-3, inspection client on CPUs 4-11 with 8 workers, 8,192 idle rooms, 4 s measured window. Private: 64 pairs. Fanout: one room with 63 readers. Rotated arm order per repetition.",
+    "binaries": {
+      "head": {
+        "commit": "e8c8a1c",
+        "sha256": "125b3ab0bda6c7267cf67306a7a9ffa6f7b16bfa8e19325c24d1e00c2c4eba95"
+      },
+      "lev": {
+        "description": "e8c8a1c plus --pin-workers=auto default and Chunks::read_with",
+        "sha256": "41c6ab648d843da0bf0dbe32d21f9c59f8da47d0d5de02f9f47edf10e5c312cb"
+      }
+    },
+    "saturation": "Not CPU bound. With 4 pinned workers each worker thread used about 0.43 core, the ingress thread 0.17 and each client thread about 0.2 during fanout; the relay used 2.4-3.2 of 4 cores on private and 1.8 on fanout. Plaintext and proxied TLS WebSocket recorded 1.6-2.3 cores on the same workload. Delivery here is set by the closed-loop round trip, so shorter wake-ups (pinning) raise it.",
+    "pinning": {
+      "runs": [
+        {
+          "case": "private",
+          "arm": "unpinned",
+          "rep": 1,
+          "rate": 1239965,
+          "us": 1.978,
+          "cores": 2.452
+        },
+        {
+          "case": "private",
+          "arm": "pinned",
+          "rep": 1,
+          "rate": 1603759,
+          "us": 1.969,
+          "cores": 3.157
+        },
+        {
+          "case": "fanout",
+          "arm": "unpinned",
+          "rep": 1,
+          "rate": 1515994,
+          "us": 1.179,
+          "cores": 1.787
+        },
+        {
+          "case": "fanout",
+          "arm": "pinned",
+          "rep": 1,
+          "rate": 1527503,
+          "us": 1.165,
+          "cores": 1.78
+        },
+        {
+          "case": "private",
+          "arm": "pinned",
+          "rep": 2,
+          "rate": 1488417,
+          "us": 1.876,
+          "cores": 2.792
+        },
+        {
+          "case": "private",
+          "arm": "unpinned",
+          "rep": 2,
+          "rate": 1192413,
+          "us": 2.01,
+          "cores": 2.397
+        },
+        {
+          "case": "fanout",
+          "arm": "pinned",
+          "rep": 2,
+          "rate": 1557746,
+          "us": 1.151,
+          "cores": 1.792
+        },
+        {
+          "case": "fanout",
+          "arm": "unpinned",
+          "rep": 2,
+          "rate": 1538127,
+          "us": 1.162,
+          "cores": 1.787
+        },
+        {
+          "case": "private",
+          "arm": "unpinned",
+          "rep": 3,
+          "rate": 1378732,
+          "us": 2.101,
+          "cores": 2.897
+        },
+        {
+          "case": "private",
+          "arm": "pinned",
+          "rep": 3,
+          "rate": 1445945,
+          "us": 1.902,
+          "cores": 2.75
+        },
+        {
+          "case": "fanout",
+          "arm": "unpinned",
+          "rep": 3,
+          "rate": 1579858,
+          "us": 1.179,
+          "cores": 1.862
+        },
+        {
+          "case": "fanout",
+          "arm": "pinned",
+          "rep": 3,
+          "rate": 1592526,
+          "us": 1.176,
+          "cores": 1.872
+        }
+      ],
+      "private_pinned_vs_unpinned_per_repetition": [
+        1.293,
+        1.248,
+        1.049
+      ],
+      "fanout_pinned_vs_unpinned_per_repetition": [
+        1.008,
+        1.013,
+        1.008
+      ],
+      "cpu_per_delivery": "level or lower when pinned"
+    },
+    "combined": {
+      "runs": [
+        {
+          "case": "private",
+          "arm": "old-unpinned",
+          "rep": 1,
+          "rate": 1300821,
+          "us": 2.081,
+          "cores": 2.707
+        },
+        {
+          "case": "private",
+          "arm": "old-pinned",
+          "rep": 1,
+          "rate": 1516333,
+          "us": 1.884,
+          "cores": 2.857
+        },
+        {
+          "case": "private",
+          "arm": "new-default",
+          "rep": 1,
+          "rate": 1488498,
+          "us": 1.995,
+          "cores": 2.97
+        },
+        {
+          "case": "fanout",
+          "arm": "old-unpinned",
+          "rep": 1,
+          "rate": 1487558,
+          "us": 1.183,
+          "cores": 1.76
+        },
+        {
+          "case": "fanout",
+          "arm": "old-pinned",
+          "rep": 1,
+          "rate": 1561505,
+          "us": 1.202,
+          "cores": 1.877
+        },
+        {
+          "case": "fanout",
+          "arm": "new-default",
+          "rep": 1,
+          "rate": 1546968,
+          "us": 1.165,
+          "cores": 1.802
+        },
+        {
+          "case": "private",
+          "arm": "old-pinned",
+          "rep": 2,
+          "rate": 1515042,
+          "us": 2.034,
+          "cores": 3.082
+        },
+        {
+          "case": "private",
+          "arm": "new-default",
+          "rep": 2,
+          "rate": 1479132,
+          "us": 1.886,
+          "cores": 2.79
+        },
+        {
+          "case": "private",
+          "arm": "old-unpinned",
+          "rep": 2,
+          "rate": 1276717,
+          "us": 2.017,
+          "cores": 2.575
+        },
+        {
+          "case": "fanout",
+          "arm": "old-pinned",
+          "rep": 2,
+          "rate": 1582912,
+          "us": 1.202,
+          "cores": 1.902
+        },
+        {
+          "case": "fanout",
+          "arm": "new-default",
+          "rep": 2,
+          "rate": 1546830,
+          "us": 1.183,
+          "cores": 1.83
+        },
+        {
+          "case": "fanout",
+          "arm": "old-unpinned",
+          "rep": 2,
+          "rate": 1555826,
+          "us": 1.195,
+          "cores": 1.86
+        },
+        {
+          "case": "private",
+          "arm": "new-default",
+          "rep": 3,
+          "rate": 1421381,
+          "us": 1.899,
+          "cores": 2.699
+        },
+        {
+          "case": "private",
+          "arm": "old-unpinned",
+          "rep": 3,
+          "rate": 1243748,
+          "us": 2.04,
+          "cores": 2.537
+        },
+        {
+          "case": "private",
+          "arm": "old-pinned",
+          "rep": 3,
+          "rate": 1425421,
+          "us": 1.969,
+          "cores": 2.807
+        },
+        {
+          "case": "fanout",
+          "arm": "new-default",
+          "rep": 3,
+          "rate": 1500738,
+          "us": 1.216,
+          "cores": 1.825
+        },
+        {
+          "case": "fanout",
+          "arm": "old-unpinned",
+          "rep": 3,
+          "rate": 1481355,
+          "us": 1.193,
+          "cores": 1.767
+        },
+        {
+          "case": "fanout",
+          "arm": "old-pinned",
+          "rep": 3,
+          "rate": 1526646,
+          "us": 1.174,
+          "cores": 1.792
+        }
+      ],
+      "private_vs_old_unpinned_per_repetition": {
+        "old_pinned": [
+          1.166,
+          1.187,
+          1.146
+        ],
+        "new_default": [
+          1.144,
+          1.159,
+          1.143
+        ]
+      },
+      "fanout_vs_old_unpinned_per_repetition": {
+        "old_pinned": [
+          1.05,
+          1.017,
+          1.031
+        ],
+        "new_default": [
+          1.04,
+          0.994,
+          1.013
+        ]
+      },
+      "median_cpu_us_per_delivery": {
+        "private": {
+          "old_unpinned": 2.04,
+          "old_pinned": 1.969,
+          "new_default": 1.899
+        },
+        "fanout": {
+          "old_unpinned": 1.193,
+          "old_pinned": 1.202,
+          "new_default": 1.183
+        }
+      }
+    },
+    "in_place_reads_paired_pinned": {
+      "runs": [
+        {
+          "case": "private",
+          "arm": "old",
+          "rep": 1,
+          "rate": 1561912,
+          "us": 2.015,
+          "cores": 3.147
+        },
+        {
+          "case": "private",
+          "arm": "new",
+          "rep": 1,
+          "rate": 1382074,
+          "us": 2.072,
+          "cores": 2.864
+        },
+        {
+          "case": "private",
+          "arm": "new",
+          "rep": 2,
+          "rate": 1517760,
+          "us": 1.877,
+          "cores": 2.849
+        },
+        {
+          "case": "private",
+          "arm": "old",
+          "rep": 2,
+          "rate": 1497765,
+          "us": 1.921,
+          "cores": 2.877
+        },
+        {
+          "case": "private",
+          "arm": "old",
+          "rep": 3,
+          "rate": 1504406,
+          "us": 2.064,
+          "cores": 3.105
+        },
+        {
+          "case": "private",
+          "arm": "new",
+          "rep": 3,
+          "rate": 1489027,
+          "us": 2.033,
+          "cores": 3.027
+        },
+        {
+          "case": "private",
+          "arm": "new",
+          "rep": 4,
+          "rate": 1518357,
+          "us": 2.022,
+          "cores": 3.07
+        },
+        {
+          "case": "private",
+          "arm": "old",
+          "rep": 4,
+          "rate": 1523036,
+          "us": 2.04,
+          "cores": 3.107
+        },
+        {
+          "case": "private",
+          "arm": "old",
+          "rep": 5,
+          "rate": 1467051,
+          "us": 2.063,
+          "cores": 3.027
+        },
+        {
+          "case": "private",
+          "arm": "new",
+          "rep": 5,
+          "rate": 1508209,
+          "us": 2.022,
+          "cores": 3.049
+        }
+      ],
+      "private_new_vs_old_per_repetition": [
+        0.885,
+        1.013,
+        0.99,
+        0.997,
+        1.028
+      ],
+      "median": {
+        "old": {
+          "rate": 1504406,
+          "us": 2.04
+        },
+        "new": {
+          "rate": 1508209,
+          "us": 2.022
+        }
+      }
+    },
+    "profile": "perf cycles with frame pointers, 3 s of private routing, pinned, about 23,000 samples each. Share of relay samples in bytes reference-count functions fell from 6.55% to 4.26%: shared_v_clone 1.21% to 0.06% (its caller was Chunks::next splitting a chunk for the 4-byte record-length read), shared_v_drop 2.56% to 0.98%. Remaining updates are in packet decode (PartialDecode::finish split), UDP batch splitting, send-buffer release on acknowledgement and payload sharing in frame_chunks.",
+    "conclusion": "Pinning by default is retained: +14-16% private delivery against the old default at equal or lower CPU per delivery, fanout +0-4%. auto pins only when the allowed CPUs number exactly one per worker, so it partitions only CPUs the process was given. In-place stream reads are retained: delivery is level and CPU per delivery falls 1-4%. Legacy WebSocket stays unpinned by default; earlier runs showed no gain from pinning it.",
+    "limits": "One host with a desktop session; 3 or 5 repetitions of 4 s. One unpaired private outlier (0.885) in the in-place read check."
+  }
+}

@@ -87,19 +87,7 @@ pub async fn serve(
             .map_or(2, usize::from)
             .min(16)
     });
-    let worker_cores = if relay.config.pin_workers {
-        let mut cores = core_affinity::get_core_ids()
-            .context("cannot discover allowed CPUs for native worker affinity")?;
-        anyhow::ensure!(
-            cores.len() >= workers,
-            "pin-workers needs one allowed CPU per native worker: {} CPUs for {workers} workers",
-            cores.len()
-        );
-        cores.truncate(workers);
-        Some(cores)
-    } else {
-        None
-    };
+    let worker_cores = relay.config.worker_cores(workers)?;
     let mut prepared = Vec::new();
     prepared
         .try_reserve_exact(workers)
@@ -1492,20 +1480,20 @@ impl Drop for Connection {
     }
 }
 
-struct RateLimiter {
+pub(crate) struct RateLimiter {
     rates: [u64; 2],
     tokens: [f64; 2],
     updated: Instant,
 }
 impl RateLimiter {
-    fn new(messages: u64, bytes: u64, now: Instant) -> Self {
+    pub(crate) fn new(messages: u64, bytes: u64, now: Instant) -> Self {
         Self {
             rates: [messages, bytes],
             tokens: [messages as f64, bytes as f64],
             updated: now,
         }
     }
-    fn allow(&mut self, bytes: usize, now: Instant) -> bool {
+    pub(crate) fn allow(&mut self, bytes: usize, now: Instant) -> bool {
         if self.rates == [0, 0] {
             return true;
         }

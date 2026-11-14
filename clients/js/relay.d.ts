@@ -9,25 +9,37 @@ export type VariableResult<T = unknown> = { found: false; value: null } | { foun
 export type ChannelListing = Array<[Uint8Array, number | bigint]>;
 export interface RelayOptions {
   requestTimeoutMs?: number;
+  WebTransportClass?: typeof WebTransport;
+  serverCertificateHashes?: WebTransportHash[];
+  congestionControl?: WebTransportCongestionControl;
   WebSocketClass?: new (url: string | URL, protocols?: string | string[]) => WebSocket;
 }
 export interface RelayEventMap {
-  message: CustomEvent<{ sender: bigint; value: unknown }>;
+  message: CustomEvent<{ sender: bigint; value: unknown; unreliable?: true }>;
   disconnect: CustomEvent<{ userId: bigint }>;
   close: CustomEvent<{ code: number; reason: string }>;
   error: CustomEvent<unknown>;
 }
 
-/** Browser and Node 22+ client for war.cbor.v1. All received IDs are bigint. */
+export interface RelayTransport extends EventTarget {
+  readonly readyState: number;
+  send(bytes: Uint8Array): void;
+  close(code?: number, reason?: string): void;
+}
+
+/** WebTransport client; explicit ws URLs retain the legacy comparison path. */
 export class Relay extends EventTarget {
-  constructor(ws: WebSocket, userId: UserId, requestTimeoutMs?: number);
+  constructor(ws: RelayTransport, userId: UserId, requestTimeoutMs?: number);
   static connect(url: string | URL, channel: Channel, options?: RelayOptions): Promise<Relay>;
-  readonly ws: WebSocket;
+  readonly ws: RelayTransport;
   readonly userId: bigint;
   readonly ready: boolean;
   requestTimeoutMs: number;
   send(target: UserId, value: unknown): void;
   broadcast(value: unknown): void;
+  sendUnreliable(target: UserId, value: unknown): Promise<void>;
+  broadcastUnreliable(value: unknown): Promise<void>;
+  readonly maxDatagramSize: number;
   close(): void;
   request(op: number, value: unknown): Promise<unknown>;
   authenticate(password: string | Uint8Array): Promise<boolean>;

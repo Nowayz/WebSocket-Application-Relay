@@ -1,0 +1,1544 @@
+{
+  "status": "Retained as memory reduction with measured mixed-throughput cost; overall parity unmet",
+  "baseline_commit": "7a860f9",
+  "design": "Data packet space remains inline. Initial and Handshake storage live in separate boxes until final key discard, then become terminal None tombstones. Lookups never recreate retired spaces. Retry explicitly clears recovery and replaces Initial keys in existing live storage, retaining next_packet_number. In-flight removal and timer recomputation preserved.",
+  "rfc": "https://www.rfc-editor.org/rfc/rfc9002.html#section-6.4",
+  "layout": {
+    "prior_protocol_connection_bytes": 5728,
+    "candidate_protocol_connection_bytes": 4656,
+    "difference_bytes": 1072,
+    "scope": "Exact release quinn-proto rlib identified by Cargo compiler-artifact output and linked to size_of helper; complete relay memory impact requires capacity/heap measurement."
+  },
+  "verification": {
+    "relay_tests": 274,
+    "proto_tests": 319,
+    "focused_cases": [
+      "Terminal retirement preserves Data packet number, crypto offset, dedup history",
+      "Replayed early packets after confirmation preserve bidirectional application datagrams"
+    ],
+    "clippy": "Final version passed",
+    "vendor": "272 files / 5 pinned published archives / 4 declared patches verified"
+  },
+  "pending": [],
+  "parity": "Not achieved.",
+  "ordinary_reliable": {
+    "private": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-private-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-private-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-private-event-batch-3.json"
+        ],
+        "rates": [
+          1478027.6145445928,
+          1397976.028369931,
+          1450736.9459978952
+        ],
+        "median": 1450736.9459978952,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 1450736.9459978952,
+            "p99_upper_ms": [
+              1.048576,
+              1.048576,
+              1.048576
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          13.38,
+          13.28,
+          13.370000000000001
+        ],
+        "client_cpu_seconds": [
+          19.189999999999998,
+          18.77,
+          19.759999999999998
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-private-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-private-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-private-packet-spaces-3.json"
+        ],
+        "rates": [
+          1454160.5904480068,
+          1430693.921941226,
+          1444476.1406488433
+        ],
+        "median": 1444476.1406488433,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 1444476.1406488433,
+            "p99_upper_ms": [
+              1.048576,
+              1.048576,
+              1.048576
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          13.38,
+          13.3,
+          13.360000000000001
+        ],
+        "client_cpu_seconds": [
+          19.88,
+          19.83,
+          19.62
+        ]
+      },
+      "change_percent": -0.4315603436118032
+    },
+    "roomonly": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-roomonly-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-roomonly-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-roomonly-event-batch-3.json"
+        ],
+        "rates": [
+          1410013.6726425947,
+          1394339.0945283761,
+          1487446.2932427353
+        ],
+        "median": 1410013.6726425947,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1410013.6726425947,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          12.39,
+          12.510000000000002,
+          12.360000000000001
+        ],
+        "client_cpu_seconds": [
+          18.45,
+          18.569999999999997,
+          18.330000000000002
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-roomonly-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-roomonly-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-roomonly-packet-spaces-3.json"
+        ],
+        "rates": [
+          1444511.1301264714,
+          1425956.139898686,
+          1434959.8664310127
+        ],
+        "median": 1434959.8664310127,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1434959.8664310127,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          12.450000000000001,
+          12.33,
+          12.38
+        ],
+        "client_cpu_seconds": [
+          18.439999999999998,
+          18.02,
+          18.56
+        ]
+      },
+      "change_percent": 1.7692164460834547
+    },
+    "mixed": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-mixed-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-mixed-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-mixed-event-batch-3.json"
+        ],
+        "rates": [
+          1477794.4241638877,
+          1412722.6441474548,
+          1442555.6269059225
+        ],
+        "median": 1442555.6269059225,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 368210.8789179362,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1074344.7479879863,
+            "p99_upper_ms": [
+              8.388608,
+              8.388608,
+              8.388608
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          13.78,
+          13.889999999999999,
+          13.81
+        ],
+        "client_cpu_seconds": [
+          19.85,
+          20.049999999999997,
+          20.02
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-mixed-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-mixed-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-mixed-packet-spaces-3.json"
+        ],
+        "rates": [
+          1427738.08566237,
+          1391760.8018501517,
+          1412953.5464018597
+        ],
+        "median": 1412953.5464018597,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 361572.27236865053,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1051381.2740332093,
+            "p99_upper_ms": [
+              8.388608,
+              8.388608,
+              8.388608
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          13.799999999999999,
+          13.83,
+          13.84
+        ],
+        "client_cpu_seconds": [
+          19.439999999999998,
+          19.38,
+          19.91
+        ]
+      },
+      "change_percent": -2.052058163438386
+    }
+  },
+  "capacity": {
+    "event-batch": {
+      "receipt": "artifacts/webtransport/packet-spaces-capacity-event-batch-1.json",
+      "server_sha256": "a43f45b4ba16a0faf785a7b3e80d420b71448278d18086a04abbc4be3fb49f4d",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2357.12890625,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.264719340993906,
+        "server_cpu_seconds": 6.84,
+        "client_cpu_seconds": 7.279999999999998,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99706.67828239499,
+        "server_user_cpu_seconds": 5.619999999999997,
+        "server_system_cpu_seconds": 1.2199999999999998,
+        "round_trip": {
+          "max_ms": 10.256255,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.779943,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "setup_seconds": 11.321163039,
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    },
+    "packet-spaces": {
+      "receipt": "artifacts/webtransport/packet-spaces-capacity-packet-spaces-1.json",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2256.81640625,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.266356409993023,
+        "server_cpu_seconds": 6.699999999999999,
+        "client_cpu_seconds": 7.399999999999999,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99663.57712401384,
+        "server_user_cpu_seconds": 5.529999999999998,
+        "server_system_cpu_seconds": 1.17,
+        "round_trip": {
+          "max_ms": 3.815155,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.567509,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "setup_seconds": 11.460128524,
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    }
+  },
+  "candidate_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+  "heap": {
+    "receipt": "artifacts/webtransport/packet-spaces-heap-100000.json",
+    "analysis": "artifacts/webtransport/packet-spaces-heap-100000-sites.json",
+    "passed": true,
+    "requested_ready_bytes": 2192201779,
+    "unresolved_bytes": 0,
+    "largest_sites": [
+      {
+        "offset": "0x25207c",
+        "function": "quinn::endpoint::EndpointInner::accept",
+        "location": "quinn.529f723b385a6b01-cgu.0:?",
+        "objects": 100000,
+        "bytes": 534400000,
+        "mean_bytes": 5344.0
+      },
+      {
+        "offset": "0x3a6f49",
+        "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+        "location": "??:?",
+        "objects": 400032,
+        "bytes": 230418432,
+        "mean_bytes": 576.0
+      },
+      {
+        "offset": "0x588452",
+        "function": "war_relay::main::{{closure}}",
+        "location": "war_relay.dda031fd2e8ee20-cgu.0:?",
+        "objects": 100000,
+        "bytes": 192000000,
+        "mean_bytes": 1920.0
+      }
+    ],
+    "scope": "Replacement-allocator diagnostic; ordinary RSS and CPU measured separately."
+  },
+  "long_reliable": {
+    "private": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-private-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-long-private-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-long-private-event-batch-3.json"
+        ],
+        "rates": [
+          1462287.3594481335,
+          1419371.2344982957,
+          1428655.8961215036
+        ],
+        "median": 1428655.8961215036,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 1428655.8961215036,
+            "p99_upper_ms": [
+              1.048576,
+              1.048576,
+              1.048576
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          40.1,
+          39.85,
+          39.97
+        ],
+        "client_cpu_seconds": [
+          58.65,
+          58.410000000000004,
+          58.260000000000005
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-private-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-long-private-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-long-private-packet-spaces-3.json"
+        ],
+        "rates": [
+          1328048.3572049853,
+          1427565.4800939641,
+          1433313.8402472178
+        ],
+        "median": 1427565.4800939641,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 1427565.4800939641,
+            "p99_upper_ms": [
+              1.048576,
+              1.048576,
+              1.048576
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          39.38,
+          39.97,
+          40.09
+        ],
+        "client_cpu_seconds": [
+          55.39,
+          60.34,
+          59.9
+        ]
+      },
+      "change_percent": -0.07632460906084049
+    },
+    "roomonly": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-roomonly-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-long-roomonly-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-long-roomonly-event-batch-3.json"
+        ],
+        "rates": [
+          1395507.5881417503,
+          1395798.0779229982,
+          1473748.8131030882
+        ],
+        "median": 1395798.0779229982,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1395798.0779229982,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          37.78,
+          37.650000000000006,
+          37.25
+        ],
+        "client_cpu_seconds": [
+          54.48,
+          54.839999999999996,
+          54.63999999999999
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-roomonly-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-long-roomonly-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-long-roomonly-packet-spaces-3.json"
+        ],
+        "rates": [
+          1256896.0632457738,
+          1451963.9094264854,
+          1424290.8325077004
+        ],
+        "median": 1424290.8325077004,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 0.0,
+            "p99_upper_ms": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1424290.8325077004,
+            "p99_upper_ms": [
+              8.388608,
+              4.194304,
+              4.194304
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          37.31,
+          37.62,
+          37.6
+        ],
+        "client_cpu_seconds": [
+          52.65,
+          54.83,
+          56.269999999999996
+        ]
+      },
+      "change_percent": 2.0413235291956155
+    },
+    "mixed": {
+      "event-batch": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-mixed-event-batch-1.json",
+          "artifacts/webtransport/packet-spaces-long-mixed-event-batch-2.json",
+          "artifacts/webtransport/packet-spaces-long-mixed-event-batch-3.json"
+        ],
+        "rates": [
+          1381348.4393907175,
+          1408986.4793024142,
+          1410246.3941987175
+        ],
+        "median": 1408986.4793024142,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 363354.0251476537,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1040995.6016271778,
+            "p99_upper_ms": [
+              8.388608,
+              8.388608,
+              8.388608
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          41.57,
+          41.39,
+          41.55
+        ],
+        "client_cpu_seconds": [
+          58.67,
+          59.15,
+          57.32
+        ]
+      },
+      "packet-spaces": {
+        "receipts": [
+          "artifacts/webtransport/packet-spaces-long-mixed-packet-spaces-1.json",
+          "artifacts/webtransport/packet-spaces-long-mixed-packet-spaces-2.json",
+          "artifacts/webtransport/packet-spaces-long-mixed-packet-spaces-3.json"
+        ],
+        "rates": [
+          1460438.8128742627,
+          1374594.9222955965,
+          1393497.8237639463
+        ],
+        "median": 1393497.8237639463,
+        "components": {
+          "healthy": {
+            "median_verified_per_second": 361457.5327406898,
+            "p99_upper_ms": [
+              4.194304,
+              4.194304,
+              4.194304
+            ]
+          },
+          "fanout": {
+            "median_verified_per_second": 1032040.2910232565,
+            "p99_upper_ms": [
+              8.388608,
+              8.388608,
+              8.388608
+            ]
+          }
+        },
+        "server_cpu_seconds": [
+          41.23,
+          41.57,
+          41.54
+        ],
+        "client_cpu_seconds": [
+          60.3,
+          58.8,
+          59.92
+        ]
+      },
+      "change_percent": -1.0992763781620063
+    }
+  },
+  "interpretation": "Both cohorts passed; private throughput nearly unchanged in longer runs, room improved, mixed lower in both. Mixed private and fanout components both slightly lower rather than a large hidden composition shift; p99 histogram upper bounds unchanged across longer candidate mixed repeats. Memory saving verified; no overall throughput win or parity claim.",
+  "paced_reliable": [
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-mixed-high-stream-1.json",
+      "sha256": "d5826aa12441fb97ad70d1dec792b04f59fb3fc8cff3b1fc7020769b8d7cc3dc",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023831,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 13.060939,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023831
+          },
+          "verified_during_offer_per_second": 255858.5,
+          "expected_generated_deliveries": 1023831
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 17.42021,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1023268.0,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-mixed-high-stream-2.json",
+      "sha256": "9f1baf31824aeb524b4b422915f3c47a7bc351c9bdf2d4317303dd21af2619cd",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023918,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 14.049235,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023918
+          },
+          "verified_during_offer_per_second": 255808.0,
+          "expected_generated_deliveries": 1023918
+        },
+        "fanout": {
+          "verified_unique": 4094976,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 19.844878,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4094976
+          },
+          "verified_during_offer_per_second": 1023056.25,
+          "expected_generated_deliveries": 4094976
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-mixed-high-stream-3.json",
+      "sha256": "f077eaf0e00585d5a7430dda97eb7c4b6f5c32c3e299af866f112a74d4919867",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023790,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 19.176345,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023790
+          },
+          "verified_during_offer_per_second": 255830.0,
+          "expected_generated_deliveries": 1023790
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 26.047252,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1023401.0,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-private-high-stream-1.json",
+      "sha256": "b791451dd95ce41060146e1a46e6dd2c6c45a53e0dfbc8f07e989703e1e4f5e7",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4094480,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 17.310833,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "samples": 4094480
+          },
+          "verified_during_offer_per_second": 1023513.5,
+          "expected_generated_deliveries": 4094480
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0,
+          "expected_generated_deliveries": 0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-private-high-stream-2.json",
+      "sha256": "c86a555e0695ff9f0e6cefc07e1e5374419a92228805e2be7c703d1959997e85",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4095291,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 5.752515,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095291
+          },
+          "verified_during_offer_per_second": 1023616.5,
+          "expected_generated_deliveries": 4095291
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0,
+          "expected_generated_deliveries": 0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-paced-private-high-stream-3.json",
+      "sha256": "26259913c9847e9fcd9fce717944a6c113969d14aecb5ffaf82deaf1e30a27f3",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4095838,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 4.793049,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095838
+          },
+          "verified_during_offer_per_second": 1023507.0,
+          "expected_generated_deliveries": 4095838
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0,
+          "expected_generated_deliveries": 0
+        }
+      }
+    }
+  ],
+  "datagram_controls": [
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-event-batch-1.json",
+      "sha256": "a76cf95914baae0d91133581fe9efdb802dec6c5cf0e14a80e2109299bdbd9ec",
+      "server_sha256": "a43f45b4ba16a0faf785a7b3e80d420b71448278d18086a04abbc4be3fb49f4d",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1019028,
+          "unreceived_within_window": 4749,
+          "arrival_age": {
+            "max_ms": 47.155718,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1019028
+          },
+          "verified_during_offer_per_second": 254757.0,
+          "expected_generated_deliveries": 1023777
+        },
+        "fanout": {
+          "verified_unique": 4079305,
+          "unreceived_within_window": 16695,
+          "arrival_age": {
+            "max_ms": 45.524049,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4079305
+          },
+          "verified_during_offer_per_second": 1019486.0,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-event-batch-2.json",
+      "sha256": "87702666a8a61211b2e67e1a89ca0b833e74426fa343cf2d42442f5eb1ebac82",
+      "server_sha256": "a43f45b4ba16a0faf785a7b3e80d420b71448278d18086a04abbc4be3fb49f4d",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1021484,
+          "unreceived_within_window": 2311,
+          "arrival_age": {
+            "max_ms": 12.6434,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1021484
+          },
+          "verified_during_offer_per_second": 255340.0,
+          "expected_generated_deliveries": 1023795
+        },
+        "fanout": {
+          "verified_unique": 4086537,
+          "unreceived_within_window": 9463,
+          "arrival_age": {
+            "max_ms": 16.004225,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4086537
+          },
+          "verified_during_offer_per_second": 1021258.25,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-event-batch-3.json",
+      "sha256": "0331efdb174874a4605fb9b4d7fd7948e05f799b60978172cfbb3151795b1f84",
+      "server_sha256": "a43f45b4ba16a0faf785a7b3e80d420b71448278d18086a04abbc4be3fb49f4d",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1021666,
+          "unreceived_within_window": 2143,
+          "arrival_age": {
+            "max_ms": 21.699651,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 16.777216,
+            "samples": 1021666
+          },
+          "verified_during_offer_per_second": 255172.25,
+          "expected_generated_deliveries": 1023809
+        },
+        "fanout": {
+          "verified_unique": 4090570,
+          "unreceived_within_window": 5430,
+          "arrival_age": {
+            "max_ms": 53.213954,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4090570
+          },
+          "verified_during_offer_per_second": 1021566.0,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-packet-spaces-1.json",
+      "sha256": "558ccb2184201a1bebd29b953caee4c1d5a327f456a7e2bf3bcc46363046e80e",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023776,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 15.855019,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023776
+          },
+          "verified_during_offer_per_second": 255928.25,
+          "expected_generated_deliveries": 1023776
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 15.384761,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1023386.75,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-packet-spaces-2.json",
+      "sha256": "48ee3003abd59bdcd03f71969158f14721068839f6ab6bbdb40df8ac183be1f1",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1021904,
+          "unreceived_within_window": 2041,
+          "arrival_age": {
+            "max_ms": 16.708678,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1021904
+          },
+          "verified_during_offer_per_second": 255349.75,
+          "expected_generated_deliveries": 1023945
+        },
+        "fanout": {
+          "verified_unique": 4089258,
+          "unreceived_within_window": 6742,
+          "arrival_age": {
+            "max_ms": 21.38125,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4089258
+          },
+          "verified_during_offer_per_second": 1021573.5,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/packet-spaces-dg-control-packet-spaces-3.json",
+      "sha256": "5949f0a1c170bd75e3a5f574bb0f9d7f6a73a78fe7a9be57a93c79f30f59f919",
+      "server_sha256": "6220db155dab5a38b670454bd7e3451793c09234002f2110c1624efb47b5fa05",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023864,
+          "unreceived_within_window": 69,
+          "arrival_age": {
+            "max_ms": 21.547914,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023864
+          },
+          "verified_during_offer_per_second": 255899.5,
+          "expected_generated_deliveries": 1023933
+        },
+        "fanout": {
+          "verified_unique": 4093922,
+          "unreceived_within_window": 2078,
+          "arrival_age": {
+            "max_ms": 18.118701,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4093922
+          },
+          "verified_during_offer_per_second": 1022788.25,
+          "expected_generated_deliveries": 4096000
+        }
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "path": "artifacts/webtransport/packet-spaces-reliable-event-batch-server-symbols.txt",
+      "sha256": "2b54543b6a616ae4b9a4f30cf713e592165cd164203e0d6563a7c179de187e6d",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.37%  event-batch-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "2.59%  event-batch-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.59%  event-batch-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "2.34%  [kernel.kallsyms]  [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.16%  [kernel.kallsyms]  [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.00%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.92%  event-batch-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "1.90%  event-batch-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.88%  [kernel.kallsyms]  [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "1.83%  event-batch-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.61%  event-batch-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.53%  libc.so.6          [.] 0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -",
+        "1.42%  libc.so.6          [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+        "1.32%  [kernel.kallsyms]  [k] __udp_enqueue_schedule_skb                                                                                                                                                                                                                                                               -      -",
+        "1.21%  event-batch-relay  [.] war_relay::webtransport::queue::Receiver<T,O>::recv_with_idle_map::{{closure}}                                                                                                                                                                                                           -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/packet-spaces-reliable-event-batch-client-symbols.txt",
+      "sha256": "a36bf00b5873a9ad545c6bba4099a3b043f6a75bd398e4591b4a3b44993ec074",
+      "lost_samples": 0,
+      "leading_rows": [
+        "4.23%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.39%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "2.96%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "2.95%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "2.10%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.99%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.78%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.74%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.42%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+        "1.40%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.36%  inspection         [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.34%  inspection         [.] quinn_proto::connection::Connection::handle_decode                                                                                                                                                                                                                                       -      -",
+        "1.29%  [kernel.kallsyms]  [k] __check_object_size                                                                                                                                                                                                                                                                      -      -",
+        "1.25%  inspection         [.] tokio::runtime::time::<impl tokio::runtime::time::handle::Handle>::reregister                                                                                                                                                                                                            -      -",
+        "1.14%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/packet-spaces-reliable-packet-spaces-server-symbols.txt",
+      "sha256": "c3b0c0f604d501b80bdd4d2c5020e36bb562e3da14cf482f1152c652d39c357a",
+      "lost_samples": 0,
+      "leading_rows": [
+        "4.02%  packet-spaces-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "2.93%  packet-spaces-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.84%  [kernel.kallsyms]    [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.64%  [kernel.kallsyms]    [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.22%  packet-spaces-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "2.14%  [kernel.kallsyms]    [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "2.10%  packet-spaces-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "2.02%  [kernel.kallsyms]    [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.93%  packet-spaces-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.83%  packet-spaces-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.58%  packet-spaces-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.51%  libc.so.6            [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+        "1.40%  [kernel.kallsyms]    [k] __udp_enqueue_schedule_skb                                                                                                                                                                                                                                                               -      -",
+        "1.21%  libc.so.6            [.] 0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -",
+        "1.14%  libc.so.6            [.] 0x00000000000a79b9                                                                                                                                                                                                                                                                       -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/packet-spaces-reliable-packet-spaces-client-symbols.txt",
+      "sha256": "a841c82ab7f1dd344e037cafa448cfe32999a0fcad7d05febd87eb4751ba21fb",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.83%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.65%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "3.27%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "3.22%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "2.21%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.89%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.68%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.56%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.46%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.44%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.43%  [kernel.kallsyms]  [k] __check_object_size                                                                                                                                                                                                                                                                      -      -",
+        "1.37%  inspection         [.] ring::aead::aes_gcm::open                                                                                                                                                                                                                                                                -      -",
+        "1.29%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+        "1.28%  inspection         [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.26%  inspection         [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -"
+      ]
+    }
+  ],
+  "freshness": [
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/clean-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 0.456158,
+          "p50_ms": 0.225074,
+          "p99_ms": 0.418959,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.332991,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.001792853,
+        "freshest_state_age": {
+          "max_ms": 17.730011,
+          "p50_ms": 9.904889,
+          "p99_ms": 17.602064,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.30033,
+          "p50_ms": 1.042966,
+          "p99_ms": 1.7448819999999998,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 1
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/clean-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.184564,
+          "p50_ms": 0.234445,
+          "p99_ms": 0.408609,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.1442959999999998,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.000826477,
+        "freshest_state_age": {
+          "max_ms": 17.087137,
+          "p50_ms": 9.625527,
+          "p99_ms": 16.664228,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.356831,
+          "p50_ms": 1.122768,
+          "p99_ms": 2.175531,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/clean-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 0.40182,
+          "p50_ms": 0.207794,
+          "p99_ms": 0.325792,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1.365785,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001336686,
+        "freshest_state_age": {
+          "max_ms": 17.684352,
+          "p50_ms": 10.184742,
+          "p99_ms": 17.512046,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.16447,
+          "p50_ms": 1.3159020000000001,
+          "p99_ms": 2.0803879999999997,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/loss-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 79.277741,
+          "p50_ms": 40.207111,
+          "p99_ms": 53.126163,
+          "samples": 349
+        },
+        "bulk_arrival_ms": 775.505017,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.002218349,
+        "freshest_state_age": {
+          "max_ms": 80.4797,
+          "p50_ms": 50.193988,
+          "p99_ms": 65.809753,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.263013,
+          "p50_ms": 1.345759,
+          "p99_ms": 2.248949,
+          "samples": 360
+        },
+        "missing": 11,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 349,
+        "updates_before_bulk": 43
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/loss-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1528.365233,
+          "p50_ms": 40.565992,
+          "p99_ms": 1479.244318,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1529.4895849999998,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.034160574,
+        "freshest_state_age": {
+          "max_ms": 1520.618109,
+          "p50_ms": 53.313529,
+          "p99_ms": 1461.482978,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.175504,
+          "p50_ms": 1.0937620000000001,
+          "p99_ms": 2.062088,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 77,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/loss-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1254.910687,
+          "p50_ms": 40.479035,
+          "p99_ms": 1205.177957,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1255.675978,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.033874025,
+        "freshest_state_age": {
+          "max_ms": 1241.75891,
+          "p50_ms": 53.267791,
+          "p99_ms": 1181.488967,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.190409,
+          "p50_ms": 1.1728489999999998,
+          "p99_ms": 2.132568,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 63,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/reorder-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 95.942657,
+          "p50_ms": 51.69124,
+          "p99_ms": 86.33772,
+          "samples": 353
+        },
+        "bulk_arrival_ms": 6570.14159,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.573431838,
+        "freshest_state_age": {
+          "max_ms": 103.790178,
+          "p50_ms": 59.895461,
+          "p99_ms": 97.090717,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 1.994071,
+          "p50_ms": 1.029813,
+          "p99_ms": 1.933024,
+          "samples": 360
+        },
+        "missing": 7,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 27,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 4,
+        "rate": 60,
+        "received_unique": 353,
+        "updates_before_bulk": 353
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/reorder-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 6219.433003,
+          "p50_ms": 3851.738365,
+          "p99_ms": 6168.957482,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 6219.341555,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 7.505378468,
+        "freshest_state_age": {
+          "max_ms": 6000.365966,
+          "p50_ms": 3001.481458,
+          "p99_ms": 5941.04675,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.452967,
+          "p50_ms": 1.301174,
+          "p99_ms": 2.354788,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 301,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-packet-spaces/reorder-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 630.673164,
+          "p50_ms": 41.512428,
+          "p99_ms": 580.141655,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 631.4363539999999,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.024504086,
+        "freshest_state_age": {
+          "max_ms": 620.809654,
+          "p50_ms": 50.013863,
+          "p99_ms": 561.683822,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.562006,
+          "p50_ms": 1.301365,
+          "p99_ms": 2.3070730000000004,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 32,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    }
+  ],
+  "decision": "Retain 100.31 MiB ordinary ready RSS reduction and 1072-byte reduction per Quinn connection allocation. Mixed throughput fell 2.05% initially and 1.10% in longer cohort; preserve this cost, do not claim overall throughput improvement. Candidate acceptance checks passed.",
+  "browser": {
+    "checks_passed": 9,
+    "browser": "Chrome/156.0.0.0",
+    "snapshot": "artifacts/webtransport/packet-spaces-browser-snapshot.txt",
+    "screenshot": "output/playwright/packet-spaces.png",
+    "screenshot_sha256": "c25584b415b2b2db88a53dcb2385ec7b7d46ec1bf29f3378411a8c19a323b3b9",
+    "cleanup": "artifacts/webtransport/packet-spaces-browser-cleanup.json",
+    "cleanup_passed": true,
+    "includes_5_mib_exact_application_message": true
+  },
+  "remaining_goal": [
+    "Reach native WebSocket throughput parity on matched private/room/mixed reliable and datagram workloads",
+    "Reach memory parity at 100000 sessions; retained QUIC RSS remains about 2.2 GiB",
+    "Profile larger task, crypto and remaining protocol-state allocations"
+  ],
+  "limits": [
+    "Local Linux loopback, shared host; repeated samples vary. Initial and longer medians retained separately.",
+    "One ordinary capacity pair; setup and CPU changes do not establish repeatable improvements. Two temporary allocations per connection added for Initial and Handshake storage.",
+    "Allocator capture is separate from ordinary timing/RSS; kernel accounting is separate and incomplete in linked capacity receipts.",
+    "Datagram missing means not received during observation; paired candidate missing counts lower in three repetitions does not establish general reliability improvement.",
+    "Freshness is one repetition per profile/mode; TLS WebSocket fixture is not native WebSocket parity evidence."
+  ],
+  "source_sha256": {
+    "vendor/quinn-proto/src/connection/mod.rs": "b7793ae7fbae2d8126d6c3121ff065b5d74228943c3f5c73d32f87c7754a7457",
+    "vendor/quinn-proto/src/connection/spaces.rs": "4393986888aaa8aa4c81a2c56116ad9132f9a485c25e55e94d63f0d26a745182",
+    "vendor/quinn-proto/src/connection/packet_crypto.rs": "3aa8212f54bbe2a9e0c88571ae2066e331c7bea5e7ad1888deef777602aa7ffd",
+    "vendor/quinn-proto/src/packet.rs": "6894c1cc798f1301d60fe05d4974633b319896f04cc0ee9caa710eb3c1d17b4e",
+    "vendor/quinn-proto/src/tests/mod.rs": "3d98d3685782f6c62fd6c746ac960f567a7c95856ed0eb82eb2c49692a90e469"
+  },
+  "reproduction_scripts": {
+    "artifacts/webtransport/packet-spaces-edit.py": {
+      "sha256": "4d3bfd091553a85acb155439d549e27f4c53a89c7fa613143631afbb60754395",
+      "source": "from pathlib import Path\nout=Path('artifacts/webtransport')\nfor name in ['spaces.rs','mod.rs','packet_crypto.rs']:\n p=Path('vendor/quinn-proto/src/connection')/name;(out/('packet-spaces-before-'+name)).write_bytes(p.read_bytes())\np=Path('vendor/quinn-proto/src/connection/spaces.rs');s=p.read_text();a=s.index('impl Index<SpaceId> for [PacketSpace; 3]');b=s.index('/// Represents one or more packets',a)\ns=s[:a]+'''/// Data stays inline. Earlier spaces own transient state until final key\n/// retirement; None is a tombstone, never a request to allocate a new space.\npub(super) struct PacketSpaces {\n    initial: Option<Box<PacketSpace>>,\n    handshake: Option<Box<PacketSpace>>,\n    data: PacketSpace,\n}\n\nimpl PacketSpaces {\n    pub(super) fn new(initial: PacketSpace, now: Instant) -> Self {\n        Self {\n            initial: Some(Box::new(initial)),\n            handshake: Some(Box::new(PacketSpace::new(now))),\n            data: PacketSpace::new(now),\n        }\n    }\n\n    pub(super) fn get(&self, id: SpaceId) -> Option<&PacketSpace> {\n        match id {\n            SpaceId::Initial => self.initial.as_deref(),\n            SpaceId::Handshake => self.handshake.as_deref(),\n            SpaceId::Data => Some(&self.data),\n        }\n    }\n\n    pub(super) fn get_mut(&mut self, id: SpaceId) -> Option<&mut PacketSpace> {\n        match id {\n            SpaceId::Initial => self.initial.as_deref_mut(),\n            SpaceId::Handshake => self.handshake.as_deref_mut(),\n            SpaceId::Data => Some(&mut self.data),\n        }\n    }\n\n    pub(super) fn has_keys(&self, id: SpaceId) -> bool {\n        self.get(id).is_some_and(|space| space.crypto.is_some())\n    }\n\n    pub(super) fn retire(&mut self, id: SpaceId) {\n        match id {\n            SpaceId::Initial => { self.initial.take(); }\n            SpaceId::Handshake => { self.handshake.take(); }\n            SpaceId::Data => panic!(\"application packet space cannot be retired\"),\n        }\n    }\n}\n\nimpl Index<SpaceId> for PacketSpaces {\n    type Output = PacketSpace;\n    fn index(&self, space: SpaceId) -> &PacketSpace {\n        self.get(space).expect(\"packet space already retired\")\n    }\n}\n\nimpl IndexMut<SpaceId> for PacketSpaces {\n    fn index_mut(&mut self, space: SpaceId) -> &mut PacketSpace {\n        self.get_mut(space).expect(\"packet space already retired\")\n    }\n}\n\n'''+s[b:];p.write_text(s)\np=Path('vendor/quinn-proto/src/connection/mod.rs');s=p.read_text();s=s.replace('PacketNumberFilter, PacketSpace, SendableFrames','PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames');s=s.replace('spaces: [PacketSpace; 3],','spaces: PacketSpaces,');s=s.replace('spaces: [initial_space, PacketSpace::new(now), PacketSpace::new(now)],','spaces: PacketSpaces::new(initial_space, now),')\ns=s.replace('''            self.spaces[space].maybe_queue_probe(request_immediate_ack, &self.streams);''','''            if let Some(space) = self.spaces.get_mut(space) {\n                space.maybe_queue_probe(request_immediate_ack, &self.streams);\n            }''')\ns=s.replace('self.spaces[space_id].crypto.is_none()', '!self.spaces.has_keys(space_id)')\ns=s.replace('self.spaces[SpaceId::Initial].crypto.is_some()', 'self.spaces.has_keys(SpaceId::Initial)')\ns=s.replace('self.spaces[SpaceId::Handshake].crypto.is_some()', 'self.spaces.has_keys(SpaceId::Handshake)')\ns=s.replace('self.spaces[SpaceId::Handshake].crypto.is_none()', '!self.spaces.has_keys(SpaceId::Handshake)')\ns=s.replace('.filter_map(|id| Some((self.spaces[id].loss_time?, id)))','.filter_map(|id| Some((self.spaces.get(id)?.loss_time?, id)))')\ns=s.replace('''            if !self.spaces[space].has_in_flight() {''','''            if !self.spaces.get(space).is_some_and(PacketSpace::has_in_flight) {''')\ns=s.replace('''        self.spaces[SpaceId::Handshake]\n            .largest_acked_packet\n            .is_some()''','''        self.spaces.get(SpaceId::Handshake)\n            .and_then(|space| space.largest_acked_packet)\n            .is_some()''')\n# Retry clears recovery state but explicitly retains its live Initial storage.\ns=s.replace('self.discard_space(now, SpaceId::Initial); // Make sure we clean up after any retransmitted Initials','self.clear_space(now, SpaceId::Initial); // Retry replaces keys, not final retirement')\ns=s.replace('''    fn discard_space(&mut self, now: Instant, space_id: SpaceId) {\n        debug_assert!''','''    fn discard_space(&mut self, now: Instant, space_id: SpaceId) {\n        self.clear_space(now, space_id);\n        self.spaces.retire(space_id);\n    }\n\n    fn clear_space(&mut self, now: Instant, space_id: SpaceId) {\n        debug_assert!''')\nneedle='''        let space = &mut self.spaces[space_id];\n        space.crypto = None;''';assert needle in s;s=s.replace(needle,'''        let Some(space) = self.spaces.get_mut(space_id) else { return; };\n        space.crypto = None;''',1)\ns=s.replace('self.spaces[SpaceId::Data as usize]', 'self.spaces[SpaceId::Data]');p.write_text(s)\np=Path('vendor/quinn-proto/src/connection/packet_crypto.rs');s=p.read_text().replace('use crate::connection::spaces::PacketSpace;', 'use crate::connection::spaces::PacketSpaces;').replace('spaces: &[PacketSpace; 3]', 'spaces: &PacketSpaces');s=s.replace('if let Some(ref crypto) = spaces[space].crypto {','if let Some(crypto) = spaces.get(space).and_then(|space| space.crypto.as_ref()) {');p.write_text(s)\n"
+    },
+    "artifacts/webtransport/packet-spaces-compare.py": {
+      "sha256": "bb530f195760c9111636b74ce976a7244694ee1b8d994f025ce0182bdf330b38",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['event-batch','packet-spaces'] if repeat!=2 else ['packet-spaces','event-batch']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'packet-spaces-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\nfor v in ['event-batch','packet-spaces']:\n a=json.loads((out/'owner-poll-capacity-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'packet-spaces-capacity-{v}-1.json').resolve()))\n for k in ['server','client','output','server_preload','user_latency_output','user_latency_histogram_output','pressure_client','kernel_slab_sizes']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n capacity.run(argparse.Namespace(**a));print('CAPACITY',v,flush=True)\n"
+    },
+    "artifacts/webtransport/packet-spaces-long-compare.py": {
+      "sha256": "920fbcad5de772c9bc5b2c1aafdcdc6ab8d9007ffac2c7e0d09364532663b9a4",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['event-batch','packet-spaces'] if repeat!=2 else ['packet-spaces','event-batch']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(seconds=12,server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'packet-spaces-long-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\n"
+    },
+    "artifacts/webtransport/packet-spaces-paced.py": {
+      "sha256": "265f4778ae959dc401e6ecbc8ccb52c1a3876a21a73a5110596a05a4cc7608fb",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor case in ['private','mixed']:\n for repeat in range(1,4):\n  a=json.loads((out/f'reliable-quantum-load-{case}-high-stream-1.json').read_text())['args'];a.update(server=str(out/'binaries/packet-spaces-relay'),output=str(out/f'packet-spaces-paced-{case}-high-stream-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('STREAM',case,repeat,r['passed'],r.get('error'),flush=True)\n"
+    },
+    "artifacts/webtransport/packet-spaces-dg-controls.py": {
+      "sha256": "0aea21b1718056c3eea67ec8757bd8af36c58fcbffa557e26fe2638d154f7bf4",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['event-batch','packet-spaces'] if repeat!=2 else ['packet-spaces','event-batch']):\n  a=json.loads((out/'owner-poll-mixed-high-datagram-1.json').read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),output=str(out/f'packet-spaces-dg-control-{v}-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('CONTROL',v,repeat,r['passed'],flush=True)\n"
+    },
+    "artifacts/webtransport/profile-packet-spaces-reliable.py": {
+      "sha256": "c168728c20af24036af535c671f2e22c7ca1b0600f3b25b932428c4f4c6a6669",
+      "source": "import sys,json,argparse,subprocess,os\nfrom pathlib import Path\nroot=Path.cwd();out=root/'artifacts/webtransport';sys.path.insert(0,str(root/'scripts'))\nimport inspection\noriginal=subprocess.Popen;client=[None];roles={}\ndef popen(cmd,*a,**kw):\n if cmd[0]=='perf':\n  cmd=list(cmd);index=cmd.index('-p');roles['server']=int(cmd[index+1]);roles['client']=client[0]\n  assert roles['client'];cmd[index+1]+=','+str(roles['client']);cmd[cmd.index('-e')+1]='cycles';cmd[cmd.index('-F')+1]='249';cmd+=['-m','512'];cmd=['sudo','-n']+cmd\n p=original(cmd,*a,**kw)\n if any(Path(str(x)).name=='inspection' for x in cmd):client[0]=p.pid\n return p\nsubprocess.Popen=popen\nfor v in ['event-batch','packet-spaces']:\n client[0]=None;roles.clear()\n source=out/'thin-pending-final-mixed.json';a=json.loads(source.read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),profile=True,seconds=8,output=str(out/f'packet-spaces-reliable-mixed-{v}-profile.json'))\n for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n r=inspection.run(argparse.Namespace(**a));assert r['passed'];data=a['output'].with_suffix('.perf.data')\n for role,pid in roles.items():\n  text=subprocess.run(['sudo','-n','perf','report','--stdio','--no-children','-g','none','--pid',str(pid),'--sort','dso,symbol','--percentage','relative','--percent-limit','0.3','-i',str(data)],capture_output=True,text=True,check=True).stdout\n  assert 'Total Lost Samples: 0' in text\n  (out/f'packet-spaces-reliable-{v}-{role}-symbols.txt').write_text(text)\n (out/f'packet-spaces-reliable-{v}-profile-roles.json').write_text(json.dumps(dict(roles),indent=2))\n subprocess.run(['sudo','-n','chown',f'{os.getuid()}:{os.getgid()}',str(data)],check=True)\n print('DONE',v,roles,flush=True)\n"
+    },
+    "artifacts/webtransport/packet-spaces-browser-fixture.py": {
+      "sha256": "6b9b56ba4d9d53536a0d46c541636e49492fd53f4655cf410c44c0ab95fcab40",
+      "source": "import subprocess,json,os\nfrom pathlib import Path\nout=Path('artifacts/webtransport');env={k:v for k,v in os.environ.items() if not k.startswith('WAR_')};env['RUST_LOG']='war_relay=debug'\ncommands=[['artifacts/webtransport/binaries/packet-spaces-relay','--dev-cert','--bind','127.0.0.1:14438','--admin-bind','127.0.0.1:14439','--workers','4','--messages-per-second','0','--bytes-per-second','0'],['python3','-m','http.server','14440','--bind','127.0.0.1','--directory','target/browser']]\nprocesses=[]\ntry:\n for i,c in enumerate(commands):\n  with (out/f'packet-spaces-browser-live-process-{i}.log').open('x') as f:p=subprocess.Popen(c,env=env,stdout=f,stderr=f)\n  processes.append(p)\n print('READY',[(p.pid,c) for p,c in zip(processes,commands)],flush=True)\n input()\nfinally:\n for p in reversed(processes):\n  p.terminate();p.wait(timeout=10)\n print('STOPPED',[p.returncode for p in processes],flush=True)\n"
+    }
+  }
+}

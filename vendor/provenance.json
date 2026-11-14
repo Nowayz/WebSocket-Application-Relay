@@ -18,5 +18,69 @@
     "modified_files": [
       "src/lib.rs"
     ]
+  },
+  "quinn-proto": {
+    "version": "0.11.19",
+    "package_sha256": "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe",
+    "upstream_git": "8192ed399a26a6e8f0aba43d10ec8badaa5b905e",
+    "patch": "quinn-sparse-streams.patch",
+    "modified_files": [
+      "src/connection/assembler.rs",
+      "src/connection/datagrams.rs",
+      "src/connection/mod.rs",
+      "src/connection/mtud.rs",
+      "src/connection/packet_crypto.rs",
+      "src/connection/send_buffer.rs",
+      "src/connection/spaces.rs",
+      "src/connection/streams/mod.rs",
+      "src/connection/streams/recv.rs",
+      "src/connection/streams/sparse.rs",
+      "src/connection/streams/state.rs",
+      "src/packet.rs",
+      "src/tests/mod.rs"
+    ]
+  },
+  "quinn": {
+    "version": "0.11.12",
+    "package_sha256": "4051e23e9185c255a7e33ef59cdbca87a22d359052eecd22fc6b901fb37d9d11",
+    "upstream_git": "eaec0db4bcb698f76df736d89938743c88a2ad5f",
+    "patch": "quinn-event-channel.patch",
+    "modified_files": [
+      "Cargo.toml",
+      "Cargo.toml.orig",
+      "src/connection.rs",
+      "src/endpoint.rs",
+      "src/event_queue.rs",
+      "src/lib.rs",
+      "src/recv_stream.rs",
+      "src/tests.rs",
+      "src/transmit_buffer.rs"
+    ]
+  },
+  "rustls": {
+    "version": "0.23.46",
+    "package_sha256": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
+    "upstream_git": "f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb",
+    "patch": "rustls-quic-record-ciphers.patch",
+    "modified_files": [
+      "src/msgs/deframer/handshake.rs",
+      "src/quic.rs",
+      "src/tls13/key_schedule.rs"
+    ],
+    "test_fixtures": {
+      "url": "https://codeload.github.com/rustls/rustls/tar.gz/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb",
+      "sha256": "4cfdec250d939cd129036024cd62cc47143939a2ec596f9d6de1f69dd9cf9ae8"
+    }
+  },
+  "web-transport-quinn": {
+    "version": "0.13.3",
+    "package_sha256": "251772dde5c7b78a532af0df7597259186456b683b46fc516745585684574a0e",
+    "upstream_git": "554ac663fad22f9c68691a9fa94301bcf76d3e86",
+    "patch": "web-transport-session-io.patch",
+    "modified_files": [
+      "src/op.rs",
+      "src/session.rs",
+      "src/waiters.rs"
+    ]
   }
 }

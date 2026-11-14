@@ -2,9 +2,48 @@
 
 ## Unreleased
 
+- WebTransport workers are pinned one per CPU by default when the process may
+  use exactly one CPU per worker (`--pin-workers` is now `auto`, `on` or `off`;
+  the bare flag and `WAR_PIN_WORKERS=true` still mean `on`). Under the
+  historical closed-loop workload private delivery rises 14-16% and room
+  fanout 0-4%. Legacy WebSocket stays unpinned unless asked. QUIC stream reads
+  copy from the receive assembler in place instead of splitting the shared
+  packet buffer, removing two atomic updates per record; CPU per delivery
+  falls 1-4%.
+
+- The relay binary uses jemalloc as its global allocator on non-MSVC targets.
+  WebTransport reliable throughput rises 2-3% for private routing, about 17%
+  for room fanout and about 8% for mixed traffic, which puts it ahead of the
+  plaintext WebSocket transport in every paired run of all three workloads.
+  Idle QUIC connections release their drained endpoint-event, handshake and
+  handshake-frame queues, start receive assemblers with one slot, and keep the
+  previous path and 0-RTT secret out of line; ready memory at 100,000 sessions
+  falls from about 1,839 to about 1,671 MiB. See the
+  [measurements](docs/reports/webtransport-allocator-idle-storage-2026-11-13.json).
+- WebTransport tolerates packet reordering. QUIC connections hold 1-RTT
+  packets that overtake the end of the handshake instead of dropping them,
+  retire a peer's old connection ID only after the packets sent to it are
+  resolved, and the relay detects loss by the time threshold alone rather
+  than also by packet count. A 1 MiB reliable transfer over a 100 ms path
+  with 3 ms of jitter falls from 5.8-8.3 s to 1.36-1.47 s in every run, level
+  with TLS WebSocket; under
+  2% loss it takes about 1.0 s against 2.9-3.8 s for TLS WebSocket.
+  `scripts/freshness-matrix.py` gains `--mtu`, `--client-packet-threshold` and
+  a `jitter` profile.
+- `scripts/capacity.py` can run its connected-population check against TLS
+  WebSocket (`--transport websocket-tls`, through `examples/tls_front`), so
+  WebTransport is compared with an encrypted baseline at 100,000 sessions.
+- HTTP and CBOR channel listings omit empty or retired ordinary rooms captured
+  during concurrent admission or departure; the permanent `re_globl` room
+  remains visible when empty. The metadata collector stays out of line so
+  the pinned release compiler preserves native routing specialization.
+- The observer-barrier acceptance fixture checks each cross-room departure
+  exactly once before acknowledgement without imposing a global order, and
+  rejects duplicate, missing or late notices. Same-room FIFO remains covered
+  by the relay tests. See the [acceptance and fanout measurements](docs/reports/acceptance-fanout-2026-10-21.md).
 - The routing registry no longer has a global lock. Session ownership and
-  the channel index are lock-free concurrent maps, pre-sized so they do not
-  resize in ordinary operation, each channel has its own
+  the channel index are lock-free concurrent maps, pre-sized to reduce resize
+  work, each channel has its own
   lock, global observers are an atomically swapped snapshot and admission
   counters are atomics, including an exact channel count that enforces
   `WAR_MAX_CHANNELS` under concurrent creation. No socket write happens
@@ -35,12 +74,12 @@
   `re_globl` departures and disconnect-observer notices are spread over
   sixteen queues by the departing session's room; a revocation barrier
   scans them one at a time, at most 128 jobs per hold, with one watermark
-  per queue, so nothing holds two of them and a long queue cannot stall
-  departures on its shard. The synchronous fallback a departure takes when
+  per queue, so nothing holds two of them and a long scan releases the shard
+  between chunks. The synchronous fallback a departure takes when
   staging credit is refused drains the queue in holds of at most eight
   turns. Workers rotate across queues in bounded turns (128
-  recipients for departures, 1,024 for live broadcasts), so a large room's
-  notices cannot delay another room's. Notices for different rooms, including
+  recipients for departures, 1,024 for live broadcasts), allowing other queues
+  to receive service before a large room finishes. Notices for different rooms, including
   disconnect notices for sessions of different rooms, are no longer ordered
   relative to each other.
 - A session that closes with an unfinished broadcast (more than 1,024

@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn listings_omit_unpopulated_and_retired_rooms_but_keep_empty_global() {
+    let relay = Relay::new(Config::default()).unwrap();
+    let sub = relay.subscribe(b"retiring").unwrap();
+    let retired = sub.registration.peer.room.clone();
+    assert_eq!(ChannelSnapshot::of(&retired).unwrap().members, 1);
+    drop(sub);
+    // Reproduce a listing that captured the handle before retirement.
+    assert!(ChannelSnapshot::of(&retired).is_none());
+
+    // Reproduce the interval between index publication and first admission.
+    let name = Bytes::from_static(b"joining");
+    relay
+        .channels
+        .pin()
+        .insert(name.clone(), Channel::new(name));
+    relay.channel_count.fetch_add(1, Relaxed);
+    let full = relay.channels();
+    assert_eq!(full.len(), 1);
+    assert_eq!(full[0].name.as_deref(), Some("re_globl"));
+    assert_eq!(full[0].members, 0);
+    let snapshots = relay.channel_listing();
+    let page = relay.channel_page(std::num::NonZeroUsize::new(1).unwrap(), None);
+    for rows in [&snapshots, &page] {
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name.as_bytes(), GLOBAL_CHANNEL);
+        assert_eq!(rows[0].members, 0);
+    }
+    let members = relay.channel_members_snapshot();
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0].0.as_bytes(), GLOBAL_CHANNEL);
+    assert_eq!(members[0].1, 0);
+}
+
+#[test]
 fn bounded_channel_pages_match_the_independent_full_listing_and_own_metadata() {
     let relay = Relay::new(Config::default()).unwrap();
     let mut names = vec![

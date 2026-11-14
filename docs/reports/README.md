@@ -1,5 +1,9 @@
 # Measurement and decision records
 
+The [October 21 acceptance and fanout follow-up](acceptance-fanout-2026-10-21.md)
+covers concurrent listing repair, sharded observer validation and repeat
+measurements of the current architecture.
+
 These files are dated measurement and decision records from the October 2026
 Rust rewrite. They are kept for provenance. Each one describes the
 implementation as it was on the date in its text, including its routing code,

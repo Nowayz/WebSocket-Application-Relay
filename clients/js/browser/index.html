@@ -17,11 +17,13 @@
 </style>
 <main>
   <h1>Relay browser check</h1>
-  <p>Exercise the bundled CBOR client through this browser's WebSocket. Each run
+  <p>Exercise the bundled CBOR client through this browser's WebTransport connection. Each run
     opens three sessions, checks delivery and channel variables, then closes them.</p>
   <form id="check">
-    <label for="url">Relay WebSocket URL</label>
-    <input id="url" type="url" value="ws://127.0.0.1:1338" required>
+    <label for="url">Relay WebTransport URL</label>
+    <input id="url" type="url" value="https://127.0.0.1:1338/war" required>
+    <label for="pin">Local development certificate SHA256 pin (optional)</label>
+    <input id="pin" autocomplete="off" placeholder="Colon-separated SHA256 from --dev-cert">
     <button id="run" type="submit">Run browser check</button>
   </form>
   <p id="status" role="status">Ready</p>

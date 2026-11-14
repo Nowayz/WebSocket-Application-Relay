@@ -1,0 +1,5713 @@
+{
+  "record_type": "compact_full_history_endpoint_probe_findings",
+  "detailed_analysis": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic-analysis.json",
+    "sha256": "4a2570d5cffbb8e54a7d1acaa972cbf721b560edb40c69229a46c837d4da5f6b",
+    "bytes": 544848
+  },
+  "source_refs": {
+    "analysis_source": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-endpoint-full-history-diagnostic.py",
+      "sha256": "2509b8208548515c5bfdf10e778e308e263a9c7a4708e79b6bb5bf367844e05c",
+      "bytes": 14552
+    },
+    "reused_data_only_helper": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-endpoint-ready-diagnostic.py",
+      "sha256": "21333c868efde6414454f46cc406542f4373c7c1d57906993982859a18aca8b5",
+      "bytes": 13858
+    },
+    "experiment_summary": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/summary.json",
+      "sha256": "19ebb390ccf6cba6c6dd9c2b607a42637042e3f763ef60f980c0df7c96338588",
+      "bytes": 21567
+    },
+    "client_gate_source": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-probe-build-f9c61c8/source/examples/datagram_load.rs",
+      "sha256": "c82071eb77cf5e2db2fc5333aa8231b731ca892b3912012e9d01941171b88cfc",
+      "bytes": 25963
+    },
+    "controller_gate_source": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/scripts/datagram-load.py",
+      "sha256": "624ea8c66ac41ee519ec3890e01b9b92bb14a7c7326b9b31862626f60db0408d",
+      "bytes": 12052
+    }
+  },
+  "assessment": "The observed first-drop and warning windows do not support a long known-self-wake wait or a sampled endpoint-mutex wait spike as their immediate explanation. External readiness is untimed, mutex phases are sampled, and no unique cause or ordinary ranking follows.",
+  "limits": [
+    "Every poll entry/self-wake is traced; only every 64th poll has phase/detail counters and at most eight route batches plus one rotating selected queue send. Unselected counters remain unavailable.",
+    "Known-ready waiting intervals refer only to instrumented self-wakes; other readiness sources are not timestamped. Their retained-window time fraction is not CPU duty or executor starvation.",
+    "Receive/event Pending includes cooperative suspension. Receive/event budget exits record rescheduling reasons and do not prove remaining source backlog.",
+    "Acquisition/send intervals are elapsed time including descheduling. A small sampled acquisition does not establish absence of contention outside those samples.",
+    "UDP cumulative deltas require identical PID, owned-inode set, and UDP socket count; onset is bounded by actual read samples, never an exact packet-loss timestamp.",
+    "Warning alignment uses printed UTC precision and start/drop monotonic brackets, assuming no unobserved realtime clock step. The warning timestamp is not the exact refusal-instruction time.",
+    "The collector requests 4 ms UDP and 40 ms per-TID reads. Actual gaps/collection time, recorder clock/TLS/ring work, ring allocation and post-run dump are diagnostic costs; no ordinary CPU/RSS/latency/throughput comparison is valid.",
+    "The failed run has no measured gate, so actual generated work and generation lag are unavailable; the planned offer cannot substitute for actual completed work.",
+    "The six-attempt full-history series has five passes then one refusal; it is a new 32x-row-storage diagnostic experiment and is not ranked against the earlier 8192-row series.",
+    "Ready/measured/done events have no absolute/monotonic timestamp, and observer rows have no gate marker. Exact offer/drain/cleanup boundaries cannot be reconstructed.",
+    "For passing runs only, source order proves offer start S>=0 and measured gate before endpoint Drop D. Measured elapsed E therefore bounds S<=D-E. The common fixed-offer core [D-E,4s] is conservative source-derived coverage, not an observed gate timestamp.",
+    "First UDP-drop wall intervals use observer outer wall timestamps through collector completion, translated by the envelope of trace anchor offsets. Floating wall-clock precision and unobserved realtime steps limit this alignment.",
+    "Processing/wait partitions clip global non-overlapping intervals before summation. Sampled phase totals are kept in a separate domain and never extrapolated to elapsed wall duty."
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "client_exit_code": 0,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-1/endpoint-889351-0.jsonl",
+        "sha256": "17c64081db5de15725083b00cbcb103bfe4efd48f829a89daa347e381a563a75",
+        "bytes": 193141408
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-1/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "dd069c4aab49da2e00acd4cf35e262bf6e34b97b5ed92789cc95810c3bab0e46",
+        "bytes": 2263736
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-1/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "242972e3bc69fb07f6ad8e2f81f71f8e73341e9ef485ce3196318a547773d3b1",
+        "bytes": 489691
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 238491,
+        "rows_written": 238491,
+        "overwritten": 0,
+        "self_wakes": 33991,
+        "matched_self_wakes": 33991,
+        "unmatched_self_wakes": 0,
+        "pending_self_wakes": 0,
+        "unfinished_records": 0,
+        "first_entry_ns": 3239909,
+        "last_entry_ns": 6017771964
+      },
+      "first_drop_mono_ns_bounds": null,
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889351,
+          "owned_inode_set": [
+            "6427195",
+            "6427196",
+            "6427197"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 1299,
+          "outer_wall_ns_bounds": [
+            1794020956860740352,
+            1794020962852280832
+          ],
+          "drops_first_last": [
+            0,
+            0
+          ],
+          "same_identity_drop_delta": 0,
+          "max_queue_bytes": 958727
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready",
+          "measured",
+          "done"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "measured": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "done": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "measured_elapsed_seconds": 5.004566886,
+        "source_derived_offer_start_ns_bounds": [
+          0,
+          1014960404
+        ],
+        "conservative_common_offer_ns": [
+          1014960404,
+          4000000000
+        ],
+        "ready_to_measured_client_drop_delta": 0
+      },
+      "actual_measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004566886,
+        "private": {
+          "planned_source_updates": 1024000,
+          "generated_source_updates": 1023874,
+          "not_generated": 126,
+          "expected_generated_deliveries": 1023874,
+          "verified_unique": 1023874,
+          "unreceived_within_window": 0,
+          "received_during_offer": 1023399,
+          "received_during_drain": 475,
+          "verified_during_offer_per_second": 255849.75,
+          "generation_lag": {
+            "max_ms": 1.367734,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023874
+          },
+          "last_submit_ms": 3999.505496
+        },
+        "fanout": {
+          "planned_source_updates": 4000,
+          "generated_source_updates": 4000,
+          "not_generated": 0,
+          "expected_generated_deliveries": 4096000,
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "received_during_offer": 4093761,
+          "received_during_drain": 2239,
+          "verified_during_offer_per_second": 1023440.25,
+          "generation_lag": {
+            "max_ms": 0.804826,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.433168
+        }
+      },
+      "write_state_snapshot": [],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 40695,
+          "interval_ns": [
+            980163352,
+            980395376
+          ],
+          "duration_ns": 232024,
+          "clipped_ns": 232024
+        },
+        {
+          "source_or_next_seq": 14943,
+          "interval_ns": [
+            466583036,
+            466775631
+          ],
+          "duration_ns": 192595,
+          "clipped_ns": 192595
+        },
+        {
+          "source_or_next_seq": 19467,
+          "interval_ns": [
+            569445685,
+            569626601
+          ],
+          "duration_ns": 180916,
+          "clipped_ns": 180916
+        }
+      ],
+      "global_sampled_mutex_max_ns": 36539,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 1299,
+        "outer_sample_gap_seconds": {
+          "count": 1298,
+          "min": 0.0043443210306577384,
+          "p50_nearest_rank": 0.004656353034079075,
+          "p99_nearest_rank": 0.00509351200889796,
+          "max": 0.007713075960054994,
+          "sum": 5.991541111958213
+        },
+        "collector_seconds": {
+          "count": 1299,
+          "min": 0.00031624198891222477,
+          "p50_nearest_rank": 0.0005896550137549639,
+          "p99_nearest_rank": 0.0010120540391653776,
+          "max": 0.001356886001303792,
+          "sum": 0.7077128754463047
+        },
+        "thread_snapshot_count": 139,
+        "max_thread_gap_seconds": 0.0453896020189859,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "conservative_common_offer_core": {
+          "window_ns": [
+            1014960404,
+            4000000000
+          ],
+          "rows": 157921,
+          "known_ready_entries": 19988,
+          "detailed_rows": 2467,
+          "known_ready_elapsed_upper_ns": {
+            "count": 19988,
+            "min": 340,
+            "p50_nearest_rank": 2940,
+            "p99_nearest_rank": 46149,
+            "max": 176556
+          },
+          "entry_gap_ns": {
+            "count": 157920,
+            "min": 1560,
+            "p50_nearest_rank": 12579,
+            "p99_nearest_rank": 69539,
+            "max": 537097
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 2467,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 150,
+              "max": 2730
+            },
+            "mutex_acquisition": {
+              "count": 2467,
+              "min": 30,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 240
+            },
+            "drive_recv": {
+              "count": 2467,
+              "min": 430,
+              "p50_nearest_rank": 9800,
+              "p99_nearest_rank": 67059,
+              "max": 81248
+            },
+            "handle_events": {
+              "count": 2467,
+              "min": 49,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 150,
+              "max": 340
+            },
+            "post_events_release": {
+              "count": 2467,
+              "min": 29,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 130
+            },
+            "entry_to_release": {
+              "count": 2467,
+              "min": 620,
+              "p50_nearest_rank": 10020,
+              "p99_nearest_rank": 67279,
+              "max": 81478
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 9939,
+            "batches": 7846,
+            "messages": 35108,
+            "segments": 66842,
+            "dispatches": 66842,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 2093,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 2467,
+            "batch_samples": 7601,
+            "send_calls": 66842,
+            "send_sample": 2099,
+            "send_complete": 2099
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 908893595,
+            "self_wake_call_bracket": 734066,
+            "known_ready_after_to_next_entry": 98136372
+          },
+          "unclassified_ns": 1977275563,
+          "known_ready_wait_ns_bounds": [
+            98136372,
+            98870438
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            908893595,
+            909627661
+          ],
+          "max_own_self_wake_processing_ns": 140826,
+          "client_udp_samples": {
+            "samples": 644,
+            "window_ns": [
+              1014960404,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1015564335,
+                1015964196
+              ],
+              "outer_wall_unix_ns": 1794020957873806592,
+              "sample_monotonic_seconds": 457679.931168812,
+              "pid": 889351,
+              "owned_inode_set": [
+                "6427195",
+                "6427196",
+                "6427197"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 16735
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3998839599,
+                3999516963
+              ],
+              "outer_wall_unix_ns": 1794020960857081856,
+              "sample_monotonic_seconds": 457682.914444994,
+              "pid": 889351,
+              "owned_inode_set": [
+                "6427195",
+                "6427196",
+                "6427197"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 62193
+            },
+            "receive_queue_bytes": {
+              "count": 644,
+              "min": 0,
+              "p50_nearest_rank": 4181,
+              "p99_nearest_rank": 136007,
+              "max": 958727,
+              "sum": 9365595
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "no_observed_drop_common_offer_core": {
+          "window_ns": [
+            1014960404,
+            4000000000
+          ],
+          "rows": 157921,
+          "known_ready_entries": 19988,
+          "detailed_rows": 2467,
+          "known_ready_elapsed_upper_ns": {
+            "count": 19988,
+            "min": 340,
+            "p50_nearest_rank": 2940,
+            "p99_nearest_rank": 46149,
+            "max": 176556
+          },
+          "entry_gap_ns": {
+            "count": 157920,
+            "min": 1560,
+            "p50_nearest_rank": 12579,
+            "p99_nearest_rank": 69539,
+            "max": 537097
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 2467,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 150,
+              "max": 2730
+            },
+            "mutex_acquisition": {
+              "count": 2467,
+              "min": 30,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 240
+            },
+            "drive_recv": {
+              "count": 2467,
+              "min": 430,
+              "p50_nearest_rank": 9800,
+              "p99_nearest_rank": 67059,
+              "max": 81248
+            },
+            "handle_events": {
+              "count": 2467,
+              "min": 49,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 150,
+              "max": 340
+            },
+            "post_events_release": {
+              "count": 2467,
+              "min": 29,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 130
+            },
+            "entry_to_release": {
+              "count": 2467,
+              "min": 620,
+              "p50_nearest_rank": 10020,
+              "p99_nearest_rank": 67279,
+              "max": 81478
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 9939,
+            "batches": 7846,
+            "messages": 35108,
+            "segments": 66842,
+            "dispatches": 66842,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 2093,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 2467,
+            "batch_samples": 7601,
+            "send_calls": 66842,
+            "send_sample": 2099,
+            "send_complete": 2099
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 908893595,
+            "self_wake_call_bracket": 734066,
+            "known_ready_after_to_next_entry": 98136372
+          },
+          "unclassified_ns": 1977275563,
+          "known_ready_wait_ns_bounds": [
+            98136372,
+            98870438
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            908893595,
+            909627661
+          ],
+          "max_own_self_wake_processing_ns": 140826,
+          "client_udp_samples": {
+            "samples": 644,
+            "window_ns": [
+              1014960404,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1015564335,
+                1015964196
+              ],
+              "outer_wall_unix_ns": 1794020957873806592,
+              "sample_monotonic_seconds": 457679.931168812,
+              "pid": 889351,
+              "owned_inode_set": [
+                "6427195",
+                "6427196",
+                "6427197"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 16735
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3998839599,
+                3999516963
+              ],
+              "outer_wall_unix_ns": 1794020960857081856,
+              "sample_monotonic_seconds": 457682.914444994,
+              "pid": 889351,
+              "owned_inode_set": [
+                "6427195",
+                "6427196",
+                "6427197"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 62193
+            },
+            "receive_queue_bytes": {
+              "count": 644,
+              "min": 0,
+              "p50_nearest_rank": 4181,
+              "p99_nearest_rank": 136007,
+              "max": 958727,
+              "sum": 9365595
+            },
+            "same_identity_drop_delta": 0
+          }
+        }
+      }
+    },
+    {
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "client_exit_code": 0,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-2/endpoint-889459-0.jsonl",
+        "sha256": "59ed2442ea762948c2c775775f33fb913751f1422c82d2b216743bad642cfa24",
+        "bytes": 164008131
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-2/reliable-peer-udp-cpu-diagnostic-mixed-2-samples.json",
+        "sha256": "d7d09fc2b8252d5db8e57f3bd8d3fb2b89d29d0ccd98ca3a68a6bcd1d5214ac0",
+        "bytes": 2264413
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-2/reliable-peer-udp-cpu-diagnostic-mixed-2.json",
+        "sha256": "078c03e630e0f0fec4ac035e0d4a4473cbdb3f7c1ba562349f8738ee144a8359",
+        "bytes": 489719
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 201819,
+        "rows_written": 201819,
+        "overwritten": 0,
+        "self_wakes": 43680,
+        "matched_self_wakes": 43680,
+        "unmatched_self_wakes": 0,
+        "pending_self_wakes": 0,
+        "unfinished_records": 0,
+        "first_entry_ns": 3574500,
+        "last_entry_ns": 6016774199
+      },
+      "first_drop_mono_ns_bounds": [
+        3240172404,
+        3245646041
+      ],
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889459,
+          "owned_inode_set": [
+            "6427203",
+            "6427204",
+            "6427205"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 1302,
+          "outer_wall_ns_bounds": [
+            1794020968681997824,
+            1794020974673477632
+          ],
+          "drops_first_last": [
+            0,
+            10358
+          ],
+          "same_identity_drop_delta": 10358,
+          "max_queue_bytes": 7144797
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready",
+          "measured",
+          "done"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "measured": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 10358
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "done": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 10358
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "measured_elapsed_seconds": 5.004262086,
+        "source_derived_offer_start_ns_bounds": [
+          0,
+          1014701998
+        ],
+        "conservative_common_offer_ns": [
+          1014701998,
+          4000000000
+        ],
+        "ready_to_measured_client_drop_delta": 10358
+      },
+      "actual_measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004262086,
+        "private": {
+          "planned_source_updates": 1024000,
+          "generated_source_updates": 1023931,
+          "not_generated": 69,
+          "expected_generated_deliveries": 1023931,
+          "verified_unique": 1023931,
+          "unreceived_within_window": 0,
+          "received_during_offer": 1023352,
+          "received_during_drain": 579,
+          "verified_during_offer_per_second": 255838.0,
+          "generation_lag": {
+            "max_ms": 1.5397,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023931
+          },
+          "last_submit_ms": 3999.682916
+        },
+        "fanout": {
+          "planned_source_updates": 4000,
+          "generated_source_updates": 4000,
+          "not_generated": 0,
+          "expected_generated_deliveries": 4096000,
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "received_during_offer": 4092763,
+          "received_during_drain": 3237,
+          "verified_during_offer_per_second": 1023190.75,
+          "generation_lag": {
+            "max_ms": 1.223287,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.679586
+        }
+      },
+      "write_state_snapshot": [],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 160592,
+          "interval_ns": [
+            3595083119,
+            3595345643
+          ],
+          "duration_ns": 262524,
+          "clipped_ns": 262524
+        },
+        {
+          "source_or_next_seq": 159713,
+          "interval_ns": [
+            3546706864,
+            3546948588
+          ],
+          "duration_ns": 241724,
+          "clipped_ns": 241724
+        },
+        {
+          "source_or_next_seq": 160593,
+          "interval_ns": [
+            3595390171,
+            3595616706
+          ],
+          "duration_ns": 226535,
+          "clipped_ns": 226535
+        }
+      ],
+      "global_sampled_mutex_max_ns": 26989,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 1302,
+        "outer_sample_gap_seconds": {
+          "count": 1301,
+          "min": 0.0043276910437271,
+          "p50_nearest_rank": 0.004531196027528495,
+          "p99_nearest_rank": 0.005186590016819537,
+          "max": 0.009495090984273702,
+          "sum": 5.991480453987606
+        },
+        "collector_seconds": {
+          "count": 1302,
+          "min": 0.00031518202740699053,
+          "p50_nearest_rank": 0.00045998801942914724,
+          "p99_nearest_rank": 0.0010693729855120182,
+          "max": 0.0026903030229732394,
+          "sum": 0.6898883867543191
+        },
+        "thread_snapshot_count": 138,
+        "max_thread_gap_seconds": 0.04708927700994536,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "conservative_common_offer_core": {
+          "window_ns": [
+            1014701998,
+            4000000000
+          ],
+          "rows": 119985,
+          "known_ready_entries": 29863,
+          "detailed_rows": 1874,
+          "known_ready_elapsed_upper_ns": {
+            "count": 29863,
+            "min": 380,
+            "p50_nearest_rank": 5070,
+            "p99_nearest_rank": 75978,
+            "max": 262564
+          },
+          "entry_gap_ns": {
+            "count": 119984,
+            "min": 1490,
+            "p50_nearest_rank": 14350,
+            "p99_nearest_rank": 98088,
+            "max": 552106
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1874,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 190,
+              "max": 340
+            },
+            "mutex_acquisition": {
+              "count": 1874,
+              "min": 20,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1874,
+              "min": 1130,
+              "p50_nearest_rank": 11519,
+              "p99_nearest_rank": 89328,
+              "max": 117337
+            },
+            "handle_events": {
+              "count": 1874,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 160,
+              "max": 270
+            },
+            "post_events_release": {
+              "count": 1874,
+              "min": 30,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 90,
+              "max": 100
+            },
+            "entry_to_release": {
+              "count": 1874,
+              "min": 1330,
+              "p50_nearest_rank": 11730,
+              "p99_nearest_rank": 89608,
+              "max": 117577
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6505,
+            "batches": 5125,
+            "messages": 30758,
+            "segments": 61514,
+            "dispatches": 61514,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1380,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1874,
+            "batch_samples": 5016,
+            "send_calls": 61514,
+            "send_sample": 1619,
+            "send_complete": 1619
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1420830454,
+            "self_wake_call_bracket": 1375043,
+            "known_ready_after_to_next_entry": 266859029
+          },
+          "unclassified_ns": 1296233476,
+          "known_ready_wait_ns_bounds": [
+            266859029,
+            268234072
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1420830454,
+            1422205497
+          ],
+          "max_own_self_wake_processing_ns": 137256,
+          "client_udp_samples": {
+            "samples": 646,
+            "window_ns": [
+              1014701998,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1014240116,
+                1014750205
+              ],
+              "outer_wall_unix_ns": 1794020969693650176,
+              "sample_monotonic_seconds": 457691.751013076,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 15688
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3999157364,
+                3999811708
+              ],
+              "outer_wall_unix_ns": 1794020972678567424,
+              "sample_monotonic_seconds": 457694.735929853,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 6039,
+              "queue_bytes": 5657884
+            },
+            "receive_queue_bytes": {
+              "count": 646,
+              "min": 0,
+              "p50_nearest_rank": 9335,
+              "p99_nearest_rank": 6504198,
+              "max": 7144797,
+              "sum": 453768604
+            },
+            "same_identity_drop_delta": 6039
+          }
+        },
+        "no_observed_drop_common_offer_core": {
+          "window_ns": [
+            1014701998,
+            3240172404
+          ],
+          "rows": 105958,
+          "known_ready_entries": 18371,
+          "detailed_rows": 1655,
+          "known_ready_elapsed_upper_ns": {
+            "count": 18371,
+            "min": 380,
+            "p50_nearest_rank": 3780,
+            "p99_nearest_rank": 61979,
+            "max": 176546
+          },
+          "entry_gap_ns": {
+            "count": 105957,
+            "min": 1490,
+            "p50_nearest_rank": 12960,
+            "p99_nearest_rank": 84988,
+            "max": 552106
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1655,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 170,
+              "max": 340
+            },
+            "mutex_acquisition": {
+              "count": 1655,
+              "min": 20,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1655,
+              "min": 1130,
+              "p50_nearest_rank": 9990,
+              "p99_nearest_rank": 79508,
+              "max": 104237
+            },
+            "handle_events": {
+              "count": 1655,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 150,
+              "max": 270
+            },
+            "post_events_release": {
+              "count": 1655,
+              "min": 30,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 1655,
+              "min": 1330,
+              "p50_nearest_rank": 10210,
+              "p99_nearest_rank": 79808,
+              "max": 104517
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6112,
+            "batches": 4767,
+            "messages": 23675,
+            "segments": 46351,
+            "dispatches": 46351,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1345,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1655,
+            "batch_samples": 4658,
+            "send_calls": 46351,
+            "send_sample": 1404,
+            "send_complete": 1404
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 854986198,
+            "self_wake_call_bracket": 770737,
+            "known_ready_after_to_next_entry": 127025677
+          },
+          "unclassified_ns": 1242687794,
+          "known_ready_wait_ns_bounds": [
+            127025677,
+            127796414
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            854986198,
+            855756935
+          ],
+          "max_own_self_wake_processing_ns": 132037,
+          "client_udp_samples": {
+            "samples": 487,
+            "window_ns": [
+              1014701998,
+              3240172404
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1014240116,
+                1014750205
+              ],
+              "outer_wall_unix_ns": 1794020969693650176,
+              "sample_monotonic_seconds": 457691.751013076,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 15688
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3240172404,
+                3240857187
+              ],
+              "outer_wall_unix_ns": 1794020971919582464,
+              "sample_monotonic_seconds": 457693.976945723,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5908558
+            },
+            "receive_queue_bytes": {
+              "count": 487,
+              "min": 0,
+              "p50_nearest_rank": 6216,
+              "p99_nearest_rank": 2304172,
+              "max": 5908558,
+              "sum": 55939726
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "pre_first_drop_250ms": {
+          "window_ns": [
+            2990172404,
+            3240172404
+          ],
+          "rows": 5909,
+          "known_ready_entries": 3546,
+          "detailed_rows": 92,
+          "known_ready_elapsed_upper_ns": {
+            "count": 3546,
+            "min": 400,
+            "p50_nearest_rank": 6620,
+            "p99_nearest_rank": 78498,
+            "max": 137847
+          },
+          "entry_gap_ns": {
+            "count": 5908,
+            "min": 3660,
+            "p50_nearest_rank": 43729,
+            "p99_nearest_rank": 117957,
+            "max": 552106
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 92,
+              "min": 50,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 210,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 92,
+              "min": 40,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 92,
+              "min": 1720,
+              "p50_nearest_rank": 39199,
+              "p99_nearest_rank": 98678,
+              "max": 98678
+            },
+            "handle_events": {
+              "count": 92,
+              "min": 70,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 180,
+              "max": 180
+            },
+            "post_events_release": {
+              "count": 92,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 92,
+              "min": 2060,
+              "p50_nearest_rank": 39499,
+              "p99_nearest_rank": 98998,
+              "max": 98998
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 203,
+            "batches": 172,
+            "messages": 2642,
+            "segments": 5340,
+            "dispatches": 5340,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 31,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 92,
+            "batch_samples": 171,
+            "send_calls": 5340,
+            "send_sample": 86,
+            "send_complete": 86
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 168234742,
+            "self_wake_call_bracket": 180783,
+            "known_ready_after_to_next_entry": 36889255
+          },
+          "unclassified_ns": 44695220,
+          "known_ready_wait_ns_bounds": [
+            36889255,
+            37070038
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            168234742,
+            168415525
+          ],
+          "max_own_self_wake_processing_ns": 104388,
+          "client_udp_samples": {
+            "samples": 53,
+            "window_ns": [
+              2990172404,
+              3240172404
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2990653044,
+                2991340236
+              ],
+              "outer_wall_unix_ns": 1794020971670063104,
+              "sample_monotonic_seconds": 457693.727426089,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 28049
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3240172404,
+                3240857187
+              ],
+              "outer_wall_unix_ns": 1794020971919582464,
+              "sample_monotonic_seconds": 457693.976945723,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5908558
+            },
+            "receive_queue_bytes": {
+              "count": 53,
+              "min": 0,
+              "p50_nearest_rank": 195826,
+              "p99_nearest_rank": 5908558,
+              "max": 5908558,
+              "sum": 42510307
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "first_drop_plusminus_250ms": {
+          "window_ns": [
+            2990172404,
+            3495646041
+          ],
+          "rows": 10135,
+          "known_ready_entries": 7772,
+          "detailed_rows": 158,
+          "known_ready_elapsed_upper_ns": {
+            "count": 7772,
+            "min": 400,
+            "p50_nearest_rank": 7500,
+            "p99_nearest_rank": 83508,
+            "max": 175046
+          },
+          "entry_gap_ns": {
+            "count": 10134,
+            "min": 3660,
+            "p50_nearest_rank": 50569,
+            "p99_nearest_rank": 131047,
+            "max": 552106
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 158,
+              "min": 50,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 190,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 158,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 158,
+              "min": 1720,
+              "p50_nearest_rank": 45439,
+              "p99_nearest_rank": 98678,
+              "max": 106887
+            },
+            "handle_events": {
+              "count": 158,
+              "min": 70,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 160,
+              "max": 180
+            },
+            "post_events_release": {
+              "count": 158,
+              "min": 40,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 100,
+              "max": 100
+            },
+            "entry_to_release": {
+              "count": 158,
+              "min": 2060,
+              "p50_nearest_rank": 45729,
+              "p99_nearest_rank": 98998,
+              "max": 107177
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 273,
+            "batches": 242,
+            "messages": 4882,
+            "segments": 10200,
+            "dispatches": 10200,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 31,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 158,
+            "batch_samples": 241,
+            "send_calls": 10200,
+            "send_sample": 152,
+            "send_complete": 152
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 370655255,
+            "self_wake_call_bracket": 412429,
+            "known_ready_after_to_next_entry": 89710733
+          },
+          "unclassified_ns": 44695220,
+          "known_ready_wait_ns_bounds": [
+            89710733,
+            90123162
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            370655255,
+            371067684
+          ],
+          "max_own_self_wake_processing_ns": 137256,
+          "client_udp_samples": {
+            "samples": 105,
+            "window_ns": [
+              2990172404,
+              3495646041
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2990653044,
+                2991340236
+              ],
+              "outer_wall_unix_ns": 1794020971670063104,
+              "sample_monotonic_seconds": 457693.727426089,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 28049
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3490955124,
+                3491667777
+              ],
+              "outer_wall_unix_ns": 1794020972170365184,
+              "sample_monotonic_seconds": 457694.227728085,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 4264,
+              "queue_bytes": 3062543
+            },
+            "receive_queue_bytes": {
+              "count": 105,
+              "min": 0,
+              "p50_nearest_rank": 3620339,
+              "p99_nearest_rank": 6572061,
+              "max": 6646926,
+              "sum": 332511866
+            },
+            "same_identity_drop_delta": 4264
+          }
+        },
+        "first_drop_plusminus_8ms": {
+          "window_ns": [
+            3232172404,
+            3253646041
+          ],
+          "rows": 384,
+          "known_ready_entries": 384,
+          "detailed_rows": 6,
+          "known_ready_elapsed_upper_ns": {
+            "count": 384,
+            "min": 910,
+            "p50_nearest_rank": 7260,
+            "p99_nearest_rank": 82178,
+            "max": 121187
+          },
+          "entry_gap_ns": {
+            "count": 383,
+            "min": 32919,
+            "p50_nearest_rank": 53059,
+            "p99_nearest_rank": 132117,
+            "max": 168126
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 6,
+              "min": 80,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "mutex_acquisition": {
+              "count": 6,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 6,
+              "min": 36769,
+              "p50_nearest_rank": 47218,
+              "p99_nearest_rank": 59949,
+              "max": 59949
+            },
+            "handle_events": {
+              "count": 6,
+              "min": 90,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 130,
+              "max": 130
+            },
+            "post_events_release": {
+              "count": 6,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 6,
+              "min": 37099,
+              "p50_nearest_rank": 47588,
+              "p99_nearest_rank": 60279,
+              "max": 60279
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6,
+            "batches": 6,
+            "messages": 192,
+            "segments": 398,
+            "dispatches": 398,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 6,
+            "batch_samples": 6,
+            "send_calls": 398,
+            "send_sample": 6,
+            "send_complete": 6
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 17077612,
+            "self_wake_call_bracket": 21209,
+            "known_ready_after_to_next_entry": 4374816
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            4374816,
+            4396025
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            17077612,
+            17098821
+          ],
+          "max_own_self_wake_processing_ns": 80248,
+          "client_udp_samples": {
+            "samples": 4,
+            "window_ns": [
+              3232172404,
+              3253646041
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3235511412,
+                3236089169
+              ],
+              "outer_wall_unix_ns": 1794020971914921472,
+              "sample_monotonic_seconds": 457693.97228428,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5284355
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3249727860,
+                3250437783
+              ],
+              "outer_wall_unix_ns": 1794020971929137920,
+              "sample_monotonic_seconds": 457693.986500893,
+              "pid": 889459,
+              "owned_inode_set": [
+                "6427203",
+                "6427204",
+                "6427205"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 364,
+              "queue_bytes": 6524353
+            },
+            "receive_queue_bytes": {
+              "count": 4,
+              "min": 5284355,
+              "p50_nearest_rank": 5503458,
+              "p99_nearest_rank": 6524353,
+              "max": 6524353,
+              "sum": 23220724
+            },
+            "same_identity_drop_delta": 364
+          }
+        }
+      }
+    },
+    {
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "client_exit_code": 0,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-3/endpoint-889531-0.jsonl",
+        "sha256": "e594e8137e2a74c73cb664866be532a3bba7e02e973a70c43e9bd1dd9916677c",
+        "bytes": 155043504
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-3/reliable-peer-udp-cpu-diagnostic-mixed-3-samples.json",
+        "sha256": "f1a2c3bea9160bb380a354052b97083a4d7369bad01e26de4fba552efccafbd4",
+        "bytes": 2214334
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-3/reliable-peer-udp-cpu-diagnostic-mixed-3.json",
+        "sha256": "9cd75903530f0d1ce1673d096a403b7a7acd346cf97ec995b97ff0a529a5177e",
+        "bytes": 489630
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 190738,
+        "rows_written": 190738,
+        "overwritten": 0,
+        "self_wakes": 42642,
+        "matched_self_wakes": 42642,
+        "unmatched_self_wakes": 0,
+        "pending_self_wakes": 0,
+        "unfinished_records": 0,
+        "first_entry_ns": 3669408,
+        "last_entry_ns": 5999914745
+      },
+      "first_drop_mono_ns_bounds": [
+        3621343400,
+        3626874115
+      ],
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889531,
+          "owned_inode_set": [
+            "6427211",
+            "6427212",
+            "6427213"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 1260,
+          "outer_wall_ns_bounds": [
+            1794020979656660480,
+            1794020985629385216
+          ],
+          "drops_first_last": [
+            0,
+            8880
+          ],
+          "same_identity_drop_delta": 8880,
+          "max_queue_bytes": 6792499
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready",
+          "measured",
+          "done"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "measured": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 8880
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "done": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 8880
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "measured_elapsed_seconds": 5.004878363,
+        "source_derived_offer_start_ns_bounds": [
+          0,
+          996873046
+        ],
+        "conservative_common_offer_ns": [
+          996873046,
+          4000000000
+        ],
+        "ready_to_measured_client_drop_delta": 8880
+      },
+      "actual_measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004878363,
+        "private": {
+          "planned_source_updates": 1024000,
+          "generated_source_updates": 1023943,
+          "not_generated": 57,
+          "expected_generated_deliveries": 1023943,
+          "verified_unique": 1023943,
+          "unreceived_within_window": 0,
+          "received_during_offer": 1023424,
+          "received_during_drain": 519,
+          "verified_during_offer_per_second": 255856.0,
+          "generation_lag": {
+            "max_ms": 1.514754,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023943
+          },
+          "last_submit_ms": 3999.768176
+        },
+        "fanout": {
+          "planned_source_updates": 4000,
+          "generated_source_updates": 4000,
+          "not_generated": 0,
+          "expected_generated_deliveries": 4096000,
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "received_during_offer": 4093682,
+          "received_during_drain": 2318,
+          "verified_during_offer_per_second": 1023420.5,
+          "generation_lag": {
+            "max_ms": 1.240035,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.642649
+        }
+      },
+      "write_state_snapshot": [],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 27974,
+          "interval_ns": [
+            690538729,
+            690735734
+          ],
+          "duration_ns": 197005,
+          "clipped_ns": 197005
+        },
+        {
+          "source_or_next_seq": 27973,
+          "interval_ns": [
+            690290846,
+            690482591
+          ],
+          "duration_ns": 191745,
+          "clipped_ns": 191745
+        },
+        {
+          "source_or_next_seq": 15400,
+          "interval_ns": [
+            453054967,
+            453244172
+          ],
+          "duration_ns": 189205,
+          "clipped_ns": 189205
+        }
+      ],
+      "global_sampled_mutex_max_ns": 27939,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 1260,
+        "outer_sample_gap_seconds": {
+          "count": 1259,
+          "min": 0.0043531800038181245,
+          "p50_nearest_rank": 0.004763140983413905,
+          "p99_nearest_rank": 0.005367954960092902,
+          "max": 0.007727825024630874,
+          "sum": 5.972725817991886
+        },
+        "collector_seconds": {
+          "count": 1260,
+          "min": 0.0003210920258425176,
+          "p50_nearest_rank": 0.0006841719732619822,
+          "p99_nearest_rank": 0.0011283719795756042,
+          "max": 0.001434984034858644,
+          "sum": 0.832045764895156
+        },
+        "thread_snapshot_count": 138,
+        "max_thread_gap_seconds": 0.04596477496670559,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "conservative_common_offer_core": {
+          "window_ns": [
+            996873046,
+            4000000000
+          ],
+          "rows": 109898,
+          "known_ready_entries": 29265,
+          "detailed_rows": 1717,
+          "known_ready_elapsed_upper_ns": {
+            "count": 29265,
+            "min": 370,
+            "p50_nearest_rank": 5030,
+            "p99_nearest_rank": 80698,
+            "max": 180686
+          },
+          "entry_gap_ns": {
+            "count": 109897,
+            "min": 1350,
+            "p50_nearest_rank": 14940,
+            "p99_nearest_rank": 109008,
+            "max": 500157
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1717,
+              "min": 30,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 190,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 1717,
+              "min": 20,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1717,
+              "min": 370,
+              "p50_nearest_rank": 12140,
+              "p99_nearest_rank": 95127,
+              "max": 127037
+            },
+            "handle_events": {
+              "count": 1717,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 180,
+              "max": 330
+            },
+            "post_events_release": {
+              "count": 1717,
+              "min": 29,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 110
+            },
+            "entry_to_release": {
+              "count": 1717,
+              "min": 540,
+              "p50_nearest_rank": 12440,
+              "p99_nearest_rank": 95407,
+              "max": 127357
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 5948,
+            "batches": 4725,
+            "messages": 30859,
+            "segments": 61546,
+            "dispatches": 61546,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1223,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1717,
+            "batch_samples": 4633,
+            "send_calls": 61546,
+            "send_sample": 1469,
+            "send_complete": 1469
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1550671461,
+            "self_wake_call_bracket": 1408677,
+            "known_ready_after_to_next_entry": 268628974
+          },
+          "unclassified_ns": 1182417842,
+          "known_ready_wait_ns_bounds": [
+            268628974,
+            270037651
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1550671461,
+            1552080138
+          ],
+          "max_own_self_wake_processing_ns": 136807,
+          "client_udp_samples": {
+            "samples": 633,
+            "window_ns": [
+              996873046,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                996863400,
+                997912925
+              ],
+              "outer_wall_unix_ns": 1794020980651056896,
+              "sample_monotonic_seconds": 457702.708419589,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 0
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3998315688,
+                3999037900
+              ],
+              "outer_wall_unix_ns": 1794020983652509184,
+              "sample_monotonic_seconds": 457705.709872022,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 6545,
+              "queue_bytes": 700736
+            },
+            "receive_queue_bytes": {
+              "count": 633,
+              "min": 0,
+              "p50_nearest_rank": 18432,
+              "p99_nearest_rank": 6371405,
+              "max": 6792499,
+              "sum": 552647168
+            },
+            "same_identity_drop_delta": 6545
+          }
+        },
+        "no_observed_drop_common_offer_core": {
+          "window_ns": [
+            996873046,
+            3621343400
+          ],
+          "rows": 103723,
+          "known_ready_entries": 23143,
+          "detailed_rows": 1620,
+          "known_ready_elapsed_upper_ns": {
+            "count": 23143,
+            "min": 370,
+            "p50_nearest_rank": 4290,
+            "p99_nearest_rank": 72358,
+            "max": 172766
+          },
+          "entry_gap_ns": {
+            "count": 103722,
+            "min": 1350,
+            "p50_nearest_rank": 14089,
+            "p99_nearest_rank": 105718,
+            "max": 500157
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1620,
+              "min": 30,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 190,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 1620,
+              "min": 20,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 70,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1620,
+              "min": 370,
+              "p50_nearest_rank": 11290,
+              "p99_nearest_rank": 96958,
+              "max": 127037
+            },
+            "handle_events": {
+              "count": 1620,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 170,
+              "max": 330
+            },
+            "post_events_release": {
+              "count": 1620,
+              "min": 29,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 60,
+              "max": 110
+            },
+            "entry_to_release": {
+              "count": 1620,
+              "min": 540,
+              "p50_nearest_rank": 11520,
+              "p99_nearest_rank": 97288,
+              "max": 127357
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 5848,
+            "batches": 4627,
+            "messages": 27816,
+            "segments": 54708,
+            "dispatches": 54708,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1221,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1620,
+            "batch_samples": 4535,
+            "send_calls": 54708,
+            "send_sample": 1373,
+            "send_complete": 1373
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1254364933,
+            "self_wake_call_bracket": 1053728,
+            "known_ready_after_to_next_entry": 187916077
+          },
+          "unclassified_ns": 1181135616,
+          "known_ready_wait_ns_bounds": [
+            187916077,
+            188969805
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1254364933,
+            1255418661
+          ],
+          "max_own_self_wake_processing_ns": 136807,
+          "client_udp_samples": {
+            "samples": 555,
+            "window_ns": [
+              996873046,
+              3621343400
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                996863400,
+                997912925
+              ],
+              "outer_wall_unix_ns": 1794020980651056896,
+              "sample_monotonic_seconds": 457702.708419589,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 0
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3621343400,
+                3622063203
+              ],
+              "outer_wall_unix_ns": 1794020983275536896,
+              "sample_monotonic_seconds": 457705.332899436,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5751489
+            },
+            "receive_queue_bytes": {
+              "count": 555,
+              "min": 0,
+              "p50_nearest_rank": 9324,
+              "p99_nearest_rank": 3890994,
+              "max": 5751489,
+              "sum": 120654948
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "pre_first_drop_250ms": {
+          "window_ns": [
+            3371343400,
+            3621343400
+          ],
+          "rows": 4451,
+          "known_ready_entries": 3087,
+          "detailed_rows": 69,
+          "known_ready_elapsed_upper_ns": {
+            "count": 3087,
+            "min": 550,
+            "p50_nearest_rank": 6239,
+            "p99_nearest_rank": 82978,
+            "max": 146997
+          },
+          "entry_gap_ns": {
+            "count": 4450,
+            "min": 3710,
+            "p50_nearest_rank": 52688,
+            "p99_nearest_rank": 145446,
+            "max": 228775
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 69,
+              "min": 60,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 200,
+              "max": 200
+            },
+            "mutex_acquisition": {
+              "count": 69,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "drive_recv": {
+              "count": 69,
+              "min": 1930,
+              "p50_nearest_rank": 44289,
+              "p99_nearest_rank": 101267,
+              "max": 101267
+            },
+            "handle_events": {
+              "count": 69,
+              "min": 70,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 240,
+              "max": 240
+            },
+            "post_events_release": {
+              "count": 69,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "entry_to_release": {
+              "count": 69,
+              "min": 2200,
+              "p50_nearest_rank": 44549,
+              "p99_nearest_rank": 101527,
+              "max": 101527
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 164,
+            "batches": 138,
+            "messages": 2219,
+            "segments": 4389,
+            "dispatches": 4389,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 26,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 69,
+            "batch_samples": 138,
+            "send_calls": 4389,
+            "send_sample": 61,
+            "send_complete": 61
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 188025156,
+            "self_wake_call_bracket": 162898,
+            "known_ready_after_to_next_entry": 33551480
+          },
+          "unclassified_ns": 28260466,
+          "known_ready_wait_ns_bounds": [
+            33551480,
+            33714378
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            188025156,
+            188188054
+          ],
+          "max_own_self_wake_processing_ns": 123847,
+          "client_udp_samples": {
+            "samples": 53,
+            "window_ns": [
+              3371343400,
+              3621343400
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3371417256,
+                3372111570
+              ],
+              "outer_wall_unix_ns": 1794020983025610752,
+              "sample_monotonic_seconds": 457705.082973307,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 0
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3621343400,
+                3622063203
+              ],
+              "outer_wall_unix_ns": 1794020983275536896,
+              "sample_monotonic_seconds": 457705.332899436,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5751489
+            },
+            "receive_queue_bytes": {
+              "count": 53,
+              "min": 0,
+              "p50_nearest_rank": 149349,
+              "p99_nearest_rank": 5751489,
+              "max": 5751489,
+              "sum": 38394876
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "first_drop_plusminus_250ms": {
+          "window_ns": [
+            3371343400,
+            3876874115
+          ],
+          "rows": 8625,
+          "known_ready_entries": 7261,
+          "detailed_rows": 134,
+          "known_ready_elapsed_upper_ns": {
+            "count": 7261,
+            "min": 550,
+            "p50_nearest_rank": 7670,
+            "p99_nearest_rank": 94127,
+            "max": 180686
+          },
+          "entry_gap_ns": {
+            "count": 8624,
+            "min": 3710,
+            "p50_nearest_rank": 55998,
+            "p99_nearest_rank": 145606,
+            "max": 235864
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 134,
+              "min": 60,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 190,
+              "max": 200
+            },
+            "mutex_acquisition": {
+              "count": 134,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 100,
+              "max": 110
+            },
+            "drive_recv": {
+              "count": 134,
+              "min": 1930,
+              "p50_nearest_rank": 49048,
+              "p99_nearest_rank": 95127,
+              "max": 101267
+            },
+            "handle_events": {
+              "count": 134,
+              "min": 70,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 200,
+              "max": 240
+            },
+            "post_events_release": {
+              "count": 134,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 100,
+              "max": 100
+            },
+            "entry_to_release": {
+              "count": 134,
+              "min": 2200,
+              "p50_nearest_rank": 49398,
+              "p99_nearest_rank": 95407,
+              "max": 101527
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 229,
+            "batches": 203,
+            "messages": 4299,
+            "segments": 8963,
+            "dispatches": 8963,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 26,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 134,
+            "batch_samples": 203,
+            "send_calls": 8963,
+            "send_sample": 126,
+            "send_complete": 126
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 387716278,
+            "self_wake_call_bracket": 406694,
+            "known_ready_after_to_next_entry": 89147277
+          },
+          "unclassified_ns": 28260466,
+          "known_ready_wait_ns_bounds": [
+            89147277,
+            89553971
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            387716278,
+            388122972
+          ],
+          "max_own_self_wake_processing_ns": 123847,
+          "client_udp_samples": {
+            "samples": 105,
+            "window_ns": [
+              3371343400,
+              3876874115
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3371417256,
+                3372111570
+              ],
+              "outer_wall_unix_ns": 1794020983025610752,
+              "sample_monotonic_seconds": 457705.082973307,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 0
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3872721832,
+                3873432245
+              ],
+              "outer_wall_unix_ns": 1794020983526915328,
+              "sample_monotonic_seconds": 457705.584278218,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 6366,
+              "queue_bytes": 5688854
+            },
+            "receive_queue_bytes": {
+              "count": 105,
+              "min": 0,
+              "p50_nearest_rank": 5347429,
+              "p99_nearest_rank": 6726196,
+              "max": 6792499,
+              "sum": 355727288
+            },
+            "same_identity_drop_delta": 6366
+          }
+        },
+        "first_drop_plusminus_8ms": {
+          "window_ns": [
+            3613343400,
+            3634874115
+          ],
+          "rows": 377,
+          "known_ready_entries": 377,
+          "detailed_rows": 6,
+          "known_ready_elapsed_upper_ns": {
+            "count": 377,
+            "min": 620,
+            "p50_nearest_rank": 7640,
+            "p99_nearest_rank": 93857,
+            "max": 112787
+          },
+          "entry_gap_ns": {
+            "count": 376,
+            "min": 30539,
+            "p50_nearest_rank": 54248,
+            "p99_nearest_rank": 133296,
+            "max": 159016
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 6,
+              "min": 70,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 120,
+              "max": 120
+            },
+            "mutex_acquisition": {
+              "count": 6,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 80,
+              "max": 80
+            },
+            "drive_recv": {
+              "count": 6,
+              "min": 31839,
+              "p50_nearest_rank": 50908,
+              "p99_nearest_rank": 74798,
+              "max": 74798
+            },
+            "handle_events": {
+              "count": 6,
+              "min": 90,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "post_events_release": {
+              "count": 6,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 50,
+              "max": 50
+            },
+            "entry_to_release": {
+              "count": 6,
+              "min": 32159,
+              "p50_nearest_rank": 51168,
+              "p99_nearest_rank": 75108,
+              "max": 75108
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6,
+            "batches": 6,
+            "messages": 192,
+            "segments": 499,
+            "dispatches": 499,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 6,
+            "batch_samples": 6,
+            "send_calls": 499,
+            "send_sample": 6,
+            "send_complete": 6
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 16997740,
+            "self_wake_call_bracket": 20990,
+            "known_ready_after_to_next_entry": 4511985
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            4511985,
+            4532975
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            16997740,
+            17018730
+          ],
+          "max_own_self_wake_processing_ns": 82648,
+          "client_udp_samples": {
+            "samples": 4,
+            "window_ns": [
+              3613343400,
+              3634874115
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3616580264,
+                3617263718
+              ],
+              "outer_wall_unix_ns": 1794020983270773760,
+              "sample_monotonic_seconds": 457705.328136776,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 4989642
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3630954408,
+                3631703890
+              ],
+              "outer_wall_unix_ns": 1794020983285147904,
+              "sample_monotonic_seconds": 457705.342510864,
+              "pid": 889531,
+              "owned_inode_set": [
+                "6427211",
+                "6427212",
+                "6427213"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 470,
+              "queue_bytes": 6156186
+            },
+            "receive_queue_bytes": {
+              "count": 4,
+              "min": 4989642,
+              "p50_nearest_rank": 5751489,
+              "p99_nearest_rank": 6190382,
+              "max": 6190382,
+              "sum": 23087699
+            },
+            "same_identity_drop_delta": 470
+          }
+        }
+      }
+    },
+    {
+      "attempt": 4,
+      "passed": true,
+      "error": null,
+      "client_exit_code": 0,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-4/endpoint-889551-0.jsonl",
+        "sha256": "2dd6ac0b791f752a632b22e3b119e858c0c62d478d4a3867e2ab916c41179b6c",
+        "bytes": 153253632
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-4/reliable-peer-udp-cpu-diagnostic-mixed-4-samples.json",
+        "sha256": "5cc520891e0add0ca9c847acb0882c139e080bbbbb9e568085a6278b60e9536a",
+        "bytes": 2255087
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-4/reliable-peer-udp-cpu-diagnostic-mixed-4.json",
+        "sha256": "bc10634a6cc7fbfd1c4f1c8ab8e12d605f7448bf25f3694d2e70a396201f266a",
+        "bytes": 489637
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 188457,
+        "rows_written": 188457,
+        "overwritten": 0,
+        "self_wakes": 43659,
+        "matched_self_wakes": 43659,
+        "unmatched_self_wakes": 0,
+        "pending_self_wakes": 0,
+        "unfinished_records": 0,
+        "first_entry_ns": 3715357,
+        "last_entry_ns": 6039263017
+      },
+      "first_drop_mono_ns_bounds": [
+        3195179230,
+        3200736870
+      ],
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889551,
+          "owned_inode_set": [
+            "6427218",
+            "6427219",
+            "6427220"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 1295,
+          "outer_wall_ns_bounds": [
+            1794020990016720896,
+            1794020996031247872
+          ],
+          "drops_first_last": [
+            0,
+            231
+          ],
+          "same_identity_drop_delta": 231,
+          "max_queue_bytes": 6364043
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready",
+          "measured",
+          "done"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "measured": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 231
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "done": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 231
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "measured_elapsed_seconds": 5.004253637,
+        "source_derived_offer_start_ns_bounds": [
+          0,
+          1036146451
+        ],
+        "conservative_common_offer_ns": [
+          1036146451,
+          4000000000
+        ],
+        "ready_to_measured_client_drop_delta": 231
+      },
+      "actual_measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004253637,
+        "private": {
+          "planned_source_updates": 1024000,
+          "generated_source_updates": 1023790,
+          "not_generated": 210,
+          "expected_generated_deliveries": 1023790,
+          "verified_unique": 1023790,
+          "unreceived_within_window": 0,
+          "received_during_offer": 1023491,
+          "received_during_drain": 299,
+          "verified_during_offer_per_second": 255872.75,
+          "generation_lag": {
+            "max_ms": 1.780377,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023790
+          },
+          "last_submit_ms": 3999.999927
+        },
+        "fanout": {
+          "planned_source_updates": 4000,
+          "generated_source_updates": 3999,
+          "not_generated": 1,
+          "expected_generated_deliveries": 4094976,
+          "verified_unique": 4094976,
+          "unreceived_within_window": 0,
+          "received_during_offer": 4093544,
+          "received_during_drain": 1432,
+          "verified_during_offer_per_second": 1023386.0,
+          "generation_lag": {
+            "max_ms": 1.66712,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 3999
+          },
+          "last_submit_ms": 3998.950783
+        }
+      },
+      "write_state_snapshot": [],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 152062,
+          "interval_ns": [
+            4312872861,
+            4313214852
+          ],
+          "duration_ns": 341991,
+          "clipped_ns": 341991
+        },
+        {
+          "source_or_next_seq": 152065,
+          "interval_ns": [
+            4313921514,
+            4314216337
+          ],
+          "duration_ns": 294823,
+          "clipped_ns": 294823
+        },
+        {
+          "source_or_next_seq": 152064,
+          "interval_ns": [
+            4313589643,
+            4313866086
+          ],
+          "duration_ns": 276443,
+          "clipped_ns": 276443
+        }
+      ],
+      "global_sampled_mutex_max_ns": 33529,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 1295,
+        "outer_sample_gap_seconds": {
+          "count": 1294,
+          "min": 0.004330170981120318,
+          "p50_nearest_rank": 0.0046539329923689365,
+          "p99_nearest_rank": 0.005333034961950034,
+          "max": 0.008733930008020252,
+          "sum": 6.014527817955241
+        },
+        "collector_seconds": {
+          "count": 1295,
+          "min": 0.00032047199783846736,
+          "p50_nearest_rank": 0.0005928049795329571,
+          "p99_nearest_rank": 0.0011139020207338035,
+          "max": 0.001488642010372132,
+          "sum": 0.7363057333277538
+        },
+        "thread_snapshot_count": 138,
+        "max_thread_gap_seconds": 0.0460685919970274,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "conservative_common_offer_core": {
+          "window_ns": [
+            1036146451,
+            4000000000
+          ],
+          "rows": 105570,
+          "known_ready_entries": 30281,
+          "detailed_rows": 1650,
+          "known_ready_elapsed_upper_ns": {
+            "count": 30281,
+            "min": 390,
+            "p50_nearest_rank": 4900,
+            "p99_nearest_rank": 70869,
+            "max": 239884
+          },
+          "entry_gap_ns": {
+            "count": 105569,
+            "min": 1980,
+            "p50_nearest_rank": 16449,
+            "p99_nearest_rank": 105927,
+            "max": 654814
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1650,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 200,
+              "max": 220
+            },
+            "mutex_acquisition": {
+              "count": 1650,
+              "min": 20,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1650,
+              "min": 360,
+              "p50_nearest_rank": 15009,
+              "p99_nearest_rank": 94908,
+              "max": 120867
+            },
+            "handle_events": {
+              "count": 1650,
+              "min": 50,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 180,
+              "max": 350
+            },
+            "post_events_release": {
+              "count": 1650,
+              "min": 29,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 160
+            },
+            "entry_to_release": {
+              "count": 1650,
+              "min": 520,
+              "p50_nearest_rank": 15269,
+              "p99_nearest_rank": 95198,
+              "max": 121267
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 5817,
+            "batches": 4714,
+            "messages": 32515,
+            "segments": 63540,
+            "dispatches": 63540,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1103,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1650,
+            "batch_samples": 4600,
+            "send_calls": 63540,
+            "send_sample": 1438,
+            "send_complete": 1438
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1529323450,
+            "self_wake_call_bracket": 1443535,
+            "known_ready_after_to_next_entry": 260870750
+          },
+          "unclassified_ns": 1172215814,
+          "known_ready_wait_ns_bounds": [
+            260870750,
+            262314285
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1529323450,
+            1530766985
+          ],
+          "max_own_self_wake_processing_ns": 157376,
+          "client_udp_samples": {
+            "samples": 635,
+            "window_ns": [
+              1036146451,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1039131614,
+                1039489046
+              ],
+              "outer_wall_unix_ns": 1794020991053522176,
+              "sample_monotonic_seconds": 457713.110884064,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 10824
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3997640670,
+                3998070770
+              ],
+              "outer_wall_unix_ns": 1794020994012031232,
+              "sample_monotonic_seconds": 457716.069393432,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 231,
+              "queue_bytes": 7300
+            },
+            "receive_queue_bytes": {
+              "count": 635,
+              "min": 0,
+              "p50_nearest_rank": 16724,
+              "p99_nearest_rank": 4831742,
+              "max": 6364043,
+              "sum": 154055044
+            },
+            "same_identity_drop_delta": 231
+          }
+        },
+        "no_observed_drop_common_offer_core": {
+          "window_ns": [
+            1036146451,
+            3195179230
+          ],
+          "rows": 87203,
+          "known_ready_entries": 19083,
+          "detailed_rows": 1363,
+          "known_ready_elapsed_upper_ns": {
+            "count": 19083,
+            "min": 390,
+            "p50_nearest_rank": 3840,
+            "p99_nearest_rank": 65548,
+            "max": 144656
+          },
+          "entry_gap_ns": {
+            "count": 87202,
+            "min": 1980,
+            "p50_nearest_rank": 14340,
+            "p99_nearest_rank": 101258,
+            "max": 654814
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1363,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 190,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 1363,
+              "min": 20,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1363,
+              "min": 360,
+              "p50_nearest_rank": 12490,
+              "p99_nearest_rank": 93858,
+              "max": 120717
+            },
+            "handle_events": {
+              "count": 1363,
+              "min": 50,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 170,
+              "max": 350
+            },
+            "post_events_release": {
+              "count": 1363,
+              "min": 29,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 100
+            },
+            "entry_to_release": {
+              "count": 1363,
+              "min": 520,
+              "p50_nearest_rank": 12689,
+              "p99_nearest_rank": 94167,
+              "max": 120987
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 5137,
+            "batches": 4144,
+            "messages": 25744,
+            "segments": 48369,
+            "dispatches": 48369,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 993,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1363,
+            "batch_samples": 4039,
+            "send_calls": 48369,
+            "send_sample": 1175,
+            "send_complete": 1175
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1000279533,
+            "self_wake_call_bracket": 838029,
+            "known_ready_after_to_next_entry": 139306436
+          },
+          "unclassified_ns": 1018608781,
+          "known_ready_wait_ns_bounds": [
+            139306436,
+            140144465
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1000279533,
+            1001117562
+          ],
+          "max_own_self_wake_processing_ns": 124097,
+          "client_udp_samples": {
+            "samples": 461,
+            "window_ns": [
+              1036146451,
+              3195179230
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1039131614,
+                1039489046
+              ],
+              "outer_wall_unix_ns": 1794020991053522176,
+              "sample_monotonic_seconds": 457713.110884064,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 10824
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3195179230,
+                3195914553
+              ],
+              "outer_wall_unix_ns": 1794020993209569792,
+              "sample_monotonic_seconds": 457715.266932844,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5462111
+            },
+            "receive_queue_bytes": {
+              "count": 461,
+              "min": 0,
+              "p50_nearest_rank": 8441,
+              "p99_nearest_rank": 2587139,
+              "max": 5462111,
+              "sum": 56015886
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "pre_first_drop_250ms": {
+          "window_ns": [
+            2945179230,
+            3195179230
+          ],
+          "rows": 4422,
+          "known_ready_entries": 3400,
+          "detailed_rows": 69,
+          "known_ready_elapsed_upper_ns": {
+            "count": 3400,
+            "min": 560,
+            "p50_nearest_rank": 6580,
+            "p99_nearest_rank": 77788,
+            "max": 137596
+          },
+          "entry_gap_ns": {
+            "count": 4421,
+            "min": 2810,
+            "p50_nearest_rank": 51389,
+            "p99_nearest_rank": 140716,
+            "max": 654814
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 69,
+              "min": 50,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 210,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 69,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "drive_recv": {
+              "count": 69,
+              "min": 2610,
+              "p50_nearest_rank": 48169,
+              "p99_nearest_rank": 120717,
+              "max": 120717
+            },
+            "handle_events": {
+              "count": 69,
+              "min": 80,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 220,
+              "max": 220
+            },
+            "post_events_release": {
+              "count": 69,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 69,
+              "min": 3180,
+              "p50_nearest_rank": 48579,
+              "p99_nearest_rank": 120987,
+              "max": 120987
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 135,
+            "batches": 125,
+            "messages": 2650,
+            "segments": 5136,
+            "dispatches": 5136,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 10,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 69,
+            "batch_samples": 125,
+            "send_calls": 5136,
+            "send_sample": 68,
+            "send_complete": 68
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 189090010,
+            "self_wake_call_bracket": 182615,
+            "known_ready_after_to_next_entry": 37151083
+          },
+          "unclassified_ns": 23576292,
+          "known_ready_wait_ns_bounds": [
+            37151083,
+            37333698
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            189090010,
+            189272625
+          ],
+          "max_own_self_wake_processing_ns": 121036,
+          "client_udp_samples": {
+            "samples": 53,
+            "window_ns": [
+              2945179230,
+              3195179230
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2944937182,
+                2945629885
+              ],
+              "outer_wall_unix_ns": 1794020992959327744,
+              "sample_monotonic_seconds": 457715.016690228,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 407786
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3195179230,
+                3195914553
+              ],
+              "outer_wall_unix_ns": 1794020993209569792,
+              "sample_monotonic_seconds": 457715.266932844,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5462111
+            },
+            "receive_queue_bytes": {
+              "count": 53,
+              "min": 0,
+              "p50_nearest_rank": 335664,
+              "p99_nearest_rank": 5462111,
+              "max": 5462111,
+              "sum": 38373925
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "first_drop_plusminus_250ms": {
+          "window_ns": [
+            2945179230,
+            3450736870
+          ],
+          "rows": 9524,
+          "known_ready_entries": 7007,
+          "detailed_rows": 149,
+          "known_ready_elapsed_upper_ns": {
+            "count": 7007,
+            "min": 560,
+            "p50_nearest_rank": 7010,
+            "p99_nearest_rank": 80048,
+            "max": 168635
+          },
+          "entry_gap_ns": {
+            "count": 9523,
+            "min": 2810,
+            "p50_nearest_rank": 50769,
+            "p99_nearest_rank": 138337,
+            "max": 654814
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 149,
+              "min": 50,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 210,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 149,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "drive_recv": {
+              "count": 149,
+              "min": 2390,
+              "p50_nearest_rank": 44709,
+              "p99_nearest_rank": 120717,
+              "max": 120867
+            },
+            "handle_events": {
+              "count": 149,
+              "min": 70,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 200,
+              "max": 220
+            },
+            "post_events_release": {
+              "count": 149,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 149,
+              "min": 2720,
+              "p50_nearest_rank": 44949,
+              "p99_nearest_rank": 120987,
+              "max": 121267
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 294,
+            "batches": 256,
+            "messages": 4740,
+            "segments": 9599,
+            "dispatches": 9599,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 38,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 149,
+            "batch_samples": 256,
+            "send_calls": 9599,
+            "send_sample": 143,
+            "send_complete": 143
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 371085235,
+            "self_wake_call_bracket": 380991,
+            "known_ready_after_to_next_entry": 77982674
+          },
+          "unclassified_ns": 56108740,
+          "known_ready_wait_ns_bounds": [
+            77982674,
+            78363665
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            371085235,
+            371466226
+          ],
+          "max_own_self_wake_processing_ns": 157376,
+          "client_udp_samples": {
+            "samples": 105,
+            "window_ns": [
+              2945179230,
+              3450736870
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2944937182,
+                2945629885
+              ],
+              "outer_wall_unix_ns": 1794020992959327744,
+              "sample_monotonic_seconds": 457715.016690228,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 407786
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3446743518,
+                3447451561
+              ],
+              "outer_wall_unix_ns": 1794020993461134080,
+              "sample_monotonic_seconds": 457715.518496847,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 231,
+              "queue_bytes": 800076
+            },
+            "receive_queue_bytes": {
+              "count": 105,
+              "min": 0,
+              "p50_nearest_rank": 407786,
+              "p99_nearest_rank": 5998574,
+              "max": 6364043,
+              "sum": 114825684
+            },
+            "same_identity_drop_delta": 231
+          }
+        },
+        "first_drop_plusminus_8ms": {
+          "window_ns": [
+            3187179230,
+            3208736870
+          ],
+          "rows": 367,
+          "known_ready_entries": 367,
+          "detailed_rows": 6,
+          "known_ready_elapsed_upper_ns": {
+            "count": 367,
+            "min": 850,
+            "p50_nearest_rank": 7360,
+            "p99_nearest_rank": 80268,
+            "max": 88297
+          },
+          "entry_gap_ns": {
+            "count": 366,
+            "min": 31359,
+            "p50_nearest_rank": 52139,
+            "p99_nearest_rank": 140707,
+            "max": 198775
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 6,
+              "min": 80,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 130,
+              "max": 130
+            },
+            "mutex_acquisition": {
+              "count": 6,
+              "min": 50,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 6,
+              "min": 37369,
+              "p50_nearest_rank": 46449,
+              "p99_nearest_rank": 53888,
+              "max": 53888
+            },
+            "handle_events": {
+              "count": 6,
+              "min": 90,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 160,
+              "max": 160
+            },
+            "post_events_release": {
+              "count": 6,
+              "min": 50,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 6,
+              "min": 37649,
+              "p50_nearest_rank": 46759,
+              "p99_nearest_rank": 54328,
+              "max": 54328
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6,
+            "batches": 6,
+            "messages": 192,
+            "segments": 400,
+            "dispatches": 400,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 6,
+            "batch_samples": 6,
+            "send_calls": 400,
+            "send_sample": 6,
+            "send_complete": 6
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 17267185,
+            "self_wake_call_bracket": 20569,
+            "known_ready_after_to_next_entry": 4269886
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            4269886,
+            4290455
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            17267185,
+            17287754
+          ],
+          "max_own_self_wake_processing_ns": 137116,
+          "client_udp_samples": {
+            "samples": 4,
+            "window_ns": [
+              3187179230,
+              3208736870
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3190369502,
+                3191097465
+              ],
+              "outer_wall_unix_ns": 1794020993204760064,
+              "sample_monotonic_seconds": 457715.262123245,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 4981822
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3204821470,
+                3205573281
+              ],
+              "outer_wall_unix_ns": 1794020993219212032,
+              "sample_monotonic_seconds": 457715.276575042,
+              "pid": 889551,
+              "owned_inode_set": [
+                "6427218",
+                "6427219",
+                "6427220"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 202,
+              "queue_bytes": 5998574
+            },
+            "receive_queue_bytes": {
+              "count": 4,
+              "min": 4981822,
+              "p50_nearest_rank": 5462111,
+              "p99_nearest_rank": 6364043,
+              "max": 6364043,
+              "sum": 22806550
+            },
+            "same_identity_drop_delta": 202
+          }
+        }
+      }
+    },
+    {
+      "attempt": 5,
+      "passed": true,
+      "error": null,
+      "client_exit_code": 0,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-5/endpoint-889592-0.jsonl",
+        "sha256": "72baf8c807c1a036d32c5d2dd55267d4cd1b23c2829416c66153096c12715718",
+        "bytes": 153035531
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-5/reliable-peer-udp-cpu-diagnostic-mixed-5-samples.json",
+        "sha256": "497947866353b9051c9f5eefc31b44ca252e1b19975f874de0a4069edbe6e6bd",
+        "bytes": 2246752
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-5/reliable-peer-udp-cpu-diagnostic-mixed-5.json",
+        "sha256": "894a6aecb37b07e57b8d1fd7c5f2c79a61e221668a65a6512a9e08b01f6d6998",
+        "bytes": 489650
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 188023,
+        "rows_written": 188023,
+        "overwritten": 0,
+        "self_wakes": 47138,
+        "matched_self_wakes": 47138,
+        "unmatched_self_wakes": 0,
+        "pending_self_wakes": 0,
+        "unfinished_records": 0,
+        "first_entry_ns": 3629758,
+        "last_entry_ns": 6016217207
+      },
+      "first_drop_mono_ns_bounds": [
+        2888679184,
+        2894247637
+      ],
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889592,
+          "owned_inode_set": [
+            "6427226",
+            "6427227",
+            "6427228"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 1287,
+          "outer_wall_ns_bounds": [
+            1794021000610135040,
+            1794021006599641856
+          ],
+          "drops_first_last": [
+            0,
+            4141
+          ],
+          "same_identity_drop_delta": 4141,
+          "max_queue_bytes": 6690623
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready",
+          "measured",
+          "done"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "measured": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 4141
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          },
+          "done": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 4141
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "measured_elapsed_seconds": 5.004084181,
+        "source_derived_offer_start_ns_bounds": [
+          0,
+          1013487232
+        ],
+        "conservative_common_offer_ns": [
+          1013487232,
+          4000000000
+        ],
+        "ready_to_measured_client_drop_delta": 4141
+      },
+      "actual_measurement": {
+        "status": "observed",
+        "elapsed_seconds": 5.004084181,
+        "private": {
+          "planned_source_updates": 1024000,
+          "generated_source_updates": 1023840,
+          "not_generated": 160,
+          "expected_generated_deliveries": 1023840,
+          "verified_unique": 1023840,
+          "unreceived_within_window": 0,
+          "received_during_offer": 1023338,
+          "received_during_drain": 502,
+          "verified_during_offer_per_second": 255834.5,
+          "generation_lag": {
+            "max_ms": 1.959122,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023840
+          },
+          "last_submit_ms": 3999.355901
+        },
+        "fanout": {
+          "planned_source_updates": 4000,
+          "generated_source_updates": 4000,
+          "not_generated": 0,
+          "expected_generated_deliveries": 4096000,
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "received_during_offer": 4093588,
+          "received_during_drain": 2412,
+          "verified_during_offer_per_second": 1023397.0,
+          "generation_lag": {
+            "max_ms": 1.148076,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.295162
+        }
+      },
+      "write_state_snapshot": [],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 120050,
+          "interval_ns": [
+            2337164807,
+            2337446720
+          ],
+          "duration_ns": 281913,
+          "clipped_ns": 281913
+        },
+        {
+          "source_or_next_seq": 120048,
+          "interval_ns": [
+            2336607481,
+            2336833715
+          ],
+          "duration_ns": 226234,
+          "clipped_ns": 226234
+        },
+        {
+          "source_or_next_seq": 120049,
+          "interval_ns": [
+            2336894143,
+            2337101408
+          ],
+          "duration_ns": 207265,
+          "clipped_ns": 207265
+        }
+      ],
+      "global_sampled_mutex_max_ns": 24530,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 1287,
+        "outer_sample_gap_seconds": {
+          "count": 1286,
+          "min": 0.004339681006968021,
+          "p50_nearest_rank": 0.004715282004326582,
+          "p99_nearest_rank": 0.005211267969571054,
+          "max": 0.009344444959424436,
+          "sum": 5.989507390011568
+        },
+        "collector_seconds": {
+          "count": 1287,
+          "min": 0.00032003200612962246,
+          "p50_nearest_rank": 0.0006439840071834624,
+          "p99_nearest_rank": 0.0010927330004051328,
+          "max": 0.0025452959816902876,
+          "sum": 0.7477506716386415
+        },
+        "thread_snapshot_count": 138,
+        "max_thread_gap_seconds": 0.046039210981689394,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "conservative_common_offer_core": {
+          "window_ns": [
+            1013487232,
+            4000000000
+          ],
+          "rows": 108066,
+          "known_ready_entries": 31650,
+          "detailed_rows": 1689,
+          "known_ready_elapsed_upper_ns": {
+            "count": 31650,
+            "min": 390,
+            "p50_nearest_rank": 5290,
+            "p99_nearest_rank": 76148,
+            "max": 281943
+          },
+          "entry_gap_ns": {
+            "count": 108065,
+            "min": 1730,
+            "p50_nearest_rank": 15410,
+            "p99_nearest_rank": 108758,
+            "max": 600805
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1689,
+              "min": 40,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 190,
+              "max": 2280
+            },
+            "mutex_acquisition": {
+              "count": 1689,
+              "min": 20,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 80,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1689,
+              "min": 580,
+              "p50_nearest_rank": 12550,
+              "p99_nearest_rank": 95938,
+              "max": 118417
+            },
+            "handle_events": {
+              "count": 1689,
+              "min": 49,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 160,
+              "max": 230
+            },
+            "post_events_release": {
+              "count": 1689,
+              "min": 29,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 70,
+              "max": 140
+            },
+            "entry_to_release": {
+              "count": 1689,
+              "min": 820,
+              "p50_nearest_rank": 12770,
+              "p99_nearest_rank": 96218,
+              "max": 118757
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 5581,
+            "batches": 4417,
+            "messages": 30691,
+            "segments": 60532,
+            "dispatches": 60532,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1164,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1689,
+            "batch_samples": 4341,
+            "send_calls": 60532,
+            "send_sample": 1454,
+            "send_complete": 1454
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 1588978977,
+            "self_wake_call_bracket": 1483638,
+            "known_ready_after_to_next_entry": 289147619
+          },
+          "unclassified_ns": 1106902534,
+          "known_ready_wait_ns_bounds": [
+            289147619,
+            290631257
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            1588978977,
+            1590462615
+          ],
+          "max_own_self_wake_processing_ns": 158936,
+          "client_udp_samples": {
+            "samples": 639,
+            "window_ns": [
+              1013487232,
+              4000000000
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1017092112,
+                1017451974
+              ],
+              "outer_wall_unix_ns": 1794021001625020672,
+              "sample_monotonic_seconds": 457723.682382837,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 3119
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3996529168,
+                3997243110
+              ],
+              "outer_wall_unix_ns": 1794021004604457728,
+              "sample_monotonic_seconds": 457726.661820295,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 1579,
+              "queue_bytes": 5666039
+            },
+            "receive_queue_bytes": {
+              "count": 639,
+              "min": 0,
+              "p50_nearest_rank": 24648,
+              "p99_nearest_rank": 6201474,
+              "max": 6690623,
+              "sum": 408791097
+            },
+            "same_identity_drop_delta": 1579
+          }
+        },
+        "no_observed_drop_common_offer_core": {
+          "window_ns": [
+            1013487232,
+            2888679184
+          ],
+          "rows": 88093,
+          "known_ready_entries": 16250,
+          "detailed_rows": 1376,
+          "known_ready_elapsed_upper_ns": {
+            "count": 16250,
+            "min": 390,
+            "p50_nearest_rank": 3790,
+            "p99_nearest_rank": 63418,
+            "max": 281943
+          },
+          "entry_gap_ns": {
+            "count": 88092,
+            "min": 1730,
+            "p50_nearest_rank": 13039,
+            "p99_nearest_rank": 86108,
+            "max": 600805
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 1376,
+              "min": 40,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 170,
+              "max": 2280
+            },
+            "mutex_acquisition": {
+              "count": 1376,
+              "min": 20,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 70,
+              "max": 230
+            },
+            "drive_recv": {
+              "count": 1376,
+              "min": 580,
+              "p50_nearest_rank": 10210,
+              "p99_nearest_rank": 81688,
+              "max": 100667
+            },
+            "handle_events": {
+              "count": 1376,
+              "min": 49,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 140,
+              "max": 230
+            },
+            "post_events_release": {
+              "count": 1376,
+              "min": 29,
+              "p50_nearest_rank": 30,
+              "p99_nearest_rank": 60,
+              "max": 80
+            },
+            "entry_to_release": {
+              "count": 1376,
+              "min": 820,
+              "p50_nearest_rank": 10420,
+              "p99_nearest_rank": 81938,
+              "max": 101017
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 4909,
+            "batches": 3813,
+            "messages": 20216,
+            "segments": 39233,
+            "dispatches": 39233,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 1096,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 1376,
+            "batch_samples": 3745,
+            "send_calls": 39233,
+            "send_sample": 1158,
+            "send_complete": 1158
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 752369460,
+            "self_wake_call_bracket": 671693,
+            "known_ready_after_to_next_entry": 111395812
+          },
+          "unclassified_ns": 1010754987,
+          "known_ready_wait_ns_bounds": [
+            111395812,
+            112067505
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            752369460,
+            753041153
+          ],
+          "max_own_self_wake_processing_ns": 130666,
+          "client_udp_samples": {
+            "samples": 408,
+            "window_ns": [
+              1013487232,
+              2888679184
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                1017092112,
+                1017451974
+              ],
+              "outer_wall_unix_ns": 1794021001625020672,
+              "sample_monotonic_seconds": 457723.682382837,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 3119
+            },
+            "last": {
+              "mono_ns_bounds": [
+                2888679184,
+                2889410745
+              ],
+              "outer_wall_unix_ns": 1794021003496607744,
+              "sample_monotonic_seconds": 457725.553970448,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5183275
+            },
+            "receive_queue_bytes": {
+              "count": 408,
+              "min": 0,
+              "p50_nearest_rank": 6912,
+              "p99_nearest_rank": 3269583,
+              "max": 5183275,
+              "sum": 56859805
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "pre_first_drop_250ms": {
+          "window_ns": [
+            2638679184,
+            2888679184
+          ],
+          "rows": 5495,
+          "known_ready_entries": 3787,
+          "detailed_rows": 85,
+          "known_ready_elapsed_upper_ns": {
+            "count": 3787,
+            "min": 490,
+            "p50_nearest_rank": 6650,
+            "p99_nearest_rank": 76398,
+            "max": 190635
+          },
+          "entry_gap_ns": {
+            "count": 5494,
+            "min": 2890,
+            "p50_nearest_rank": 45528,
+            "p99_nearest_rank": 122876,
+            "max": 224154
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 85,
+              "min": 50,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 190,
+              "max": 190
+            },
+            "mutex_acquisition": {
+              "count": 85,
+              "min": 30,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "drive_recv": {
+              "count": 85,
+              "min": 580,
+              "p50_nearest_rank": 42029,
+              "p99_nearest_rank": 100667,
+              "max": 100667
+            },
+            "handle_events": {
+              "count": 85,
+              "min": 70,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 160,
+              "max": 160
+            },
+            "post_events_release": {
+              "count": 85,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "entry_to_release": {
+              "count": 85,
+              "min": 820,
+              "p50_nearest_rank": 42289,
+              "p99_nearest_rank": 101017,
+              "max": 101017
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 208,
+            "batches": 187,
+            "messages": 2737,
+            "segments": 5195,
+            "dispatches": 5195,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 21,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 85,
+            "batch_samples": 184,
+            "send_calls": 5195,
+            "send_sample": 79,
+            "send_complete": 79
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 179511133,
+            "self_wake_call_bracket": 189294,
+            "known_ready_after_to_next_entry": 39067329
+          },
+          "unclassified_ns": 31232244,
+          "known_ready_wait_ns_bounds": [
+            39067329,
+            39256623
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            179511133,
+            179700427
+          ],
+          "max_own_self_wake_processing_ns": 113248,
+          "client_udp_samples": {
+            "samples": 53,
+            "window_ns": [
+              2638679184,
+              2888679184
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2639979792,
+                2640352982
+              ],
+              "outer_wall_unix_ns": 1794021003247908352,
+              "sample_monotonic_seconds": 457725.305270287,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 18588
+            },
+            "last": {
+              "mono_ns_bounds": [
+                2888679184,
+                2889410745
+              ],
+              "outer_wall_unix_ns": 1794021003496607744,
+              "sample_monotonic_seconds": 457725.553970448,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 5183275
+            },
+            "receive_queue_bytes": {
+              "count": 53,
+              "min": 0,
+              "p50_nearest_rank": 260436,
+              "p99_nearest_rank": 5183275,
+              "max": 5183275,
+              "sum": 45619174
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "first_drop_plusminus_250ms": {
+          "window_ns": [
+            2638679184,
+            3144247637
+          ],
+          "rows": 9772,
+          "known_ready_entries": 7244,
+          "detailed_rows": 152,
+          "known_ready_elapsed_upper_ns": {
+            "count": 7244,
+            "min": 490,
+            "p50_nearest_rank": 6860,
+            "p99_nearest_rank": 79408,
+            "max": 190635
+          },
+          "entry_gap_ns": {
+            "count": 9771,
+            "min": 2890,
+            "p50_nearest_rank": 49029,
+            "p99_nearest_rank": 135436,
+            "max": 230294
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 152,
+              "min": 50,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 190,
+              "max": 200
+            },
+            "mutex_acquisition": {
+              "count": 152,
+              "min": 30,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 90,
+              "max": 110
+            },
+            "drive_recv": {
+              "count": 152,
+              "min": 580,
+              "p50_nearest_rank": 44969,
+              "p99_nearest_rank": 104277,
+              "max": 105767
+            },
+            "handle_events": {
+              "count": 152,
+              "min": 70,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 170,
+              "max": 180
+            },
+            "post_events_release": {
+              "count": 152,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 80
+            },
+            "entry_to_release": {
+              "count": 152,
+              "min": 820,
+              "p50_nearest_rank": 45249,
+              "p99_nearest_rank": 104597,
+              "max": 106057
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 345,
+            "batches": 314,
+            "messages": 5295,
+            "segments": 10130,
+            "dispatches": 10130,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 31,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 152,
+            "batch_samples": 307,
+            "send_calls": 10130,
+            "send_sample": 142,
+            "send_complete": 142
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 377020494,
+            "self_wake_call_bracket": 370277,
+            "known_ready_after_to_next_entry": 79510649
+          },
+          "unclassified_ns": 48667033,
+          "known_ready_wait_ns_bounds": [
+            79510649,
+            79880926
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            377020494,
+            377390771
+          ],
+          "max_own_self_wake_processing_ns": 125457,
+          "client_udp_samples": {
+            "samples": 105,
+            "window_ns": [
+              2638679184,
+              3144247637
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2639979792,
+                2640352982
+              ],
+              "outer_wall_unix_ns": 1794021003247908352,
+              "sample_monotonic_seconds": 457725.305270287,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 18588
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3139315984,
+                3140375027
+              ],
+              "outer_wall_unix_ns": 1794021003747244544,
+              "sample_monotonic_seconds": 457725.80460733,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 1579,
+              "queue_bytes": 6216
+            },
+            "receive_queue_bytes": {
+              "count": 105,
+              "min": 0,
+              "p50_nearest_rank": 476759,
+              "p99_nearest_rank": 6487023,
+              "max": 6690623,
+              "sum": 167420509
+            },
+            "same_identity_drop_delta": 1579
+          }
+        },
+        "first_drop_plusminus_8ms": {
+          "window_ns": [
+            2880679184,
+            2902247637
+          ],
+          "rows": 401,
+          "known_ready_entries": 401,
+          "detailed_rows": 6,
+          "known_ready_elapsed_upper_ns": {
+            "count": 401,
+            "min": 650,
+            "p50_nearest_rank": 7400,
+            "p99_nearest_rank": 94307,
+            "max": 138416
+          },
+          "entry_gap_ns": {
+            "count": 400,
+            "min": 32739,
+            "p50_nearest_rank": 50239,
+            "p99_nearest_rank": 143707,
+            "max": 181775
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 6,
+              "min": 70,
+              "p50_nearest_rank": 70,
+              "p99_nearest_rank": 100,
+              "max": 100
+            },
+            "mutex_acquisition": {
+              "count": 6,
+              "min": 50,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 6,
+              "min": 32109,
+              "p50_nearest_rank": 38229,
+              "p99_nearest_rank": 47719,
+              "max": 47719
+            },
+            "handle_events": {
+              "count": 6,
+              "min": 90,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 160,
+              "max": 160
+            },
+            "post_events_release": {
+              "count": 6,
+              "min": 50,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "entry_to_release": {
+              "count": 6,
+              "min": 32399,
+              "p50_nearest_rank": 38539,
+              "p99_nearest_rank": 48059,
+              "max": 48059
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6,
+            "batches": 6,
+            "messages": 192,
+            "segments": 326,
+            "dispatches": 326,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 6,
+            "batch_samples": 6,
+            "send_calls": 326,
+            "send_sample": 6,
+            "send_complete": 6
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 16781462,
+            "self_wake_call_bracket": 21709,
+            "known_ready_after_to_next_entry": 4765282
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            4765282,
+            4786991
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            16781462,
+            16803171
+          ],
+          "max_own_self_wake_processing_ns": 93098,
+          "client_udp_samples": {
+            "samples": 4,
+            "window_ns": [
+              2880679184,
+              2902247637
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2883862288,
+                2884599600
+              ],
+              "outer_wall_unix_ns": 1794021003491790848,
+              "sample_monotonic_seconds": 457725.549153669,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 4107654
+            },
+            "last": {
+              "mono_ns_bounds": [
+                2898328592,
+                2899078413
+              ],
+              "outer_wall_unix_ns": 1794021003506257152,
+              "sample_monotonic_seconds": 457725.563620055,
+              "pid": 889592,
+              "owned_inode_set": [
+                "6427226",
+                "6427227",
+                "6427228"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 339,
+              "queue_bytes": 6251780
+            },
+            "receive_queue_bytes": {
+              "count": 4,
+              "min": 4107654,
+              "p50_nearest_rank": 5183275,
+              "p99_nearest_rank": 6251780,
+              "max": 6251780,
+              "sum": 21744183
+            },
+            "same_identity_drop_delta": 339
+          }
+        }
+      }
+    },
+    {
+      "attempt": 6,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "client_exit_code": 1,
+      "client_forced_kill": false,
+      "raw_trace": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-6/endpoint-889622-0.jsonl",
+        "sha256": "9b9b19a4dbfffa43816b5fcc412211ba5cba649af70ccb4bbaeaceab3be1732b",
+        "bytes": 132096476
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-6/reliable-peer-udp-cpu-diagnostic-mixed-6-samples.json",
+        "sha256": "63e80c4bf6a3c53c1421c1927d4410ee83fd7d2c43000be50dbe33d52a99dd94",
+        "bytes": 1695653
+      },
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-endpoint-full-history-diagnostic/attempt-6/reliable-peer-udp-cpu-diagnostic-mixed-6.json",
+        "sha256": "8bbc08e274ecaeca6f25833c84471854d59b9169ee48efa5788eeb32c84e3679",
+        "bytes": 23559
+      },
+      "footer": {
+        "kind": "footer",
+        "polls": 162366,
+        "rows_written": 162366,
+        "overwritten": 0,
+        "self_wakes": 39857,
+        "matched_self_wakes": 39856,
+        "unmatched_self_wakes": 1,
+        "pending_self_wakes": 1,
+        "unfinished_records": 0,
+        "first_entry_ns": 3582420,
+        "last_entry_ns": 4392105738
+      },
+      "first_drop_mono_ns_bounds": [
+        2938079553,
+        2942876804
+      ],
+      "client_udp_identity_epochs": [
+        {
+          "pid": 889622,
+          "owned_inode_set": [
+            "6427234",
+            "6427235",
+            "6427236"
+          ],
+          "owned_udp_sockets": 1,
+          "samples": 980,
+          "outer_wall_ns_bounds": [
+            1794021011511013120,
+            1794021016056961024
+          ],
+          "drops_first_last": [
+            0,
+            24760
+          ],
+          "same_identity_drop_delta": 24760,
+          "max_queue_bytes": 8276559
+        }
+      ],
+      "gates": {
+        "observed_events": [
+          "ready"
+        ],
+        "absolute_timestamps": "unavailable",
+        "udp_at_gates": {
+          "ready": {
+            "client": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            },
+            "server": {
+              "owned_sockets": 1,
+              "receive_queue_bytes": 0,
+              "send_queue_bytes": 0,
+              "receive_drops": 0
+            }
+          }
+        },
+        "source_order": "ready gate -> measurement Instant/barrier -> offer/drain -> measured gate -> closing -> done -> runtime/endpoint Drop",
+        "conservative_common_offer_ns": null,
+        "reason": "No measured gate; measured elapsed and an offer-start upper bound are unavailable."
+      },
+      "actual_measurement": {
+        "status": "unavailable",
+        "reason": "No measured gate; actual generated work and lag remain unknown."
+      },
+      "write_state_snapshot": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3533,
+          "stream_max": 30025321,
+          "stream_offset": 30025321,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 30025395,
+          "conn_credit": 4611686018397362508,
+          "send_window": 10000000,
+          "buffered_data": 1151077,
+          "window_credit": 8848923,
+          "write_limit": 8848923,
+          "stream_retained": 1151077,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 30369,
+          "in_flight": 29040,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "global_known_ready_maxima": [
+        {
+          "source_or_next_seq": 58006,
+          "interval_ns": [
+            1263927182,
+            1264664353
+          ],
+          "duration_ns": 737171,
+          "clipped_ns": 737171
+        },
+        {
+          "source_or_next_seq": 58007,
+          "interval_ns": [
+            1264722442,
+            1265384485
+          ],
+          "duration_ns": 662043,
+          "clipped_ns": 662043
+        },
+        {
+          "source_or_next_seq": 162359,
+          "interval_ns": [
+            4388917428,
+            4389417745
+          ],
+          "duration_ns": 500317,
+          "clipped_ns": 500317
+        }
+      ],
+      "global_sampled_mutex_max_ns": 23909,
+      "observer": {
+        "udp_requested_seconds": 0.004,
+        "thread_requested_seconds": 0.04,
+        "sample_count": 980,
+        "outer_sample_gap_seconds": {
+          "count": 979,
+          "min": 0.004372320021502674,
+          "p50_nearest_rank": 0.004702762002125382,
+          "p99_nearest_rank": 0.005154229991603643,
+          "max": 0.006357659993227571,
+          "sum": 4.545948791957926
+        },
+        "collector_seconds": {
+          "count": 980,
+          "min": 0.0003261319943703711,
+          "p50_nearest_rank": 0.0006370440241880715,
+          "p99_nearest_rank": 0.0010729730129241943,
+          "max": 0.0011865499545820057,
+          "sum": 0.5627804887481034
+        },
+        "thread_snapshot_count": 105,
+        "max_thread_gap_seconds": 0.045728107972536236,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      },
+      "scopes": {
+        "pre_first_drop_250ms": {
+          "window_ns": [
+            2688079553,
+            2938079553
+          ],
+          "rows": 5625,
+          "known_ready_entries": 4180,
+          "detailed_rows": 88,
+          "known_ready_elapsed_upper_ns": {
+            "count": 4180,
+            "min": 510,
+            "p50_nearest_rank": 6890,
+            "p99_nearest_rank": 75088,
+            "max": 133486
+          },
+          "entry_gap_ns": {
+            "count": 5624,
+            "min": 2750,
+            "p50_nearest_rank": 45189,
+            "p99_nearest_rank": 114857,
+            "max": 214515
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 88,
+              "min": 60,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 210,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 88,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 130,
+              "max": 130
+            },
+            "drive_recv": {
+              "count": 88,
+              "min": 2220,
+              "p50_nearest_rank": 40509,
+              "p99_nearest_rank": 99458,
+              "max": 99458
+            },
+            "handle_events": {
+              "count": 88,
+              "min": 70,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 150,
+              "max": 150
+            },
+            "post_events_release": {
+              "count": 88,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 80,
+              "max": 80
+            },
+            "entry_to_release": {
+              "count": 88,
+              "min": 2510,
+              "p50_nearest_rank": 40758,
+              "p99_nearest_rank": 99668,
+              "max": 99668
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 178,
+            "batches": 158,
+            "messages": 2586,
+            "segments": 5095,
+            "dispatches": 5095,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 20,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 88,
+            "batch_samples": 154,
+            "send_calls": 5095,
+            "send_sample": 86,
+            "send_complete": 86
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 179508501,
+            "self_wake_call_bracket": 214724,
+            "known_ready_after_to_next_entry": 42265578
+          },
+          "unclassified_ns": 28011197,
+          "known_ready_wait_ns_bounds": [
+            42265578,
+            42480302
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            179508501,
+            179723225
+          ],
+          "max_own_self_wake_processing_ns": 126267,
+          "client_udp_samples": {
+            "samples": 56,
+            "window_ns": [
+              2688079553,
+              2938079553
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2688791361,
+                2689176012
+              ],
+              "outer_wall_unix_ns": 1794021014197603328,
+              "sample_monotonic_seconds": 457736.254965476,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 49728
+            },
+            "last": {
+              "mono_ns_bounds": [
+                2938079553,
+                2938446414
+              ],
+              "outer_wall_unix_ns": 1794021014446891520,
+              "sample_monotonic_seconds": 457736.504253868,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 4753396
+            },
+            "receive_queue_bytes": {
+              "count": 56,
+              "min": 0,
+              "p50_nearest_rank": 261226,
+              "p99_nearest_rank": 4753396,
+              "max": 4753396,
+              "sum": 38054014
+            },
+            "same_identity_drop_delta": 0
+          }
+        },
+        "first_drop_plusminus_250ms": {
+          "window_ns": [
+            2688079553,
+            3192876804
+          ],
+          "rows": 9472,
+          "known_ready_entries": 7345,
+          "detailed_rows": 148,
+          "known_ready_elapsed_upper_ns": {
+            "count": 7345,
+            "min": 510,
+            "p50_nearest_rank": 6900,
+            "p99_nearest_rank": 79448,
+            "max": 141396
+          },
+          "entry_gap_ns": {
+            "count": 9471,
+            "min": 2750,
+            "p50_nearest_rank": 48959,
+            "p99_nearest_rank": 136826,
+            "max": 228704
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 148,
+              "min": 60,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 200,
+              "max": 210
+            },
+            "mutex_acquisition": {
+              "count": 148,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 80,
+              "max": 130
+            },
+            "drive_recv": {
+              "count": 148,
+              "min": 1900,
+              "p50_nearest_rank": 43489,
+              "p99_nearest_rank": 105358,
+              "max": 116617
+            },
+            "handle_events": {
+              "count": 148,
+              "min": 70,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 180,
+              "max": 180
+            },
+            "post_events_release": {
+              "count": 148,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 80,
+              "max": 100
+            },
+            "entry_to_release": {
+              "count": 148,
+              "min": 2320,
+              "p50_nearest_rank": 43729,
+              "p99_nearest_rank": 105628,
+              "max": 116887
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 297,
+            "batches": 267,
+            "messages": 4994,
+            "segments": 10004,
+            "dispatches": 10004,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 30,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 148,
+            "batch_samples": 263,
+            "send_calls": 10004,
+            "send_sample": 144,
+            "send_complete": 144
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 381329212,
+            "self_wake_call_bracket": 390082,
+            "known_ready_after_to_next_entry": 79831092
+          },
+          "unclassified_ns": 43246865,
+          "known_ready_wait_ns_bounds": [
+            79831092,
+            80221174
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            381329212,
+            381719294
+          ],
+          "max_own_self_wake_processing_ns": 127696,
+          "client_udp_samples": {
+            "samples": 113,
+            "window_ns": [
+              2688079553,
+              3192876804
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2688791361,
+                2689176012
+              ],
+              "outer_wall_unix_ns": 1794021014197603328,
+              "sample_monotonic_seconds": 457736.254965476,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 49728
+            },
+            "last": {
+              "mono_ns_bounds": [
+                3192252481,
+                3192872056
+              ],
+              "outer_wall_unix_ns": 1794021014701064448,
+              "sample_monotonic_seconds": 457736.758426796,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 1797,
+              "queue_bytes": 105828
+            },
+            "receive_queue_bytes": {
+              "count": 113,
+              "min": 0,
+              "p50_nearest_rank": 460149,
+              "p99_nearest_rank": 6374634,
+              "max": 6375952,
+              "sum": 188793311
+            },
+            "same_identity_drop_delta": 1797
+          }
+        },
+        "first_drop_plusminus_8ms": {
+          "window_ns": [
+            2930079553,
+            2950876804
+          ],
+          "rows": 392,
+          "known_ready_entries": 392,
+          "detailed_rows": 6,
+          "known_ready_elapsed_upper_ns": {
+            "count": 392,
+            "min": 730,
+            "p50_nearest_rank": 7470,
+            "p99_nearest_rank": 70828,
+            "max": 110097
+          },
+          "entry_gap_ns": {
+            "count": 391,
+            "min": 31629,
+            "p50_nearest_rank": 51079,
+            "p99_nearest_rank": 117927,
+            "max": 168286
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 6,
+              "min": 70,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "mutex_acquisition": {
+              "count": 6,
+              "min": 40,
+              "p50_nearest_rank": 40,
+              "p99_nearest_rank": 50,
+              "max": 50
+            },
+            "drive_recv": {
+              "count": 6,
+              "min": 43549,
+              "p50_nearest_rank": 45919,
+              "p99_nearest_rank": 64818,
+              "max": 64818
+            },
+            "handle_events": {
+              "count": 6,
+              "min": 80,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 150,
+              "max": 150
+            },
+            "post_events_release": {
+              "count": 6,
+              "min": 40,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 50,
+              "max": 50
+            },
+            "entry_to_release": {
+              "count": 6,
+              "min": 43829,
+              "p50_nearest_rank": 46239,
+              "p99_nearest_rank": 65168,
+              "max": 65168
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 6,
+            "batches": 6,
+            "messages": 192,
+            "segments": 434,
+            "dispatches": 434,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 6,
+            "batch_samples": 6,
+            "send_calls": 434,
+            "send_sample": 6,
+            "send_complete": 6
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 16584818,
+            "self_wake_call_bracket": 21980,
+            "known_ready_after_to_next_entry": 4190453
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            4190453,
+            4212433
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            16584818,
+            16606798
+          ],
+          "max_own_self_wake_processing_ns": 97218,
+          "client_udp_samples": {
+            "samples": 4,
+            "window_ns": [
+              2930079553,
+              2950876804
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                2933653057,
+                2934022388
+              ],
+              "outer_wall_unix_ns": 1794021014442465024,
+              "sample_monotonic_seconds": 457736.499827109,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 0,
+              "queue_bytes": 3952553
+            },
+            "last": {
+              "mono_ns_bounds": [
+                2946934081,
+                2947297952
+              ],
+              "outer_wall_unix_ns": 1794021014455746048,
+              "sample_monotonic_seconds": 457736.513108055,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 293,
+              "queue_bytes": 6031756
+            },
+            "receive_queue_bytes": {
+              "count": 4,
+              "min": 3952553,
+              "p50_nearest_rank": 4753396,
+              "p99_nearest_rank": 6374634,
+              "max": 6374634,
+              "sum": 21112339
+            },
+            "same_identity_drop_delta": 293
+          }
+        },
+        "pre_warning_250ms": {
+          "window_ns": [
+            3753825033,
+            4003825033
+          ],
+          "rows": 3897,
+          "known_ready_entries": 3897,
+          "detailed_rows": 61,
+          "known_ready_elapsed_upper_ns": {
+            "count": 3897,
+            "min": 650,
+            "p50_nearest_rank": 9700,
+            "p99_nearest_rank": 95888,
+            "max": 159486
+          },
+          "entry_gap_ns": {
+            "count": 3896,
+            "min": 33959,
+            "p50_nearest_rank": 59639,
+            "p99_nearest_rank": 146716,
+            "max": 226724
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 61,
+              "min": 70,
+              "p50_nearest_rank": 100,
+              "p99_nearest_rank": 150,
+              "max": 150
+            },
+            "mutex_acquisition": {
+              "count": 61,
+              "min": 50,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "drive_recv": {
+              "count": 61,
+              "min": 33439,
+              "p50_nearest_rank": 54218,
+              "p99_nearest_rank": 72809,
+              "max": 72809
+            },
+            "handle_events": {
+              "count": 61,
+              "min": 90,
+              "p50_nearest_rank": 110,
+              "p99_nearest_rank": 230,
+              "max": 230
+            },
+            "post_events_release": {
+              "count": 61,
+              "min": 50,
+              "p50_nearest_rank": 60,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "entry_to_release": {
+              "count": 61,
+              "min": 33739,
+              "p50_nearest_rank": 54548,
+              "p99_nearest_rank": 73109,
+              "max": 73109
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 61,
+            "batches": 61,
+            "messages": 1952,
+            "segments": 4497,
+            "dispatches": 4497,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 61,
+            "batch_samples": 61,
+            "send_calls": 4497,
+            "send_sample": 61,
+            "send_complete": 61
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 193624735,
+            "self_wake_call_bracket": 240056,
+            "known_ready_after_to_next_entry": 56135209
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            56135209,
+            56375265
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            193624735,
+            193864791
+          ],
+          "max_own_self_wake_processing_ns": 109637,
+          "client_udp_samples": {
+            "samples": 53,
+            "window_ns": [
+              3753825033,
+              4003825033
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3754750529,
+                3755392254
+              ],
+              "outer_wall_unix_ns": 1794021015263562496,
+              "sample_monotonic_seconds": 457737.320924599,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 8998,
+              "queue_bytes": 5836395
+            },
+            "last": {
+              "mono_ns_bounds": [
+                4002924353,
+                4003630325
+              ],
+              "outer_wall_unix_ns": 1794021015511736320,
+              "sample_monotonic_seconds": 457737.569098938,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 15314,
+              "queue_bytes": 6329192
+            },
+            "receive_queue_bytes": {
+              "count": 53,
+              "min": 5570690,
+              "p50_nearest_rank": 6172314,
+              "p99_nearest_rank": 6910646,
+              "max": 6910646,
+              "sum": 326078491
+            },
+            "same_identity_drop_delta": 6316
+          }
+        },
+        "warning_plusminus_8ms": {
+          "window_ns": [
+            3995825033,
+            4011826142
+          ],
+          "rows": 254,
+          "known_ready_entries": 254,
+          "detailed_rows": 4,
+          "known_ready_elapsed_upper_ns": {
+            "count": 254,
+            "min": 650,
+            "p50_nearest_rank": 8800,
+            "p99_nearest_rank": 95218,
+            "max": 117697
+          },
+          "entry_gap_ns": {
+            "count": 253,
+            "min": 35349,
+            "p50_nearest_rank": 58819,
+            "p99_nearest_rank": 145816,
+            "max": 168705
+          },
+          "sampled_phase_elapsed_ns": {
+            "entry_to_prelock": {
+              "count": 4,
+              "min": 70,
+              "p50_nearest_rank": 80,
+              "p99_nearest_rank": 90,
+              "max": 90
+            },
+            "mutex_acquisition": {
+              "count": 4,
+              "min": 50,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 70,
+              "max": 70
+            },
+            "drive_recv": {
+              "count": 4,
+              "min": 33439,
+              "p50_nearest_rank": 41209,
+              "p99_nearest_rank": 51319,
+              "max": 51319
+            },
+            "handle_events": {
+              "count": 4,
+              "min": 90,
+              "p50_nearest_rank": 90,
+              "p99_nearest_rank": 110,
+              "max": 110
+            },
+            "post_events_release": {
+              "count": 4,
+              "min": 50,
+              "p50_nearest_rank": 50,
+              "p99_nearest_rank": 80,
+              "max": 80
+            },
+            "entry_to_release": {
+              "count": 4,
+              "min": 33739,
+              "p50_nearest_rank": 41529,
+              "p99_nearest_rank": 51609,
+              "max": 51609
+            }
+          },
+          "sampled_counter_totals_no_extrapolation": {
+            "recv_calls": 4,
+            "batches": 4,
+            "messages": 128,
+            "segments": 234,
+            "dispatches": 234,
+            "endpoint_events": 0,
+            "recv_pending_or_coop": 0,
+            "recv_errors": 0,
+            "connection_resets": 0,
+            "event_pending_or_coop": 4,
+            "batch_samples": 4,
+            "send_calls": 234,
+            "send_sample": 4,
+            "send_complete": 4
+          },
+          "elapsed_wall_partition_ns": {
+            "entry_to_self_wake_before": 12423208,
+            "self_wake_call_bracket": 15450,
+            "known_ready_after_to_next_entry": 3562451
+          },
+          "unclassified_ns": 0,
+          "known_ready_wait_ns_bounds": [
+            3562451,
+            3577901
+          ],
+          "entry_to_actual_wake_point_ns_bounds": [
+            12423208,
+            12438658
+          ],
+          "max_own_self_wake_processing_ns": 87527,
+          "client_udp_samples": {
+            "samples": 3,
+            "window_ns": [
+              3995825033,
+              4011826142
+            ],
+            "one_observed_identity": true,
+            "first": {
+              "mono_ns_bounds": [
+                3998120513,
+                3998843746
+              ],
+              "outer_wall_unix_ns": 1794021015506932480,
+              "sample_monotonic_seconds": 457737.564295169,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 15211,
+              "queue_bytes": 6218191
+            },
+            "last": {
+              "mono_ns_bounds": [
+                4007711041,
+                4008430853
+              ],
+              "outer_wall_unix_ns": 1794021015516523008,
+              "sample_monotonic_seconds": 457737.573885577,
+              "pid": 889622,
+              "owned_inode_set": [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              "owned_udp_sockets": 1,
+              "drops": 15387,
+              "queue_bytes": 6067538
+            },
+            "receive_queue_bytes": {
+              "count": 3,
+              "min": 6067538,
+              "p50_nearest_rank": 6218191,
+              "p99_nearest_rank": 6329192,
+              "max": 6329192,
+              "sum": 18614921
+            },
+            "same_identity_drop_delta": 176
+          }
+        }
+      },
+      "first_drop_observer": {
+        "last_zero_outer_wall_ns": 1794021014446891520,
+        "first_positive_outer_wall_ns": 1794021014451315200,
+        "first_positive_read_mono_seconds": 457736.508677386,
+        "first_positive_drops": 152,
+        "same_identity": true,
+        "pid": 889622,
+        "owned_inode_set": [
+          "6427234",
+          "6427235",
+          "6427236"
+        ],
+        "sample_gap_seconds": 0.004423517966642976,
+        "first_positive_collection_seconds": 0.00037346099270507693,
+        "seconds_before_warning_conservative_bounds": [
+          1.060948339007295,
+          1.065746479
+        ]
+      },
+      "udp_at_warning": {
+        "last_sample_fully_before": {
+          "identity": [
+            889622,
+            [
+              "6427234",
+              "6427235",
+              "6427236"
+            ],
+            1
+          ],
+          "wall_ns": 1794021015511736320,
+          "read_mono_seconds": 457737.569098938,
+          "read_seconds": 0.0003779809921979904,
+          "collector_seconds": 0.0007058619521558285,
+          "drops": 15314,
+          "queue": 6329192
+        },
+        "first_sample_after": {
+          "identity": [
+            889622,
+            [
+              "6427234",
+              "6427235",
+              "6427236"
+            ],
+            1
+          ],
+          "wall_ns": 1794021015516523008,
+          "read_mono_seconds": 457737.573885577,
+          "read_seconds": 0.00039380101952701807,
+          "collector_seconds": 0.0007197019876912236,
+          "drops": 15387,
+          "queue": 6067538
+        },
+        "samples_within_8ms": [
+          {
+            "identity": [
+              889622,
+              [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              1
+            ],
+            "wall_ns": 1794021015506932480,
+            "read_mono_seconds": 457737.564295169,
+            "read_seconds": 0.00037690094904974103,
+            "collector_seconds": 0.0007231220370158553,
+            "drops": 15211,
+            "queue": 6218191
+          },
+          {
+            "identity": [
+              889622,
+              [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              1
+            ],
+            "wall_ns": 1794021015511736320,
+            "read_mono_seconds": 457737.569098938,
+            "read_seconds": 0.0003779809921979904,
+            "collector_seconds": 0.0007058619521558285,
+            "drops": 15314,
+            "queue": 6329192
+          },
+          {
+            "identity": [
+              889622,
+              [
+                "6427234",
+                "6427235",
+                "6427236"
+              ],
+              1
+            ],
+            "wall_ns": 1794021015516523008,
+            "read_mono_seconds": 457737.573885577,
+            "read_seconds": 0.00039380101952701807,
+            "collector_seconds": 0.0007197019876912236,
+            "drops": 15387,
+            "queue": 6067538
+          }
+        ]
+      },
+      "warning_alignment": {
+        "status": "bounded_assuming_no_unobserved_realtime_step",
+        "warning": {
+          "utc": "2026-11-07T03:10:15.512637Z",
+          "wall_unix_ns_bounds": [
+            1794021015512637000,
+            1794021015512637999
+          ]
+        },
+        "anchor_wall_minus_mono_ns_bounds": [
+          [
+            1794021011508811877,
+            1794021011508811967
+          ],
+          [
+            1794021011508811857,
+            1794021011508811957
+          ]
+        ],
+        "warning_mono_ns_bounds": [
+          4003825033,
+          4003826142
+        ],
+        "retained_window_coverage": "covered_warning_timestamp",
+        "known_self_wake_pairs_spanning_warning": [],
+        "nearest_detailed_polls": [
+          {
+            "seq": 156160,
+            "entry_ns": 4002289256,
+            "complete": true,
+            "recv_budget_exit": true,
+            "event_budget_exit": false,
+            "counters": {
+              "recv_calls": 1,
+              "batches": 1,
+              "messages": 32,
+              "segments": 80,
+              "dispatches": 80,
+              "endpoint_events": 0,
+              "recv_pending_or_coop": 0,
+              "recv_errors": 0,
+              "connection_resets": 0,
+              "event_pending_or_coop": 1,
+              "batch_samples": 1,
+              "send_calls": 80,
+              "send_target": 0,
+              "send_sample": 1,
+              "send_depth_before": 0,
+              "send_pool_attempt": 0,
+              "send_had_wake": 1,
+              "send_complete": 1
+            },
+            "phase_ns": [
+              4002289346,
+              4002289396,
+              4002340715,
+              4002340805,
+              4002340865
+            ],
+            "phase_elapsed_ns": {
+              "entry_to_prelock": 90,
+              "mutex_acquisition": 50,
+              "drive_recv": 51319,
+              "handle_events": 90,
+              "post_events_release": 60
+            },
+            "batch_route_ns": [
+              29909
+            ],
+            "receive_call_residual_ns": 21410,
+            "send_elapsed_ns": {
+              "acquisition": 70,
+              "held": 70,
+              "wake": 220
+            }
+          },
+          {
+            "seq": 156224,
+            "entry_ns": 4006232007,
+            "complete": true,
+            "recv_budget_exit": true,
+            "event_budget_exit": false,
+            "counters": {
+              "recv_calls": 1,
+              "batches": 1,
+              "messages": 32,
+              "segments": 55,
+              "dispatches": 55,
+              "endpoint_events": 0,
+              "recv_pending_or_coop": 0,
+              "recv_errors": 0,
+              "connection_resets": 0,
+              "event_pending_or_coop": 1,
+              "batch_samples": 1,
+              "send_calls": 55,
+              "send_target": 1,
+              "send_sample": 1,
+              "send_depth_before": 0,
+              "send_pool_attempt": 0,
+              "send_had_wake": 1,
+              "send_complete": 1
+            },
+            "phase_ns": [
+              4006232097,
+              4006232157,
+              4006273366,
+              4006273456,
+              4006273536
+            ],
+            "phase_elapsed_ns": {
+              "entry_to_prelock": 90,
+              "mutex_acquisition": 60,
+              "drive_recv": 41209,
+              "handle_events": 90,
+              "post_events_release": 80
+            },
+            "batch_route_ns": [
+              23310
+            ],
+            "receive_call_residual_ns": 17899,
+            "send_elapsed_ns": {
+              "acquisition": 60,
+              "held": 60,
+              "wake": 770
+            }
+          },
+          {
+            "seq": 156096,
+            "entry_ns": 3998324446,
+            "complete": true,
+            "recv_budget_exit": true,
+            "event_budget_exit": false,
+            "counters": {
+              "recv_calls": 1,
+              "batches": 1,
+              "messages": 32,
+              "segments": 32,
+              "dispatches": 32,
+              "endpoint_events": 0,
+              "recv_pending_or_coop": 0,
+              "recv_errors": 0,
+              "connection_resets": 0,
+              "event_pending_or_coop": 1,
+              "batch_samples": 1,
+              "send_calls": 32,
+              "send_target": 7,
+              "send_sample": 1,
+              "send_depth_before": 0,
+              "send_pool_attempt": 0,
+              "send_had_wake": 1,
+              "send_complete": 1
+            },
+            "phase_ns": [
+              3998324516,
+              3998324586,
+              3998358025,
+              3998358135,
+              3998358185
+            ],
+            "phase_elapsed_ns": {
+              "entry_to_prelock": 70,
+              "mutex_acquisition": 70,
+              "drive_recv": 33439,
+              "handle_events": 110,
+              "post_events_release": 50
+            },
+            "batch_route_ns": [
+              18789
+            ],
+            "receive_call_residual_ns": 14650,
+            "send_elapsed_ns": {
+              "acquisition": 50,
+              "held": 90,
+              "wake": 130
+            }
+          },
+          {
+            "seq": 156288,
+            "entry_ns": 4010375202,
+            "complete": true,
+            "recv_budget_exit": true,
+            "event_budget_exit": false,
+            "counters": {
+              "recv_calls": 1,
+              "batches": 1,
+              "messages": 32,
+              "segments": 67,
+              "dispatches": 67,
+              "endpoint_events": 0,
+              "recv_pending_or_coop": 0,
+              "recv_errors": 0,
+              "connection_resets": 0,
+              "event_pending_or_coop": 1,
+              "batch_samples": 1,
+              "send_calls": 67,
+              "send_target": 2,
+              "send_sample": 1,
+              "send_depth_before": 0,
+              "send_pool_attempt": 0,
+              "send_had_wake": 1,
+              "send_complete": 1
+            },
+            "phase_ns": [
+              4010375282,
+              4010375332,
+              4010422041,
+              4010422151,
+              4010422201
+            ],
+            "phase_elapsed_ns": {
+              "entry_to_prelock": 80,
+              "mutex_acquisition": 50,
+              "drive_recv": 46709,
+              "handle_events": 110,
+              "post_events_release": 50
+            },
+            "batch_route_ns": [
+              24459
+            ],
+            "receive_call_residual_ns": 22250,
+            "send_elapsed_ns": {
+              "acquisition": 70,
+              "held": 50,
+              "wake": 1150
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

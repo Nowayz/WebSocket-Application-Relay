@@ -28,10 +28,13 @@ impl Relay {
             if after.is_some_and(|after| key <= after) {
                 continue;
             }
+            let Some(snapshot) = ChannelSnapshot::of(channel) else {
+                continue;
+            };
             if selected.is_empty() {
                 selected.reserve_exact(capacity);
             }
-            selected.push((key, ChannelSnapshot::of(channel)));
+            selected.push((key, snapshot));
             // Keep one page of candidates and make room for the next batch.
             if selected.len() == 2 * limit {
                 selected.select_nth_unstable_by_key(limit, |row| row.0);

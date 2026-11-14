@@ -65,6 +65,7 @@ enum Admission {
 pub struct Relay {
     pub config: Config,
     pub metrics: Arc<Metrics>,
+    pub(crate) receive_arena: crate::receive_arena::ReceiveArena,
     admission: AtomicU8,
     users: Users,
     /// Lock-free name-to-channel index. Lookup never blocks; creation and
@@ -149,7 +150,7 @@ impl ReceiveBatch<'_> {
         storage_capacity: usize,
     ) -> Result<usize, Disconnect> {
         self.relay
-            .receive_with_totals(peer, bytes, storage_capacity, &mut self.totals, None)
+            .receive_with_totals::<false>(peer, bytes, storage_capacity, &mut self.totals, None)
             .map_err(|error| error.reason)
     }
 
@@ -162,10 +163,27 @@ impl ReceiveBatch<'_> {
         pending: &mut Option<Box<RoomFanout>>,
         quantum: usize,
     ) -> Result<usize, RoutingFailure> {
-        self.relay.receive_with_totals(
+        self.relay.receive_with_totals::<false>(
             peer,
             bytes,
             storage_capacity,
+            &mut self.totals,
+            Some((pending, quantum)),
+        )
+    }
+
+    pub(crate) fn receive_datagram(
+        &mut self,
+        peer: &Peer,
+        bytes: Bytes,
+        pending: &mut Option<Box<RoomFanout>>,
+        quantum: usize,
+    ) -> Result<usize, RoutingFailure> {
+        let size = bytes.len();
+        self.relay.receive_with_totals::<true>(
+            peer,
+            bytes,
+            size,
             &mut self.totals,
             Some((pending, quantum)),
         )
@@ -1126,7 +1144,11 @@ impl Peer {
             })
             .is_err()
         {
-            self.overloaded();
+            if frame.unreliable {
+                self.budget.metrics.datagrams_dropped.fetch_add(1, Relaxed);
+            } else {
+                self.overloaded();
+            }
             return Ok(None);
         }
         if self
@@ -1141,7 +1163,9 @@ impl Peer {
         {
             let held = self.budget.used.fetch_sub(size, Relaxed) - size;
             self.budget.metrics.global_pressure.fetch_add(1, Relaxed);
-            if reply || held >= self.budget.limit / 4 {
+            if frame.unreliable {
+                self.budget.metrics.datagrams_dropped.fetch_add(1, Relaxed);
+            } else if reply || held >= self.budget.limit / 4 {
                 self.overloaded();
             }
             return Ok(None);
@@ -1274,14 +1298,22 @@ pub(crate) struct ChannelSnapshot {
 }
 
 impl ChannelSnapshot {
-    fn of(channel: &Channel) -> Self {
+    fn of(channel: &Channel) -> Option<Self> {
         let state = channel.state.read();
-        Self {
+        // The index walk and this metadata read are separate. A newly
+        // published room may not have its first member yet, or the last
+        // member may have left after the walk captured its handle. Neither
+        // is a live ordinary room in a listing. The permanent global room
+        // remains visible even when empty.
+        if state.retired || (state.members.is_empty() && channel.name.as_ref() != GLOBAL_CHANNEL) {
+            return None;
+        }
+        Some(Self {
             name: SnapshotName::new(&channel.name),
             members: state.members.len(),
             variables: state.variables.len(),
             variable_bytes: state.variable_bytes,
-        }
+        })
     }
 }
 
@@ -1331,13 +1363,19 @@ impl Relay {
         let users = Users::new(config.max_connections);
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| tungstenite::protocol::ReadBudget::new(config.total_read_buffer_bytes));
+        let receive_arena = crate::receive_arena::ReceiveArena::new(
+            config.receive_arena_bytes,
+            config.receive_arena_page_bytes,
+        );
         Ok(Arc::new(Self {
             ip_limit: crate::admission::IpLimit::new(config.max_connections_per_ip),
             config,
             metrics: Arc::new(Metrics {
                 read_budget,
+                receive_arena_budget: Some(receive_arena.budget.clone()),
                 ..Metrics::default()
             }),
+            receive_arena,
             admission: AtomicU8::new(Admission::Open as u8),
             users,
             channels,
@@ -1420,14 +1458,21 @@ impl Relay {
 
     fn channel_snapshot(&self) -> Vec<ChannelSnapshot> {
         let channels = self.live_channels();
-        channels.iter().map(|c| ChannelSnapshot::of(c)).collect()
+        channels
+            .iter()
+            .filter_map(|c| ChannelSnapshot::of(c))
+            .collect()
     }
 
+    // Keep the inspection-only index walk out of the per-message dispatch.
+    // Inlining this collector enlarged receive_with_totals enough to prevent
+    // its inlining into the native receive batch in the release build.
+    #[inline(never)]
     fn channel_members_snapshot(&self) -> Vec<(SnapshotName, usize)> {
         let channels = self.live_channels();
         channels
             .iter()
-            .map(|c| (SnapshotName::new(&c.name), c.state.read().members.len()))
+            .filter_map(|c| ChannelSnapshot::of(c).map(|row| (row.name, row.members)))
             .collect()
     }
 
@@ -1715,7 +1760,7 @@ impl Relay {
         self.receive_batch().receive(peer, bytes, storage_capacity)
     }
 
-    fn receive_with_totals(
+    fn receive_with_totals<const UNRELIABLE: bool>(
         &self,
         peer: &Peer,
         bytes: Bytes,
@@ -1730,6 +1775,9 @@ impl Relay {
         totals.bytes = totals.bytes.wrapping_add(bytes.len() as u64);
         let (target, value) = protocol::parse(&bytes)?;
         if target == 0 {
+            if UNRELIABLE {
+                return Err(Disconnect::PROTOCOL.into());
+            }
             return self.control(peer, value).map(|_| 1).map_err(Into::into);
         }
         let private_recipient = if target == BROADCAST {
@@ -1754,7 +1802,8 @@ impl Relay {
         let compact = storage_capacity > self.config.read_buffer_bytes
             && bytes.len().saturating_mul(8) < storage_capacity
             && !bytes.is_unique();
-        let frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        let mut frame = Frame::routed(peer.id.load(Relaxed), bytes, value_start, compact);
+        frame.unreliable = UNRELIABLE;
         let counter = if compact {
             &mut totals.copied
         } else {

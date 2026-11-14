@@ -1,0 +1,75 @@
+{
+  "status": "Defect and correction proven; pure candidate validation completed and correctness fix retained; full parity remains unmet",
+  "source_path": "vendor/quinn/src/endpoint.rs",
+  "root_cause": "EndpointDriver captured one timestamp before drain; later poll_recv batches reused it while concurrent connection drivers transmitted packets. An ACK could then predate the packet it acknowledges; saturating subtraction hides negative RTT as zero.",
+  "correction": "Read runtime.now immediately after each successful socket.poll_recv and remove stale timestamp plumbing. One clock sample per batch, no per-datagram fields or altered resource limits.",
+  "regression_test": "receive_batches_refresh_timestamp_after_poll_recv",
+  "red": {
+    "path": "artifacts/webtransport/rx-clock-test-red.log",
+    "sha256": "58c8fc4bbe5cdaf4537e9070da3e0402e5fd9bea2eef5144520a2c5d8ba83e6f"
+  },
+  "green": {
+    "path": "artifacts/webtransport/rx-clock-test-green.log",
+    "sha256": "b89600db4327798a49748307ba83f01a98bd4cc6c34bcf081c4c23cac83cb9a5"
+  },
+  "runtime_probe_source": "diff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..d0d4912 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -1554,6 +1554,15 @@ impl Connection {\n                     Duration::from_micros(ack.delay << self.peer_params.ack_delay_exponent.0),\n                 )\n             };\n+            // Diagnostic only: observe a nonpositive receive-to-send clock interval once.\n+            static BAD_ACK_TIME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+            let sent_at = self.spaces[space].largest_acked_packet_sent;\n+            if now <= sent_at && !BAD_ACK_TIME.swap(true, std::sync::atomic::Ordering::Relaxed) {\n+                tracing::warn!(target: \"war_relay::transport_clock\",\n+                    lag_ns = ?sent_at.saturating_duration_since(now).as_nanos(),\n+                    receive_time = ?now, send_time = ?sent_at, space = ?space,\n+                    \"ACK_TIME_DIAGNOSTIC nonpositive RTT input\");\n+            }\n             let rtt = now.saturating_duration_since(self.spaces[space].largest_acked_packet_sent);\n             self.path.rtt.update(ack_delay, rtt);\n             if self.path.first_packet_after_rtt_sample.is_none() {\n",
+  "fixed_probe_source": "diff --git a/vendor/quinn-proto/src/connection/mod.rs b/vendor/quinn-proto/src/connection/mod.rs\nindex d7c27bc..d0d4912 100644\n--- a/vendor/quinn-proto/src/connection/mod.rs\n+++ b/vendor/quinn-proto/src/connection/mod.rs\n@@ -1554,6 +1554,15 @@ impl Connection {\n                     Duration::from_micros(ack.delay << self.peer_params.ack_delay_exponent.0),\n                 )\n             };\n+            // Diagnostic only: observe a nonpositive receive-to-send clock interval once.\n+            static BAD_ACK_TIME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n+            let sent_at = self.spaces[space].largest_acked_packet_sent;\n+            if now <= sent_at && !BAD_ACK_TIME.swap(true, std::sync::atomic::Ordering::Relaxed) {\n+                tracing::warn!(target: \"war_relay::transport_clock\",\n+                    lag_ns = ?sent_at.saturating_duration_since(now).as_nanos(),\n+                    receive_time = ?now, send_time = ?sent_at, space = ?space,\n+                    \"ACK_TIME_DIAGNOSTIC nonpositive RTT input\");\n+            }\n             let rtt = now.saturating_duration_since(self.spaces[space].largest_acked_packet_sent);\n             self.path.rtt.update(ack_delay, rtt);\n             if self.path.first_packet_after_rtt_sample.is_none() {\ndiff --git a/vendor/quinn/src/endpoint.rs b/vendor/quinn/src/endpoint.rs\nindex fbec4c2..eb2d172 100644\n--- a/vendor/quinn/src/endpoint.rs\n+++ b/vendor/quinn/src/endpoint.rs\n@@ -18,7 +18,6 @@ use std::{\n #[cfg(all(not(wasm_browser), any(feature = \"aws-lc-rs\", feature = \"ring\")))]\n use crate::runtime::default_runtime;\n use crate::{\n-    Instant,\n     runtime::{AsyncUdpSocket, Runtime},\n     udp_transmit,\n };\n@@ -372,9 +371,8 @@ impl Future for EndpointDriver {\n             endpoint.driver = Some(cx.waker().clone());\n         }\n \n-        let now = endpoint.runtime.now();\n         let mut keep_going = false;\n-        keep_going |= endpoint.drive_recv(cx, now)?;\n+        keep_going |= endpoint.drive_recv(cx)?;\n         keep_going |= endpoint.handle_events(cx, &self.0.shared);\n \n         if !endpoint.recv_state.incoming.is_empty() {\n@@ -494,21 +492,21 @@ pub(crate) struct Shared {\n }\n \n impl State {\n-    fn drive_recv(&mut self, cx: &mut Context, now: Instant) -> Result<bool, io::Error> {\n+    fn drive_recv(&mut self, cx: &mut Context) -> Result<bool, io::Error> {\n         let get_time = || self.runtime.now();\n         self.recv_state.recv_limiter.start_cycle(get_time);\n         if let Some(socket) = &self.prev_socket {\n             // We don't care about the `PollProgress` from old sockets.\n             let poll_res =\n                 self.recv_state\n-                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime, now);\n+                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime);\n             if poll_res.is_err() {\n                 self.prev_socket = None;\n             }\n         };\n         let poll_res =\n             self.recv_state\n-                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime, now);\n+                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime);\n         self.recv_state.recv_limiter.finish_cycle(get_time);\n         let poll_res = poll_res?;\n         if poll_res.received_connection_packet {\n@@ -779,7 +777,6 @@ impl RecvState {\n         endpoint: &mut proto::Endpoint,\n         socket: &dyn AsyncUdpSocket,\n         runtime: &dyn Runtime,\n-        now: Instant,\n     ) -> Result<PollProgress, io::Error> {\n         let mut received_connection_packet = false;\n         let mut metas = [RecvMeta::default(); BATCH_SIZE];\n@@ -797,6 +794,8 @@ impl RecvState {\n         loop {\n             match socket.poll_recv(cx, &mut iovs, &mut metas) {\n                 Poll::Ready(Ok(msgs)) => {\n+                    // Concurrent sends must not be newer than their received loopback ACKs.\n+                    let now = runtime.now();\n                     self.recv_limiter.record_work(msgs);\n                     for (meta, buf) in metas.iter().zip(iovs.iter()).take(msgs) {\n                         let mut data: BytesMut = buf[0..meta.len].into();\n@@ -881,3 +880,108 @@ struct PollProgress {\n     /// Whether datagram handling was interrupted early by the work limiter for fairness\n     keep_going: bool,\n }\n+\n+\n+#[cfg(all(test, any(feature = \"ring\", feature = \"aws-lc-rs\")))]\n+mod receive_clock_tests {\n+    use super::*;\n+    use crate::{Duration, Instant, runtime::{AsyncTimer, UdpPoller}};\n+    use std::{net::Ipv4Addr, sync::atomic::AtomicU64};\n+\n+    #[derive(Debug)]\n+    struct AdvancingSocket {\n+        base: Instant,\n+        micros: AtomicU64,\n+        receives: AtomicUsize,\n+        responses: AtomicUsize,\n+    }\n+\n+    impl Runtime for AdvancingSocket {\n+        fn new_timer(&self, _: Instant) -> Pin<Box<dyn AsyncTimer>> {\n+            unreachable!(\"stateless resets use no connection timer\")\n+        }\n+\n+        fn spawn(&self, _: Pin<Box<dyn Future<Output = ()> + Send>>) {\n+            unreachable!(\"stateless resets spawn no connection driver\")\n+        }\n+\n+        #[cfg(not(wasm_browser))]\n+        fn wrap_udp_socket(&self, _: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {\n+            unreachable!(\"the test supplies its socket\")\n+        }\n+\n+        fn now(&self) -> Instant {\n+            self.base + Duration::from_micros(self.micros.load(Ordering::Relaxed))\n+        }\n+    }\n+\n+    impl AsyncUdpSocket for AdvancingSocket {\n+        fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {\n+            unreachable!(\"the test socket is always writable\")\n+        }\n+\n+        fn try_send(&self, _: &udp::Transmit<'_>) -> io::Result<()> {\n+            self.responses.fetch_add(1, Ordering::Relaxed);\n+            Ok(())\n+        }\n+\n+        fn poll_recv(\n+            &self,\n+            _: &mut Context,\n+            bufs: &mut [IoSliceMut<'_>],\n+            meta: &mut [RecvMeta],\n+        ) -> Poll<io::Result<usize>> {\n+            if self.receives.fetch_add(1, Ordering::Relaxed) >= 2 {\n+                return Poll::Pending;\n+            }\n+            self.micros.fetch_add(15, Ordering::Relaxed);\n+            // A short-header packet with an unknown, nonempty random-format CID.\n+            bufs[0][..64].fill(7);\n+            bufs[0][0] = 0x40;\n+            meta[0] = RecvMeta {\n+                addr: (Ipv4Addr::LOCALHOST, 4433).into(),\n+                len: 64,\n+                stride: 64,\n+                ..RecvMeta::default()\n+            };\n+            Poll::Ready(Ok(1))\n+        }\n+\n+        fn local_addr(&self) -> io::Result<SocketAddr> {\n+            Ok((Ipv4Addr::LOCALHOST, 4434).into())\n+        }\n+    }\n+\n+    #[test]\n+    fn receive_batches_refresh_timestamp_after_poll_recv() {\n+        let mut config = EndpointConfig::default();\n+        config.min_reset_interval(Duration::from_micros(10));\n+        config.cid_generator(|| Box::new(proto::RandomConnectionIdGenerator::new(8)));\n+        let mut endpoint = proto::Endpoint::new(Arc::new(config), None, true, Some([0; 32]));\n+        let (sender, _events) = mpsc::unbounded_channel();\n+        let mut recv = RecvState::new(sender, 1, &endpoint);\n+        let socket = AdvancingSocket {\n+            base: Instant::now(),\n+            micros: AtomicU64::new(0),\n+            receives: AtomicUsize::new(0),\n+            responses: AtomicUsize::new(0),\n+        };\n+        // A reset at the old poll time makes before-receive timestamps observable too.\n+        let mut packet = [7; 64];\n+        packet[0] = 0x40;\n+        assert!(matches!(\n+            endpoint.handle(\n+                socket.now(), (Ipv4Addr::LOCALHOST, 4433).into(), None, None,\n+                BytesMut::from(&packet[..]), &mut Vec::new(),\n+            ),\n+            Some(DatagramEvent::Response(_))\n+        ));\n+        recv.recv_limiter.start_cycle(|| socket.now());\n+        let mut cx = Context::from_waker(Waker::noop());\n+        let progress = recv.poll_socket(&mut cx, &mut endpoint, &socket, &socket).unwrap();\n+        recv.recv_limiter.finish_cycle(|| socket.now());\n+        assert!(!progress.keep_going);\n+        assert_eq!(socket.micros.load(Ordering::Relaxed), 30);\n+        assert_eq!(socket.responses.load(Ordering::Relaxed), 2);\n+    }\n+}\n",
+  "probe_runs": [
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-base-1.json",
+      "variant": "base",
+      "passed": true,
+      "nonpositive_ack_time": [
+        "2026-11-06T22:51:52.071130Z  WARN war_relay::transport_clock: ACK_TIME_DIAGNOSTIC nonpositive RTT input lag_ns=12449 receive_time=Instant { tv_sec: 442234, tv_nsec: 127348005 } send_time=Instant { tv_sec: 442234, tv_nsec: 127360454 } space=Data"
+      ],
+      "sha256": "7aa07fd55ef6ec93161be10e2d6316db1f12f40c700eb15da816d9d5511ee505"
+    },
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-fixed-1.json",
+      "variant": "fixed",
+      "passed": false,
+      "nonpositive_ack_time": [],
+      "sha256": "dc922626c1ba75076fc4651899170c3135222cc89cf80906d589727e155ead63"
+    },
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-fixed-2.json",
+      "variant": "fixed",
+      "passed": true,
+      "nonpositive_ack_time": [],
+      "sha256": "a5a19986a8bbf576c16914b8fdf9e8a3a150878c4f9cef70c681b2137bd8ffe4"
+    },
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-base-2.json",
+      "variant": "base",
+      "passed": false,
+      "nonpositive_ack_time": [
+        "2026-11-06T22:52:08.654367Z  WARN war_relay::transport_clock: ACK_TIME_DIAGNOSTIC nonpositive RTT input lag_ns=6620 receive_time=Instant { tv_sec: 442250, tv_nsec: 710221011 } send_time=Instant { tv_sec: 442250, tv_nsec: 710227631 } space=Data"
+      ],
+      "sha256": "3e539aeca2cfb89d72a26cab17df7d93f440d0d15c259ba361d46547bde76d72"
+    },
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-base-3.json",
+      "variant": "base",
+      "passed": true,
+      "nonpositive_ack_time": [
+        "2026-11-06T22:52:13.141774Z  WARN war_relay::transport_clock: ACK_TIME_DIAGNOSTIC nonpositive RTT input lag_ns=177785 receive_time=Instant { tv_sec: 442255, tv_nsec: 197982226 } send_time=Instant { tv_sec: 442255, tv_nsec: 198160011 } space=Data"
+      ],
+      "sha256": "0434935b31709c06d0711eda7d7ee6849ff36c3934f321623037a433b422ca87"
+    },
+    {
+      "receipt": "artifacts/webtransport/rx-clock-probe-control-fixed-3.json",
+      "variant": "fixed",
+      "passed": true,
+      "nonpositive_ack_time": [],
+      "sha256": "57d68f6a2538fd8b2c1857e9ce1d57d59268adf5ec503055800ab90f9d2dd43f"
+    }
+  ],
+  "scope": "Diagnostic predicate only; no ordinary speed or RSS claim. Frozen clients were unchanged. All three old-code probes observed negative ACK timing; all three fixed-code probes observed none. Each variant still failed one of three paced-load trials, so the clock correction is not proved to solve overload.",
+  "pending": [
+    "Resolve remaining peer receive pressure and intermittent paced reliable overload.",
+    "Reach100000-session memory parity and prove complete native-WebSocket throughput parity after subsequent changes."
+  ],
+  "validation_report": {
+    "path": "docs/reports/webtransport-receive-clock-validation-2026-11-06.json"
+  }
+}

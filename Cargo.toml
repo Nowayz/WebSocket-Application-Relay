@@ -33,10 +33,19 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tungstenite = "0.30.0"
 papaya = "0.2.5"
+wtransport = { version = "0.7.2", features = ["quinn"] }
+web-transport-quinn = { version = "=0.13.3", default-features = false, features = ["ring"] }
+
+# The QUIC path allocates several small objects per delivery; jemalloc measurably
+# outperforms the system allocator there. MSVC targets keep the system allocator.
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.7"
 
 [dev-dependencies]
+url = "2"
 futures-util = { version = "0.3", features = ["sink"] }
-tokio-tungstenite = "0.30.0"
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 
 [profile.release]
 lto = "thin"
@@ -51,6 +60,10 @@ name = "load"
 path = "examples/load.rs"
 
 [patch.crates-io]
-# Narrow decoder-storage control; source versions and patch are in vendor/README.md.
+# Protocol storage and QUIC integration patches; pinned origins are in vendor/README.md.
 tungstenite = { path = "vendor/tungstenite" }
 tokio-tungstenite = { path = "vendor/tokio-tungstenite" }
+quinn-proto = { path = "vendor/quinn-proto" }
+quinn = { path = "vendor/quinn" }
+rustls = { path = "vendor/rustls" }
+web-transport-quinn = { path = "vendor/web-transport-quinn" }

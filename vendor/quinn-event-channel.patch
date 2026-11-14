@@ -1,0 +1,946 @@
+--- a/quinn/Cargo.toml
++++ b/quinn/Cargo.toml
+@@ -185,8 +185,8 @@
+ version = "2.0.3"
+
+ [dependencies.tokio]
+-version = "1.28.1"
+-features = ["sync"]
++version = "1.47"
++features = ["sync", "rt"]
+
+ [dependencies.tracing]
+ version = "0.1.10"
+--- a/quinn/Cargo.toml.orig
++++ b/quinn/Cargo.toml.orig
+@@ -64,7 +64,7 @@
+ smol = { workspace = true, optional = true }
+ thiserror = { workspace = true }
+ tracing =  { workspace = true }
+-tokio = { workspace = true }
++tokio = { version = "1.47", features = ["sync", "rt"] }
+ udp = { package = "quinn-udp", path = "../quinn-udp", version = "0.5", default-features = false, features = ["tracing"] }
+
+ [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+--- a/quinn/src/connection.rs
++++ b/quinn/src/connection.rs
+@@ -45,7 +45,7 @@
+         handle: ConnectionHandle,
+         conn: proto::Connection,
+         endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
+-        conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
++        conn_events: crate::event_queue::Receiver<ConnectionEvent>,
+         socket: Arc<dyn AsyncUdpSocket>,
+         runtime: Arc<dyn Runtime>,
+     ) -> Self {
+@@ -899,7 +899,7 @@
+         handle: ConnectionHandle,
+         conn: proto::Connection,
+         endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
+-        conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
++        conn_events: crate::event_queue::Receiver<ConnectionEvent>,
+         on_handshake_data: oneshot::Sender<()>,
+         on_connected: oneshot::Sender<bool>,
+         socket: Arc<dyn AsyncUdpSocket>,
+@@ -921,7 +921,7 @@
+                 blocked_readers: FxHashMap::default(),
+                 stopped: FxHashMap::default(),
+                 error: None,
+-                io_poller: socket.clone().create_io_poller(),
++                io_poller: None,
+                 socket,
+                 runtime,
+                 send_buffer: Vec::new(),
+@@ -997,7 +997,7 @@
+     connected: bool,
+     timer: Option<Pin<Box<dyn AsyncTimer>>>,
+     timer_deadline: Option<Instant>,
+-    conn_events: mpsc::UnboundedReceiver<ConnectionEvent>,
++    conn_events: crate::event_queue::Receiver<ConnectionEvent>,
+     endpoint_events: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
+     pub(crate) blocked_writers: FxHashMap<StreamId, Waker>,
+     pub(crate) blocked_readers: FxHashMap<StreamId, Waker>,
+@@ -1005,8 +1005,11 @@
+     /// Always set to Some before the connection becomes drained
+     pub(crate) error: Option<ConnectionError>,
+     socket: Arc<dyn AsyncUdpSocket>,
+-    io_poller: Pin<Box<dyn UdpPoller>>,
++    // Allocate writable notification state only after a send would block.
++    io_poller: Option<Pin<Box<dyn UdpPoller>>>,
+     runtime: Arc<dyn Runtime>,
++    /// Owns bytes only while a transmit is blocked on socket writability.
++    /// Completed sends return their scratch allocation to the current thread.
+     send_buffer: Vec<u8>,
+     /// We buffer a transmit when the underlying I/O would block
+     buffered_transmit: Option<proto::Transmit>,
+@@ -1014,6 +1017,7 @@
+
+ impl State {
+     fn drive_transmit(&mut self, cx: &mut Context) -> io::Result<bool> {
++        let mut send_buffer = crate::transmit_buffer::TransmitBuffer::take(&mut self.send_buffer);
+         let now = self.runtime.now();
+         let mut transmits = 0;
+
+@@ -1027,11 +1031,11 @@
+             let t = match self.buffered_transmit.take() {
+                 Some(t) => t,
+                 None => {
+-                    self.send_buffer.clear();
+-                    self.send_buffer.reserve(self.inner.current_mtu() as usize);
++                    send_buffer.clear();
++                    send_buffer.reserve(self.inner.current_mtu() as usize);
+                     match self
+                         .inner
+-                        .poll_transmit(now, max_datagrams, &mut self.send_buffer)
++                        .poll_transmit(now, max_datagrams, &mut send_buffer)
+                     {
+                         Some(t) => {
+                             transmits += match t.segment_size {
+@@ -1045,27 +1049,27 @@
+                 }
+             };
+
+-            if self.io_poller.as_mut().poll_writable(cx)?.is_pending() {
+-                // Retry after a future wakeup
+-                self.buffered_transmit = Some(t);
+-                return Ok(false);
+-            }
+-
+             let len = t.size;
+             let retry = match self
+                 .socket
+-                .try_send(&udp_transmit(&t, &self.send_buffer[..len]))
++                .try_send(&udp_transmit(&t, &send_buffer[..len]))
+             {
+                 Ok(()) => false,
+                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => true,
+                 Err(e) => return Err(e),
+             };
+             if retry {
+-                // We thought the socket was writable, but it wasn't. Retry so that either another
+-                // `poll_writable` call determines that the socket is indeed not writable and
+-                // registers us for a wakeup, or the send succeeds if this really was just a
+-                // transient failure.
++                // A successful nonblocking send needs no readiness future.
++                // After WouldBlock, register before yielding so the next writable
++                // transition cannot be missed. A ready poll retries this same
++                // transmit, preserving packet bytes and accounting.
+                 self.buffered_transmit = Some(t);
++                let poller = self.io_poller
++                    .get_or_insert_with(|| self.socket.clone().create_io_poller());
++                if poller.as_mut().poll_writable(cx)?.is_pending() {
++                    send_buffer.retain(&mut self.send_buffer);
++                    return Ok(false);
++                }
+                 continue;
+             }
+
+@@ -1098,7 +1102,7 @@
+             match self.conn_events.poll_recv(cx) {
+                 Poll::Ready(Some(ConnectionEvent::Rebind(socket))) => {
+                     self.socket = socket;
+-                    self.io_poller = self.socket.clone().create_io_poller();
++                    self.io_poller = None;
+                     self.inner.local_address_changed();
+                 }
+                 Poll::Ready(Some(ConnectionEvent::Proto(event))) => {
+--- a/quinn/src/endpoint.rs
++++ b/quinn/src/endpoint.rs
+@@ -9,8 +9,8 @@
+     pin::Pin,
+     str,
+     sync::{
++        atomic::{AtomicUsize, Ordering},
+         Arc, Mutex,
+-        atomic::{AtomicUsize, Ordering},
+     },
+     task::{Context, Poll, Waker},
+ };
+@@ -18,7 +18,6 @@
+ #[cfg(all(not(wasm_browser), any(feature = "aws-lc-rs", feature = "ring")))]
+ use crate::runtime::default_runtime;
+ use crate::{
+-    Instant,
+     runtime::{AsyncUdpSocket, Runtime},
+     udp_transmit,
+ };
+@@ -31,13 +30,13 @@
+ use rustc_hash::FxHashMap;
+ #[cfg(all(not(wasm_browser), any(feature = "aws-lc-rs", feature = "ring"),))]
+ use socket2::{Domain, Protocol, Socket, Type};
+-use tokio::sync::{Notify, futures::Notified, mpsc};
++use tokio::sync::{futures::Notified, mpsc, Notify};
+ use tracing::{Instrument, Span};
+-use udp::{BATCH_SIZE, RecvMeta};
++use udp::{RecvMeta, BATCH_SIZE};
+
+ use crate::{
+-    ConnectionEvent, EndpointConfig, IO_LOOP_BOUND, RECV_TIME_BOUND, VarInt,
+-    connection::Connecting, incoming::Incoming, work_limiter::WorkLimiter,
++    connection::Connecting, incoming::Incoming, work_limiter::WorkLimiter, ConnectionEvent,
++    EndpointConfig, VarInt, IO_LOOP_BOUND, RECV_TIME_BOUND,
+ };
+
+ /// A QUIC endpoint.
+@@ -372,9 +371,8 @@
+             endpoint.driver = Some(cx.waker().clone());
+         }
+
+-        let now = endpoint.runtime.now();
+         let mut keep_going = false;
+-        keep_going |= endpoint.drive_recv(cx, now)?;
++        keep_going |= endpoint.drive_recv(cx)?;
+         keep_going |= endpoint.handle_events(cx, &self.0.shared);
+
+         if !endpoint.recv_state.incoming.is_empty() {
+@@ -494,21 +492,21 @@
+ }
+
+ impl State {
+-    fn drive_recv(&mut self, cx: &mut Context, now: Instant) -> Result<bool, io::Error> {
++    fn drive_recv(&mut self, cx: &mut Context) -> Result<bool, io::Error> {
+         let get_time = || self.runtime.now();
+         self.recv_state.recv_limiter.start_cycle(get_time);
+         if let Some(socket) = &self.prev_socket {
+             // We don't care about the `PollProgress` from old sockets.
+             let poll_res =
+                 self.recv_state
+-                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime, now);
++                    .poll_socket(cx, &mut self.inner, &**socket, &*self.runtime);
+             if poll_res.is_err() {
+                 self.prev_socket = None;
+             }
+         };
+         let poll_res =
+             self.recv_state
+-                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime, now);
++                .poll_socket(cx, &mut self.inner, &*self.socket, &*self.runtime);
+         self.recv_state.recv_limiter.finish_cycle(get_time);
+         let poll_res = poll_res?;
+         if poll_res.received_connection_packet {
+@@ -595,8 +593,9 @@
+
+ #[derive(Debug)]
+ struct ConnectionSet {
++    event_buffers: Arc<crate::event_queue::BufferPool<ConnectionEvent>>,
+     /// Senders for communicating with the endpoint's connections
+-    senders: FxHashMap<ConnectionHandle, mpsc::UnboundedSender<ConnectionEvent>>,
++    senders: FxHashMap<ConnectionHandle, crate::event_queue::Sender<ConnectionEvent>>,
+     /// Stored to give out clones to new ConnectionInners
+     sender: mpsc::UnboundedSender<(ConnectionHandle, EndpointEvent)>,
+     /// Set if the endpoint has been manually closed
+@@ -611,7 +610,7 @@
+         socket: Arc<dyn AsyncUdpSocket>,
+         runtime: Arc<dyn Runtime>,
+     ) -> Connecting {
+-        let (send, recv) = mpsc::unbounded_channel();
++        let (send, recv) = crate::event_queue::channel_with_pool(self.event_buffers.clone());
+         if let Some((error_code, ref reason)) = self.close {
+             send.send(ConnectionEvent::Close {
+                 error_code,
+@@ -759,6 +758,9 @@
+         ];
+         Self {
+             connections: ConnectionSet {
++                event_buffers: Arc::new(crate::event_queue::BufferPool::new(
++                    max_receive_segments * BATCH_SIZE,
++                )),
+                 senders: FxHashMap::default(),
+                 sender,
+                 close: None,
+@@ -775,7 +777,6 @@
+         endpoint: &mut proto::Endpoint,
+         socket: &dyn AsyncUdpSocket,
+         runtime: &dyn Runtime,
+-        now: Instant,
+     ) -> Result<PollProgress, io::Error> {
+         let mut received_connection_packet = false;
+         let mut metas = [RecvMeta::default(); BATCH_SIZE];
+@@ -793,6 +794,8 @@
+         loop {
+             match socket.poll_recv(cx, &mut iovs, &mut metas) {
+                 Poll::Ready(Ok(msgs)) => {
++                    // Concurrent sends must not be newer than their received loopback ACKs.
++                    let now = runtime.now();
+                     self.recv_limiter.record_work(msgs);
+                     for (meta, buf) in metas.iter().zip(iovs.iter()).take(msgs) {
+                         let mut data: BytesMut = buf[0..meta.len].into();
+@@ -877,3 +880,116 @@
+     /// Whether datagram handling was interrupted early by the work limiter for fairness
+     keep_going: bool,
+ }
++
++#[cfg(all(test, any(feature = "ring", feature = "aws-lc-rs")))]
++mod receive_clock_tests {
++    use super::*;
++    use crate::{
++        runtime::{AsyncTimer, UdpPoller},
++        Duration, Instant,
++    };
++    use std::{net::Ipv4Addr, sync::atomic::AtomicU64};
++
++    #[derive(Debug)]
++    struct AdvancingSocket {
++        base: Instant,
++        micros: AtomicU64,
++        receives: AtomicUsize,
++        responses: AtomicUsize,
++    }
++
++    impl Runtime for AdvancingSocket {
++        fn new_timer(&self, _: Instant) -> Pin<Box<dyn AsyncTimer>> {
++            unreachable!("stateless resets use no connection timer")
++        }
++
++        fn spawn(&self, _: Pin<Box<dyn Future<Output = ()> + Send>>) {
++            unreachable!("stateless resets spawn no connection driver")
++        }
++
++        #[cfg(not(wasm_browser))]
++        fn wrap_udp_socket(&self, _: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
++            unreachable!("the test supplies its socket")
++        }
++
++        fn now(&self) -> Instant {
++            self.base + Duration::from_micros(self.micros.load(Ordering::Relaxed))
++        }
++    }
++
++    impl AsyncUdpSocket for AdvancingSocket {
++        fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
++            unreachable!("the test socket is always writable")
++        }
++
++        fn try_send(&self, _: &udp::Transmit<'_>) -> io::Result<()> {
++            self.responses.fetch_add(1, Ordering::Relaxed);
++            Ok(())
++        }
++
++        fn poll_recv(
++            &self,
++            _: &mut Context,
++            bufs: &mut [IoSliceMut<'_>],
++            meta: &mut [RecvMeta],
++        ) -> Poll<io::Result<usize>> {
++            if self.receives.fetch_add(1, Ordering::Relaxed) >= 2 {
++                return Poll::Pending;
++            }
++            self.micros.fetch_add(15, Ordering::Relaxed);
++            // A short-header packet with an unknown, nonempty random-format CID.
++            bufs[0][..64].fill(7);
++            bufs[0][0] = 0x40;
++            meta[0] = RecvMeta {
++                addr: (Ipv4Addr::LOCALHOST, 4433).into(),
++                len: 64,
++                stride: 64,
++                ..RecvMeta::default()
++            };
++            Poll::Ready(Ok(1))
++        }
++
++        fn local_addr(&self) -> io::Result<SocketAddr> {
++            Ok((Ipv4Addr::LOCALHOST, 4434).into())
++        }
++    }
++
++    #[test]
++    fn receive_batches_refresh_timestamp_after_poll_recv() {
++        let mut config = EndpointConfig::default();
++        config.min_reset_interval(Duration::from_micros(10));
++        config.cid_generator(|| Box::new(proto::RandomConnectionIdGenerator::new(8)));
++        let mut endpoint = proto::Endpoint::new(Arc::new(config), None, true, Some([0; 32]));
++        let (sender, _events) = mpsc::unbounded_channel();
++        let mut recv = RecvState::new(sender, 1, &endpoint);
++        let socket = AdvancingSocket {
++            base: Instant::now(),
++            micros: AtomicU64::new(0),
++            receives: AtomicUsize::new(0),
++            responses: AtomicUsize::new(0),
++        };
++        // A reset at the old poll time makes before-receive timestamps observable too.
++        let mut packet = [7; 64];
++        packet[0] = 0x40;
++        assert!(matches!(
++            endpoint.handle(
++                socket.now(),
++                (Ipv4Addr::LOCALHOST, 4433).into(),
++                None,
++                None,
++                BytesMut::from(&packet[..]),
++                &mut Vec::new(),
++            ),
++            Some(DatagramEvent::Response(_))
++        ));
++        recv.recv_limiter.start_cycle(|| socket.now());
++        let mut cx = Context::from_waker(Waker::noop());
++        let progress = recv
++            .poll_socket(&mut cx, &mut endpoint, &socket, &socket)
++            .unwrap();
++        recv.recv_limiter.finish_cycle(|| socket.now());
++        assert!(!progress.keep_going);
++        assert_eq!(socket.micros.load(Ordering::Relaxed), 30);
++        assert_eq!(socket.responses.load(Ordering::Relaxed), 2);
++    }
++}
+--- /dev/null
++++ b/quinn/src/event_queue.rs
+@@ -0,0 +1,327 @@
++//! One endpoint-owned sender and one connection-owned receiver. Keep an idle
++//! event slot inline instead of allocating a 32-event block per connection.
++//! The endpoint serializes producers; this channel also permits concurrent
++//! send/receive. FIFO, receiver retirement and scheduler cooperation are explicit.
++use std::{
++    collections::VecDeque,
++    mem,
++    sync::{Arc, Mutex},
++    task::{ready, Context, Poll, Waker},
++};
++
++use tokio::sync::mpsc::error::SendError;
++
++// Match the original mpsc block retention for small bursts. This is a storage
++// reuse threshold, never a limit on queued or delivered events.
++const RETAIN_SLOTS: usize = if cfg!(target_pointer_width = "64") {
++    32
++} else {
++    16
++};
++
++/// Empty overflow storage shared by an endpoint and its connection drivers.
++/// The endpoint sizes the cache to its receive batch, allowing drained queues
++/// to return scratch for the next burst. Event queues still grow freely.
++#[derive(Debug)]
++pub(crate) struct BufferPool<T> {
++    spare: Mutex<Vec<VecDeque<T>>>,
++    slots: usize,
++}
++
++impl<T> BufferPool<T> {
++    pub(crate) fn new(slots: usize) -> Self {
++        debug_assert!(slots > 0);
++        Self {
++            spare: Mutex::new(Vec::with_capacity(slots)),
++            slots,
++        }
++    }
++
++    fn take(&self) -> VecDeque<T> {
++        self.spare
++            .lock()
++            .unwrap_or_else(|e| e.into_inner())
++            .pop()
++            .unwrap_or_default()
++    }
++
++    fn recycle(&self, buffer: VecDeque<T>) {
++        debug_assert!(buffer.is_empty());
++        if buffer.capacity() == 0 || buffer.capacity() > RETAIN_SLOTS {
++            return;
++        }
++        let mut spare = self.spare.lock().unwrap_or_else(|e| e.into_inner());
++        if spare.len() < self.slots {
++            spare.push(buffer);
++        }
++    }
++}
++
++#[derive(Debug)]
++struct State<T> {
++    first: Option<T>,
++    pool: Arc<BufferPool<T>>,
++    rest: VecDeque<T>,
++    sender_alive: bool,
++    receiver_alive: bool,
++    reader: Option<Waker>,
++}
++
++#[derive(Debug)]
++pub(crate) struct Sender<T>(Arc<Mutex<State<T>>>);
++
++#[derive(Debug)]
++pub(crate) struct Receiver<T>(Arc<Mutex<State<T>>>);
++
++#[cfg(test)]
++fn channel<T>() -> (Sender<T>, Receiver<T>) {
++    channel_with_pool(Arc::new(BufferPool::new(4)))
++}
++
++pub(crate) fn channel_with_pool<T>(pool: Arc<BufferPool<T>>) -> (Sender<T>, Receiver<T>) {
++    let state = Arc::new(Mutex::new(State {
++        first: None,
++        pool,
++        rest: VecDeque::new(),
++        sender_alive: true,
++        receiver_alive: true,
++        reader: None,
++    }));
++    (Sender(state.clone()), Receiver(state))
++}
++
++impl<T> Sender<T> {
++    pub(crate) fn send(&self, value: T) -> Result<(), SendError<T>> {
++        let wake = {
++            let mut state = self.0.lock().unwrap();
++            if !state.receiver_alive {
++                return Err(SendError(value));
++            }
++            if state.first.is_none() && state.rest.is_empty() {
++                state.first = Some(value);
++            } else {
++                if state.rest.capacity() == 0 {
++                    state.rest = state.pool.take();
++                }
++                state.rest.push_back(value);
++            }
++            state.reader.take()
++        };
++        if let Some(waker) = wake {
++            waker.wake();
++        }
++        Ok(())
++    }
++}
++
++impl<T> Drop for Sender<T> {
++    fn drop(&mut self) {
++        let wake = {
++            let mut state = self
++                .0
++                .lock()
++                .unwrap_or_else(|poisoned| poisoned.into_inner());
++            state.sender_alive = false;
++            state.reader.take()
++        };
++        if let Some(waker) = wake {
++            waker.wake();
++        }
++    }
++}
++
++impl<T> Receiver<T> {
++    pub(crate) fn poll_recv(&mut self, cx: &mut Context<'_>) -> Poll<Option<T>> {
++        // Match Tokio mpsc's budget consumption. A permanently ready packet
++        // source must still let connection writes and other tasks run.
++        let coop = ready!(tokio::task::coop::poll_proceed(cx));
++        let mut state = self.0.lock().unwrap();
++        let value = state.first.take().or_else(|| state.rest.pop_front());
++        if state.rest.is_empty() && state.rest.capacity() != 0 {
++            let buffer = mem::take(&mut state.rest);
++            state.pool.recycle(buffer);
++        }
++        if value.is_some() || !state.sender_alive {
++            coop.made_progress();
++            return Poll::Ready(value);
++        }
++        if let Some(reader) = &mut state.reader {
++            reader.clone_from(cx.waker());
++        } else {
++            state.reader = Some(cx.waker().clone());
++        }
++        Poll::Pending
++    }
++}
++
++impl<T> Drop for Receiver<T> {
++    fn drop(&mut self) {
++        let retired = {
++            let mut state = self
++                .0
++                .lock()
++                .unwrap_or_else(|poisoned| poisoned.into_inner());
++            state.receiver_alive = false;
++            (
++                state.first.take(),
++                std::mem::take(&mut state.rest),
++                state.reader.take(),
++            )
++        };
++        // Releasing events or a retired task's waker can run destructors.
++        drop(retired);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::{
++        cell::Cell,
++        future::poll_fn,
++        sync::atomic::{AtomicUsize, Ordering::Relaxed},
++        task::Wake,
++    };
++
++    #[tokio::test]
++    async fn an_endpoint_pool_reuses_drained_storage_across_driver_threads() {
++        let pool = Arc::new(BufferPool::new(4));
++        let (send, mut receive) = channel_with_pool(pool.clone());
++        std::thread::spawn(move || {
++            for value in 0..5 {
++                send.send(value).unwrap();
++            }
++        })
++        .join()
++        .unwrap();
++        for value in 0..5 {
++            assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(value));
++        }
++        assert_eq!(receive.0.lock().unwrap().rest.capacity(), 0);
++        assert_eq!(pool.spare.lock().unwrap().len(), 1);
++        let (send, mut other) = channel_with_pool(pool.clone());
++        let producer_pool = pool.clone();
++        std::thread::spawn(move || {
++            send.send(10).unwrap();
++            send.send(11).unwrap();
++            assert!(producer_pool.spare.lock().unwrap().is_empty());
++        })
++        .join()
++        .unwrap();
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, Some(10));
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, Some(11));
++        assert_eq!(poll_fn(|cx| other.poll_recv(cx)).await, None);
++        assert_eq!(pool.spare.lock().unwrap().len(), 1);
++    }
++
++    #[tokio::test]
++    async fn fifo_burst_drain_and_inline_idle_storage() {
++        let (send, mut receive) = channel();
++        send.send(0).unwrap();
++        assert_eq!(send.0.lock().unwrap().rest.capacity(), 0);
++        for value in 1..1000 {
++            send.send(value).unwrap();
++        }
++        drop(send);
++        for value in 0..1000 {
++            assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(value));
++        }
++        assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, None);
++    }
++
++    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
++    async fn concurrent_producer_and_cancelled_receive_preserve_fifo() {
++        let (send, mut receive) = channel();
++        tokio::select! {
++            biased;
++            _ = poll_fn(|cx| receive.poll_recv(cx)) => panic!("empty queue became ready"),
++            _ = tokio::task::yield_now() => {}
++        }
++        let producer = tokio::spawn(async move {
++            for value in 0..1000 {
++                send.send(value).unwrap();
++                tokio::task::yield_now().await;
++            }
++        });
++        for value in 0..1000 {
++            assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(value));
++        }
++        producer.await.unwrap();
++        assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, None);
++    }
++
++    #[test]
++    fn sender_retirement_wakes_reader_and_receiver_retirement_releases_events() {
++        struct Counter(AtomicUsize);
++        impl Wake for Counter {
++            fn wake(self: Arc<Self>) {
++                self.0.fetch_add(1, Relaxed);
++            }
++        }
++        let counter = Arc::new(Counter(AtomicUsize::new(0)));
++        let waker = Waker::from(counter.clone());
++        let mut cx = Context::from_waker(&waker);
++        let (send, mut receive) = channel::<usize>();
++        assert!(receive.poll_recv(&mut cx).is_pending());
++        drop(send);
++        assert_eq!(counter.0.load(Relaxed), 1);
++        assert_eq!(receive.poll_recv(&mut cx), Poll::Ready(None));
++
++        let value = Arc::new(());
++        let (send, receive) = channel();
++        send.send(value.clone()).unwrap();
++        send.send(value.clone()).unwrap();
++        drop(receive);
++        assert_eq!(Arc::strong_count(&value), 1);
++        let refused = send.send(value.clone()).unwrap_err();
++        assert!(Arc::ptr_eq(&refused.0, &value));
++        drop(refused);
++        assert_eq!(Arc::strong_count(&value), 1);
++    }
++
++    #[tokio::test]
++    async fn a_large_burst_releases_excess_storage_after_drain() {
++        let (send, mut receive) = channel();
++        for value in 0..10000 {
++            send.send(value).unwrap();
++        }
++        assert!(send.0.lock().unwrap().rest.capacity() > 32);
++        for value in 0..10000 {
++            assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(value));
++        }
++        let capacity = send.0.lock().unwrap().rest.capacity();
++        assert_eq!(capacity, 0);
++        send.send(10000).unwrap();
++        assert_eq!(poll_fn(|cx| receive.poll_recv(cx)).await, Some(10000));
++    }
++
++    #[test]
++    fn retirement_after_an_unwind_releases_events_without_a_second_panic() {
++        let value = Arc::new(());
++        let (send, receive) = channel();
++        send.send(value.clone()).unwrap();
++        let result = std::panic::catch_unwind(|| {
++            let _state = send.0.lock().unwrap();
++            panic!("simulate a driver unwinding while the queue is locked");
++        });
++        assert!(result.is_err());
++        drop(receive);
++        drop(send);
++        assert_eq!(Arc::strong_count(&value), 1);
++    }
++
++    #[tokio::test]
++    async fn a_ready_queue_preserves_tokio_cooperative_scheduling() {
++        let (send, mut receive) = channel();
++        for value in 0..1000 {
++            send.send(value).unwrap();
++        }
++        drop(send);
++        let count = Cell::new(0);
++        tokio::join!(biased;
++            async { while poll_fn(|cx| receive.poll_recv(cx)).await.is_some() { count.set(count.get() + 1); } },
++            async { assert!(count.get() < 1000, "ready input starved another future"); }
++        );
++        assert_eq!(count.get(), 1000);
++    }
++}
+--- a/quinn/src/lib.rs
++++ b/quinn/src/lib.rs
+@@ -50,6 +50,7 @@
+ mod recv_stream;
+ mod runtime;
+ mod send_stream;
++mod transmit_buffer;
+ mod work_limiter;
+
+ #[cfg(not(wasm_browser))]
+@@ -93,6 +94,8 @@
+ #[cfg(test)]
+ mod tests;
+
++mod event_queue;
++
+ #[derive(Debug)]
+ enum ConnectionEvent {
+     Close {
+--- a/quinn/src/recv_stream.rs
++++ b/quinn/src/recv_stream.rs
+@@ -144,9 +144,9 @@ impl RecvStream {
+                     return ReadStatus::Readable(());
+                 }
+
+-                match chunks.next(buf.remaining()) {
+-                    Ok(Some(chunk)) => {
+-                        buf.put_slice(&chunk.bytes);
++                // Copy in place: splitting a chunk would clone and drop its shared buffer.
++                match chunks.read_with(buf.remaining(), |data| buf.put_slice(data)) {
++                    Ok(Some(_)) => {
+                         read = true;
+                     }
+                     res => return (if read { Some(()) } else { None }, res.err()).into(),
+--- a/quinn/src/tests.rs
++++ b/quinn/src/tests.rs
+@@ -1109,3 +1109,126 @@
+ unsafe fn drop_waker(data: *const ()) {
+     drop(Arc::<WakeCounter>::from_raw(data as *const WakeCounter));
+ }
++
++/// Force a blocked send and a pending writable poll independently of the real
++/// loopback socket's generous buffers. The next poll is explicitly woken.
++#[derive(Debug)]
++struct BlockOnceSocket {
++    inner: Arc<dyn crate::AsyncUdpSocket>,
++    block: std::sync::atomic::AtomicBool,
++    pending: Arc<std::sync::atomic::AtomicBool>,
++    polls: Arc<AtomicUsize>,
++}
++
++impl crate::AsyncUdpSocket for BlockOnceSocket {
++    fn create_io_poller(self: Arc<Self>) -> std::pin::Pin<Box<dyn crate::UdpPoller>> {
++        Box::pin(BlockOncePoller {
++            inner: self.inner.clone().create_io_poller(),
++            pending: self.pending.clone(),
++            polls: self.polls.clone(),
++        })
++    }
++    fn try_send(&self, transmit: &crate::udp::Transmit) -> io::Result<()> {
++        if self.block.swap(false, Ordering::SeqCst) {
++            self.pending.store(true, Ordering::SeqCst);
++            return Err(io::ErrorKind::WouldBlock.into());
++        }
++        self.inner.try_send(transmit)
++    }
++    fn poll_recv(
++        &self,
++        cx: &mut Context,
++        bufs: &mut [std::io::IoSliceMut<'_>],
++        meta: &mut [crate::udp::RecvMeta],
++    ) -> Poll<io::Result<usize>> {
++        self.inner.poll_recv(cx, bufs, meta)
++    }
++    fn local_addr(&self) -> io::Result<SocketAddr> {
++        self.inner.local_addr()
++    }
++    fn max_transmit_segments(&self) -> usize {
++        self.inner.max_transmit_segments()
++    }
++    fn max_receive_segments(&self) -> usize {
++        self.inner.max_receive_segments()
++    }
++    fn may_fragment(&self) -> bool {
++        self.inner.may_fragment()
++    }
++}
++
++#[derive(Debug)]
++struct BlockOncePoller {
++    inner: std::pin::Pin<Box<dyn crate::UdpPoller>>,
++    pending: Arc<std::sync::atomic::AtomicBool>,
++    polls: Arc<AtomicUsize>,
++}
++impl crate::UdpPoller for BlockOncePoller {
++    fn poll_writable(mut self: std::pin::Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
++        self.polls.fetch_add(1, Ordering::SeqCst);
++        if self.pending.swap(false, Ordering::SeqCst) {
++            cx.waker().wake_by_ref();
++            return Poll::Pending;
++        }
++        self.inner.as_mut().poll_writable(cx)
++    }
++}
++
++#[test]
++fn blocked_transmit_survives_pending_writability_and_rebind() {
++    use crate::Runtime as _;
++    let runtime = rt_basic();
++    runtime.block_on(async {
++        timeout(Duration::from_secs(5), async {
++            let factory = EndpointFactory::new();
++            let endpoint = factory.endpoint();
++            let server = factory.endpoint();
++            let (outgoing, incoming) = join!(
++                endpoint
++                    .connect(server.local_addr().unwrap(), "localhost")
++                    .unwrap(),
++                async { server.accept().await.unwrap().await }
++            );
++            let outgoing = outgoing.unwrap();
++            let incoming = incoming.unwrap();
++            for byte in [41u8, 73] {
++                let socket = Arc::new(BlockOnceSocket {
++                    inner: TokioRuntime
++                        .wrap_udp_socket(UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap())
++                        .unwrap(),
++                    block: std::sync::atomic::AtomicBool::new(true),
++                    pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
++                    polls: Arc::new(AtomicUsize::new(0)),
++                });
++                endpoint.rebind_abstract(socket.clone()).unwrap();
++                let payload = vec![byte; 65536];
++                let (sent, received) = join!(
++                    async {
++                        let mut send = outgoing.open_uni().await.unwrap();
++                        send.write_all(&payload).await.unwrap();
++                        send.finish().unwrap();
++                        send.stopped().await.unwrap();
++                    },
++                    async {
++                        incoming
++                            .accept_uni()
++                            .await
++                            .unwrap()
++                            .read_to_end(payload.len())
++                            .await
++                            .unwrap()
++                    }
++                );
++                let _ = sent;
++                assert_eq!(received, payload);
++                assert!(!socket.block.load(Ordering::SeqCst));
++                assert!(socket.polls.load(Ordering::SeqCst) > 0);
++            }
++            endpoint.close(0u32.into(), b"done");
++            server.close(0u32.into(), b"done");
++            join!(endpoint.wait_idle(), server.wait_idle());
++        })
++        .await
++        .expect("blocked transmit did not resume");
++    });
++}
+--- /dev/null
++++ b/quinn/src/transmit_buffer.rs
+@@ -0,0 +1,66 @@
++//! Packet construction is synchronous, so an unblocked connection can return
++//! its scratch allocation for reuse by the next connection on this thread.
++//! A socket-blocked transmit keeps its bytes with its own connection instead.
++use std::{
++    cell::RefCell,
++    mem,
++    ops::{Deref, DerefMut},
++};
++
++thread_local! {
++    static SCRATCH: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
++}
++
++pub(crate) struct TransmitBuffer(Vec<u8>);
++
++impl TransmitBuffer {
++    pub(crate) fn take(retained: &mut Vec<u8>) -> Self {
++        let mut bytes = mem::take(retained);
++        if bytes.capacity() == 0 {
++            if let Ok(Some(scratch)) = SCRATCH.try_with(|slot| {
++                slot.try_borrow_mut()
++                    .ok()
++                    .map(|mut slot| mem::take(&mut *slot))
++            }) {
++                bytes = scratch;
++            }
++        }
++        Self(bytes)
++    }
++
++    pub(crate) fn retain(&mut self, pending: &mut Vec<u8>) {
++        *pending = mem::take(&mut self.0);
++    }
++}
++
++impl Deref for TransmitBuffer {
++    type Target = Vec<u8>;
++
++    fn deref(&self) -> &Self::Target {
++        &self.0
++    }
++}
++
++impl DerefMut for TransmitBuffer {
++    fn deref_mut(&mut self) -> &mut Self::Target {
++        &mut self.0
++    }
++}
++
++impl Drop for TransmitBuffer {
++    fn drop(&mut self) {
++        if self.0.capacity() == 0 {
++            return;
++        }
++        self.0.clear();
++        // A nested/custom socket callback or thread-local teardown must not
++        // panic or share a live construction buffer. In that case just free it.
++        let _ = SCRATCH.try_with(|slot| {
++            if let Ok(mut spare) = slot.try_borrow_mut() {
++                if spare.capacity() < self.0.capacity() {
++                    mem::swap(&mut *spare, &mut self.0);
++                }
++            }
++        });
++    }
++}

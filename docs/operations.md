@@ -14,6 +14,25 @@ The relay defaults to `127.0.0.1:1338` and management to `127.0.0.1:1339`.
 Deploy behind a TLS WebSocket ingress; [Caddyfile.example](../deploy/Caddyfile.example)
 shows the native route.
 
+### WebTransport endpoint servicing
+
+In WebTransport mode, `--workers` controls the connection and application runtime.
+One additional `war-ingress` thread owns a current-thread runtime for the shared
+UDP socket reactor and endpoint dispatch. It shares the process CPU allowance;
+`--pin-workers` pins the application workers and does not reserve an extra CPU
+for ingress. By default (`auto`) the workers are pinned when the process may use
+exactly one CPU per worker, which is the case with the default worker count on
+hosts of up to 16 CPUs; the relay then only partitions CPUs it was given. Use
+`--pin-workers=off` when the host shares those CPUs with other busy work. Session shutdown completes before this runtime is stopped and joined.
+Startup failure also stops and joins it. Reliable private/control output attempts
+an immediate chunk write when there is no older output; partial writes retain
+FIFO position, charged credit, and their write deadline. The queue ordering lock
+also protects the stream and in-flight marker; a pending write holds no lock
+across an await and cannot be overtaken. Fanout remains queued
+for recipient batching. The TCP/WebSocket details below apply to
+`--legacy-websocket`. See the [measured endpoint-servicing comparison](reports/webtransport-dedicated-ingress-2026-10-21.json)
+for the mixed-load gain and reliable-only throughput tradeoffs.
+
 ### Browser origin admission
 
 `WAR_ALLOWED_ORIGINS` (or repeated `--allowed-origin`) lists exact browser
@@ -85,7 +104,7 @@ socket memory, application storage and file descriptors in capacity planning.
 Linux commonly reports doubled socket-buffer requests; check effective settings.
 Small TCP windows can limit throughput on high bandwidth-delay networks.
 
-Choose worker count and optional `WAR_PIN_WORKERS` for the actual host. Keep load
+Choose worker count and `WAR_PIN_WORKERS` (default `auto`) for the actual host. Keep load
 generators on different physical cores during comparisons, and record SMT
 siblings, worker affinity and CPU topology. The fixed masks in mixed-load scripts
 assume the original 32-logical-CPU test host; adjust them before another host.
@@ -122,12 +141,13 @@ reply to its own command. Senders are never closed because of their recipients.
 Delivery under pressure is best-effort: later recipients of one broadcast may
 miss a frame that earlier recipients received.
 
-Departure notices use one queue per room, plus one shared queue for `re_globl`
-departures and disconnect-observer notices and one for broadcasts whose source
-left mid-delivery. Notices to at most 128 recipients are delivered immediately
+Departure notices use one queue per ordinary room, sixteen source-room-hashed
+queues for `re_globl` departures and disconnect-observer notices, and one for
+detached global/observer publications. Different rooms' observer notices have
+no shared order. Notices to at most 128 recipients are delivered immediately
 when the room's queue is idle. Larger ones become jobs that workers advance in
-128-recipient turns, rotating across queues, so one large room cannot delay
-another room's notices. Live broadcasts above 1,024 recipients advance in
+128-recipient turns, rotating across queues so a large room need not finish
+before another queue receives service. Live broadcasts above 1,024 recipients advance in
 1,024-recipient turns owned by the source. Each job reserves staging credit for
 its captured view from the global budget; a refused reservation falls back to
 synchronous delivery, in order, and counts in `war_global_pressure_total`, so
@@ -185,6 +205,12 @@ kernel copying or zero first-use allocation. RSS can remain above initial values
 after logical resources reach zero because allocators keep pages and small
 arenas/queues stay warm for reconnects.
 
+The server binary uses jemalloc on non-MSVC targets. It returns freed pages to
+the OS gradually (after a 100,000-session population retires, resident memory
+falls from about 1,670 to about 1,350 MiB within seconds), and it honours
+jemalloc settings through `_RJEM_MALLOC_CONF` for hosts that need different decay
+or arena policy. No setting is required.
+
 Use [short recipes](performance-guide.md) to check the workload on its intended
 host. Test normal Close, EOF, exact payloads/FIFO and final resource release.
 Do not overlap compilation, profiling or multiple timed generators. Record failed
@@ -214,6 +240,8 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--queue-bytes` | `WAR_QUEUE_BYTES` | `33554432` (32 MiB) | At least `max-message-bytes` + 10 | Per-session output byte allowance |
 | `--total-queue-bytes` | `WAR_TOTAL_QUEUE_BYTES` | `268435456` (256 MiB) | At least `queue-bytes` | Global output budget shared by all sessions, bodies and captured views |
 | `--read-buffer-bytes` | `WAR_READ_BUFFER_BYTES` | `4096` | 1 to 1048576 | Base decoder receive storage per connection |
+| `--receive-arena-bytes` | `WAR_RECEIVE_ARENA_BYTES` | `0` (disabled) | 0, or at least `receive-arena-page-bytes`; must fit the address space | Process-wide backing-store cap for reliable WebTransport receive slabs, including retained published slices |
+| `--receive-arena-page-bytes` | `WAR_RECEIVE_ARENA_PAGE_BYTES` | `65536` (64 KiB) | Positive and fits the address space | Minimum slab allocation on first use by a worker, shared across its connections |
 | `--total-read-buffer-bytes` | `WAR_TOTAL_READ_BUFFER_BYTES` | `1073741824` (1 GiB) | 0, or at least 2 × max(`read-buffer-bytes`, 20480) | Shared decoder staging allowance; 0 disables that admission check |
 | `--read-buffer-idle-secs` | `WAR_READ_BUFFER_IDLE_SECS` | `5` | 0 to 86400 | Reclaim enlarged decoder storage after this long without large input; 0 disables |
 | `--max-variables` | `WAR_MAX_VARIABLES` | `256` | 1 to 4294967295 | Variables per channel |
@@ -229,8 +257,8 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--idle-timeout-secs` | `WAR_IDLE_TIMEOUT_SECS` | `0` | 0 to 86400 | Close joined sessions with no application input or output; 0 disables |
 | `--shutdown-timeout-secs` | `WAR_SHUTDOWN_TIMEOUT_SECS` | `10` | 1 to 86400 | Worker grace to send `1001` and retire sockets at terminal shutdown |
 | `--disable-global-broadcast` | `WAR_DISABLE_GLOBAL_BROADCAST` | off | Flag | `re_globl` broadcasts require an authenticated sender |
-| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Number of native I/O worker threads |
-| `--pin-workers` | `WAR_PIN_WORKERS` | off | Flag; needs one allowed CPU per worker | Pin each worker thread to one CPU |
+| `--workers` | `WAR_WORKERS` | available CPUs, capped at 16 | At least 1 | Native I/O workers, or WebTransport connection/application workers (plus one ingress thread) |
+| `--pin-workers` | `WAR_PIN_WORKERS` | `auto` | `auto`, `on` (bare flag, `true`), `off` (`false`); `on` needs one allowed CPU per worker | Pin each worker thread to one CPU; `auto` pins WebTransport workers when the allowed CPUs number exactly one per worker |
 
 Two secrets are environment-only and never appear in `--help` or logs:
 
@@ -251,6 +279,29 @@ commonly doubles a request), plus the resident baseline of the process. That
 total must fit under the cgroup memory limit with headroom, or the OOM killer
 ends the process instead of the budgets refusing admission. Raise a budget
 only together with the limit that contains it.
+
+When enabling the reliable WebTransport receive arena, also allow up to
+`WAR_RECEIVE_ARENA_BYTES` of backing storage. For example,
+`--receive-arena-bytes 8388608 --receive-arena-page-bytes 65536` permits up to
+8 MiB of slabs, allocating a 64 KiB page lazily on a worker's first eligible
+record. This is shared across connections; it does not preallocate 64 KiB for
+every session. Workers reuse released prefixes and append into unused page space.
+The final slice can return a completed slab to a single spare-page cache on its
+worker, so the next allocation can reuse its backing storage. Both active and
+spare pages count against the same process cap; no global pool lock is used.
+Each published slice retains its page until its final consumer releases it.
+The arena budget includes those retained pages and worker caches. Once that cap
+is reached, or a record exceeds the page size, the reader uses its ordinary
+budgeted allocation path. Arena pressure therefore does not reject otherwise
+admissible messages. Message-size, staging, queue, rate and timeout limits still
+apply. Datagram payload allocation and the legacy WebSocket decoder are unchanged.
+
+`war_receive_arena_reserved_bytes` and `war_receive_arena_peak_reserved_bytes`
+report backing reservations separately from decoder staging. Arena storage may
+remain cached after connections retire and is released when the worker runtime
+exits; its reservation must remain within the configured cap. A larger page can
+reduce payload allocations but lets one retained small slice pin more capacity.
+Choose the page size and cap using actual message sizes and slow-recipient load.
 
 After a load test, check that the six gauges the release gate requires to be
 zero have returned to zero: `war_connections`, `war_sessions`,

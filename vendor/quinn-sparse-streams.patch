@@ -1,0 +1,1938 @@
+--- a/quinn-proto/src/connection/assembler.rs
++++ b/quinn-proto/src/connection/assembler.rs
+@@ -37,6 +37,14 @@ impl Assembler {
+         self.data.clear();
+     }
+
++    /// Release buffered data and its staging allocation without resetting the
++    /// consumed offset or ordering history. Used when a crypto space retires.
++    pub(super) fn discard_buffer(&mut self) {
++        self.data = BinaryHeap::new();
++        self.buffered = 0;
++        self.allocated = 0;
++    }
++
+     pub(super) fn ensure_ordering(&mut self, ordered: bool) -> Result<(), IllegalOrderedRead> {
+         if ordered && !self.state.is_ordered() {
+             return Err(IllegalOrderedRead);
+@@ -98,6 +106,40 @@ impl Assembler {
+         }
+     }
+
++    /// Pass up to `max_length` ordered bytes from the next chunk to `consume`
++    ///
++    /// Unlike [`Self::read`], a partly read chunk is advanced in place rather than split, so
++    /// copying readers make no reference-count updates on the shared packet buffer.
++    pub(super) fn read_with(&mut self, max_length: usize, consume: impl FnOnce(&[u8])) -> usize {
++        loop {
++            let Some(mut chunk) = self.data.peek_mut() else {
++                return 0;
++            };
++            if chunk.offset > self.bytes_read {
++                return 0;
++            } else if (chunk.offset + chunk.bytes.len() as u64) <= self.bytes_read {
++                self.buffered -= chunk.bytes.len();
++                self.allocated -= chunk.allocation_size;
++                PeekMut::pop(chunk);
++                continue;
++            }
++            let start = (self.bytes_read - chunk.offset) as usize;
++            let len = max_length.min(chunk.bytes.len() - start);
++            consume(&chunk.bytes[start..start + len]);
++            self.bytes_read += len as u64;
++            if start + len == chunk.bytes.len() {
++                self.buffered -= chunk.bytes.len();
++                self.allocated -= chunk.allocation_size;
++                PeekMut::pop(chunk);
++            } else {
++                chunk.bytes.advance(start + len);
++                chunk.offset += (start + len) as u64;
++                self.buffered -= start + len;
++            }
++            return len;
++        }
++    }
++
+     /// Copy fragmented chunk data to new chunks backed by a single buffer
+     ///
+     /// This makes sure we're not unnecessarily holding on to many larger allocations.
+@@ -195,6 +237,12 @@ impl Assembler {
+             let buffer = Buffer::new(offset, bytes, allocation_size);
+             self.buffered += buffer.bytes.len();
+             self.allocated += buffer.allocation_size;
++            if self.data.capacity() == 0 {
++                // A stream read as fast as it arrives holds one chunk at a time, and control
++                // streams receive once. Start with one slot instead of the default four; a
++                // stream that ever queues a second chunk grows to four as before.
++                self.data.reserve_exact(1);
++            }
+             self.data.push(buffer);
+         }
+         // `self.buffered` also counts duplicate bytes, therefore we use
+@@ -377,6 +425,31 @@ mod test {
+     use super::*;
+     use assert_matches::assert_matches;
+
++    #[test]
++    fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {
++        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};
++        struct Owned(Arc<AtomicUsize>);
++        impl AsRef<[u8]> for Owned {
++            fn as_ref(&self) -> &[u8] { b"later" }
++        }
++        impl Drop for Owned {
++            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }
++        }
++        let dropped = Arc::new(AtomicUsize::new(0));
++        let mut x = Assembler::new();
++        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
++        drop(x.read(usize::MAX, true).unwrap());
++        x.insert(5, Bytes::from_owner(Owned(dropped.clone())), 5).unwrap();
++        assert_eq!(dropped.load(SeqCst), 0);
++        x.discard_buffer();
++        assert_eq!(dropped.load(SeqCst), 1);
++        assert_eq!(x.bytes_read(), 5);
++        assert_eq!(x.data.capacity(), 0);
++        // A retransmitted consumed prefix must not become application data again.
++        x.insert(0, Bytes::from_static(b"first"), 5).unwrap();
++        assert!(x.read(usize::MAX, true).is_none());
++    }
++
+     #[test]
+     fn assemble_ordered() {
+         let mut x = Assembler::new();
+@@ -393,6 +466,22 @@ mod test {
+         assert_matches!(next(&mut x, 32), None);
+     }
+
++    #[test]
++    fn in_order_stream_keeps_one_slot_until_two_chunks_queue() {
++        let mut x = Assembler::new();
++        for (offset, chunk) in [(0, b"123"), (3, b"456")] {
++            x.insert(offset, Bytes::from_static(chunk), 3).unwrap();
++            assert_eq!(x.data.capacity(), 1);
++            assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == chunk);
++        }
++        x.insert(6, Bytes::from_static(b"789"), 3).unwrap();
++        x.insert(9, Bytes::from_static(b"10"), 2).unwrap();
++        assert!(x.data.capacity() >= 2);
++        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"789");
++        assert_matches!(next(&mut x, 32), Some(ref y) if &y[..] == b"10");
++        assert_matches!(next(&mut x, 32), None);
++    }
++
+     #[test]
+     fn assemble_unordered() {
+         let mut x = Assembler::new();
+@@ -789,6 +878,27 @@ mod test {
+         x.read(usize::MAX, false).unwrap()
+     }
+
++    #[test]
++    fn read_with_copies_in_place_across_overlaps() {
++        let mut x = Assembler::new();
++        let packet = Bytes::from(b"0123456789".to_vec());
++        x.insert(0, packet.slice(0..6), 6).unwrap();
++        // Overlaps the unread tail of the first chunk.
++        x.insert(4, packet.slice(4..10), 6).unwrap();
++        let mut out = Vec::new();
++        let mut read = |x: &mut Assembler, max| x.read_with(max, |d| out.extend_from_slice(d));
++        assert_eq!(read(&mut x, 4), 4);
++        assert_eq!(x.buffered, 2 + 6);
++        // Both remaining chunks start at offset 4; either may come first.
++        while read(&mut x, 32) != 0 {}
++        assert_eq!(out, b"0123456789");
++        assert_eq!((x.buffered, x.allocated, x.bytes_read()), (0, 0, 10));
++        // Only `packet` holds the buffer now: in-place reads kept no split handles.
++        assert!(packet.is_unique());
++        x.insert(12, Bytes::from_static(b"cd"), 2).unwrap();
++        assert_eq!(x.read_with(32, |_| unreachable!()), 0);
++    }
++
+     fn next(x: &mut Assembler, size: usize) -> Option<Bytes> {
+         x.read(size, true).map(|chunk| chunk.bytes)
+     }
+--- a/quinn-proto/src/connection/datagrams.rs
++++ b/quinn-proto/src/connection/datagrams.rs
+@@ -4,7 +4,7 @@
+ use thiserror::Error;
+ use tracing::{debug, trace};
+
+-use super::{Connection, Event};
++use super::{Connection, QueuedEvent};
+ use crate::{
+     TransportError,
+     frame::{Datagram, FrameStruct},
+@@ -67,7 +67,7 @@
+         }
+
+         self.conn.datagrams.send_blocked = false;
+-        self.conn.events.push_back(Event::DatagramsUnblocked);
++        self.conn.events.push_back(QueuedEvent::DatagramsUnblocked);
+     }
+
+     /// Compute the maximum size of datagrams that may passed to `send_datagram`
+--- a/quinn-proto/src/connection/mod.rs
++++ b/quinn-proto/src/connection/mod.rs
+@@ -70,9 +70,9 @@ mod send_buffer;
+ mod spaces;
+ #[cfg(fuzzing)]
+ pub use spaces::Retransmits;
+-#[cfg(not(fuzzing))]
+-use spaces::Retransmits;
+-use spaces::{PacketNumberFilter, PacketSpace, SendableFrames, SentPacket, ThinRetransmits};
++use spaces::{
++    PacketNumberFilter, PacketSpace, PacketSpaces, SendableFrames, SentPacket, ThinRetransmits,
++};
+
+ mod stats;
+ pub use stats::{ConnectionStats, FrameStats, PathStats, UdpStats};
+@@ -149,13 +149,20 @@ pub struct Connection {
+     path_counter: u64,
+     /// Whether MTU detection is supported in this environment
+     allow_mtud: bool,
+-    prev_path: Option<(ConnectionId, PathData)>,
++    // Boxed: only a connection that has migrated holds one, and inline it costs every
++    // connection 432 bytes.
++    prev_path: Option<Box<(ConnectionId, PathData)>>,
+     state: State,
+     side: ConnectionSide,
+     /// Whether or not 0-RTT was enabled during the handshake. Does not imply acceptance.
+     zero_rtt_enabled: bool,
+     /// Set if 0-RTT is supported, then cleared when no longer needed.
+     zero_rtt_crypto: Option<ZeroRttCrypto>,
++    /// 1-RTT packets that overtook the end of the handshake, kept until it completes
++    early_short_packets: Vec<(Option<EcnCodepoint>, BytesMut)>,
++    /// Remote CIDs no longer used, retired once no Data packet numbered below the first is
++    /// outstanding
++    deferred_retire_cids: Option<(u64, std::ops::Range<u64>)>,
+     key_phase: bool,
+     /// How many packets are in the current key phase. Used only for `Data` space.
+     key_phase_size: u64,
+@@ -168,14 +175,14 @@ pub struct Connection {
+     /// The value that the server included in the Source Connection ID field of a Retry packet, if
+     /// one was received
+     retry_src_cid: Option<ConnectionId>,
+-    events: VecDeque<Event>,
++    events: VecDeque<QueuedEvent>,
+     endpoint_events: VecDeque<EndpointEventInner>,
+     /// Whether the spin bit is in use for this connection
+     spin_enabled: bool,
+     /// Outgoing spin bit state
+     spin: bool,
+     /// Packet number spaces: initial, handshake, 1-RTT
+-    spaces: [PacketSpace; 3],
++    spaces: PacketSpaces,
+     /// Highest usable packet number space
+     highest_space: SpaceId,
+     /// 1-RTT keys used prior to a key update
+@@ -298,6 +305,8 @@ impl Connection {
+             side: connection_side,
+             zero_rtt_enabled: false,
+             zero_rtt_crypto: None,
++            early_short_packets: Vec::new(),
++            deferred_retire_cids: None,
+             key_phase: false,
+             // A small initial key phase size ensures peers that don't handle key updates correctly
+             // fail sooner rather than later. It's okay for both peers to do this, as the first one
+@@ -314,7 +323,7 @@ impl Connection {
+             endpoint_events: VecDeque::new(),
+             spin_enabled: config.allow_spin && rng.random_ratio(7, 8),
+             spin: false,
+-            spaces: [initial_space, PacketSpace::new(now), PacketSpace::new(now)],
++            spaces: PacketSpaces::new(initial_space, now),
+             highest_space: SpaceId::Initial,
+             prev_crypto: None,
+             next_crypto: None,
+@@ -395,7 +404,7 @@ impl Connection {
+     #[must_use]
+     pub fn poll(&mut self) -> Option<Event> {
+         if let Some(x) = self.events.pop_front() {
+-            return Some(x);
++            return Some(x.into());
+         }
+
+         if let Some(event) = self.streams.poll() {
+@@ -412,7 +421,14 @@ impl Connection {
+     /// Return endpoint-facing events
+     #[must_use]
+     pub fn poll_endpoint_events(&mut self) -> Option<EndpointEvent> {
+-        self.endpoint_events.pop_front().map(EndpointEvent)
++        let event = self.endpoint_events.pop_front()?;
++        if self.endpoint_events.is_empty() {
++            // Endpoint events are control-plane bursts (handshake, CID rotation, drain), never
++            // per-packet work. Releasing the drained burst's storage keeps an established idle
++            // connection from holding it for its whole lifetime.
++            self.endpoint_events = VecDeque::new();
++        }
++        Some(EndpointEvent(event))
+     }
+
+     /// Provide control over streams
+@@ -431,7 +447,7 @@ impl Connection {
+         RecvStream {
+             id,
+             state: &mut self.streams,
+-            pending: &mut self.spaces[SpaceId::Data].pending,
++            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
+         }
+     }
+
+@@ -442,7 +458,7 @@ impl Connection {
+         SendStream {
+             id,
+             state: &mut self.streams,
+-            pending: &mut self.spaces[SpaceId::Data].pending,
++            pending: self.spaces[SpaceId::Data].pending.get_or_create(),
+             conn_state: &self.state,
+         }
+     }
+@@ -485,7 +501,9 @@ impl Connection {
+         for space in SpaceId::iter() {
+             let request_immediate_ack =
+                 space == SpaceId::Data && self.peer_supports_ack_frequency();
+-            self.spaces[space].maybe_queue_probe(request_immediate_ack, &self.streams);
++            if let Some(space) = self.spaces.get_mut(space) {
++                space.maybe_queue_probe(request_immediate_ack, &self.streams);
++            }
+         }
+
+         // Check whether we need to send a close message
+@@ -508,10 +526,14 @@ impl Connection {
+
+         // Check whether we need to send an ACK_FREQUENCY frame
+         if let Some(config) = &self.config.ack_frequency_config {
+-            self.spaces[SpaceId::Data].pending.ack_frequency = self
+-                .ack_frequency
+-                .should_send_ack_frequency(self.path.rtt.get(), config, &self.peer_params)
+-                && self.highest_space == SpaceId::Data
++            self.spaces[SpaceId::Data]
++                .pending
++                .get_or_create()
++                .ack_frequency = self.ack_frequency.should_send_ack_frequency(
++                self.path.rtt.get(),
++                config,
++                &self.peer_params,
++            ) && self.highest_space == SpaceId::Data
+                 && self.peer_supports_ack_frequency();
+         }
+
+@@ -546,7 +568,7 @@ impl Connection {
+
+             // Is there data or a close message to send in this space?
+             let can_send = self.space_can_send(space_id, frame_space_1rtt);
+-            if can_send.is_empty() && (!close || self.spaces[space_id].crypto.is_none()) {
++            if can_send.is_empty() && (!close || !self.spaces.has_keys(space_id)) {
+                 space_idx += 1;
+                 continue;
+             }
+@@ -758,7 +780,7 @@ impl Connection {
+             // From here on, we've determined that a packet will definitely be sent.
+             //
+
+-            if self.spaces[SpaceId::Initial].crypto.is_some()
++            if self.spaces.has_keys(SpaceId::Initial)
+                 && space_id == SpaceId::Handshake
+                 && self.side.is_client()
+             {
+@@ -1018,7 +1040,7 @@ impl Connection {
+
+     /// Send PATH_CHALLENGE for a previous path if necessary
+     fn send_path_challenge(&mut self, now: Instant, buf: &mut Vec<u8>) -> Option<Transmit> {
+-        let (prev_cid, prev_path) = self.prev_path.as_mut()?;
++        let (prev_cid, prev_path) = &mut **self.prev_path.as_mut()?;
+         if !prev_path.challenge_pending {
+             return None;
+         }
+@@ -1076,7 +1098,7 @@ impl Connection {
+
+     /// Indicate what types of frames are ready to send for the given space
+     fn space_can_send(&self, space_id: SpaceId, frame_space_1rtt: usize) -> SendableFrames {
+-        if self.spaces[space_id].crypto.is_none()
++        if !self.spaces.has_keys(space_id)
+             && (space_id != SpaceId::Data
+                 || self.zero_rtt_crypto.is_none()
+                 || self.side.is_server())
+@@ -1151,6 +1173,10 @@ impl Connection {
+                     self.handle_coalesced(now, remote, ecn, data);
+                 }
+
++                if !self.early_short_packets.is_empty() && !self.state.is_handshake() {
++                    self.replay_early_short_packets(now, remote);
++                }
++
+                 self.config.qlog_sink.emit_recovery_metrics(
+                     self.pto_count,
+                     &mut self.path,
+@@ -1168,7 +1194,11 @@ impl Connection {
+             NewIdentifiers(ids, now) => {
+                 self.local_cid_state.new_cids(&ids, now);
+                 ids.into_iter().rev().for_each(|frame| {
+-                    self.spaces[SpaceId::Data].pending.new_cids.push(frame);
++                    self.spaces[SpaceId::Data]
++                        .pending
++                        .get_or_create()
++                        .new_cids
++                        .push(frame);
+                 });
+                 // Update Timer::PushNewCid
+                 if self.timers.get(Timer::PushNewCid).is_none_or(|x| x <= now) {
+@@ -1222,8 +1252,8 @@ impl Connection {
+                 }
+                 Timer::PathValidation => {
+                     debug!("path validation failed");
+-                    if let Some((_, prev)) = self.prev_path.take() {
+-                        self.path = prev;
++                    if let Some(prev) = self.prev_path.take() {
++                        self.path = prev.1;
+                     }
+                     self.path.challenge = None;
+                     self.path.challenge_pending = false;
+@@ -1437,7 +1467,7 @@ impl Connection {
+         self.streams.set_max_concurrent(dir, count);
+         // If the limit was reduced, then a flow control update previously deemed insignificant may
+         // now be significant.
+-        let pending = &mut self.spaces[SpaceId::Data].pending;
++        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
+         self.streams.queue_max_stream_id(pending);
+     }
+
+@@ -1458,7 +1488,7 @@ impl Connection {
+     /// See [`TransportConfig::receive_window()`]
+     pub fn set_receive_window(&mut self, receive_window: VarInt) {
+         if self.streams.set_receive_window(receive_window) {
+-            self.spaces[SpaceId::Data].pending.max_data = true;
++            self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
+         }
+     }
+
+@@ -1791,7 +1821,9 @@ impl Connection {
+                 self.path.mtud.on_non_probe_lost(packet, info.size);
+             }
+
+-            if self.path.mtud.black_hole_detected(now) {
++            // The loss timer declares one send burst at a time. Only an ACK-driven pass ends the
++            // loss burst, so the black hole detector does not count one loss event as several.
++            if due_to_ack && self.path.mtud.black_hole_detected(now) {
+                 self.stats.path.black_holes_detected += 1;
+                 self.path
+                     .congestion
+@@ -1820,11 +1852,15 @@ impl Connection {
+             self.path.mtud.on_probe_lost();
+             self.stats.path.lost_plpmtud_probes += 1;
+         }
++
++        if pn_space == SpaceId::Data {
++            self.retire_deferred_cids();
++        }
+     }
+
+     fn loss_time_and_space(&self) -> Option<(Instant, SpaceId)> {
+         SpaceId::iter()
+-            .filter_map(|id| Some((self.spaces[id].loss_time?, id)))
++            .filter_map(|id| Some((self.spaces.get(id)?.loss_time?, id)))
+             .min_by_key(|&(time, _)| time)
+     }
+
+@@ -1843,7 +1879,11 @@ impl Connection {
+
+         let mut result = None;
+         for space in SpaceId::iter() {
+-            if !self.spaces[space].has_in_flight() {
++            if !self
++                .spaces
++                .get(space)
++                .is_some_and(PacketSpace::has_in_flight)
++            {
+                 continue;
+             }
+             if space == SpaceId::Data {
+@@ -1872,12 +1912,13 @@ impl Connection {
+         }
+         // The server is guaranteed to have validated our address if any of our handshake or 1-RTT
+         // packets are acknowledged or we've seen HANDSHAKE_DONE and discarded handshake keys.
+-        self.spaces[SpaceId::Handshake]
+-            .largest_acked_packet
++        self.spaces
++            .get(SpaceId::Handshake)
++            .and_then(|space| space.largest_acked_packet)
+             .is_some()
+             || self.spaces[SpaceId::Data].largest_acked_packet.is_some()
+             || (self.spaces[SpaceId::Data].crypto.is_some()
+-                && self.spaces[SpaceId::Handshake].crypto.is_none())
++                && !self.spaces.has_keys(SpaceId::Handshake))
+     }
+
+     fn set_loss_detection_timer(&mut self, now: Instant) {
+@@ -1953,7 +1994,7 @@ impl Connection {
+             None => return,
+         };
+         if self.side.is_server() {
+-            if self.spaces[SpaceId::Initial].crypto.is_some() && space_id == SpaceId::Handshake {
++            if self.spaces.has_keys(SpaceId::Initial) && space_id == SpaceId::Handshake {
+                 // A server stops sending and processing Initial packets when it receives its first Handshake packet.
+                 self.discard_space(now, SpaceId::Initial);
+             }
+@@ -2136,7 +2177,7 @@ impl Connection {
+         while let Some(chunk) = space.crypto_stream.read(usize::MAX, true) {
+             trace!("consumed {} CRYPTO bytes", chunk.bytes.len());
+             if self.crypto.read_handshake(&chunk.bytes)? {
+-                self.events.push_back(Event::HandshakeDataReady);
++                self.events.push_back(QueuedEvent::HandshakeDataReady);
+             }
+         }
+
+@@ -2175,10 +2216,14 @@ impl Connection {
+             }
+             self.spaces[space].crypto_offset += outgoing.len() as u64;
+             trace!("wrote {} {:?} CRYPTO bytes", outgoing.len(), space);
+-            self.spaces[space].pending.crypto.push_back(frame::Crypto {
+-                offset,
+-                data: outgoing,
+-            });
++            self.spaces[space]
++                .pending
++                .get_or_create()
++                .crypto
++                .push_back(frame::Crypto {
++                    offset,
++                    data: outgoing,
++                });
+         }
+     }
+
+@@ -2208,6 +2253,11 @@ impl Connection {
+     }
+
+     fn discard_space(&mut self, now: Instant, space_id: SpaceId) {
++        self.clear_space(now, space_id);
++        self.spaces.retire(space_id);
++    }
++
++    fn clear_space(&mut self, now: Instant, space_id: SpaceId) {
+         debug_assert!(space_id != SpaceId::Data);
+         trace!("discarding {:?} keys", space_id);
+         if space_id == SpaceId::Initial {
+@@ -2216,8 +2266,14 @@ impl Connection {
+                 *token = Bytes::new();
+             }
+         }
+-        let space = &mut self.spaces[space_id];
++        let Some(space) = self.spaces.get_mut(space_id) else {
++            return;
++        };
+         space.crypto = None;
++        // Clear recovery for the old keys. Final discard then retires the
++        // space; Retry instead preserves its packet number and replaces keys.
++        space.pending = ThinRetransmits::default();
++        space.crypto_stream.discard_buffer();
+         space.time_of_last_ack_eliciting_packet = None;
+         space.loss_time = None;
+         let sent_packets = mem::take(&mut space.sent_packets);
+@@ -2262,6 +2318,26 @@ impl Connection {
+         ecn: Option<EcnCodepoint>,
+         partial_decode: PartialDecode,
+     ) {
++        if self.state.is_handshake()
++            && remote == self.path.remote
++            && partial_decode.space() == Some(SpaceId::Data)
++            && !partial_decode.is_0rtt()
++        {
++            // A 1-RTT packet that overtook the end of the handshake cannot be processed yet.
++            // Dropping it makes the peer see a loss and cut its congestion window on its first
++            // flight, so keep a bounded copy until the handshake completes (RFC 9001 §5.7).
++            let held: usize = self.early_short_packets.iter().map(|x| x.1.len()).sum();
++            let data = partial_decode.data();
++            if self.early_short_packets.len() < MAX_EARLY_SHORT_PACKETS
++                && held + data.len() <= MAX_EARLY_SHORT_BYTES
++            {
++                // Copied so a held packet does not pin its whole receive buffer.
++                self.early_short_packets.push((ecn, BytesMut::from(data)));
++            } else {
++                trace!("dropping short packet during handshake");
++            }
++            return;
++        }
+         if let Some(decoded) = packet_crypto::unprotect_header(
+             partial_decode,
+             &self.spaces,
+@@ -2272,6 +2348,23 @@ impl Connection {
+         }
+     }
+
++    /// Processes the packets held by `handle_decode` once the handshake is over
++    fn replay_early_short_packets(&mut self, now: Instant, remote: SocketAddr) {
++        for (ecn, data) in mem::take(&mut self.early_short_packets) {
++            if !self.state.is_established() {
++                return;
++            }
++            if let Ok((partial_decode, _)) = PartialDecode::new(
++                data,
++                &FixedLengthConnectionIdParser::new(self.local_cid_state.cid_len()),
++                &[self.version],
++                self.endpoint_config.grease_quic_bit,
++            ) {
++                self.handle_decode(now, remote, ecn, partial_decode);
++            }
++        }
++    }
++
+     fn handle_packet(
+         &mut self,
+         now: Instant,
+@@ -2342,7 +2435,7 @@ impl Connection {
+                     debug!("discarding possible duplicate packet");
+                     return;
+                 } else if self.state.is_handshake() && packet.header.is_short() {
+-                    // TODO: SHOULD buffer these to improve reordering tolerance.
++                    // `handle_decode` holds these back, so none should arrive here.
+                     trace!("dropping short packet during handshake");
+                     return;
+                 } else {
+@@ -2509,7 +2602,7 @@ impl Connection {
+                     self.on_packet_acked(now, info);
+                 };
+
+-                self.discard_space(now, SpaceId::Initial); // Make sure we clean up after any retransmitted Initials
++                self.clear_space(now, SpaceId::Initial); // Retry replaces keys, not final retirement
+                 self.spaces[SpaceId::Initial] = PacketSpace {
+                     crypto: Some(self.crypto.initial_keys(&rem_cid, self.side.side())),
+                     next_packet_number: self.spaces[SpaceId::Initial].next_packet_number,
+@@ -2518,6 +2611,7 @@ impl Connection {
+                 };
+                 self.spaces[SpaceId::Initial]
+                     .pending
++                    .get_or_create()
+                     .crypto
+                     .push_back(frame::Crypto {
+                         offset: 0,
+@@ -2587,7 +2681,7 @@ impl Connection {
+                             self.streams.zero_rtt_rejected();
+
+                             // Discard already-queued frames
+-                            self.spaces[SpaceId::Data].pending = Retransmits::default();
++                            self.spaces[SpaceId::Data].pending = ThinRetransmits::default();
+
+                             // Discard 0-RTT packets
+                             let sent_packets =
+@@ -2608,11 +2702,14 @@ impl Connection {
+                     self.issue_first_cids(now);
+                 } else {
+                     // Server-only
+-                    self.spaces[SpaceId::Data].pending.handshake_done = true;
++                    self.spaces[SpaceId::Data]
++                        .pending
++                        .get_or_create()
++                        .handshake_done = true;
+                     self.discard_space(now, SpaceId::Handshake);
+                 }
+
+-                self.events.push_back(Event::Connected);
++                self.events.push_back(QueuedEvent::Connected);
+                 self.state = State::Established;
+                 trace!("established");
+                 Ok(())
+@@ -2808,7 +2905,7 @@ impl Connection {
+                 }
+                 Frame::Stream(frame) => {
+                     if self.streams.received(frame, payload_len)?.should_transmit() {
+-                        self.spaces[SpaceId::Data].pending.max_data = true;
++                        self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
+                     }
+                 }
+                 Frame::Ack(ack) => {
+@@ -2835,9 +2932,9 @@ impl Connection {
+                         self.timers.stop(Timer::PathValidation);
+                         self.path.challenge = None;
+                         self.path.validated = true;
+-                        if let Some((_, ref mut prev_path)) = self.prev_path {
+-                            prev_path.challenge = None;
+-                            prev_path.challenge_pending = false;
++                        if let Some(prev) = &mut self.prev_path {
++                            prev.1.challenge = None;
++                            prev.1.challenge_pending = false;
+                         }
+                     } else {
+                         debug!(token, "ignoring invalid PATH_RESPONSE");
+@@ -2854,7 +2951,7 @@ impl Connection {
+                 }
+                 Frame::ResetStream(frame) => {
+                     if self.streams.received_reset(frame)?.should_transmit() {
+-                        self.spaces[SpaceId::Data].pending.max_data = true;
++                        self.spaces[SpaceId::Data].pending.get_or_create().max_data = true;
+                     }
+                 }
+                 Frame::DataBlocked { offset } => {
+@@ -2930,7 +3027,14 @@ impl Connection {
+                     match self.rem_cids.insert(frame) {
+                         Ok(None) => {}
+                         Ok(Some((retired, reset_token))) => {
+-                            self.spaces[SpaceId::Data].pending.retire_cids(retired)?;
++                            // The peer's Retire Prior To also covers any CIDs held back by
++                            // `update_rem_cid`, and they must be retired before the new one is used
++                            let deferred = self.deferred_retire_cids.take();
++                            let pending = self.spaces[SpaceId::Data].pending.get_or_create();
++                            if let Some((_, deferred)) = deferred {
++                                pending.retire_cids.extend(deferred);
++                            }
++                            pending.retire_cids(retired)?;
+                             self.set_reset_token(reset_token);
+                         }
+                         Err(InsertError::ExceedsLimit) => {
+@@ -2943,6 +3047,7 @@ impl Connection {
+                             // was retired all at once via retire_prior_to.
+                             self.spaces[SpaceId::Data]
+                                 .pending
++                                .get_or_create()
+                                 .retire_cids(frame.sequence..frame.sequence.saturating_add(1))?;
+                             continue;
+                         }
+@@ -2974,7 +3079,7 @@ impl Connection {
+                         .datagrams
+                         .received(datagram, &self.config.datagram_receive_buffer_size)?
+                     {
+-                        self.events.push_back(Event::DatagramReceived);
++                        self.events.push_back(QueuedEvent::DatagramReceived);
+                     }
+                 }
+                 Frame::AckFrequency(ack_frequency) => {
+@@ -3010,7 +3115,7 @@ impl Connection {
+                             "client sent HANDSHAKE_DONE",
+                         ));
+                     }
+-                    if self.spaces[SpaceId::Handshake].crypto.is_some() {
++                    if self.spaces.has_keys(SpaceId::Handshake) {
+                         self.discard_space(now, SpaceId::Handshake);
+                     }
+                 }
+@@ -3031,7 +3136,7 @@ impl Connection {
+         // on stopped streams. Incoming finishes/resets on open streams are not handled here as they
+         // are only freed, and hence only issue credit, once the application has been notified
+         // during a read on the stream.
+-        let pending = &mut self.spaces[SpaceId::Data].pending;
++        let pending = self.spaces[SpaceId::Data].pending.get_or_create();
+         self.streams.queue_max_stream_id(pending);
+
+         if let Some(reason) = close {
+@@ -3093,7 +3198,7 @@ impl Connection {
+             prev.challenge_pending = true;
+             // We haven't updated the remote CID yet, this captures the remote CID we were using on
+             // the previous path.
+-            self.prev_path = Some((self.rem_cids.active(), prev));
++            self.prev_path = Some(Box::new((self.rem_cids.active(), prev)));
+         }
+
+         self.timers.set(
+@@ -3115,14 +3220,47 @@ impl Connection {
+             None => return,
+         };
+
+-        // Retire the current remote CID and any CIDs we had to skip.
+-        self.spaces[SpaceId::Data]
+-            .pending
+-            .retire_cids
+-            .extend(retired);
++        // Retire the current remote CID and any CIDs we had to skip, but only once no packet sent
++        // with them is outstanding: a peer may stop routing a CID as soon as it is retired, and
++        // a retirement that overtakes such a packet would make the peer drop it.
++        let first_new = self.spaces[SpaceId::Data].next_packet_number;
++        let deferred = match self.deferred_retire_cids.take() {
++            Some((_, earlier)) if earlier.end == retired.start => earlier.start..retired.end,
++            Some((_, earlier)) => {
++                // Not adjacent: the peer retired the CIDs in between. Retire the earlier ones now.
++                self.spaces[SpaceId::Data]
++                    .pending
++                    .get_or_create()
++                    .retire_cids
++                    .extend(earlier);
++                retired
++            }
++            None => retired,
++        };
++        self.deferred_retire_cids = Some((first_new, deferred));
++        self.retire_deferred_cids();
+         self.set_reset_token(reset_token);
+     }
+
++    /// Queues deferred CID retirements once every ack-eliciting packet sent with those CIDs is
++    /// acknowledged or declared lost
++    fn retire_deferred_cids(&mut self) {
++        let Some((first_new, _)) = self.deferred_retire_cids else {
++            return;
++        };
++        let space = &mut self.spaces[SpaceId::Data];
++        // A dropped ACK-only packet costs nothing: later ACKs cover its ranges.
++        if space
++            .sent_packets
++            .range(..first_new)
++            .any(|(_, packet)| packet.ack_eliciting)
++        {
++            return;
++        }
++        let (_, retired) = self.deferred_retire_cids.take().unwrap();
++        space.pending.get_or_create().retire_cids.extend(retired);
++    }
++
+     fn set_reset_token(&mut self, reset_token: ResetToken) {
+         self.endpoint_events
+             .push_back(EndpointEventInner::ResetToken(
+@@ -3166,7 +3304,7 @@ impl Connection {
+         let pre_payload_len = buf.len();
+
+         // HANDSHAKE_DONE
+-        if !is_0rtt && mem::replace(&mut space.pending.handshake_done, false) {
++        if !is_0rtt && mem::replace(&mut space.pending.get_or_create().handshake_done, false) {
+             buf.write(frame::FrameType::HANDSHAKE_DONE);
+             sent.retransmits.get_or_create().handshake_done = true;
+             // This is just a u8 counter and the frame is typically just sent once
+@@ -3204,7 +3342,7 @@ impl Connection {
+         }
+
+         // ACK_FREQUENCY
+-        if mem::replace(&mut space.pending.ack_frequency, false) {
++        if mem::replace(&mut space.pending.get_or_create().ack_frequency, false) {
+             let sequence_number = self.ack_frequency.next_sequence_number();
+
+             // Safe to unwrap because this is always provided when ACK frequency is enabled
+@@ -3262,7 +3400,7 @@ impl Connection {
+
+         // CRYPTO
+         while buf.len() + frame::Crypto::SIZE_BOUND < max_size && !is_0rtt {
+-            let mut frame = match space.pending.crypto.pop_front() {
++            let mut frame = match space.pending.get_or_create().crypto.pop_front() {
+                 Some(x) => x,
+                 None => break,
+             };
+@@ -3296,16 +3434,21 @@ impl Connection {
+             truncated.encode(buf);
+             self.stats.frame_tx.crypto += 1;
+             sent.retransmits.get_or_create().crypto.push_back(truncated);
++            let pending = space.pending.get_or_create();
+             if !frame.data.is_empty() {
+                 frame.offset += len as u64;
+-                space.pending.crypto.push_front(frame);
++                pending.crypto.push_front(frame);
++            } else if pending.crypto.is_empty() {
++                // Handshake-time queues: release each once its burst is sent, rather than
++                // keeping the storage for the life of an established connection.
++                pending.crypto = VecDeque::new();
+             }
+         }
+
+         if space_id == SpaceId::Data {
+             self.streams.write_control_frames(
+                 buf,
+-                &mut space.pending,
++                space.pending.get_or_create(),
+                 &mut sent.retransmits,
+                 &mut self.stats.frame_tx,
+                 max_size,
+@@ -3314,10 +3457,14 @@ impl Connection {
+
+         // NEW_CONNECTION_ID
+         while buf.len() + NewConnectionId::SIZE_BOUND < max_size {
+-            let issued = match space.pending.new_cids.pop() {
++            let pending = space.pending.get_or_create();
++            let issued = match pending.new_cids.pop() {
+                 Some(x) => x,
+                 None => break,
+             };
++            if pending.new_cids.is_empty() {
++                pending.new_cids = Vec::new();
++            }
+             trace!(
+                 sequence = issued.sequence,
+                 id = %issued.id,
+@@ -3336,7 +3483,7 @@ impl Connection {
+
+         // RETIRE_CONNECTION_ID
+         while buf.len() + frame::RETIRE_CONNECTION_ID_SIZE_BOUND < max_size {
+-            let seq = match space.pending.retire_cids.pop() {
++            let seq = match space.pending.get_or_create().retire_cids.pop() {
+                 Some(x) => x,
+                 None => break,
+             };
+@@ -3360,12 +3507,12 @@ impl Connection {
+             }
+         }
+         if self.datagrams.send_blocked && sent_datagrams {
+-            self.events.push_back(Event::DatagramsUnblocked);
++            self.events.push_back(QueuedEvent::DatagramsUnblocked);
+             self.datagrams.send_blocked = false;
+         }
+
+         // NEW_TOKEN
+-        while let Some(remote_addr) = space.pending.new_tokens.pop() {
++        while let Some(remote_addr) = space.pending.get_or_create().new_tokens.pop() {
+             debug_assert_eq!(space_id, SpaceId::Data);
+             let ConnectionSide::Server { server_config } = &self.side else {
+                 panic!("NEW_TOKEN frames should not be enqueued by clients");
+@@ -3391,11 +3538,15 @@ impl Connection {
+             };
+
+             if buf.len() + new_token.size() >= max_size {
+-                space.pending.new_tokens.push(remote_addr);
++                space.pending.get_or_create().new_tokens.push(remote_addr);
+                 break;
+             }
+
+             new_token.encode(buf);
++            let pending = space.pending.get_or_create();
++            if pending.new_tokens.is_empty() {
++                pending.new_tokens = Vec::new();
++            }
+             sent.retransmits
+                 .get_or_create()
+                 .new_tokens
+@@ -3489,6 +3640,7 @@ impl Connection {
+         for &timer in &Timer::VALUES {
+             self.timers.stop(timer);
+         }
++        self.early_short_packets = Vec::new();
+     }
+
+     fn set_close_timer(&mut self, now: Instant) {
+@@ -3691,6 +3843,24 @@ impl Connection {
+         self.local_cid_state.active_seq()
+     }
+
++    #[cfg(test)]
++    pub(crate) fn endpoint_event_capacity(&self) -> usize {
++        self.endpoint_events.capacity()
++    }
++
++    #[cfg(test)]
++    pub(crate) fn early_short_packet_capacity(&self) -> usize {
++        self.early_short_packets.capacity()
++    }
++
++    /// Capacity still held by the Data-space queues that only handshake-time frames fill
++    #[cfg(test)]
++    pub(crate) fn pending_control_capacity(&self) -> usize {
++        self.spaces[SpaceId::Data].pending.get().map_or(0, |pending| {
++            pending.crypto.capacity() + pending.new_cids.capacity() + pending.new_tokens.capacity()
++        })
++    }
++
+     /// Instruct the peer to replace previously issued CIDs by sending a NEW_CONNECTION_ID frame
+     /// with updated `retire_prior_to` field set to `v`
+     #[cfg(test)]
+@@ -3721,7 +3891,7 @@ impl Connection {
+             || self
+                 .prev_path
+                 .as_ref()
+-                .is_some_and(|(_, x)| x.challenge_pending)
++                .is_some_and(|prev| prev.1.challenge_pending)
+             || !self.path_responses.is_empty()
+             || self.datagrams.outgoing.can_send_1rtt(max_size)
+     }
+@@ -3731,7 +3901,7 @@ impl Connection {
+         // Visit known paths from newest to oldest to find the one `packet` was sent on
+         for path in [&mut self.path]
+             .into_iter()
+-            .chain(self.prev_path.as_mut().map(|(_, data)| data))
++            .chain(self.prev_path.as_mut().map(|prev| &mut prev.1))
+         {
+             if path.remove_in_flight(packet) {
+                 return;
+@@ -3792,7 +3962,10 @@ impl Connection {
+         let ConnectionSide::Server { server_config } = &self.side else {
+             return;
+         };
+-        let new_tokens = &mut self.spaces[SpaceId::Data as usize].pending.new_tokens;
++        let new_tokens = &mut self.spaces[SpaceId::Data]
++            .pending
++            .get_or_create()
++            .new_tokens;
+         new_tokens.clear();
+         for _ in 0..server_config.validation_token.sent {
+             new_tokens.push(self.path.remote);
+@@ -4023,6 +4196,26 @@ mod state {
+     }
+ }
+
++// Only unit notifications are queued; stream and error payloads are polled separately.
++#[derive(Debug)]
++enum QueuedEvent {
++    HandshakeDataReady,
++    Connected,
++    DatagramReceived,
++    DatagramsUnblocked,
++}
++
++impl From<QueuedEvent> for Event {
++    fn from(event: QueuedEvent) -> Self {
++        match event {
++            QueuedEvent::HandshakeDataReady => Self::HandshakeDataReady,
++            QueuedEvent::Connected => Self::Connected,
++            QueuedEvent::DatagramReceived => Self::DatagramReceived,
++            QueuedEvent::DatagramsUnblocked => Self::DatagramsUnblocked,
++        }
++    }
++}
++
+ /// Events of interest to the application
+ #[derive(Debug)]
+ pub enum Event {
+@@ -4074,6 +4267,16 @@ const MAX_HANDSHAKE_OR_0RTT_HEADER_SIZE: usize =
+ /// Chosen arbitrarily, intended to be large enough to prevent spurious connection loss.
+ const KEY_UPDATE_MARGIN: u64 = 10_000;
+
++/// Most bytes of early 1-RTT packets held during the handshake
++///
++/// This is the largest initial congestion window RFC 9002 allows, so a conforming peer cannot have
++/// more than this in flight before its handshake is acknowledged.
++const MAX_EARLY_SHORT_BYTES: usize = 14_720;
++
++/// Most early 1-RTT packets held during the handshake, so that tiny packets cannot hold many times
++/// the byte bound in per-packet overhead
++const MAX_EARLY_SHORT_PACKETS: usize = 16;
++
+ #[derive(Default)]
+ struct SentFrames {
+     retransmits: ThinRetransmits,
+@@ -4114,6 +4317,49 @@ fn negotiate_max_idle_timeout(x: Option<VarInt>, y: Option<VarInt>) -> Option<Du
+ mod tests {
+     use super::*;
+
++    #[test]
++    fn queued_unit_events_preserve_fifo_duplicates_and_small_storage() {
++        assert_eq!(mem::size_of::<QueuedEvent>(), 1);
++        let input = [
++            QueuedEvent::HandshakeDataReady,
++            QueuedEvent::Connected,
++            QueuedEvent::DatagramReceived,
++            QueuedEvent::DatagramReceived,
++            QueuedEvent::DatagramsUnblocked,
++            QueuedEvent::DatagramsUnblocked,
++            QueuedEvent::Connected,
++        ];
++        let expected = [
++            Event::HandshakeDataReady,
++            Event::Connected,
++            Event::DatagramReceived,
++            Event::DatagramReceived,
++            Event::DatagramsUnblocked,
++            Event::DatagramsUnblocked,
++            Event::Connected,
++        ];
++        let mut queued = VecDeque::new();
++        let mut wide = VecDeque::new();
++        for (compact, public) in input.into_iter().zip(expected) {
++            queued.push_back(compact);
++            wide.push_back(public);
++        }
++        let capacity = queued.capacity();
++        assert!(capacity * mem::size_of::<QueuedEvent>() < wide.capacity() * mem::size_of::<Event>());
++        while let Some(expected) = wide.pop_front() {
++            let actual: Event = queued.pop_front().unwrap().into();
++            assert_eq!(mem::discriminant(&actual), mem::discriminant(&expected));
++        }
++        assert!(queued.is_empty());
++        assert_eq!(queued.capacity(), capacity);
++        queued.push_back(QueuedEvent::DatagramReceived);
++        assert!(matches!(
++            Event::from(queued.pop_front().unwrap()),
++            Event::DatagramReceived
++        ));
++        assert_eq!(queued.capacity(), capacity);
++    }
++
+     #[cfg(feature = "rustls-ring")]
+     #[test]
+     fn large_initial_token_leaves_room_for_close() {
+--- a/quinn-proto/src/connection/mtud.rs
++++ b/quinn-proto/src/connection/mtud.rs
+@@ -429,7 +429,9 @@ impl BlackHoleDetector {
+         let end_last_burst = self
+             .current_loss_burst
+             .as_ref()
+-            .is_some_and(|current| pn - current.latest_non_probe != 1);
++            // A burst can stay open between calls, and a later call may be for another packet
++            // number space, so `pn` is not always the larger of the two
++            .is_some_and(|current| pn.wrapping_sub(current.latest_non_probe) != 1);
+
+         if end_last_burst {
+             self.finish_loss_burst();
+@@ -888,6 +890,21 @@ mod tests {
+         assert!(bhd.black_hole_detected());
+     }
+
++    // Consecutive packets declared lost one call at a time form a single burst, and a smaller packet
++    // number from another space starts a new one
++    #[test]
++    fn burst_spans_calls_until_a_gap() {
++        let mut bhd = BlackHoleDetector::new(1200);
++        for pn in 10..20 {
++            bhd.on_non_probe_lost(pn, 1400);
++        }
++        assert!(bhd.suspicious_loss_bursts.is_empty());
++        bhd.on_non_probe_lost(3, 1400);
++        assert_eq!(bhd.suspicious_loss_bursts.len(), 1);
++        assert!(!bhd.black_hole_detected());
++        assert_eq!(bhd.suspicious_loss_bursts.len(), 2);
++    }
++
+     // Loss of packets followed in transmission order by confirmation of a larger packet should not
+     // indicate a black hole
+     #[test]
+--- a/quinn-proto/src/connection/packet_crypto.rs
++++ b/quinn-proto/src/connection/packet_crypto.rs
+@@ -1,7 +1,7 @@
+ use tracing::{debug, trace};
+
+ use crate::Instant;
+-use crate::connection::spaces::PacketSpace;
++use crate::connection::spaces::PacketSpaces;
+ use crate::crypto::{HeaderKey, KeyPair, PacketKey};
+ use crate::packet::{Packet, PartialDecode, SpaceId};
+ use crate::token::ResetToken;
+@@ -10,7 +10,7 @@
+ /// Removes header protection of a packet, or returns `None` if the packet was dropped
+ pub(super) fn unprotect_header(
+     partial_decode: PartialDecode,
+-    spaces: &[PacketSpace; 3],
++    spaces: &PacketSpaces,
+     zero_rtt_crypto: Option<&ZeroRttCrypto>,
+     stateless_reset_token: Option<ResetToken>,
+ ) -> Option<UnprotectHeaderResult> {
+@@ -22,7 +22,7 @@
+             return None;
+         }
+     } else if let Some(space) = partial_decode.space() {
+-        if let Some(ref crypto) = spaces[space].crypto {
++        if let Some(crypto) = spaces.get(space).and_then(|space| space.crypto.as_ref()) {
+             Some(&*crypto.header.remote)
+         } else {
+             debug!(
+@@ -68,7 +68,7 @@
+ /// Decrypts a packet's body in-place
+ pub(super) fn decrypt_packet_body(
+     packet: &mut Packet,
+-    spaces: &[PacketSpace; 3],
++    spaces: &PacketSpaces,
+     zero_rtt_crypto: Option<&ZeroRttCrypto>,
+     conn_key_phase: bool,
+     prev_crypto: Option<&PrevCrypto>,
+--- a/quinn-proto/src/connection/send_buffer.rs
++++ b/quinn-proto/src/connection/send_buffer.rs
+@@ -47,32 +47,41 @@
+         range.start = base_offset.max(range.start);
+         range.end = base_offset.max(range.end);
+
++        // With no saved out-of-order ACKs, this is exactly the buffered
++        // prefix. Avoid inserting a range only to remove it immediately.
++        if range.start == base_offset && self.acks.is_empty() {
++            self.discard_prefix((range.end - range.start) as usize);
++            return;
++        }
++
+         self.acks.insert(range);
+
+         while self.acks.min() == Some(self.offset - self.unacked_len as u64) {
+             let prefix = self.acks.pop_min().unwrap();
+-            let mut to_advance = (prefix.end - prefix.start) as usize;
+-
+-            self.unacked_len -= to_advance;
+-            while to_advance > 0 {
+-                let front = self
+-                    .unacked_segments
+-                    .front_mut()
+-                    .expect("Expected buffered data");
+-
+-                if front.len() <= to_advance {
+-                    to_advance -= front.len();
+-                    self.unacked_segments.pop_front();
+-                    self.front_trimmed = 0;
+-
+-                    if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
+-                        self.unacked_segments.shrink_to_fit();
+-                    }
+-                } else {
+-                    front.advance(to_advance);
+-                    self.front_trimmed += to_advance;
+-                    to_advance = 0;
++            self.discard_prefix((prefix.end - prefix.start) as usize);
++        }
++    }
++
++    fn discard_prefix(&mut self, mut to_advance: usize) {
++        self.unacked_len -= to_advance;
++        while to_advance > 0 {
++            let front = self
++                .unacked_segments
++                .front_mut()
++                .expect("Expected buffered data");
++
++            if front.len() <= to_advance {
++                to_advance -= front.len();
++                self.unacked_segments.pop_front();
++                self.front_trimmed = 0;
++
++                if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {
++                    self.unacked_segments.shrink_to_fit();
+                 }
++            } else {
++                front.advance(to_advance);
++                self.front_trimmed += to_advance;
++                to_advance = 0;
+             }
+         }
+     }
+@@ -397,6 +406,43 @@
+         assert!(buf.acks.is_empty());
+     }
+
++    #[test]
++    fn ordered_prefix_then_overlapping_reordered_ack_preserves_pending_ranges() {
++        let mut buf = SendBuffer::new();
++        buf.write(Bytes::from_static(b"abcdefghij"));
++        buf.write(Bytes::from_static(b"klmnopqrst"));
++        let _ = buf.poll_transmit(64);
++        buf.ack(0..4);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
++        assert_eq!(buf.front_trimmed, 4);
++        buf.ack(10..15);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnopqrst");
++        buf.ack(4..12);
++        assert_eq!(aggregate_unacked(&buf), b"pqrst");
++        assert!(buf.acks.is_empty());
++        buf.ack(0..7);
++        assert_eq!(aggregate_unacked(&buf), b"pqrst");
++        buf.ack(15..20);
++        assert!(buf.is_fully_acked());
++        assert_eq!(buf.front_trimmed, 0);
++    }
++
++    #[test]
++    fn discarded_duplicate_ack_does_not_drop_an_out_of_order_ack() {
++        let mut buf = SendBuffer::new();
++        buf.write(Bytes::from_static(b"abcdefghijklmnop"));
++        let _ = buf.poll_transmit(64);
++        buf.ack(0..4);
++        buf.ack(10..12);
++        buf.ack(0..2);
++        assert_eq!(aggregate_unacked(&buf), b"efghijklmnop");
++        assert_eq!(buf.acks.peek_min(), Some(10..12));
++        buf.ack(4..10);
++        assert_eq!(aggregate_unacked(&buf), b"mnop");
++        buf.ack(12..16);
++        assert!(buf.is_fully_acked());
++    }
++
+     fn aggregate_unacked(buf: &SendBuffer) -> Vec<u8> {
+         let mut result = Vec::new();
+         for segment in buf.unacked_segments.iter() {
+--- a/quinn-proto/src/connection/spaces.rs
++++ b/quinn-proto/src/connection/spaces.rs
+@@ -23,7 +23,7 @@
+     pub(super) rx_packet: u64,
+
+     /// Data to send
+-    pub(super) pending: Retransmits,
++    pub(super) pending: ThinRetransmits,
+     /// Packet numbers to acknowledge
+     pub(super) pending_acks: PendingAcks,
+
+@@ -76,7 +76,7 @@
+             dedup: Dedup::new(),
+             rx_packet: 0,
+
+-            pending: Retransmits::default(),
++            pending: ThinRetransmits::default(),
+             pending_acks: PendingAcks::new(),
+
+             next_packet_number: 0,
+@@ -207,6 +207,11 @@
+     /// Stop tracking sent packet `number`, and return what we knew about it
+     pub(super) fn take(&mut self, number: u64) -> Option<SentPacket> {
+         let packet = self.sent_packets.remove(&number)?;
++        // BTreeMap retains its empty leaf after the last removal. Idle peers
++        // need the packet-number history below, not an unused packet-tree node.
++        if self.sent_packets.is_empty() {
++            self.sent_packets = BTreeMap::new();
++        }
+         if !packet.ack_eliciting && number > self.largest_ack_eliciting_sent {
+             self.unacked_non_ack_eliciting_tail =
+                 self.unacked_non_ack_eliciting_tail.checked_sub(1).unwrap();
+@@ -265,16 +270,66 @@
+     }
+ }
+
+-impl Index<SpaceId> for [PacketSpace; 3] {
++/// Data stays inline. Earlier spaces own transient state until final key
++/// retirement; None is a tombstone, never a request to allocate a new space.
++pub(super) struct PacketSpaces {
++    initial: Option<Box<PacketSpace>>,
++    handshake: Option<Box<PacketSpace>>,
++    data: PacketSpace,
++}
++
++impl PacketSpaces {
++    pub(super) fn new(initial: PacketSpace, now: Instant) -> Self {
++        Self {
++            initial: Some(Box::new(initial)),
++            handshake: Some(Box::new(PacketSpace::new(now))),
++            data: PacketSpace::new(now),
++        }
++    }
++
++    pub(super) fn get(&self, id: SpaceId) -> Option<&PacketSpace> {
++        match id {
++            SpaceId::Initial => self.initial.as_deref(),
++            SpaceId::Handshake => self.handshake.as_deref(),
++            SpaceId::Data => Some(&self.data),
++        }
++    }
++
++    pub(super) fn get_mut(&mut self, id: SpaceId) -> Option<&mut PacketSpace> {
++        match id {
++            SpaceId::Initial => self.initial.as_deref_mut(),
++            SpaceId::Handshake => self.handshake.as_deref_mut(),
++            SpaceId::Data => Some(&mut self.data),
++        }
++    }
++
++    pub(super) fn has_keys(&self, id: SpaceId) -> bool {
++        self.get(id).is_some_and(|space| space.crypto.is_some())
++    }
++
++    pub(super) fn retire(&mut self, id: SpaceId) {
++        match id {
++            SpaceId::Initial => {
++                self.initial.take();
++            }
++            SpaceId::Handshake => {
++                self.handshake.take();
++            }
++            SpaceId::Data => panic!("application packet space cannot be retired"),
++        }
++    }
++}
++
++impl Index<SpaceId> for PacketSpaces {
+     type Output = PacketSpace;
+     fn index(&self, space: SpaceId) -> &PacketSpace {
+-        &self.as_ref()[space as usize]
+-    }
+-}
+-
+-impl IndexMut<SpaceId> for [PacketSpace; 3] {
++        self.get(space).expect("packet space already retired")
++    }
++}
++
++impl IndexMut<SpaceId> for PacketSpaces {
+     fn index_mut(&mut self, space: SpaceId) -> &mut PacketSpace {
+-        &mut self.as_mut()[space as usize]
++        self.get_mut(space).expect("packet space already retired")
+     }
+ }
+
+@@ -429,6 +484,24 @@
+ #[derive(Debug, Default, Clone)]
+ pub(super) struct ThinRetransmits {
+     retransmits: Option<Box<Retransmits>>,
++}
++
++impl std::ops::BitOrAssign for ThinRetransmits {
++    fn bitor_assign(&mut self, rhs: Self) {
++        let Some(rhs) = rhs.retransmits else {
++            return;
++        };
++        match self.retransmits.as_mut() {
++            Some(pending) => **pending |= *rhs,
++            None => self.retransmits = Some(rhs),
++        }
++    }
++}
++
++impl std::ops::BitOrAssign<Retransmits> for ThinRetransmits {
++    fn bitor_assign(&mut self, rhs: Retransmits) {
++        *self.get_or_create() |= rhs;
++    }
+ }
+
+ impl ThinRetransmits {
+@@ -928,6 +1001,56 @@
+     use super::*;
+
+     #[test]
++    fn retirement_is_terminal_and_preserves_application_history() {
++        let now = Instant::now();
++        let mut spaces = PacketSpaces::new(PacketSpace::new(now), now);
++        spaces[SpaceId::Data].next_packet_number = 99;
++        spaces[SpaceId::Data].crypto_offset = 72;
++        assert!(!spaces[SpaceId::Data].dedup.insert(88));
++        spaces.retire(SpaceId::Initial);
++        spaces.retire(SpaceId::Initial);
++        spaces.retire(SpaceId::Handshake);
++        for id in [SpaceId::Initial, SpaceId::Handshake] {
++            assert!(spaces.get(id).is_none());
++            assert!(spaces.get_mut(id).is_none());
++            assert!(!spaces.has_keys(id));
++        }
++        assert_eq!(spaces[SpaceId::Data].next_packet_number, 99);
++        assert_eq!(spaces[SpaceId::Data].crypto_offset, 72);
++        assert!(spaces[SpaceId::Data].dedup.insert(88));
++    }
++
++    #[test]
++    fn thin_pending_moves_storage_and_preserves_crypto_retransmit_priority() {
++        let mut pending = ThinRetransmits::default();
++        pending |= ThinRetransmits::default();
++        assert!(pending.get().is_none());
++        let mut first = ThinRetransmits::default();
++        first.get_or_create().crypto.push_back(frame::Crypto {
++            offset: 2,
++            data: bytes::Bytes::from_static(b"new"),
++        });
++        let storage = first.get().unwrap() as *const Retransmits;
++        pending |= first;
++        assert_eq!(pending.get().unwrap() as *const Retransmits, storage);
++        let mut lost = Retransmits::default();
++        lost.crypto.push_back(frame::Crypto {
++            offset: 0,
++            data: bytes::Bytes::from_static(b"old"),
++        });
++        lost.handshake_done = true;
++        pending |= lost;
++        let retained = pending.get().unwrap();
++        assert!(retained.handshake_done);
++        assert_eq!(
++            retained.crypto.iter().map(|x| x.offset).collect::<Vec<_>>(),
++            [0, 2]
++        );
++        drop(std::mem::take(&mut pending));
++        assert!(pending.get().is_none());
++    }
++
++    #[test]
+     fn sanity() {
+         let mut dedup = Dedup::new();
+         assert!(!dedup.insert(0));
+--- a/quinn-proto/src/connection/streams/mod.rs
++++ b/quinn-proto/src/connection/streams/mod.rs
+@@ -23,6 +23,7 @@
+ use send::{BytesSource, Send, SendState};
+ pub use send::{FinishError, WriteError, Written};
+
++mod sparse;
+ mod state;
+ #[allow(unreachable_pub)] // fuzzing only
+ pub use state::StreamsState;
+--- a/quinn-proto/src/connection/streams/recv.rs
++++ b/quinn-proto/src/connection/streams/recv.rs
+@@ -286,6 +286,34 @@ impl<'a> Chunks<'a> {
+     ///
+     /// Should call finalize() when done calling this.
+     pub fn next(&mut self, max_length: usize) -> Result<Option<Chunk>, ReadError> {
++        let ordered = self.ordered;
++        self.read_from(|assembler| {
++            let chunk = assembler.read(max_length, ordered)?;
++            let len = chunk.bytes.len();
++            Some((chunk, len))
++        })
++    }
++
++    /// Pass up to `max_length` (nonzero) ordered bytes to `consume` without splitting the
++    /// shared packet buffer, and return how many were passed
++    ///
++    /// Copying readers use this in place of [`Self::next`]. Should call finalize() when done.
++    pub fn read_with(
++        &mut self,
++        max_length: usize,
++        consume: impl FnOnce(&[u8]),
++    ) -> Result<Option<usize>, ReadError> {
++        debug_assert!(self.ordered && max_length != 0);
++        self.read_from(|assembler| {
++            let len = assembler.read_with(max_length, consume);
++            (len != 0).then_some((len, len))
++        })
++    }
++
++    fn read_from<T>(
++        &mut self,
++        read: impl FnOnce(&mut Assembler) -> Option<(T, usize)>,
++    ) -> Result<Option<T>, ReadError> {
+         let rs = match self.state {
+             ChunksState::Readable(ref mut rs) => rs,
+             ChunksState::Reset(error_code) => {
+@@ -297,9 +325,9 @@ impl<'a> Chunks<'a> {
+             ChunksState::Finalized => panic!("must not call next() after finalize()"),
+         };
+
+-        if let Some(chunk) = rs.assembler.read(max_length, self.ordered) {
+-            self.read += chunk.bytes.len() as u64;
+-            return Ok(Some(chunk));
++        if let Some((data, len)) = read(&mut rs.assembler) {
++            self.read += len as u64;
++            return Ok(Some(data));
+         }
+
+         match rs.state {
+--- /dev/null
++++ b/quinn-proto/src/connection/streams/sparse.rs
+@@ -0,0 +1,189 @@
++//! Preserve the logical stream map without allocating a slot for every unused
++//! remote stream credit. Only mutable access materializes an empty stream slot.
++use std::collections::hash_map::Entry;
++
++use rustc_hash::FxHashMap;
++
++use crate::{Side, StreamId, range_set::ArrayRangeSet};
++
++pub(super) struct SparseMap<T> {
++    allocated: FxHashMap<StreamId, Option<T>>,
++    remote: Side,
++    unopened: [ArrayRangeSet; 2],
++    empty: Option<T>,
++}
++
++impl<T> SparseMap<T> {
++    pub(super) fn new(remote: Side) -> Self {
++        Self {
++            allocated: FxHashMap::default(),
++            remote,
++            unopened: std::array::from_fn(|_| ArrayRangeSet::new()),
++            empty: None,
++        }
++    }
++
++    fn deferred(&self, id: StreamId) -> bool {
++        id.initiator() == self.remote && self.unopened[id.dir() as usize].contains(id.index())
++    }
++
++    fn take_deferred(&mut self, id: StreamId) -> bool {
++        id.initiator() == self.remote
++            && self.unopened[id.dir() as usize].remove(id.index()..id.index() + 1)
++    }
++
++    pub(super) fn contains_key(&self, id: &StreamId) -> bool {
++        self.allocated.contains_key(id) || self.deferred(*id)
++    }
++
++    pub(super) fn get(&self, id: &StreamId) -> Option<&Option<T>> {
++        self.allocated
++            .get(id)
++            .or_else(|| self.deferred(*id).then_some(&self.empty))
++    }
++
++    pub(super) fn get_mut(&mut self, id: &StreamId) -> Option<&mut Option<T>> {
++        match self.entry(*id) {
++            Entry::Occupied(entry) => Some(entry.into_mut()),
++            Entry::Vacant(_) => None,
++        }
++    }
++
++    pub(super) fn entry(&mut self, id: StreamId) -> Entry<'_, StreamId, Option<T>> {
++        // Active streams stay on the ordinary one-hash lookup path. Only an
++        // absent slot needs to consult and split unused remote credit ranges.
++        match self.allocated.entry(id) {
++            Entry::Vacant(entry)
++                if id.initiator() == self.remote
++                    && self.unopened[id.dir() as usize].remove(id.index()..id.index() + 1) =>
++            {
++                Entry::Occupied(entry.insert_entry(None))
++            }
++            entry => entry,
++        }
++    }
++
++    pub(super) fn remove(&mut self, id: &StreamId) -> Option<Option<T>> {
++        if self.take_deferred(*id) {
++            Some(None)
++        } else {
++            self.allocated.remove(id)
++        }
++    }
++
++    pub(super) fn insert(&mut self, id: StreamId, value: Option<T>) -> Option<Option<T>> {
++        let old = self.remove(&id);
++        if id.initiator() == self.remote && value.is_none() {
++            self.unopened[id.dir() as usize].insert_one(id.index());
++        } else {
++            self.allocated.insert(id, value);
++        }
++        old
++    }
++
++    // Empty logical placeholders have no fields to update. This intentionally
++    // exposes only allocated entries to transport-parameter updates.
++    pub(super) fn allocated_mut(&mut self) -> impl Iterator<Item = (&StreamId, &mut Option<T>)> {
++        self.allocated.iter_mut()
++    }
++
++    #[cfg(test)]
++    pub(super) fn len(&self) -> usize {
++        self.allocated.len()
++            + self
++                .unopened
++                .iter()
++                .flat_map(|ranges| ranges.iter())
++                .map(|r| (r.end - r.start) as usize)
++                .sum::<usize>()
++    }
++}
++
++impl<T> std::ops::Index<&StreamId> for SparseMap<T> {
++    type Output = Option<T>;
++
++    fn index(&self, id: &StreamId) -> &Self::Output {
++        self.get(id).expect("stream is present")
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::Dir;
++    use std::collections::HashMap;
++
++    #[test]
++    fn remote_credit_is_logically_present_without_hash_slots() {
++        let mut map = SparseMap::<u64>::new(Side::Client);
++        for index in 0..1000 {
++            for dir in [Dir::Bi, Dir::Uni] {
++                assert_eq!(
++                    map.insert(StreamId::new(Side::Client, dir, index), None),
++                    None
++                );
++            }
++        }
++        assert_eq!(map.len(), 2000);
++        assert_eq!(map.allocated.capacity(), 0);
++        assert_eq!(map.unopened[0].len(), 1);
++        assert_eq!(map.unopened[1].len(), 1);
++        let id = StreamId::new(Side::Client, Dir::Bi, 500);
++        assert_eq!(map.get(&id), Some(&None));
++        *map.get_mut(&id).unwrap() = Some(42);
++        assert_eq!(map.get(&id), Some(&Some(42)));
++        assert_eq!(map.remove(&id), Some(Some(42)));
++        assert!(!map.contains_key(&id));
++        assert_eq!(map.len(), 1999);
++    }
++
++    #[test]
++    fn mixed_operations_match_independent_hash_map() {
++        let mut map = SparseMap::<u64>::new(Side::Client);
++        let mut reference = HashMap::new();
++        let mut seed = 0x82c67b491e3a620du64;
++        for turn in 0..20000 {
++            seed ^= seed << 13;
++            seed ^= seed >> 7;
++            seed ^= seed << 17;
++            let id = StreamId::new(
++                if seed & 1 == 0 {
++                    Side::Client
++                } else {
++                    Side::Server
++                },
++                if seed & 2 == 0 { Dir::Bi } else { Dir::Uni },
++                (seed >> 8) % 128,
++            );
++            match (seed >> 3) % 5 {
++                0 => {
++                    let value = (seed & 4 != 0).then_some(turn);
++                    assert_eq!(map.insert(id, value), reference.insert(id, value));
++                }
++                1 => {
++                    assert_eq!(map.remove(&id), reference.remove(&id));
++                }
++                2 => {
++                    if let Some(slot) = map.get_mut(&id) {
++                        *slot = Some(turn);
++                    }
++                    if let Some(slot) = reference.get_mut(&id) {
++                        *slot = Some(turn);
++                    }
++                }
++                3 => {
++                    *map.entry(id).or_insert(None) = Some(turn);
++                    *reference.entry(id).or_insert(None) = Some(turn);
++                }
++                _ => {
++                    assert_eq!(map.contains_key(&id), reference.contains_key(&id));
++                }
++            }
++            assert_eq!(map.get(&id), reference.get(&id));
++            assert_eq!(map.len(), reference.len());
++        }
++        for (id, value) in &reference {
++            assert_eq!(map.get(id), Some(value));
++        }
++    }
++}
+--- a/quinn-proto/src/connection/streams/state.rs
++++ b/quinn-proto/src/connection/streams/state.rs
+@@ -5,7 +5,7 @@
+ };
+
+ use bytes::BufMut;
+-use rustc_hash::FxHashMap;
++use super::sparse::SparseMap;
+ use tracing::{debug, error, trace};
+
+ use super::{
+@@ -69,8 +69,8 @@
+ pub struct StreamsState {
+     pub(super) side: Side,
+     // Set of streams that are currently open, or could be immediately opened by the peer
+-    pub(super) send: FxHashMap<StreamId, Option<Box<Send>>>,
+-    pub(super) recv: FxHashMap<StreamId, Option<StreamRecv>>,
++    pub(super) send: SparseMap<Box<Send>>,
++    pub(super) recv: SparseMap<StreamRecv>,
+     pub(super) free_recv: Vec<StreamRecv>,
+     pub(super) next: [u64; 2],
+     /// Maximum number of locally-initiated streams that may be opened over the lifetime of the
+@@ -155,8 +155,8 @@
+     ) -> Self {
+         let mut this = Self {
+             side,
+-            send: FxHashMap::default(),
+-            recv: FxHashMap::default(),
++            send: SparseMap::new(!side),
++            recv: SparseMap::new(!side),
+             free_recv: Vec::new(),
+             next: [0, 0],
+             max: [0, 0],
+@@ -204,10 +204,13 @@
+         self.max[Dir::Bi as usize] = params.initial_max_streams_bidi.into();
+         self.max[Dir::Uni as usize] = params.initial_max_streams_uni.into();
+         self.received_max_data(params.initial_max_data);
+-        for i in 0..self.max_remote[Dir::Bi as usize] {
+-            let id = StreamId::new(!self.side, Dir::Bi, i);
+-            if let Some(s) = self.send.get_mut(&id).and_then(|s| s.as_mut()) {
+-                s.max_data = params.initial_max_stream_data_bidi_local.into();
++        // Unopened remote streams have no send state to update. Iterating the
++        // materialized entries avoids allocating placeholder slots just to skip them.
++        for (&id, state) in self.send.allocated_mut() {
++            if id.initiator() != self.side && id.dir() == Dir::Bi {
++                if let Some(s) = state {
++                    s.max_data = params.initial_max_stream_data_bidi_local.into();
++                }
+             }
+         }
+     }
+--- a/quinn-proto/src/packet.rs
++++ b/quinn-proto/src/packet.rs
+@@ -882,7 +882,7 @@
+
+ /// Packet number space identifiers
+ #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+-pub enum SpaceId {
++pub(crate) enum SpaceId {
+     /// Unprotected packets, used to bootstrap the handshake
+     Initial = 0,
+     Handshake = 1,
+@@ -891,7 +891,7 @@
+ }
+
+ impl SpaceId {
+-    pub fn iter() -> impl Iterator<Item = Self> {
++    pub(crate) fn iter() -> impl Iterator<Item = Self> {
+         [Self::Initial, Self::Handshake, Self::Data].iter().cloned()
+     }
+ }
+--- a/quinn-proto/src/tests/mod.rs
++++ b/quinn-proto/src/tests/mod.rs
+@@ -45,6 +45,43 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
+ // #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+ // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
++#[test]
++fn replayed_early_packets_after_confirmation_preserve_application_io() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client = pair.begin_connect(client_config());
++    pair.drive_client();
++    let mut to_server = pair.server.inbound.clone();
++    pair.drive_server();
++    let to_client = pair.client.inbound.clone();
++    pair.drive_client();
++    to_server.extend(pair.server.inbound.iter().cloned());
++    pair.drive();
++    let server = pair.server.assert_accept();
++    pair.finish_connect(client, server);
++    for (_, ecn, packet) in to_server {
++        pair.server.inbound.push_back((pair.time, ecn, packet));
++    }
++    for (_, ecn, packet) in to_client {
++        pair.client.inbound.push_back((pair.time, ecn, packet));
++    }
++    pair.drive();
++    assert!(!pair.client_conn_mut(client).is_handshaking());
++    assert!(!pair.server_conn_mut(server).is_handshaking());
++    pair.client_datagrams(client)
++        .send(Bytes::from_static(b"after retirement"), true)
++        .unwrap();
++    pair.server_datagrams(server)
++        .send(Bytes::from_static(b"reply"), true)
++        .unwrap();
++    pair.drive();
++    assert_eq!(
++        pair.server_datagrams(server).recv().unwrap(),
++        b"after retirement"[..]
++    );
++    assert_eq!(pair.client_datagrams(client).recv().unwrap(), b"reply"[..]);
++}
++
+ #[test]
+ fn pending_incoming_survives_server_config_change() {
+     let _guard = subscribe();
+@@ -220,6 +257,26 @@ fn lifecycle() {
+     assert_eq!(pair.server.known_cids(), 0);
+ }
+
++#[test]
++fn drained_endpoint_events_release_storage() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let (client_ch, server_ch) = pair.connect();
++    // The handshake queued and delivered connection-ID and reset-token events on both sides.
++    assert_eq!(pair.client_conn_mut(client_ch).endpoint_event_capacity(), 0);
++    assert_eq!(pair.server_conn_mut(server_ch).endpoint_event_capacity(), 0);
++}
++
++#[test]
++fn sent_handshake_control_frames_release_pending_storage() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let (client_ch, server_ch) = pair.connect();
++    // Both sides issued connection IDs; the server also sent tickets and an address token.
++    assert_eq!(pair.client_conn_mut(client_ch).pending_control_capacity(), 0);
++    assert_eq!(pair.server_conn_mut(server_ch).pending_control_capacity(), 0);
++}
++
+ #[test]
+ fn draft_version_compat() {
+     let _guard = subscribe();
+@@ -2103,7 +2160,10 @@ fn handshake_1rtt_handling() {
+
+     pair.drive();
+
+-    assert!(pair.client_conn_mut(client_ch).stats().path.lost_packets != 0);
++    // The early packet is held until the handshake completes rather than dropped, so the client
++    // sees no loss on its first flight.
++    assert_eq!(pair.client_conn_mut(client_ch).stats().path.lost_packets, 0);
++    assert_eq!(pair.server_conn_mut(server_ch).early_short_packet_capacity(), 0);
+     let mut recv = pair.server_recv(server_ch, s);
+     let mut chunks = recv.read(false).unwrap();
+     assert_matches!(
+@@ -2113,6 +2173,90 @@ fn handshake_1rtt_handling() {
+     let _ = chunks.finalize();
+ }
+
++#[test]
++fn server_retires_initial_client_cid_after_its_packets() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client_ch = pair.begin_connect(client_config());
++    pair.drive_client();
++    pair.drive_server();
++    let server_ch = pair.server.assert_accept();
++
++    // A server packet sent with the client's initial CID is held back in the network.
++    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
++    const MSG: &[u8] = b"sent with the initial CID";
++    pair.server_send(server_ch, s).write(MSG).unwrap();
++    pair.server.drive(pair.time, pair.client.addr);
++    assert!(!pair.server.outbound.is_empty());
++    pair.server.delay_outbound();
++
++    // The client's first 1-RTT flight issues new CIDs, so the server switches to one of them.
++    pair.drive_client();
++    pair.drive_server();
++    assert_ne!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 0);
++    // The initial CID is not retired while the held packet is outstanding: a client that stops
++    // routing it on retirement would drop that packet.
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        0
++    );
++
++    pair.server.finish_delay();
++    pair.drive();
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        1
++    );
++    assert_matches!(pair.client_streams(client_ch).accept(Dir::Uni), Some(stream) if stream == s);
++    let mut recv = pair.client_recv(client_ch, s);
++    let mut chunks = recv.read(false).unwrap();
++    assert_matches!(chunks.next(usize::MAX), Ok(Some(chunk)) if chunk.bytes == MSG);
++    let _ = chunks.finalize();
++}
++
++/// A peer's Retire Prior To and a later switch while a retirement is held back retire each CID
++/// exactly once
++#[test]
++fn deferred_cid_retirement_with_retire_prior_to() {
++    let _guard = subscribe();
++    let mut pair = Pair::default();
++    let client_ch = pair.begin_connect(client_config());
++    pair.drive_client();
++    pair.drive_server();
++    let server_ch = pair.server.assert_accept();
++    let s = pair.server_streams(server_ch).open(Dir::Uni).unwrap();
++    pair.server_send(server_ch, s).write(b"held").unwrap();
++    pair.server.drive(pair.time, pair.client.addr);
++    pair.server.delay_outbound();
++    pair.drive_client();
++    pair.drive_server();
++    assert_eq!(pair.server_conn_mut(server_ch).active_rem_cid_seq(), 1);
++
++    // The client retires the server's active CID and the held-back initial one.
++    let retire_prior_to = 2;
++    let now = pair.time;
++    pair.client_conn_mut(client_ch)
++        .rotate_local_cid(retire_prior_to, now);
++    pair.drive_client();
++    pair.drive_server();
++    assert_eq!(
++        pair.server_conn_mut(server_ch).active_rem_cid_seq(),
++        retire_prior_to
++    );
++    // Then the server switches again while its held packet is still outstanding.
++    pair.server_conn_mut(server_ch).local_address_changed();
++
++    pair.server.finish_delay();
++    pair.drive();
++    assert!(!pair.client_conn_mut(client_ch).is_closed());
++    assert!(!pair.server_conn_mut(server_ch).is_closed());
++    // Sequences 0 through `retire_prior_to`, once each
++    assert_eq!(
++        pair.server_conn_mut(server_ch).stats().frame_tx.retire_connection_id,
++        retire_prior_to + 1
++    );
++}
++
+ #[test]
+ fn stop_before_finish() {
+     let _guard = subscribe();
+@@ -3013,10 +3157,24 @@ fn connect_runs_mtud_again_after_600_seconds() {
+
+ #[test]
+ fn blackhole_after_mtu_change_repairs_itself() {
++    blackhole_after_mtu_change(client_config());
++}
++
++/// A real black hole is still found when loss is detected by time alone
++#[test]
++fn blackhole_after_mtu_change_repairs_itself_without_packet_threshold() {
++    let mut transport = TransportConfig::default();
++    transport.packet_threshold(u32::MAX);
++    let mut config = client_config();
++    config.transport_config(Arc::new(transport));
++    blackhole_after_mtu_change(config);
++}
++
++fn blackhole_after_mtu_change(config: ClientConfig) {
+     let _guard = subscribe();
+     let mut pair = Pair::default();
+     pair.mtu = 1500;
+-    let (client_ch, server_ch) = pair.connect();
++    let (client_ch, server_ch) = pair.connect_with(config);
+     pair.drive();
+
+     // Sanity check

@@ -41,6 +41,7 @@ jobs:
           key: vendor-source-${{ hashFiles('vendor/provenance.json') }}
       - run: python3 scripts/check-product.py
       - run: python3 scripts/test-observer-message-output.py
+      - run: python3 scripts/test-observer-barrier.py
       - run: cargo fmt --check
       - run: python3 scripts/check-vendor.py
       - run: cargo clippy --locked --all-targets -- -D warnings

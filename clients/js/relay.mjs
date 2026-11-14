@@ -1,3 +1,4 @@
+import { WebTransportChannel } from './webtransport.mjs';
 // Explicit JavaScript entry points avoid Node's optional native extractor.
 import { Encoder } from 'cbor-x/encode';
 import { Decoder } from 'cbor-x/decode';
@@ -74,6 +75,7 @@ export class Relay extends EventTarget {
     this.userId = wireId(userId, true);
     this.requestTimeoutMs = requestTimeout(requestTimeoutMs);
     const message = event => {
+      if (ws.readyState === 2) return;
       try {
         const envelope = decodeMessage(event.data);
         if (!Array.isArray(envelope) || envelope.length !== 2) throw new Error('Invalid relay envelope');
@@ -100,7 +102,7 @@ export class Relay extends EventTarget {
         } else if (sender === BROADCAST) {
           this.dispatchEvent(new CustomEvent('disconnect', { detail: { userId: wireId(value, true) } }));
         } else {
-          this.dispatchEvent(new CustomEvent('message', { detail: { sender, value } }));
+          this.dispatchEvent(new CustomEvent('message', { detail: event.unreliable ? { sender, value, unreliable: true } : { sender, value } }));
         }
       } catch (error) {
         this.#pending?.reject(error);
@@ -118,13 +120,14 @@ export class Relay extends EventTarget {
     ws.addEventListener('close', closed);
   }
 
-  static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass = globalThis.WebSocket } = {}) {
+  static async connect(url, channel, { requestTimeoutMs = 10_000, WebSocketClass, ...transportOptions } = {}) {
     requestTimeout(requestTimeoutMs);
     const channelBytes = typeof channel === 'string' ? new TextEncoder().encode(channel) : channel;
     if (!(channelBytes instanceof Uint8Array) || channelBytes.length > 16) throw new RangeError('Channel must contain at most 16 bytes');
     // Capture the channel before asynchronous socket setup lets its owner reuse it.
     const subscription = encode(channel);
-    const ws = new WebSocketClass(url, 'war.cbor.v1');
+    const LegacySocket = WebSocketClass ?? (/^wss?:/.test(String(url)) ? globalThis.WebSocket : undefined);
+    const ws = LegacySocket ? new LegacySocket(url, 'war.cbor.v1') : new WebTransportChannel(url, { closeTimeoutMs: requestTimeoutMs, ...transportOptions });
     ws.binaryType = 'arraybuffer';
     return new Promise((resolve, reject) => {
       const cleanup = () => {
@@ -168,6 +171,14 @@ export class Relay extends EventTarget {
   }
 
   broadcast(value) { this.send(BROADCAST, value); }
+  sendUnreliable(target, value) {
+    target = asUserId(target);
+    if (target === RELAY) throw new Error('Commands require reliable delivery');
+    if (!this.ws.sendUnreliable) throw new Error('Transport does not support datagrams');
+    return this.ws.sendUnreliable(encode([target, value]));
+  }
+  broadcastUnreliable(value) { return this.sendUnreliable(BROADCAST, value); }
+  get maxDatagramSize() { return this.ws.maxDatagramSize ?? 0; }
   close() {
     this.#pending?.reject(new Error('Relay is closed'));
     this.ws.close(1000);

@@ -2363,10 +2363,18 @@ async fn unrelated_traffic_stays_responsive_under_room_churn_and_global_broadcas
     // departures and turns above.
     {
         let (mut ws, _) = join_at(&url, "re_globl").await;
-        assert_eq!(
-            command(&mut ws, 0, &protocol::text("host-test")).await,
-            protocol::reply(0, &[0xf5])
-        );
+        // Global traffic is already running. Its accepted data can precede the
+        // authentication reply, just as it can for the observer crowd above.
+        let authenticated = protocol::reply(0, &[0xf5]);
+        let mut packet = command(&mut ws, 0, &protocol::text("host-test")).await;
+        while packet != authenticated {
+            assert_ne!(
+                protocol::parse(&packet).unwrap().0,
+                0,
+                "unexpected control reply"
+            );
+            packet = data(&mut ws).await;
+        }
         let stop = stop.clone();
         churn.spawn(async move {
             let mut toggles = 0u64;

@@ -1,0 +1,2347 @@
+{
+  "status": "Rejected server cipher-policy CPU/throughput screen; selected SessionIO remains unchanged",
+  "decision": "reject",
+  "decision_rationale": "All three ordinary throughput medians regress with the same fixed client binaries: private -23.45752%, room -11.83753%, mixed -15.49692%. Candidate server CPU seconds and CPU per verified delivery also rise. All remaining controls passed, but functional delivery success does not offset whole-workload regression. No Ring compact-ChaCha follow-on will be implemented from this screen; full throughput and memory parity remains unmet.",
+  "source_patch": "--- a/src/main.rs\n+++ b/src/main.rs\n@@ -45,7 +45,19 @@\n         if relay.config.dev_cert {\n             info!(certificate_sha256 = %identity.certificate_chain().as_slice()[0].hash(), \"development certificate pin\");\n         }\n-        let transport = wtransport::ServerConfig::builder().with_bind_address(relay.config.bind).with_custom_transport(identity, war_relay::webtransport::server_transport_config())\n+        use wtransport::tls::rustls;\n+        let default_tls = wtransport::tls::server::build_default_tls_config(identity);\n+        let mut provider = rustls::crypto::ring::default_provider();\n+        provider.cipher_suites.sort_by_key(|suite| {\n+            suite.suite() != rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256\n+        });\n+        let mut tls = rustls::ServerConfig::builder_with_provider(std::sync::Arc::new(provider))\n+            .with_protocol_versions(&[&rustls::version::TLS13])?\n+            .with_no_client_auth()\n+            .with_cert_resolver(default_tls.cert_resolver);\n+        tls.alpn_protocols = default_tls.alpn_protocols;\n+        tls.ignore_client_order = true;\n+        let transport = wtransport::ServerConfig::builder().with_bind_address(relay.config.bind).with_custom_tls_and_transport(tls, war_relay::webtransport::server_transport_config())\n             .keep_alive_interval((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.ping_interval_secs)))\n             .max_idle_timeout((relay.config.ping_interval_secs != 0).then(|| std::time::Duration::from_secs(relay.config.pong_timeout_secs)))?\n             .build();\n",
+  "runner_summary": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-run-summary.json",
+    "sha256": "932ed342842519da3d9e7773f896bbb1b41a9e5f4f4383988394ba1c16681475"
+  },
+  "analyzer": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-chacha-preference-screen.py",
+    "sha256": "9c22e578e91d67fb3602cd35c6e214aec306c9e3de926333db66000a6afb1d03"
+  },
+  "build": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-build.json",
+    "sha256": "30a5ce3504c2fd55e12fd6027f49f19e8e36f2ac97ee7b26431e56e32c5d8bdf",
+    "contents": {
+      "status": "complete",
+      "scope": "Server cipher-preference CPU/throughput screen only; no Ring representation or memory improvement.",
+      "timestamp_utc": "2026-11-07T01:21:52.907349+00:00",
+      "checkout_head": "413c650433502c52d47b133b21a6969f7dec5539",
+      "controller": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-chacha-preference-screen.py",
+        "sha256": "ceca54d72b31fd77bcb3354d4b3fab037b1cc3fb06e74ce511ad683c2b9e84f0"
+      },
+      "base": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/session-io-relay",
+        "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0"
+      },
+      "base_source_manifest": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-build/base-source-manifest.json",
+        "sha256": "4a69a6751efc9cb2db687b92c053bd70205a399c929518cb23fbf111eabdb896"
+      },
+      "candidate_main": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-server-candidate-main.rs",
+        "sha256": "20118dfd136ee607969c3908bba9d7230afae6147fedc4a30c321ebcc1ee6e82"
+      },
+      "patch": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-server.patch",
+        "sha256": "dca1448cb2464eca24173028c72a32708f9a72986ab91eabe16d67132f04fe8a"
+      },
+      "scope_receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-server-scope.json",
+        "sha256": "11fac07bea389cb55c2af052af33924ff172de28f05622a9fa64a29671d00a7a"
+      },
+      "restored": true,
+      "server": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/chacha-preference-relay",
+        "sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f"
+      },
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "--bin",
+        "war-relay",
+        "--target-dir",
+        "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-build/target",
+        "--message-format=json-render-diagnostics"
+      ],
+      "build_log": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-build/release-build.log",
+        "sha256": "13a002f7c8928e3ff192f7bd4d838c882c293dc0da495d43507489576c97e8e6"
+      }
+    }
+  },
+  "server_images": {
+    "baseline": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/session-io-relay",
+      "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0"
+    },
+    "candidate": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/chacha-preference-relay",
+      "sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f"
+    }
+  },
+  "actual_suite_diagnostics": [
+    {
+      "case": "private",
+      "variant": "baseline",
+      "repetition": "negotiation",
+      "diagnostic": true,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-baseline-negotiation.json",
+        "sha256": "738f7d634a210d97b9d9f3e91af8dcdbea0f92747eaa42f084e2085e2c5b4978"
+      },
+      "source_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+        "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+      },
+      "passed": true,
+      "negotiated_suites": [
+        "TLS13_AES_256_GCM_SHA384"
+      ],
+      "timestamp_utc": "2026-11-07T01:23:59.714258+00:00",
+      "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+      "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+      "client_exit_code": 0,
+      "server_exit_code": 0,
+      "negotiated_handshakes": 64,
+      "excluded_from_all_medians": true
+    },
+    {
+      "case": "private",
+      "variant": "candidate",
+      "repetition": "negotiation",
+      "diagnostic": true,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-candidate-negotiation.json",
+        "sha256": "cb6e0c44ebf54859af97d719ac046d9a2511eccd1a4de4c1603ca21da19b7fc8"
+      },
+      "source_recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+        "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+      },
+      "passed": true,
+      "negotiated_suites": [
+        "TLS13_CHACHA20_POLY1305_SHA256"
+      ],
+      "timestamp_utc": "2026-11-07T01:24:01.786691+00:00",
+      "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+      "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+      "client_exit_code": 0,
+      "server_exit_code": 0,
+      "negotiated_handshakes": 64,
+      "excluded_from_all_medians": true
+    }
+  ],
+  "ordinary_reliable": {
+    "private": {
+      "variants": {
+        "baseline": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "private",
+              "variant": "baseline",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-baseline-1.json",
+                "sha256": "f7bd904fcc4b1a0e081c50fdca823d97f61a0cb786c87f6bb05fb5738d514286"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:24:03.855572+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 17666752,
+              "elapsed_seconds": 12.000355252,
+              "verified_received_per_second": 1472185.750255654,
+              "server_cpu_seconds": 40.06,
+              "client_cpu_seconds": 61.3,
+              "server_cpu_us_per_verified": 2.267536217183555,
+              "client_cpu_us_per_verified": 3.4697945609923093,
+              "private_round_trip": {
+                "max_ms": 3.08082,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1472185.750255654,
+                "verified": 17666752
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "case": "private",
+              "variant": "baseline",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-baseline-2.json",
+                "sha256": "376b8d7ade6e213071ed1fd6011009b29fe5aaf346258999a1a5e663fb9a1035"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:26:00.173295+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 17607712,
+              "elapsed_seconds": 12.00037058,
+              "verified_received_per_second": 1467264.0217749008,
+              "server_cpu_seconds": 40.0,
+              "client_cpu_seconds": 61.04,
+              "server_cpu_us_per_verified": 2.271731841138701,
+              "client_cpu_us_per_verified": 3.466662789577658,
+              "private_round_trip": {
+                "max_ms": 3.400772,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1467264.0217749008,
+                "verified": 17607712
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "case": "private",
+              "variant": "baseline",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-baseline-3.json",
+                "sha256": "a76f5bcba7bbfe753de8dd210b997b475c0b19bfeea2a4f127a82c23dfee6c99"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:26:38.905206+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 17284608,
+              "elapsed_seconds": 12.000395411,
+              "verified_received_per_second": 1440336.539590712,
+              "server_cpu_seconds": 39.68,
+              "client_cpu_seconds": 60.940000000000005,
+              "server_cpu_us_per_verified": 2.295684113865932,
+              "client_cpu_us_per_verified": 3.525680188986641,
+              "private_round_trip": {
+                "max_ms": 3.413081,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1440336.539590712,
+                "verified": 17284608
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1472185.750255654,
+            1467264.0217749008,
+            1440336.539590712
+          ],
+          "verified_received_per_second_median": 1467264.0217749008,
+          "server_cpu_seconds_samples": [
+            40.06,
+            40.0,
+            39.68
+          ],
+          "server_cpu_seconds_median": 40.0,
+          "client_cpu_seconds_samples": [
+            61.3,
+            61.04,
+            60.940000000000005
+          ],
+          "client_cpu_seconds_median": 61.04,
+          "server_cpu_us_per_verified_samples": [
+            2.267536217183555,
+            2.271731841138701,
+            2.295684113865932
+          ],
+          "server_cpu_us_per_verified_median": 2.271731841138701,
+          "client_cpu_us_per_verified_samples": [
+            3.4697945609923093,
+            3.466662789577658,
+            3.525680188986641
+          ],
+          "client_cpu_us_per_verified_median": 3.4697945609923093
+        },
+        "candidate": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "private",
+              "variant": "candidate",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-candidate-1.json",
+                "sha256": "d59ec0f00b3791ba9223d3f8079a5fd19176d75ad8a6970cb23dc42625421f63"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:24:42.611077+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 13419648,
+              "elapsed_seconds": 12.000415899,
+              "verified_received_per_second": 1118265.242883646,
+              "server_cpu_seconds": 41.42,
+              "client_cpu_seconds": 61.68,
+              "server_cpu_us_per_verified": 3.0865191098902147,
+              "client_cpu_us_per_verified": 4.596245743554525,
+              "private_round_trip": {
+                "max_ms": 4.034875,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1118265.242883646,
+                "verified": 13419648
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "case": "private",
+              "variant": "candidate",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-candidate-2.json",
+                "sha256": "4fa8805b66e87cb53890f3241d4551d4c5600408c27a2d822732f7e5122082e4"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:25:21.380321+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 13638944,
+              "elapsed_seconds": 12.000470734,
+              "verified_received_per_second": 1136534.082897085,
+              "server_cpu_seconds": 41.54,
+              "client_cpu_seconds": 62.9,
+              "server_cpu_us_per_verified": 3.0456903408357716,
+              "client_cpu_us_per_verified": 4.611793992262157,
+              "private_round_trip": {
+                "max_ms": 2.952033,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1136534.082897085,
+                "verified": 13638944
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "case": "private",
+              "variant": "candidate",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-private-candidate-3.json",
+                "sha256": "9fb9386957ff48e52b9ae2f80f644ae37091f2d50680c3bea9706a858ce75b17"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-private-receive-clock-1.json",
+                "sha256": "ae3ae75d584e74f3a1251eb30957423fccfa77d1364c82ac0f1d19678a8613a8"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:27:17.678483+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 13477488,
+              "elapsed_seconds": 12.000467644,
+              "verified_received_per_second": 1123080.2331889526,
+              "server_cpu_seconds": 41.42,
+              "client_cpu_seconds": 62.68,
+              "server_cpu_us_per_verified": 3.0732730016157315,
+              "client_cpu_us_per_verified": 4.650718294091599,
+              "private_round_trip": {
+                "max_ms": 4.22908,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1123080.2331889526,
+                "verified": 13477488
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1118265.242883646,
+            1136534.082897085,
+            1123080.2331889526
+          ],
+          "verified_received_per_second_median": 1123080.2331889526,
+          "server_cpu_seconds_samples": [
+            41.42,
+            41.54,
+            41.42
+          ],
+          "server_cpu_seconds_median": 41.42,
+          "client_cpu_seconds_samples": [
+            61.68,
+            62.9,
+            62.68
+          ],
+          "client_cpu_seconds_median": 62.68,
+          "server_cpu_us_per_verified_samples": [
+            3.0865191098902147,
+            3.0456903408357716,
+            3.0732730016157315
+          ],
+          "server_cpu_us_per_verified_median": 3.0732730016157315,
+          "client_cpu_us_per_verified_samples": [
+            4.596245743554525,
+            4.611793992262157,
+            4.650718294091599
+          ],
+          "client_cpu_us_per_verified_median": 4.611793992262157
+        }
+      },
+      "candidate_median_percent_changes": {
+        "verified_received_per_second": -23.457522537055087,
+        "server_cpu_seconds": 3.5500000000000087,
+        "client_cpu_seconds": 2.6867627785059023,
+        "server_cpu_us_per_verified": 35.283264774563335,
+        "client_cpu_us_per_verified": 32.91259500226011
+      },
+      "scope": "Medians require all three repetitions to pass; failed trials are retained and never replaced or omitted to form a three-sample claim."
+    },
+    "roomonly": {
+      "variants": {
+        "baseline": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "roomonly",
+              "variant": "baseline",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-baseline-1.json",
+                "sha256": "e98a5c1d9189a97457efbe491dbcbd5c06d7af493c12146783c1dd8a34b14ff6"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:24:15.953403+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18771968,
+              "elapsed_seconds": 12.000676098,
+              "verified_received_per_second": 1564242.534895887,
+              "server_cpu_seconds": 36.4,
+              "client_cpu_seconds": 57.14,
+              "server_cpu_us_per_verified": 1.9390614771983417,
+              "client_cpu_us_per_verified": 3.0439003518437704,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.556088,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1564242.534895887,
+                "verified": 18771968
+              }
+            },
+            {
+              "case": "roomonly",
+              "variant": "baseline",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-baseline-2.json",
+                "sha256": "3c0a6d2c89dbe04b363027fa8af6ee2e8bd973922cc86db2081d3daa45930928"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:26:12.244277+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18026496,
+              "elapsed_seconds": 12.001410094,
+              "verified_received_per_second": 1502031.4995328914,
+              "server_cpu_seconds": 36.449999999999996,
+              "client_cpu_seconds": 56.04,
+              "server_cpu_us_per_verified": 2.022023581288343,
+              "client_cpu_us_per_verified": 3.10875724267212,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.496729,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1502031.4995328914,
+                "verified": 18026496
+              }
+            },
+            {
+              "case": "roomonly",
+              "variant": "baseline",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-baseline-3.json",
+                "sha256": "e1aba86926b6e3ab9eec992e3278c185a166e1b1721b0579e9c7d3d040aaa53c"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:26:50.974754+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18821120,
+              "elapsed_seconds": 12.002473483,
+              "verified_received_per_second": 1568103.4435658415,
+              "server_cpu_seconds": 36.41,
+              "client_cpu_seconds": 57.38,
+              "server_cpu_us_per_verified": 1.934528869695321,
+              "client_cpu_us_per_verified": 3.0487027339499457,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.071246,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1568103.4435658415,
+                "verified": 18821120
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1564242.534895887,
+            1502031.4995328914,
+            1568103.4435658415
+          ],
+          "verified_received_per_second_median": 1564242.534895887,
+          "server_cpu_seconds_samples": [
+            36.4,
+            36.449999999999996,
+            36.41
+          ],
+          "server_cpu_seconds_median": 36.41,
+          "client_cpu_seconds_samples": [
+            57.14,
+            56.04,
+            57.38
+          ],
+          "client_cpu_seconds_median": 57.14,
+          "server_cpu_us_per_verified_samples": [
+            1.9390614771983417,
+            2.022023581288343,
+            1.934528869695321
+          ],
+          "server_cpu_us_per_verified_median": 1.9390614771983417,
+          "client_cpu_us_per_verified_samples": [
+            3.0439003518437704,
+            3.10875724267212,
+            3.0487027339499457
+          ],
+          "client_cpu_us_per_verified_median": 3.0487027339499457
+        },
+        "candidate": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "roomonly",
+              "variant": "candidate",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-candidate-1.json",
+                "sha256": "cf4630424aad2cc03d20d8c47d0dc17b56e0555870201b72bb8e2b0f9cc464a0"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:24:54.679865+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 16551936,
+              "elapsed_seconds": 12.002202262,
+              "verified_received_per_second": 1379074.909644278,
+              "server_cpu_seconds": 38.99,
+              "client_cpu_seconds": 60.019999999999996,
+              "server_cpu_us_per_verified": 2.3556156814526106,
+              "client_cpu_us_per_verified": 3.6261619184607765,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.646757,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1379074.909644278,
+                "verified": 16551936
+              }
+            },
+            {
+              "case": "roomonly",
+              "variant": "candidate",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-candidate-2.json",
+                "sha256": "34efc013071a42eaa0c9d35a77c0547e313c24ab27d1e9a1961085cfb177af5b"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:25:33.450117+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 16683008,
+              "elapsed_seconds": 12.000630535,
+              "verified_received_per_second": 1390177.6203628452,
+              "server_cpu_seconds": 38.92,
+              "client_cpu_seconds": 60.48,
+              "server_cpu_us_per_verified": 2.3329126258286275,
+              "client_cpu_us_per_verified": 3.625245519273263,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 10.173875,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1390177.6203628452,
+                "verified": 16683008
+              }
+            },
+            {
+              "case": "roomonly",
+              "variant": "candidate",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-roomonly-candidate-3.json",
+                "sha256": "973edba4080f55250fdbd7d171edf0c94f61cb477808f18efe7c50374378f985"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-roomonly-receive-clock-1.json",
+                "sha256": "30995d89a9399f2edb10ccac4bff4aa5174afded710c1e3daee66a5fc90ca429"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:27:29.750392+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 16506880,
+              "elapsed_seconds": 12.002924152,
+              "verified_received_per_second": 1375238.2162016348,
+              "server_cpu_seconds": 38.949999999999996,
+              "client_cpu_seconds": 60.12,
+              "server_cpu_us_per_verified": 2.359622169665012,
+              "client_cpu_us_per_verified": 3.642117710918114,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.048636,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1375238.2162016348,
+                "verified": 16506880
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1379074.909644278,
+            1390177.6203628452,
+            1375238.2162016348
+          ],
+          "verified_received_per_second_median": 1379074.909644278,
+          "server_cpu_seconds_samples": [
+            38.99,
+            38.92,
+            38.949999999999996
+          ],
+          "server_cpu_seconds_median": 38.949999999999996,
+          "client_cpu_seconds_samples": [
+            60.019999999999996,
+            60.48,
+            60.12
+          ],
+          "client_cpu_seconds_median": 60.12,
+          "server_cpu_us_per_verified_samples": [
+            2.3556156814526106,
+            2.3329126258286275,
+            2.359622169665012
+          ],
+          "server_cpu_us_per_verified_median": 2.3556156814526106,
+          "client_cpu_us_per_verified_samples": [
+            3.6261619184607765,
+            3.625245519273263,
+            3.642117710918114
+          ],
+          "client_cpu_us_per_verified_median": 3.6261619184607765
+        }
+      },
+      "candidate_median_percent_changes": {
+        "verified_received_per_second": -11.83752654213135,
+        "server_cpu_seconds": 6.976105465531446,
+        "client_cpu_seconds": 5.215260763038154,
+        "server_cpu_us_per_verified": 21.482258770677465,
+        "client_cpu_us_per_verified": 18.94114431296703
+      },
+      "scope": "Medians require all three repetitions to pass; failed trials are retained and never replaced or omitted to form a three-sample claim."
+    },
+    "mixed": {
+      "variants": {
+        "baseline": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "mixed",
+              "variant": "baseline",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-baseline-1.json",
+                "sha256": "a4cf367b05a300ba56cd869ff0443033355564fb56bc5e3dede3c9b2fe8eb6a1"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:24:29.270515+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18667360,
+              "elapsed_seconds": 12.000918901,
+              "verified_received_per_second": 1555494.2212337179,
+              "server_cpu_seconds": 40.44,
+              "client_cpu_seconds": 63.129999999999995,
+              "server_cpu_us_per_verified": 2.166348107070309,
+              "client_cpu_us_per_verified": 3.381838674563516,
+              "private_round_trip": {
+                "max_ms": 5.700142,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 361601.64365733677,
+                "verified": 4339552
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.092759,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1193892.577576381,
+                "verified": 14327808
+              }
+            },
+            {
+              "case": "mixed",
+              "variant": "baseline",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-baseline-2.json",
+                "sha256": "e3f5cb0f25b21dc9b5cbf410a1f0712e54408284d33bf444125e88c3a2fc4308"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:26:25.556063+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18111984,
+              "elapsed_seconds": 12.002931893,
+              "verified_received_per_second": 1508963.323416235,
+              "server_cpu_seconds": 40.24,
+              "client_cpu_seconds": 62.59,
+              "server_cpu_us_per_verified": 2.221733411425275,
+              "client_cpu_us_per_verified": 3.45572301742316,
+              "private_round_trip": {
+                "max_ms": 7.531763,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 348030.96753687464,
+                "verified": 4177392
+              },
+              "fanout_round_trip": {
+                "max_ms": 10.259933,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 8.388608,
+                "per_second": 1160932.3558793603,
+                "verified": 13934592
+              }
+            },
+            {
+              "case": "mixed",
+              "variant": "baseline",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-baseline-3.json",
+                "sha256": "f46319a16400e0f582269c87caf05c8d74088af87c892f519e01588eda593880"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:27:04.287505+00:00",
+              "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 18178576,
+              "elapsed_seconds": 12.00268351,
+              "verified_received_per_second": 1514542.6424727915,
+              "server_cpu_seconds": 40.27,
+              "client_cpu_seconds": 63.080000000000005,
+              "server_cpu_us_per_verified": 2.215245022492411,
+              "client_cpu_us_per_verified": 3.4700187737477353,
+              "private_round_trip": {
+                "max_ms": 5.859717,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 348126.1499996012,
+                "verified": 4178448
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.972786,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 8.388608,
+                "per_second": 1166416.4924731902,
+                "verified": 14000128
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1555494.2212337179,
+            1508963.323416235,
+            1514542.6424727915
+          ],
+          "verified_received_per_second_median": 1514542.6424727915,
+          "server_cpu_seconds_samples": [
+            40.44,
+            40.24,
+            40.27
+          ],
+          "server_cpu_seconds_median": 40.27,
+          "client_cpu_seconds_samples": [
+            63.129999999999995,
+            62.59,
+            63.080000000000005
+          ],
+          "client_cpu_seconds_median": 63.080000000000005,
+          "server_cpu_us_per_verified_samples": [
+            2.166348107070309,
+            2.221733411425275,
+            2.215245022492411
+          ],
+          "server_cpu_us_per_verified_median": 2.215245022492411,
+          "client_cpu_us_per_verified_samples": [
+            3.381838674563516,
+            3.45572301742316,
+            3.4700187737477353
+          ],
+          "client_cpu_us_per_verified_median": 3.45572301742316
+        },
+        "candidate": {
+          "passed": 3,
+          "attempted": 3,
+          "runs": [
+            {
+              "case": "mixed",
+              "variant": "candidate",
+              "repetition": 1,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-candidate-1.json",
+                "sha256": "fca5cc357a38fb90189d6ba5cf8120b15694dbd579b6211d44272e1722e99ccb"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:25:08.024851+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 15361568,
+              "elapsed_seconds": 12.002770443,
+              "verified_received_per_second": 1279835.1907962088,
+              "server_cpu_seconds": 42.25,
+              "client_cpu_seconds": 61.4,
+              "server_cpu_us_per_verified": 2.7503702747011243,
+              "client_cpu_us_per_verified": 3.9969878074946514,
+              "private_round_trip": {
+                "max_ms": 7.056487,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 332512.5660740757,
+                "verified": 3991072
+              },
+              "fanout_round_trip": {
+                "max_ms": 11.690956,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "per_second": 947322.6247221332,
+                "verified": 11370496
+              }
+            },
+            {
+              "case": "mixed",
+              "variant": "candidate",
+              "repetition": 2,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-candidate-2.json",
+                "sha256": "8e3440e99d9d77006bba8e0e9974e104db3e52d54eee512830ca490c9028ffea"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:25:46.775752+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 15594080,
+              "elapsed_seconds": 12.001591052,
+              "verified_received_per_second": 1299334.3909515506,
+              "server_cpu_seconds": 42.25,
+              "client_cpu_seconds": 63.33,
+              "server_cpu_us_per_verified": 2.709361501287668,
+              "client_cpu_us_per_verified": 4.061156541456758,
+              "private_round_trip": {
+                "max_ms": 7.68521,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 335536.84528593614,
+                "verified": 4026976
+              },
+              "fanout_round_trip": {
+                "max_ms": 9.839724,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "per_second": 963797.5456656144,
+                "verified": 11567104
+              }
+            },
+            {
+              "case": "mixed",
+              "variant": "candidate",
+              "repetition": 3,
+              "diagnostic": false,
+              "receipt": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-mixed-candidate-3.json",
+                "sha256": "154a4b5465f34f40bb48b1d31f8b211e56a69e0f1d325ed83abf4a963949b219"
+              },
+              "source_recipe": {
+                "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-long-mixed-receive-clock-1.json",
+                "sha256": "fd0853eea79c0322337fe27fda69dbebc074b5fb4e74f96eeb26d45bb103cfc0"
+              },
+              "passed": true,
+              "timestamp_utc": "2026-11-07T01:27:43.094653+00:00",
+              "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+              "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+              "client_exit_code": 0,
+              "server_exit_code": 0,
+              "verified_received": 15246944,
+              "elapsed_seconds": 12.003007237,
+              "verified_received_per_second": 1270260.335509952,
+              "server_cpu_seconds": 42.31,
+              "client_cpu_seconds": 63.550000000000004,
+              "server_cpu_us_per_verified": 2.774982317768072,
+              "client_cpu_us_per_verified": 4.168048364314843,
+              "private_round_trip": {
+                "max_ms": 7.976542,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 330122.6035909954,
+                "verified": 3962464
+              },
+              "fanout_round_trip": {
+                "max_ms": 11.90098,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "per_second": 940137.7319189564,
+                "verified": 11284480
+              }
+            }
+          ],
+          "verified_received_per_second_samples": [
+            1279835.1907962088,
+            1299334.3909515506,
+            1270260.335509952
+          ],
+          "verified_received_per_second_median": 1279835.1907962088,
+          "server_cpu_seconds_samples": [
+            42.25,
+            42.25,
+            42.31
+          ],
+          "server_cpu_seconds_median": 42.25,
+          "client_cpu_seconds_samples": [
+            61.4,
+            63.33,
+            63.550000000000004
+          ],
+          "client_cpu_seconds_median": 63.33,
+          "server_cpu_us_per_verified_samples": [
+            2.7503702747011243,
+            2.709361501287668,
+            2.774982317768072
+          ],
+          "server_cpu_us_per_verified_median": 2.7503702747011243,
+          "client_cpu_us_per_verified_samples": [
+            3.9969878074946514,
+            4.061156541456758,
+            4.168048364314843
+          ],
+          "client_cpu_us_per_verified_median": 4.061156541456758
+        }
+      },
+      "candidate_median_percent_changes": {
+        "verified_received_per_second": -15.496919340176262,
+        "server_cpu_seconds": 4.916811522224984,
+        "client_cpu_seconds": 0.39632213062776867,
+        "server_cpu_us_per_verified": 24.156481417420572,
+        "client_cpu_us_per_verified": 17.51973526179924
+      },
+      "scope": "Medians require all three repetitions to pass; failed trials are retained and never replaced or omitted to form a three-sample claim."
+    }
+  },
+  "paced_and_datagram": {
+    "paced-mixed": {
+      "baseline": {
+        "passed": 3,
+        "attempted": 3,
+        "runs": [
+          {
+            "case": "paced-mixed",
+            "variant": "baseline",
+            "repetition": 1,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-baseline-1.json",
+              "sha256": "3050709156e87cd09702805fb0a99e4e125c647c527e6222c6b0cbddb0cecfe9"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:27:56.467857+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003402564,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.7,
+              "server_cpu_cores_observation": 2.7381366629527113,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 20.979999999999997,
+              "client_cpu_cores_observation": 4.193146510127582,
+              "client_timed_udp_receive_drops": 6413,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 18.708492,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 1023832
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023832,
+                "generated_source_updates": 1023832,
+                "generation_lag": {
+                  "max_ms": 1.582497,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023832
+                },
+                "last_submit_ms": 3999.334348,
+                "not_generated": 168,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 389,
+                "received_during_offer": 1023443,
+                "scheduled_arrival_age": {
+                  "max_ms": 19.688529,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 1023832
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255860.75,
+                "verified_unique": 1023832
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 55.891682,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 0.73534,
+                  "p50_upper_ms": 0.262144,
+                  "p99_upper_ms": 0.524288,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.25388,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 3033,
+                "received_during_offer": 4092967,
+                "scheduled_arrival_age": {
+                  "max_ms": 56.212435,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1023241.75,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "paced-mixed",
+            "variant": "baseline",
+            "repetition": 2,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-baseline-2.json",
+              "sha256": "45cfab2783d459b6c39e135e5dc7b79a7b7bd4a455ceae0f6a82645886897a8b"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:14.779530+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003967826,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.610000000000001,
+              "server_cpu_cores_observation": 2.7198416283342426,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 20.6,
+              "client_cpu_cores_observation": 4.11673310387108,
+              "client_timed_udp_receive_drops": 6498,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 18.483497,
+                  "p50_upper_ms": 2.097152,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023843
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023843,
+                "generated_source_updates": 1023843,
+                "generation_lag": {
+                  "max_ms": 1.822148,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023843
+                },
+                "last_submit_ms": 3999.39939,
+                "not_generated": 157,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 917,
+                "received_during_offer": 1022926,
+                "scheduled_arrival_age": {
+                  "max_ms": 19.431602,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023843
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255731.5,
+                "verified_unique": 1023843
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 57.604896,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 0.967404,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 0.524288,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.312062,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 4733,
+                "received_during_offer": 4091267,
+                "scheduled_arrival_age": {
+                  "max_ms": 57.926515,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1022816.75,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "paced-mixed",
+            "variant": "baseline",
+            "repetition": 3,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-baseline-3.json",
+              "sha256": "c58ca7933f1308a3ec7ae983d2f461892754c2c1e43ca6a9e987ab3d0fb379c5"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:20.904851+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.004171369,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.479999999999999,
+              "server_cpu_cores_observation": 2.6937526727214682,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 20.43,
+              "client_cpu_cores_observation": 4.082593998790772,
+              "client_timed_udp_receive_drops": 4435,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 15.878385,
+                  "p50_upper_ms": 2.097152,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023838
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023838,
+                "generated_source_updates": 1023838,
+                "generation_lag": {
+                  "max_ms": 1.355298,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023838
+                },
+                "last_submit_ms": 4000.000115,
+                "not_generated": 162,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 185,
+                "received_during_offer": 1023653,
+                "scheduled_arrival_age": {
+                  "max_ms": 16.858009,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023838
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255913.25,
+                "verified_unique": 1023838
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 35.60912,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4094976
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4094976,
+                "generated_source_updates": 3999,
+                "generation_lag": {
+                  "max_ms": 1.289499,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 2.097152,
+                  "samples": 3999
+                },
+                "last_submit_ms": 3998.961913,
+                "not_generated": 1,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 2054,
+                "received_during_offer": 4092922,
+                "scheduled_arrival_age": {
+                  "max_ms": 36.56235,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4094976
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1023230.5,
+                "verified_unique": 4094976
+              }
+            }
+          }
+        ]
+      },
+      "candidate": {
+        "passed": 3,
+        "attempted": 3,
+        "runs": [
+          {
+            "case": "paced-mixed",
+            "variant": "candidate",
+            "repetition": 1,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-candidate-1.json",
+              "sha256": "9be9631ba62b4e396e60ce28ce160f1e8c6fa6f411cb78d8344b55657d7c4f64"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:02.570227+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003746514,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 14.19,
+              "server_cpu_cores_observation": 2.8358750708689473,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.03,
+              "client_cpu_cores_observation": 4.202850792133472,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 13.709342,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023904
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023904,
+                "generated_source_updates": 1023904,
+                "generation_lag": {
+                  "max_ms": 3.847979,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023904
+                },
+                "last_submit_ms": 3999.622542,
+                "not_generated": 96,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 810,
+                "received_during_offer": 1023094,
+                "scheduled_arrival_age": {
+                  "max_ms": 14.426196,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023904
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255773.5,
+                "verified_unique": 1023904
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 15.74038,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 3.198497,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.568133,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 4382,
+                "received_during_offer": 4091618,
+                "scheduled_arrival_age": {
+                  "max_ms": 16.421338,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1022904.5,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "paced-mixed",
+            "variant": "candidate",
+            "repetition": 2,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-candidate-2.json",
+              "sha256": "78fd14fec5d3eba6f77b0ab22295b273859aec6a0c492b75a0120accdf904115"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:08.668254+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003978557,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 14.14,
+              "server_cpu_cores_observation": 2.825751517304114,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.4,
+              "client_cpu_cores_observation": 4.276597062963793,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 14.966339,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023823
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023823,
+                "generated_source_updates": 1023823,
+                "generation_lag": {
+                  "max_ms": 2.873581,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023823
+                },
+                "last_submit_ms": 3999.294122,
+                "not_generated": 177,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 601,
+                "received_during_offer": 1023222,
+                "scheduled_arrival_age": {
+                  "max_ms": 15.499656,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 1023823
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255805.5,
+                "verified_unique": 1023823
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 21.363233,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 1.562578,
+                  "p50_upper_ms": 0.262144,
+                  "p99_upper_ms": 0.524288,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.260742,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 3915,
+                "received_during_offer": 4092085,
+                "scheduled_arrival_age": {
+                  "max_ms": 21.563108,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1023021.25,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "paced-mixed",
+            "variant": "candidate",
+            "repetition": 3,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-paced-mixed-candidate-3.json",
+              "sha256": "f68039b874ee266835eef288e21f809e314c9d4b73dd89f905331b88db364bfe"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-paced-mixed-control-receive-clock-1.json",
+              "sha256": "ce5011ef46e43700f70c65a9f58eadabee12387ccc90bd1f212a48db69526d84"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:27.020662+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.005821446,
+              "mode": "stream",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 14.2,
+              "server_cpu_cores_observation": 2.8366972640118413,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 20.959999999999997,
+              "client_cpu_cores_observation": 4.1871249756118445,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 12.716628,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023883
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023883,
+                "generated_source_updates": 1023883,
+                "generation_lag": {
+                  "max_ms": 1.968621,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023883
+                },
+                "last_submit_ms": 3999.567348,
+                "not_generated": 117,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 506,
+                "received_during_offer": 1023377,
+                "scheduled_arrival_age": {
+                  "max_ms": 13.137172,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023883
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255844.25,
+                "verified_unique": 1023883
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 15.68301,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 0.938519,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 0.524288,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.466951,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 3420,
+                "received_during_offer": 4092580,
+                "scheduled_arrival_age": {
+                  "max_ms": 16.059764,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1023145.0,
+                "verified_unique": 4096000
+              }
+            }
+          }
+        ]
+      }
+    },
+    "dg": {
+      "baseline": {
+        "passed": 3,
+        "attempted": 3,
+        "runs": [
+          {
+            "case": "dg",
+            "variant": "baseline",
+            "repetition": 1,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-baseline-1.json",
+              "sha256": "8c2397b77d38e02d99e8d560a4fdef5ef602ca68b1f50b847a57cc19eb92c788"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:33.190760+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003912604,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 12.780000000000001,
+              "server_cpu_cores_observation": 2.554001440749384,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.220000000000002,
+              "client_cpu_cores_observation": 4.2406815784586795,
+              "client_timed_udp_receive_drops": 66184,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 127.479191,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 134.217728,
+                  "samples": 1002525
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023886,
+                "generated_source_updates": 1023886,
+                "generation_lag": {
+                  "max_ms": 1.471559,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023886
+                },
+                "last_submit_ms": 3999.53529,
+                "not_generated": 114,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 318,
+                "received_during_offer": 1002207,
+                "scheduled_arrival_age": {
+                  "max_ms": 127.869999,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 134.217728,
+                  "samples": 1002525
+                },
+                "unreceived_within_window": 21361,
+                "verified_during_offer_per_second": 250551.75,
+                "verified_unique": 1002525
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 42.326475,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4014435
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 0.910701,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.482651,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 1869,
+                "received_during_offer": 4012566,
+                "scheduled_arrival_age": {
+                  "max_ms": 42.823085,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4014435
+                },
+                "unreceived_within_window": 81565,
+                "verified_during_offer_per_second": 1003141.5,
+                "verified_unique": 4014435
+              }
+            }
+          },
+          {
+            "case": "dg",
+            "variant": "baseline",
+            "repetition": 2,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-baseline-2.json",
+              "sha256": "504cee91c2a8624f875c2a0e51fdd7cdb760824735dd1133567c72c690114412"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:51.524224+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.004392491,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 12.86,
+              "server_cpu_cores_observation": 2.5697424858517155,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 20.58,
+              "client_cpu_cores_observation": 4.11238727518105,
+              "client_timed_udp_receive_drops": 42588,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 127.89294,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 67.108864,
+                  "samples": 1008898
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023942,
+                "generated_source_updates": 1023942,
+                "generation_lag": {
+                  "max_ms": 3.351719,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023942
+                },
+                "last_submit_ms": 3999.785259,
+                "not_generated": 58,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 1098,
+                "received_during_offer": 1007800,
+                "scheduled_arrival_age": {
+                  "max_ms": 128.22913,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 67.108864,
+                  "samples": 1008898
+                },
+                "unreceived_within_window": 15044,
+                "verified_during_offer_per_second": 251950.0,
+                "verified_unique": 1008898
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 48.301118,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4042048
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 2.986362,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.703551,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 5071,
+                "received_during_offer": 4036977,
+                "scheduled_arrival_age": {
+                  "max_ms": 49.085598,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4042048
+                },
+                "unreceived_within_window": 53952,
+                "verified_during_offer_per_second": 1009244.25,
+                "verified_unique": 4042048
+              }
+            }
+          },
+          {
+            "case": "dg",
+            "variant": "baseline",
+            "repetition": 3,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-baseline-3.json",
+              "sha256": "b6ec9a01c8f479b0e6622ba3db7d941cbe3bbc62026341a80cf3c15a322070b5"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:57.715743+00:00",
+            "server_sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003585091,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 12.74,
+              "server_cpu_cores_observation": 2.5461743466530766,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.13,
+              "client_cpu_cores_observation": 4.222972052180495,
+              "client_timed_udp_receive_drops": 44504,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 121.772129,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 67.108864,
+                  "samples": 1009470
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023968,
+                "generated_source_updates": 1023968,
+                "generation_lag": {
+                  "max_ms": 1.436545,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023968
+                },
+                "last_submit_ms": 3999.828809,
+                "not_generated": 32,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 513,
+                "received_during_offer": 1008957,
+                "scheduled_arrival_age": {
+                  "max_ms": 121.848875,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 134.217728,
+                  "samples": 1009470
+                },
+                "unreceived_within_window": 14498,
+                "verified_during_offer_per_second": 252239.25,
+                "verified_unique": 1009470
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 45.119721,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4041430
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 1.436325,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.79769,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 2456,
+                "received_during_offer": 4038974,
+                "scheduled_arrival_age": {
+                  "max_ms": 45.923373,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4041430
+                },
+                "unreceived_within_window": 54570,
+                "verified_during_offer_per_second": 1009743.5,
+                "verified_unique": 4041430
+              }
+            }
+          }
+        ]
+      },
+      "candidate": {
+        "passed": 3,
+        "attempted": 3,
+        "runs": [
+          {
+            "case": "dg",
+            "variant": "candidate",
+            "repetition": 1,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-candidate-1.json",
+              "sha256": "98ae0c384f236011bd2d809dc696659b22fb8175b5ed3eb5b2150649956b00de"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:39.303643+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.004119419,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.47,
+              "server_cpu_cores_observation": 2.691782284182935,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.35,
+              "client_cpu_cores_observation": 4.266484912197896,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 14.046413,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023966
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023966,
+                "generated_source_updates": 1023966,
+                "generation_lag": {
+                  "max_ms": 2.273326,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023966
+                },
+                "last_submit_ms": 3999.817425,
+                "not_generated": 34,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 519,
+                "received_during_offer": 1023447,
+                "scheduled_arrival_age": {
+                  "max_ms": 14.668609,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023966
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255861.75,
+                "verified_unique": 1023966
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 16.005722,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 2.232107,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.793515,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 4044,
+                "received_during_offer": 4091956,
+                "scheduled_arrival_age": {
+                  "max_ms": 16.760504,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1022989.0,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "dg",
+            "variant": "candidate",
+            "repetition": 2,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-candidate-2.json",
+              "sha256": "0882f27b42cf94a55ea1ebf7deddabdfe3bd7df2876b220f8d0430ceabe70607"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:28:45.393643+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.004089659,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.559999999999999,
+              "server_cpu_cores_observation": 2.7097835818372973,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.209999999999997,
+              "client_cpu_cores_observation": 4.238533168935772,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 14.762274,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023957
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023957,
+                "generated_source_updates": 1023957,
+                "generation_lag": {
+                  "max_ms": 1.878987,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023957
+                },
+                "last_submit_ms": 3999.991122,
+                "not_generated": 43,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 889,
+                "received_during_offer": 1023068,
+                "scheduled_arrival_age": {
+                  "max_ms": 15.697497,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023957
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255767.0,
+                "verified_unique": 1023957
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 16.203107,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 1.516976,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.967572,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 4317,
+                "received_during_offer": 4091683,
+                "scheduled_arrival_age": {
+                  "max_ms": 17.046987,
+                  "p50_upper_ms": 8.388608,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1022920.75,
+                "verified_unique": 4096000
+              }
+            }
+          },
+          {
+            "case": "dg",
+            "variant": "candidate",
+            "repetition": 3,
+            "diagnostic": false,
+            "receipt": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-v2-dg-candidate-3.json",
+              "sha256": "87adf55e3e12cf02497a064e2029d9849918b3783bd9f49ca6be3d27ba6e0a13"
+            },
+            "source_recipe": {
+              "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/receive-clock-dg-control-receive-clock-1.json",
+              "sha256": "df8e835dde98093ff7550708a1524d37d373584f36e14f644ab35ad8d63db7fc"
+            },
+            "passed": true,
+            "timestamp_utc": "2026-11-07T01:29:03.825399+00:00",
+            "server_sha256": "0f7fca889dd02b3902bcb80cf220c26702bfd0df57d41756ac08585edb65a77f",
+            "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+            "client_exit_code": 0,
+            "server_exit_code": 0,
+            "measurement": {
+              "elapsed_seconds": 5.003490313,
+              "mode": "datagram",
+              "observation_seconds": 5.0,
+              "offered_seconds": 4,
+              "reliable_complete": true,
+              "server_cpu_seconds": 13.57,
+              "server_cpu_cores_observation": 2.712106779689892,
+              "server_timed_udp_receive_drops": 0,
+              "client_cpu_seconds": 21.02,
+              "client_cpu_cores_observation": 4.2010673919735835,
+              "client_timed_udp_receive_drops": 0,
+              "private": {
+                "arrival_age": {
+                  "max_ms": 21.997025,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 8.388608,
+                  "samples": 1023926
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 1023926,
+                "generated_source_updates": 1023926,
+                "generation_lag": {
+                  "max_ms": 3.217041,
+                  "p50_upper_ms": 0.524288,
+                  "p99_upper_ms": 1.048576,
+                  "samples": 1023926
+                },
+                "last_submit_ms": 3999.999986,
+                "not_generated": 74,
+                "out_of_order": 0,
+                "planned_source_updates": 1024000,
+                "received_during_drain": 636,
+                "received_during_offer": 1023290,
+                "scheduled_arrival_age": {
+                  "max_ms": 21.998662,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 1023926
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 255822.5,
+                "verified_unique": 1023926
+              },
+              "fanout": {
+                "arrival_age": {
+                  "max_ms": 20.854905,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "duplicates": 0,
+                "expected_generated_deliveries": 4096000,
+                "generated_source_updates": 4000,
+                "generation_lag": {
+                  "max_ms": 2.097918,
+                  "p50_upper_ms": 1.048576,
+                  "p99_upper_ms": 2.097152,
+                  "samples": 4000
+                },
+                "last_submit_ms": 3999.939518,
+                "not_generated": 0,
+                "out_of_order": 0,
+                "planned_source_updates": 4000,
+                "received_during_drain": 4420,
+                "received_during_offer": 4091580,
+                "scheduled_arrival_age": {
+                  "max_ms": 21.738686,
+                  "p50_upper_ms": 4.194304,
+                  "p99_upper_ms": 16.777216,
+                  "samples": 4096000
+                },
+                "unreceived_within_window": 0,
+                "verified_during_offer_per_second": 1022895.0,
+                "verified_unique": 4096000
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "failed_workload_receipts": [],
+  "preflight_failure_preserved": {
+    "controller": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/run-chacha-preference-screen.py",
+      "sha256": "0ce15ef771b2601902c0aa65218525bcf1757a2df4068fc7215652669116bcff"
+    },
+    "summary": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-run-summary.json",
+      "sha256": "4e2abcb89eed3a042a4919a3739a096197ff3041a7f7406d9916b3d7a9bd5d93"
+    },
+    "baseline_receipt": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/chacha-preference-private-baseline-negotiation.json",
+      "sha256": "5ef3a1f2819ec03b752b2ee888828b182766306132682c5d5129d1b7bb2f420d"
+    },
+    "explanation": "V1 baseline traffic passed, but benchmark_transport.prepare reset RUST_LOG to war_relay=info, leaving no suite debug logs. Diagnostic assertion failed before any ordinary case. This is a logging/controller failure, not a cipher failure; all V1 timings excluded."
+  },
+  "binding_verification": {
+    "baseline_source_restored": true,
+    "current_selected_binary_restored": true,
+    "server_images_and_recipes_hashed": true,
+    "fixed_inspection_client": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7",
+    "fixed_paced_datagram_client": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d"
+  },
+  "limits": [
+    "No Ring key representation changes or new memory measurements; cipher choice alone does not prove a memory saving.",
+    "Fixed client binaries negotiate a different cipher, which can change client CPU cost. Both endpoint CPU counters are reported; do not attribute every throughput change solely to server computation.",
+    "Debug suite diagnostics are separate and excluded from medians. All30 ordinary/control attempts are preserved including failures.",
+    "V2 diagnostics set debug logging only after original benchmark_transport.prepare, restore it finally, and leave ordinary preparation unchanged.",
+    "Round-trip percentiles are histogram upper bounds. Datagram unreceived counts are within the observation window, not proof of network loss.",
+    "This screen does not establish native WebSocket throughput/memory parity, browser compatibility, complete kernel-memory accounting, or loss/bulk freshness acceptance."
+  ]
+}

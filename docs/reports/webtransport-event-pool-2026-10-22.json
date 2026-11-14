@@ -1,0 +1,332 @@
+{
+  "status": "Superseded by receive-batch cache; CPU-sized pool not retained",
+  "baseline_commit": "373e7fb",
+  "design": "One endpoint-owned shared mutex pool of empty overflow buffers. Cache one small buffer per available CPU; queues remain unbounded by cache policy. Preserve queue mutex, FIFO, wakers, cooperative budget and receiver retirement. Cache and queue locks are always acquired queue then pool; pool never locks a queue.",
+  "census": [
+    {
+      "receipt": "artifacts/webtransport/event-pool-census-private.json",
+      "server_sha256": "67c71466d42ce7a35575329b730a6ae57a721eb672067466862be9591f48dfc3",
+      "rows": [
+        [
+          "409211",
+          "187501"
+        ]
+      ],
+      "scope": "Instrumented only; exclude timings and RSS from ordinary comparisons."
+    },
+    {
+      "receipt": "artifacts/webtransport/event-pool-census-mixed.json",
+      "server_sha256": "67c71466d42ce7a35575329b730a6ae57a721eb672067466862be9591f48dfc3",
+      "rows": [
+        [
+          "110094",
+          "55937"
+        ]
+      ],
+      "scope": "Instrumented only; exclude timings and RSS from ordinary comparisons."
+    }
+  ],
+  "verification": {
+    "relay_suite": "passed",
+    "clippy": "passed",
+    "quinn_library": "29 passed, 3 existing ignored; cross-thread sharing test passed",
+    "vendor": "272 files / 5 archives / 4 patches verified"
+  },
+  "pending": [
+    "Paced reliable/datagram, endpoint profiles, freshness, browser"
+  ],
+  "parity": "Not achieved",
+  "ordinary_reliable": {
+    "private": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-private-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-private-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1422530.0753493633,
+          1421824.5606941471,
+          1438059.3028114885
+        ],
+        "median": 1422530.0753493633
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-private-event-pool-1.json",
+          "artifacts/webtransport/event-pool-private-event-pool-2.json",
+          "artifacts/webtransport/event-pool-private-event-pool-3.json"
+        ],
+        "rates": [
+          1442482.781305836,
+          1424302.4219507095,
+          1424703.2148756944
+        ],
+        "median": 1424703.2148756944
+      },
+      "change_percent": 0.1527658053765535
+    },
+    "roomonly": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1507980.8828887593,
+          1437736.2785533015,
+          1464284.6599681056
+        ],
+        "median": 1464284.6599681056
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-roomonly-event-pool-1.json",
+          "artifacts/webtransport/event-pool-roomonly-event-pool-2.json",
+          "artifacts/webtransport/event-pool-roomonly-event-pool-3.json"
+        ],
+        "rates": [
+          1471156.4521708882,
+          1442581.555973268,
+          1439827.2503506043
+        ],
+        "median": 1442581.555973268
+      },
+      "change_percent": -1.482164266837993
+    },
+    "mixed": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1467726.5067916915,
+          1355332.3561262111,
+          1422249.7833681693
+        ],
+        "median": 1422249.7833681693
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-mixed-event-pool-1.json",
+          "artifacts/webtransport/event-pool-mixed-event-pool-2.json",
+          "artifacts/webtransport/event-pool-mixed-event-pool-3.json"
+        ],
+        "rates": [
+          1392867.8065358591,
+          1429394.3108004704,
+          1406433.0246367035
+        ],
+        "median": 1406433.0246367035
+      },
+      "change_percent": -1.112094297107824
+    }
+  },
+  "capacity": {
+    "handshake-buffer": {
+      "receipt": "artifacts/webtransport/event-pool-capacity-handshake-buffer-1.json",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2437.66015625,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.2663845289935125,
+        "server_cpu_seconds": 7.209999999999997,
+        "client_cpu_seconds": 7.099999999999998,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99663.07810120337,
+        "server_user_cpu_seconds": 5.949999999999999,
+        "server_system_cpu_seconds": 1.2599999999999998,
+        "round_trip": {
+          "max_ms": 3.886855,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.664551,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    },
+    "event-pool": {
+      "receipt": "artifacts/webtransport/event-pool-capacity-event-pool-1.json",
+      "server_sha256": "590a4d549ef04b95f0f29e2e30528c4518e112018fec4e8c292893287811c656",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "ready_rss_mib": 2358.19140625,
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265455304004718,
+        "server_cpu_seconds": 6.7500000000000036,
+        "client_cpu_seconds": 7.350000000000001,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99690.30245530841,
+        "server_user_cpu_seconds": 5.52,
+        "server_system_cpu_seconds": 1.2300000000000004,
+        "round_trip": {
+          "max_ms": 11.193888,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.677902,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "events": [
+        "connected",
+        "ready",
+        "measured",
+        "postcheck",
+        "done"
+      ]
+    }
+  },
+  "candidate_sha256": "590a4d549ef04b95f0f29e2e30528c4518e112018fec4e8c292893287811c656",
+  "heap": {
+    "receipt": "artifacts/webtransport/event-pool-heap-100000.json",
+    "analysis": "artifacts/webtransport/event-pool-heap-100000-sites.json",
+    "passed": true,
+    "requested_ready_bytes": 2298412654,
+    "unresolved_bytes": 0,
+    "scope": "Separate allocator diagnostic; do not compare its RSS/CPU with ordinary runs."
+  },
+  "source_sha256": {
+    "vendor/quinn/src/event_queue.rs": "dc2a84dcd47879407d9411bc125029de036900a5744ad9f10cc75bcc00152801",
+    "vendor/quinn/src/endpoint.rs": "9e50f0ca04eca810a1defda13a90202db3418fa4f167a1c7b02d2de82ddb6100"
+  },
+  "long_reliable": {
+    "private": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-private-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-long-private-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-long-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1421485.790932194,
+          1418150.0550572074,
+          1427324.205988612
+        ],
+        "median": 1421485.790932194
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-private-event-pool-1.json",
+          "artifacts/webtransport/event-pool-long-private-event-pool-2.json",
+          "artifacts/webtransport/event-pool-long-private-event-pool-3.json"
+        ],
+        "rates": [
+          1413639.8519567307,
+          1415019.5146164994,
+          1407615.6457503668
+        ],
+        "median": 1413639.8519567307
+      },
+      "change_percent": -0.551953387470594
+    },
+    "roomonly": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-long-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-long-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1209703.392084726,
+          1446138.180954069,
+          1433644.212481822
+        ],
+        "median": 1433644.212481822
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-roomonly-event-pool-1.json",
+          "artifacts/webtransport/event-pool-long-roomonly-event-pool-2.json",
+          "artifacts/webtransport/event-pool-long-roomonly-event-pool-3.json"
+        ],
+        "rates": [
+          1439998.0724501389,
+          1457585.6623278868,
+          1418310.7112579537
+        ],
+        "median": 1439998.0724501389
+      },
+      "change_percent": 0.44319642997878717
+    },
+    "mixed": {
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/event-pool-long-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/event-pool-long-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1308321.0949926889,
+          1384500.7383234191,
+          1361286.8053326893
+        ],
+        "median": 1361286.8053326893
+      },
+      "event-pool": {
+        "receipts": [
+          "artifacts/webtransport/event-pool-long-mixed-event-pool-1.json",
+          "artifacts/webtransport/event-pool-long-mixed-event-pool-2.json",
+          "artifacts/webtransport/event-pool-long-mixed-event-pool-3.json"
+        ],
+        "rates": [
+          1404969.2459068212,
+          1371827.4512535739,
+          1401209.8182660155
+        ],
+        "median": 1401209.8182660155
+      },
+      "change_percent": 2.932740755065888
+    }
+  },
+  "full_cache_census": [
+    {
+      "receipt": "artifacts/webtransport/event-pool-full-census-private.json",
+      "rows": [
+        {
+          "takes": 401450,
+          "hits": 185241,
+          "full_returns": 216205,
+          "slots": 4
+        }
+      ],
+      "scope": "Diagnostic; timing/RSS excluded from ordinary comparisons."
+    },
+    {
+      "receipt": "artifacts/webtransport/event-pool-full-census-mixed.json",
+      "rows": [
+        {
+          "takes": 107734,
+          "hits": 54359,
+          "full_returns": 53371,
+          "slots": 4
+        }
+      ],
+      "scope": "Diagnostic; timing/RSS excluded from ordinary comparisons."
+    }
+  ],
+  "interpretation": "Four cache slots caused 216205 full returns in private and 53371 in mixed, nearly matching later cache misses. Test cache storage sized to endpoint receive batch as a separate variant; no traffic limit change.",
+  "decision": "Four slots caused full-cache returns almost matching later misses. Source archived as event-pool-cpu-slots-event_queue.rs and endpoint.rs. Receive-batch candidate measured separately and selected."
+}

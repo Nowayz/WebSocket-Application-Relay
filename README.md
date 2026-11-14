@@ -1,5 +1,16 @@
 # WebSocket Application Relay
 
+> **WebTransport migration branch — in progress.** The default data listener now uses
+> HTTP/3 at `https://127.0.0.1:1338/war`. Start locally with
+> `cargo run --release -- --dev-cert`; supply the logged SHA256 certificate pin to
+> the browser client. Production certificates use `--tls-cert` and `--tls-key`.
+> The previous listener remains explicitly available with `--legacy-websocket` for
+> comparisons. Performance parity and the full migration acceptance suite are not
+> yet established. See [the implementation and acceptance ledger](docs/webtransport-pivot.md).
+> Sections below that describe WebSocket deployment are the baseline documentation
+> and are still being migrated.
+
+
 A Rust WebSocket relay with a native CBOR JavaScript client. Clients join a
 channel, receive a 64-bit session ID, and send typed values to another session or
 their channel. Applications own message meaning, game logic and application state.
@@ -14,7 +25,8 @@ capacity and latency depend on the workload and host.
 For release assets, installation and the final acceptance gate, see the
 [release guide](docs/release.md).
 
-Rust 1.91+ builds the server. Node 22+ is needed for the JavaScript tools.
+Rust 1.91+ builds the server; its bundled jemalloc allocator also needs a C
+compiler and `make`. Node 22+ is needed for the JavaScript tools.
 
 ```sh
 cargo build --locked --release --bin war-relay
@@ -81,12 +93,13 @@ can import `Relay` from the generated `relay.js` ES module.
   Fresh readiness and buffered/output work receive separate bounded turns;
   [scheduling measurements](docs/reports/worker-scheduling.md) document the latency/CPU
   tradeoff. Tokio handles management and process signals.
-- [Routing](src/relay.rs): no global registry lock. ID ownership is a 64-way
-  sharded map, each channel has its own lock for membership, variables and its
-  cached recipient view, global observers have a separate lock, and admission
-  counters are atomics. No socket write happens while a registry lock is held.
+- [Routing](src/relay.rs): no global registry lock. Session and channel indexes
+  are concurrent maps; each channel locks its own membership, variables and
+  cached recipient view. Global observers use atomic immutable snapshots, and
+  admission counters are atomics. No socket write happens while a registry lock is held.
   Large broadcasts capture an immutable recipient view and advance in bounded
-  turns; each room has its own departure queue. See
+  turns; ordinary rooms have their own departure queues and observer notices
+  use sixteen shards. See
   [docs/architecture.md](docs/architecture.md).
 - [Output](src/server/socket.rs): private sends attempt immediate borrowed writes;
   multicast uses recipient-owner output and bounded vectored batches. Each socket
@@ -117,6 +130,7 @@ npm run build:browser --prefix clients/js
 
 [Protocol](docs/protocol.md), [operations](docs/operations.md),
 [short performance recipes](docs/performance-guide.md),
+[verified open-loop transport loads](docs/datagram-load.md),
 [historical findings](docs/reports/performance-history.md) and
 [stability checks](docs/reports/stability.md) describe the contracts and measurement limits.
 The [consolidation record](docs/reports/consolidation.md) lists this migration's local

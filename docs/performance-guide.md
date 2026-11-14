@@ -114,6 +114,9 @@ messages, departures, all process exits and final resource gauges.
   client/server cores for the measured case, or 2,048 peers and two workers in CI.
 - `scripts/observer-barrier.py` checks native unsubscribe ordering, re-subscription,
   an independent echo witness and every audience member's departure/Close matrix.
+  Distinct source rooms may arrive in any order; the checker requires their
+  exact set once each before the unsubscribe acknowledgement and rejects late
+  frames. Same-room FIFO is covered separately by the relay tests.
   Use `--audience 100000 --server-cpus 0-7` on the measured host, with the client
   pinned to separate physical cores. Default teardown serializes follow-up
   departures; `--burst-teardown` separately probes queue-pressure behavior.
@@ -159,3 +162,122 @@ performance rankings or production guarantees from loopback diagnostics.
 The full historical data and temporary comparison implementations are available
 through Git history; [the concise history](reports/performance-history.md) records useful
 results and exact retrieval paths. Current work compares Rust revisions.
+
+## Phase-gated capacity allocations
+
+Measure ordinary capacity first and freeze both binaries for revision comparisons.
+Choose valid, separate server/client CPU masks for the host and keep them fixed.
+The following is the 100,000-session, 1 KiB, four-second contract used by the
+[full-scale memory report](reports/webtransport-100k-memory-2026-10-21.json):
+
+```sh
+cargo build --release --bin war-relay --example capacity
+python scripts/capacity.py --transport webtransport \
+  --users 100000 --room-size 16 --concurrency 64 --source-addresses 64 \
+  --seconds 4 --waves 1 --payload-bytes 1024 --messages-per-second 1 \
+  --workers 8 --client-workers 8 --pin-workers --pin-client-workers \
+  --server-cpus 0-7 --client-cpus 8-15 \
+  --output artifacts/capacity-ordinary.json
+```
+
+Use `--transport websocket` for the native control. The runner records its
+explicit message, queue and staging budgets; this capacity contract does not
+replace the separate large-message checks.
+
+Repeat that receipt with the replacement allocator to capture every phase gate:
+
+```sh
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-heap/relay --output artifacts/capacity-heap.json
+python scripts/analyze-capacity-heap.py --receipt artifacts/capacity-heap.json \
+  --phase ready --output artifacts/capacity-allocation-sites.json
+```
+
+The heap tool requires gperftools (`/usr/lib/libtcmalloc.so` by default; select
+another installation with `--library`). It preloads only the server, pauses the
+client at each gate, and waits for the dump's signal handler to finish. The
+`--capture-timeout` watchdog controls the diagnostic collector, not relay
+protocol deadlines. The collector retries dump requests when no profile appears
+and no signal is pending or active, recording attempts and all gate profiles.
+[gperftools 2.18.1's signal handler](https://github.com/gperftools/gperftools/blob/gperftools-2.18.1/src/heap-profiler.cc#L361-L371)
+uses `TryLock` and can ignore a request during concurrent heap activity. Automatic
+interval dumps are disabled; gate and process-exit snapshots remain distinct.
+`python scripts/test-capacity-heap-capture.py` checks recovery against the real
+profiler after suppressing the first request. Use fresh output paths and prefixes. The analyzer verifies
+the exact executable and profile hashes, resolves captured executable addresses,
+and checks that all allocation buckets sum to the profile header. Optimized
+inline sites can share function names; this is not complete stack attribution.
+
+Kernel socket counters are collected separately. For socket-object estimates,
+read the current kernel's slab sizes without changing host settings:
+
+```sh
+sudo -n python scripts/socket_resources.py --slab-sizes-only > artifacts/socket-slab-sizes.json
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-heap-with-sockets/relay \
+  --output artifacts/capacity-heap-with-sockets.json \
+  --slab-sizes artifacts/socket-slab-sizes.json
+```
+
+If slab metadata is unavailable, the receipt records that limitation. Buffer
+limits are not allocated bytes, SKMEM counters are not an additive total, and
+socket-object estimates exclude other kernel storage. Requested live bytes are
+already part of process memory; never add them to RSS. The replacement allocator
+and capture overhead exclude heap runs from ordinary CPU, latency and RSS
+comparisons. Logical zero resource gauges can precede deferred QUIC retirement;
+keep the done gate and the separate process-exit profile distinct.
+
+### Server ACK-frequency policy
+
+The standard server builder uses `webtransport::server_transport_config()`.
+It requests an ACK after eight ack-eliciting packets, a maximum ACK delay of
+5 ms, and immediate acknowledgement of reordering. These are transport feedback
+parameters, not limits on application traffic. The batch request targets the
+measured ACK-heavy receive path in room/mixed workloads; the delay bound limits
+waiting on sparse traffic. Peers that do not support the extension ignore it.
+
+The same factory disables QUIC's packet-count loss rule, so loss is detected
+by the time threshold alone (9/8 of the round trip). The packet rule declares
+a packet lost once three later ones are acknowledged, which treats ordinary
+reordering as congestion; `packet_threshold(3)` restores it. The time rule
+depends on the immediate acknowledgement of reordering requested above.
+
+Callers building custom endpoints retain control over their transport config;
+`EndpointIngress::bind` does not overwrite it. A caller can start from this
+factory and disable requests with `ack_frequency_config(None)`. The standard
+CLI and integration fixtures use the same factory.
+
+The [controlled ACK-frequency report](reports/webtransport-ack-frequency-2026-10-21.json)
+keeps ordinary short/long workloads, capacity CPU/RSS, allocation diagnostics,
+packet counters, profiles and loss cases separate. ACK-frame counts are not CPU
+shares; Quinn I/O counters are not kernel syscall counts. High-rate candidate
+datagram cases had more client UDP-drop/missing-update runs than the baseline,
+so lower ACK traffic must not be described as a universal datagram improvement.
+
+### Resolve callers behind generic allocation symbols
+
+An optimized executable may omit frame pointers. A heap captured with a frame
+pointer unwinder can stop at a generic allocation helper and cannot identify
+its caller. Do not infer a particular container or type from that symbol alone.
+Use an explicitly supported unwinder for a separate diagnostic run:
+
+```sh
+python scripts/capacity-heap.py --receipt artifacts/capacity-ordinary.json \
+  --prefix artifacts/capacity-unwind/relay --output artifacts/capacity-unwind.json \
+  --stacktrace-method libunwind
+python scripts/analyze-capacity-heap.py --receipt artifacts/capacity-unwind.json \
+  --stacks --output artifacts/capacity-unwind-stacks.json
+```
+
+The collector requests verbose profiler startup confirmation and records the
+requested and observed methods. An explicit request that is not confirmed fails
+the collector rather than silently accepting a fallback. Availability depends
+on the installed gperftools build. This can cost substantially more allocation
+CPU, so exclude its timing/RSS from ordinary comparisons. Watchdogs are
+collector controls, not changes to relay protocol deadlines.
+
+`--stacks` groups by all captured frames inside the exact executable image,
+using the same receipt/profile hash and ELF load-bias checks. It cannot recover
+omitted or inlined frames and excludes shared-library frames. All live bucket
+bytes must still sum to the heap header. Omitting `--stacks` retains the existing
+first-frame grouping and site rows.

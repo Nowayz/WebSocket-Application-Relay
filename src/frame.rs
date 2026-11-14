@@ -7,6 +7,7 @@ use minicbor::{Encoder, encode::write::Cursor};
 
 #[derive(Clone)]
 pub(crate) struct Frame {
+    pub(crate) unreliable: bool,
     prefix: [u8; 14],
     prefix_len: u8,
     payload: Bytes,
@@ -15,6 +16,7 @@ pub(crate) struct Frame {
 impl Frame {
     fn encoded(payload: Bytes) -> Self {
         Self {
+            unreliable: false,
             prefix: [0; 14],
             prefix_len: 0,
             payload,
@@ -111,6 +113,10 @@ impl Frame {
 
     pub(crate) fn payload(&self) -> &[u8] {
         &self.payload
+    }
+
+    pub(crate) fn shared_payload(&self) -> Bytes {
+        self.payload.clone()
     }
 
     pub(crate) fn len(&self) -> usize {

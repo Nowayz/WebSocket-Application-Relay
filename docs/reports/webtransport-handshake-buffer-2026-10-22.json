@@ -1,0 +1,1253 @@
+{
+  "status": "Retained as a memory reduction with measured throughput uncertainty; overall parity not achieved",
+  "change": "Release consumed QUIC TLS handshake input buffer only after handshake completion with no active fragments and empty input; preserve deframer ordering state.",
+  "baseline": "ack-eight",
+  "candidate_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+  "reliable": {
+    "private": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-private-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-private-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-private-ack-eight-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1538367.7822888074,
+          1435701.068934704,
+          1442209.6232632294
+        ],
+        "median": 1442209.6232632294
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-private-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-private-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-private-handshake-buffer-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1433847.5122835978,
+          1447841.7254385445,
+          1414707.7329707537
+        ],
+        "median": 1433847.5122835978
+      },
+      "median_change_percent": -0.5798124520006276
+    },
+    "roomonly": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-roomonly-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-roomonly-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-roomonly-ack-eight-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1449685.3727864756,
+          1515222.8620343634,
+          1452057.9196396028
+        ],
+        "median": 1452057.9196396028
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-roomonly-handshake-buffer-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1455227.1492731848,
+          1479832.3613511338,
+          1487441.9478091653
+        ],
+        "median": 1479832.3613511338
+      },
+      "median_change_percent": 1.9127640389458245
+    },
+    "mixed": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-mixed-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-mixed-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-mixed-ack-eight-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1383487.43760876,
+          1366469.3750540377,
+          1399681.3665366597
+        ],
+        "median": 1383487.43760876
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-mixed-handshake-buffer-3.json"
+        ],
+        "verified_deliveries_per_second": [
+          1371163.137106273,
+          1439061.1009788134,
+          1397739.9742053405
+        ],
+        "median": 1397739.9742053405
+      },
+      "median_change_percent": 1.0301890865893837
+    }
+  },
+  "capacity": {
+    "ack-eight": {
+      "receipt": "artifacts/webtransport/handshake-buffer-capacity-ack-eight-1.json",
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.267329587994027,
+        "server_cpu_seconds": 7.230000000000004,
+        "client_cpu_seconds": 7.440000000000001,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99647.60409536556,
+        "server_user_cpu_seconds": 6.039999999999999,
+        "server_system_cpu_seconds": 1.1899999999999995,
+        "round_trip": {
+          "max_ms": 11.255132,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.043533,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "ready_server": {
+        "VmSize": 2737352,
+        "VmRSS": 2532444,
+        "RssAnon": 2524684,
+        "Threads": 10,
+        "cpu_seconds": 25.4,
+        "user_cpu_seconds": 20.29,
+        "system_cpu_seconds": 5.11,
+        "thread_cpu_seconds": {
+          "528601": 0.19,
+          "528602": 2.9,
+          "528603": 2.82,
+          "528604": 2.93,
+          "528605": 2.87,
+          "528606": 2.81,
+          "528607": 2.86,
+          "528608": 2.93,
+          "528609": 2.9,
+          "528610": 2.09
+        },
+        "fd_count": 15,
+        "socket_fd_count": 6
+      }
+    },
+    "handshake-buffer": {
+      "receipt": "artifacts/webtransport/handshake-buffer-capacity-handshake-buffer-1.json",
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265532671008259,
+        "server_cpu_seconds": 7.190000000000001,
+        "client_cpu_seconds": 7.119999999999997,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99699.78537714439,
+        "server_user_cpu_seconds": 5.93,
+        "server_system_cpu_seconds": 1.2599999999999998,
+        "round_trip": {
+          "max_ms": 2.680537,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.676363,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "ready_server": {
+        "VmSize": 2737352,
+        "VmRSS": 2493856,
+        "RssAnon": 2486080,
+        "Threads": 10,
+        "cpu_seconds": 25.59,
+        "user_cpu_seconds": 20.43,
+        "system_cpu_seconds": 5.16,
+        "thread_cpu_seconds": {
+          "528626": 0.19,
+          "528627": 2.92,
+          "528628": 2.87,
+          "528629": 2.91,
+          "528630": 2.88,
+          "528631": 2.84,
+          "528632": 2.88,
+          "528633": 2.95,
+          "528634": 2.94,
+          "528635": 2.1
+        },
+        "fd_count": 15,
+        "socket_fd_count": 6
+      }
+    }
+  },
+  "verification": {
+    "relay_tests": 274,
+    "rustls_tests": 247,
+    "quinn_proto_tests": 317,
+    "clippy": "passed",
+    "vendor": "272 files, 5 archives, 4 patches"
+  },
+  "remaining": [
+    "Reach native WebSocket memory parity at 100000 sessions",
+    "Reach matched-workload throughput parity; candidate memory change does not establish it"
+  ],
+  "parity": "Not achieved; memory remains far above native WebSocket and maximum throughput parity is unproven.",
+  "heap": {
+    "receipt": "artifacts/webtransport/handshake-buffer-heap-100000.json",
+    "analysis": "artifacts/webtransport/handshake-buffer-heap-100000-sites.json",
+    "passed": true,
+    "requested_ready_bytes": 2380842704,
+    "previous_completed_requested_ready_bytes": 2420719873,
+    "unresolved_bytes": 0,
+    "scope": "Diagnostic allocator. Ordinary RSS and throughput are measured separately. Previous capture is not a contemporaneous allocation pair."
+  },
+  "long_reliable": {
+    "private": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-private-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-long-private-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-long-private-ack-eight-3.json"
+        ],
+        "rates": [
+          1452025.1656967206,
+          1402239.3326474186,
+          1414897.4794961386
+        ],
+        "median": 1414897.4794961386
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-private-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-long-private-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-long-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1373707.2658084808,
+          1421655.5486183474,
+          1430798.6349792462
+        ],
+        "median": 1421655.5486183474
+      },
+      "median_change_percent": 0.4776366641500607
+    },
+    "roomonly": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-roomonly-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-long-roomonly-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-long-roomonly-ack-eight-3.json"
+        ],
+        "rates": [
+          1445433.0397299805,
+          1512459.228645505,
+          1434231.8977318655
+        ],
+        "median": 1445433.0397299805
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-long-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-long-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1210202.158031121,
+          1448783.258342501,
+          1412328.140948526
+        ],
+        "median": 1412328.140948526
+      },
+      "median_change_percent": -2.290310091959613
+    },
+    "mixed": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-mixed-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-long-mixed-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-long-mixed-ack-eight-3.json"
+        ],
+        "rates": [
+          1420859.839338205,
+          1413982.9725763565,
+          1364005.7086527322
+        ],
+        "median": 1413982.9725763565
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-long-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-long-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-long-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1370901.972930605,
+          1388058.528238019,
+          1368326.1956353812
+        ],
+        "median": 1370901.972930605
+      },
+      "median_change_percent": -3.0467834819294493
+    }
+  },
+  "interpretation": "Completed fixed-client and resource checks support this storage reclamation. Throughput rankings vary across cohorts; room and mixed were lower in both longer cohorts. This measured tradeoff remains visible and no throughput win is claimed.",
+  "reproduction_scripts": {
+    "artifacts/webtransport/handshake-buffer-compare.py": {
+      "sha256": "67c8ec7b6cd2e4a9c997e12dde84361b88fb3082de4106fe682cf874d0b8fb3e",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['ack-eight','handshake-buffer'] if repeat!=2 else ['handshake-buffer','ack-eight']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'handshake-buffer-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\nfor v in ['ack-eight','handshake-buffer']:\n a=json.loads((out/'owner-poll-capacity-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'handshake-buffer-capacity-{v}-1.json').resolve()))\n for k in ['server','client','output','server_preload','user_latency_output','user_latency_histogram_output','pressure_client','kernel_slab_sizes']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n capacity.run(argparse.Namespace(**a));print('CAPACITY',v,flush=True)\n"
+    },
+    "artifacts/webtransport/handshake-buffer-long-compare.py": {
+      "sha256": "657870d328f7d8c3cabc843fd5c9b5f0a46806c82850412ba4cf3066204f96d1",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['ack-eight','handshake-buffer'] if repeat!=2 else ['handshake-buffer','ack-eight']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(seconds=12,server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'handshake-buffer-long-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\n"
+    },
+    "artifacts/webtransport/handshake-buffer-paced.py": {
+      "sha256": "dca2e14755fa9413b008fe7b39eb95b940a35a83afcf00f5518bcbe96b62635b",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor case in ['private','mixed']:\n for repeat in range(1,4):\n  a=json.loads((out/f'reliable-quantum-load-{case}-high-stream-1.json').read_text())['args'];a.update(server=str(out/'binaries/handshake-buffer-relay'),output=str(out/f'handshake-buffer-paced-{case}-high-stream-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('STREAM',case,repeat,r['passed'],r.get('error'),flush=True)\n"
+    },
+    "artifacts/webtransport/handshake-buffer-dg-controls.py": {
+      "sha256": "d45d04d1618a629fbc8e215877875b05420d0f51a5fe28b7fffccea5c30dded0",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['ack-eight','handshake-buffer'] if repeat!=2 else ['handshake-buffer','ack-eight']):\n  a=json.loads((out/'owner-poll-mixed-high-datagram-1.json').read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),output=str(out/f'handshake-buffer-dg-control-{v}-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('CONTROL',v,repeat,r['passed'],flush=True)\n"
+    },
+    "artifacts/webtransport/profile-handshake-buffer-reliable.py": {
+      "sha256": "468f27361a8387d7652513b1bb5570be875dc1852700e73cba54bf07525b2489",
+      "source": "import sys,json,argparse,subprocess,os\nfrom pathlib import Path\nroot=Path.cwd();out=root/'artifacts/webtransport';sys.path.insert(0,str(root/'scripts'))\nimport inspection\noriginal=subprocess.Popen;client=[None];roles={}\ndef popen(cmd,*a,**kw):\n if cmd[0]=='perf':\n  cmd=list(cmd);index=cmd.index('-p');roles['server']=int(cmd[index+1]);roles['client']=client[0]\n  assert roles['client'];cmd[index+1]+=','+str(roles['client']);cmd[cmd.index('-e')+1]='cycles';cmd[cmd.index('-F')+1]='249';cmd+=['-m','512'];cmd=['sudo','-n']+cmd\n p=original(cmd,*a,**kw)\n if any(Path(str(x)).name=='inspection' for x in cmd):client[0]=p.pid\n return p\nsubprocess.Popen=popen\nfor v in ['ack-eight','handshake-buffer']:\n client[0]=None;roles.clear()\n source=out/'thin-pending-final-mixed.json';a=json.loads(source.read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),profile=True,seconds=8,output=str(out/f'handshake-buffer-reliable-mixed-{v}-profile.json'))\n for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n r=inspection.run(argparse.Namespace(**a));assert r['passed'];data=a['output'].with_suffix('.perf.data')\n for role,pid in roles.items():\n  text=subprocess.run(['sudo','-n','perf','report','--stdio','--no-children','-g','none','--pid',str(pid),'--sort','dso,symbol','--percentage','relative','--percent-limit','0.3','-i',str(data)],capture_output=True,text=True,check=True).stdout\n  assert 'Total Lost Samples: 0' in text\n  (out/f'handshake-buffer-reliable-{v}-{role}-symbols.txt').write_text(text)\n (out/f'handshake-buffer-reliable-{v}-profile-roles.json').write_text(json.dumps(dict(roles),indent=2))\n subprocess.run(['sudo','-n','chown',f'{os.getuid()}:{os.getgid()}',str(data)],check=True)\n print('DONE',v,roles,flush=True)\n"
+    }
+  },
+  "paced_reliable": [
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-mixed-high-stream-1.json",
+      "sha256": "9033a6433a23a6ca95a9a58a02e35432aeb61c0151b0d6eb0836e29946fc8e06",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1024000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 8.751883,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1024000
+          },
+          "verified_during_offer_per_second": 255843.0
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 12.215959,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1023065.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-mixed-high-stream-2.json",
+      "sha256": "2f795ac98668b68ed96cbb51568176f594bdcb3c69164ae0629414e66cb3d886",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023790,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 12.853552,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023790
+          },
+          "verified_during_offer_per_second": 255857.25
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 18.349993,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1023259.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-mixed-high-stream-3.json",
+      "sha256": "0784f4e041838eca9ceafd6010731129ab7a9bf1b612946c5b517d1cbafe45e7",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023993,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 42.37444,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 33.554432,
+            "samples": 1023993
+          },
+          "verified_during_offer_per_second": 255736.0
+        },
+        "fanout": {
+          "verified_unique": 4096000,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 58.768826,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 33.554432,
+            "samples": 4096000
+          },
+          "verified_during_offer_per_second": 1022723.75
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-private-high-stream-1.json",
+      "sha256": "09ddb97b083cf9efe1f52205ca88313b09e283b4255bc9334aea6c30ce6a3666",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4095364,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 12.797393,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 8.388608,
+            "samples": 4095364
+          },
+          "verified_during_offer_per_second": 1023604.75
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-private-high-stream-2.json",
+      "sha256": "d7bb2e78f97db580746424ab92b3301dcddc485e8507aa17692150cdaa45c766",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4095215,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 8.309704,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "samples": 4095215
+          },
+          "verified_during_offer_per_second": 1023445.25
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-paced-private-high-stream-3.json",
+      "sha256": "aaeeea4d8c921981e85a070f5e2125b428276841bdd6878018f1b89151e0e06c",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 4095379,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 4.333133,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095379
+          },
+          "verified_during_offer_per_second": 1023525.75
+        },
+        "fanout": {
+          "verified_unique": 0,
+          "unreceived_within_window": 0,
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "verified_during_offer_per_second": 0.0
+        }
+      }
+    }
+  ],
+  "datagram_controls": [
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-ack-eight-1.json",
+      "sha256": "daa2c8053b4ecb961c6561818423e773a76d4006e5f18041bab1a3c6626adf60",
+      "server_sha256": "6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023778,
+          "unreceived_within_window": 34,
+          "arrival_age": {
+            "max_ms": 80.120487,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 1023778
+          },
+          "verified_during_offer_per_second": 255707.0
+        },
+        "fanout": {
+          "verified_unique": 4094903,
+          "unreceived_within_window": 1097,
+          "arrival_age": {
+            "max_ms": 57.447012,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4094903
+          },
+          "verified_during_offer_per_second": 1022705.25
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-ack-eight-2.json",
+      "sha256": "bbf5cfcdbee01ef91ea1fbccb8550faff57c55379781ae8a608edd555fbe7625",
+      "server_sha256": "6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1021932,
+          "unreceived_within_window": 2067,
+          "arrival_age": {
+            "max_ms": 14.674032,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1021932
+          },
+          "verified_during_offer_per_second": 255355.25
+        },
+        "fanout": {
+          "verified_unique": 4087745,
+          "unreceived_within_window": 8255,
+          "arrival_age": {
+            "max_ms": 24.916845,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4087745
+          },
+          "verified_during_offer_per_second": 1021374.5
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-ack-eight-3.json",
+      "sha256": "7417d7c09738d4e09cd5e876fa3a9f573b66c95df96f16d7bb29fb17ad476d50",
+      "server_sha256": "6d24b6bd04f3a114694560b846f5681b73dba765c82a8c951721743d37c69a8f",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1019698,
+          "unreceived_within_window": 4285,
+          "arrival_age": {
+            "max_ms": 34.561013,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 16.777216,
+            "samples": 1019698
+          },
+          "verified_during_offer_per_second": 254818.25
+        },
+        "fanout": {
+          "verified_unique": 4081460,
+          "unreceived_within_window": 14540,
+          "arrival_age": {
+            "max_ms": 53.937498,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4081460
+          },
+          "verified_during_offer_per_second": 1019642.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-handshake-buffer-1.json",
+      "sha256": "11faf682b8d2a48c5d43cc0e4cd1cf61f648f3c069ad65b2166e82fd8a5b279d",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1017089,
+          "unreceived_within_window": 6771,
+          "arrival_age": {
+            "max_ms": 128.120115,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 67.108864,
+            "samples": 1017089
+          },
+          "verified_during_offer_per_second": 254161.75
+        },
+        "fanout": {
+          "verified_unique": 4070105,
+          "unreceived_within_window": 25895,
+          "arrival_age": {
+            "max_ms": 164.656804,
+            "p50_upper_ms": 8.388608,
+            "p99_upper_ms": 67.108864,
+            "samples": 4070105
+          },
+          "verified_during_offer_per_second": 1016941.0
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-handshake-buffer-2.json",
+      "sha256": "cef96a453eb4171a8db6bba58325b5ae34718667d5a2bc02652c803f56808015",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1023578,
+          "unreceived_within_window": 229,
+          "arrival_age": {
+            "max_ms": 16.766916,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023578
+          },
+          "verified_during_offer_per_second": 255832.0
+        },
+        "fanout": {
+          "verified_unique": 4094143,
+          "unreceived_within_window": 1857,
+          "arrival_age": {
+            "max_ms": 22.949288,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4094143
+          },
+          "verified_during_offer_per_second": 1022838.5
+        }
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/handshake-buffer-dg-control-handshake-buffer-3.json",
+      "sha256": "6ba7346d7eba4f7919c5bd7196014d6fd7aadcf1dbc5999bf95480f6f8b5eb09",
+      "server_sha256": "64c1435630685891fb547ef077445514c9545c5de6a46338f42baff584c67ca1",
+      "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+      "passed": true,
+      "delivery": {
+        "private": {
+          "verified_unique": 1022507,
+          "unreceived_within_window": 1476,
+          "arrival_age": {
+            "max_ms": 28.438049,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1022507
+          },
+          "verified_during_offer_per_second": 255543.0
+        },
+        "fanout": {
+          "verified_unique": 4090541,
+          "unreceived_within_window": 5459,
+          "arrival_age": {
+            "max_ms": 29.10522,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4090541
+          },
+          "verified_during_offer_per_second": 1021886.75
+        }
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "path": "artifacts/webtransport/handshake-buffer-reliable-ack-eight-server-symbols.txt",
+      "sha256": "7c3298eeccf55098202dcf298a000e02460ed7c95ba673ca21fd25e401bc63d9",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.88%  ack-eight-relay    [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "2.62%  ack-eight-relay    [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.50%  [kernel.kallsyms]  [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.46%  [kernel.kallsyms]  [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.14%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "2.12%  ack-eight-relay    [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "1.97%  ack-eight-relay    [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.96%  [kernel.kallsyms]  [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "1.87%  ack-eight-relay    [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.65%  ack-eight-relay    [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.59%  ack-eight-relay    [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.53%  libc.so.6          [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/handshake-buffer-reliable-ack-eight-client-symbols.txt",
+      "sha256": "270892d9b9c8a4a6f327d160476f22a59ff5881192230f8e0384f575c918aa53",
+      "lost_samples": 0,
+      "leading_rows": [
+        "4.05%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.82%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "3.00%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "2.95%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.77%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.70%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.69%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.67%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.58%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "1.45%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.40%  [kernel.kallsyms]  [k] __check_object_size                                                                                                                                                                                                                                                                      -      -",
+        "1.39%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/handshake-buffer-reliable-handshake-buffer-server-symbols.txt",
+      "sha256": "fa9f333a6bff3ca3e56a171b40e46c36e3028e730ab0a9b155f2a29e4fe10f39",
+      "lost_samples": 0,
+      "leading_rows": [
+        "3.52%  handshake-buffer-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "2.78%  handshake-buffer-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+        "2.46%  [kernel.kallsyms]       [k] skb_release_data                                                                                                                                                                                                                                                                         -      -",
+        "2.18%  [kernel.kallsyms]       [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -",
+        "2.05%  [kernel.kallsyms]       [k] __ip_append_data                                                                                                                                                                                                                                                                         -      -",
+        "2.00%  handshake-buffer-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.90%  handshake-buffer-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+        "1.83%  [kernel.kallsyms]       [k] _raw_spin_lock_irqsave                                                                                                                                                                                                                                                                   -      -",
+        "1.75%  handshake-buffer-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+        "1.68%  handshake-buffer-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "1.61%  handshake-buffer-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+        "1.52%  libc.so.6               [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -"
+      ]
+    },
+    {
+      "path": "artifacts/webtransport/handshake-buffer-reliable-handshake-buffer-client-symbols.txt",
+      "sha256": "fe5c028e93740f17a3ac2b88d8a33834fb054cedb78bd92e0503726dae1fcb90",
+      "lost_samples": 0,
+      "leading_rows": [
+        "4.20%  inspection         [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+        "3.58%  inspection         [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+        "3.07%  inspection         [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+        "2.62%  inspection         [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+        "1.88%  inspection         [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+        "1.87%  inspection         [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+        "1.79%  [vdso]             [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+        "1.72%  inspection         [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+        "1.50%  inspection         [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+        "1.48%  inspection         [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+        "1.42%  [kernel.kallsyms]  [k] __check_object_size                                                                                                                                                                                                                                                                      -      -",
+        "1.38%  [kernel.kallsyms]  [k] native_queued_spin_lock_slowpath                                                                                                                                                                                                                                                         -      -"
+      ]
+    }
+  ],
+  "freshness": [
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/clean-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 0.424778,
+          "p50_ms": 0.119667,
+          "p99_ms": 0.339061,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.3102880000000003,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.00204408,
+        "freshest_state_age": {
+          "max_ms": 17.940653,
+          "p50_ms": 10.247282,
+          "p99_ms": 17.488556,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.0653669999999997,
+          "p50_ms": 1.052956,
+          "p99_ms": 1.877059,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 1
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/clean-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.081044,
+          "p50_ms": 0.125606,
+          "p99_ms": 0.347101,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.134292,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.000610389,
+        "freshest_state_age": {
+          "max_ms": 16.665478,
+          "p50_ms": 10.246952,
+          "p99_ms": 16.489423,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.053394,
+          "p50_ms": 1.203756,
+          "p99_ms": 1.9770880000000002,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/clean-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1.001493,
+          "p50_ms": 0.132827,
+          "p99_ms": 0.333521,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1.5402289999999998,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001153136,
+        "freshest_state_age": {
+          "max_ms": 17.659422,
+          "p50_ms": 10.205393,
+          "p99_ms": 17.360979,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 1.809161,
+          "p50_ms": 0.998264,
+          "p99_ms": 1.7464629999999999,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/loss-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 79.155055,
+          "p50_ms": 40.267839,
+          "p99_ms": 59.264164,
+          "samples": 353
+        },
+        "bulk_arrival_ms": 1940.511689,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.001984381,
+        "freshest_state_age": {
+          "max_ms": 80.572837,
+          "p50_ms": 50.771094,
+          "p99_ms": 72.679091,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 1.9561579999999998,
+          "p50_ms": 1.1118860000000002,
+          "p99_ms": 1.902038,
+          "samples": 360
+        },
+        "missing": 7,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 353,
+        "updates_before_bulk": 113
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/loss-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1355.947527,
+          "p50_ms": 40.348007,
+          "p99_ms": 1305.567402,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1355.884238,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.035190712,
+        "freshest_state_age": {
+          "max_ms": 1340.993852,
+          "p50_ms": 53.691775,
+          "p99_ms": 1281.238151,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.2996179999999997,
+          "p50_ms": 1.26742,
+          "p99_ms": 2.049843,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 68,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/loss-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1201.499491,
+          "p50_ms": 40.280679,
+          "p99_ms": 1151.127036,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1202.339907,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.034506401,
+        "freshest_state_age": {
+          "max_ms": 1201.561438,
+          "p50_ms": 53.784213,
+          "p99_ms": 1141.477446,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.256614,
+          "p50_ms": 1.226185,
+          "p99_ms": 1.990866,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 61,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/reorder-datagram-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 127.439488,
+          "p50_ms": 52.366952,
+          "p99_ms": 109.790075,
+          "samples": 353
+        },
+        "bulk_arrival_ms": 7423.1652730000005,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 9.431947427,
+        "freshest_state_age": {
+          "max_ms": 173.197648,
+          "p50_ms": 59.982865,
+          "p99_ms": 137.619322,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.055791,
+          "p50_ms": 1.196702,
+          "p99_ms": 2.004867,
+          "samples": 360
+        },
+        "missing": 7,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 26,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 353,
+        "updates_before_bulk": 353
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/reorder-stream-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 6755.594575,
+          "p50_ms": 4264.913465,
+          "p99_ms": 6705.20003,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 6755.493317,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 7.86053863,
+        "freshest_state_age": {
+          "max_ms": 6001.109315,
+          "p50_ms": 3000.332193,
+          "p99_ms": 5941.073562,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.1345140000000002,
+          "p50_ms": 1.174219,
+          "p99_ms": 1.958258,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 301,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-handshake-buffer/reorder-websocket-tls-1.json",
+      "passed": true,
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 461.310201,
+          "p50_ms": 41.779268,
+          "p99_ms": 411.000114,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 462.03246199999995,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.023724854,
+        "freshest_state_age": {
+          "max_ms": 461.128166,
+          "p50_ms": 50.21804,
+          "p99_ms": 401.901671,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.446452,
+          "p50_ms": 1.250085,
+          "p99_ms": 2.176183,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 24,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    }
+  ],
+  "browser": {
+    "passed_checks": 9,
+    "browser": "Chrome/156.0.0.0",
+    "screenshot": "output/playwright/handshake-buffer.png",
+    "screenshot_sha256": "412b84c6617231e799164f1ce88447f26de542fba513750f39864190a84d7208",
+    "checks": [
+      "BigInt IDs and datagrams",
+      "CBOR fidelity",
+      "Private cross-channel routing",
+      "Explicit unreliable datagram metadata",
+      "128 KiB exact bytes",
+      "5 MiB exact application message",
+      "Concurrent typed/missing/empty control variables",
+      "Unsafe Number IDs rejected",
+      "Disconnect notification and clean session closures"
+    ],
+    "observed_cleanup": {
+      "war_connections": 0,
+      "war_sessions": 0,
+      "war_quic_connections": 0,
+      "war_queued_bytes": 0,
+      "war_variable_bytes": 0,
+      "war_read_buffer_reserved_bytes": 0,
+      "war_read_buffer_peak_reserved_bytes": 10485790
+    },
+    "cleanup_script_errors": [
+      "First read referenced nonexistent war_read_buffer_reserved; actual metric ends in _bytes.",
+      "Second assertion incorrectly included historical peak; current gauges printed zero before assertion. Historical peak is not a cleanup leak."
+    ],
+    "fixture_exit_codes": [
+      0,
+      -15
+    ],
+    "cleanup_confirmation": "artifacts/webtransport/handshake-buffer-browser-cleanup-confirm.json",
+    "repeated_checks_passed": 9
+  },
+  "confirmation_reliable": {
+    "private": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-private-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-private-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-private-ack-eight-3.json"
+        ],
+        "rates": [
+          1412498.3168617277,
+          1411052.2556880703,
+          1416175.2466763293
+        ],
+        "median": 1412498.3168617277
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-private-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-private-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-private-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1452934.6072668447,
+          1422227.36366497,
+          1413136.0946469635
+        ],
+        "median": 1422227.36366497
+      },
+      "median_change_percent": 0.6887828953211272
+    },
+    "roomonly": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-ack-eight-3.json"
+        ],
+        "rates": [
+          1424888.3954360334,
+          1474981.1754893756,
+          1420044.7535522773
+        ],
+        "median": 1424888.3954360334
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-roomonly-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1236059.2737010315,
+          1427364.3423934882,
+          1411522.941179982
+        ],
+        "median": 1411522.941179982
+      },
+      "median_change_percent": -0.9380000776805675
+    },
+    "mixed": {
+      "ack-eight": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-ack-eight-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-ack-eight-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-ack-eight-3.json"
+        ],
+        "rates": [
+          1374152.26933935,
+          1381199.7261505614,
+          1369714.1935110537
+        ],
+        "median": 1374152.26933935
+      },
+      "handshake-buffer": {
+        "receipts": [
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-handshake-buffer-1.json",
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-handshake-buffer-2.json",
+          "artifacts/webtransport/handshake-buffer-confirm-mixed-handshake-buffer-3.json"
+        ],
+        "rates": [
+          1247638.0709112128,
+          1370799.3304272152,
+          1402845.775751897
+        ],
+        "median": 1370799.3304272152
+      },
+      "median_change_percent": -0.24400053669065835
+    }
+  },
+  "decision": "Retain the 37.68 MiB ordinary RSS reduction and completed allocation reduction. No throughput improvement claim. Long-cohort medians were -2.29% room/-3.05% mixed; reversed-order confirmation -0.94% room/-0.24% mixed. Preserve all cohorts and continue toward full parity.",
+  "next_memory_targets": "artifacts/webtransport/handshake-buffer-next-memory-targets.json"
+}

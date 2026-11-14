@@ -2,7 +2,7 @@
 
 use std::{
     ffi::OsString,
-    net::TcpListener,
+    net::UdpSocket,
     os::unix::ffi::OsStringExt,
     process::{Command, Output, Stdio},
     thread,
@@ -12,10 +12,11 @@ use std::{
 fn startup(secrets: &[(&str, OsString)]) -> Output {
     // Force an ordinary bind error if secret loading succeeds. Neither the
     // original nor selected executable can open a relay during these checks.
-    let occupied = TcpListener::bind("127.0.0.1:0").unwrap();
+    let occupied = UdpSocket::bind("127.0.0.1:0").unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_war-relay"));
     command
         .env_clear()
+        .args(["--dev-cert", "--no-admin"])
         .arg("--bind")
         .arg(occupied.local_addr().unwrap().to_string())
         .stdout(Stdio::piped())

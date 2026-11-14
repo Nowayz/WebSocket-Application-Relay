@@ -1,0 +1,1696 @@
+{
+  "record_type": "completed_untraced_recv_target_pilot_artifact_analysis",
+  "analysis_source": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-recv250-diagnostic.py",
+    "sha256": "14e9c340fb9a2235d6bfdfbc538f2761e6f50b75e76dc81fb18f8a25630841d7",
+    "bytes": 16761
+  },
+  "data_only_udp_helper": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/analyze-client-endpoint-ready-diagnostic.py",
+    "sha256": "21333c868efde6414454f46cc406542f4373c7c1d57906993982859a18aca8b5",
+    "bytes": 13858
+  },
+  "experiment_summary": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/summary.json",
+    "sha256": "7941b4da4ca12bdd13bf8e8e839f36a5a3f25d482c318b44221accc1bf6afba9",
+    "bytes": 12881
+  },
+  "build_manifest": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-build.json",
+    "sha256": "269f7f8afa9ae6f9b5646a91a46d8428609bb3242fd551d5d9dabe15dfac992e",
+    "bytes": 21524
+  },
+  "source_audit": {
+    "canonical_files": 332,
+    "candidate_live_files_verified": 332,
+    "added_files": [],
+    "removed_files": [],
+    "changed_files": [
+      "vendor/quinn/src/lib.rs"
+    ],
+    "exact_substitution": "RECV_TIME_BOUND Duration::from_micros(50) -> from_micros(250)",
+    "untraced_source": true,
+    "dependency_metadata_features_equal_after_relocation": true,
+    "recorded_toolchain_equal": true,
+    "target_is_fairness_target_not_hard_time_bound": true
+  },
+  "unique_build_protected_references_verified": 740,
+  "build_guards": {
+    "canonical_B_verified": true,
+    "baseline_B_binary_verified": true,
+    "exact_one_constant_patch": true,
+    "untraced_B_source": true,
+    "source_frozen_before_checks": true,
+    "dependency_features_match_relocated_B": true,
+    "release_client_built": true,
+    "all_source_inputs_unchanged": true,
+    "original_artifacts_unchanged": true,
+    "mutable_C_unchanged": true,
+    "selected_root_unchanged": true
+  },
+  "runtime_protected_inputs_unchanged": true,
+  "baseline_image": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-read-current-control-diagnostic",
+    "sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+    "bytes": 5725048
+  },
+  "candidate_image": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-recv250-diagnostic",
+    "sha256": "b2cf6ceedefd5d95c19afa0e995e546ca7147290ed7910b2252ca75410241698",
+    "bytes": 5725048
+  },
+  "executed_server_image": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/receive-clock-write-state-relay",
+    "sha256": "737b50de6e6d8577438f8092f227bcba9b33a74f44c642c8f73f5ffa7bdf1374",
+    "bytes": 7932640
+  },
+  "selected_root_image": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+    "sha256": "f1811d2cd2dc6736b48fe0a1fdf8459209e0530a1a48ae930f56ff2cec0a7851",
+    "bytes": 7922248
+  },
+  "histogram_semantics": {
+    "generation_lag": "Actual generation stamp minus scheduled slot; source-update samples.",
+    "arrival_age": "Verified receipt time minus actual generation stamp; delivered-recipient samples, includes the application/transport path.",
+    "scheduled_arrival_age": "Verified receipt time minus scheduled slot; delivered-recipient samples, includes generation lag.",
+    "percentiles": "p50_upper_ms and p99_upper_ms are power-of-two nanosecond-bucket upper bounds, not exact quantiles. max_ms is recorded maximum; bucket counts are not in receipts."
+  },
+  "limits": [
+    "Fixed four-case 50/250/250/50 order is a diagnostic sensitivity pilot, not a failure-rate estimate, repeated-baseline median, server speedup, or ordinary performance/CPU-efficiency ranking.",
+    "The 250 us change increases the receive fairness target fivefold; it is not a hard turn-time cap. Both clients are untraced canonical-B variants; the UDP/thread observer still perturbs the runs.",
+    "Failed attempt has no measured gate: measurement is null, generated counts/lag/arrival histograms and comparable measured CPU are unknown. Partial gate process snapshots are preserved separately.",
+    "Gate rows have no wall/monotonic marker, so exact offer/drain/cleanup boundaries cannot be reconstructed from the observer timestamps.",
+    "UDP deltas require the same PID/owned-inode set/socket count. Onset is sample-bounded, not an exact loss timestamp. Observer outer wall timestamps and collection completion bound warning comparison, assuming no unobserved clock step.",
+    "Per-TID CPU/schedstat samples cannot identify endpoint futures; disabled schedstats makes zero runnable-wait counters uninformative. Actual sample gaps and collector elapsed quantify observer scheduling/cost limits.",
+    "Derived recipes inherit historical non-argument fields from the original receipt, including its old server hash/events/measurement. Those fields are not execution evidence; recipe args/client hash and actual receipts identify each pilot run.",
+    "Passing with actual generated work verified does not imply every planned update was generated. All shortfalls and histograms are retained, including one candidate fanout update not generated.",
+    "This pilot does not establish a production adoption or reliability fix. The selected root f181 server image and protected source/artifacts remain unchanged."
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "receive_target_us": 50,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-1-50us/reliable-peer-udp-cpu-diagnostic-mixed-1.json",
+        "sha256": "9a3a9bf72e17a38aca1c2747fbe5f05c4d8e5df50706a27c1e2b5f93f7f1cb24",
+        "bytes": 488061
+      },
+      "recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-1-50us/args.json",
+        "sha256": "95087552aadb724dff001f66ad39489ef8a34ad870c8298c42247455c92f1ca5",
+        "bytes": 15394
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-1-50us/reliable-peer-udp-cpu-diagnostic-mixed-1-samples.json",
+        "sha256": "718d4198482a299ab42887b71b0406a1ac986dc25ae5cbfd9a3740c7faee1b4b",
+        "bytes": 2251960
+      },
+      "client_image": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-read-current-control-diagnostic",
+        "sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+        "bytes": 5725048
+      },
+      "recipe_historical_server_sha256_not_execution_evidence": "e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3",
+      "measurement": {
+        "elapsed_seconds": 5.003804712,
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.180000000000001,
+        "server_cpu_cores_observation": 2.6339956810049068,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 17.18,
+        "client_cpu_cores_observation": 3.4333873899593543,
+        "client_timed_udp_receive_drops": 0,
+        "private": {
+          "arrival_age": {
+            "max_ms": 10.006913,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023868
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023868,
+          "generated_source_updates": 1023868,
+          "generation_lag": {
+            "max_ms": 1.629803,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023868
+          },
+          "last_submit_ms": 3999.474576,
+          "not_generated": 132,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 360,
+          "received_during_offer": 1023508,
+          "scheduled_arrival_age": {
+            "max_ms": 10.441885,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023868
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255877.0,
+          "verified_unique": 1023868,
+          "per_recipient_validation": {
+            "recipients": 32,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 11.66431,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 0.709708,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.299831,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2136,
+          "received_during_offer": 4093864,
+          "scheduled_arrival_age": {
+            "max_ms": 12.048685,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023466.0,
+          "verified_unique": 4096000,
+          "per_recipient_validation": {
+            "recipients": 1024,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        }
+      },
+      "measurement_status": "observed",
+      "gates": {
+        "ready": {
+          "details": {
+            "pairs": 32,
+            "readers": 1024,
+            "sessions": 1089
+          },
+          "client": {
+            "VmSize": 580588,
+            "VmRSS": 40664,
+            "RssAnon": 33796,
+            "Threads": 9,
+            "cpu_seconds": 0.29,
+            "user_cpu_seconds": 0.21,
+            "system_cpu_seconds": 0.08,
+            "thread_cpu_seconds": {
+              "895755": 0.05,
+              "895756": 0.05,
+              "895757": 0.0,
+              "895758": 0.0,
+              "895759": 0.04,
+              "895760": 0.0,
+              "895761": 0.04,
+              "895762": 0.05,
+              "895763": 0.0
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 31916,
+            "RssAnon": 23944,
+            "Threads": 6,
+            "cpu_seconds": 0.29,
+            "user_cpu_seconds": 0.2,
+            "system_cpu_seconds": 0.09,
+            "thread_cpu_seconds": {
+              "895749": 0.0,
+              "895750": 0.06,
+              "895751": 0.03,
+              "895752": 0.05,
+              "895753": 0.04,
+              "895754": 0.05
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "measured": {
+          "details": {
+            "elapsed_seconds": 5.003804712,
+            "mode": "stream",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true
+          },
+          "client": {
+            "VmSize": 585808,
+            "VmRSS": 49760,
+            "RssAnon": 42892,
+            "Threads": 9,
+            "cpu_seconds": 17.47,
+            "user_cpu_seconds": 12.12,
+            "system_cpu_seconds": 5.35,
+            "thread_cpu_seconds": {
+              "895755": 0.06,
+              "895756": 2.21,
+              "895757": 2.13,
+              "895758": 2.12,
+              "895759": 2.2,
+              "895760": 2.14,
+              "895761": 2.17,
+              "895762": 2.21,
+              "895763": 2.15
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 42648,
+            "RssAnon": 34676,
+            "Threads": 6,
+            "cpu_seconds": 13.47,
+            "user_cpu_seconds": 7.64,
+            "system_cpu_seconds": 5.83,
+            "thread_cpu_seconds": {
+              "895749": 0.0,
+              "895750": 3.05,
+              "895751": 3.05,
+              "895752": 3.06,
+              "895753": 3.06,
+              "895754": 1.2
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "done": {
+          "details": {
+            "normal_closes": 1089,
+            "passed": true,
+            "source_departures_verified": 1024
+          },
+          "client": {
+            "VmSize": 575372,
+            "VmRSS": 40856,
+            "RssAnon": 33988,
+            "Threads": 9,
+            "cpu_seconds": 19.62,
+            "user_cpu_seconds": 13.45,
+            "system_cpu_seconds": 6.17,
+            "thread_cpu_seconds": {
+              "895755": 0.06,
+              "895756": 2.48,
+              "895757": 2.4,
+              "895758": 2.39,
+              "895759": 2.47,
+              "895760": 2.41,
+              "895761": 2.44,
+              "895762": 2.48,
+              "895763": 2.41
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 353308,
+            "VmRSS": 40556,
+            "RssAnon": 32584,
+            "Threads": 6,
+            "cpu_seconds": 15.17,
+            "user_cpu_seconds": 8.46,
+            "system_cpu_seconds": 6.71,
+            "thread_cpu_seconds": {
+              "895749": 0.05,
+              "895750": 3.44,
+              "895751": 3.44,
+              "895752": 3.44,
+              "895753": 3.44,
+              "895754": 1.32
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        }
+      },
+      "exit": {
+        "client_exit_code": 0,
+        "server_exit_code": 0,
+        "server_forced_kill": null,
+        "client_stderr": ""
+      },
+      "write_state_snapshot": [],
+      "warning": null,
+      "udp": {
+        "client": {
+          "observed_samples": 1285,
+          "identity_epochs": [
+            {
+              "pid": 895755,
+              "owned_inode_set": [
+                "6452510",
+                "6452511",
+                "6452512"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1285,
+              "outer_wall_ns_bounds": [
+                1794021506738319872,
+                1794021512781918720
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 4665117
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 4665117
+        },
+        "server": {
+          "observed_samples": 1285,
+          "identity_epochs": [
+            {
+              "pid": 895749,
+              "owned_inode_set": [
+                "6431709",
+                "6431710",
+                "6431711",
+                "6448801"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1285,
+              "outer_wall_ns_bounds": [
+                1794021506738319872,
+                1794021512781918720
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 1256563
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 1256563
+        }
+      },
+      "observer": {
+        "collector_cpu": 4,
+        "requested_udp_seconds": 0.004,
+        "requested_thread_seconds": 0.04,
+        "sample_count": 1285,
+        "actual_sample_gap_seconds": {
+          "count": 1284,
+          "min": 0.004358507983852178,
+          "p50_nearest_rank": 0.0047396880108863115,
+          "p99_nearest_rank": 0.005342182004824281,
+          "max": 0.009870595997199416,
+          "sum": 6.0435997559688985
+        },
+        "collector_elapsed_seconds": {
+          "count": 1285,
+          "min": 0.0003214320167899132,
+          "p50_nearest_rank": 0.0006633630255237222,
+          "p99_nearest_rank": 0.0011033819755539298,
+          "max": 0.0013788550277240574,
+          "sum": 0.7986356353503652
+        },
+        "thread_snapshot_count": 140,
+        "max_thread_gap_seconds": 0.0468088070047088,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      }
+    },
+    {
+      "attempt": 2,
+      "receive_target_us": 250,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-2-250us/reliable-peer-udp-cpu-diagnostic-mixed-2.json",
+        "sha256": "164d5547a032fe8dc2b844ec53c184d8a8b049fe26198900a175e1cfb6383bd5",
+        "bytes": 488116
+      },
+      "recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-2-250us/args.json",
+        "sha256": "2ab54f8781a9025b14374973e3cbc25c538ea6c5185c7ed47a8c47565a83bf34",
+        "bytes": 15383
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-2-250us/reliable-peer-udp-cpu-diagnostic-mixed-2-samples.json",
+        "sha256": "c9c9262eb22467de34a6a4fb0a70f0a1de6141959d6582d22f34fb97b990b684",
+        "bytes": 2280119
+      },
+      "client_image": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-recv250-diagnostic",
+        "sha256": "b2cf6ceedefd5d95c19afa0e995e546ca7147290ed7910b2252ca75410241698",
+        "bytes": 5725048
+      },
+      "recipe_historical_server_sha256_not_execution_evidence": "e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3",
+      "measurement": {
+        "elapsed_seconds": 5.004512254,
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.36,
+        "server_cpu_cores_observation": 2.669590825623743,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.490000000000002,
+        "client_cpu_cores_observation": 4.094305091095098,
+        "client_timed_udp_receive_drops": 0,
+        "private": {
+          "arrival_age": {
+            "max_ms": 10.253746,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023931
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023931,
+          "generated_source_updates": 1023931,
+          "generation_lag": {
+            "max_ms": 3.654909,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023931
+          },
+          "last_submit_ms": 3999.700595,
+          "not_generated": 69,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 511,
+          "received_during_offer": 1023420,
+          "scheduled_arrival_age": {
+            "max_ms": 11.100719,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023931
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255855.0,
+          "verified_unique": 1023931,
+          "per_recipient_validation": {
+            "recipients": 32,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 17.052292,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 3.105324,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.655696,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2358,
+          "received_during_offer": 4093642,
+          "scheduled_arrival_age": {
+            "max_ms": 17.687611,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023410.5,
+          "verified_unique": 4096000,
+          "per_recipient_validation": {
+            "recipients": 1024,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        }
+      },
+      "measurement_status": "observed",
+      "gates": {
+        "ready": {
+          "details": {
+            "pairs": 32,
+            "readers": 1024,
+            "sessions": 1089
+          },
+          "client": {
+            "VmSize": 580584,
+            "VmRSS": 40776,
+            "RssAnon": 33792,
+            "Threads": 9,
+            "cpu_seconds": 0.29,
+            "user_cpu_seconds": 0.21,
+            "system_cpu_seconds": 0.08,
+            "thread_cpu_seconds": {
+              "895773": 0.05,
+              "895774": 0.0,
+              "895775": 0.0,
+              "895776": 0.05,
+              "895777": 0.04,
+              "895778": 0.0,
+              "895779": 0.05,
+              "895780": 0.0,
+              "895781": 0.05
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 31760,
+            "RssAnon": 23952,
+            "Threads": 6,
+            "cpu_seconds": 0.32,
+            "user_cpu_seconds": 0.23,
+            "system_cpu_seconds": 0.09,
+            "thread_cpu_seconds": {
+              "895767": 0.0,
+              "895768": 0.03,
+              "895769": 0.05,
+              "895770": 0.07,
+              "895771": 0.06,
+              "895772": 0.06
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "measured": {
+          "details": {
+            "elapsed_seconds": 5.004512254,
+            "mode": "stream",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true
+          },
+          "client": {
+            "VmSize": 585780,
+            "VmRSS": 51632,
+            "RssAnon": 44648,
+            "Threads": 9,
+            "cpu_seconds": 20.78,
+            "user_cpu_seconds": 15.26,
+            "system_cpu_seconds": 5.52,
+            "thread_cpu_seconds": {
+              "895773": 0.06,
+              "895774": 2.57,
+              "895775": 2.57,
+              "895776": 2.6,
+              "895777": 2.6,
+              "895778": 2.55,
+              "895779": 2.59,
+              "895780": 2.56,
+              "895781": 2.62
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 43144,
+            "RssAnon": 35336,
+            "Threads": 6,
+            "cpu_seconds": 13.68,
+            "user_cpu_seconds": 7.99,
+            "system_cpu_seconds": 5.69,
+            "thread_cpu_seconds": {
+              "895767": 0.0,
+              "895768": 3.03,
+              "895769": 3.1,
+              "895770": 3.1,
+              "895771": 3.1,
+              "895772": 1.29
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "done": {
+          "details": {
+            "normal_closes": 1089,
+            "passed": true,
+            "source_departures_verified": 1024
+          },
+          "client": {
+            "VmSize": 575344,
+            "VmRSS": 42744,
+            "RssAnon": 35760,
+            "Threads": 9,
+            "cpu_seconds": 23.05,
+            "user_cpu_seconds": 16.75,
+            "system_cpu_seconds": 6.3,
+            "thread_cpu_seconds": {
+              "895773": 0.06,
+              "895774": 2.85,
+              "895775": 2.85,
+              "895776": 2.88,
+              "895777": 2.88,
+              "895778": 2.84,
+              "895779": 2.87,
+              "895780": 2.85,
+              "895781": 2.89
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 353308,
+            "VmRSS": 40420,
+            "RssAnon": 32612,
+            "Threads": 6,
+            "cpu_seconds": 15.32,
+            "user_cpu_seconds": 8.79,
+            "system_cpu_seconds": 6.53,
+            "thread_cpu_seconds": {
+              "895767": 0.05,
+              "895768": 3.41,
+              "895769": 3.47,
+              "895770": 3.47,
+              "895771": 3.48,
+              "895772": 1.4
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        }
+      },
+      "exit": {
+        "client_exit_code": 0,
+        "server_exit_code": 0,
+        "server_forced_kill": null,
+        "client_stderr": ""
+      },
+      "write_state_snapshot": [],
+      "warning": null,
+      "udp": {
+        "client": {
+          "observed_samples": 1308,
+          "identity_epochs": [
+            {
+              "pid": 895773,
+              "owned_inode_set": [
+                "6427542",
+                "6427543",
+                "6427544"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1308,
+              "outer_wall_ns_bounds": [
+                1794021512919432960,
+                1794021518960642304
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 4476613
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 4476613
+        },
+        "server": {
+          "observed_samples": 1308,
+          "identity_epochs": [
+            {
+              "pid": 895767,
+              "owned_inode_set": [
+                "6448808",
+                "6448809",
+                "6448810",
+                "6453471"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1308,
+              "outer_wall_ns_bounds": [
+                1794021512919432960,
+                1794021518960642304
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 1047625
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 1047625
+        }
+      },
+      "observer": {
+        "collector_cpu": 4,
+        "requested_udp_seconds": 0.004,
+        "requested_thread_seconds": 0.04,
+        "sample_count": 1308,
+        "actual_sample_gap_seconds": {
+          "count": 1307,
+          "min": 0.004337997990660369,
+          "p50_nearest_rank": 0.0045983720337972045,
+          "p99_nearest_rank": 0.005165007954929024,
+          "max": 0.009696230990812182,
+          "sum": 6.041210094001144
+        },
+        "collector_elapsed_seconds": {
+          "count": 1308,
+          "min": 0.00031689199386164546,
+          "p50_nearest_rank": 0.0005256360163912177,
+          "p99_nearest_rank": 0.001069062971509993,
+          "max": 0.0026090520550496876,
+          "sum": 0.7147422311245464
+        },
+        "thread_snapshot_count": 140,
+        "max_thread_gap_seconds": 0.0452678760048002,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      }
+    },
+    {
+      "attempt": 3,
+      "receive_target_us": 250,
+      "passed": true,
+      "error": null,
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-3-250us/reliable-peer-udp-cpu-diagnostic-mixed-3.json",
+        "sha256": "210b397f1696d4755b933437def155a8f117176b4dddfc53d57c2f713097eb99",
+        "bytes": 488007
+      },
+      "recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-3-250us/args.json",
+        "sha256": "130c24453aa5d9c9103f03805ed9404878055d9458872788559684c6d408f63e",
+        "bytes": 15383
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-3-250us/reliable-peer-udp-cpu-diagnostic-mixed-3-samples.json",
+        "sha256": "9a7df433e4b763d3b222b783d9a6caca6df972ad59a19a0f010d27ca351f8ff0",
+        "bytes": 2250586
+      },
+      "client_image": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-recv250-diagnostic",
+        "sha256": "b2cf6ceedefd5d95c19afa0e995e546ca7147290ed7910b2252ca75410241698",
+        "bytes": 5725048
+      },
+      "recipe_historical_server_sha256_not_execution_evidence": "e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3",
+      "measurement": {
+        "elapsed_seconds": 5.004986043,
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.13,
+        "server_cpu_cores_observation": 2.6233839389749525,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.639999999999997,
+        "client_cpu_cores_observation": 4.123887623796117,
+        "client_timed_udp_receive_drops": 0,
+        "private": {
+          "arrival_age": {
+            "max_ms": 14.889167,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023791
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023791,
+          "generated_source_updates": 1023791,
+          "generation_lag": {
+            "max_ms": 2.952997,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023791
+          },
+          "last_submit_ms": 3999.998652,
+          "not_generated": 209,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 152,
+          "received_during_offer": 1023639,
+          "scheduled_arrival_age": {
+            "max_ms": 17.028091,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023791
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255909.75,
+          "verified_unique": 1023791,
+          "per_recipient_validation": {
+            "recipients": 32,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        },
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 22.16645,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4094976
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4094976,
+          "generated_source_updates": 3999,
+          "generation_lag": {
+            "max_ms": 2.630488,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 3999
+          },
+          "last_submit_ms": 3998.984048,
+          "not_generated": 1,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 1747,
+          "received_during_offer": 4093229,
+          "scheduled_arrival_age": {
+            "max_ms": 23.257915,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4094976
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023307.25,
+          "verified_unique": 4094976,
+          "per_recipient_validation": {
+            "recipients": 1024,
+            "unique_ids": true,
+            "all_generated_equal_verified": true,
+            "all_unreceived_zero": true
+          }
+        }
+      },
+      "measurement_status": "observed",
+      "gates": {
+        "ready": {
+          "details": {
+            "pairs": 32,
+            "readers": 1024,
+            "sessions": 1089
+          },
+          "client": {
+            "VmSize": 580588,
+            "VmRSS": 40716,
+            "RssAnon": 33804,
+            "Threads": 9,
+            "cpu_seconds": 0.26,
+            "user_cpu_seconds": 0.17,
+            "system_cpu_seconds": 0.09,
+            "thread_cpu_seconds": {
+              "895794": 0.04,
+              "895795": 0.0,
+              "895796": 0.04,
+              "895797": 0.0,
+              "895798": 0.04,
+              "895799": 0.0,
+              "895800": 0.0,
+              "895801": 0.05,
+              "895802": 0.03
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 31892,
+            "RssAnon": 23944,
+            "Threads": 6,
+            "cpu_seconds": 0.28,
+            "user_cpu_seconds": 0.22,
+            "system_cpu_seconds": 0.06,
+            "thread_cpu_seconds": {
+              "895788": 0.0,
+              "895789": 0.05,
+              "895790": 0.04,
+              "895791": 0.04,
+              "895792": 0.05,
+              "895793": 0.06
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "measured": {
+          "details": {
+            "elapsed_seconds": 5.004986043,
+            "mode": "stream",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true
+          },
+          "client": {
+            "VmSize": 585788,
+            "VmRSS": 51812,
+            "RssAnon": 44900,
+            "Threads": 9,
+            "cpu_seconds": 20.9,
+            "user_cpu_seconds": 15.0,
+            "system_cpu_seconds": 5.9,
+            "thread_cpu_seconds": {
+              "895794": 0.05,
+              "895795": 2.57,
+              "895796": 2.64,
+              "895797": 2.56,
+              "895798": 2.61,
+              "895799": 2.56,
+              "895800": 2.57,
+              "895801": 2.63,
+              "895802": 2.62
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 43700,
+            "RssAnon": 35752,
+            "Threads": 6,
+            "cpu_seconds": 13.41,
+            "user_cpu_seconds": 7.78,
+            "system_cpu_seconds": 5.63,
+            "thread_cpu_seconds": {
+              "895788": 0.0,
+              "895789": 3.02,
+              "895790": 3.05,
+              "895791": 3.02,
+              "895792": 3.05,
+              "895793": 1.24
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        },
+        "done": {
+          "details": {
+            "normal_closes": 1089,
+            "passed": true,
+            "source_departures_verified": 1024
+          },
+          "client": {
+            "VmSize": 575352,
+            "VmRSS": 42524,
+            "RssAnon": 35612,
+            "Threads": 9,
+            "cpu_seconds": 23.02,
+            "user_cpu_seconds": 16.44,
+            "system_cpu_seconds": 6.58,
+            "thread_cpu_seconds": {
+              "895794": 0.05,
+              "895795": 2.84,
+              "895796": 2.9,
+              "895797": 2.82,
+              "895798": 2.87,
+              "895799": 2.83,
+              "895800": 2.83,
+              "895801": 2.9,
+              "895802": 2.9
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 353308,
+            "VmRSS": 40732,
+            "RssAnon": 32784,
+            "Threads": 6,
+            "cpu_seconds": 15.03,
+            "user_cpu_seconds": 8.59,
+            "system_cpu_seconds": 6.44,
+            "thread_cpu_seconds": {
+              "895788": 0.05,
+              "895789": 3.38,
+              "895790": 3.4,
+              "895791": 3.39,
+              "895792": 3.41,
+              "895793": 1.35
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        }
+      },
+      "exit": {
+        "client_exit_code": 0,
+        "server_exit_code": 0,
+        "server_forced_kill": null,
+        "client_stderr": ""
+      },
+      "write_state_snapshot": [],
+      "warning": null,
+      "udp": {
+        "client": {
+          "observed_samples": 1292,
+          "identity_epochs": [
+            {
+              "pid": 895794,
+              "owned_inode_set": [
+                "6427557",
+                "6427558",
+                "6427559"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1292,
+              "outer_wall_ns_bounds": [
+                1794021519096992512,
+                1794021525068988160
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 3288298
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 3288298
+        },
+        "server": {
+          "observed_samples": 1292,
+          "identity_epochs": [
+            {
+              "pid": 895788,
+              "owned_inode_set": [
+                "6448812",
+                "6451841",
+                "6451842",
+                "6451843"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 1292,
+              "outer_wall_ns_bounds": [
+                1794021519096992512,
+                1794021525068988160
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 1031849
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 1031849
+        }
+      },
+      "observer": {
+        "collector_cpu": 4,
+        "requested_udp_seconds": 0.004,
+        "requested_thread_seconds": 0.04,
+        "sample_count": 1292,
+        "actual_sample_gap_seconds": {
+          "count": 1291,
+          "min": 0.004343929002061486,
+          "p50_nearest_rank": 0.0045970220235176384,
+          "p99_nearest_rank": 0.005229274975135922,
+          "max": 0.008883191971108317,
+          "sum": 5.971996181004215
+        },
+        "collector_elapsed_seconds": {
+          "count": 1292,
+          "min": 0.00031660200329497457,
+          "p50_nearest_rank": 0.0005321360076777637,
+          "p99_nearest_rank": 0.0010780529701150954,
+          "max": 0.0014671329990960658,
+          "sum": 0.7111023759935051
+        },
+        "thread_snapshot_count": 138,
+        "max_thread_gap_seconds": 0.04536932200426236,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      }
+    },
+    {
+      "attempt": 4,
+      "receive_target_us": 50,
+      "passed": false,
+      "error": "RuntimeError('client EOF before final gate')",
+      "receipt": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-4-50us/reliable-peer-udp-cpu-diagnostic-mixed-4.json",
+        "sha256": "c54162c71676f52013d457b7e9738df083b695008eb348dfce6276a0ec3e7de5",
+        "bytes": 22033
+      },
+      "recipe": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-4-50us/args.json",
+        "sha256": "738cc704d653270c6ddd313c1def6abf04567558b1161ed074047288690ed48e",
+        "bytes": 15394
+      },
+      "raw_udp_cpu_series": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/client-recv250-diagnostic/attempt-4-50us/reliable-peer-udp-cpu-diagnostic-mixed-4-samples.json",
+        "sha256": "b1c57b66ff536708492c5b0b373c22d5a5ef314f2988f64b65e4cb5cc4b125b6",
+        "bytes": 1644865
+      },
+      "client_image": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/client-read-current-control-diagnostic",
+        "sha256": "07da0afb81af5702caaf389436f9500220f06ccbd19fef73311a429a32ad471b",
+        "bytes": 5725048
+      },
+      "recipe_historical_server_sha256_not_execution_evidence": "e1ac652735f2c91cadf31d65588852f39cad09e347a3686c90a938240a4c56e3",
+      "measurement": null,
+      "measurement_status": "unavailable",
+      "gates": {
+        "ready": {
+          "details": {
+            "pairs": 32,
+            "readers": 1024,
+            "sessions": 1089
+          },
+          "client": {
+            "VmSize": 580544,
+            "VmRSS": 40716,
+            "RssAnon": 33800,
+            "Threads": 9,
+            "cpu_seconds": 0.25,
+            "user_cpu_seconds": 0.17,
+            "system_cpu_seconds": 0.08,
+            "thread_cpu_seconds": {
+              "895812": 0.04,
+              "895813": 0.0,
+              "895814": 0.04,
+              "895815": 0.0,
+              "895816": 0.0,
+              "895817": 0.04,
+              "895818": 0.0,
+              "895819": 0.04,
+              "895820": 0.04
+            },
+            "fd_count": 10,
+            "socket_fd_count": 4
+          },
+          "server": {
+            "VmSize": 354876,
+            "VmRSS": 31708,
+            "RssAnon": 23948,
+            "Threads": 6,
+            "cpu_seconds": 0.28,
+            "user_cpu_seconds": 0.19,
+            "system_cpu_seconds": 0.09,
+            "thread_cpu_seconds": {
+              "895806": 0.0,
+              "895807": 0.06,
+              "895808": 0.06,
+              "895809": 0.03,
+              "895810": 0.04,
+              "895811": 0.06
+            },
+            "fd_count": 15,
+            "socket_fd_count": 6
+          },
+          "client_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          },
+          "server_udp": {
+            "owned_sockets": 1,
+            "receive_queue_bytes": 0,
+            "send_queue_bytes": 0,
+            "receive_drops": 0
+          }
+        }
+      },
+      "exit": {
+        "client_exit_code": 1,
+        "server_exit_code": 0,
+        "server_forced_kill": null,
+        "client_stderr": "Error: session error: webtransport error: closed: code=1013 reason=Try Again Later\n\nCaused by:\n    0: webtransport error: closed: code=1013 reason=Try Again Later\n    1: closed: code=1013 reason=Try Again Later\n"
+      },
+      "write_state_snapshot": [
+        {
+          "writer_busy": true,
+          "immediate": true,
+          "queue_closed": false,
+          "queue_limit": 64,
+          "queue_capacity_bytes": 5120,
+          "rtt_micros": 3450,
+          "stream_max": 22824349,
+          "stream_offset": 22824349,
+          "stream_credit": 0,
+          "conn_max": 4611686018427387903,
+          "data_sent": 22824423,
+          "conn_credit": 4611686018404563480,
+          "send_window": 10000000,
+          "buffered_data": 1101775,
+          "window_credit": 8898225,
+          "write_limit": 8898225,
+          "stream_retained": 1101775,
+          "stream_writable": true,
+          "stream_stopped": false,
+          "connection_blocked": false,
+          "cwnd": 21084,
+          "in_flight": 20328,
+          "proto_closed": false,
+          "writer_registered": true,
+          "runtime_error": false
+        }
+      ],
+      "warning": {
+        "utc": "2026-11-07T03:18:48.336185Z",
+        "wall_unix_ns_bounds": [
+          1794021528336185000,
+          1794021528336185999
+        ]
+      },
+      "udp": {
+        "client": {
+          "observed_samples": 935,
+          "identity_epochs": [
+            {
+              "pid": 895812,
+              "owned_inode_set": [
+                "6427564",
+                "6427565",
+                "6427566"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 935,
+              "outer_wall_ns_bounds": [
+                1794021525208198912,
+                1794021529602956288
+              ],
+              "drops_first_last": [
+                0,
+                43720
+              ],
+              "same_identity_drop_delta": 43720,
+              "max_queue_bytes": 6823889
+            }
+          ],
+          "first_drop_onset": {
+            "last_zero_outer_wall_ns": 1794021526805047296,
+            "first_positive_outer_wall_ns": 1794021526809494784,
+            "first_positive_read_mono_seconds": 458248.866857434,
+            "first_positive_drops": 120,
+            "same_identity": true,
+            "pid": 895812,
+            "owned_inode_set": [
+              "6427564",
+              "6427565",
+              "6427566"
+            ],
+            "sample_gap_seconds": 0.004448134975973517,
+            "first_positive_collection_seconds": 0.0007873399881646037,
+            "seconds_before_warning_conservative_bounds": [
+              1.5259028760118354,
+              1.531138703
+            ]
+          },
+          "maximum_receive_queue_bytes": 6823889,
+          "at_warning": {
+            "last_sample_fully_before": {
+              "identity": [
+                895812,
+                [
+                  "6427564",
+                  "6427565",
+                  "6427566"
+                ],
+                1
+              ],
+              "wall_ns": 1794021528330892544,
+              "read_mono_seconds": 458250.388255489,
+              "read_seconds": 0.0003892999957315624,
+              "collector_seconds": 0.0007167719886638224,
+              "drops": 27363,
+              "queue": 5472046
+            },
+            "first_sample_after": {
+              "identity": [
+                895812,
+                [
+                  "6427564",
+                  "6427565",
+                  "6427566"
+                ],
+                1
+              ],
+              "wall_ns": 1794021528340358144,
+              "read_mono_seconds": 458250.397721256,
+              "read_seconds": 0.00039761996595188975,
+              "collector_seconds": 0.0007246610475704074,
+              "drops": 27393,
+              "queue": 6168077
+            },
+            "samples_within_8ms": [
+              {
+                "identity": [
+                  895812,
+                  [
+                    "6427564",
+                    "6427565",
+                    "6427566"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528330892544,
+                "read_mono_seconds": 458250.388255489,
+                "read_seconds": 0.0003892999957315624,
+                "collector_seconds": 0.0007167719886638224,
+                "drops": 27363,
+                "queue": 5472046
+              },
+              {
+                "identity": [
+                  895812,
+                  [
+                    "6427564",
+                    "6427565",
+                    "6427566"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528335662592,
+                "read_mono_seconds": 458250.393025756,
+                "read_seconds": 0.0003817710094153881,
+                "collector_seconds": 0.0006164549849927425,
+                "drops": 27363,
+                "queue": 5032352
+              },
+              {
+                "identity": [
+                  895812,
+                  [
+                    "6427564",
+                    "6427565",
+                    "6427566"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528340358144,
+                "read_mono_seconds": 458250.397721256,
+                "read_seconds": 0.00039761996595188975,
+                "collector_seconds": 0.0007246610475704074,
+                "drops": 27393,
+                "queue": 6168077
+              }
+            ]
+          }
+        },
+        "server": {
+          "observed_samples": 935,
+          "identity_epochs": [
+            {
+              "pid": 895806,
+              "owned_inode_set": [
+                "6431729",
+                "6448815",
+                "6451853",
+                "6451854"
+              ],
+              "owned_udp_sockets": 1,
+              "samples": 935,
+              "outer_wall_ns_bounds": [
+                1794021525208198912,
+                1794021529602956288
+              ],
+              "drops_first_last": [
+                0,
+                0
+              ],
+              "same_identity_drop_delta": 0,
+              "max_queue_bytes": 1106731
+            }
+          ],
+          "first_drop_onset": null,
+          "maximum_receive_queue_bytes": 1106731,
+          "at_warning": {
+            "last_sample_fully_before": {
+              "identity": [
+                895806,
+                [
+                  "6431729",
+                  "6448815",
+                  "6451853",
+                  "6451854"
+                ],
+                1
+              ],
+              "wall_ns": 1794021528330892544,
+              "read_mono_seconds": 458250.388646279,
+              "read_seconds": 0.0003141920315101743,
+              "collector_seconds": 0.0007167719886638224,
+              "drops": 0,
+              "queue": 441320
+            },
+            "first_sample_after": {
+              "identity": [
+                895806,
+                [
+                  "6431729",
+                  "6448815",
+                  "6451853",
+                  "6451854"
+                ],
+                1
+              ],
+              "wall_ns": 1794021528340358144,
+              "read_mono_seconds": 458250.398120525,
+              "read_seconds": 0.00031396199483424425,
+              "collector_seconds": 0.0007246610475704074,
+              "drops": 0,
+              "queue": 960
+            },
+            "samples_within_8ms": [
+              {
+                "identity": [
+                  895806,
+                  [
+                    "6431729",
+                    "6448815",
+                    "6451853",
+                    "6451854"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528330892544,
+                "read_mono_seconds": 458250.388646279,
+                "read_seconds": 0.0003141920315101743,
+                "collector_seconds": 0.0007167719886638224,
+                "drops": 0,
+                "queue": 441320
+              },
+              {
+                "identity": [
+                  895806,
+                  [
+                    "6431729",
+                    "6448815",
+                    "6451853",
+                    "6451854"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528335662592,
+                "read_mono_seconds": 458250.393408987,
+                "read_seconds": 0.0002246340154670179,
+                "collector_seconds": 0.0006164549849927425,
+                "drops": 0,
+                "queue": 99405
+              },
+              {
+                "identity": [
+                  895806,
+                  [
+                    "6431729",
+                    "6448815",
+                    "6451853",
+                    "6451854"
+                  ],
+                  1
+                ],
+                "wall_ns": 1794021528340358144,
+                "read_mono_seconds": 458250.398120525,
+                "read_seconds": 0.00031396199483424425,
+                "collector_seconds": 0.0007246610475704074,
+                "drops": 0,
+                "queue": 960
+              }
+            ]
+          }
+        }
+      },
+      "observer": {
+        "collector_cpu": 4,
+        "requested_udp_seconds": 0.004,
+        "requested_thread_seconds": 0.04,
+        "sample_count": 935,
+        "actual_sample_gap_seconds": {
+          "count": 934,
+          "min": 0.0043561679776757956,
+          "p50_nearest_rank": 0.004764736979268491,
+          "p99_nearest_rank": 0.005187947012018412,
+          "max": 0.006888063042424619,
+          "sum": 4.394758212962188
+        },
+        "collector_elapsed_seconds": {
+          "count": 935,
+          "min": 0.00032297102734446526,
+          "p50_nearest_rank": 0.0006873729871585965,
+          "p99_nearest_rank": 0.0010800930322147906,
+          "max": 0.001281366974581033,
+          "sum": 0.5821321154362522
+        },
+        "thread_snapshot_count": 102,
+        "max_thread_gap_seconds": 0.04550700000254437,
+        "sched_schedstats": {
+          "status": "observed",
+          "enabled": false,
+          "source": "/proc/sys/kernel/sched_schedstats"
+        }
+      }
+    }
+  ]
+}

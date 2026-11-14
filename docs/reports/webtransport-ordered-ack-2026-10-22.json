@@ -1,0 +1,2144 @@
+{
+  "status": "Retained: ordered ACK bookkeeping avoids persistent range trees; mixed throughput tradeoff recorded; overall parity unmet",
+  "baseline_commit": "2d72d8fdd9facb071172eff20e03cfff74f28187",
+  "baseline_product_commit": "29ff41d",
+  "baseline_binary": "artifacts/webtransport/binaries/handshake-spans-relay",
+  "candidate_binary": "artifacts/webtransport/binaries/ordered-ack-relay",
+  "candidate_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+  "hypothesis": "The 100k heap contains 300k 192-byte range-tree allocation sites. SendBuffer::ack inserts a contiguous prefix then immediately pops it. If the clamped ACK starts at the buffer base and no out-of-order ACK ranges are pending, discard that prefix directly. Preserve the existing range-tree algorithm for other ACKs.",
+  "source_diff": "diff --git a/vendor/quinn-proto/src/connection/send_buffer.rs b/vendor/quinn-proto/src/connection/send_buffer.rs\nindex a80cae5..94dc1b4 100644\n--- a/vendor/quinn-proto/src/connection/send_buffer.rs\n+++ b/vendor/quinn-proto/src/connection/send_buffer.rs\n@@ -47,32 +47,41 @@ impl SendBuffer {\n         range.start = base_offset.max(range.start);\n         range.end = base_offset.max(range.end);\n \n+        // With no saved out-of-order ACKs, this is exactly the buffered\n+        // prefix. Avoid inserting a range only to remove it immediately.\n+        if range.start == base_offset && self.acks.is_empty() {\n+            self.discard_prefix((range.end - range.start) as usize);\n+            return;\n+        }\n+\n         self.acks.insert(range);\n \n         while self.acks.min() == Some(self.offset - self.unacked_len as u64) {\n             let prefix = self.acks.pop_min().unwrap();\n-            let mut to_advance = (prefix.end - prefix.start) as usize;\n-\n-            self.unacked_len -= to_advance;\n-            while to_advance > 0 {\n-                let front = self\n-                    .unacked_segments\n-                    .front_mut()\n-                    .expect(\"Expected buffered data\");\n-\n-                if front.len() <= to_advance {\n-                    to_advance -= front.len();\n-                    self.unacked_segments.pop_front();\n-                    self.front_trimmed = 0;\n-\n-                    if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {\n-                        self.unacked_segments.shrink_to_fit();\n-                    }\n-                } else {\n-                    front.advance(to_advance);\n-                    self.front_trimmed += to_advance;\n-                    to_advance = 0;\n+            self.discard_prefix((prefix.end - prefix.start) as usize);\n+        }\n+    }\n+\n+    fn discard_prefix(&mut self, mut to_advance: usize) {\n+        self.unacked_len -= to_advance;\n+        while to_advance > 0 {\n+            let front = self\n+                .unacked_segments\n+                .front_mut()\n+                .expect(\"Expected buffered data\");\n+\n+            if front.len() <= to_advance {\n+                to_advance -= front.len();\n+                self.unacked_segments.pop_front();\n+                self.front_trimmed = 0;\n+\n+                if self.unacked_segments.len() * 4 < self.unacked_segments.capacity() {\n+                    self.unacked_segments.shrink_to_fit();\n                 }\n+            } else {\n+                front.advance(to_advance);\n+                self.front_trimmed += to_advance;\n+                to_advance = 0;\n             }\n         }\n     }\n@@ -397,6 +406,43 @@ mod tests {\n         assert!(buf.acks.is_empty());\n     }\n \n+    #[test]\n+    fn ordered_prefix_then_overlapping_reordered_ack_preserves_pending_ranges() {\n+        let mut buf = SendBuffer::new();\n+        buf.write(Bytes::from_static(b\"abcdefghij\"));\n+        buf.write(Bytes::from_static(b\"klmnopqrst\"));\n+        let _ = buf.poll_transmit(64);\n+        buf.ack(0..4);\n+        assert_eq!(aggregate_unacked(&buf), b\"efghijklmnopqrst\");\n+        assert_eq!(buf.front_trimmed, 4);\n+        buf.ack(10..15);\n+        assert_eq!(aggregate_unacked(&buf), b\"efghijklmnopqrst\");\n+        buf.ack(4..12);\n+        assert_eq!(aggregate_unacked(&buf), b\"pqrst\");\n+        assert!(buf.acks.is_empty());\n+        buf.ack(0..7);\n+        assert_eq!(aggregate_unacked(&buf), b\"pqrst\");\n+        buf.ack(15..20);\n+        assert!(buf.is_fully_acked());\n+        assert_eq!(buf.front_trimmed, 0);\n+    }\n+\n+    #[test]\n+    fn discarded_duplicate_ack_does_not_drop_an_out_of_order_ack() {\n+        let mut buf = SendBuffer::new();\n+        buf.write(Bytes::from_static(b\"abcdefghijklmnop\"));\n+        let _ = buf.poll_transmit(64);\n+        buf.ack(0..4);\n+        buf.ack(10..12);\n+        buf.ack(0..2);\n+        assert_eq!(aggregate_unacked(&buf), b\"efghijklmnop\");\n+        assert_eq!(buf.acks.peek_min(), Some(10..12));\n+        buf.ack(4..10);\n+        assert_eq!(aggregate_unacked(&buf), b\"mnop\");\n+        buf.ack(12..16);\n+        assert!(buf.is_fully_acked());\n+    }\n+\n     fn aggregate_unacked(buf: &SendBuffer) -> Vec<u8> {\n         let mut result = Vec::new();\n         for segment in buf.unacked_segments.iter() {\n",
+  "validation": {
+    "artifacts/webtransport/ordered-ack-tests.log": {
+      "sha256": "8217364c55e4cc512ea45dd1279e4e680bd0c46ff663bfcbbc05f3fe96d445ce",
+      "results": [
+        "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.83s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.50s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.35s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "tail": "6724e1e8e1be04)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n     Running unittests examples/transport_probe.rs (target/debug/examples/transport_probe-ef5667c19dca835c)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n"
+    },
+    "artifacts/webtransport/ordered-ack-clippy.log": {
+      "sha256": "0774cc1df8cf72c89a2ba712a8a8dba2c2dc1bcbcfc992f71f1559d8b1f4e36c",
+      "results": [],
+      "tail": "n-proto)\n    Checking quinn v0.11.12 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn)\n    Checking web-transport-quinn v0.13.3\n    Checking wtransport v0.7.2\n    Checking war-relay v0.1.0 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.51s\n"
+    },
+    "artifacts/webtransport/ordered-ack-build.log": {
+      "sha256": "838712dd361e17e60f5747f1e8902def70cf33733f5c7df6c64e0a6c7a9d3de9",
+      "results": [],
+      "tail": "uinn)\n   Compiling quinn-proto v0.11.19 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next/vendor/quinn-proto)\n   Compiling wtransport v0.7.2\n   Compiling web-transport-quinn v0.13.3\n   Compiling war-relay v0.1.0 (/home/phil/.codex/worktrees/claude-update-benchmark/war_next)\n    Finished `release` profile [optimized] target(s) in 17.14s\n"
+    },
+    "artifacts/webtransport/ordered-ack-proto-tests.log": {
+      "sha256": "4cc083ce3ed7420c6599fda3a279ce48a6dad9c3c4160769787c10966002e9fe",
+      "results": [
+        "test result: ok. 314 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+      ],
+      "tail": "en_expired ... ok\ntest tests::zero_rtt_rejection ... ok\ntest tests::zero_rtt_incoming_buffer_size ... ok\ntest tests::zero_rtt_happypath ... ok\ntest tests::zero_rtt_incoming_buffer_size_total ... ok\ntest tests::voluntary_ack_with_large_datagrams ... ok\n\ntest result: ok. 314 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n"
+    }
+  },
+  "pending": [],
+  "scope_limits": [
+    "100k memory saving verified; throughput benefit remains provisional.",
+    "No range-set type change, fragmentation cap, ACK policy change, packet-number change or resource-budget change.",
+    "Focused cases cover partial shared-segment release, overlapping reordered ACKs, and duplicates with pending out-of-order ranges.",
+    "Overall throughput and memory parity remain unmet.",
+    "Three process repeats per duration on shared desktop host; small timing differences have limited confidence.",
+    "One capacity pair does not establish setup or CPU speedup.",
+    "These are QUIC candidate/control measurements, not fresh native parity results.",
+    "Out-of-order traffic still uses the existing tree and can allocate it.",
+    "Full throughput and memory parity remain unmet."
+  ],
+  "reproduction_script": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['handshake-spans','ordered-ack'] if repeat!=2 else ['ordered-ack','handshake-spans']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'ordered-ack-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\nfor v in ['handshake-spans','ordered-ack']:\n a=json.loads((out/'owner-poll-capacity-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'ordered-ack-capacity-{v}-1.json').resolve()))\n for k in ['server','client','output','server_preload','user_latency_output','user_latency_histogram_output','pressure_client','kernel_slab_sizes']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n capacity.run(argparse.Namespace(**a));print('CAPACITY',v,flush=True)\n",
+  "screening": {
+    "private": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-handshake-spans-1.json",
+            "sha256": "6c7817e0e97d533b4d64444a0a4f553d0032ec70dc5c54a7ae8018d615a8ad57",
+            "verified_per_second": 1545122.0572969322,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-handshake-spans-2.json",
+            "sha256": "82c157bc06fbbb26bf1301bcd984aff7bebe61d8663857b239aea3f32da37d7c",
+            "verified_per_second": 1341116.7262900502,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-handshake-spans-3.json",
+            "sha256": "a2d91d3775c0eeefd7bcaa1298828a20600e2f978193eb4278ddfeb9757b14d5",
+            "verified_per_second": 1432908.7123174833,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1432908.7123174833
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-ordered-ack-1.json",
+            "sha256": "e7b74d8f1a5e0f55f14456d563a64feaaf5d39aecabd74b81e49b5b393d0261e",
+            "verified_per_second": 1457961.6931434916,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-ordered-ack-2.json",
+            "sha256": "65988df07e8a5f3d3a9b20b3d0627ea3f81b2378c82d7db3d9ebd68e09de0e3e",
+            "verified_per_second": 1448739.5131035072,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-private-ordered-ack-3.json",
+            "sha256": "eb05bf355b9ad0b38be4b3029d15213a1c1b90d954aa7dfd1a82e31bc97c34b3",
+            "verified_per_second": 1385935.3880712264,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1448739.5131035072
+      },
+      "candidate_delta_percent": 1.104801767896313
+    },
+    "roomonly": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-handshake-spans-1.json",
+            "sha256": "d82f58c8dd7a34ec2e3d69db64703b35d697a23b1fb30bc0741e6283bfd4a979",
+            "verified_per_second": 1487400.8921687715,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-handshake-spans-2.json",
+            "sha256": "05abb67e3ebd5694a4ba98a8ef572263122014da6b58969bd0c190e385d09147",
+            "verified_per_second": 1287030.0165328435,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-handshake-spans-3.json",
+            "sha256": "9b930fab5ddd9e7626c9f1d1705a28f2c0b9a9789ab8fb6a66544433fba80f47",
+            "verified_per_second": 1460989.300798271,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1460989.300798271
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-ordered-ack-1.json",
+            "sha256": "b123025c2a3d88e853ea425a6ba54ef04a0f969e01185be6e22cf1ad89c3eea0",
+            "verified_per_second": 1485340.9103216734,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-ordered-ack-2.json",
+            "sha256": "bf7a67a97c56591e3cc7ff641783924b1e977826344b691e0d7da0cdb5242faf",
+            "verified_per_second": 1486476.9541699428,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-roomonly-ordered-ack-3.json",
+            "sha256": "1e629942128220f5f272a2aba7242cb8587aa28da83ea40bbd566d621f22631c",
+            "verified_per_second": 1500779.9033799705,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1486476.9541699428
+      },
+      "candidate_delta_percent": 1.7445475718231185
+    },
+    "mixed": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-handshake-spans-1.json",
+            "sha256": "c8f845177d58de5fce7ce4505ab6bfccc8c5b4b6cc3eb6ae327c6a96d93f1c3c",
+            "verified_per_second": 1396599.1109164655,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-handshake-spans-2.json",
+            "sha256": "7b2265d14f2621d12448ff12d08774d91a4c9f0c28af1b523a66dd8d324a1a03",
+            "verified_per_second": 1264983.6915445197,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-handshake-spans-3.json",
+            "sha256": "ec6ca381c0416eb4417f7046da8e6e3fe1ebd6e43c35b8a555f62d8a292607a4",
+            "verified_per_second": 1417766.1266913414,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1396599.1109164655
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-ordered-ack-1.json",
+            "sha256": "784e3b660a7e51fbf4662594259ecab5aacfd878acdfd6d13e740bec4592aee5",
+            "verified_per_second": 1444408.5191624514,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-ordered-ack-2.json",
+            "sha256": "b740087e71a9144965e25d37c6dd36991c8880f1b0100e93348a6dc8a03b5b85",
+            "verified_per_second": 1450789.738109618,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-mixed-ordered-ack-3.json",
+            "sha256": "6a2e0ba0fef33d5c00c3ffe0ff90e5678ee5bb062758262dbfc16d1b4d6041bd",
+            "verified_per_second": 1438556.3637427166,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1444408.5191624514
+      },
+      "candidate_delta_percent": 3.423273570223939
+    }
+  },
+  "capacity": {
+    "handshake-spans": {
+      "receipt": "artifacts/webtransport/ordered-ack-capacity-handshake-spans-1.json",
+      "phase_rss_mib": {
+        "connected": 2122.26953125,
+        "ready": 2142.125,
+        "measured": 2145.0703125,
+        "postcheck": 2148.98046875,
+        "done": 2148.98046875
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.267381521000061,
+        "server_cpu_seconds": 6.609999999999996,
+        "client_cpu_seconds": 7.260000000000002,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99676.1334037819,
+        "server_user_cpu_seconds": 5.400000000000002,
+        "server_system_cpu_seconds": 1.21,
+        "round_trip": {
+          "max_ms": 10.624371,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.107912,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "setup_seconds": 11.536520898
+    },
+    "ordered-ack": {
+      "receipt": "artifacts/webtransport/ordered-ack-capacity-ordered-ack-1.json",
+      "phase_rss_mib": {
+        "connected": 2062.53515625,
+        "ready": 2082.5,
+        "measured": 2085.71875,
+        "postcheck": 2088.890625,
+        "done": 2088.890625
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265968592997524,
+        "server_cpu_seconds": 6.610000000000003,
+        "client_cpu_seconds": 7.149999999999999,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99689.18792837355,
+        "server_user_cpu_seconds": 5.379999999999999,
+        "server_system_cpu_seconds": 1.2300000000000004,
+        "round_trip": {
+          "max_ms": 10.598492,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 2.097152,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.359292,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "setup_seconds": 11.356519643
+    }
+  },
+  "heap": {
+    "receipt": "artifacts/webtransport/ordered-ack-heap-100000.json",
+    "sites": "artifacts/webtransport/ordered-ack-heap-sites.json",
+    "baseline_ready_live_bytes": 2076389859,
+    "candidate_ready_live_bytes": 2018187005,
+    "baseline_range_tree_objects": 300000,
+    "baseline_range_tree_bytes": 57600000,
+    "candidate_range_tree_insert_site_present": false,
+    "scope": "Diagnostic allocator; all five gates and 400k deliveries passed. Analyzer verified exact binary/profile hashes and allocation-bucket sums. Total difference includes other live sites; not an ordinary timing or RSS measurement.",
+    "phase_headers": {
+      "connected": "heap profile: 7840652: 2010079493 [36316962: 6761421568] @ heapprofile",
+      "ready": "heap profile: 7939458: 2018187005 [37539825: 7137760703] @ heapprofile",
+      "measured": "heap profile: 7947191: 2027084709 [41178104: 8598377399] @ heapprofile",
+      "postcheck": "heap profile: 7941603: 2020640645 [42111047: 8959670481] @ heapprofile",
+      "done": "heap profile:   2936: 70959484 [46148846: 9578675036] @ heapprofile"
+    }
+  },
+  "long_throughput": {
+    "private": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-handshake-spans-1.json",
+            "sha256": "b3e7d228816f9c07382122fc85ff8f40b2679eafc791a4da32e6b67ba2170626",
+            "verified_per_second": 1473785.143826107,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-handshake-spans-2.json",
+            "sha256": "51dc7d03edf334384e20cf56dba47df04506351a1dcdb43c098ee67e0b409142",
+            "verified_per_second": 1423384.1842672902,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-handshake-spans-3.json",
+            "sha256": "36516ee42ae3c16d9d69ec1d69734f6cd54714623dd622467c477e499f039264",
+            "verified_per_second": 1422503.3164179246,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1423384.1842672902
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-ordered-ack-1.json",
+            "sha256": "867d8899ed1ac4eb251476ac1d51612d0ef8174f890d8bb15d9cfe24908c35be",
+            "verified_per_second": 1425311.2724430456,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-ordered-ack-2.json",
+            "sha256": "9fafc78cfe92f53e614b57ba0a95aa3f93b2da77a2e5174cf986b6e96a07e6e5",
+            "verified_per_second": 1329060.3577488167,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-private-ordered-ack-3.json",
+            "sha256": "d1d80c7b77eedadca4254a0fb31b7263ed1a95317c830ee248a974da4eacec67",
+            "verified_per_second": 1448007.6736693615,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1425311.2724430456
+      },
+      "candidate_delta_percent": 0.13538777492791976
+    },
+    "roomonly": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-handshake-spans-1.json",
+            "sha256": "db1179bcc5c4e9d69c56635928363dd7e24f688c01ab6e98ce79dbfd7adcd3d9",
+            "verified_per_second": 1451989.1459592455,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-handshake-spans-2.json",
+            "sha256": "8d83430f78b9596694828c0cd9a2f06139989ab481b68fc3fc30b32773ec5d41",
+            "verified_per_second": 1411869.8686860728,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-handshake-spans-3.json",
+            "sha256": "018e8b99ceb90730e20d3317e0818756b7e55b6bf434f5bfef22a38af3877f40",
+            "verified_per_second": 1457015.3749397842,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1451989.1459592455
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-ordered-ack-1.json",
+            "sha256": "b702e225719cde35423b6a7cf3c2c6648046adc984fc02c57ae88801f841f7bc",
+            "verified_per_second": 1464000.29820288,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-ordered-ack-2.json",
+            "sha256": "91540130d5c9475f6f51cc264fe7eb9ee8157920879a1744bf7d2b88c0b424f6",
+            "verified_per_second": 1458316.208438183,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-roomonly-ordered-ack-3.json",
+            "sha256": "8725e475dfa093ad8fa9d40279ee3af693dfcd7d83c58a323c25bd791a3a276d",
+            "verified_per_second": 1464575.8046693483,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1464000.29820288
+      },
+      "candidate_delta_percent": 0.8272205255156706
+    },
+    "mixed": {
+      "handshake-spans": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-handshake-spans-1.json",
+            "sha256": "79a81d6b3036757d20909345c7c8f6f5f59fbeb24e03a4d39f1120a9b6534c06",
+            "verified_per_second": 1458834.1401803228,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-handshake-spans-2.json",
+            "sha256": "d7f7862db4605e7f7277c6eb86e4bb8df7ba2822bf428960c580afc1f7a481e5",
+            "verified_per_second": 1420158.7608728334,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-handshake-spans-3.json",
+            "sha256": "b92df37677ae99c426058cdb6399ffe0feb48ba0ef29cc88377465d265ca067a",
+            "verified_per_second": 1408355.5936226714,
+            "server_sha256": "5cba3ed03ed4cf9b913e3c8d17738f0c22528c13a2dd0747b1ab5ea28ca0d949",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1420158.7608728334
+      },
+      "ordered-ack": {
+        "runs": [
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-ordered-ack-1.json",
+            "sha256": "d306da3e8e3e1af92a8d619278427d8760273f5b6ad226c2c1abc3a82dca59a2",
+            "verified_per_second": 1370826.461395468,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-ordered-ack-2.json",
+            "sha256": "5a33dd653330ad51b11ea51b6aa7a660452e404e19a92423078f8495962bf525",
+            "verified_per_second": 1474073.5879633683,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          },
+          {
+            "receipt": "artifacts/webtransport/ordered-ack-long-mixed-ordered-ack-3.json",
+            "sha256": "83d4d0e5ea0270f895d08ee73b1fcd2ca9c0112275348555e2e6ceebb084ef0c",
+            "verified_per_second": 1404038.0575659582,
+            "server_sha256": "8e11a5d0ffa1d94c2da55cfa9ada4df23cffdbb4d14b8a5832af7648892ac99a",
+            "client_sha256": "3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7"
+          }
+        ],
+        "median": 1404038.0575659582
+      },
+      "candidate_delta_percent": -1.1351338843952452
+    }
+  },
+  "paced": [
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-private-high-stream-1.json",
+      "sha256": "3b39f30a1f34db9d5400d93233a7f6b951dc1e7ba6fb8e0941f23b78e9fdc497",
+      "measurement": {
+        "elapsed_seconds": 5.000438821,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 0,
+          "generated_source_updates": 0,
+          "generation_lag": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "last_submit_ms": 0.0,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 0,
+          "received_during_drain": 0,
+          "received_during_offer": 0,
+          "scheduled_arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 0.0,
+          "verified_unique": 0
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 5.677171,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 4.194304,
+            "samples": 4095266
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4095266,
+          "generated_source_updates": 4095266,
+          "generation_lag": {
+            "max_ms": 3.041112,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095266
+          },
+          "last_submit_ms": 3999.304042,
+          "not_generated": 734,
+          "out_of_order": 0,
+          "planned_source_updates": 4096000,
+          "received_during_drain": 316,
+          "received_during_offer": 4094950,
+          "scheduled_arrival_age": {
+            "max_ms": 6.371021,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 4095266
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023737.5,
+          "verified_unique": 4095266
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 8.18,
+        "server_cpu_cores_observation": 1.6358564303690737,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 10.68,
+        "client_cpu_cores_observation": 2.135812552120013,
+        "client_timed_udp_receive_drops": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-private-high-stream-2.json",
+      "sha256": "e8e83c10e1a26225f989b9d6e0b08301a8e53492949f274d51d1fe07e1120435",
+      "measurement": {
+        "elapsed_seconds": 5.00120884,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 0,
+          "generated_source_updates": 0,
+          "generation_lag": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "last_submit_ms": 0.0,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 0,
+          "received_during_drain": 0,
+          "received_during_offer": 0,
+          "scheduled_arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 0.0,
+          "verified_unique": 0
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 3.42105,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4094404
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4094404,
+          "generated_source_updates": 4094404,
+          "generation_lag": {
+            "max_ms": 2.364286,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4094404
+          },
+          "last_submit_ms": 3998.535232,
+          "not_generated": 1596,
+          "out_of_order": 0,
+          "planned_source_updates": 4096000,
+          "received_during_drain": 0,
+          "received_during_offer": 4094404,
+          "scheduled_arrival_age": {
+            "max_ms": 4.442961,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 4094404
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023601.0,
+          "verified_unique": 4094404
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 8.3,
+        "server_cpu_cores_observation": 1.6595987621264783,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 13.450000000000001,
+        "client_cpu_cores_observation": 2.689349801277245,
+        "client_timed_udp_receive_drops": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-private-high-stream-3.json",
+      "sha256": "f85912929312bf17177bdc2edd98ffc2654e559ff9d5a0ce025b28e0fd1b2bf1",
+      "measurement": {
+        "elapsed_seconds": 5.001607949,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 0,
+          "generated_source_updates": 0,
+          "generation_lag": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "last_submit_ms": 0.0,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 0,
+          "received_during_drain": 0,
+          "received_during_offer": 0,
+          "scheduled_arrival_age": {
+            "max_ms": 0.0,
+            "p50_upper_ms": 0.0,
+            "p99_upper_ms": 0.0,
+            "samples": 0
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 0.0,
+          "verified_unique": 0
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 3.230645,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095150
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4095150,
+          "generated_source_updates": 4095150,
+          "generation_lag": {
+            "max_ms": 2.476712,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 4095150
+          },
+          "last_submit_ms": 4000.000183,
+          "not_generated": 850,
+          "out_of_order": 0,
+          "planned_source_updates": 4096000,
+          "received_during_drain": 1225,
+          "received_during_offer": 4093925,
+          "scheduled_arrival_age": {
+            "max_ms": 4.813145,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 4095150
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023481.25,
+          "verified_unique": 4095150
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 8.33,
+        "server_cpu_cores_observation": 1.6654644036355277,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 13.200000000000001,
+        "client_cpu_cores_observation": 2.6391512758690236,
+        "client_timed_udp_receive_drops": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-mixed-high-stream-1.json",
+      "sha256": "06de6375fc570bab1739456be4867326f1cceade966e0273624a0ad9257e9460",
+      "measurement": {
+        "elapsed_seconds": 5.003872058,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 15.591341,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.430875,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.779788,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 3098,
+          "received_during_offer": 4092902,
+          "scheduled_arrival_age": {
+            "max_ms": 16.344307,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023225.5,
+          "verified_unique": 4096000
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 11.107868,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023948
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023948,
+          "generated_source_updates": 1023948,
+          "generation_lag": {
+            "max_ms": 1.733114,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023948
+          },
+          "last_submit_ms": 3999.803207,
+          "not_generated": 52,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 452,
+          "received_during_offer": 1023496,
+          "scheduled_arrival_age": {
+            "max_ms": 11.801586,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023948
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255874.0,
+          "verified_unique": 1023948
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.61,
+        "server_cpu_cores_observation": 2.7198936827812874,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.05,
+        "client_cpu_cores_observation": 4.0068970124735355,
+        "client_timed_udp_receive_drops": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-mixed-high-stream-2.json",
+      "sha256": "60757b431793fa0edba2c2a5144258cb8024ac06950c5b1b729533bc7a354db0",
+      "measurement": {
+        "elapsed_seconds": 5.002665539,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 24.136647,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.12654,
+            "p50_upper_ms": 0.131072,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.085636,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2699,
+          "received_during_offer": 4093301,
+          "scheduled_arrival_age": {
+            "max_ms": 24.430597,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023325.25,
+          "verified_unique": 4096000
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 17.584498,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023784
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023784,
+          "generated_source_updates": 1023784,
+          "generation_lag": {
+            "max_ms": 2.057339,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023784
+          },
+          "last_submit_ms": 3999.149084,
+          "not_generated": 216,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 426,
+          "received_during_offer": 1023358,
+          "scheduled_arrival_age": {
+            "max_ms": 18.37542,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023784
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255839.5,
+          "verified_unique": 1023784
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.62,
+        "server_cpu_cores_observation": 2.7225485881117986,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 19.86,
+        "client_cpu_cores_observation": 3.9698836240749134,
+        "client_timed_udp_receive_drops": 1003
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-paced-mixed-high-stream-3.json",
+      "sha256": "269ca5d86b56d1d1964074f6a3a5450dfd69ab22a0bda9f4b6412b6c22f6c81c",
+      "measurement": {
+        "elapsed_seconds": 5.003992523,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 28.129662,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 2.281129,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.874744,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 3226,
+          "received_during_offer": 4092774,
+          "scheduled_arrival_age": {
+            "max_ms": 30.409821,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023193.5,
+          "verified_unique": 4096000
+        },
+        "mode": "stream",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 17.622717,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023987
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023987,
+          "generated_source_updates": 1023987,
+          "generation_lag": {
+            "max_ms": 2.500956,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023987
+          },
+          "last_submit_ms": 3999.918713,
+          "not_generated": 13,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 450,
+          "received_during_offer": 1023537,
+          "scheduled_arrival_age": {
+            "max_ms": 20.006927,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023987
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255884.25,
+          "verified_unique": 1023987
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 13.39,
+        "server_cpu_cores_observation": 2.6758633108373253,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.06,
+        "client_cpu_cores_observation": 4.008798955593483,
+        "client_timed_udp_receive_drops": 140
+      }
+    }
+  ],
+  "datagram_controls": [
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-handshake-spans-1.json",
+      "sha256": "ed32620ebd413fa88df526b0f491c6e6a8d945cac96d4067b6d52f1fa4360b52",
+      "measurement": {
+        "elapsed_seconds": 5.003684551,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 85.606263,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4075451
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.073952,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.719687,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2673,
+          "received_during_offer": 4072778,
+          "scheduled_arrival_age": {
+            "max_ms": 86.302167,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4075451
+          },
+          "unreceived_within_window": 20549,
+          "verified_during_offer_per_second": 1018194.5,
+          "verified_unique": 4075451
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 49.16149,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 16.777216,
+            "samples": 1018126
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023936,
+          "generated_source_updates": 1023936,
+          "generation_lag": {
+            "max_ms": 1.428086,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023936
+          },
+          "last_submit_ms": 3999.732437,
+          "not_generated": 64,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 336,
+          "received_during_offer": 1017790,
+          "scheduled_arrival_age": {
+            "max_ms": 49.68744,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 16.777216,
+            "samples": 1018126
+          },
+          "unreceived_within_window": 5810,
+          "verified_during_offer_per_second": 254447.5,
+          "verified_unique": 1018126
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.719999999999999,
+        "server_cpu_cores_observation": 2.542126680919138,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.45,
+        "client_cpu_cores_observation": 4.086988256666382,
+        "client_timed_udp_receive_drops": 13735
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-ordered-ack-1.json",
+      "sha256": "5d86d9fc2aa67910860a910b31fd6e686b5f5118f75fb1bea6fb27b9fb9dd61c",
+      "measurement": {
+        "elapsed_seconds": 5.004309854,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 60.052514,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4071890
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.886992,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.96352,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2476,
+          "received_during_offer": 4069414,
+          "scheduled_arrival_age": {
+            "max_ms": 60.948781,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 16.777216,
+            "samples": 4071890
+          },
+          "unreceived_within_window": 24110,
+          "verified_during_offer_per_second": 1017353.5,
+          "verified_unique": 4071890
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 29.274992,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1018652
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023992,
+          "generated_source_updates": 1023992,
+          "generation_lag": {
+            "max_ms": 2.016932,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023992
+          },
+          "last_submit_ms": 3999.96502,
+          "not_generated": 8,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 446,
+          "received_during_offer": 1018206,
+          "scheduled_arrival_age": {
+            "max_ms": 29.506415,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 1018652
+          },
+          "unreceived_within_window": 5340,
+          "verified_during_offer_per_second": 254551.5,
+          "verified_unique": 1018652
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.76,
+        "server_cpu_cores_observation": 2.5498021450052284,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.5,
+        "client_cpu_cores_observation": 4.0964689633704685,
+        "client_timed_udp_receive_drops": 18039
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-handshake-spans-2.json",
+      "sha256": "b5d308eaa5e2c72b7d247e764f65d4169e1e46930b1fc40bb74e0a3da6fa5d95",
+      "measurement": {
+        "elapsed_seconds": 5.004074899,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 48.954215,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 33.554432,
+            "samples": 4086950
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4094976,
+          "generated_source_updates": 3999,
+          "generation_lag": {
+            "max_ms": 2.011423,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 2.097152,
+            "samples": 3999
+          },
+          "last_submit_ms": 3998.03228,
+          "not_generated": 1,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 1975,
+          "received_during_offer": 4084975,
+          "scheduled_arrival_age": {
+            "max_ms": 49.663759,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 33.554432,
+            "samples": 4086950
+          },
+          "unreceived_within_window": 8026,
+          "verified_during_offer_per_second": 1021243.75,
+          "verified_unique": 4086950
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 25.302556,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1021489
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023834,
+          "generated_source_updates": 1023834,
+          "generation_lag": {
+            "max_ms": 2.043408,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023834
+          },
+          "last_submit_ms": 3999.999939,
+          "not_generated": 166,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 845,
+          "received_during_offer": 1020644,
+          "scheduled_arrival_age": {
+            "max_ms": 25.749626,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1021489
+          },
+          "unreceived_within_window": 2345,
+          "verified_during_offer_per_second": 255161.0,
+          "verified_unique": 1021489
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.639999999999999,
+        "server_cpu_cores_observation": 2.525941408775864,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.099999999999998,
+        "client_cpu_cores_observation": 4.016726449081872,
+        "client_timed_udp_receive_drops": 5634
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-ordered-ack-2.json",
+      "sha256": "d891e29d14188126c0f5493d025c1ee20ea1e122a2f4e84e15e8c167df124e04",
+      "measurement": {
+        "elapsed_seconds": 5.002844812,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 7.25664,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 0.785881,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.407115,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 2048,
+          "received_during_offer": 4093952,
+          "scheduled_arrival_age": {
+            "max_ms": 7.667556,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4096000
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 1023488.0,
+          "verified_unique": 4096000
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 10.780957,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023872
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023872,
+          "generated_source_updates": 1023872,
+          "generation_lag": {
+            "max_ms": 1.397012,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023872
+          },
+          "last_submit_ms": 3999.468683,
+          "not_generated": 128,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 239,
+          "received_during_offer": 1023633,
+          "scheduled_arrival_age": {
+            "max_ms": 11.070455,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023872
+          },
+          "unreceived_within_window": 0,
+          "verified_during_offer_per_second": 255908.25,
+          "verified_unique": 1023872
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.66,
+        "server_cpu_cores_observation": 2.530560206391627,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.57,
+        "client_cpu_cores_observation": 4.111660619705827,
+        "client_timed_udp_receive_drops": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-handshake-spans-3.json",
+      "sha256": "400789b158fd8bad349837144156f42a1296242d1e20681f9099c99eeee12b57",
+      "measurement": {
+        "elapsed_seconds": 5.003477833,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 9.753344,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4095542
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.215485,
+            "p50_upper_ms": 1.048576,
+            "p99_upper_ms": 1.048576,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.846962,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 3260,
+          "received_during_offer": 4092282,
+          "scheduled_arrival_age": {
+            "max_ms": 10.694258,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4095542
+          },
+          "unreceived_within_window": 458,
+          "verified_during_offer_per_second": 1023070.5,
+          "verified_unique": 4095542
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 6.87668,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 4.194304,
+            "samples": 1023825
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023979,
+          "generated_source_updates": 1023979,
+          "generation_lag": {
+            "max_ms": 1.407714,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023979
+          },
+          "last_submit_ms": 3999.92395,
+          "not_generated": 21,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 735,
+          "received_during_offer": 1023090,
+          "scheduled_arrival_age": {
+            "max_ms": 7.854767,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023825
+          },
+          "unreceived_within_window": 154,
+          "verified_during_offer_per_second": 255772.5,
+          "verified_unique": 1023825
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.69,
+        "server_cpu_cores_observation": 2.536235879032823,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 20.279999999999998,
+        "client_cpu_cores_observation": 4.0531807428515085,
+        "client_timed_udp_receive_drops": 309
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/ordered-ack-dg-control-ordered-ack-3.json",
+      "sha256": "30545d655ac88a157c174c207ff449e81e34ad08c610bdae489238677e5029b4",
+      "measurement": {
+        "elapsed_seconds": 5.002793571,
+        "fanout": {
+          "arrival_age": {
+            "max_ms": 17.104602,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4093473
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 4096000,
+          "generated_source_updates": 4000,
+          "generation_lag": {
+            "max_ms": 1.806537,
+            "p50_upper_ms": 0.262144,
+            "p99_upper_ms": 0.524288,
+            "samples": 4000
+          },
+          "last_submit_ms": 3999.083491,
+          "not_generated": 0,
+          "out_of_order": 0,
+          "planned_source_updates": 4000,
+          "received_during_drain": 1960,
+          "received_during_offer": 4091513,
+          "scheduled_arrival_age": {
+            "max_ms": 17.168421,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 4093473
+          },
+          "unreceived_within_window": 2527,
+          "verified_during_offer_per_second": 1022878.25,
+          "verified_unique": 4093473
+        },
+        "mode": "datagram",
+        "observation_seconds": 5.0,
+        "offered_seconds": 4,
+        "private": {
+          "arrival_age": {
+            "max_ms": 16.104437,
+            "p50_upper_ms": 2.097152,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023134
+          },
+          "duplicates": 0,
+          "expected_generated_deliveries": 1023779,
+          "generated_source_updates": 1023779,
+          "generation_lag": {
+            "max_ms": 2.686703,
+            "p50_upper_ms": 0.524288,
+            "p99_upper_ms": 1.048576,
+            "samples": 1023779
+          },
+          "last_submit_ms": 3999.13455,
+          "not_generated": 221,
+          "out_of_order": 0,
+          "planned_source_updates": 1024000,
+          "received_during_drain": 15,
+          "received_during_offer": 1023119,
+          "scheduled_arrival_age": {
+            "max_ms": 16.422147,
+            "p50_upper_ms": 4.194304,
+            "p99_upper_ms": 8.388608,
+            "samples": 1023134
+          },
+          "unreceived_within_window": 645,
+          "verified_during_offer_per_second": 255779.75,
+          "verified_unique": 1023134
+        },
+        "reliable_complete": true,
+        "server_cpu_seconds": 12.89,
+        "server_cpu_cores_observation": 2.5765604390955192,
+        "server_timed_udp_receive_drops": 0,
+        "client_cpu_seconds": 19.799999999999997,
+        "client_cpu_cores_observation": 3.9577887272374923,
+        "client_timed_udp_receive_drops": 1752
+      }
+    }
+  ],
+  "profiles": {
+    "handshake-spans-server": {
+      "symbols": "artifacts/webtransport/ordered-ack-reliable-handshake-spans-server-symbols.txt",
+      "sha256": "2d838e20c50944a4a3920c04d490da4da0d9e58b723e225086a8e2eeecff719e",
+      "lost_samples": 0
+    },
+    "handshake-spans-client": {
+      "symbols": "artifacts/webtransport/ordered-ack-reliable-handshake-spans-client-symbols.txt",
+      "sha256": "916ebd9ab9539c87b7d6bbf62d57e520bf55be645492fb87dde0b77a150d6eba",
+      "lost_samples": 0
+    },
+    "ordered-ack-server": {
+      "symbols": "artifacts/webtransport/ordered-ack-reliable-ordered-ack-server-symbols.txt",
+      "sha256": "7eb29ae08bdd7a9892b949452dca4c6272934cd29000878369e1316aa7055ff5",
+      "lost_samples": 0
+    },
+    "ordered-ack-client": {
+      "symbols": "artifacts/webtransport/ordered-ack-reliable-ordered-ack-client-symbols.txt",
+      "sha256": "3996627b53a9091d801b03f70fa82bb5d3dd316c07f754d3af9e1479cc2889dc",
+      "lost_samples": 0
+    }
+  },
+  "freshness": [
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/clean-datagram-1.json",
+      "sha256": "05a4c96c1f3e35f921f6a8c3821ee3fcd991b1454efd358102121299dbcb52ac",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 0.512677,
+          "p50_ms": 0.232614,
+          "p99_ms": 0.401279,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.230212,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.002288839,
+        "freshest_state_age": {
+          "max_ms": 16.636463,
+          "p50_ms": 9.657546,
+          "p99_ms": 16.549646,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.366496,
+          "p50_ms": 1.309392,
+          "p99_ms": 2.150963,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 1
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/clean-stream-1.json",
+      "sha256": "ce3cb308f5c54de0839fdc502ddfb875101a95796cc70f859a8943c2600e3082",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 2.380717,
+          "p50_ms": 0.222965,
+          "p99_ms": 0.367041,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 2.351128,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001015213,
+        "freshest_state_age": {
+          "max_ms": 16.79463,
+          "p50_ms": 10.207432,
+          "p99_ms": 16.675362,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.1564710000000002,
+          "p50_ms": 1.140283,
+          "p99_ms": 2.009867,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/clean-websocket-tls-1.json",
+      "sha256": "e6822f243023c3c652042d45ba4f8caddf8311f4df0455305c614ce211c521e1",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 0.821759,
+          "p50_ms": 0.193434,
+          "p99_ms": 0.352251,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1.313876,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.001234299,
+        "freshest_state_age": {
+          "max_ms": 17.502611,
+          "p50_ms": 10.234661,
+          "p99_ms": 17.420062,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.235665,
+          "p50_ms": 0.9805669999999999,
+          "p99_ms": 1.83125,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 1,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/loss-datagram-1.json",
+      "sha256": "9ea66478ab0a3956274d3a46ac5130e391f69759da2522b37352f739eb364d65",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 80.270273,
+          "p50_ms": 40.154516,
+          "p99_ms": 53.011319,
+          "samples": 345
+        },
+        "bulk_arrival_ms": 1356.138398,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 8.001399448,
+        "freshest_state_age": {
+          "max_ms": 80.571196,
+          "p50_ms": 50.257851,
+          "p99_ms": 72.505497,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.407164,
+          "p50_ms": 1.125445,
+          "p99_ms": 1.975326,
+          "samples": 360
+        },
+        "missing": 15,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 345,
+        "updates_before_bulk": 74
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/loss-stream-1.json",
+      "sha256": "ae70f69d669dd26079cd6360a924c6bc3280314fddeff3e60887d93bc21094c9",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1273.869647,
+          "p50_ms": 40.513247,
+          "p99_ms": 1223.676504,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1274.89222,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.03492903,
+        "freshest_state_age": {
+          "max_ms": 1261.18987,
+          "p50_ms": 53.813568,
+          "p99_ms": 1201.583794,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.206123,
+          "p50_ms": 1.2190320000000001,
+          "p99_ms": 2.121292,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 64,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/loss-websocket-tls-1.json",
+      "sha256": "707da7acfee0cbf9cbe63ef0a05c607b20406aeefaca883f0a1b103e3f85c14b",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 1082.071031,
+          "p50_ms": 40.485498,
+          "p99_ms": 1031.524177,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 1082.84702,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.033962316,
+        "freshest_state_age": {
+          "max_ms": 1081.690041,
+          "p50_ms": 54.223847,
+          "p99_ms": 1021.837981,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.1318650000000003,
+          "p50_ms": 1.015894,
+          "p99_ms": 2.004073,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 55,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/reorder-datagram-1.json",
+      "sha256": "fdc2307221985e07d1b6105eac79b9ec7bd898e9621a80e46148ae3fd59afd6a",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 121.349505,
+          "p50_ms": 51.356283,
+          "p99_ms": 92.718026,
+          "samples": 352
+        },
+        "bulk_arrival_ms": 7005.691717000001,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 9.016253478,
+        "freshest_state_age": {
+          "max_ms": 142.698065,
+          "p50_ms": 60.190871,
+          "p99_ms": 123.171477,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.1727719999999997,
+          "p50_ms": 1.072497,
+          "p99_ms": 2.132404,
+          "samples": 360
+        },
+        "missing": 8,
+        "mode": "datagram",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 18,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 5,
+        "rate": 60,
+        "received_unique": 352,
+        "updates_before_bulk": 352
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/reorder-stream-1.json",
+      "sha256": "e5d745673fe004cb06edd30e17fdc0a5150dcf7326dcf7aee8799d32a5e4340f",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 5799.988853,
+          "p50_ms": 3118.914081,
+          "p99_ms": 5749.217906,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 5799.878336,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.435407696,
+        "freshest_state_age": {
+          "max_ms": 5780.928493,
+          "p50_ms": 3000.996195,
+          "p99_ms": 5720.86412,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.0512799999999998,
+          "p50_ms": 1.1835660000000001,
+          "p99_ms": 1.9817300000000002,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "stream",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 290,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    },
+    {
+      "receipt": "artifacts/webtransport/freshness-ordered-ack/reorder-websocket-tls-1.json",
+      "sha256": "75a23f9f8b469ab8c8aa67399faad66b05068c0812e50847c5d68012423651f6",
+      "measurement": {
+        "arrival_age": {
+          "max_ms": 720.628786,
+          "p50_ms": 41.346634,
+          "p99_ms": 669.826339,
+          "samples": 360
+        },
+        "bulk_arrival_ms": 720.46604,
+        "bulk_bytes": 1048576,
+        "duplicates": 0,
+        "elapsed_seconds": 6.033525024,
+        "freshest_state_age": {
+          "max_ms": 720.281265,
+          "p50_ms": 50.089625,
+          "p99_ms": 660.560463,
+          "samples": 301
+        },
+        "generation_lag": {
+          "max_ms": 2.260942,
+          "p50_ms": 0.967302,
+          "p99_ms": 1.840507,
+          "samples": 360
+        },
+        "missing": 0,
+        "mode": "websocket-tls",
+        "offered": 360,
+        "offered_seconds": 6,
+        "out_of_order": 0,
+        "payload_bytes": 1024,
+        "probes_before_first_state": 37,
+        "rate": 60,
+        "received_unique": 360,
+        "updates_before_bulk": 0
+      }
+    }
+  ],
+  "browser": {
+    "snapshot": "artifacts/webtransport/ordered-ack-browser-snapshot-command.txt",
+    "snapshot_sha256": "42f966e952df8fce5944cefc9abc436dc03df5e7da0740402f02e9e421c09706",
+    "screenshot": "output/playwright/ordered-ack.png",
+    "checks": 9,
+    "cleanup": {
+      "war_connections": 0,
+      "war_sessions": 0,
+      "war_quic_connections": 0,
+      "war_queued_bytes": 0,
+      "war_variable_bytes": 0,
+      "war_read_buffer_reserved_bytes": 0
+    },
+    "scope": "Actual headed Chrome, screenshot inspected, exact 5 MiB delivery, CBOR/control/datagram/closure checks. Browser and fixtures stopped."
+  },
+  "reproduction_scripts": {
+    "artifacts/webtransport/ordered-ack-compare.py": {
+      "sha256": "a5ba1ca30dbfca4b408baa603bd8d84f54772cc0a393ed139c00d75444c7e8db",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['handshake-spans','ordered-ack'] if repeat!=2 else ['ordered-ack','handshake-spans']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'ordered-ack-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\nfor v in ['handshake-spans','ordered-ack']:\n a=json.loads((out/'owner-poll-capacity-owner-poll-1.json').read_text())['args'];a.update(server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'ordered-ack-capacity-{v}-1.json').resolve()))\n for k in ['server','client','output','server_preload','user_latency_output','user_latency_histogram_output','pressure_client','kernel_slab_sizes']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n capacity.run(argparse.Namespace(**a));print('CAPACITY',v,flush=True)\n"
+    },
+    "artifacts/webtransport/ordered-ack-long-compare.py": {
+      "sha256": "640eb48280c158a240bb3f6bc169b9025ac96c9b07f601545ef4ffb459ecb3d8",
+      "source": "import argparse,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');import inspection,capacity\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['handshake-spans','ordered-ack'] if repeat!=2 else ['ordered-ack','handshake-spans']):\n  for case in ['private','roomonly','mixed']:\n   a=json.loads((out/f'owner-poll-{case}-owner-poll-1.json').read_text())['args'];a.update(seconds=12,server=str((out/f'binaries/{v}-relay').resolve()),output=str((out/f'ordered-ack-long-{case}-{v}-{repeat}.json').resolve()))\n   for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n    if a.get(k) is not None:a[k]=Path(a[k])\n   r=inspection.run(argparse.Namespace(**a));assert r['passed'];print('COMPARED',case,v,repeat,flush=True)\n"
+    },
+    "artifacts/webtransport/ordered-ack-paced.py": {
+      "sha256": "ef58425b07b83978f2491e8793af8fcb53cb4f8b9d0f12ddfaa175c872a19788",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor case in ['private','mixed']:\n for repeat in range(1,4):\n  a=json.loads((out/f'reliable-quantum-load-{case}-high-stream-1.json').read_text())['args'];a.update(server=str(out/'binaries/ordered-ack-relay'),output=str(out/f'ordered-ack-paced-{case}-high-stream-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('STREAM',case,repeat,r['passed'],r.get('error'),flush=True)\n"
+    },
+    "artifacts/webtransport/ordered-ack-dg-controls.py": {
+      "sha256": "29adfa5ba37e2bc0dce23ec2003eeb9854c8e7db5dcf30b8e75220749df7da24",
+      "source": "import argparse,importlib.util,json,sys\nfrom pathlib import Path\nsys.path.insert(0,'scripts');spec=importlib.util.spec_from_file_location('load','scripts/datagram-load.py');load=importlib.util.module_from_spec(spec);spec.loader.exec_module(load)\nout=Path('artifacts/webtransport')\nfor repeat in range(1,4):\n for v in (['handshake-spans','ordered-ack'] if repeat!=2 else ['ordered-ack','handshake-spans']):\n  a=json.loads((out/'owner-poll-mixed-high-datagram-1.json').read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),output=str(out/f'ordered-ack-dg-control-{v}-{repeat}.json'))\n  for k in ['server','client','output']:a[k]=Path(a[k])\n  r=load.run(argparse.Namespace(**a));assert r['passed'], a['output'];print('CONTROL',v,repeat,r['passed'],flush=True)\n"
+    },
+    "artifacts/webtransport/profile-ordered-ack-reliable.py": {
+      "sha256": "2d00c2efa48dce4df76f31570beb91188767920309efdd3d16ad31e3d7b3c32d",
+      "source": "import sys,json,argparse,subprocess,os\nfrom pathlib import Path\nroot=Path.cwd();out=root/'artifacts/webtransport';sys.path.insert(0,str(root/'scripts'))\nimport inspection\noriginal=subprocess.Popen;client=[None];roles={}\ndef popen(cmd,*a,**kw):\n if cmd[0]=='perf':\n  cmd=list(cmd);index=cmd.index('-p');roles['server']=int(cmd[index+1]);roles['client']=client[0]\n  assert roles['client'];cmd[index+1]+=','+str(roles['client']);cmd[cmd.index('-e')+1]='cycles';cmd[cmd.index('-F')+1]='249';cmd+=['-m','512'];cmd=['sudo','-n']+cmd\n p=original(cmd,*a,**kw)\n if any(Path(str(x)).name=='inspection' for x in cmd):client[0]=p.pid\n return p\nsubprocess.Popen=popen\nfor v in ['handshake-spans','ordered-ack']:\n client[0]=None;roles.clear()\n source=out/'thin-pending-final-mixed.json';a=json.loads(source.read_text())['args'];a.update(server=str(out/f'binaries/{v}-relay'),profile=True,seconds=8,output=str(out/f'ordered-ack-reliable-mixed-{v}-profile.json'))\n for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n r=inspection.run(argparse.Namespace(**a));assert r['passed'];data=a['output'].with_suffix('.perf.data')\n for role,pid in roles.items():\n  text=subprocess.run(['sudo','-n','perf','report','--stdio','--no-children','-g','none','--pid',str(pid),'--sort','dso,symbol','--percentage','relative','--percent-limit','0.3','-i',str(data)],capture_output=True,text=True,check=True).stdout\n  assert 'Total Lost Samples: 0' in text\n  (out/f'ordered-ack-reliable-{v}-{role}-symbols.txt').write_text(text)\n (out/f'ordered-ack-reliable-{v}-profile-roles.json').write_text(json.dumps(dict(roles),indent=2))\n subprocess.run(['sudo','-n','chown',f'{os.getuid()}:{os.getgid()}',str(data)],check=True)\n print('DONE',v,roles,flush=True)\n"
+    },
+    "artifacts/webtransport/ordered-ack-browser-fixture.py": {
+      "sha256": "f07ca0319438df78795ed44cc42a173d87acfb53ecd1c365f1809bc39e0ecb70",
+      "source": "import subprocess,json,os\nfrom pathlib import Path\nout=Path('artifacts/webtransport');env={k:v for k,v in os.environ.items() if not k.startswith('WAR_')};env['RUST_LOG']='war_relay=debug'\ncommands=[['artifacts/webtransport/binaries/ordered-ack-relay','--dev-cert','--bind','127.0.0.1:14438','--admin-bind','127.0.0.1:14439','--workers','4','--messages-per-second','0','--bytes-per-second','0'],['python3','-m','http.server','14440','--bind','127.0.0.1','--directory','target/browser']]\nprocesses=[]\ntry:\n for i,c in enumerate(commands):\n  with (out/f'ordered-ack-browser-live-process-{i}.log').open('x') as f:p=subprocess.Popen(c,env=env,stdout=f,stderr=f)\n  processes.append(p)\n print('READY',[(p.pid,c) for p,c in zip(processes,commands)],flush=True)\n input()\nfinally:\n for p in reversed(processes):\n  p.terminate();p.wait(timeout=10)\n print('STOPPED',[p.returncode for p in processes],flush=True)\n"
+    }
+  },
+  "workload_args": {
+    "owner-poll-private-owner-poll-1.json": {
+      "udp_receive_buffer_bytes": 4194304,
+      "transport": "webtransport",
+      "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+      "tls_cert": null,
+      "tls_key": null,
+      "tls_ca": null,
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/owner-poll-relay",
+      "client": "target/release/examples/inspection",
+      "client_source_root": null,
+      "mode": "none",
+      "page_size": null,
+      "value_kind": "bytes",
+      "private_payload_bytes": 1024,
+      "rooms": 0,
+      "seconds": 4,
+      "inspectors": 0,
+      "inspection_interval_ms": 10,
+      "pairs": 32,
+      "client_workers": 8,
+      "churn_workers": 0,
+      "workers": 4,
+      "fanout_readers": 0,
+      "fanout_global_observers": false,
+      "fanout_global_broadcast": false,
+      "fanout_windows_per_second": 0,
+      "fanout_latency_output": null,
+      "fanout_churn_every": 0,
+      "fanout_window": 16,
+      "fanout_close_window": 1,
+      "read_storage": "worker",
+      "pin_workers": true,
+      "pin_client_workers": true,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "profile": false,
+      "heap_profile": null,
+      "heap_library": "/usr/lib/libtcmalloc.so",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/owner-poll-private-owner-poll-1.json"
+    },
+    "owner-poll-roomonly-owner-poll-1.json": {
+      "udp_receive_buffer_bytes": 4194304,
+      "transport": "webtransport",
+      "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+      "tls_cert": null,
+      "tls_key": null,
+      "tls_ca": null,
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/owner-poll-relay",
+      "client": "target/release/examples/inspection",
+      "client_source_root": null,
+      "mode": "none",
+      "page_size": null,
+      "value_kind": "bytes",
+      "private_payload_bytes": 1024,
+      "rooms": 0,
+      "seconds": 4,
+      "inspectors": 0,
+      "inspection_interval_ms": 10,
+      "pairs": 0,
+      "client_workers": 8,
+      "churn_workers": 0,
+      "workers": 4,
+      "fanout_readers": 1024,
+      "fanout_global_observers": false,
+      "fanout_global_broadcast": false,
+      "fanout_windows_per_second": 0,
+      "fanout_latency_output": null,
+      "fanout_churn_every": 0,
+      "fanout_window": 4,
+      "fanout_close_window": 1,
+      "read_storage": "worker",
+      "pin_workers": true,
+      "pin_client_workers": true,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "profile": false,
+      "heap_profile": null,
+      "heap_library": "/usr/lib/libtcmalloc.so",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/owner-poll-roomonly-owner-poll-1.json"
+    },
+    "owner-poll-mixed-owner-poll-1.json": {
+      "udp_receive_buffer_bytes": 4194304,
+      "transport": "webtransport",
+      "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+      "tls_cert": null,
+      "tls_key": null,
+      "tls_ca": null,
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/owner-poll-relay",
+      "client": "target/release/examples/inspection",
+      "client_source_root": null,
+      "mode": "none",
+      "page_size": null,
+      "value_kind": "bytes",
+      "private_payload_bytes": 1024,
+      "rooms": 0,
+      "seconds": 4,
+      "inspectors": 0,
+      "inspection_interval_ms": 10,
+      "pairs": 32,
+      "client_workers": 8,
+      "churn_workers": 0,
+      "workers": 4,
+      "fanout_readers": 1024,
+      "fanout_global_observers": false,
+      "fanout_global_broadcast": false,
+      "fanout_windows_per_second": 0,
+      "fanout_latency_output": null,
+      "fanout_churn_every": 0,
+      "fanout_window": 4,
+      "fanout_close_window": 1,
+      "read_storage": "worker",
+      "pin_workers": true,
+      "pin_client_workers": true,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "profile": false,
+      "heap_profile": null,
+      "heap_library": "/usr/lib/libtcmalloc.so",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/owner-poll-mixed-owner-poll-1.json"
+    },
+    "owner-poll-capacity-owner-poll-1.json": {
+      "udp_receive_buffer_bytes": 4194304,
+      "transport": "webtransport",
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/owner-poll-relay",
+      "client": "artifacts/webtransport/binaries/buffered-direct-capacity",
+      "server_preload": null,
+      "users": 100000,
+      "room_size": 16,
+      "concurrency": 64,
+      "source_addresses": 64,
+      "seconds": 4,
+      "waves": 1,
+      "payload_bytes": 1024,
+      "active_percent": 100,
+      "client_workers": 8,
+      "messages_per_second": 1,
+      "user_latency_output": null,
+      "user_latency_histogram_output": null,
+      "churn_workers": 0,
+      "ping_interval_secs": 0,
+      "tcp_send_buffer_bytes": 0,
+      "tcp_receive_buffer_bytes": 0,
+      "connection_headroom": 0,
+      "pin_workers": true,
+      "pin_server_workers": false,
+      "pin_client_workers": true,
+      "profile": false,
+      "profile_counters": false,
+      "profile_client": false,
+      "profile_frequency": 499,
+      "profile_scheduling": false,
+      "profile_kernel": false,
+      "pressure_client": null,
+      "workers": 8,
+      "read_storage": "worker",
+      "server_cpus": "0-7",
+      "client_cpus": "8-15",
+      "timeout": 240,
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/owner-poll-capacity-owner-poll-1.json",
+      "kernel_socket_resources": false,
+      "kernel_slab_sizes": null
+    },
+    "reliable-quantum-load-private-high-stream-1.json": {
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/reliable-admission-quantum-relay",
+      "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/datagram-load-final",
+      "mode": "stream",
+      "pairs": 32,
+      "readers": 0,
+      "private_rate": 32000,
+      "fanout_rate": 500,
+      "seconds": 4,
+      "drain_ms": 1000,
+      "payload_bytes": 1024,
+      "workers": 4,
+      "client_workers": 8,
+      "udp_receive_buffer_bytes": 4194304,
+      "io_timeout_secs": 30,
+      "timeout": 180,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-quantum-load-private-high-stream-1.json"
+    },
+    "reliable-quantum-load-mixed-high-stream-1.json": {
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/reliable-admission-quantum-relay",
+      "client": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/datagram-load-final",
+      "mode": "stream",
+      "pairs": 32,
+      "readers": 1024,
+      "private_rate": 8000,
+      "fanout_rate": 1000,
+      "seconds": 4,
+      "drain_ms": 1000,
+      "payload_bytes": 1024,
+      "workers": 4,
+      "client_workers": 8,
+      "udp_receive_buffer_bytes": 4194304,
+      "io_timeout_secs": 30,
+      "timeout": 180,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/reliable-quantum-load-mixed-high-stream-1.json"
+    },
+    "owner-poll-mixed-high-datagram-1.json": {
+      "server": "artifacts/webtransport/binaries/owner-poll-relay",
+      "client": "artifacts/webtransport/binaries/datagram-load-final",
+      "mode": "datagram",
+      "pairs": 32,
+      "readers": 1024,
+      "private_rate": 8000,
+      "fanout_rate": 1000,
+      "seconds": 4,
+      "drain_ms": 1000,
+      "payload_bytes": 1024,
+      "workers": 4,
+      "client_workers": 8,
+      "udp_receive_buffer_bytes": 4194304,
+      "io_timeout_secs": 30,
+      "timeout": 180,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "output": "artifacts/webtransport/owner-poll-mixed-high-datagram-1.json"
+    },
+    "thin-pending-final-mixed.json": {
+      "udp_receive_buffer_bytes": 4194304,
+      "transport": "webtransport",
+      "tls_front": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/examples/tls_front",
+      "tls_cert": null,
+      "tls_key": null,
+      "tls_ca": null,
+      "server": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/thin-pending-formatted-relay",
+      "client": "target/release/examples/inspection",
+      "client_source_root": null,
+      "mode": "none",
+      "page_size": null,
+      "value_kind": "bytes",
+      "private_payload_bytes": 1024,
+      "rooms": 0,
+      "seconds": 4,
+      "inspectors": 0,
+      "inspection_interval_ms": 10,
+      "pairs": 32,
+      "client_workers": 8,
+      "churn_workers": 0,
+      "workers": 4,
+      "fanout_readers": 1024,
+      "fanout_global_observers": false,
+      "fanout_global_broadcast": false,
+      "fanout_windows_per_second": 0,
+      "fanout_latency_output": null,
+      "fanout_churn_every": 0,
+      "fanout_window": 4,
+      "fanout_close_window": 1,
+      "read_storage": "worker",
+      "pin_workers": true,
+      "pin_client_workers": true,
+      "server_cpus": "0-3",
+      "client_cpus": "8-15",
+      "profile": false,
+      "heap_profile": null,
+      "heap_library": "/usr/lib/libtcmalloc.so",
+      "output": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/thin-pending-final-mixed.json"
+    }
+  },
+  "source_sha256": {
+    "vendor/quinn-proto/src/connection/send_buffer.rs": "0a5bceb0bfc53606ac0cc7f0f338569fe7339c56a3eae2757bfe6f3818d21276"
+  },
+  "vendor_verification": "Verified 272 vendored files against 5 pinned published archives and 4 declared patches.\n",
+  "decision": "Retain the eliminated 300k range-tree allocation site and 59.62 MiB ordinary RSS reduction. Longer throughput +0.14% private, +0.83% room, -1.14% mixed. Earlier short gains are not the final throughput claim. ACK wire policy and fragmented-range fallback are unchanged."
+}

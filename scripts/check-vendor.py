@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that the local codecs equal pinned published archives plus our patch."""
+"""Verify local protocol sources against pinned published archives and patches."""
 import hashlib
 import json
 import os
@@ -46,8 +46,11 @@ def main():
         # Apply in a separate, disposable filesystem tree. Ambient Git settings
         # must not redirect this verification into the calling worktree.
         environment = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        subprocess.run(["git", "apply", str(ROOT / "vendor/read-buffer-reclaim.patch")],
-                       cwd=prepared, env=environment, check=True)
+        patches = dict.fromkeys(info.get("patch", "read-buffer-reclaim.patch")
+                                for info in provenance.values())
+        for patch in patches:
+            subprocess.run(["git", "apply", str(ROOT / "vendor" / patch)],
+                           cwd=prepared, env=environment, check=True)
         total = 0
         for name in provenance:
             expected, actual = files(prepared / name), files(ROOT / "vendor" / name)
@@ -60,7 +63,7 @@ def main():
                                  if expected.get(k) != actual.get(k))
                 raise RuntimeError(f"{name} differs from its published archive plus patch: {changed}")
             total += len(actual)
-    print(f"Verified {total} vendored files against two pinned published archives plus the declared patch.")
+    print(f"Verified {total} vendored files against {len(provenance)} pinned published archives and {len(patches)} declared patches.")
 
 
 if __name__ == "__main__":

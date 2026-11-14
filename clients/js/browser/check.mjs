@@ -40,15 +40,17 @@ form.addEventListener('submit', async event => {
   try {
     // Per-run names isolate concurrent browser checks and disappear on cleanup.
     const suffix = crypto.randomUUID().slice(0, 8);
+    const pin = document.querySelector('#pin').value.trim();
+    const transportOptions = pin ? { serverCertificateHashes: [{ algorithm: 'sha-256', value: Uint8Array.from(pin.split(':'), byte => parseInt(byte, 16)) }] } : {};
     for (const channel of [`web-${suffix}`, `web-${suffix}`, `out-${suffix}`]) {
-      const client = await Relay.connect(report.url, channel, { requestTimeoutMs: 5_000 });
+      const client = await Relay.connect(report.url, channel, { requestTimeoutMs: 5_000, ...transportOptions });
       clients.push(client);
       client.addEventListener('error', ({ detail }) => report.errors.push(String(detail)));
       assert(typeof client.userId === 'bigint', 'Session ID lost its BigInt type');
-      assert(client.ws.protocol === 'war.cbor.v1', 'CBOR subprotocol was not negotiated');
+      assert(client.maxDatagramSize > 0, 'Datagrams were not negotiated');
     }
     const [a, b, outsider] = clients;
-    pass('Three browser WebSockets joined with BigInt IDs and war.cbor.v1.');
+    pass('Three browser WebTransport sessions joined with BigInt IDs and datagrams.');
 
     const value = {
       text: 'Hello π / 世界', bytes: new Uint8Array([0, 1, 127, 255]),
@@ -67,6 +69,12 @@ form.addEventListener('submit', async event => {
     const privatePacket = (await privateMessage).detail;
     assert(privatePacket.sender === b.userId && privatePacket.value === 'cross-channel private', 'Private delivery changed');
     pass('Private routing reached a session in a different channel.');
+
+    const unreliable = once(outsider, 'message');
+    await a.sendUnreliable(outsider.userId, 'fresh state');
+    const update = (await unreliable).detail;
+    assert(update.unreliable === true && update.value === 'fresh state' && update.sender === a.userId, 'Datagram metadata or value changed');
+    pass('An unreliable datagram reached another room with explicit delivery metadata.');
 
     const bytes = new Uint8Array(131_072);
     for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
@@ -102,15 +110,15 @@ form.addEventListener('submit', async event => {
     b.close();
     assert((await disconnect).detail.userId === b.userId, 'Disconnect ID changed');
     const closedEvent = await closed;
-    assert(closedEvent.wasClean && closedEvent.code === 1000, 'Peer Close handshake failed');
+    assert(closedEvent.code === 1000, 'Peer session closure failed');
     for (const client of [a, outsider]) {
       const closed = once(client.ws, 'close');
       client.close();
       const event = await closed;
-      assert(event.wasClean && event.code === 1000, 'Final Close handshake failed');
+      assert(event.code === 1000, 'Final session closure failed');
     }
     assert(report.errors.length === 0, report.errors.join('\n'));
-    pass('Disconnect notification and all three clean Close handshakes completed.');
+    pass('Disconnect notification and all three clean session closures completed.');
     report.passed = true;
     report.userAgent = navigator.userAgent;
     status.textContent = 'Passed';

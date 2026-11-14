@@ -1,0 +1,2543 @@
+{
+  "status": "Rejected guarded-peek inline assembler; established-session IO baseline remains selected",
+  "decision": "reject",
+  "retained_product_commit": "49f266e8360c7c1d4c25849dc1ced92922f345eb",
+  "build_manifest": {
+    "path": "artifacts/webtransport/inline-peek-build.json",
+    "sha256": "ff2aaa13e716baedb3b9050b275b2ee6d527fd4b74635d9662ee515213ad1ee5",
+    "contents": {
+      "status": "complete",
+      "scope": "Guarded inline assembler experiment; no memory or performance claim before workload checks.",
+      "timestamp_utc": "2026-11-07T01:39:38.397428+00:00",
+      "checkout_head": "9cfc5a4a9f8edabfaeccffd8743c0b78bf7c342b",
+      "controller": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-inline-peek-screen.py",
+        "sha256": "31dc628d66012b8df30b581a33a7da663aba03d74ba78883cd1254aba6816b35",
+        "bytes": 5119
+      },
+      "build_helpers": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-stronger-send-state-diagnostic.py",
+        "sha256": "8b87b9c27c859c41df3cee920111c14b430e2b1bd0991d9f09a77f00a7146138",
+        "bytes": 11204
+      },
+      "base_source_manifest": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/base-source-manifest.json",
+        "sha256": "5856a864744c353cddd1822145ebc5b3b2eab03f9b4d05e30ca69cc08dc88257",
+        "bytes": 96276
+      },
+      "base_assembler": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/base-assembler.rs",
+        "sha256": "024d67fc87eadb5818015ec2b040879cb05cad9bedbbd8e95b1906fabd5f4757",
+        "bytes": 31042
+      },
+      "candidate": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-peek-formatted.rs",
+        "sha256": "8b90bcd4ff27679033653b216aee29b80054bf447fe687963641c97cb38ab91a",
+        "bytes": 38123
+      },
+      "source_patch": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/source.patch",
+        "sha256": "20590fa5cddccde2a39b0486cb65c14f5d2cb98e08f3d88a623d6ddde5f9831b",
+        "bytes": 11353
+      },
+      "selected": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+        "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+        "bytes": 7925208
+      },
+      "checks": [
+        {
+          "command": [
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "vendor/quinn-proto/Cargo.toml",
+            "--target-dir",
+            "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/proto-target",
+            "--lib"
+          ],
+          "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+          "log": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/proto-tests.log",
+            "sha256": "605c1b8494f69da1bc5765002fc30016a879ea0acd47f9e92b87f55415bba594",
+            "bytes": 22612
+          },
+          "required_passing_tests": [
+            "inline_spill_partial_read_and_reuse_preserve_accounting",
+            "partial_inline_clear_and_retirement_release_only_staged_ownership"
+          ]
+        },
+        {
+          "command": [
+            "cargo",
+            "test",
+            "--locked",
+            "--target-dir",
+            "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target"
+          ],
+          "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+          "log": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/root-tests.log",
+            "sha256": "16f34e3c0a7819d9ded031a753b84c15fee724f3c4ce90acfcaecfb5eeaf6b31",
+            "bytes": 33352
+          },
+          "required_passing_tests": []
+        },
+        {
+          "command": [
+            "cargo",
+            "clippy",
+            "--locked",
+            "--target-dir",
+            "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+          "log": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/clippy.log",
+            "sha256": "0ba2bad6b433acba559c28ca1494b051ee71ad739aee2a47edd36d0b124bfa26",
+            "bytes": 6426
+          },
+          "required_passing_tests": []
+        },
+        {
+          "command": [
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "--bin",
+            "war-relay",
+            "--target-dir",
+            "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target"
+          ],
+          "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+          "log": {
+            "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/release-build.log",
+            "sha256": "0221d93794478748679d7bd125388af91645caaf75ae441cb43ad9dd626df24f",
+            "bytes": 7091
+          },
+          "required_passing_tests": []
+        }
+      ],
+      "restored": true,
+      "toolchain": {
+        "rustc": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-unknown-linux-gnu\nrelease: 1.91.1\nLLVM version: 21.1.2",
+        "cargo": "cargo 1.91.1 (ea2d97820 2025-10-10)\nrelease: 1.91.1\ncommit-hash: ea2d97820c16195b0ca3fadb4319fe512c199a43\ncommit-date: 2025-10-10\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.1 (sys:0.20.2 vendored)\nlibcurl: 8.15.0-DEV (sys:0.4.83+curl-8.15.0 vendored ssl:OpenSSL/3.5.2)\nssl: OpenSSL 3.5.2 5 Aug 2025\nos: Arch Linux [64-bit]"
+      },
+      "build_environment": {},
+      "server": {
+        "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/inline-peek-relay",
+        "sha256": "7788af24546ee87eb4dd5119ff240dc17a6f44779eeb2f9c244203be862a75fc",
+        "bytes": 7925432
+      }
+    }
+  },
+  "pre_next_diagnostic_identity_verification": {
+    "path": "artifacts/webtransport/inline-peek-report-identity-check.json",
+    "sha256": "efd76d953089f78a2ccef1d5f82d84f83b5e3cd68d5a8dd72287054e4e75319f",
+    "contents": {
+      "timestamp_utc": "2026-11-07T01:54:40.477554+00:00",
+      "status": "passed",
+      "scope": "Source/binary identity verified after inline-peek profiles terminal and before parent launches the next temporary event diagnostic build. Later current-tree instrumentation must not be confused with this frozen candidate.",
+      "build_manifest": {
+        "path": "artifacts/webtransport/inline-peek-build.json",
+        "sha256": "ff2aaa13e716baedb3b9050b275b2ee6d527fd4b74635d9662ee515213ad1ee5"
+      },
+      "verified_build_references": [
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-inline-peek-screen.py",
+          "sha256": "31dc628d66012b8df30b581a33a7da663aba03d74ba78883cd1254aba6816b35",
+          "bytes": 5119
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/build-stronger-send-state-diagnostic.py",
+          "sha256": "8b87b9c27c859c41df3cee920111c14b430e2b1bd0991d9f09a77f00a7146138",
+          "bytes": 11204
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/base-source-manifest.json",
+          "sha256": "5856a864744c353cddd1822145ebc5b3b2eab03f9b4d05e30ca69cc08dc88257",
+          "bytes": 96276
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/base-assembler.rs",
+          "sha256": "024d67fc87eadb5818015ec2b040879cb05cad9bedbbd8e95b1906fabd5f4757",
+          "bytes": 31042
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-peek-formatted.rs",
+          "sha256": "8b90bcd4ff27679033653b216aee29b80054bf447fe687963641c97cb38ab91a",
+          "bytes": 38123
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/source.patch",
+          "sha256": "20590fa5cddccde2a39b0486cb65c14f5d2cb98e08f3d88a623d6ddde5f9831b",
+          "bytes": 11353
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/target/release/war-relay",
+          "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0",
+          "bytes": 7925208
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/inline-peek-relay",
+          "sha256": "7788af24546ee87eb4dd5119ff240dc17a6f44779eeb2f9c244203be862a75fc",
+          "bytes": 7925432
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/proto-tests.log",
+          "sha256": "605c1b8494f69da1bc5765002fc30016a879ea0acd47f9e92b87f55415bba594",
+          "bytes": 22612
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/root-tests.log",
+          "sha256": "16f34e3c0a7819d9ded031a753b84c15fee724f3c4ce90acfcaecfb5eeaf6b31",
+          "bytes": 33352
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/clippy.log",
+          "sha256": "0ba2bad6b433acba559c28ca1494b051ee71ad739aee2a47edd36d0b124bfa26",
+          "bytes": 6426
+        },
+        {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/release-build.log",
+          "sha256": "0221d93794478748679d7bd125388af91645caaf75ae441cb43ad9dd626df24f",
+          "bytes": 7091
+        }
+      ],
+      "verified_base_source_files": 373,
+      "frozen_baseline": {
+        "path": "artifacts/webtransport/binaries/session-io-relay",
+        "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0"
+      }
+    }
+  },
+  "server_images": {
+    "baseline": {
+      "path": "artifacts/webtransport/binaries/session-io-relay",
+      "sha256": "1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0"
+    },
+    "candidate": {
+      "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/binaries/inline-peek-relay",
+      "sha256": "7788af24546ee87eb4dd5119ff240dc17a6f44779eeb2f9c244203be862a75fc",
+      "bytes": 7925432
+    }
+  },
+  "source_patch": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/source.patch",
+    "sha256": "20590fa5cddccde2a39b0486cb65c14f5d2cb98e08f3d88a623d6ddde5f9831b",
+    "bytes": 11353,
+    "source": "--- a/vendor/quinn-proto/src/connection/assembler.rs\n+++ b/vendor/quinn-proto/src/connection/assembler.rs\n@@ -2,6 +2,7 @@\n     cmp::{Ordering, max},\n     collections::{BinaryHeap, binary_heap::PeekMut},\n     mem,\n+    ops::{Deref, DerefMut},\n };\n \n use bytes::{Buf, Bytes, BytesMut};\n@@ -12,7 +13,7 @@\n #[derive(Debug, Default)]\n pub(super) struct Assembler {\n     state: State,\n-    data: BinaryHeap<Buffer>,\n+    data: BufferStorage,\n     /// Total number of buffered bytes, including duplicates in ordered mode.\n     buffered: usize,\n     /// Estimated number of allocated bytes, will never be less than `buffered`.\n@@ -40,7 +41,7 @@\n     /// Release buffered data and its staging allocation without resetting the\n     /// consumed offset or ordering history. Used when a crypto space retires.\n     pub(super) fn discard_buffer(&mut self) {\n-        self.data = BinaryHeap::new();\n+        self.data = BufferStorage::default();\n         self.buffered = 0;\n         self.allocated = 0;\n     }\n@@ -56,7 +57,7 @@\n             }\n             let mut recvd = RangeSet::new();\n             recvd.insert(0..self.bytes_read);\n-            for chunk in &self.data {\n+            for chunk in self.data.iter() {\n                 recvd.insert(chunk.offset..chunk.offset + chunk.bytes.len() as u64);\n             }\n             self.state = State::Unordered { recvd };\n@@ -77,7 +78,7 @@\n                     // Next chunk is useless as the read index is beyond its end\n                     self.buffered -= chunk.bytes.len();\n                     self.allocated -= chunk.allocation_size;\n-                    PeekMut::pop(chunk);\n+                    BufferPeek::pop(chunk);\n                     continue;\n                 }\n \n@@ -100,7 +101,7 @@\n                 self.bytes_read += chunk.bytes.len() as u64;\n                 self.buffered -= chunk.bytes.len();\n                 self.allocated -= chunk.allocation_size;\n-                let chunk = PeekMut::pop(chunk);\n+                let chunk = BufferPeek::pop(chunk);\n                 Chunk::new(chunk.offset, chunk.bytes)\n             });\n         }\n@@ -113,7 +114,7 @@\n     fn defragment(&mut self) {\n         // Chunks smaller than min_chunk_size are merged regardless of fragmentation\n         let min_chunk_size = max(self.buffered.div_ceil(MAX_CHUNKS), MIN_RETAINED_CHUNK_SIZE);\n-        let new = BinaryHeap::with_capacity(self.data.len());\n+        let new = self.data.empty_for_compaction();\n         let old = mem::replace(&mut self.data, new);\n         let mut buffers = old.into_sorted_vec();\n         self.buffered = 0;\n@@ -244,6 +245,134 @@\n     }\n }\n \n+#[derive(Debug)]\n+enum BufferStorage {\n+    Inline(Option<Buffer>),\n+    Heap(BinaryHeap<Buffer>),\n+}\n+\n+impl Default for BufferStorage {\n+    fn default() -> Self {\n+        Self::Inline(None)\n+    }\n+}\n+\n+impl BufferStorage {\n+    fn empty_for_compaction(&self) -> Self {\n+        match self {\n+            Self::Inline(_) => Self::default(),\n+            Self::Heap(heap) => Self::Heap(BinaryHeap::with_capacity(heap.len())),\n+        }\n+    }\n+\n+    fn push(&mut self, buffer: Buffer) {\n+        match self {\n+            Self::Inline(slot) => match slot.take() {\n+                None => *slot = Some(buffer),\n+                Some(first) => *self = Self::Heap(BinaryHeap::from(vec![first, buffer])),\n+            },\n+            Self::Heap(heap) => heap.push(buffer),\n+        }\n+    }\n+\n+    fn peek_mut(&mut self) -> Option<BufferPeek<'_>> {\n+        match self {\n+            Self::Inline(slot) => {\n+                if slot.is_some() {\n+                    Some(BufferPeek::Inline(slot))\n+                } else {\n+                    None\n+                }\n+            }\n+            Self::Heap(heap) => heap.peek_mut().map(BufferPeek::Heap),\n+        }\n+    }\n+\n+    #[cfg(test)]\n+    fn peek(&self) -> Option<&Buffer> {\n+        match self {\n+            Self::Inline(slot) => slot.as_ref(),\n+            Self::Heap(heap) => heap.peek(),\n+        }\n+    }\n+\n+    fn len(&self) -> usize {\n+        match self {\n+            Self::Inline(slot) => usize::from(slot.is_some()),\n+            Self::Heap(heap) => heap.len(),\n+        }\n+    }\n+\n+    fn is_empty(&self) -> bool {\n+        self.len() == 0\n+    }\n+\n+    fn clear(&mut self) {\n+        // Keep a spilled heap's capacity across normal reads and stream reuse.\n+        match self {\n+            Self::Inline(slot) => *slot = None,\n+            Self::Heap(heap) => heap.clear(),\n+        }\n+    }\n+\n+    fn iter(&self) -> impl Iterator<Item = &Buffer> {\n+        let (inline, heap) = match self {\n+            Self::Inline(slot) => (slot.as_ref(), None),\n+            Self::Heap(heap) => (None, Some(heap)),\n+        };\n+        inline.into_iter().chain(heap.into_iter().flatten())\n+    }\n+\n+    fn into_sorted_vec(self) -> Vec<Buffer> {\n+        match self {\n+            Self::Inline(slot) => slot.into_iter().collect(),\n+            Self::Heap(heap) => heap.into_sorted_vec(),\n+        }\n+    }\n+\n+    #[cfg(test)]\n+    fn capacity(&self) -> usize {\n+        match self {\n+            Self::Inline(_) => 0,\n+            Self::Heap(heap) => heap.capacity(),\n+        }\n+    }\n+}\n+\n+enum BufferPeek<'a> {\n+    Inline(&'a mut Option<Buffer>),\n+    Heap(PeekMut<'a, Buffer>),\n+}\n+\n+impl BufferPeek<'_> {\n+    fn pop(self) -> Buffer {\n+        match self {\n+            Self::Inline(slot) => slot.take().unwrap(),\n+            Self::Heap(chunk) => PeekMut::pop(chunk),\n+        }\n+    }\n+}\n+\n+impl Deref for BufferPeek<'_> {\n+    type Target = Buffer;\n+\n+    fn deref(&self) -> &Buffer {\n+        match self {\n+            Self::Inline(slot) => slot.as_ref().unwrap(),\n+            Self::Heap(chunk) => chunk,\n+        }\n+    }\n+}\n+\n+impl DerefMut for BufferPeek<'_> {\n+    fn deref_mut(&mut self) -> &mut Buffer {\n+        match self {\n+            Self::Inline(slot) => slot.as_mut().unwrap(),\n+            Self::Heap(chunk) => chunk,\n+        }\n+    }\n+}\n+\n /// A chunk of data from the receive stream\n #[derive(Debug, PartialEq, Eq)]\n pub struct Chunk {\n@@ -387,19 +516,27 @@\n \n     #[test]\n     fn discard_buffer_preserves_consumed_offset_and_releases_staged_owner() {\n-        use std::sync::{Arc, atomic::{AtomicUsize, Ordering::SeqCst}};\n+        use std::sync::{\n+            Arc,\n+            atomic::{AtomicUsize, Ordering::SeqCst},\n+        };\n         struct Owned(Arc<AtomicUsize>);\n         impl AsRef<[u8]> for Owned {\n-            fn as_ref(&self) -> &[u8] { b\"later\" }\n+            fn as_ref(&self) -> &[u8] {\n+                b\"later\"\n+            }\n         }\n         impl Drop for Owned {\n-            fn drop(&mut self) { self.0.fetch_add(1, SeqCst); }\n+            fn drop(&mut self) {\n+                self.0.fetch_add(1, SeqCst);\n+            }\n         }\n         let dropped = Arc::new(AtomicUsize::new(0));\n         let mut x = Assembler::new();\n         x.insert(0, Bytes::from_static(b\"first\"), 5).unwrap();\n         drop(x.read(usize::MAX, true).unwrap());\n-        x.insert(5, Bytes::from_owner(Owned(dropped.clone())), 5).unwrap();\n+        x.insert(5, Bytes::from_owner(Owned(dropped.clone())), 5)\n+            .unwrap();\n         assert_eq!(dropped.load(SeqCst), 0);\n         x.discard_buffer();\n         assert_eq!(dropped.load(SeqCst), 1);\n@@ -408,6 +545,109 @@\n         // A retransmitted consumed prefix must not become application data again.\n         x.insert(0, Bytes::from_static(b\"first\"), 5).unwrap();\n         assert!(x.read(usize::MAX, true).is_none());\n+    }\n+\n+    #[test]\n+    fn inline_spill_partial_read_and_reuse_preserve_accounting() {\n+        let mut x = Assembler::new();\n+        x.insert(0, Bytes::from_static(b\"abcd\"), 8).unwrap();\n+        assert_eq!(x.data.capacity(), 0);\n+        assert_eq!((x.buffered, x.allocated), (4, 8));\n+        assert_eq!(\n+            x.read(1, true),\n+            Some(Chunk::new(0, Bytes::from_static(b\"a\")))\n+        );\n+        assert_eq!(x.data.capacity(), 0);\n+        assert_eq!((x.buffered, x.allocated), (3, 8));\n+        x.insert(4, Bytes::from_static(b\"ef\"), 6).unwrap();\n+        let capacity = x.data.capacity();\n+        assert!(capacity >= 2);\n+        assert_eq!((x.buffered, x.allocated), (5, 14));\n+        assert_eq!(\n+            x.read(1, true),\n+            Some(Chunk::new(1, Bytes::from_static(b\"b\")))\n+        );\n+        assert_eq!((x.buffered, x.allocated), (4, 14));\n+        assert_eq!(\n+            x.read(usize::MAX, true),\n+            Some(Chunk::new(2, Bytes::from_static(b\"cd\")))\n+        );\n+        assert_eq!((x.buffered, x.allocated), (2, 6));\n+        x.clear();\n+        assert_eq!((x.buffered, x.allocated), (0, 0));\n+        assert_eq!(x.bytes_read(), 4);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.reinit();\n+        assert_eq!(x.bytes_read(), 0);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.insert(0, Bytes::from_static(b\"abcdef\"), 6).unwrap();\n+        x.insert(2, Bytes::from_static(b\"cdefgh\"), 6).unwrap();\n+        assert_eq!(x.data.capacity(), capacity);\n+        // Advancing the first chunk past the second must restore heap ordering.\n+        assert_eq!(\n+            x.read(3, true),\n+            Some(Chunk::new(0, Bytes::from_static(b\"abc\")))\n+        );\n+        assert_eq!(\n+            x.read(2, true),\n+            Some(Chunk::new(3, Bytes::from_static(b\"de\")))\n+        );\n+        assert_eq!(\n+            x.read(usize::MAX, true),\n+            Some(Chunk::new(5, Bytes::from_static(b\"f\")))\n+        );\n+        assert_eq!(\n+            x.read(usize::MAX, true),\n+            Some(Chunk::new(6, Bytes::from_static(b\"gh\")))\n+        );\n+        assert_eq!((x.buffered, x.allocated), (0, 0));\n+        assert_eq!(x.bytes_read(), 8);\n+        assert_eq!(x.data.capacity(), capacity);\n+        x.discard_buffer();\n+        assert_eq!(x.data.capacity(), 0);\n+    }\n+\n+    #[test]\n+    fn partial_inline_clear_and_retirement_release_only_staged_ownership() {\n+        use std::sync::{\n+            Arc,\n+            atomic::{AtomicUsize, Ordering::SeqCst},\n+        };\n+        struct Owned(Arc<AtomicUsize>);\n+        impl AsRef<[u8]> for Owned {\n+            fn as_ref(&self) -> &[u8] {\n+                b\"abcd\"\n+            }\n+        }\n+        impl Drop for Owned {\n+            fn drop(&mut self) {\n+                self.0.fetch_add(1, SeqCst);\n+            }\n+        }\n+        for retirement in [false, true] {\n+            let dropped = Arc::new(AtomicUsize::new(0));\n+            let mut x = Assembler::new();\n+            x.insert(0, Bytes::from_owner(Owned(dropped.clone())), 4)\n+                .unwrap();\n+            let first = x.read(1, true).unwrap();\n+            assert_eq!(first.bytes, b\"a\"[..]);\n+            assert_eq!((x.buffered, x.allocated), (3, 4));\n+            if retirement {\n+                x.discard_buffer();\n+            } else {\n+                x.clear();\n+            }\n+            assert_eq!((x.buffered, x.allocated), (0, 0));\n+            assert_eq!(x.bytes_read(), 1);\n+            assert_eq!(dropped.load(SeqCst), 0);\n+            drop(first);\n+            assert_eq!(dropped.load(SeqCst), 1);\n+            x.insert(0, Bytes::from_static(b\"abcd\"), 4).unwrap();\n+            assert_eq!(\n+                x.read(usize::MAX, true),\n+                Some(Chunk::new(1, Bytes::from_static(b\"bcd\")))\n+            );\n+        }\n     }\n \n     #[test]\n"
+  },
+  "candidate_source": {
+    "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-assembler-peek-formatted.rs",
+    "sha256": "8b90bcd4ff27679033653b216aee29b80054bf447fe687963641c97cb38ab91a",
+    "bytes": 38123
+  },
+  "hypothesis": "Inline the first buffered receive chunk to remove persistent assembler heap roots while preserving the original guarded peek/read algorithm after spill.",
+  "implementation": "Inline Option<Buffer> spills on a second chunk. BufferPeek wraps either inline ownership or BinaryHeap PeekMut, preserving guarded mutation and pop semantics; ordinary clear/reuse retains spilled capacity and retirement releases it. No pop/update/push rewrite of the read loop.",
+  "previous_pop_candidate": {
+    "server_sha256": "22b939f92e149211f02d846b57b4d19058a04503e72ca2aa8499f22634b7ded5",
+    "report": {
+      "path": "docs/reports/webtransport-inline-assembler-screen-2026-11-06.json",
+      "sha256": "0f5e1ab197dbfe5d35fc112863e6360da34e18c40b75e15b542d7ae056e71dca"
+    },
+    "scope": "Separate prior rejected representation/read-algorithm experiment. Its baseline and image differ; these results are not a direct head-to-head speed comparison."
+  },
+  "scope": "Fixed original benchmark clients, same resource budgets and matched serialized workloads. Ordinary RSS/CPU and diagnostic requested-live captures remain separate. Current source was verified before the next temporary diagnostic build; frozen candidate and source artifacts identify this experiment independently of subsequent temporary working-tree instrumentation.",
+  "validation": {
+    "checks": [
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "vendor/quinn-proto/Cargo.toml",
+          "--target-dir",
+          "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/proto-target",
+          "--lib"
+        ],
+        "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+        "log": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/proto-tests.log",
+          "sha256": "605c1b8494f69da1bc5765002fc30016a879ea0acd47f9e92b87f55415bba594",
+          "bytes": 22612
+        },
+        "required_passing_tests": [
+          "inline_spill_partial_read_and_reuse_preserve_accounting",
+          "partial_inline_clear_and_retirement_release_only_staged_ownership"
+        ],
+        "results": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.76s",
+          "test result: ok. 323 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+        ]
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--target-dir",
+          "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target"
+        ],
+        "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+        "log": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/root-tests.log",
+          "sha256": "16f34e3c0a7819d9ded031a753b84c15fee724f3c4ce90acfcaecfb5eeaf6b31",
+          "bytes": 33352
+        },
+        "required_passing_tests": [],
+        "results": [
+          "    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.84s",
+          "test result: ok. 165 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.86s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+          "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.49s",
+          "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.23s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      {
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--target-dir",
+          "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+        "log": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/clippy.log",
+          "sha256": "0ba2bad6b433acba559c28ca1494b051ee71ad739aee2a47edd36d0b124bfa26",
+          "bytes": 6426
+        },
+        "required_passing_tests": [],
+        "results": [
+          "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.90s"
+        ]
+      },
+      {
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "--bin",
+          "war-relay",
+          "--target-dir",
+          "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/target"
+        ],
+        "cwd": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next",
+        "log": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-build/release-build.log",
+          "sha256": "0221d93794478748679d7bd125388af91645caaf75ae441cb43ad9dd626df24f",
+          "bytes": 7091
+        },
+        "required_passing_tests": [],
+        "results": [
+          "    Finished `release` profile [optimized] target(s) in 26.22s"
+        ]
+      }
+    ],
+    "totals": {
+      "proto_passed": 323,
+      "root_passed": 253,
+      "root_existing_ignored": 1
+    },
+    "focused_coverage": "Inline/spill partial reads, heap ordering restoration, duplicates, accounting, clear/reuse, retirement, and retained Bytes ownership through partial consumption; focused tests named in the build manifest."
+  },
+  "infrastructure_history": {
+    "v1": {
+      "path": "artifacts/webtransport/inline-peek-memory-summary.json",
+      "sha256": "72180f890b8e5e9e5c497bd57337c1e7aaf5a2d8e33a01a7d5cb0104373d397a",
+      "error": "TypeError(\"'NoneType' object is not subscriptable\")",
+      "log": {
+        "path": "artifacts/webtransport/inline-peek-memory-screen.log",
+        "sha256": "d7d99e900c5f24e312ffe62a054aff830c26df489cb6bbdfb93353ccf5fbe78c"
+      },
+      "classification": "Post-success controller error: capacity.run returns None after writing the passed baseline receipt. Baseline ordinary application workload is passed, not failed."
+    },
+    "v2": {
+      "path": "artifacts/webtransport/inline-peek-memory-v2-summary.json",
+      "sha256": "2a94117e0e6cc61a529a7ee9170aeabb862c47d5a549eeb211915d70f772d2e0",
+      "error": "FileNotFoundError(2, 'No such file or directory')",
+      "log": {
+        "path": "artifacts/webtransport/inline-peek-memory-screen-v2.log",
+        "sha256": "aebf195b6bcc16d731815bf21aa448f08bf7d3c14456a69653e9b65dd4639c63"
+      },
+      "failed_heap_receipt": {
+        "path": "artifacts/webtransport/inline-peek-heap-baseline.json",
+        "sha256": "074b19537f40c998f2e0dbf6f9bc5338c4d3ae3d425be0d3592f1c12c9e375b6"
+      },
+      "heap_error": "FileNotFoundError(2, 'No such file or directory')",
+      "saved_event_count": 0,
+      "kernel_resource_diagnostic": {
+        "scope": "Per-process SOCK_DIAG snapshots at quiescent phase gates. Diagnostic scan overhead excludes this run from ordinary timing comparisons. Kernel counters and slab object estimates are separate from RSS and are not a complete kernel allocation total.",
+        "slab_metadata_sha256": null
+      },
+      "classification": "Diagnostic kernel-accounting preflight SOCK_DIAG ENOENT, before any saved capacity gate; not a baseline application failure. Preserve this failed diagnostic attempt separately from the later allocation-only captures."
+    },
+    "completed_heap_controller": {
+      "path": "artifacts/webtransport/inline-peek-heap-summary.json",
+      "sha256": "3f8f8a330f8015198e8302ba3d69e0f76a3aaaa00ac3e65a4111df55aa0199e0"
+    }
+  },
+  "ordinary_capacity_100000": {
+    "baseline": {
+      "path": "artifacts/webtransport/inline-peek-capacity-baseline.json",
+      "sha256": "2524a6cf28cb3088d7846fbaf9becd913bf6bd783815ec14ac7ae88ae358dd9f",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "setup_seconds": 10.572513156,
+      "connected_gate_wall_seconds": 10.595341086038388,
+      "phase_server_rss_mib": {
+        "connected": 1869.76171875,
+        "ready": 1889.796875,
+        "measured": 1892.55078125,
+        "postcheck": 1896.44921875,
+        "done": 1896.44921875
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.265463384974282,
+        "server_cpu_seconds": 6.120000000000001,
+        "client_cpu_seconds": 6.779999999999998,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99684.22137022772,
+        "server_user_cpu_seconds": 4.950000000000003,
+        "server_system_cpu_seconds": 1.17,
+        "round_trip": {
+          "max_ms": 3.299493,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 2.364742,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "cleanup_checked": {
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_channels": 1
+      }
+    },
+    "candidate": {
+      "path": "artifacts/webtransport/inline-peek-capacity-candidate.json",
+      "sha256": "3b223932cdc85a0f1a5fb2cd3ec61afa483e1737636935b8c295a7961e4e08d8",
+      "client_sha256": "ec893ebc63ba5458ca52559fb1d3f612ab49fb1d3e63126cc70a9fe0e33aad27",
+      "setup_seconds": 10.405832965,
+      "connected_gate_wall_seconds": 10.428719913994428,
+      "phase_server_rss_mib": {
+        "connected": 1812.5234375,
+        "ready": 1832.625,
+        "measured": 1835.328125,
+        "postcheck": 1838.88671875,
+        "done": 1838.88671875
+      },
+      "measurement": {
+        "wave": 1,
+        "gate_wall_seconds": 4.26571830897592,
+        "server_cpu_seconds": 5.91,
+        "client_cpu_seconds": 6.820000000000004,
+        "application_deliveries": 400000,
+        "planned_deliveries_per_second": 100000,
+        "stable_deliveries_per_second": 99688.7397544013,
+        "server_user_cpu_seconds": 4.73,
+        "server_system_cpu_seconds": 1.1799999999999997,
+        "round_trip": {
+          "max_ms": 10.383078,
+          "p50_upper_ms": 0.524288,
+          "p99_upper_ms": 1.048576,
+          "samples": 400000
+        },
+        "schedule_lag": {
+          "max_ms": 3.058457,
+          "p50_upper_ms": 1.048576,
+          "p99_upper_ms": 2.097152,
+          "samples": 25000
+        }
+      },
+      "cleanup_checked": {
+        "war_connections": 0,
+        "war_sessions": 0,
+        "war_quic_connections": 0,
+        "war_queued_bytes": 0,
+        "war_variable_bytes": 0,
+        "war_read_buffer_reserved_bytes": 0,
+        "war_output_queue_capacity_bytes": 0,
+        "war_channels": 1
+      }
+    }
+  },
+  "ordinary_ready_rss_saving_mib": 57.171875,
+  "separate_requested_live_captures": {
+    "baseline": {
+      "capture_receipt": {
+        "path": "artifacts/webtransport/inline-peek-heap-only-baseline.json",
+        "sha256": "c37af5015310d7fc328c346b26c6934301b289d228e0ce952c1f40cd2fe0159c"
+      },
+      "phases": {
+        "ready": {
+          "path": "artifacts/webtransport/inline-peek-heap-only-baseline-ready-stacks.json",
+          "sha256": "e0e57b0a2df721e5c3191e5bb63e69acc8c50bad591f287938da03c533b792fb",
+          "requested_live_bytes": 1847927909,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-heap-only-baseline_824078.0002.heap",
+          "heap_sha256": "66bd953cd713654220ef4fe81a9a9828bc23118a36f0f7804f649ff1a2375943",
+          "leading_allocation_site_groups": [
+            {
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "mean_bytes": 5344.0,
+              "objects": 100000,
+              "bytes": 534400000
+            },
+            {
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+              "mean_bytes": 576.0,
+              "objects": 400044,
+              "bytes": 230425344
+            },
+            {
+              "function": "war_relay::main::{{closure}}",
+              "mean_bytes": 2048.0,
+              "objects": 100000,
+              "bytes": 204800000
+            },
+            {
+              "function": "<quinn_proto::crypto::rustls::QuicServerConfig as quinn_proto::crypto::ServerConfig>::start_session",
+              "mean_bytes": 1032.0,
+              "objects": 100000,
+              "bytes": 103200000
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 224.0,
+              "objects": 400000,
+              "bytes": 89600000
+            },
+            {
+              "function": "web_transport_quinn::session::Session::new",
+              "mean_bytes": 512.0,
+              "objects": 100000,
+              "bytes": 51200000
+            },
+            {
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::header_protection_key",
+              "mean_bytes": 256.0,
+              "objects": 200000,
+              "bytes": 51200000
+            },
+            {
+              "function": "quinn_proto::connection::Connection::process_payload",
+              "mean_bytes": 136.0,
+              "objects": 300000,
+              "bytes": 40800000
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 192.0,
+              "objects": 200000,
+              "bytes": 38400000
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 34603024.0,
+              "objects": 1,
+              "bytes": 34603024
+            },
+            {
+              "function": "quinn_proto::connection::streams::SendStream::write",
+              "mean_bytes": 160.0,
+              "objects": 200000,
+              "bytes": 32000000
+            },
+            {
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "mean_bytes": 296.0,
+              "objects": 100000,
+              "bytes": 29600000
+            },
+            {
+              "function": "war_relay::webtransport::session::{{closure}}",
+              "mean_bytes": 288.0,
+              "objects": 100000,
+              "bytes": 28800000
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 280.0,
+              "objects": 100000,
+              "bytes": 28000000
+            }
+          ],
+          "crypto_vecdeque_224b": {
+            "objects": 100000,
+            "bytes": 22400000
+          },
+          "legacy_224b_binary_heap_roots": {
+            "objects": 300000,
+            "bytes": 67200000
+          },
+          "all_captured_assembler_staging": {
+            "objects": 300000,
+            "bytes": 67200000
+          }
+        },
+        "done": {
+          "path": "artifacts/webtransport/inline-peek-heap-only-baseline-done-stacks.json",
+          "sha256": "470f9b99adab3e50a95983d1efecb922e53a189667dff613d1e89f2a30aaa5ec",
+          "requested_live_bytes": 71230170,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-heap-only-baseline_824078.0005.heap",
+          "heap_sha256": "5fa6d61384717ea0dfca9ce08d34ff8ef09b02eaddd4c769b7bf93b2898cd323",
+          "leading_allocation_site_groups": [
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 34603024.0,
+              "objects": 1,
+              "bytes": 34603024
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 22020096.0,
+              "objects": 1,
+              "bytes": 22020096
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 5373968.0,
+              "objects": 1,
+              "bytes": 5373968
+            },
+            {
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "mean_bytes": 3014656.0,
+              "objects": 1,
+              "bytes": 3014656
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 2228240.0,
+              "objects": 1,
+              "bytes": 2228240
+            },
+            {
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "mean_bytes": 1179784.0,
+              "objects": 1,
+              "bytes": 1179784
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 1179664.0,
+              "objects": 1,
+              "bytes": 1179664
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 832.0,
+              "objects": 886,
+              "bytes": 737152
+            },
+            {
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "mean_bytes": 147592.0,
+              "objects": 1,
+              "bytes": 147592
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 1664.0,
+              "objects": 58,
+              "bytes": 96512
+            },
+            {
+              "function": "<war_relay::relay::messages::MessageFanouts as core::default::Default>::default",
+              "mean_bytes": 73864.0,
+              "objects": 1,
+              "bytes": 73864
+            },
+            {
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "mean_bytes": 65536.0,
+              "objects": 1,
+              "bytes": 65536
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 560.0,
+              "objects": 106,
+              "bytes": 59360
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 50192.0,
+              "objects": 1,
+              "bytes": 50192
+            }
+          ],
+          "crypto_vecdeque_224b": {
+            "objects": 0,
+            "bytes": 0
+          },
+          "legacy_224b_binary_heap_roots": {
+            "objects": 0,
+            "bytes": 0
+          },
+          "all_captured_assembler_staging": {
+            "objects": 0,
+            "bytes": 0
+          }
+        }
+      }
+    },
+    "candidate": {
+      "capture_receipt": {
+        "path": "artifacts/webtransport/inline-peek-heap-only-candidate.json",
+        "sha256": "38055a01b6e1d7bf05e843ab2bc27f23868448962cd6841ded5ce74864d64e66"
+      },
+      "phases": {
+        "ready": {
+          "path": "artifacts/webtransport/inline-peek-heap-only-candidate-ready-stacks.json",
+          "sha256": "1e179ebf5499e9df29dd4dd7dc8911d5cf14a6d24f1dc18b0377e46168071a88",
+          "requested_live_bytes": 1793103409,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-heap-only-candidate_824138.0002.heap",
+          "heap_sha256": "8327bdafabb975794f6263bb02b8acc6868ea61ceab490ff0202a0b7f2e039c5",
+          "leading_allocation_site_groups": [
+            {
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "mean_bytes": 5376.0,
+              "objects": 100000,
+              "bytes": 537600000
+            },
+            {
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::packet_key",
+              "mean_bytes": 576.0,
+              "objects": 400020,
+              "bytes": 230411520
+            },
+            {
+              "function": "war_relay::main::{{closure}}",
+              "mean_bytes": 2048.0,
+              "objects": 100000,
+              "bytes": 204800000
+            },
+            {
+              "function": "<quinn_proto::crypto::rustls::QuicServerConfig as quinn_proto::crypto::ServerConfig>::start_session",
+              "mean_bytes": 1032.0,
+              "objects": 100000,
+              "bytes": 103200000
+            },
+            {
+              "function": "web_transport_quinn::session::Session::new",
+              "mean_bytes": 512.0,
+              "objects": 100000,
+              "bytes": 51200000
+            },
+            {
+              "function": "<rustls::crypto::ring::quic::KeyBuilder as rustls::quic::Algorithm>::header_protection_key",
+              "mean_bytes": 256.0,
+              "objects": 200000,
+              "bytes": 51200000
+            },
+            {
+              "function": "quinn_proto::connection::Connection::process_payload",
+              "mean_bytes": 168.0,
+              "objects": 300000,
+              "bytes": 50400000
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 192.0,
+              "objects": 200000,
+              "bytes": 38400000
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 34603024.0,
+              "objects": 1,
+              "bytes": 34603024
+            },
+            {
+              "function": "quinn_proto::connection::streams::SendStream::write",
+              "mean_bytes": 160.0,
+              "objects": 200000,
+              "bytes": 32000000
+            },
+            {
+              "function": "quinn::endpoint::EndpointInner::accept",
+              "mean_bytes": 296.0,
+              "objects": 100000,
+              "bytes": 29600000
+            },
+            {
+              "function": "war_relay::webtransport::session::{{closure}}",
+              "mean_bytes": 288.0,
+              "objects": 100000,
+              "bytes": 28800000
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 280.0,
+              "objects": 100000,
+              "bytes": 28000000
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 128.0,
+              "objects": 200002,
+              "bytes": 25600256
+            }
+          ],
+          "crypto_vecdeque_224b": {
+            "objects": 100000,
+            "bytes": 22400000
+          },
+          "legacy_224b_binary_heap_roots": {
+            "objects": 0,
+            "bytes": 0
+          },
+          "all_captured_assembler_staging": {
+            "objects": 65,
+            "bytes": 7280
+          }
+        },
+        "done": {
+          "path": "artifacts/webtransport/inline-peek-heap-only-candidate-done-stacks.json",
+          "sha256": "aadf95409c94f72b6d102e356afcbcdb82d3d9b3c1650d94a8ed1d87f12d8569",
+          "requested_live_bytes": 70895195,
+          "heap": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-heap-only-candidate_824138.0005.heap",
+          "heap_sha256": "696406621fbcbbe6f133c81850013db2ce69dbb904707c453f1be29e271501fc",
+          "leading_allocation_site_groups": [
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 34603024.0,
+              "objects": 1,
+              "bytes": 34603024
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 22020096.0,
+              "objects": 1,
+              "bytes": 22020096
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 5373968.0,
+              "objects": 1,
+              "bytes": 5373968
+            },
+            {
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "mean_bytes": 3014656.0,
+              "objects": 1,
+              "bytes": 3014656
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 2228240.0,
+              "objects": 1,
+              "bytes": 2228240
+            },
+            {
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "mean_bytes": 1179784.0,
+              "objects": 1,
+              "bytes": 1179784
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 1179664.0,
+              "objects": 1,
+              "bytes": 1179664
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 832.0,
+              "objects": 496,
+              "bytes": 412672
+            },
+            {
+              "function": "papaya::raw::alloc::Table<T>::alloc",
+              "mean_bytes": 147592.0,
+              "objects": 1,
+              "bytes": 147592
+            },
+            {
+              "function": "alloc::raw_vec::finish_grow",
+              "mean_bytes": 1664.0,
+              "objects": 51,
+              "bytes": 84864
+            },
+            {
+              "function": "<war_relay::relay::messages::MessageFanouts as core::default::Default>::default",
+              "mean_bytes": 73864.0,
+              "objects": 1,
+              "bytes": 73864
+            },
+            {
+              "function": "quinn::endpoint::Endpoint::new_with_abstract_socket",
+              "mean_bytes": 65536.0,
+              "objects": 1,
+              "bytes": 65536
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 560.0,
+              "objects": 106,
+              "bytes": 59360
+            },
+            {
+              "function": "hashbrown::raw::RawTableInner::fallible_with_capacity",
+              "mean_bytes": 50192.0,
+              "objects": 1,
+              "bytes": 50192
+            }
+          ],
+          "crypto_vecdeque_224b": {
+            "objects": 0,
+            "bytes": 0
+          },
+          "legacy_224b_binary_heap_roots": {
+            "objects": 0,
+            "bytes": 0
+          },
+          "all_captured_assembler_staging": {
+            "objects": 0,
+            "bytes": 0
+          }
+        }
+      }
+    }
+  },
+  "memory_accounting": {
+    "net_requested_ready_saving_bytes": 54824500,
+    "net_requested_ready_saving_mib": 52.28471755981445,
+    "core_growth_bytes": 3200000,
+    "receive_state_growth_bytes": 9600000,
+    "selected_root_arithmetic_saving_bytes": 54392720,
+    "scope": "Legacy224B BinaryHeap assembler roots decline300000/67.2MB\u21920, but all captured assembler staging declines300000/67.2MB\u219265allocations/7280B of112B BufferStorage::push spill storage. Both captures have zero assembler staging at done. Connection storage grows5344\u21925376B (+3.2MB), receive-state allocations136\u2192168B (+9.6MB); those costs are already included in net totals. The surviving100000224B/22.4MB roots are VecDeque::grow\u2192Connection::read_crypto, not assembler allocations. Selected-root arithmetic67,200,000\u22127,280\u22123,200,000\u22129,600,000=54,392,720B differs from measured54,824,500B by431,780B in other sites; that difference remains unattributed. Site frames omit/in-line code and are not complete type-layout proof. Logical done residual alone is not a leak claim.",
+    "legacy_224b_heap_roots_removed_bytes": 67200000,
+    "candidate_captured_assembler_staging_bytes": 7280,
+    "all_captured_assembler_staging_saving_bytes": 67192720,
+    "unattributed_other_site_difference_bytes": 431780
+  },
+  "long_reliable_throughput": {
+    "cases": {
+      "private": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-baseline-1.json",
+              "sha256": "980c2cde6c9d1e50493c78b38d8231cbf320beb6103e5a25a5696c06f4648687",
+              "verified_received_deliveries": 18391984,
+              "elapsed_seconds": 12.00033771,
+              "verified_received_per_second": 1532622.2015130273,
+              "server_cpu_seconds": 40.260000000000005,
+              "client_cpu_seconds": 59.29,
+              "private_round_trip": {
+                "max_ms": 3.544767,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1532622.2015130273,
+                "verified": 18391984
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-baseline-2.json",
+              "sha256": "2034cfb298e0b4c9de4d0e4eb71d7acbacb745579492460f86ccc98045811ef9",
+              "verified_received_deliveries": 17782720,
+              "elapsed_seconds": 12.000358471,
+              "verified_received_per_second": 1481849.0666736017,
+              "server_cpu_seconds": 39.89,
+              "client_cpu_seconds": 60.32,
+              "private_round_trip": {
+                "max_ms": 3.666364,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1481849.0666736017,
+                "verified": 17782720
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-baseline-3.json",
+              "sha256": "90c7fb88650fa3846ff84f23f928b0de548600a4833d80d6c1ddf247e21960a7",
+              "verified_received_deliveries": 17712272,
+              "elapsed_seconds": 12.000371395,
+              "verified_received_per_second": 1475976.9857939468,
+              "server_cpu_seconds": 40.17,
+              "client_cpu_seconds": 58.64,
+              "private_round_trip": {
+                "max_ms": 3.281876,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1475976.9857939468,
+                "verified": 17712272
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1532622.2015130273,
+            1481849.0666736017,
+            1475976.9857939468
+          ],
+          "median_verified_received_per_second": 1481849.0666736017,
+          "range": {
+            "minimum": 1475976.9857939468,
+            "maximum": 1532622.2015130273
+          },
+          "median_server_cpu_seconds": 40.17
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-candidate-1.json",
+              "sha256": "766f93a9e6fe7bdbc2e3b1679e6b3d9c3bd86a8557345836e950cdf3701f3700",
+              "verified_received_deliveries": 17839184,
+              "elapsed_seconds": 12.000378028,
+              "verified_received_per_second": 1486551.836815186,
+              "server_cpu_seconds": 39.89,
+              "client_cpu_seconds": 58.6,
+              "private_round_trip": {
+                "max_ms": 3.497048,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1486551.836815186,
+                "verified": 17839184
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-candidate-2.json",
+              "sha256": "22df5e4e82d0838f858d65b4d6397f67f820b8e5618263766e19e28ea2acc0d5",
+              "verified_received_deliveries": 17917888,
+              "elapsed_seconds": 12.000351978,
+              "verified_received_per_second": 1493113.5380735914,
+              "server_cpu_seconds": 39.9,
+              "client_cpu_seconds": 61.76,
+              "private_round_trip": {
+                "max_ms": 3.987705,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1493113.5380735914,
+                "verified": 17917888
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-private-candidate-3.json",
+              "sha256": "d13fc2f2250f014cceec348b83786f211e3385052e94b92d8f5a7501666f45cd",
+              "verified_received_deliveries": 17773216,
+              "elapsed_seconds": 12.000361834,
+              "verified_received_per_second": 1481056.6752782464,
+              "server_cpu_seconds": 39.72,
+              "client_cpu_seconds": 59.85,
+              "private_round_trip": {
+                "max_ms": 4.795903,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "per_second": 1481056.6752782464,
+                "verified": 17773216
+              },
+              "fanout_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1486551.836815186,
+            1493113.5380735914,
+            1481056.6752782464
+          ],
+          "median_verified_received_per_second": 1486551.836815186,
+          "range": {
+            "minimum": 1481056.6752782464,
+            "maximum": 1493113.5380735914
+          },
+          "median_server_cpu_seconds": 39.89
+        },
+        "candidate_median_percent_change": 0.3173582416285514
+      },
+      "roomonly": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-baseline-1.json",
+              "sha256": "65f24f78424f346472af585156cac735082c810f0cd9600dfe6228237eb3c2af",
+              "verified_received_deliveries": 19898368,
+              "elapsed_seconds": 12.001423374,
+              "verified_received_per_second": 1658000.6704128126,
+              "server_cpu_seconds": 36.29,
+              "client_cpu_seconds": 57.66,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.648794,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1658000.6704128126,
+                "verified": 19898368
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-baseline-2.json",
+              "sha256": "512cf68c80224968cfa8d29d2c58b7447400e1379e1136ff020f667da5e571f7",
+              "verified_received_deliveries": 19816448,
+              "elapsed_seconds": 12.002021221,
+              "verified_received_per_second": 1651092.5647529315,
+              "server_cpu_seconds": 36.41,
+              "client_cpu_seconds": 57.47,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.727746,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1651092.5647529315,
+                "verified": 19816448
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-baseline-3.json",
+              "sha256": "b4b61ad2ec7d08f350a6c8115e3ac06f136dfb05a5be0c11a48bf1ef56538c3c",
+              "verified_received_deliveries": 19910656,
+              "elapsed_seconds": 12.003003274,
+              "verified_received_per_second": 1658806.1792109115,
+              "server_cpu_seconds": 36.42,
+              "client_cpu_seconds": 58.18,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 4.574159,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1658806.1792109115,
+                "verified": 19910656
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1658000.6704128126,
+            1651092.5647529315,
+            1658806.1792109115
+          ],
+          "median_verified_received_per_second": 1658000.6704128126,
+          "range": {
+            "minimum": 1651092.5647529315,
+            "maximum": 1658806.1792109115
+          },
+          "median_server_cpu_seconds": 36.41
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-candidate-1.json",
+              "sha256": "ddafad654d3c108feaa0c14d562c718fbde17a1151152cf865282c49eeb1463f",
+              "verified_received_deliveries": 20103168,
+              "elapsed_seconds": 12.001606358,
+              "verified_received_per_second": 1675039.7738715769,
+              "server_cpu_seconds": 36.629999999999995,
+              "client_cpu_seconds": 57.449999999999996,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.170179,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1675039.7738715769,
+                "verified": 20103168
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-candidate-2.json",
+              "sha256": "7e3dd13133dffa1acb0ec4efe65f7b66be0223a40cf523857c55d84cdaa8dd29",
+              "verified_received_deliveries": 19718144,
+              "elapsed_seconds": 12.002068152,
+              "verified_received_per_second": 1642895.520195343,
+              "server_cpu_seconds": 36.550000000000004,
+              "client_cpu_seconds": 57.22,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.56333,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1642895.520195343,
+                "verified": 19718144
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-roomonly-candidate-3.json",
+              "sha256": "85cb38f82f96429ae90d18ad76bc0cedb9b8c8a2bf9359c12d7652c0048422be",
+              "verified_received_deliveries": 19857408,
+              "elapsed_seconds": 12.001743299,
+              "verified_received_per_second": 1654543.6363111136,
+              "server_cpu_seconds": 36.23,
+              "client_cpu_seconds": 57.65,
+              "private_round_trip": {
+                "max_ms": 0.0,
+                "p50_upper_ms": 0.0,
+                "p99_upper_ms": 0.0,
+                "per_second": 0.0,
+                "verified": 0
+              },
+              "fanout_round_trip": {
+                "max_ms": 5.521602,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1654543.6363111136,
+                "verified": 19857408
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1675039.7738715769,
+            1642895.520195343,
+            1654543.6363111136
+          ],
+          "median_verified_received_per_second": 1654543.6363111136,
+          "range": {
+            "minimum": 1642895.520195343,
+            "maximum": 1675039.7738715769
+          },
+          "median_server_cpu_seconds": 36.550000000000004
+        },
+        "candidate_median_percent_change": -0.2085061944419042
+      },
+      "mixed": {
+        "baseline": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-baseline-1.json",
+              "sha256": "c0829375c8e2e89ba5869eb2377720f54e8d388c78b39e999231664f84d13c80",
+              "verified_received_deliveries": 18913504,
+              "elapsed_seconds": 12.002343509,
+              "verified_received_per_second": 1575817.5881083258,
+              "server_cpu_seconds": 39.19,
+              "client_cpu_seconds": 63.52,
+              "private_round_trip": {
+                "max_ms": 6.16344,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 339067.1160968186,
+                "verified": 4069600
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.56031,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1236750.4720115073,
+                "verified": 14843904
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-baseline-2.json",
+              "sha256": "20ad7d82dd774a8ee56c57f92ccb831e5bd7c0374b178f5caadbd5ebec9081b0",
+              "verified_received_deliveries": 19511280,
+              "elapsed_seconds": 12.001226916,
+              "verified_received_per_second": 1625773.7760118193,
+              "server_cpu_seconds": 39.67,
+              "client_cpu_seconds": 63.080000000000005,
+              "private_round_trip": {
+                "max_ms": 5.075634,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 355119.69149738224,
+                "verified": 4261872
+              },
+              "fanout_round_trip": {
+                "max_ms": 7.839725,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1270654.084514437,
+                "verified": 15249408
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-baseline-3.json",
+              "sha256": "75b3173b911b5c7f358e05466bd9fdf05d98fa29710a3817f176ec92d78c6b00",
+              "verified_received_deliveries": 19340544,
+              "elapsed_seconds": 12.001770135,
+              "verified_received_per_second": 1611474.2894132258,
+              "server_cpu_seconds": 39.61,
+              "client_cpu_seconds": 63.13999999999999,
+              "private_round_trip": {
+                "max_ms": 6.31686,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 356918.01724379556,
+                "verified": 4283648
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.322402,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1254556.2721694303,
+                "verified": 15056896
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1575817.5881083258,
+            1625773.7760118193,
+            1611474.2894132258
+          ],
+          "median_verified_received_per_second": 1611474.2894132258,
+          "range": {
+            "minimum": 1575817.5881083258,
+            "maximum": 1625773.7760118193
+          },
+          "median_server_cpu_seconds": 39.61
+        },
+        "candidate": {
+          "runs": [
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-candidate-1.json",
+              "sha256": "1aec52d8278e5396a1a860947a0e5fdf72122c6822ac5aed05dc825a22815c0f",
+              "verified_received_deliveries": 18695696,
+              "elapsed_seconds": 12.003210366,
+              "verified_received_per_second": 1557557.9724035307,
+              "server_cpu_seconds": 39.300000000000004,
+              "client_cpu_seconds": 63.260000000000005,
+              "private_round_trip": {
+                "max_ms": 7.041685,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 337958.9190147499,
+                "verified": 4056592
+              },
+              "fanout_round_trip": {
+                "max_ms": 8.904281,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1219599.0533887807,
+                "verified": 14639104
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-candidate-2.json",
+              "sha256": "03fb6e4914832f30ad37f758f71806bede778ac3afb9c925963eec257468bddb",
+              "verified_received_deliveries": 19060240,
+              "elapsed_seconds": 12.003058146,
+              "verified_received_per_second": 1587948.6517651998,
+              "server_cpu_seconds": 39.1,
+              "client_cpu_seconds": 63.49,
+              "private_round_trip": {
+                "max_ms": 4.902118,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 338304.45129962295,
+                "verified": 4060688
+              },
+              "fanout_round_trip": {
+                "max_ms": 6.468034,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1249644.2004655767,
+                "verified": 14999552
+              }
+            },
+            {
+              "path": "artifacts/webtransport/inline-peek-long-mixed-candidate-3.json",
+              "sha256": "9531df2f02d899d5ca824becd2c9e74e5cfbe27e8c25d99cab7a5cffc4607d76",
+              "verified_received_deliveries": 19002496,
+              "elapsed_seconds": 12.002845474,
+              "verified_received_per_second": 1583165.9285427204,
+              "server_cpu_seconds": 39.17,
+              "client_cpu_seconds": 63.309999999999995,
+              "private_round_trip": {
+                "max_ms": 6.895783,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 342713.4014938831,
+                "verified": 4113536
+              },
+              "fanout_round_trip": {
+                "max_ms": 13.171425,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "per_second": 1240452.5270488372,
+                "verified": 14888960
+              }
+            }
+          ],
+          "verified_received_per_second_distribution": [
+            1557557.9724035307,
+            1587948.6517651998,
+            1583165.9285427204
+          ],
+          "median_verified_received_per_second": 1583165.9285427204,
+          "range": {
+            "minimum": 1557557.9724035307,
+            "maximum": 1587948.6517651998
+          },
+          "median_server_cpu_seconds": 39.17
+        },
+        "candidate_median_percent_change": -1.7566746833307056
+      }
+    },
+    "scope": "18passed serialized12second fixed3afclient comparisons, three rotated-order repeats per case. Aggregate verified received private+fanout work. ServerCPU0-3/clientCPU8-15; no profiling or replacement allocator in these medians. Preserve distributions rather than assigning a broad statistical speed mechanism."
+  },
+  "paced_controls": {
+    "reliable_stream": {
+      "runs": [
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-baseline-1.json",
+          "sha256": "d49b076b758906e77ce39a6db3f214bc4813a6d0f444958494448f47555f7c71",
+          "variant": "baseline",
+          "passed": false,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "error": "RuntimeError('client EOF before final gate')",
+          "last_server_metrics": {
+            "war_quic_connections": 1088,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 31110,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 1034980817,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 145,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 1089,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 1089,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 455,
+            "war_incoming_messages_total": 1027699,
+            "war_incoming_bytes_total": 1065723863,
+            "war_deliveries_total": 5164302,
+            "war_delivered_bytes_total": 5289558620,
+            "war_slow_consumers_total": 955,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 634,
+            "war_sessions": 634,
+            "war_channels": 2,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 3246080,
+            "war_output_queue_peak_capacity_bytes": 0
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-baseline-2.json",
+          "sha256": "73b4c3c0b64f27ab0a582a4b0b2d02818f843ce0b1d6d5dc3f55128bcda4bd24",
+          "variant": "baseline",
+          "passed": false,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "error": "RuntimeError('client EOF before final gate')",
+          "last_server_metrics": {
+            "war_quic_connections": 1085,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 31110,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 1032493423,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 61,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 1089,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 1089,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 394,
+            "war_incoming_messages_total": 1027741,
+            "war_incoming_bytes_total": 1065767417,
+            "war_deliveries_total": 5142167,
+            "war_delivered_bytes_total": 5286592018,
+            "war_slow_consumers_total": 942,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 695,
+            "war_sessions": 695,
+            "war_channels": 2,
+            "war_queued_bytes": 525156,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 3619840,
+            "war_output_queue_peak_capacity_bytes": 0
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-baseline-3.json",
+          "sha256": "982bab8dfa0b94b1c80b2c42283da9f66ef0de468be63e5dbd9f8e4aad19f1cd",
+          "variant": "baseline",
+          "passed": false,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "error": "RuntimeError('client EOF before final gate')",
+          "last_server_metrics": {
+            "war_quic_connections": 1083,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 45628,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 946533523,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 0,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 1089,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 1089,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 20,
+            "war_incoming_messages_total": 1027807,
+            "war_incoming_bytes_total": 1065835859,
+            "war_deliveries_total": 5016175,
+            "war_delivered_bytes_total": 5198571155,
+            "war_slow_consumers_total": 6,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 1069,
+            "war_sessions": 1069,
+            "war_channels": 48,
+            "war_queued_bytes": 0,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 356480,
+            "war_output_queue_peak_capacity_bytes": 0
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-candidate-1.json",
+          "sha256": "7b4a87bc67611205ed98aa6d5569f8a62048cc942054e333ad13b0b9355dda59",
+          "variant": "candidate",
+          "passed": false,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "error": "RuntimeError('client EOF before final gate')",
+          "last_server_metrics": {
+            "war_quic_connections": 1087,
+            "war_datagrams_received": 0,
+            "war_datagrams_submitted": 0,
+            "war_datagram_bytes_submitted": 0,
+            "war_datagrams_dropped": 0,
+            "war_datagrams_oversized": 0,
+            "war_read_buffer_reserved_bytes": 0,
+            "war_read_buffer_peak_reserved_bytes": 39406,
+            "war_read_buffer_limit_bytes": 1073741824,
+            "war_read_buffer_reservations_rejected_total": 0,
+            "war_accept_errors_total": 0,
+            "war_setup_errors_total": 0,
+            "war_ip_rejected_total": 0,
+            "war_read_buffer_reclaims_total": 0,
+            "war_read_buffer_reclaim_header_bytes_total": 0,
+            "war_read_buffer_reclaims_deferred_total": 0,
+            "war_idle_timeouts_total": 0,
+            "war_unstarted_writes_cancelled_total": 0,
+            "war_routing_reused_bytes_total": 1049150336,
+            "war_routing_copied_bytes_total": 0,
+            "war_write_timeouts_total": 0,
+            "war_write_errors_total": 17,
+            "war_aborted_writes_total": 0,
+            "war_close_failures_total": 0,
+            "war_transport_disconnects_total": 0,
+            "war_global_pressure_total": 0,
+            "war_accepted_total": 1089,
+            "war_rejected_total": 0,
+            "war_origin_rejected_total": 0,
+            "war_handshake_errors_total": 0,
+            "war_joined_total": 1089,
+            "war_join_rejected_total": 0,
+            "war_disconnected_total": 232,
+            "war_incoming_messages_total": 1027776,
+            "war_incoming_bytes_total": 1065803712,
+            "war_deliveries_total": 5197543,
+            "war_delivered_bytes_total": 5304100151,
+            "war_slow_consumers_total": 949,
+            "war_protocol_errors_total": 0,
+            "war_rate_limited_total": 0,
+            "war_variable_bytes": 0,
+            "war_connections": 857,
+            "war_sessions": 857,
+            "war_channels": 6,
+            "war_queued_bytes": 22040,
+            "war_draining": 0,
+            "war_native_connection_slots": 0,
+            "war_output_queue_capacity_bytes": 4367360,
+            "war_output_queue_peak_capacity_bytes": 0
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-candidate-2.json",
+          "sha256": "43443ccb5f8ea61c7bd7ae5282f147d2b677e9d89049558c51eadbea002220a6",
+          "variant": "candidate",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.003960732,
+            "mode": "stream",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 13.270000000000001,
+            "server_cpu_cores_observation": 2.6518993075103934,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 20.959999999999997,
+            "client_cpu_cores_observation": 4.188681950672029,
+            "client_timed_udp_receive_drops": 13972,
+            "private": {
+              "arrival_age": {
+                "max_ms": 77.721801,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 33.554432,
+                "samples": 1023821
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023821,
+              "generated_source_updates": 1023821,
+              "generation_lag": {
+                "max_ms": 1.337155,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023821
+              },
+              "last_submit_ms": 3999.306979,
+              "not_generated": 179,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 272,
+              "received_during_offer": 1023549,
+              "scheduled_arrival_age": {
+                "max_ms": 78.112335,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 33.554432,
+                "samples": 1023821
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 255887.25,
+              "verified_unique": 1023821
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 81.816616,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 16.777216,
+                "samples": 4096000
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 0.520527,
+                "p50_upper_ms": 0.262144,
+                "p99_upper_ms": 0.524288,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.226051,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 1321,
+              "received_during_offer": 4094679,
+              "scheduled_arrival_age": {
+                "max_ms": 82.024246,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 16.777216,
+                "samples": 4096000
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 1023669.75,
+              "verified_unique": 4096000
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-paced-mixed-candidate-3.json",
+          "sha256": "a8a16b803f6b5d45cfb60573bb56f59b525b085e6c547986635d5aaec9e9ad79",
+          "variant": "candidate",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.004407375,
+            "mode": "stream",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 13.31,
+            "server_cpu_cores_observation": 2.6596555800975334,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 21.139999999999997,
+            "client_cpu_cores_observation": 4.2242764059550595,
+            "client_timed_udp_receive_drops": 16023,
+            "private": {
+              "arrival_age": {
+                "max_ms": 88.445772,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 67.108864,
+                "samples": 1023795
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023795,
+              "generated_source_updates": 1023795,
+              "generation_lag": {
+                "max_ms": 1.385247,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023795
+              },
+              "last_submit_ms": 3999.191451,
+              "not_generated": 205,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 1054,
+              "received_during_offer": 1022741,
+              "scheduled_arrival_age": {
+                "max_ms": 88.851828,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 67.108864,
+                "samples": 1023795
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 255685.25,
+              "verified_unique": 1023795
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 51.83315,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 16.777216,
+                "samples": 4096000
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 0.721178,
+                "p50_upper_ms": 0.262144,
+                "p99_upper_ms": 0.524288,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.173501,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 5006,
+              "received_during_offer": 4090994,
+              "scheduled_arrival_age": {
+                "max_ms": 51.924517,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 16.777216,
+                "samples": 4096000
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 1022748.5,
+              "verified_unique": 4096000
+            }
+          }
+        }
+      ],
+      "passes_by_variant": {
+        "baseline": 0,
+        "candidate": 2
+      }
+    },
+    "datagram": {
+      "runs": [
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-baseline-1.json",
+          "sha256": "21139a054ae34eaf21c076892ef24d601da9f1629dad730bd7b4289b27c873ba",
+          "variant": "baseline",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.00404718,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 12.48,
+            "server_cpu_cores_observation": 2.4939812817672116,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 20.639999999999997,
+            "client_cpu_cores_observation": 4.124661350615003,
+            "client_timed_udp_receive_drops": 42013,
+            "private": {
+              "arrival_age": {
+                "max_ms": 124.763263,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 134.217728,
+                "samples": 1012698
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023799,
+              "generated_source_updates": 1023799,
+              "generation_lag": {
+                "max_ms": 1.311682,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023799
+              },
+              "last_submit_ms": 3999.195586,
+              "not_generated": 201,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 102,
+              "received_during_offer": 1012596,
+              "scheduled_arrival_age": {
+                "max_ms": 124.840274,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 134.217728,
+                "samples": 1012698
+              },
+              "unreceived_within_window": 11101,
+              "verified_during_offer_per_second": 253149.0,
+              "verified_unique": 1012698
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 32.80452,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "samples": 4047098
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 0.402833,
+                "p50_upper_ms": 0.131072,
+                "p99_upper_ms": 0.262144,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.121128,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 1862,
+              "received_during_offer": 4045236,
+              "scheduled_arrival_age": {
+                "max_ms": 32.968817,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "samples": 4047098
+              },
+              "unreceived_within_window": 48902,
+              "verified_during_offer_per_second": 1011309.0,
+              "verified_unique": 4047098
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-baseline-2.json",
+          "sha256": "ea0793b0c1ca931c94ce14a70fcf492382ade77549afff8ed5851d412513dbfb",
+          "variant": "baseline",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.003754133,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 12.440000000000001,
+            "server_cpu_cores_observation": 2.486133344953462,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 20.64,
+            "client_cpu_cores_observation": 4.1249029131703745,
+            "client_timed_udp_receive_drops": 10807,
+            "private": {
+              "arrival_age": {
+                "max_ms": 57.515853,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 16.777216,
+                "samples": 1020178
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023958,
+              "generated_source_updates": 1023958,
+              "generation_lag": {
+                "max_ms": 1.78113,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023958
+              },
+              "last_submit_ms": 3999.816049,
+              "not_generated": 42,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 1027,
+              "received_during_offer": 1019151,
+              "scheduled_arrival_age": {
+                "max_ms": 57.543016,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 33.554432,
+                "samples": 1020178
+              },
+              "unreceived_within_window": 3780,
+              "verified_during_offer_per_second": 254787.75,
+              "verified_unique": 1020178
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 26.271807,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 8.388608,
+                "samples": 4084349
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 1.506591,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 1.048576,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.732241,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 4514,
+              "received_during_offer": 4079835,
+              "scheduled_arrival_age": {
+                "max_ms": 27.068303,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "samples": 4084349
+              },
+              "unreceived_within_window": 11651,
+              "verified_during_offer_per_second": 1019958.75,
+              "verified_unique": 4084349
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-baseline-3.json",
+          "sha256": "457770120696ae80585162533b59e96d1afdda0ab8e82fab33e60928ffff0cb2",
+          "variant": "baseline",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.004578869,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 11.17,
+            "server_cpu_cores_observation": 2.2319560331420965,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 18.51,
+            "client_cpu_cores_observation": 3.6986129072032417,
+            "client_timed_udp_receive_drops": 0,
+            "private": {
+              "arrival_age": {
+                "max_ms": 5.472385,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 4.194304,
+                "samples": 1023780
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023780,
+              "generated_source_updates": 1023780,
+              "generation_lag": {
+                "max_ms": 2.407293,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 2.097152,
+                "samples": 1023780
+              },
+              "last_submit_ms": 3999.13379,
+              "not_generated": 220,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 260,
+              "received_during_offer": 1023520,
+              "scheduled_arrival_age": {
+                "max_ms": 6.025241,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "samples": 1023780
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 255880.0,
+              "verified_unique": 1023780
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 6.316752,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "samples": 4094976
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4094976,
+              "generated_source_updates": 3999,
+              "generation_lag": {
+                "max_ms": 2.11754,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 2.097152,
+                "samples": 3999
+              },
+              "last_submit_ms": 3998.018131,
+              "not_generated": 1,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 56,
+              "received_during_offer": 4094920,
+              "scheduled_arrival_age": {
+                "max_ms": 6.363579,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 4.194304,
+                "samples": 4094976
+              },
+              "unreceived_within_window": 0,
+              "verified_during_offer_per_second": 1023730.0,
+              "verified_unique": 4094976
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-candidate-1.json",
+          "sha256": "0067af893896378fd5966fedbd877acde2d4ff585cc96e0d7ca18fc1fcee7677",
+          "variant": "candidate",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.003651494,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 12.47,
+            "server_cpu_cores_observation": 2.492179963962934,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 20.86,
+            "client_cpu_cores_observation": 4.168955416861812,
+            "client_timed_udp_receive_drops": 21682,
+            "private": {
+              "arrival_age": {
+                "max_ms": 119.491405,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 67.108864,
+                "samples": 1017417
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023851,
+              "generated_source_updates": 1023851,
+              "generation_lag": {
+                "max_ms": 1.306471,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023851
+              },
+              "last_submit_ms": 3999.423014,
+              "not_generated": 149,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 267,
+              "received_during_offer": 1017150,
+              "scheduled_arrival_age": {
+                "max_ms": 119.614033,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 67.108864,
+                "samples": 1017417
+              },
+              "unreceived_within_window": 6434,
+              "verified_during_offer_per_second": 254287.5,
+              "verified_unique": 1017417
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 24.555604,
+                "p50_upper_ms": 2.097152,
+                "p99_upper_ms": 8.388608,
+                "samples": 4071857
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 0.633823,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 0.524288,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.363016,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 1557,
+              "received_during_offer": 4070300,
+              "scheduled_arrival_age": {
+                "max_ms": 24.91104,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "samples": 4071857
+              },
+              "unreceived_within_window": 24143,
+              "verified_during_offer_per_second": 1017575.0,
+              "verified_unique": 4071857
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-candidate-2.json",
+          "sha256": "50f76b72a9334db2733b420e8568cf39a40790e818117187d7ef4b0bdb9845ff",
+          "variant": "candidate",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.004067093,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 12.51,
+            "server_cpu_cores_observation": 2.499966480765169,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 20.72,
+            "client_cpu_cores_observation": 4.140631932969968,
+            "client_timed_udp_receive_drops": 48009,
+            "private": {
+              "arrival_age": {
+                "max_ms": 127.573338,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 134.217728,
+                "samples": 1007213
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023993,
+              "generated_source_updates": 1023993,
+              "generation_lag": {
+                "max_ms": 1.346919,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023993
+              },
+              "last_submit_ms": 3999.959312,
+              "not_generated": 7,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 3537,
+              "received_during_offer": 1003676,
+              "scheduled_arrival_age": {
+                "max_ms": 127.779792,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 134.217728,
+                "samples": 1007213
+              },
+              "unreceived_within_window": 16780,
+              "verified_during_offer_per_second": 250919.0,
+              "verified_unique": 1007213
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 39.539981,
+                "p50_upper_ms": 4.194304,
+                "p99_upper_ms": 8.388608,
+                "samples": 4039846
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 1.187742,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 1.048576,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.889174,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 5024,
+              "received_during_offer": 4034822,
+              "scheduled_arrival_age": {
+                "max_ms": 40.370359,
+                "p50_upper_ms": 8.388608,
+                "p99_upper_ms": 8.388608,
+                "samples": 4039846
+              },
+              "unreceived_within_window": 56154,
+              "verified_during_offer_per_second": 1008705.5,
+              "verified_unique": 4039846
+            }
+          }
+        },
+        {
+          "path": "artifacts/webtransport/inline-peek-dg-candidate-3.json",
+          "sha256": "bc3e513ec568dabbde6020a96cf9baf4c18ce2d39776df432e6b25139c0b02c9",
+          "variant": "candidate",
+          "passed": true,
+          "client_sha256": "b1fea5d628a55e8a41fa4e175d9d8a88d50fa05b6b024bf9009fd1d1ef29688d",
+          "measurement": {
+            "elapsed_seconds": 5.0045029,
+            "mode": "datagram",
+            "observation_seconds": 5.0,
+            "offered_seconds": 4,
+            "reliable_complete": true,
+            "server_cpu_seconds": 12.690000000000001,
+            "server_cpu_cores_observation": 2.5357163845384125,
+            "server_timed_udp_receive_drops": 0,
+            "client_cpu_seconds": 21.240000000000002,
+            "client_cpu_cores_observation": 4.24417777837635,
+            "client_timed_udp_receive_drops": 88178,
+            "private": {
+              "arrival_age": {
+                "max_ms": 128.172659,
+                "p50_upper_ms": 8.388608,
+                "p99_upper_ms": 134.217728,
+                "samples": 990627
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 1023906,
+              "generated_source_updates": 1023906,
+              "generation_lag": {
+                "max_ms": 1.291359,
+                "p50_upper_ms": 0.524288,
+                "p99_upper_ms": 1.048576,
+                "samples": 1023906
+              },
+              "last_submit_ms": 3999.636866,
+              "not_generated": 94,
+              "out_of_order": 0,
+              "planned_source_updates": 1024000,
+              "received_during_drain": 1197,
+              "received_during_offer": 989430,
+              "scheduled_arrival_age": {
+                "max_ms": 128.581413,
+                "p50_upper_ms": 8.388608,
+                "p99_upper_ms": 134.217728,
+                "samples": 990627
+              },
+              "unreceived_within_window": 33279,
+              "verified_during_offer_per_second": 247357.5,
+              "verified_unique": 990627
+            },
+            "fanout": {
+              "arrival_age": {
+                "max_ms": 126.34268,
+                "p50_upper_ms": 8.388608,
+                "p99_upper_ms": 16.777216,
+                "samples": 3989887
+              },
+              "duplicates": 0,
+              "expected_generated_deliveries": 4096000,
+              "generated_source_updates": 4000,
+              "generation_lag": {
+                "max_ms": 0.89401,
+                "p50_upper_ms": 1.048576,
+                "p99_upper_ms": 1.048576,
+                "samples": 4000
+              },
+              "last_submit_ms": 3999.617936,
+              "not_generated": 0,
+              "out_of_order": 0,
+              "planned_source_updates": 4000,
+              "received_during_drain": 4965,
+              "received_during_offer": 3984922,
+              "scheduled_arrival_age": {
+                "max_ms": 126.914036,
+                "p50_upper_ms": 8.388608,
+                "p99_upper_ms": 16.777216,
+                "samples": 3989887
+              },
+              "unreceived_within_window": 106113,
+              "verified_during_offer_per_second": 996230.5,
+              "verified_unique": 3989887
+            }
+          }
+        }
+      ],
+      "passes_by_variant": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    "scope": "Four reliable control failures are preserved (three baseline, one candidate). Three trials per variant do not establish a failure-rate improvement, regression or solution to existing receiver pressure. Datagram missing updates remain explicit."
+  },
+  "failed_application_control_receipts": [
+    "artifacts/webtransport/inline-peek-paced-mixed-baseline-1.json",
+    "artifacts/webtransport/inline-peek-paced-mixed-baseline-2.json",
+    "artifacts/webtransport/inline-peek-paced-mixed-baseline-3.json",
+    "artifacts/webtransport/inline-peek-paced-mixed-candidate-1.json"
+  ],
+  "both_endpoint_profiles": {
+    "runs": [
+      {
+        "path": "artifacts/webtransport/inline-peek-user-reliable-mixed-baseline-profile.json",
+        "sha256": "dda83dba51c68d9dfcea6198a8815a5a1c73a62b0ec8c0208338b4bc141d1cd4",
+        "variant": "baseline",
+        "roles": {
+          "server": 825752,
+          "client": 825758
+        },
+        "reports": {
+          "server": {
+            "path": "artifacts/webtransport/inline-peek-user-reliable-baseline-server-symbols.txt",
+            "sha256": "e38ed32b3841eb7db99b62ce0197aec4a28dfd47c176f18f71e8a0a441e0a74a",
+            "lost_samples": 0,
+            "leading_leaf_symbols": [
+              "6.40%  session-io-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+              "5.03%  session-io-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+              "2.63%  session-io-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+              "2.55%  session-io-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+              "2.46%  session-io-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+              "2.44%  libc.so.6         [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+              "2.42%  session-io-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+              "2.14%  session-io-relay  [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+              "1.94%  libc.so.6         [.] 0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -",
+              "1.75%  session-io-relay  [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -"
+            ]
+          },
+          "client": {
+            "path": "artifacts/webtransport/inline-peek-user-reliable-baseline-client-symbols.txt",
+            "sha256": "1906a4353fb1983a41335edd7fcde227d834eb7c3e28051e043d05b1b9643625",
+            "lost_samples": 0,
+            "leading_leaf_symbols": [
+              "5.55%  inspection        [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+              "5.53%  inspection        [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+              "4.26%  inspection        [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+              "4.13%  inspection        [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+              "2.53%  [vdso]            [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -",
+              "2.45%  inspection        [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+              "2.33%  inspection        [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+              "2.19%  inspection        [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+              "1.95%  inspection        [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+              "1.93%  inspection        [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -"
+            ]
+          }
+        },
+        "perf_data": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-user-reliable-mixed-baseline-profile.perf.data",
+          "sha256": "f9094d1b1f789e2ea518dd3faf13463844e9bd93b6b34369cafad5b59f692ff2"
+        }
+      },
+      {
+        "path": "artifacts/webtransport/inline-peek-user-reliable-mixed-candidate-profile.json",
+        "sha256": "0bd7d2f2e5e69c6daaff3df3553be2fd8475afea1678eedb740d671c69a0855f",
+        "variant": "candidate",
+        "roles": {
+          "server": 825804,
+          "client": 825810
+        },
+        "reports": {
+          "server": {
+            "path": "artifacts/webtransport/inline-peek-user-reliable-candidate-server-symbols.txt",
+            "sha256": "da97b65e05b9c00be711b899a29443cc929bbc5688d9ccce700495d9268d8653",
+            "lost_samples": 0,
+            "leading_leaf_symbols": [
+              "6.77%  inline-peek-relay  [.] ring_core_0_17_14__aes_gcm_enc_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+              "4.56%  inline-peek-relay  [.] quinn_proto::connection::Connection::populate_packet                                                                                                                                                                                                                                     -      -",
+              "3.58%  inline-peek-relay  [.] ring::aead::aes_gcm::seal                                                                                                                                                                                                                                                                -      -",
+              "2.71%  inline-peek-relay  [.] tokio::sync::notify::NotifiedProject::poll_notified                                                                                                                                                                                                                                      -      -",
+              "2.50%  inline-peek-relay  [.] quinn_proto::connection::Connection::poll_transmit                                                                                                                                                                                                                                       -      -",
+              "2.33%  inline-peek-relay  [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+              "2.27%  libc.so.6          [.] 0x00000000000a62ff                                                                                                                                                                                                                                                                       -      -",
+              "2.13%  inline-peek-relay  [.] bytes::bytes::shared_drop                                                                                                                                                                                                                                                                -      -",
+              "2.04%  inline-peek-relay  [.] quinn_proto::connection::packet_builder::PacketBuilder::new                                                                                                                                                                                                                              -      -",
+              "1.99%  libc.so.6          [.] 0x00000000000a62e8                                                                                                                                                                                                                                                                       -      -"
+            ]
+          },
+          "client": {
+            "path": "artifacts/webtransport/inline-peek-user-reliable-candidate-client-symbols.txt",
+            "sha256": "48d3e9393c46b5823edaaedd185537ad677147b8acb7fc56f7347216f0276ff4",
+            "lost_samples": 0,
+            "leading_leaf_symbols": [
+              "6.04%  inspection        [.] ring_core_0_17_14__aes_gcm_dec_update_vaes_avx2                                                                                                                                                                                                                                          -      -",
+              "5.29%  inspection        [.] quinn::endpoint::RecvState::poll_socket                                                                                                                                                                                                                                                  -      -",
+              "3.89%  inspection        [.] quinn::recv_stream::RecvStream::poll_read_buf                                                                                                                                                                                                                                            -      -",
+              "3.75%  inspection        [.] bytes::bytes_mut::shared_v_drop                                                                                                                                                                                                                                                          -      -",
+              "2.61%  inspection        [.] ring_core_0_17_14__aes_hw_ctr32_encrypt_blocks                                                                                                                                                                                                                                           -      -",
+              "2.46%  inspection        [.] tokio::runtime::scheduler::multi_thread::worker::run                                                                                                                                                                                                                                     -      -",
+              "2.26%  inspection        [.] std::sys::sync::mutex::futex::Mutex::lock_contended                                                                                                                                                                                                                                      -      -",
+              "2.13%  inspection        [.] quinn_proto::connection::Connection::process_payload                                                                                                                                                                                                                                     -      -",
+              "2.06%  inspection        [.] <quinn::connection::ConnectionDriver as core::future::future::Future>::poll                                                                                                                                                                                                              -      -",
+              "2.01%  [vdso]            [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                     -      -"
+            ]
+          }
+        },
+        "perf_data": {
+          "path": "/home/phil/.codex/worktrees/claude-update-benchmark/war_next/artifacts/webtransport/inline-peek-user-reliable-mixed-candidate-profile.perf.data",
+          "sha256": "adadbeb2113243282ee97ba3b652909a00819ed3cde5143d6bba9ed9b30c7af5"
+        }
+      }
+    ],
+    "scope": "Two separate8second mixed runs, user-space cycles:u249Hz/mmap64; all4server/client reports0lost. perf normalSIGINT(-2), no forced kill. Leaf shares are not wall-time stage costs and this coupled workload does not prove a cache/layout/read-algorithm mechanism. Excluded from ordinary timing medians."
+  },
+  "reproduction_sources": {
+    "artifacts/webtransport/build-inline-peek-screen.py": {
+      "path": "artifacts/webtransport/build-inline-peek-screen.py",
+      "sha256": "31dc628d66012b8df30b581a33a7da663aba03d74ba78883cd1254aba6816b35",
+      "source": "\"\"\"Validate and freeze the guarded assembler experiment, then restore product source.\"\"\"\nimport datetime\nimport difflib\nimport importlib.util\nimport json\nimport os\nfrom pathlib import Path\nimport shutil\nimport subprocess\n\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / 'artifacts/webtransport'\nBUILD = A / 'inline-peek-build'\nMANIFEST = A / 'inline-peek-build.json'\nSERVER = A / 'binaries/inline-peek-relay'\nSOURCE = ROOT / 'vendor/quinn-proto/src/connection/assembler.rs'\nCANDIDATE = A / 'inline-assembler-peek-formatted.rs'\nPRODUCT_SHA = '1c8e2d562b7e8e1eac07ab633878fd6d95800aa010e05ebdbdd77e7780dca3c0'\nINPUTS = ['Cargo.toml', 'Cargo.lock', '.cargo', 'rust-toolchain.toml', 'build.rs', 'src', 'examples', 'tests', 'vendor']\n\n\ndef main():\n    for path in (BUILD, MANIFEST, SERVER):\n        assert not path.exists(), path\n    spec = importlib.util.spec_from_file_location('inline_build_helpers', A / 'build-stronger-send-state-diagnostic.py')\n    helper = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(helper)\n    helper.BUILD = BUILD\n    ref, git = helper.reference, helper.git\n    assert ref(SOURCE)['sha256'] == '024d67fc87eadb5818015ec2b040879cb05cad9bedbbd8e95b1906fabd5f4757'\n    assert ref(CANDIDATE)['sha256'] == '8b90bcd4ff27679033653b216aee29b80054bf447fe687963641c97cb38ab91a'\n    assert not git('diff', '--name-only', 'HEAD', '--', *INPUTS)\n    assert not git('ls-files', '--others', '--exclude-standard', '--', *INPUTS)\n    selected = ROOT / 'target/release/war-relay'\n    assert ref(selected)['sha256'] == PRODUCT_SHA\n    paths = git('ls-files', '--', *INPUTS).splitlines()\n    before = helper.source_manifest(paths)\n    BUILD.mkdir()\n    backup = BUILD / 'base-assembler.rs'\n    shutil.copy2(SOURCE, backup)\n    base_manifest = BUILD / 'base-source-manifest.json'\n    helper.write_json(base_manifest, before)\n    patch = BUILD / 'source.patch'\n    patch.write_text(''.join(difflib.unified_diff(SOURCE.read_text().splitlines(True), CANDIDATE.read_text().splitlines(True),\n        fromfile='a/vendor/quinn-proto/src/connection/assembler.rs', tofile='b/vendor/quinn-proto/src/connection/assembler.rs')))\n    state = {'status': 'building', 'scope': 'Guarded inline assembler experiment; no memory or performance claim before workload checks.',\n        'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'checkout_head': git('rev-parse', 'HEAD'),\n        'controller': ref(Path(__file__)), 'build_helpers': ref(A / 'build-stronger-send-state-diagnostic.py'),\n        'base_source_manifest': ref(base_manifest), 'base_assembler': ref(backup), 'candidate': ref(CANDIDATE),\n        'source_patch': ref(patch), 'selected': ref(selected), 'checks': [], 'restored': False,\n        'toolchain': {'rustc': helper.capture(['rustc', '-Vv']), 'cargo': helper.capture(['cargo', '-Vv'])},\n        'build_environment': {key: value for key, value in os.environ.items() if key in\n            ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_TARGET', 'RUSTC', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER'] or key.startswith('CARGO_PROFILE_RELEASE_')}}\n    def save():\n        helper.write_json(MANIFEST, state)\n    save()\n    try:\n        SOURCE.write_bytes(CANDIDATE.read_bytes())\n        assert git('diff', '--name-only', 'HEAD', '--', *INPUTS) == str(SOURCE.relative_to(ROOT))\n        commands = [\n            ('proto-tests', ['cargo', 'test', '--locked', '--manifest-path', 'vendor/quinn-proto/Cargo.toml', '--target-dir', str(BUILD / 'proto-target'), '--lib'],\n                ['inline_spill_partial_read_and_reuse_preserve_accounting', 'partial_inline_clear_and_retirement_release_only_staged_ownership']),\n            ('root-tests', ['cargo', 'test', '--locked', '--target-dir', str(BUILD / 'target')], []),\n            ('clippy', ['cargo', 'clippy', '--locked', '--target-dir', str(BUILD / 'target'), '--all-targets', '--', '-D', 'warnings'], []),\n            ('release-build', ['cargo', 'build', '--locked', '--release', '--bin', 'war-relay', '--target-dir', str(BUILD / 'target')], [])]\n        for name, command, required in commands:\n            state['checks'].append(helper.run_logged(name, command, required))\n            save()\n        executable = BUILD / 'target/release/war-relay'\n        assert executable.is_file()\n        with executable.open('rb') as source, SERVER.open('xb') as destination:\n            shutil.copyfileobj(source, destination)\n        shutil.copymode(executable, SERVER)\n        state.update(status='built', server=ref(SERVER))\n    except BaseException as error:\n        state.update(status='failed', error=repr(error))\n        raise\n    finally:\n        shutil.copy2(backup, SOURCE)\n        state['restored'] = helper.source_manifest(paths) == before and ref(selected)['sha256'] == PRODUCT_SHA\n        state['status'] = ('complete' if state['status'] == 'built' else state['status']) if state['restored'] else 'restoration_failed'\n        save()\n        assert state['restored']\n    print(json.dumps({'status': state['status'], 'server': state['server'], 'restored': state['restored']}))\n\n\nif __name__ == '__main__':\n    main()\n"
+    },
+    "artifacts/webtransport/inline-peek-memory-screen.py": {
+      "path": "artifacts/webtransport/inline-peek-memory-screen.py",
+      "sha256": "955df06c52b80aa87db7b72e9d67ba3a64b765ebc95410883b7e70dd2022ee48",
+      "source": "\"\"\"Matched ordinary capacity and separate heap captures with frozen clients.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / 'artifacts/webtransport'\nsys.path.insert(0, str(ROOT / 'scripts'))\nimport capacity\nspec = importlib.util.spec_from_file_location('inline_peek_heap', ROOT / 'scripts/capacity-heap.py')\nheap = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(heap)\n\n\ndef main():\n    output = A / 'inline-peek-memory-summary.json'\n    assert not output.exists()\n    source_path = A / 'session-io-capacity-candidate-1.json'\n    source = json.loads(source_path.read_text())\n    build_path = A / 'inline-peek-build.json'\n    build = json.loads(build_path.read_text())\n    assert build['status'] == 'complete' and build['restored']\n    images = {'baseline': A / 'binaries/session-io-relay', 'candidate': Path(build['server']['path'])}\n    assert capacity.digest(images['baseline']) == source['server_sha256']\n    assert capacity.digest(images['candidate']) == build['server']['sha256']\n    assert capacity.digest(ROOT / source['args']['client']) == source['client_sha256']\n    recipes = {}\n    for arm, server in images.items():\n        path = A / f'inline-peek-capacity-args-{arm}.json'\n        assert not path.exists()\n        recipe = {'record_type': 'derived_argument_recipe_not_execution_receipt', 'parent_receipt': str(source_path),\n            'parent_receipt_sha256': capacity.digest(source_path), 'build_manifest': str(build_path),\n            'build_manifest_sha256': capacity.digest(build_path), 'client_sha256': source['client_sha256'],\n            'server_sha256': capacity.digest(server), 'args': dict(source['args'], server=str(server), output=None)}\n        assert recipe['args']['users'] == 100000 and recipe['args']['seconds'] == 4\n        path.write_text(json.dumps(recipe, indent=2) + '\\n')\n        recipes[arm] = path\n    state = {'status': 'running', 'scope': 'Ordinary RSS separate from replacement-allocator requested-live evidence. Same fixed capacity client and workload.',\n             'runner_sha256': capacity.digest(Path(__file__)), 'runs': []}\n    def save(): output.write_text(json.dumps(state, indent=2) + '\\n')\n    save()\n    try:\n        for diagnostic in [False, True]:\n            for arm in ['baseline', 'candidate']:\n                receipt = A / f'inline-peek-{\"heap\" if diagnostic else \"capacity\"}-{arm}.json'\n                assert not receipt.exists()\n                if diagnostic:\n                    result = heap.run(argparse.Namespace(receipt=recipes[arm], output=receipt,\n                        prefix=A / f'inline-peek-heap-{arm}', library=Path('/usr/lib/libtcmalloc.so'),\n                        slab_sizes=None, capture_timeout=30, stacktrace_method=None))\n                else:\n                    values = json.loads(recipes[arm].read_text())['args']\n                    values['output'] = str(receipt)\n                    for key in heap.PATH_ARGS:\n                        if values.get(key) is not None: values[key] = Path(values[key])\n                    result = capacity.run(argparse.Namespace(**values))\n                assert result['server_sha256'] == capacity.digest(images[arm])\n                assert result['client_sha256'] == source['client_sha256']\n                state['runs'].append({'arm': arm, 'heap_diagnostic': diagnostic, 'passed': result['passed'],\n                    'receipt': str(receipt), 'sha256': capacity.digest(receipt), 'recipe': str(recipes[arm])})\n                save()\n                print(json.dumps(state['runs'][-1]), flush=True)\n        assert all(row['passed'] for row in state['runs'])\n        state['status'] = 'complete'\n    except BaseException as error:\n        state.update(status='failed', error=repr(error))\n        raise\n    finally:\n        save()\n\n\nif __name__ == '__main__':\n    main()\n"
+    },
+    "artifacts/webtransport/inline-peek-memory-screen-v2.py": {
+      "path": "artifacts/webtransport/inline-peek-memory-screen-v2.py",
+      "sha256": "d617c925e57d8353ec57799d4139911257caddb974ba1fe576c7df9428323478",
+      "source": "\"\"\"Matched ordinary capacity and separate heap captures with frozen clients.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / 'artifacts/webtransport'\nsys.path.insert(0, str(ROOT / 'scripts'))\nimport capacity\nspec = importlib.util.spec_from_file_location('inline_peek_heap', ROOT / 'scripts/capacity-heap.py')\nheap = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(heap)\n\n\ndef main():\n    output = A / 'inline-peek-memory-v2-summary.json'\n    assert not output.exists()\n    source_path = A / 'session-io-capacity-candidate-1.json'\n    source = json.loads(source_path.read_text())\n    build_path = A / 'inline-peek-build.json'\n    build = json.loads(build_path.read_text())\n    assert build['status'] == 'complete' and build['restored']\n    images = {'baseline': A / 'binaries/session-io-relay', 'candidate': Path(build['server']['path'])}\n    assert capacity.digest(images['baseline']) == source['server_sha256']\n    assert capacity.digest(images['candidate']) == build['server']['sha256']\n    assert capacity.digest(ROOT / source['args']['client']) == source['client_sha256']\n    recipes = {}\n    for arm, server in images.items():\n        path = A / f'inline-peek-memory-v2-args-{arm}.json'\n        assert not path.exists()\n        recipe = {'record_type': 'derived_argument_recipe_not_execution_receipt', 'parent_receipt': str(source_path),\n            'parent_receipt_sha256': capacity.digest(source_path), 'build_manifest': str(build_path),\n            'build_manifest_sha256': capacity.digest(build_path), 'client_sha256': source['client_sha256'],\n            'server_sha256': capacity.digest(server), 'args': dict(source['args'], server=str(server), output=None)}\n        assert recipe['args']['users'] == 100000 and recipe['args']['seconds'] == 4\n        path.write_text(json.dumps(recipe, indent=2) + '\\n')\n        recipes[arm] = path\n    state = {'status': 'running', 'scope': 'Ordinary RSS separate from replacement-allocator requested-live evidence. Same fixed capacity client and workload.',\n             'runner_sha256': capacity.digest(Path(__file__)), 'runs': []}\n    def save(): output.write_text(json.dumps(state, indent=2) + '\\n')\n    prior_receipt = A / 'inline-peek-capacity-baseline.json'\n    prior = json.loads(prior_receipt.read_text())\n    assert prior['passed'] and prior['server_exit_code'] == prior['client_exit_code'] == 0\n    assert prior['server_sha256'] == capacity.digest(images['baseline']) and prior['client_sha256'] == source['client_sha256']\n    assert prior['measurement']['application_deliveries'] == 400000\n    state['prior_controller_failure'] = {'path': str(A / 'inline-peek-memory-summary.json'),\n        'sha256': capacity.digest(A / 'inline-peek-memory-summary.json'),\n        'reason': 'Ordinary capacity.run writes a receipt and returns None. Baseline workload passed; controller return-value assertion failed afterward.'}\n    state['runs'].append({'arm': 'baseline', 'heap_diagnostic': False, 'passed': True,\n        'receipt': str(prior_receipt), 'sha256': capacity.digest(prior_receipt), 'recipe': str(A / 'inline-peek-capacity-args-baseline.json')})\n    save()\n    try:\n        for diagnostic in [False, True]:\n            for arm in ['baseline', 'candidate']:\n                if not diagnostic and arm == 'baseline': continue\n                receipt = A / f'inline-peek-{\"heap\" if diagnostic else \"capacity\"}-{arm}.json'\n                assert not receipt.exists()\n                if diagnostic:\n                    result = heap.run(argparse.Namespace(receipt=recipes[arm], output=receipt,\n                        prefix=A / f'inline-peek-heap-{arm}', library=Path('/usr/lib/libtcmalloc.so'),\n                        slab_sizes=None, capture_timeout=30, stacktrace_method=None))\n                else:\n                    values = json.loads(recipes[arm].read_text())['args']\n                    values['output'] = str(receipt)\n                    for key in heap.PATH_ARGS:\n                        if values.get(key) is not None: values[key] = Path(values[key])\n                    capacity.run(argparse.Namespace(**values))\n                    result = json.loads(receipt.read_text())\n                assert result['server_sha256'] == capacity.digest(images[arm])\n                assert result['client_sha256'] == source['client_sha256']\n                state['runs'].append({'arm': arm, 'heap_diagnostic': diagnostic, 'passed': result['passed'],\n                    'receipt': str(receipt), 'sha256': capacity.digest(receipt), 'recipe': str(recipes[arm])})\n                save()\n                print(json.dumps(state['runs'][-1]), flush=True)\n        assert all(row['passed'] for row in state['runs'])\n        state['status'] = 'complete'\n    except BaseException as error:\n        state.update(status='failed', error=repr(error))\n        raise\n    finally:\n        save()\n\n\nif __name__ == '__main__':\n    main()\n"
+    },
+    "artifacts/webtransport/inline-peek-heap-screen.py": {
+      "path": "artifacts/webtransport/inline-peek-heap-screen.py",
+      "sha256": "d8adf474ef1a51b1fac469e89afdcf241e74f1671b2f4c6e78ac99d29963a5db",
+      "source": "\"\"\"Reuse phase-gated heap capture with unavailable SOCK_DIAG explicitly excluded.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nROOT = Path(__file__).resolve().parents[2]\nA = ROOT / 'artifacts/webtransport'\nsys.path.insert(0, str(ROOT / 'scripts'))\nimport capacity\nspec = importlib.util.spec_from_file_location('inline_peek_heap_only', ROOT / 'scripts/capacity-heap.py')\nheap = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(heap)\n\n\ndef main():\n    summary = A / 'inline-peek-heap-summary.json'\n    assert not summary.exists()\n    reason = {'status': 'unavailable', 'scope': 'SOCK_DIAG ENOENT observed in preceding heap preflight. Kernel bytes remain unmeasured, not zero; process-owned /proc socket census is retained.',\n              'failed_controller': str(A / 'inline-peek-memory-v2-summary.json')}\n    state = {'status': 'running', 'runner_sha256': capacity.digest(Path(__file__)),\n             'scope': 'Separate allocation diagnostic, not ordinary throughput/RSS. Same allocation-only override already used by the retained SessionIO screen.',\n             'kernel_diagnostic_unavailable': reason, 'runs': []}\n    def save(): summary.write_text(json.dumps(state, indent=2) + '\\n')\n    original = capacity.run\n    def allocations_only(args):\n        args.kernel_socket_resources = False\n        original(args)\n    save()\n    capacity.run = allocations_only\n    try:\n        for arm in ['baseline', 'candidate']:\n            source = A / f'inline-peek-capacity-{arm}.json'\n            receipt = json.loads(source.read_text())\n            assert receipt['passed'] and receipt['measurement']['application_deliveries'] == 400000\n            output = A / f'inline-peek-heap-only-{arm}.json'\n            assert not output.exists()\n            heap.run(argparse.Namespace(receipt=source, output=output,\n                prefix=A / f'inline-peek-heap-only-{arm}', library=Path('/usr/lib/libtcmalloc.so'),\n                slab_sizes=None, stacktrace_method=None, capture_timeout=30))\n            result = json.loads(output.read_text())\n            assert result['passed'] and not result['args']['kernel_socket_resources']\n            assert result['client_sha256'] == receipt['client_sha256'] and result['server_sha256'] == receipt['server_sha256']\n            result['kernel_diagnostic_unavailable'] = reason\n            output.write_text(json.dumps(result, indent=2) + '\\n')\n            state['runs'].append({'arm': arm, 'receipt': str(output), 'sha256': capacity.digest(output), 'passed': True})\n            save()\n            print(json.dumps(state['runs'][-1]), flush=True)\n        state['status'] = 'complete'\n    except BaseException as error:\n        state.update(status='failed', error=repr(error))\n        raise\n    finally:\n        capacity.run = original\n        save()\n\n\nif __name__ == '__main__':\n    main()\n"
+    },
+    "artifacts/webtransport/inline-peek-compare.py": {
+      "path": "artifacts/webtransport/inline-peek-compare.py",
+      "sha256": "18f99b20ba546d3146f96f9b1e27b347e3bee540b6ddd8588fd5fe9a2940782b",
+      "source": "\"\"\"Serialized rotated whole-workload comparisons with frozen clients.\"\"\"\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\nimport sys\n\nsys.path.insert(0, 'scripts')\nimport inspection\nspec = importlib.util.spec_from_file_location('load', 'scripts/datagram-load.py')\nload = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(load)\nA = Path('artifacts/webtransport')\nimages = {'baseline': A/'binaries/session-io-relay',\n          'candidate': A/'binaries/inline-peek-relay'}\nfailures = []\nfor repeat in range(1, 4):\n    order = ['baseline', 'candidate'] if repeat != 2 else ['candidate', 'baseline']\n    for variant in order:\n        for case in ['private', 'roomonly', 'mixed']:\n            reference = json.loads((A/f'receive-clock-long-{case}-receive-clock-1.json').read_text())\n            args = reference['args'].copy()\n            output = A/f'inline-peek-long-{case}-{variant}-{repeat}.json'\n            assert not output.exists()\n            args.update(server=str(images[variant].resolve()), output=str(output.resolve()))\n            for key in ['server', 'client', 'client_source_root', 'tls_front', 'tls_cert',\n                        'tls_key', 'tls_ca', 'heap_profile', 'heap_library', 'output',\n                        'fanout_latency_output']:\n                if args.get(key) is not None:\n                    args[key] = Path(args[key])\n            result = inspection.run(argparse.Namespace(**args))\n            assert result['client_sha256'] == reference['client_sha256']\n            if not result['passed']:\n                failures.append(str(output))\n            print('ORDINARY', repeat, variant, case, result['passed'], flush=True)\nfor repeat in range(1, 4):\n    order = ['baseline', 'candidate'] if repeat != 2 else ['candidate', 'baseline']\n    for variant in order:\n        reference = json.loads((A/'receive-clock-paced-mixed-control-receive-clock-1.json').read_text())\n        args = reference['args'].copy()\n        output = A/f'inline-peek-paced-mixed-{variant}-{repeat}.json'\n        assert not output.exists()\n        args.update(server=str(images[variant].resolve()), output=str(output.resolve()))\n        for key in ['server', 'client', 'output']:\n            args[key] = Path(args[key])\n        result = load.run(argparse.Namespace(**args))\n        assert result['client_sha256'] == reference['client_sha256']\n        if not result['passed']:\n            failures.append(str(output))\n        print('PACED', repeat, variant, result['passed'], flush=True)\nfor repeat in range(1, 4):\n    order = ['baseline', 'candidate'] if repeat != 2 else ['candidate', 'baseline']\n    for variant in order:\n        reference = json.loads((A/'receive-clock-dg-control-receive-clock-1.json').read_text())\n        args = reference['args'].copy()\n        output = A/f'inline-peek-dg-{variant}-{repeat}.json'\n        assert not output.exists()\n        args.update(server=str(images[variant].resolve()), output=str(output.resolve()))\n        for key in ['server', 'client', 'output']:\n            args[key] = Path(args[key])\n        result = load.run(argparse.Namespace(**args))\n        assert result['client_sha256'] == reference['client_sha256']\n        if not result['passed']:\n            failures.append(str(output))\n        print('DATAGRAM', repeat, variant, result['passed'], flush=True)\nprint('FAILURES', json.dumps(failures), flush=True)\n"
+    },
+    "artifacts/webtransport/profile-inline-peek-user-reliable.py": {
+      "path": "artifacts/webtransport/profile-inline-peek-user-reliable.py",
+      "sha256": "0747853d965894e2aee9fa47c7fc8acb85361222f919f57674daa16e18666e9e",
+      "source": "import sys,json,argparse,subprocess,os\nfrom pathlib import Path\nroot=Path.cwd();out=root/'artifacts/webtransport';sys.path.insert(0,str(root/'scripts'))\nimport inspection\noriginal=subprocess.Popen;client=[None];roles={}\ndef popen(cmd,*a,**kw):\n if cmd[0]=='perf' and cmd[1]=='record':\n  cmd=list(cmd);stack=cmd.index('--call-graph');del cmd[stack:stack+2];index=cmd.index('-p');roles['server']=int(cmd[index+1]);roles['client']=client[0]\n  assert roles['client'];cmd[index+1]+=','+str(roles['client']);cmd[cmd.index('-e')+1]='cycles:u';cmd[cmd.index('-F')+1]='249';cmd+=['-m','64']\n p=original(cmd,*a,**kw)\n if any(Path(str(x)).name=='inspection' for x in cmd):client[0]=p.pid\n return p\nsubprocess.Popen=popen\nfor v in ['baseline','candidate']:\n client[0]=None;roles.clear()\n source=out/'thin-pending-final-mixed.json';a=json.loads(source.read_text())['args'];a.update(server=str(out/'binaries'/({'baseline':'session-io-relay','candidate':'inline-peek-relay'}[v])),profile=True,seconds=8,output=str(out/f'inline-peek-user-reliable-mixed-{v}-profile.json'))\n for k in ['server','client','client_source_root','tls_front','tls_cert','tls_key','tls_ca','heap_profile','heap_library','output','fanout_latency_output']:\n  if a.get(k) is not None:a[k]=Path(a[k])\n r=inspection.run(argparse.Namespace(**a));assert r['passed'];assert r['client_sha256']=='3af40bb6f5a72a2389130f83ab738bd9447eb103d5b06ac6de2dd896d9e957a7';data=a['output'].with_suffix('.perf.data')\n for role,pid in roles.items():\n  text=subprocess.run(['perf','report','--stdio','--no-children','-g','none','--pid',str(pid),'--sort','dso,symbol','--percentage','relative','--percent-limit','0.3','-i',str(data)],capture_output=True,text=True,check=True).stdout\n  assert 'Total Lost Samples: 0' in text\n  (out/f'inline-peek-user-reliable-{v}-{role}-symbols.txt').write_text(text)\n (out/f'inline-peek-user-reliable-{v}-profile-roles.json').write_text(json.dumps(dict(roles),indent=2))\n # User-only capture needs no ownership change.\n print('DONE',v,roles,flush=True)\n"
+    }
+  },
+  "decision_rationale": "Reject: the measured52.2847MiB requested-live saving and57.171875MiB ordinary RSS saving accompany a1.7567percent mixed-throughput median regression; private+0.3174percent and room\u22120.2085percent do not establish a verified whole-workload improvement. The sparse failure counts cannot establish a reliability gain. Preserve this evidence and keep the1c8established-session IO baseline selected. Full native WebSocket throughput/memory/CPU and receiver-pressure parity remain unmet.",
+  "limits": [
+    "No browser or loss/bulk freshness acceptance was performed for this rejected variant.",
+    "Kernel bytes are unavailable due to SOCK_DIAG ENOENT/root-only slab metadata, not zero; process RSS excludes kernel memory.",
+    "No automatic mechanism conclusion is drawn from the profiles or selected allocation arithmetic.",
+    "Infrastructure diagnostic/controller failures remain separate from application workload/control failures."
+  ],
+  "final_frozen_binary_verification": {
+    "passed": true,
+    "scope": "Frozen baseline/candidate rehashed after profiles terminal; current vendored source is not reread during the next temporary diagnostic build."
+  }
+}

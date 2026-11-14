@@ -50,8 +50,9 @@ churn. The first global publication after a membership/ownership change still
 visits every channel to rebuild the global view. Do not replace the
 registry or add an index merely because it might be faster; establish which
 remaining lock hold, scan or allocation limits the complete workload first.
-Observer barriers scan the observer shards' pending jobs and the publication
-index for one bounded pass; no listener lock exists any more (see
+Observer barriers scan pending departure jobs in chunks of at most 128 per
+shard-lock hold, then inspect registered publications individually. Total scan
+work still grows with pending work; no listener lock exists any more (see
 [architecture.md](architecture.md)). The [concurrent-publisher follow-up](reports/concurrent-observers.md) rejected
 a two-entry scan cache: a large component win did not produce a clear native
 eight-worker improvement. The [worker-scheduling follow-up](reports/worker-scheduling.md)
