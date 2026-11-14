@@ -14,7 +14,8 @@ CPUs, capped at 16; `WAR_WORKERS` overrides it. With the default
 `WAR_PIN_WORKERS=auto`, workers are pinned one per CPU when the process may use
 exactly one CPU per worker; `on` and `off` force the choice.
 
-[src/webtransport.rs](../src/webtransport.rs) binds one UDP socket for every
+The whole relay is one file, [src/lib.rs](../src/lib.rs); the sections below
+name its modules. The `webtransport` module binds one UDP socket for every
 session. A separate thread, `war-ingress`, owns a current-thread runtime that
 services that socket and dispatches each packet to its QUIC connection; it shares
 the process CPU allowance rather than reserving a CPU. Each connection is then
@@ -22,8 +23,7 @@ driven on the worker runtime. One task per session accepts the WebTransport
 request (path `/war`, optional origin check), the bidirectional stream and the
 join record, then serves the session: it reads length-prefixed CBOR records from
 the stream and datagrams from the connection, routes them, and writes the
-session's queued output. The management HTTP service in
-[src/admin.rs](../src/admin.rs) and the SIGINT/SIGTERM handler run on the same
+session's queued output. The management HTTP service (`admin`) and the SIGINT/SIGTERM handler run on the same
 runtime.
 
 The accept loop also runs departure turns (see below) whenever a departing
@@ -38,7 +38,7 @@ ingress runtime is stopped and joined after the sessions.
 
 ## Locking model
 
-There is no global registry lock. [src/relay.rs](../src/relay.rs) splits state
+There is no global registry lock. The `relay` module splits state
 into concurrent indexes, atomic snapshots and independently locked objects:
 
 - Session ownership (ID to session) is a lock-free concurrent map
