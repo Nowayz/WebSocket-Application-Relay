@@ -82,12 +82,10 @@ sends without changing listener authorization.
 
 Use the [100k environment](../deploy/war-relay-100k.env.example) and
 [systemd override](../deploy/war-relay-100k.conf.example) as a starting profile.
-The profile includes 110,000 connection slots for joining and closing headroom,
-a 16 MiB UDP receive buffer request, 16 MiB maximum encoded messages and 256 MiB
-global allowances for output and record staging. The room ceiling is 1,024
-members. These are operating ceilings and safeguards, not preallocated memory or
-a universal capacity promise. Large-room diagnostics raise that room ceiling
-explicitly. Every session shares the one UDP socket, so descriptor limits do not
+The profile includes a 16 MiB UDP receive buffer request, 16 MiB maximum
+encoded messages and 256 MiB global allowances for output and record staging.
+These are memory safeguards, not preallocated memory or a universal capacity
+promise. The relay does not cap connections or room sizes. Every session shares the one UDP socket, so descriptor limits do not
 grow with the population. About 1.7 GiB of process memory was measured with
 100,000 idle sessions joined, before message traffic; see
 [performance.md](performance.md).
@@ -188,7 +186,7 @@ fallible and should be propagated. Keep the `EndpointIngress` alive until
 
 Track connections/sessions, QUIC connections, accepted/rejected/handshake-error
 counts, queued bytes, staging reservations, output queue capacity, variable
-bytes, write errors and timeouts, slow consumers, pressure, rate-limited and
+bytes, write errors and timeouts, slow consumers, pressure and
 idle-timeout closes, and the datagram counters. RSS can remain above initial
 values after logical resources reach zero because allocators keep pages and
 small queues stay warm for reconnects.
@@ -220,22 +218,15 @@ the relay binds; an out-of-range value is a startup error. Sizes are bytes.
 | `--udp-receive-buffer-bytes` | `WAR_UDP_RECEIVE_BUFFER_BYTES` | `4194304` (4 MiB) | Any; 0 keeps the OS default | Requested receive buffer of the shared UDP socket |
 | `--udp-send-buffer-bytes` | `WAR_UDP_SEND_BUFFER_BYTES` | `0` | Any; 0 keeps the OS default | Requested send buffer of the shared UDP socket |
 | `--allowed-origin` | `WAR_ALLOWED_ORIGINS` | unset (all origins) | Up to 64 entries of 1 to 1024 bytes, each an exact `http(s)://host[:port]` or `null`; repeat or comma-separate | Browser Origin allowlist; see [Browser origin admission](#browser-origin-admission) |
-| `--max-connections` | `WAR_MAX_CONNECTIONS` | `10000` | 1 to 4294967295 | Admitted QUIC connections per process, including handshakes |
-| `--max-connections-per-ip` | `WAR_MAX_CONNECTIONS_PER_IP` | `0` | 0 to 4294967295 | Admitted connections per client IP address; 0 disables |
-| `--max-channels` | `WAR_MAX_CHANNELS` | `10000` | 1 to 4294967295 | Channels, including `re_globl` |
-| `--max-channel-members` | `WAR_MAX_CHANNEL_MEMBERS` | `10000` | 1 to 4294967295 | Sessions per channel |
-| `--max-message-bytes` | `WAR_MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | 17 to 67108864 (64 MiB) | Largest encoded message, including the routing envelope |
+| `--max-message-bytes` | `WAR_MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | 17 to 4294967285; must fit `queue-bytes` and the staging budget | Largest encoded message, including the routing envelope |
 | `--queue-messages` | `WAR_QUEUE_MESSAGES` | `64` | 1 to 4294967295 | Queued messages per session before it is a slow consumer |
 | `--queue-bytes` | `WAR_QUEUE_BYTES` | `33554432` (32 MiB) | At least `max-message-bytes` + 10 | Per-session output byte allowance |
 | `--total-queue-bytes` | `WAR_TOTAL_QUEUE_BYTES` | `268435456` (256 MiB) | At least `queue-bytes` | Global output budget shared by all sessions, bodies and captured views |
 | `--receive-arena-bytes` | `WAR_RECEIVE_ARENA_BYTES` | `0` (disabled) | 0, or at least `receive-arena-page-bytes`; must fit the address space | Process-wide backing-store cap for reliable receive slabs, including retained published slices |
 | `--receive-arena-page-bytes` | `WAR_RECEIVE_ARENA_PAGE_BYTES` | `65536` (64 KiB) | Positive and fits the address space | Minimum slab allocation on first use by a worker, shared across its connections |
 | `--total-read-buffer-bytes` | `WAR_TOTAL_READ_BUFFER_BYTES` | `1073741824` (1 GiB) | Fits the address space; 0 disables | Shared staging allowance for records being received |
-| `--max-variables` | `WAR_MAX_VARIABLES` | `256` | 1 to 4294967295 | Variables per channel |
 | `--max-variable-bytes` | `WAR_MAX_VARIABLE_BYTES` | `1048576` (1 MiB) | 1 to 4294967295 | Key plus value bytes per channel |
 | `--total-variable-bytes` | `WAR_TOTAL_VARIABLE_BYTES` | `67108864` (64 MiB) | At least `max-variable-bytes` | Global channel variable budget |
-| `--messages-per-second` | `WAR_MESSAGES_PER_SECOND` | `1000` | Any; 0 disables | Per-session inbound message token bucket, records and datagrams together; exceeding it closes with `1008` |
-| `--bytes-per-second` | `WAR_BYTES_PER_SECOND` | `16777216` | Any; 0 disables | Per-session inbound byte token bucket; exceeding it closes with `1008` |
 | `--handshake-timeout-secs` | `WAR_HANDSHAKE_TIMEOUT_SECS` | `5` | 1 to 86400 | Time allowed for the QUIC handshake and WebTransport session request |
 | `--join-timeout-secs` | `WAR_JOIN_TIMEOUT_SECS` | `10` | 1 to 86400 | Time allowed after the session opens to send the channel name; expiry closes with `1002` |
 | `--write-timeout-secs` | `WAR_WRITE_TIMEOUT_SECS` | `5` | 1 to 86400 | Retention deadline for a queued write |
@@ -265,7 +256,9 @@ idle session in the 100,000-session measurement), the UDP socket buffers and
 the resident baseline of the process. That total must fit under the cgroup
 memory limit with headroom, or the OOM killer ends the process instead of the
 budgets refusing admission. Raise a budget only together with the limit that
-contains it.
+contains it. The relay does not cap connections, channels or room sizes, so
+per-session state grows with the number of clients: size `MemoryMax` for the
+largest population you expect, or cap connections in front of the relay.
 
 When enabling the reliable receive arena, also allow up to
 `WAR_RECEIVE_ARENA_BYTES` of backing storage. For example,

@@ -28,7 +28,7 @@ import socket_resources
 ROOT = runtime.ROOT
 TOKEN = "capacity-benchmark"  # Only the disposable local server.
 ERRORS = ["war_handshake_errors_total", "war_origin_rejected_total", "war_rejected_total",
-          "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total",
+          "war_write_timeouts_total", "war_write_errors_total",
           "war_slow_consumers_total", "war_global_pressure_total",
           "war_read_buffer_reservations_rejected_total", "war_idle_timeouts_total"]
 
@@ -179,11 +179,8 @@ def run(args):
     server_environment = runtime.preload_environment(environment, args.server_preload)
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}",
                       "--admin-bind", f"127.0.0.1:{admin}", "--workers", str(args.workers),
-                      "--max-connections", str(args.users + max(args.connection_headroom, args.churn_workers * args.room_size)),
-                      "--max-channels", str(args.users // args.room_size + args.churn_workers + 1),
                       "--max-message-bytes", "65536", "--queue-bytes", "262144",
                       "--total-read-buffer-bytes", "268435456",
-                      "--messages-per-second", "0", "--bytes-per-second", "0",
                       "--ping-interval-secs", str(args.ping_interval_secs), "--disable-global-broadcast"]
     if args.pin_workers:
         server_command.append("--pin-workers")
@@ -450,7 +447,6 @@ if __name__ == "__main__":
                         help="Bounded per-user histogram CSV; percentile columns are bounds, not exact samples")
     parser.add_argument("--churn-workers", type=int, default=0)
     parser.add_argument("--ping-interval-secs", type=int, default=0, help="Relay QUIC keep-alive interval; zero disables")
-    parser.add_argument("--connection-headroom", type=int, default=0)
     parser.add_argument("--pin-workers", action="store_true", help="Request and verify native --pin-workers startup policy")
     parser.add_argument("--pin-server-workers", action="store_true", help="Benchmark intervention: one allowed CPU per native worker")
     parser.add_argument("--pin-client-workers", action="store_true", help="Benchmark intervention: one allowed CPU per client I/O worker")
@@ -497,8 +493,6 @@ if __name__ == "__main__":
         parser.error("profile-frequency must be positive")
     if args.profile_kernel and not args.profile:
         parser.error("--profile-kernel requires --profile")
-    if args.connection_headroom < 0:
-        parser.error("connection-headroom must be nonnegative")
     try:
         run(args)
     except FileExistsError as error:

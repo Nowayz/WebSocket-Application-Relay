@@ -15,7 +15,7 @@ python scripts/datagram-load.py --mode datagram \
 
 Use `--mode stream` with otherwise identical arguments for the reliable comparison. Use `--readers 0` for private-only traffic, or `--pairs 0` for fanout-only traffic. Private rate is per source; fanout rate is source messages per second, multiplied by recipient count for offered deliveries. Use a fresh output path for every run. Freeze server and client binaries with `--server` and `--client` when comparing server revisions. Run measurements sequentially, without concurrent compilation, profiling, or browser work; rotate variant order across repeated runs.
 
-The runner disables application rate limits for the measured load and derives population limits from the requested session count. It preserves production output queue and byte budgets. It records source and binary hashes, process CPU, phase-gate RSS, owned UDP socket queues/drop counters, server metrics, and client verification results.
+The runner preserves production output queue and byte budgets. It records source and binary hashes, process CPU, phase-gate RSS, owned UDP socket queues/drop counters, server metrics, and client verification results.
 
 ## Reading a receipt
 

@@ -52,21 +52,13 @@ into concurrent indexes, atomic snapshots and independently locked objects:
   entries lazily, and a session's output and budgets are released by its own
   connection the moment it leaves, never by the map's reclamation schedule.
 - The channel index (name to channel) is a lock-free concurrent map with an
-  atomic channel count. Lookup is a lock-free read. Creation reserves a slot
-  in the count, so `max_channels` holds exactly under concurrent creation,
-  then inserts; two creators of one name resolve atomically and the loser
-  adopts the winner's channel. Retirement marks the channel, releases its
-  slot in the count and removes exactly that channel from the index, all
-  under the channel's own lock, so a joiner that sees the mark and retries
-  never finds a stale entry and a creator that misses the entry always
-  finds the slot free. The count is the limit; the index may briefly hold
-  an entry whose slot is already released while its removal completes.
-  One boundary case follows from having no index lock: exactly at the
-  channel limit, a join that races another client's creation of the same
-  name may be refused with `1013` instead of joining that channel. The
-  creator looks the name up a second time before refusing, so this needs
-  the other creator to be between its reservation and its insert at that
-  instant. The client retries, as `1013` asks.
+  atomic channel count. Lookup is a lock-free read. Creation counts the
+  channel, then inserts; two creators of one name resolve atomically and the
+  loser adopts the winner's channel and returns its count. Retirement marks
+  the channel, decrements the count and removes exactly that channel from the
+  index, all under the channel's own lock, so a joiner that sees the mark and
+  retries never finds a stale entry. There is no channel, room-size or
+  connection cap.
 - Each channel has one read/write lock covering its membership, its variables
   and its cached recipient view. It also has an atomic reservation counter used
   for admission and its own departure queue.
@@ -151,12 +143,10 @@ updates still scale with population. Registry guards never span stream I/O:
   Listings omit ordinary rooms with no members or a retirement mark at that
   read, including handles captured before retirement; the permanent `re_globl`
   room is included when empty. Each row is coherent, but the entire listing
-  is not a point-in-time snapshot. The index is pre-sized to the channel
-  limit, capped at 65,536 requested entries, to reduce resize work. The
-  admission count bounds live channels, not the table's allocated capacity.
-  `papaya` finishes an in-progress resize before iterating. The session
-  map and the publication index are pre-sized the same way (to the
-  connection limit capped at 65,536, and to 4,096 publications), and
+  is not a point-in-time snapshot. The index is pre-sized to 65,536
+  requested entries to reduce resize work. `papaya` finishes an in-progress
+  resize before iterating. The session map and the publication index are
+  pre-sized the same way (to 65,536 sessions and 4,096 publications), and
   the session map is not walked on the private-routing path. A cold global
   broadcast view does walk the channel index and each room's members.
   Beyond the initial capacities maps can grow; lock-free access does not

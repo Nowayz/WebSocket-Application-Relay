@@ -73,8 +73,6 @@ type Fixture = (
 async fn fixture() -> Fixture {
     fixture_with(Config {
         auth_password: Some("test".into()),
-        messages_per_second: 0,
-        bytes_per_second: 0,
         receive_arena_bytes: 512 * 1024,
         ..Config::default()
     })
@@ -240,8 +238,6 @@ async fn large_fanout_and_departures_progress_across_scheduler_quanta() {
 async fn application_activity_refreshes_idle_deadline_then_inactive_peer_expires() {
     let (relay, endpoint, url, stop, task) = fixture_with(Config {
         idle_timeout_secs: 1,
-        messages_per_second: 0,
-        bytes_per_second: 0,
         ..Config::default()
     })
     .await;
@@ -301,9 +297,8 @@ async fn read_admission_rejects_announced_growth_and_releases_all_credit() {
 }
 
 #[tokio::test]
-async fn refused_origins_and_connection_admission_preserve_the_live_session() {
+async fn refused_origins_preserve_the_live_session() {
     let (relay, endpoint, url, stop, task) = fixture_with(Config {
-        max_connections: 1,
         origin_policy: war_relay::origin::OriginPolicy {
             allowed: vec!["https://allowed.example".into()],
         },
@@ -339,12 +334,6 @@ async fn refused_origins_and_connection_admission_preserve_the_live_session() {
     .await
     .unwrap();
     let mut client = Client::open(&endpoint, &url, "admit").await;
-    assert!(
-        tokio::time::timeout(Duration::from_secs(3), endpoint.connect(&url))
-            .await
-            .unwrap()
-            .is_err()
-    );
     write_record(&mut client.send, &route(client.id, b"still live"))
         .await
         .unwrap();
@@ -358,36 +347,6 @@ async fn refused_origins_and_connection_admission_preserve_the_live_session() {
             .load(std::sync::atomic::Ordering::Relaxed),
         0
     );
-}
-
-#[tokio::test]
-async fn unreliable_and_reliable_input_share_the_same_rate_budget() {
-    let (relay, endpoint, url, stop, task) = fixture_with(Config {
-        messages_per_second: 1,
-        ..Config::default()
-    })
-    .await;
-    let mut client = Client::open(&endpoint, &url, "rate").await;
-    write_record(&mut client.send, &route(client.id, b"first"))
-        .await
-        .unwrap();
-    verify(&client.read().await, client.id, b"first");
-    client
-        .connection
-        .send_datagram(route(client.id, b"second"))
-        .unwrap();
-    tokio::time::timeout(Duration::from_secs(3), client.connection.closed())
-        .await
-        .unwrap();
-    assert_eq!(
-        relay
-            .metrics
-            .rate_limited
-            .load(std::sync::atomic::Ordering::Relaxed),
-        1
-    );
-    stop.cancel();
-    task.await.unwrap().unwrap();
 }
 
 #[tokio::test]
@@ -429,8 +388,6 @@ async fn blocked_shared_output_times_out_without_stalling_other_sessions_or_leak
     let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
         Config {
             write_timeout_secs: 1,
-            messages_per_second: 0,
-            bytes_per_second: 0,
             ..Config::default()
         },
         Some(transport),
@@ -480,8 +437,6 @@ async fn active_self_route_consumer_survives_a_coalesced_reliable_burst() {
     let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
         Config {
             queue_messages: 8,
-            messages_per_second: 0,
-            bytes_per_second: 0,
             ..Config::default()
         },
         None,
@@ -549,8 +504,6 @@ async fn partially_written_private_record_resumes_before_the_next_record() {
     transport.stream_receive_window(wtransport::quinn::VarInt::from_u32(64 * 1024));
     let (relay, endpoint, url, stop, task) = fixture_with_client_transport(
         Config {
-            messages_per_second: 0,
-            bytes_per_second: 0,
             receive_arena_bytes: 512 * 1024,
             ..Config::default()
         },
@@ -594,8 +547,6 @@ async fn partially_written_private_record_resumes_before_the_next_record() {
 #[tokio::test]
 async fn receive_arena_fallback_preserves_mixed_record_sizes_and_order() {
     let (relay, endpoint, url, stop, task) = fixture_with(Config {
-        messages_per_second: 0,
-        bytes_per_second: 0,
         receive_arena_bytes: 64,
         receive_arena_page_bytes: 64,
         ..Config::default()

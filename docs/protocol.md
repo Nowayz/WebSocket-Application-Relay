@@ -25,7 +25,7 @@ target IDs remain accepted.
 
 A datagram carries exactly one complete `[target, value]` item with no length
 prefix. Datagrams are unreliable and unordered; they share the session's
-membership, routing and rate limits with its stream. Relay commands (target
+membership and routing with its stream. Relay commands (target
 `0`) are refused on datagrams: the session closes with `1002`. A datagram
 forwarded to a recipient whose negotiated maximum datagram size is smaller is
 dropped for that recipient.
@@ -190,13 +190,13 @@ reason (browsers report them through `WebTransport.closed`).
 | `1000` | Normal close after a graceful close request |
 | `1001` | Shutdown or configured application-idle timeout |
 | `1002` | Invalid CBOR/WAR, a record longer than `WAR_MAX_MESSAGE_BYTES`, a command sent as a datagram, a join record that does not arrive within `WAR_JOIN_TIMEOUT_SECS`, or any other session failure |
-| `1008` | Authentication, rate, reserved-ID, or global-send policy |
-| `1013` | Join refused by admission or drain; channel variable capacity; the session's own command reply could not be funded; the session is a slow consumer |
+| `1008` | Authentication, reserved-ID, or global-send policy |
+| `1013` | Join refused by drain; channel variable capacity; the session's own command reply could not be funded; the session is a slow consumer |
 | `4000` | Operator disconnect |
 | `4001` | Privileged fixed-ID takeover |
 
 `1013` means exactly one of the following. The join was refused because the
-relay is draining or a connection, channel or room limit was reached. A
+relay is draining. A
 channel variable write exceeded the per-channel or global variable budget. The
 session's own command reply, including its welcome, could not be funded from
 its output budget. The session is a slow consumer: its per-session queue is
@@ -206,9 +206,8 @@ its recipients, and a recipient is never closed only because the global output
 budget is exhausted.
 
 Shutdown closes every QUIC connection with application error `1001`. A
-connection refused before the WebTransport session is established (connection
-limit, per-address limit, drain) is refused at the QUIC layer and has no session
-close code. QUIC keep-alives are sent every `WAR_PING_INTERVAL_SECS`; a
+connection refused before the WebTransport session is established (drain) is
+refused at the QUIC layer and has no session close code. QUIC keep-alives are sent every `WAR_PING_INTERVAL_SECS`; a
 connection that stays silent for `WAR_PONG_TIMEOUT_SECS` times out without a
 close code. Exhausting the shared record staging budget
 (`WAR_TOTAL_READ_BUFFER_BYTES`) ends the session with `1002`.

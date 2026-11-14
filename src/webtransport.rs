@@ -7,7 +7,6 @@ use crate::{
     Relay,
     frame::Frame,
     protocol::{self, Disconnect},
-    rate::RateLimiter,
     relay::{Envelope, FANOUT_QUANTUM, PeerOutput, Submission},
 };
 use anyhow::{Context, Result, bail};
@@ -331,17 +330,12 @@ pub async fn serve(
             Some(result) = sessions.join_next(), if !sessions.is_empty() => { if let Err(error) = result { tracing::warn!(%error, "WebTransport task failed"); } },
             incoming = endpoint.accept() => {
                 let Some(incoming) = incoming else { break; };
-                if relay.is_draining() || relay.metrics.connections.fetch_update(Relaxed, Relaxed, |n| (n < relay.config.max_connections).then_some(n + 1)).is_err() {
+                if relay.is_draining() {
                     incoming.refuse();
                     relay.metrics.rejected.fetch_add(1, Relaxed);
                     continue;
                 }
-                let permit = if let Some(limit) = &relay.ip_limit {
-                    match limit.acquire(incoming.remote_address().ip()) {
-                        Some(permit) => Some(permit),
-                        None => { incoming.refuse(); relay.metrics.connections.fetch_sub(1, Relaxed); relay.metrics.ip_rejected.fetch_add(1, Relaxed); relay.metrics.rejected.fetch_add(1, Relaxed); continue; }
-                    }
-                } else { None };
+                relay.metrics.connections.fetch_add(1, Relaxed);
                 relay.metrics.accepted.fetch_add(1, Relaxed);
                 let relay = relay.clone();
                 let retirement = retirement.clone();
@@ -351,7 +345,6 @@ pub async fn serve(
                 let handshake = Box::pin(accept_connection(incoming, relay.clone()));
                 sessions.spawn(async move {
                     let _lease = lease;
-                    let _permit = permit;
                     let (connection, acceptor) = match tokio::time::timeout(Duration::from_secs(relay.config.handshake_timeout_secs), handshake).await {
                         Ok(Ok(connection)) => connection,
                         Ok(Err(error)) if error.is::<Refused>() => return,
@@ -491,11 +484,6 @@ async fn session(
     let writer_yield = None;
     tokio::pin!(writer_yield);
     let result = {
-        let mut limiter = RateLimiter::new(
-            relay.config.messages_per_second,
-            relay.config.bytes_per_second,
-            Instant::now(),
-        );
         // Reverse local drop order retires reliable work before datagram work.
         let mut datagrams = application::InputState::new(INPUT_QUANTUM);
         let mut reader = application::RecordReader::default();
@@ -583,9 +571,7 @@ async fn session(
                 if bytes.is_empty() {
                     break Poll::Ready(Ok(()));
                 }
-                if let Err(error) =
-                    reliable.begin(&relay, &registration, &activity, &mut limiter, bytes, false)
-                {
+                if let Err(error) = reliable.begin(&relay, &registration, &activity, bytes, false) {
                     break Poll::Ready(Err(error));
                 }
             };
@@ -633,9 +619,7 @@ async fn session(
                     registration.peer.close(Disconnect::PROTOCOL);
                     break Poll::Ready(Err(anyhow::anyhow!("datagram exceeds message limit")));
                 }
-                if let Err(error) =
-                    datagrams.begin(&relay, &registration, &activity, &mut limiter, bytes, true)
-                {
+                if let Err(error) = datagrams.begin(&relay, &registration, &activity, bytes, true) {
                     break Poll::Ready(Err(error));
                 }
             };

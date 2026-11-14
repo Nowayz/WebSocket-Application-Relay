@@ -2,8 +2,6 @@
 use super::{Output, Pending, QueuedOutput, StreamOutput, frame_chunks, poll_output_chunks, queue};
 use crate::{
     Relay,
-    protocol::Disconnect,
-    rate::RateLimiter,
     relay::{Envelope, FANOUT_QUANTUM, Registration, RoutingFailure},
 };
 use anyhow::Result;
@@ -198,18 +196,12 @@ impl<'a> InputState<'a> {
         relay: &Relay,
         registration: &'a Registration,
         activity: &Option<Arc<Mutex<Instant>>>,
-        limiter: &mut RateLimiter,
         bytes: Bytes,
         unreliable: bool,
     ) -> Result<()> {
         assert!(matches!(self.phase, InputPhase::Read));
         if let Some(activity) = activity {
             *activity.lock() = Instant::now();
-        }
-        if !limiter.allow(bytes.len(), Instant::now()) {
-            relay.metrics.rate_limited.fetch_add(1, Relaxed);
-            registration.peer.close(Disconnect::RATE);
-            anyhow::bail!("rate exceeded");
         }
         let mut pending = Pending {
             registration,

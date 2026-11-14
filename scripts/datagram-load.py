@@ -34,9 +34,7 @@ def run(args):
     port, admin = runtime.free_port(), runtime.free_port()
     sessions = args.pairs * 2 + (args.readers + 1 if args.readers else 0)
     command = [str(args.server.resolve()), '--bind', f'127.0.0.1:{port}', '--admin-bind', f'127.0.0.1:{admin}',
-               '--workers', str(args.workers), '--pin-workers', '--messages-per-second', '0', '--bytes-per-second', '0',
-               '--ping-interval-secs', '0', '--max-connections', str(sessions),
-               '--max-channels', str(args.pairs * 2 + 2), '--max-channel-members', str(max(1, args.readers + 1))]
+               '--workers', str(args.workers), '--pin-workers', '--ping-interval-secs', '0']
     environment = {k: v for k, v in os.environ.items() if not k.startswith('WAR_')}
     url = benchmark_transport.prepare(args, command, environment, port)
     command = ['taskset', '-c', args.server_cpus] + command

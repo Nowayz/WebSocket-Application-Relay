@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **No synthetic limits.** The per-session rate limits and the connection,
+  per-address, channel, room-member and variable-count caps are removed, along
+  with the 64 MiB ceiling on `--max-message-bytes` (it may now be set up to the
+  u32 record framing, less the 10-byte routing header). Removed options:
+  `--messages-per-second`, `--bytes-per-second`, `--max-connections`,
+  `--max-connections-per-ip`, `--max-channels`, `--max-channel-members` and
+  `--max-variables`; removed metrics: `war_rate_limited_total` and
+  `war_ip_rejected_total`. A join is refused with `1013` only while the relay
+  drains. The memory budgets (queue, staging and variable bytes) and timeouts
+  remain. A client can now send a 50 MB file to another client in about 50 ms
+  over loopback; with the old 16 MiB/s default it took at least 2 s, and an
+  unpaced sender was disconnected.
 - **WebTransport is the only transport.** The WebSocket server
   (`--legacy-websocket`), its vendored `tungstenite` and `tokio-tungstenite`
   copies, the TLS front-end fixture and every WebSocket-only test, example and
@@ -18,8 +30,8 @@
   `relay.transport`. The systemd unit receives the certificate as systemd
   credentials and binds UDP 443.
 - A refused join now closes the WebTransport session with its own code
-  (`1013` for admission or drain) instead of a generic `1002`. Origin and
-  per-address refusals now count in `war_rejected_total`, as documented, and an
+  (`1013` while draining) instead of a generic `1002`. Origin refusals now
+  count in `war_rejected_total`, as documented, and an
   origin refusal no longer counts as a handshake error. Aborting the
   `webtransport::serve` task, not only cancelling it, now stops admission and
   closes every connection with `1001`.
@@ -102,7 +114,7 @@
   Per-session exhaustion still closes that recipient with `1013`.
 - A large broadcast that cannot reserve staging credit for its recipient view
   is delivered synchronously in one longer turn instead of being refused.
-- Close code `1013` now means exactly: join refused by admission or drain,
+- Close code `1013` now means exactly: join refused by drain,
   channel variable capacity, the session's own command reply could not be
   funded, or the session is a slow consumer. See docs/protocol.md.
 - `Config::default()` no longer reads `WAR_*` environment variables; only

@@ -795,13 +795,8 @@ fn deferred_submission_promotes_same_body_and_holds_reservation_through_retireme
 }
 
 #[test]
-fn channel_limit_holds_exactly_under_concurrent_creation() {
-    // 65 counts the global room, so exactly 64 ordinary rooms fit.
-    let relay = Relay::new(Config {
-        max_channels: 65,
-        ..config()
-    })
-    .unwrap();
+fn channel_count_stays_exact_under_concurrent_creation() {
+    let relay = Relay::new(config()).unwrap();
     let barrier = Arc::new(std::sync::Barrier::new(8));
     let creators: Vec<_> = (0..8)
         .map(|thread| {
@@ -810,10 +805,10 @@ fn channel_limit_holds_exactly_under_concurrent_creation() {
             std::thread::spawn(move || {
                 barrier.wait();
                 (0..32)
-                    .filter_map(|i| {
+                    .map(|i| {
                         relay
                             .subscribe(format!("room-{thread}-{i}").as_bytes())
-                            .ok()
+                            .unwrap()
                     })
                     .collect::<Vec<_>>()
             })
@@ -823,16 +818,11 @@ fn channel_limit_holds_exactly_under_concurrent_creation() {
         .into_iter()
         .flat_map(|creator| creator.join().unwrap())
         .collect();
-    assert_eq!(
-        held.len(),
-        64,
-        "the limit must hold exactly, never over or under"
-    );
-    assert_eq!(relay.counts().1, 65);
-    assert_eq!(relay.metrics.rejected.load(Relaxed), 8 * 32 - 64);
-    assert!(relay.subscribe(b"one-more").is_err());
+    // 256 ordinary rooms plus the global room.
+    assert_eq!(relay.counts().1, 257);
+    assert_eq!(relay.metrics.rejected.load(Relaxed), 0);
     drop(held);
-    // Retired rooms return their slots.
+    // Retired rooms leave the count.
     assert_eq!(relay.counts().1, 1);
     let again = relay.subscribe(b"one-more").unwrap();
     assert_eq!(relay.counts().1, 2);
@@ -852,8 +842,8 @@ fn concurrent_joins_and_retirements_of_one_name_leave_a_consistent_index() {
                 barrier.wait();
                 for _ in 0..2000 {
                     // Every join succeeds: a room retiring under a joiner is
-                    // replaced by a fresh one, never reported as a limit, and
-                    // the joiner is a member of a live room.
+                    // replaced by a fresh one, and the joiner is a member of
+                    // a live room.
                     let sub = relay.subscribe(b"shared").unwrap();
                     let state = sub.registration.peer.room.state.read();
                     assert!(!state.retired);
