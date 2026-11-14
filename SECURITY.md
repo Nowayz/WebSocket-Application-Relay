@@ -21,14 +21,16 @@ privileged relay commands (listener flags, channel listing and fixed-ID
 assignment); it does not control who may join a channel, send to a session or
 write a channel variable. For multi-tenant use, applications must carry their
 own identity and permission model inside their messages; the relay admits any
-client that completes the WebTransport handshake and passes the origin and
-admission limits.
+client that completes the WebTransport handshake and passes the origin
+policy.
 
 Keep the management listener private. A non-loopback management bind requires
 `WAR_ADMIN_TOKEN`. The relay terminates TLS itself: give it a publicly trusted
 certificate (`--tls-cert`/`--tls-key`), never `--dev-cert` outside local
 testing, and set exact browser origins with `WAR_ALLOWED_ORIGINS`; a missing
-`Origin` header is still accepted for non-browser clients. Resource budgets
-(`WAR_MAX_CONNECTIONS`, `WAR_MAX_CONNECTIONS_PER_IP`, the queue, staging and
-variable budgets and the per-session rate limits) are the denial-of-service controls; see
-[docs/operations.md](docs/operations.md) for sizing.
+`Origin` header is still accepted for non-browser clients. The relay has no
+connection, channel, membership or rate caps; its memory budgets (queue,
+staging and variable bytes) and timeouts bound what a client can make it hold,
+and a client that exceeds them is closed. Limit connection counts or rates per
+address in front of the relay (firewall or load balancer) if you need them;
+see [docs/operations.md](docs/operations.md) for sizing.

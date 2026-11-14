@@ -26,7 +26,6 @@ async fn joined(server: &Server, origin: Option<&str>) -> Client {
 #[tokio::test]
 async fn denied_origins_release_admission_and_leave_routing_usable() {
     let server = Server::new(Config {
-        max_connections: 2,
         origin_policy: policy(&[APP]),
         ..config()
     })
@@ -51,7 +50,7 @@ async fn denied_origins_release_admission_and_leave_routing_usable() {
         .await
         .unwrap();
         assert!(attempt.is_err(), "{origin:?} was admitted");
-        // With two connection slots, a leaked one would refuse the next try.
+        // A refused session request must not leak its connection count.
         eventually(|| server.relay.metrics.connections.load(Relaxed) == 1).await;
         assert_eq!(server.relay.counts(), (1, 2));
         assert_eq!(server.relay.metrics.queued_bytes.load(Relaxed), 0);
@@ -106,12 +105,11 @@ async fn no_origin_policy_admits_any_origin() {
     server.stop().await;
 }
 
-/// `/metrics` documents origin and per-IP refusals as included in
-/// `rejected_total`, and an origin refusal is not a failed handshake.
+/// `/metrics` documents origin refusals as included in `rejected_total`, and
+/// an origin refusal is not a failed handshake.
 #[tokio::test]
-async fn origin_and_address_refusals_are_counted_as_rejections() {
+async fn origin_refusals_are_counted_as_rejections() {
     let server = Server::new(Config {
-        max_connections_per_ip: 1,
         origin_policy: policy(&[APP]),
         ..config()
     })
@@ -122,11 +120,8 @@ async fn origin_and_address_refusals_are_counted_as_rejections() {
         .await;
     assert!(denied.is_err());
     eventually(|| server.relay.metrics.connections.load(Relaxed) == 0).await;
-    let _held = joined(&server, Some(APP)).await;
-    assert!(server.endpoint.connect(server.options()).await.is_err());
     assert_eq!(server.relay.metrics.origin_rejected.load(Relaxed), 1);
-    eventually(|| server.relay.metrics.ip_rejected.load(Relaxed) == 1).await;
     assert_eq!(server.relay.metrics.handshake_errors.load(Relaxed), 0);
-    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 2);
+    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 1);
     server.stop().await;
 }

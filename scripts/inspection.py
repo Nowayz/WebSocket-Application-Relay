@@ -26,7 +26,7 @@ import benchmark as runtime
 ROOT = runtime.ROOT
 TOKEN = "inspection-benchmark"  # Disposable fresh loopback process only.
 ERRORS = ["war_handshake_errors_total", "war_origin_rejected_total", "war_rejected_total",
-          "war_rate_limited_total", "war_write_timeouts_total", "war_write_errors_total",
+          "war_write_timeouts_total", "war_write_errors_total",
           "war_slow_consumers_total", "war_global_pressure_total",
           "war_read_buffer_reservations_rejected_total", "war_idle_timeouts_total"]
 
@@ -120,11 +120,9 @@ def run(args):
                                   HEAP_PROFILE_ALLOCATION_INTERVAL=str(100 * 1024**3),
                                   HEAP_PROFILE_INUSE_INTERVAL=str(100 * 1024**3))
     server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}",
-                      "--workers", str(args.workers), "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0"]
+                      "--workers", str(args.workers), "--ping-interval-secs", "0"]
     if getattr(args, "fanout_global_broadcast", False):
-        server_command += ["--max-connections", str(args.fanout_readers + 2),
-                           "--max-channels", str(args.fanout_readers + 2),
-                           "--max-channel-members", "1", "--idle-timeout-secs", "0"]
+        server_command += ["--idle-timeout-secs", "0"]
     if getattr(args, "pin_workers", False):
         server_command.append("--pin-workers")
     data_url = benchmark_transport.prepare(args, server_command, server_environment, port)

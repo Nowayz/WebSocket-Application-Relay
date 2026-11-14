@@ -27,7 +27,6 @@ pub struct Metrics {
     pub deliveries: AtomicU64,
     pub delivered_bytes: AtomicU64,
     pub slow_consumers: AtomicU64,
-    pub rate_limited: AtomicU64,
     pub idle_timeouts: AtomicU64,
     /// Exact global admission reservations, also exposed as a gauge. Includes
     /// in-flight messages and charged fanout membership snapshots.
@@ -39,7 +38,6 @@ pub struct Metrics {
     pub write_errors: AtomicU64,
     pub origin_rejected: AtomicU64,
     pub output_queue_capacity_bytes: AtomicUsize,
-    pub ip_rejected: AtomicU64,
 }
 
 // Build immutable exposition text at compile time; only values need formatting.
@@ -153,12 +151,6 @@ impl Metrics {
         }
         for (prefix, value) in [
             sample!(
-                "ip_rejected_total",
-                "counter",
-                self.ip_rejected.load(Relaxed),
-                "QUIC connections refused by the direct-peer IP limit; also included in rejected_total."
-            ),
-            sample!(
                 "idle_timeouts_total",
                 "counter",
                 self.idle_timeouts.load(Relaxed),
@@ -192,7 +184,7 @@ impl Metrics {
                 "rejected_total",
                 "counter",
                 self.rejected.load(Relaxed),
-                "Connections or joins refused by admission limits, browser-origin policy or drain."
+                "Connections or joins refused by browser-origin policy or drain."
             ),
             sample!(
                 "origin_rejected_total",
@@ -247,12 +239,6 @@ impl Metrics {
                 "counter",
                 self.slow_consumers.load(Relaxed),
                 "Recipient queue capacity-close signals, including races with peer-initiated Close."
-            ),
-            sample!(
-                "rate_limited_total",
-                "counter",
-                self.rate_limited.load(Relaxed),
-                "Sessions closed by inbound rate limits."
             ),
         ] {
             text.push_str(prefix);

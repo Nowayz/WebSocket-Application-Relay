@@ -71,8 +71,8 @@ pub struct Relay {
     /// Lock-free name-to-channel index. Lookup never blocks; creation and
     /// retirement are single-key writes that never block a reader.
     channels: papaya::HashMap<Bytes, Arc<Channel>>,
-    /// Live channels, including the global room. Reserved before a channel
-    /// is inserted so `max_channels` is exact under concurrent creation.
+    /// Live channels, including the global room. Counted before a channel is
+    /// inserted, so a concurrent reader never sees more channels than counted.
     channel_count: AtomicUsize,
     /// Incremented on every membership change. A global view built against an
     /// older generation is used once and never cached.
@@ -95,7 +95,6 @@ pub struct Relay {
     messages: Arc<MessageFanouts>,
     sessions: AtomicUsize,
     next_key: AtomicU64,
-    pub(crate) ip_limit: Option<Arc<crate::admission::IpLimit>>,
 }
 
 #[derive(Default)]
@@ -214,13 +213,15 @@ struct Users {
     map: papaya::HashMap<u64, Weak<Peer>>,
 }
 
+/// Session and channel maps are pre-sized so ordinary growth never resizes
+/// them; a resize is the one operation that can make another thread's map
+/// operation help copy entries before it proceeds.
+const PRESIZED_ENTRIES: usize = 1 << 16;
+
 impl Users {
-    /// Pre-sized up to a modest cap so ordinary growth never resizes the
-    /// table; a resize is the one operation that can make another thread's
-    /// map operation help copy entries before it proceeds.
-    fn new(sessions: usize) -> Self {
+    fn new() -> Self {
         Self {
-            map: papaya::HashMap::with_capacity(sessions.min(1 << 16)),
+            map: papaya::HashMap::with_capacity(PRESIZED_ENTRIES),
         }
     }
 
@@ -290,9 +291,6 @@ impl Users {
 pub(crate) struct Channel {
     pub(crate) name: Bytes,
     state: RwLock<ChannelState>,
-    /// Admission reservations, taken before the welcome is sent and released
-    /// on removal, so a refused join never receives a welcome.
-    reserved: AtomicUsize,
     departures: Arc<DepartureQueue>,
 }
 
@@ -314,7 +312,6 @@ impl Channel {
         Arc::new(Self {
             name,
             state: RwLock::new(ChannelState::default()),
-            reserved: AtomicUsize::new(0),
             departures: Arc::new(DepartureQueue::default()),
         })
     }
@@ -1344,10 +1341,10 @@ impl Relay {
         let _ = random_id()?;
         // Pre-size the index up to a modest cap so ordinary growth never
         // resizes it; an iteration would otherwise help finish the resize.
-        let channels = papaya::HashMap::with_capacity(config.max_channels.min(1 << 16));
+        let channels = papaya::HashMap::with_capacity(PRESIZED_ENTRIES);
         let global = Bytes::from_static(GLOBAL_CHANNEL);
         channels.pin().insert(global.clone(), Channel::new(global));
-        let users = Users::new(config.max_connections);
+        let users = Users::new();
         let read_budget = (config.total_read_buffer_bytes > 0)
             .then(|| crate::read_budget::ReadBudget::new(config.total_read_buffer_bytes));
         let receive_arena = crate::receive_arena::ReceiveArena::new(
@@ -1355,7 +1352,6 @@ impl Relay {
             config.receive_arena_page_bytes,
         );
         Ok(Arc::new(Self {
-            ip_limit: crate::admission::IpLimit::new(config.max_connections_per_ip),
             config,
             metrics: Arc::new(Metrics {
                 read_budget,
@@ -1515,36 +1511,24 @@ impl Relay {
     }
 
     /// Find a live room or create it. Lookup is a lock-free read of the
-    /// index. Creation reserves a slot in the channel count first, so the
-    /// limit holds exactly under concurrent creation, then inserts; two
-    /// creators of one name resolve atomically and the loser adopts the
-    /// winner's channel and returns its reservation. At the limit, a name
-    /// created by someone else between the lookup and the reservation is
-    /// adopted on a second look; only a name that still does not exist is
-    /// refused.
-    fn room(&self, name: &[u8]) -> Result<Arc<Channel>, Disconnect> {
+    /// index. Creation counts the channel first, then inserts; two creators
+    /// of one name resolve atomically and the loser adopts the winner's
+    /// channel and returns its count.
+    fn room(&self, name: &[u8]) -> Arc<Channel> {
         let channels = self.channels.pin();
         if let Some(channel) = channels.get(name) {
-            return Ok(channel.clone());
+            return channel.clone();
         }
-        if self
-            .channel_count
-            .fetch_update(Relaxed, Relaxed, |count| {
-                (count < self.config.max_channels).then_some(count + 1)
-            })
-            .is_err()
-        {
-            return channels.get(name).cloned().ok_or(Disconnect::OVERLOADED);
-        }
+        self.channel_count.fetch_add(1, Relaxed);
         // Copy a bounded name once per channel. Peers in an existing channel
         // share its canonical storage instead of allocating another name.
         let name = Bytes::copy_from_slice(name);
         let channel = Channel::new(name.clone());
         match channels.try_insert(name, channel.clone()) {
-            Ok(_) => Ok(channel),
+            Ok(_) => channel,
             Err(occupied) => {
                 self.channel_count.fetch_sub(1, Relaxed);
-                Ok(occupied.current.clone())
+                occupied.current.clone()
             }
         }
     }
@@ -1557,23 +1541,13 @@ impl Relay {
         if channel.len() > 16 {
             return Err(Disconnect::CHANNEL_LENGTH);
         }
-        let refused = |relay: &Relay| {
-            relay.metrics.rejected.fetch_add(1, Relaxed);
-            Disconnect::OVERLOADED
-        };
-        if self.is_draining()
-            || self
-                .sessions
-                .fetch_update(Relaxed, Relaxed, |sessions| {
-                    (sessions < self.config.max_connections).then_some(sessions + 1)
-                })
-                .is_err()
-        {
-            return Err(refused(self));
+        if self.is_draining() {
+            self.metrics.rejected.fetch_add(1, Relaxed);
+            return Err(Disconnect::OVERLOADED);
         }
+        self.sessions.fetch_add(1, Relaxed);
         let mut lease = SessionLease {
             relay: self,
-            room: None,
             id: None,
         };
         let key = self.next_key.fetch_add(1, Relaxed);
@@ -1581,33 +1555,14 @@ impl Relay {
         // room keeps this ID, so the client never sees a second welcome.
         let mut welcomed = None;
         loop {
-            // Reserve room capacity before anything is sent, so a refused join
-            // never receives a welcome. A room retired by a concurrent last
-            // departure is replaced by a fresh one.
+            // A room retired by a concurrent last departure is replaced by a
+            // fresh one.
             let room = loop {
-                let room = match self.room(channel) {
-                    Ok(room) => room,
-                    Err(reason) => {
-                        self.metrics.rejected.fetch_add(1, Relaxed);
-                        return Err(reason);
-                    }
-                };
-                if room
-                    .reserved
-                    .fetch_update(Relaxed, Relaxed, |count| {
-                        (count < self.config.max_channel_members).then_some(count + 1)
-                    })
-                    .is_err()
-                {
-                    return Err(refused(self));
+                let room = self.room(channel);
+                if !room.state.read().retired {
+                    break room;
                 }
-                if room.state.read().retired {
-                    room.reserved.fetch_sub(1, Relaxed);
-                    continue;
-                }
-                break room;
             };
-            lease.room = Some(room.clone());
             let build = |id: u64| {
                 Arc::new(Peer {
                     key,
@@ -1665,19 +1620,15 @@ impl Relay {
                 let mut state = room.state.write();
                 if state.retired {
                     // Lost a race with the last departure after the welcome
-                    // went out. Return this room's member slot and start over
-                    // against the replacement room. The session count and the
-                    // ID stay reserved by the lease.
+                    // went out. Start over against the replacement room. The
+                    // session count and the ID stay reserved by the lease.
                     drop(state);
-                    lease.room = None;
-                    room.reserved.fetch_sub(1, Relaxed);
                     continue;
                 }
                 state.insert(peer.clone());
             }
             self.membership_changed();
             self.metrics.joined.fetch_add(1, Relaxed);
-            lease.room = None;
             lease.id = None;
             std::mem::forget(lease);
             return Ok(Registration {
@@ -2077,8 +2028,6 @@ impl Relay {
                     let added = key.len() + value.len();
                     let next = state.variable_bytes - previous_size + added;
                     if next > self.config.max_variable_bytes
-                        || (previous_size == 0
-                            && state.variables.len() >= self.config.max_variables)
                         || self
                             .metrics
                             .variable_bytes
@@ -2446,7 +2395,6 @@ impl Relay {
                 Some(Departure::Direct(state.members.values().cloned().collect()))
             }
         };
-        room.reserved.fetch_sub(1, Relaxed);
         self.membership_changed();
         let id = peer.id.load(Relaxed);
         let frame = (!stopping).then(|| Frame::envelope(BROADCAST, protocol::uint(id)));
@@ -2647,18 +2595,14 @@ impl Relay {
     }
 }
 
-/// Undo partial admission when a join fails after reserving capacity.
+/// Undo partial admission when a join fails after counting the session.
 struct SessionLease<'a> {
     relay: &'a Relay,
-    room: Option<Arc<Channel>>,
     id: Option<(u64, u64)>,
 }
 
 impl Drop for SessionLease<'_> {
     fn drop(&mut self) {
-        if let Some(room) = &self.room {
-            room.reserved.fetch_sub(1, Relaxed);
-        }
         if let Some((id, key)) = self.id {
             self.relay.users.remove_owned(id, key);
         }

@@ -69,15 +69,6 @@ pub struct Config {
     pub udp_send_buffer_bytes: usize,
     #[command(flatten)]
     pub origin_policy: crate::origin::OriginPolicy,
-    #[arg(long, env = "WAR_MAX_CONNECTIONS", default_value_t = 10_000)]
-    pub max_connections: usize,
-    /// Maximum admitted sessions per direct peer IP; zero disables.
-    #[arg(long, env = "WAR_MAX_CONNECTIONS_PER_IP", default_value_t = 0)]
-    pub max_connections_per_ip: usize,
-    #[arg(long, env = "WAR_MAX_CHANNELS", default_value_t = 10_000)]
-    pub max_channels: usize,
-    #[arg(long, env = "WAR_MAX_CHANNEL_MEMBERS", default_value_t = 10_000)]
-    pub max_channel_members: usize,
     #[arg(long, env = "WAR_MAX_MESSAGE_BYTES", default_value_t = 16 * 1024 * 1024)]
     pub max_message_bytes: usize,
     #[arg(long, env = "WAR_QUEUE_MESSAGES", default_value_t = 64)]
@@ -96,17 +87,10 @@ pub struct Config {
     /// zero disables admission.
     #[arg(long, env = "WAR_TOTAL_READ_BUFFER_BYTES", default_value_t = 1024 * 1024 * 1024)]
     pub total_read_buffer_bytes: usize,
-    #[arg(long, env = "WAR_MAX_VARIABLES", default_value_t = 256)]
-    pub max_variables: usize,
     #[arg(long, env = "WAR_MAX_VARIABLE_BYTES", default_value_t = 1024 * 1024)]
     pub max_variable_bytes: usize,
     #[arg(long, env = "WAR_TOTAL_VARIABLE_BYTES", default_value_t = 64 * 1024 * 1024)]
     pub total_variable_bytes: usize,
-    /// Per-connection token bucket; zero disables the corresponding rate limit.
-    #[arg(long, env = "WAR_MESSAGES_PER_SECOND", default_value_t = 1000)]
-    pub messages_per_second: u64,
-    #[arg(long, env = "WAR_BYTES_PER_SECOND", default_value_t = 16 * 1024 * 1024)]
-    pub bytes_per_second: u64,
     #[arg(long, env = "WAR_HANDSHAKE_TIMEOUT_SECS", default_value_t = 5)]
     pub handshake_timeout_secs: u64,
     #[arg(long, env = "WAR_JOIN_TIMEOUT_SECS", default_value_t = 10)]
@@ -182,16 +166,8 @@ impl Config {
                     || self.receive_arena_bytes >= self.receive_arena_page_bytes),
             "receive-arena-bytes must be zero or at least receive-arena-page-bytes; both must fit the address space"
         );
-        ensure!(
-            self.max_connections_per_ip <= u32::MAX as usize,
-            "max-connections-per-ip must be in 0..=4294967295"
-        );
         for (name, value) in [
-            ("max-connections", self.max_connections),
-            ("max-channels", self.max_channels),
-            ("max-channel-members", self.max_channel_members),
             ("queue-messages", self.queue_messages),
-            ("max-variables", self.max_variables),
             ("max-variable-bytes", self.max_variable_bytes),
         ] {
             ensure!(
@@ -199,9 +175,10 @@ impl Config {
                 "{name} must be in 1..=4294967295"
             );
         }
+        // Records carry a u32 length; the relay adds up to 10 bytes of routing header.
         ensure!(
-            (17..=64 * 1024 * 1024).contains(&self.max_message_bytes),
-            "max-message-bytes must be in 17..=67108864"
+            (17..=u32::MAX as usize - 10).contains(&self.max_message_bytes),
+            "max-message-bytes must be in 17..=4294967285"
         );
         ensure!(
             self.queue_bytes >= self.max_message_bytes + 10,
@@ -224,10 +201,6 @@ impl Config {
         ensure!(
             self.total_read_buffer_bytes <= isize::MAX as usize,
             "total-read-buffer-bytes exceeds the addressable range"
-        );
-        ensure!(
-            self.max_connections <= tokio::sync::Semaphore::MAX_PERMITS,
-            "max-connections exceeds semaphore capacity"
         );
         ensure!(
             self.queue_messages <= tokio::sync::Semaphore::MAX_PERMITS,

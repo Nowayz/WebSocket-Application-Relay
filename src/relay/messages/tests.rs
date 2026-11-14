@@ -784,8 +784,6 @@ fn observer_barrier_event_screen() {
     assert!(audience > 0 && publishers > 0 && rounds > 0);
     let relay = Relay::new(Config {
         auth_password: Some("messages".into()),
-        max_connections: audience + publishers + 1,
-        max_channel_members: audience,
         ..Config::default()
     })
     .unwrap();

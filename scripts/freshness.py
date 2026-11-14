@@ -62,7 +62,7 @@ def run(args):
         raise FileExistsError(args.output)
     port, admin = runtime.free_port(), runtime.free_port()
     environment = {key: value for key, value in os.environ.items() if not key.startswith("WAR_")}
-    server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}", "--workers", "4", "--messages-per-second", "0", "--bytes-per-second", "0", "--ping-interval-secs", "0", "--write-timeout-secs", "30"]
+    server_command = [str(args.server.resolve()), "--bind", f"127.0.0.1:{port}", "--admin-bind", f"127.0.0.1:{admin}", "--workers", "4", "--ping-interval-secs", "0", "--write-timeout-secs", "30"]
     url = benchmark_transport.prepare(args, server_command, environment, port)
     server_command = ["taskset", "-c", args.server_cpus] + server_command
     result = {"args": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}, "server_command": server_command, "server_sha256": digest(args.server), "client_sha256": digest(args.client), "runner_sha256": digest(__file__), "client_source_sha256": digest(ROOT / "examples/state_freshness.rs"), "passed": False, "scope": "Independently checked state generation stamps/payloads and reliable bulk. Freshness probes include the pre-first-update period using initial state at t0. Missing datagrams means not received in the observation window, not an attributed network-loss count. All session/resource gauges must retire."}

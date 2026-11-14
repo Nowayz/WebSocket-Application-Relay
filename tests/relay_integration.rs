@@ -28,10 +28,10 @@ use wtransport::{
     tls::Sha256Digest,
 };
 
-#[path = "relay_integration/admission.rs"]
-mod admission;
 #[path = "relay_integration/channel_listing.rs"]
 mod channel_listing;
+#[path = "relay_integration/handshake.rs"]
+mod handshake;
 #[path = "relay_integration/listeners.rs"]
 mod listeners;
 #[path = "relay_integration/origin_policy.rs"]
@@ -741,12 +741,7 @@ async fn malformed_packets_and_unauthorized_commands_close_the_session() {
 
 #[tokio::test]
 async fn reserved_simple_encodings_never_reach_recipients_or_channel_variables() {
-    let server = Server::new(Config {
-        messages_per_second: 0,
-        bytes_per_second: 0,
-        ..config()
-    })
-    .await;
+    let server = Server::new(Config { ..config() }).await;
     let mut healthy = server.join("healthy-cbor").await;
     for value in 0..32u8 {
         for prefix in [&[][..], &[0x81], &[0xa1, 0], &[0xc0], &[0xa1]] {
@@ -852,48 +847,14 @@ async fn unfinished_record_input_does_not_extend_idle_policy() {
 }
 
 #[tokio::test]
-async fn token_bucket_limits_apply_from_the_first_message_after_join() {
-    // Each bucket starts full: one message, or 64 bytes.
-    for (messages_per_second, bytes_per_second) in [(1, 0), (0, 64)] {
-        let server = Server::new(Config {
-            messages_per_second,
-            bytes_per_second,
-            ..config()
-        })
-        .await;
-        let mut client = server.join("rate").await;
-        client.send(client.id, &[1]).await;
-        assert_eq!(client.read().await, protocol::envelope(client.id, &[1]));
-        client
-            .send(client.id, &protocol::byte_string(&[0; 64]))
-            .await;
-        client.closed().await;
-        assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 1);
-        server.stop().await;
-    }
-}
-
-#[tokio::test]
-async fn channel_admission_variable_and_message_size_limits_are_real_network_limits() {
+async fn variable_and_message_size_limits_are_real_network_limits() {
     let server = Server::new(Config {
-        max_channels: 2,
-        max_channel_members: 1,
         max_message_bytes: 128,
         queue_bytes: 256,
         max_variable_bytes: 4,
         ..config()
     })
     .await;
-    let _member = server.join("limit").await;
-    // A full channel, then a channel beyond the channel limit.
-    for channel in ["limit", "another"] {
-        let (connection, mut send, _receive) = server.open().await;
-        write_record(&mut send, &protocol::text(channel))
-            .await
-            .unwrap();
-        closed(&connection).await;
-    }
-    assert_eq!(server.relay.metrics.rejected.load(Relaxed), 2);
     let mut global = server.join("re_globl").await;
     let mut set = Encoder::new(Vec::new());
     set.array(2)
@@ -937,24 +898,6 @@ async fn message_limit_admits_an_exact_size_record_and_closes_one_byte_over() {
         reader.read().await,
         protocol::envelope(BROADCAST, &protocol::uint(sender.id))
     );
-    server.stop().await;
-}
-
-#[tokio::test]
-async fn exhausted_input_quota_still_acknowledges_a_graceful_close() {
-    let server = Server::new(Config {
-        messages_per_second: 1,
-        bytes_per_second: 0,
-        ..config()
-    })
-    .await;
-    let mut client = server.join("close-quota").await;
-    client.send(client.id, &[1]).await;
-    assert_eq!(client.read().await, protocol::envelope(client.id, &[1]));
-    // The empty close record is not application input.
-    client.close().await;
-    eventually(|| server.relay.counts() == (0, 1)).await;
-    assert_eq!(server.relay.metrics.rate_limited.load(Relaxed), 0);
     server.stop().await;
 }
 
@@ -1048,12 +991,7 @@ async fn simultaneous_graceful_closes_finish_during_notification_pressure() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn private_routing_keeps_progress_through_registry_growth_and_retirement() {
     const WAVE: usize = 1100;
-    let server = Server::new(Config {
-        messages_per_second: 0,
-        bytes_per_second: 0,
-        ..config()
-    })
-    .await;
+    let server = Server::new(Config { ..config() }).await;
     let mut sender = server.join("registry-health").await;
     let mut receiver = server.join("registry-health").await;
     let finished = CancellationToken::new();
@@ -1115,8 +1053,6 @@ async fn a_recipient_that_stops_reading_is_closed_as_a_slow_consumer_and_the_sen
         queue_bytes: 256 * 1024,
         total_queue_bytes: 16 * 1024 * 1024,
         write_timeout_secs: 5,
-        messages_per_second: 0,
-        bytes_per_second: 0,
         ..config()
     })
     .await;

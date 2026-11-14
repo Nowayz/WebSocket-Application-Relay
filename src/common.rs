@@ -37,10 +37,6 @@ impl Disconnect {
         code: 1001,
         reason: "Application Idle",
     };
-    pub const RATE: Self = Self {
-        code: 1008,
-        reason: "Rate Limit Exceeded",
-    };
     pub const RESERVED: Self = Self {
         code: 1008,
         reason: "Reserved UserID",
